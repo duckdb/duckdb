@@ -60,12 +60,11 @@ void CompressedStringScanState::SegmentLayout::ValidateDictionaryIndices(const S
 void CompressedStringScanState::SegmentLayout::ValidateIndexBuffer() const {
 	// Only the checks required to avoid out-of-bounds reads when trusting the buffer: offsets must be
 	// monotonically increasing (else a length underflows) and the largest offset must lie within the dictionary.
-	const auto &offsets = index_buffer;
 	bool has_error = false;
-	for (idx_t i = 1; i < offsets.size(); i++) {
-		has_error |= offsets[i] < offsets[i - 1];
+	for (idx_t i = 1; i < index_buffer.size(); i++) {
+		has_error |= index_buffer[i] < index_buffer[i - 1];
 	}
-	has_error |= offsets[offsets.size() - 1] > dictionary_reader.Size();
+	has_error |= index_buffer[index_buffer.size() - 1] > dictionary_reader.Size();
 
 	if (has_error) {
 		ThrowDictionaryOffsetOutOfRange();
@@ -196,6 +195,32 @@ void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segmen
 	}
 }
 
+void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
+	D_ASSERT(dictionary);
+	// Handling non-bitpacking-group-aligned start values;
+	const idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
+	const idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
+	UnpackSelection(start, decompress_count);
+
+	layout.ValidateDictionaryIndices(*sel_vec, start_offset, scan_count);
+	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
+
+	// The dictionary already contains validated strings, so copy the selected string references into the flat result.
+	auto strings = dictionary->data.Values<string_t>();
+	for (idx_t i = 0; i < scan_count; i++) {
+		const auto entry = strings[sel_vec->get_index(i + start_offset)];
+		if (entry.IsValid()) {
+			result_data.WriteStringRef(entry.GetValue());
+		} else {
+			// The validity scan can mark this row valid, so initialize its string even for the NULL entry.
+			result_data.WriteStringRef(string_t(nullptr, 0));
+			FlatVector::SetNull(result, result_offset + i, true);
+		}
+	}
+}
+
 unsafe_array_ptr<const uint8_t> CompressedStringScanState::GetSelectionBytes(idx_t start,
                                                                              idx_t decompress_count) const {
 	const auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
@@ -226,32 +251,6 @@ void CompressedStringScanState::UnpackSelection(idx_t start, idx_t decompress_co
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), source.data(), decompress_count,
 	                                          layout.current_width);
-}
-
-void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
-	D_ASSERT(dictionary);
-	// Handling non-bitpacking-group-aligned start values
-	const idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-
-	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
-	const idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
-	UnpackSelection(start, decompress_count);
-
-	layout.ValidateDictionaryIndices(*sel_vec, start_offset, scan_count);
-	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
-
-	// The dictionary already contains validated strings, so copy the selected string references into the flat result.
-	auto strings = dictionary->data.Values<string_t>();
-	for (idx_t i = 0; i < scan_count; i++) {
-		const auto entry = strings[sel_vec->get_index(i + start_offset)];
-		if (entry.IsValid()) {
-			result_data.WriteStringRef(entry.GetValue());
-		} else {
-			// The validity scan can mark this row valid, so initialize its string even for the NULL entry.
-			result_data.WriteStringRef(string_t(nullptr, 0));
-			FlatVector::SetNull(result, result_offset + i, true);
-		}
-	}
 }
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
