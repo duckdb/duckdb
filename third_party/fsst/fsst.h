@@ -138,7 +138,7 @@ duckdb_fsst_destroy(duckdb_fsst_encoder_t*);
 unsigned int                /* OUT: bytes consumed (a symbol table was decoded), or one of the sentinels above on failure. */
 duckdb_fsst_import(
    duckdb_fsst_decoder_t *decoder, /* IN: this symbol table will be overwritten. */
-   unsigned char *buf,      /* IN: pointer to a byte-buffer where duckdb_fsst_export() serialized this symbol table. */
+   const unsigned char *buf, /* IN: pointer to a byte-buffer where duckdb_fsst_export() serialized this symbol table. */
    size_t buf_size          /* IN: number of readable bytes in buf; import never reads past this. */
 );
 
