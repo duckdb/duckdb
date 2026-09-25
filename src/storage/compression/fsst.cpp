@@ -594,11 +594,20 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &con
 	return std::move(state);
 }
 
-void DeltaDecodeIndices(uint32_t *buffer_in, uint32_t *buffer_out, idx_t decode_count, uint32_t last_known_value) {
-	buffer_out[0] = buffer_in[0];
-	buffer_out[0] += last_known_value;
-	for (idx_t i = 1; i < decode_count; i++) {
-		buffer_out[i] = buffer_in[i] + buffer_out[i - 1];
+void DeltaDecodeIndices(uint32_t *buffer_in, uint32_t *buffer_out, idx_t decode_count, uint32_t last_known_value,
+                        uint32_t dictionary_size) {
+	if (last_known_value > dictionary_size) {
+		ThrowInvalidFSSTSegment("dictionary offset was out of range");
+	}
+	auto dictionary_offset = last_known_value;
+	for (idx_t i = 0; i < decode_count; i++) {
+		auto string_length = buffer_in[i];
+		// Check the remaining dictionary bytes before adding the length so the offset cannot wrap.
+		if (string_length > dictionary_size - dictionary_offset) {
+			ThrowInvalidFSSTSegment("string length exceeded the remaining dictionary bytes");
+		}
+		dictionary_offset += string_length;
+		buffer_out[i] = dictionary_offset;
 	}
 }
 
@@ -644,7 +653,7 @@ bp_delta_offsets_t FSSTStorage::StartScan(FSSTScanState &scan_state, idx_t start
 	}
 	DeltaDecodeIndices(scan_state.bitunpack_buffer.get() + offsets.bitunpack_alignment_offset,
 	                   scan_state.delta_decode_buffer.get(), offsets.total_delta_decode_count,
-	                   scan_state.last_known_index);
+	                   scan_state.last_known_index, scan_state.layout.dict.size);
 	return offsets;
 }
 
@@ -770,7 +779,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	               offsets.bitunpack_start_row, layout.width);
 	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
 	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
-	                   offsets.total_delta_decode_count, 0);
+	                   offsets.total_delta_decode_count, 0, layout.dict.size);
 
 	uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
 
