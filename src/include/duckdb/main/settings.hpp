@@ -1488,7 +1488,8 @@ struct ExternalFileCacheLocalBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_file_cache_local_block_size";
 	static constexpr const char *Description =
-	    "Block size in bytes for the external file cache when reading local (non-remote) files.";
+	    "Maximum size in bytes of an external file cache block for local (non-remote) files. Larger reads are split "
+	    "into blocks of this size, which are fetched in parallel.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
@@ -1502,7 +1503,8 @@ struct ExternalFileCacheRemoteBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_file_cache_remote_block_size";
 	static constexpr const char *Description =
-	    "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).";
+	    "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split "
+	    "into blocks of this size, which are fetched in parallel.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

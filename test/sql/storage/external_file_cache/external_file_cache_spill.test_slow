@@ -31,10 +31,13 @@ TO '{TEST_DIR}/efc_spill.parquet' (FORMAT parquet);
 
 # local files can be re-read at the same cost as a spilled block, so even with spilling
 # enabled and large cache blocks, evicted local blocks are dropped, never spilled
-query I
-SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('{TEST_DIR}/efc_spill.parquet');
+query III
+SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)),
+       sum(b) - (SELECT sum(hash(i * 2)) FROM range(12000000) t(i)),
+       sum(c) - (SELECT sum(hash(i * 3)) FROM range(12000000) t(i))
+FROM read_parquet('{TEST_DIR}/efc_spill.parquet');
 ----
-0
+0	0	0
 
 query I
 SELECT count(*) > 0 FROM duckdb_external_file_cache() WHERE NOT loaded;
@@ -59,7 +62,7 @@ FROM read_parquet('{TEST_DIR}/efc_spill.parquet');
 ----
 0	0
 
-# reads reassemble the correct content after a cache block size change re-indexes the cache
+# reads reassemble the correct content after a cache block size change
 statement ok
 SET external_file_cache_local_block_size=16384;
 
