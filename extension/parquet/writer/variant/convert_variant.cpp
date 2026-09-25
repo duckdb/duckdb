@@ -898,7 +898,7 @@ static void MarkTypedValueShreddingGroupsRequired(ColumnWriter &typed_value);
 
 // Field/element group: mark REQUIRED, then recurse into nested typed_value if present
 static void MarkShreddedGroupRequired(ColumnWriter &group) {
-	D_ASSERT(StructType::IsStruct(group.Type().id()));
+	D_ASSERT(group.Type().id() == LogicalTypeId::STRUCT);
 	group.MarkRepetitionRequired();
 	auto nested_typed_value = FindChildWriterByName(group, "typed_value");
 	if (nested_typed_value) {
