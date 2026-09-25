@@ -247,10 +247,16 @@ false	true	true	false
 
 # Deep nested objects are compared without recursive calls.
 query I
-SELECT variant_contains(
-    (repeat('{"a":', 5000) || '42' || repeat('}', 5000))::JSON::VARIANT,
-    (repeat('{"a":', 5000) || '42' || repeat('}', 5000))::JSON::VARIANT
-);
+WITH RECURSIVE nested(i, v) AS (
+    SELECT 0, 42::VARIANT
+    UNION ALL
+    SELECT i + 1, struct_pack(a := v)::VARIANT
+    FROM nested
+    WHERE i < 5000
+)
+SELECT variant_contains(v, v)
+FROM nested
+WHERE i = 5000;
 ----
 true
 
