@@ -94,6 +94,8 @@ public:
 	DUCKDB_API virtual unique_ptr<LogSinkScanState> CreateScanState(LoggingTargetTable table) const;
 	DUCKDB_API virtual bool Scan(LogSinkScanState &state, DataChunk &result) const;
 	DUCKDB_API virtual void InitializeScan(LogSinkScanState &state) const;
+	//! The number of rows a scan of the table produces, if known (used for progress reporting)
+	DUCKDB_API virtual optional_idx GetScanRowCount(LoggingTargetTable table) const;
 
 	// Reading interface 2: using bind_replace
 	DUCKDB_API virtual unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input,
@@ -339,6 +341,7 @@ public:
 	unique_ptr<LogSinkScanState> CreateScanState(LoggingTargetTable table) const override;
 	bool Scan(LogSinkScanState &state, DataChunk &result) const override;
 	void InitializeScan(LogSinkScanState &state) const override;
+	optional_idx GetScanRowCount(LoggingTargetTable table) const override;
 
 protected:
 	/// Implement BufferingLogSink interface

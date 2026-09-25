@@ -9,10 +9,14 @@
 
 namespace duckdb {
 
+struct DuckDBLogBindData : public TableFunctionData {
+	string sink_name;
+};
 struct DuckDBLogData : public GlobalTableFunctionState {
 	explicit DuckDBLogData(shared_ptr<LogSink> log_sink_p) : log_sink(std::move(log_sink_p)) {
 		scan_state = log_sink->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
 		log_sink->InitializeScan(*scan_state);
+		total_rows = log_sink->GetScanRowCount(LoggingTargetTable::LOG_ENTRIES);
 	}
 	DuckDBLogData() : log_sink(nullptr) {
 	}
@@ -20,6 +24,9 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 	//! The log sink we are scanning
 	shared_ptr<LogSink> log_sink;
 	unique_ptr<LogSinkScanState> scan_state;
+	//! The number of log entries when the scan started, if known (for progress)
+	optional_idx total_rows;
+	atomic<idx_t> scanned_rows {0};
 };
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -39,14 +46,34 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 	names.emplace_back("message");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return nullptr;
+	auto result = make_uniq<DuckDBLogBindData>();
+
+	auto sink_setting = input.named_parameters.find("sink");
+	if (sink_setting != input.named_parameters.end()) {
+		if (sink_setting->second.IsNull()) {
+			throw InvalidInputException("sink cannot be NULL");
+		}
+		result->sink_name = sink_setting->second.GetValue<string>();
+	}
+
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
-	if (LogManager::Get(context).CanScan(LoggingTargetTable::LOG_ENTRIES)) {
-		return make_uniq<DuckDBLogData>(LogManager::Get(context).GetLogSink());
+	auto &bind_data = input.bind_data->Cast<DuckDBLogBindData>();
+
+	shared_ptr<LogSink> log_sink;
+	if (bind_data.sink_name.empty()) {
+		log_sink = LogManager::Get(context).GetLogSink();
+	} else {
+		log_sink = LogManager::Get(context).GetRegisteredLogSink(bind_data.sink_name);
 	}
-	return make_uniq<DuckDBLogData>();
+
+	if (!log_sink || !log_sink->CanScan(LoggingTargetTable::LOG_ENTRIES)) {
+		return make_uniq<DuckDBLogData>();
+	}
+
+	return make_uniq<DuckDBLogData>(std::move(log_sink));
 }
 
 void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -59,7 +86,7 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 static double DuckDBLogProgress(ClientContext &context, const FunctionData *bind_data,
                                 const GlobalTableFunctionState *global_state) {
 	auto &data = global_state->Cast<DuckDBLogData>();
-	if (!data.log_storage) {
+	if (!data.log_sink) {
 		return 100.0;
 	}
 	if (!data.total_rows.IsValid()) {
@@ -75,6 +102,20 @@ static double DuckDBLogProgress(ClientContext &context, const FunctionData *bind
 
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
 	auto log_sink = LogManager::Get(context).GetLogSink();
+
+	auto sink_setting = input.named_parameters.find("sink");
+	if (sink_setting != input.named_parameters.end()) {
+		if (sink_setting->second.IsNull()) {
+			throw InvalidInputException("sink cannot be NULL");
+		}
+
+		auto sink_name = sink_setting->second.GetValue<string>();
+		log_sink = LogManager::Get(context).GetRegisteredLogSink(sink_name);
+
+		if (!log_sink) {
+			throw InvalidInputException("Log sink '%s' is not registered", sink_name);
+		}
+	}
 
 	bool denormalized_table = false;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
@@ -115,6 +156,7 @@ void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	logs_fun.bind_replace = DuckDBLogBindReplace;
 	logs_fun.table_scan_progress = DuckDBLogProgress;
 	logs_fun.named_parameters["denormalized_table"] = LogicalType::BOOLEAN;
+	logs_fun.named_parameters["sink"] = LogicalType::VARCHAR;
 	set.AddFunction(logs_fun);
 }
 

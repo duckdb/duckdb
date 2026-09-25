@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -21,6 +22,64 @@ public:
 	LogConfig config;
 	vector<string> log_types_to_set;
 };
+
+class RegisterLogSinkBindData : public TableFunctionData {
+public:
+	explicit RegisterLogSinkBindData(string name_p) : name(std::move(name_p)) {
+	}
+
+	string name;
+};
+
+static unique_ptr<FunctionData> BindRegisterLogSink(ClientContext &context, TableFunctionBindInput &input,
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
+	if (input.inputs.size() != 1 || input.inputs[0].type() != LogicalType::VARCHAR) {
+		throw BinderException("register_log_sink: expected a sink name");
+	}
+
+	auto name = input.inputs[0].GetValue<string>();
+
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+
+	return make_uniq<RegisterLogSinkBindData>(std::move(name));
+}
+
+static void RegisterLogSink(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto bind_data = data.bind_data->Cast<RegisterLogSinkBindData>();
+	auto &db = *context.db;
+
+	auto sink = make_shared_ptr<InMemoryLogSink>(db);
+	shared_ptr<LogSink> log_sink = sink;
+
+	if (!db.GetLogManager().RegisterLogSink(bind_data.name, log_sink)) {
+		throw InvalidInputException("Log sink '%s' is already registered", bind_data.name);
+	}
+}
+
+static unique_ptr<FunctionData> BindEnableLogSink(ClientContext &context, TableFunctionBindInput &input,
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
+	if (input.inputs.size() != 1 || input.inputs[0].type() != LogicalType::VARCHAR) {
+		throw BinderException("enable_log_sink: expected a sink name");
+	}
+
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+
+	return make_uniq<RegisterLogSinkBindData>(input.inputs[0].GetValue<string>());
+}
+
+static void EnableLogSink(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto bind_data = data.bind_data->Cast<RegisterLogSinkBindData>();
+	auto &log_manager = context.db->GetLogManager();
+
+	auto sink = log_manager.GetRegisteredLogSink(bind_data.name);
+	if (!sink) {
+		throw InvalidInputException("Log sink '%s' is not registered", bind_data.name);
+	}
+
+	log_manager.EnableLogSink(bind_data.name, sink);
+}
 
 static void EnableLogging(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto bind_data = data.bind_data->Cast<EnableLoggingBindData>();
@@ -44,6 +103,30 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 	if (!bind_data.storage_config.empty()) {
 		log_manager.UpdateLogSinkConfig(*context.db, bind_data.storage_config);
 	}
+}
+
+static unique_ptr<FunctionData> BindDisableLogSink(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<Identifier> &names) {
+	if (input.inputs.size() != 1 || input.inputs[0].type() != LogicalType::VARCHAR) {
+		throw BinderException("disable_log_sink: expected a sink name");
+	}
+
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+
+	return make_uniq<RegisterLogSinkBindData>(input.inputs[0].GetValue<string>());
+}
+
+static void DisableLogSink(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto bind_data = data.bind_data->Cast<RegisterLogSinkBindData>();
+	auto &log_manager = context.db->GetLogManager();
+
+	auto sink = log_manager.GetRegisteredLogSink(bind_data.name);
+	if (!sink) {
+		throw InvalidInputException("Log sink '%s' is not registered", bind_data.name);
+	}
+
+	log_manager.DisableLogSink(bind_data.name);
 }
 
 //! Log types are registered by extensions when they are loaded, so an unknown type may just belong to an extension
@@ -150,6 +233,10 @@ static void DisableLogging(ClientContext &context, TableFunctionInput &data, Dat
 	context.db->GetLogManager().SetEnableLogging(false);
 }
 
+static void FlushLogs(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	context.db->GetLogManager().Flush();
+}
+
 //! Truncate the current log storage
 static void TruncateLogs(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	context.db->GetLogManager().TruncateLogSink();
@@ -163,6 +250,14 @@ static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, Table
 	return std::move(make_uniq<EnableLoggingBindData>());
 }
 
+static unique_ptr<FunctionData> BindFlushLogs(ClientContext &context, TableFunctionBindInput &input,
+                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+
+	return make_uniq<EnableLoggingBindData>();
+}
+
 static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::BOOLEAN);
@@ -172,23 +267,38 @@ static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFu
 }
 
 void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
-	auto enable_fun = TableFunction("enable_logging", {}, EnableLogging, BindEnableLogging, nullptr, nullptr);
+	auto register_fun = TableFunction("enable_logging", {}, EnableLogging, BindEnableLogging, nullptr, nullptr);
+
+	auto register_sink_fun = TableFunction("register_log_sink", {LogicalType::VARCHAR}, RegisterLogSink,
+	                                       BindRegisterLogSink, nullptr, nullptr);
+	set.AddFunction(register_sink_fun);
+
+	auto enable_sink_fun =
+	    TableFunction("enable_log_sink", {LogicalType::VARCHAR}, EnableLogSink, BindEnableLogSink, nullptr, nullptr);
+	set.AddFunction(enable_sink_fun);
+
+	auto disable_sink_fun =
+	    TableFunction("disable_log_sink", {LogicalType::VARCHAR}, DisableLogSink, BindDisableLogSink, nullptr, nullptr);
+	set.AddFunction(disable_sink_fun);
 
 	// Base config
-	enable_fun.named_parameters.emplace("level", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage_config", LogicalType::ANY);
+	register_fun.named_parameters.emplace("level", LogicalType::VARCHAR);
+	register_fun.named_parameters.emplace("storage", LogicalType::VARCHAR);
+	register_fun.named_parameters.emplace("storage_config", LogicalType::ANY);
 
 	// Config that is forwarded to the storage_config struct as syntactic sugar
-	enable_fun.named_parameters.emplace("storage_path", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage_normalize", LogicalType::BOOLEAN);
-	enable_fun.named_parameters.emplace("storage_buffer_size", LogicalType::UBIGINT);
+	register_fun.named_parameters.emplace("storage_path", LogicalType::VARCHAR);
+	register_fun.named_parameters.emplace("storage_normalize", LogicalType::BOOLEAN);
+	register_fun.named_parameters.emplace("storage_buffer_size", LogicalType::UBIGINT);
 
-	enable_fun.SetVarArgs(LogicalType::ANY);
-	set.AddFunction(enable_fun);
+	register_fun.SetVarArgs(LogicalType::ANY);
+	set.AddFunction(register_fun);
 
 	auto disable_fun = TableFunction("disable_logging", {}, DisableLogging, BindDisableLogging, nullptr, nullptr);
 	set.AddFunction(disable_fun);
+
+	auto flush_fun = TableFunction("flush_logs", {}, FlushLogs, BindFlushLogs, nullptr, nullptr);
+	set.AddFunction(flush_fun);
 
 	auto truncate_fun = TableFunction("truncate_duckdb_logs", {}, TruncateLogs, BindTruncateLogs, nullptr, nullptr);
 	set.AddFunction(truncate_fun);

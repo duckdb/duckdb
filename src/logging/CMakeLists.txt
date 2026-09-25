@@ -1,7 +1,7 @@
 add_library_unity(
   duckdb_logging
   OBJECT
-  log_manager_sink.cpp
+  log_manager.cpp
   log_sink.cpp
   log_types.cpp
   logger.cpp

@@ -37,7 +37,6 @@ public:
 
 	RegisteredLoggingContext RegisterLoggingContext(LoggingContext &context);
 
-	// DUCKDB_API bool RegisterLogStorage(const string &name, shared_ptr<LogStorage> &storage);
 	DUCKDB_API bool RegisterLogSink(const string &name, shared_ptr<LogSink> &storage);
 
 	//! The global logger can be used when
@@ -48,8 +47,8 @@ public:
 	DUCKDB_API void Flush();
 
 	//! Get a shared_ptr to the log sink (For example, to scan it)
-	// DUCKDB_API shared_ptr<LogStorage> GetLogStorage();
 	DUCKDB_API shared_ptr<LogSink> GetLogSink();
+	DUCKDB_API shared_ptr<LogSink> GetRegisteredLogSink(const string &name);
 	DUCKDB_API bool CanScan(LoggingTargetTable table);
 
 	DUCKDB_API void SetConfig(DatabaseInstance &db, const LogConfig &config);

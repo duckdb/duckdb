@@ -77,6 +77,9 @@ bool LogSink::Scan(LogSinkScanState &state, DataChunk &result) const {
 void LogSink::InitializeScan(LogSinkScanState &state) const {
 	throw NotImplementedException("Not implemented for this LogSink: InitializeScanEntries");
 }
+optional_idx LogSink::GetScanRowCount(LoggingTargetTable table) const {
+	return optional_idx();
+}
 void LogSink::Truncate() {
 	throw NotImplementedException("Not implemented for this LogSink: TruncateLogSink");
 }
@@ -635,7 +638,6 @@ static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggin
 void BufferingLogSink::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
                                      const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
-
 	auto &log_entries_buffer =
 	    normalize_contexts ? buffers[LoggingTargetTable::LOG_ENTRIES] : buffers[LoggingTargetTable::ALL_LOGS];
 
@@ -766,6 +768,11 @@ bool InMemoryLogSink::Scan(LogSinkScanState &state, DataChunk &result) const {
 	unique_lock<mutex> lck(lock);
 	auto &in_mem_scan_state = state.Cast<InMemoryLogSinkScanState>();
 	return GetBuffer(in_mem_scan_state.table).Scan(in_mem_scan_state.scan_state, result);
+}
+
+optional_idx InMemoryLogSink::GetScanRowCount(LoggingTargetTable table) const {
+	unique_lock<mutex> lck(lock);
+	return GetBuffer(table).Count();
 }
 
 void InMemoryLogSink::InitializeScan(LogSinkScanState &state) const {
