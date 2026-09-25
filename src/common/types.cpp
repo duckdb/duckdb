@@ -1930,12 +1930,12 @@ const unique_ptr<ParsedExpression> &UnboundType::GetTypeExpression(const Logical
 	return info->Cast<UnboundTypeInfo>().expr;
 }
 
-LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str) {
+LogicalType UnboundType::TryParseAndDefaultBind(const string &type_str, const ParserOptions &options) {
 	if (type_str.empty()) {
 		return LogicalType::INVALID;
 	}
 	try {
-		ColumnList list = Parser::ParseColumnList("dummy " + type_str);
+		ColumnList list = Parser::ParseColumnList("dummy " + type_str, options);
 		auto unbound = list.GetColumn(LogicalIndex(0)).Type();
 		return TryDefaultBind(unbound);
 	} catch (const std::runtime_error &e) {

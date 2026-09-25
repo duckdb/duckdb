@@ -9,6 +9,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
@@ -170,7 +171,7 @@ static string PragmaImportDatabase(ClientContext &context, const FunctionParamet
 		auto query = string(buffer.get(), UnsafeNumericCast<uint32_t>(fsize));
 		// Replace the placeholder with the path provided to IMPORT
 		if (file == "load.sql") {
-			Parser parser;
+			Parser parser(context.GetParserOptions());
 			parser.ParseQuery(query);
 			auto copy_statements = std::move(parser.statements);
 			query.clear();

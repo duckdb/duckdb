@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -50,8 +51,12 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	return std::move(result);
 }
 
-unique_ptr<SelectStatement> CreateViewInfo::ParseSelect(const string &sql) {
-	Parser parser;
+unique_ptr<SelectStatement> CreateViewInfo::ParseSelect(ClientContext &context, const string &sql) {
+	Parser parser(context.GetParserOptions());
+	return ParseSelect(parser, sql);
+}
+
+unique_ptr<SelectStatement> CreateViewInfo::ParseSelect(Parser &parser, const string &sql) {
 	parser.ParseQuery(sql);
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
 		throw BinderException(
@@ -68,7 +73,7 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, un
 	D_ASSERT(!info->sql.empty());
 	D_ASSERT(!info->query);
 
-	info->query = ParseSelect(info->sql);
+	info->query = ParseSelect(context, info->sql);
 	return info;
 }
 
@@ -77,7 +82,7 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	D_ASSERT(!sql.empty());
 
 	// parse the SQL statement
-	Parser parser;
+	Parser parser(context.GetParserOptions());
 	parser.ParseQuery(sql);
 
 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {

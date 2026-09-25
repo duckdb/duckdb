@@ -11,6 +11,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/execution/operator/csv_scanner/string_value_scanner.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "test_config.hpp"
@@ -673,6 +674,11 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 		}
 	}
 	return false;
+}
+
+ParserOptions TestParserOptions() {
+	static auto grammar = CompiledGrammar::Create();
+	return ParserOptions(grammar);
 }
 
 unique_ptr<DBConfig> GetTestConfig() {

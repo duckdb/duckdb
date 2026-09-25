@@ -94,15 +94,14 @@ DefaultTableFunctionGenerator::DefaultTableFunctionGenerator(Catalog &catalog, S
     : DefaultGenerator(catalog), schema(schema) {
 }
 
-unique_ptr<CreateMacroInfo>
-DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,
-                                                            unique_ptr<MacroFunction> function) {
+unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(
+    const DefaultTableMacro &default_macro, unique_ptr<MacroFunction> function, const ParserOptions &options) {
 	for (idx_t param_idx = 0; default_macro.parameters[param_idx] != nullptr; param_idx++) {
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(default_macro.parameters[param_idx]));
 	}
 	for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
 		const auto &named_param = default_macro.named_parameters[named_idx];
-		auto expr_list = Parser::ParseExpressionList(named_param.default_value);
+		auto expr_list = Parser::ParseExpressionList(named_param.default_value, options);
 		if (expr_list.size() != 1) {
 			throw InternalException("Expected a single expression");
 		}
@@ -119,11 +118,6 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 	return bind_info;
 }
 
-unique_ptr<CreateMacroInfo>
-DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro) {
-	return CreateTableMacroInfo(default_macro, ParserOptions());
-}
-
 unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro,
                                                                                 const ParserOptions &options) {
 	Parser parser(options);
@@ -134,7 +128,7 @@ unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(
 	auto node = std::move(parser.statements[0]->Cast<SelectStatement>().node);
 
 	auto result = make_uniq<TableMacroFunction>(std::move(node));
-	return CreateInternalTableMacroInfo(default_macro, std::move(result));
+	return CreateInternalTableMacroInfo(default_macro, std::move(result), options);
 }
 
 static unique_ptr<CreateFunctionInfo>
@@ -149,8 +143,7 @@ GetDefaultTableFunction(const Identifier &input_schema, const Identifier &input_
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                            const Identifier &entry_name) {
-	ParserOptions options;
-	options.compiled_grammar = CompiledGrammar::Get(context);
+	ParserOptions options(CompiledGrammar::Get(context));
 	auto info = GetDefaultTableFunction(schema.name, entry_name, options);
 	if (info) {
 		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
