@@ -42,6 +42,12 @@ MetadataResult DisableBatch(ShellState &state, const vector<string> &args) {
 	return MetadataResult::SUCCESS;
 }
 
+template <OptionType AGENT_MODE>
+MetadataResult SetAgentMode(ShellState &state, const vector<string> &args) {
+	state.agent_mode = AGENT_MODE;
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult SetReadOnlyMode(ShellState &state, const vector<string> &args) {
 	state.config.options.access_mode = duckdb::AccessMode::READ_ONLY;
 	return MetadataResult::SUCCESS;
@@ -337,6 +343,9 @@ MetadataResult FormatFile(ShellState &state, const vector<string> &args) {
 }
 
 static const CommandLineOption command_line_options[] = {
+    {"agent", 0, "", SetAgentMode<OptionType::ON>, nullptr,
+     "render output for an AI coding agent (all rows, ASCII tables, JSON errors, compact plans, cost estimates "
+     "and progress on stderr). Default: on when an agent's environment variable is set and stdout is not a terminal"},
     {"ascii", 0, "", nullptr, ToggleASCIIMode, "set output mode to 'ascii'"},
     {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error"},
     {"batch", 0, "", EnableBatch, EnableBatch, "force batch I/O'"},
@@ -370,6 +379,7 @@ static const CommandLineOption command_line_options[] = {
     {"manual", 1, "FUNCTION", nullptr, RunManual, "show the manual page for a SQL function and exit"},
     {"markdown", 0, "", nullptr, ToggleOutputMode<RenderMode::MARKDOWN>, "set output mode to 'markdown'"},
     {"newline", 1, "SEP", nullptr, SetNewlineSeparator, "set output row separator. Default: '\\n'"},
+    {"no-agent", 0, "", SetAgentMode<OptionType::OFF>, nullptr, "never render output for an AI coding agent"},
     {"no-init", 0, "", SkipInit, nullptr, "skip processing the init file"},
     {"no-stdin", 0, "", nullptr, DisableStdin, "exit after processing options instead of reading stdin"},
     {"noheader", 0, "", nullptr, ToggleHeader<false>, "turn headers off"},

@@ -244,6 +244,13 @@ public:
 	bool stdout_is_console = true;
 	bool stderr_is_console = true;
 
+	//! Whether to render for an AI coding agent: forced on/off from the command line, or auto-detected (DEFAULT)
+	OptionType agent_mode = OptionType::DEFAULT;
+	//! Whether agent mode is active (see DetectAgentMode)
+	bool agent_mode_active = false;
+	//! The name of the detected agent (e.g. "claude-code"), if any
+	string agent_name;
+
 	//! True if an interrupt (Control-C) has been received.
 	atomic<idx_t> seenInterrupt;
 	//! Name of our program
@@ -366,6 +373,8 @@ public:
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);
+	//! Print an error, either with its location in the query (default) or as JSON (agent mode)
+	void PrintDatabaseError(ErrorData error, const string &query = string());
 	int RunInitialCommand(const char *sql, bool bail);
 	//! Expand `{parameter|default}` placeholders in a command using the parameters set on the command line
 	bool ExpandCommandParameters(const string &command, string &result);
@@ -430,6 +439,12 @@ public:
 	static void Sleep(idx_t ms);
 	void PrintUsage();
 	void DetectDarkLightMode();
+	//! Decide whether agent mode is active, from the -agent/-no-agent flags or the environment (see agent_mode)
+	void DetectAgentMode();
+	//! Whether the environment marks the shell as being run by an AI coding agent, and which one
+	static bool DetectAgentEnvironment(string &agent_name);
+	//! Print the planner's estimate of what a statement will read and return to stderr (agent mode)
+	void PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement);
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
 	static std::wstring Win32Utf8ToUnicode(const char *) = delete;

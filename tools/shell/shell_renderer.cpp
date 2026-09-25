@@ -572,7 +572,25 @@ public:
 
 class ModeMarkdownRenderer : public ColumnRenderer {
 public:
-	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state) {
+	//! In agent mode the table is rendered for a machine reader: no alignment padding, the type in the header cell
+	//! and a row count footer when it is not obvious from the rows (see DetectAgentMode)
+	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state), compact(state.agent_mode_active) {
+	}
+
+	void Analyze(RenderingQueryResult &result) override {
+		ColumnRenderer::Analyze(result);
+		row_count = result.loaded_row_count;
+		if (compact) {
+			for (auto &width : column_width) {
+				width = 0;
+			}
+		}
+	}
+
+	void RenderFooter(PrintStream &out, ResultMetadata &result) override {
+		if (compact && (row_count == 0 || row_count >= 10)) {
+			out.Print(StringUtil::Format("%llu rows\n", row_count));
+		}
 	}
 
 	bool HasConvertValue() override {
@@ -608,7 +626,14 @@ public:
 			if (c > 0) {
 				out.Print(GetColumnSeparator());
 			}
-			out.RenderAlignedValue(result.column_names[c], column_width[c]);
+			if (compact) {
+				auto &type = result.types[c];
+				// the NULL type renders quoted (to not read as the keyword) - the header is not SQL
+				auto type_name = type.id() == duckdb::LogicalTypeId::SQLNULL ? "NULL" : type.ToString();
+				out.Print(result.column_names[c] + ":" + type_name);
+			} else {
+				out.RenderAlignedValue(result.column_names[c], column_width[c]);
+			}
 		}
 		out.Print(GetRowSeparator());
 		PrintMarkdownSeparator(out, column_count, "|", result.types, column_width);
@@ -619,12 +644,12 @@ public:
 		if (nArg > 0) {
 			for (idx_t i = 0; i < nArg; i++) {
 				out.Print(zSep);
-				if (colTypes[i].IsNumeric()) {
+				if (colTypes[i].IsNumeric() && !compact) {
 					// right-align numerics in tables
 					out.PrintDashes(actualWidth[i] + 1);
 					out.Print(":");
 				} else {
-					out.PrintDashes(actualWidth[i] + 2);
+					out.PrintDashes(duckdb::MaxValue<idx_t>(actualWidth[i] + 2, 3));
 				}
 			}
 			out.Print(zSep);
@@ -646,6 +671,10 @@ public:
 		// this mode never uses the pager in automatic mode
 		return global_mode == PagerMode::PAGER_ON;
 	}
+
+private:
+	bool compact;
+	idx_t row_count = 0;
 };
 
 /*
