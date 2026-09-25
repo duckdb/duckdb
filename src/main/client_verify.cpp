@@ -263,7 +263,12 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 		ScopedConfigSetting suppress_profiling(
 		    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
 		    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
-		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters);
+		// Only the error is read, and a streaming result would stay the active query after this scope
+		// ends - the statement being verified runs next, past the point where InitialCleanup would
+		// have released it, and finds a query already in flight.
+		auto explain_parameters = query_parameters;
+		explain_parameters.query_parameters.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+		auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), explain_parameters);
 		if (explain_result->HasError()) {
 			explain_result->ThrowError();
 		}
