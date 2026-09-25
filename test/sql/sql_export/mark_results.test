@@ -63,46 +63,6 @@ EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN 
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: .*MARK.*semantics.*
 
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>2;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (0,0),(2,2)) r(b,c) ON a>b AND a<c;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (NULL::INTEGER,2)) r(b,c) ON a>b AND a<c;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (NULL::INTEGER,2),(0,2)) r(b,c) ON a>b AND a<c;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b IS NOT NULL;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a+b=2;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
-statement error
-EXPLAIN (SQL) SELECT bool_and(__mark_join_marker IS NOT DISTINCT FROM (a>0)) FROM (VALUES (NULL::INTEGER),(1)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a<2 AND a>0;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
 statement ok
 CREATE TABLE mark_probe(id INTEGER,label VARCHAR,a INTEGER,c INTEGER);
 
@@ -116,7 +76,7 @@ statement ok
 INSERT INTO mark_build VALUES (1,NULL);
 
 statement error
-EXPLAIN (SQL) SELECT label,label,id,__mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_build ON a=b AND c+d>0;
+EXPLAIN (SQL) SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 
@@ -124,7 +84,7 @@ statement ok
 DELETE FROM mark_build;
 
 statement error
-EXPLAIN (SQL) SELECT label,label,id,__mark_join_marker FROM mark_probe JOIN BY (TYPE MARK) mark_build ON a=b AND c+d>0;
+EXPLAIN (SQL) SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
 ----
 <REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
 

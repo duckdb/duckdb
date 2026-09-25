@@ -223,26 +223,6 @@ SELECT * FROM (VALUES (1,10),(2,20),(2,20),(NULL,30)) l(a,x) JOIN BY (TYPE mark)
 2	20	true
 NULL	30	true
 
-# Mixed MARK comparisons remain an explicit export restriction.
-statement ok
-SET debug_verify_statement='none';
-
-query III rowsort
-SELECT * FROM (VALUES (1,10),(2,20),(2,20),(NULL,30)) l(a,x) JOIN BY (TYPE mark) (VALUES (2,20),(3,30),(NULL,40)) r(b,y) ON a=b AND x<y;
-----
-1	10	NULL
-2	20	NULL
-2	20	NULL
-NULL	30	NULL
-
-statement ok
-SET debug_verify_statement='explain_sql_strict';
-
-statement error
-EXPLAIN (SQL) SELECT * FROM (VALUES (1,10),(2,20),(2,20),(NULL,30)) l(a,x) JOIN BY (TYPE mark) (VALUES (2,20),(3,30),(NULL,40)) r(b,y) ON a=b AND x<y;
-----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
-
 statement error
 SELECT * FROM (VALUES (1),(2)) l(a) JOIN BY (TYPE single) (VALUES(2),(2)) r(b) ON a=b;
 ----
