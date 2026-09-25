@@ -53,6 +53,8 @@ set(TEST_API_OBJECTS
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
     test_grammar_extension.cpp
+    test_passthrough_dialect.cpp
+    test_passthrough_token_matcher.cpp
     test_progress_bar.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
