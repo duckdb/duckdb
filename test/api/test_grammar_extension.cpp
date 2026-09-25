@@ -1196,7 +1196,14 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
 
-	auto options = con.context->GetParserOptions();
+	Parser context_parser(*con.context);
+	REQUIRE_NOTHROW(context_parser.ParseQuery("ANSWER"));
+	REQUIRE(context_parser.statements.size() == 1);
+	auto &context_select = context_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
+	REQUIRE(context_select.select_list[0]->GetExpressionClass() == ExpressionClass::CONSTANT);
+
+	auto options = ParserOptions::Builtin();
+	options.compiled_grammar = CompiledGrammar::Get(*con.context);
 	REQUIRE(options.compiled_grammar == CompiledGrammar::Get(*con.context));
 	options.extensions = nullptr;
 
@@ -1204,9 +1211,13 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
-	Parser base_parser;
-	REQUIRE_NOTHROW(base_parser.ParseQuery("SELECT 42"));
+	auto base_parser = Parser::GetBuiltinParser();
+	REQUIRE_NOTHROW(base_parser.ParseQuery("ANSWER"));
 	REQUIRE(base_parser.statements.size() == 1);
+	auto &base_select = base_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
+	// Without the extension, ANSWER is a table name in a FROM-first query.
+	REQUIRE(base_select.select_list[0]->GetExpressionClass() == ExpressionClass::STAR);
+	REQUIRE(base_select.from_table->type == TableReferenceType::BASE_TABLE);
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {

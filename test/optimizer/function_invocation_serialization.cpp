@@ -185,7 +185,7 @@ TEST_CASE("Current list serialization preserves bound ordering across repeated c
 		auto sql = "SELECT " + string(expression) + " FROM ordering_input";
 		auto expected = connection.Query(sql);
 		REQUIRE_NO_FAIL(*expected);
-		Parser parser(connection.context->GetParserOptions());
+		Parser parser(*connection.context);
 		parser.ParseQuery(sql);
 		Planner planner(*connection.context);
 		planner.CreatePlan(std::move(parser.statements[0]));
@@ -208,7 +208,7 @@ TEST_CASE("Current list serialization preserves bound ordering across repeated c
 }
 
 static unique_ptr<LogicalOperator> PlanAndOptimize(Connection &connection, const string &sql) {
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(sql);
 	Planner planner(*connection.context);
 	planner.CreatePlan(std::move(parser.statements[0]));
@@ -310,7 +310,7 @@ TEST_CASE("Secure-view source positions survive window column pruning", "[serial
 	connection.BeginTransaction();
 	for (idx_t retained_window = 0; retained_window < 2; retained_window++) {
 		CAPTURE(retained_window);
-		Parser parser(connection.context->GetParserOptions());
+		Parser parser(*connection.context);
 		parser.ParseQuery("SELECT row_number() OVER (), rank() OVER ()");
 		Planner planner(*connection.context);
 		planner.CreatePlan(std::move(parser.statements[0]));
@@ -361,7 +361,7 @@ TEST_CASE("Function unbind callbacks reconstruct retained invocation data", "[fu
 	for (const auto &sql : {"SELECT struct_insert({'a': 1}, \"new field\" := 2)", "SELECT alias(42)",
 	                        "SELECT ([1,2,3])[:2]", "SELECT ([1,2,3])[2:]"}) {
 		CAPTURE(sql);
-		Parser parser(connection.context->GetParserOptions());
+		Parser parser(*connection.context);
 		parser.ParseQuery(sql);
 		Planner planner(*connection.context);
 		planner.CreatePlan(std::move(parser.statements[0]));
@@ -413,7 +413,7 @@ TEST_CASE("Nested function qualification survives plan copies", "[serialization]
 	install(table_info);
 	const string sql = "SELECT memory.parent.child.abs(i), memory.parent.child.min(i) OVER (), "
 	                   "memory.parent.child.row_number() OVER () FROM memory.parent.child.range(3) r(i)";
-	Parser parser(context.GetParserOptions());
+	Parser parser(context);
 	parser.ParseQuery(sql);
 	Planner planner(context);
 	planner.CreatePlan(std::move(parser.statements[0]));

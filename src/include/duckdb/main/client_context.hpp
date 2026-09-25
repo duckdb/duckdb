@@ -247,9 +247,6 @@ public:
 	//! Returns the value of the current setting set by the user - if the user has set it.
 	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 
-	//! Returns the parser options for this client context
-	DUCKDB_API ParserOptions GetParserOptions();
-
 	//! Whether or not the given result object is the connection's open result
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult &result);
 
@@ -280,6 +277,10 @@ public:
 	DUCKDB_API LogicalType ParseLogicalType(const string &type);
 
 private:
+	friend class Parser;
+	friend class ParseIterator;
+	ParserOptions GetParserOptions();
+
 	//! Runs a transaction statement without going through the local query processing pipeline.
 	void RunTransactionStatement(const TransactionInfo &info);
 	//! Same as RunTransactionStatement, but does not obtain a lock or route CONNECT statements.

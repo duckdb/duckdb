@@ -123,7 +123,7 @@ static void JsonSerializePlanFunction(DataChunk &args, ExpressionState &state, V
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			Parser parser;
+			Parser parser(state.GetContext());
 			parser.ParseQuery(input.GetString());
 			auto plans_arr = yyjson_mut_arr(doc);
 
