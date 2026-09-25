@@ -27,6 +27,7 @@
 #include "duckdb/optimizer/limit_pushdown.hpp"
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
+#include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
 #include "duckdb/optimizer/row_group_pruner.hpp"
 #include "duckdb/optimizer/rule/distinct_aggregate_optimizer.hpp"
@@ -376,6 +377,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
 		JoinElimination join_elimination;
 		plan = join_elimination.Optimize(std::move(plan));
+	});
+
+	RunOptimizer(OptimizerType::REDUNDANT_ORDER_KEYS, [&]() {
+		RemoveRedundantOrderKeys remove_redundant_order_keys;
+		remove_redundant_order_keys.Optimize(*plan);
 	});
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
