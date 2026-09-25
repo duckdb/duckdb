@@ -36,7 +36,7 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   # Override extension CI matrix reduction with "enabled" or "disabled".
   # Use "disabled" on risky PRs to run the full extension matrix.
-  OVERRIDE_REDUCED_CI_MODE: disabled
+  # OVERRIDE_REDUCED_CI_MODE: disabled
   # Run only specific jobs in CI (separated by whitespace) and skip the rest.
   #
   # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
@@ -405,7 +405,7 @@ jobs:
       needs.linux-release-musl.result == 'success' &&
       needs.windows.result == 'success' &&
       (needs.osx.result == 'success' || needs.osx.result == 'skipped')
-    uses: smvv/extension-ci-tools/.github/workflows/build.yml@prebuilt_duckdb
+    uses: duckdb/extension-ci-tools/.github/workflows/build.yml@main
     needs:
       - prepare
       - linux-relassert
@@ -444,8 +444,8 @@ jobs:
           toolchain: rust
       extension_repository: duckdb/extension-template
       extension_ref: main
-      ci_tools_repository: smvv/extension-ci-tools
-      ci_tools_version: prebuilt_duckdb
+      ci_tools_repository: duckdb/extension-ci-tools
+      ci_tools_version: main
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
