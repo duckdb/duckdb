@@ -19,31 +19,32 @@
 namespace duckdb {
 
 PhysicalUpdate::PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &tableref,
-                               DataTable &table, vector<PhysicalIndex> columns,
-                               vector<unique_ptr<Expression>> expressions,
+                               DataTable &table, vector<PhysicalIndex> referenced_columns,
+                               vector<PhysicalIndex> columns_to_update, vector<unique_ptr<Expression>> expressions,
                                vector<unique_ptr<Expression>> bound_defaults,
                                vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
                                bool return_chunk, bool capture_old_rows, vector<idx_t> old_row_columns,
                                RowIdHandling row_id_handling)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::UPDATE, std::move(types), estimated_cardinality),
-      tableref(tableref), table(table), columns(std::move(columns)), expressions(std::move(expressions)),
+      tableref(tableref), table(table), referenced_columns(std::move(referenced_columns)),
+      columns_to_update(std::move(columns_to_update)), expressions(std::move(expressions)),
       bound_defaults(std::move(bound_defaults)), bound_constraints(std::move(bound_constraints)),
       return_chunk(return_chunk), capture_old_rows(capture_old_rows), old_row_columns(std::move(old_row_columns)),
       row_id_handling(row_id_handling), index_update(false) {
 	auto &indexes = table.GetDataTableInfo().get()->GetIndexes();
 	auto index_columns = indexes.GetIndexedColumns();
 
-	unordered_set<column_t> update_columns;
-	update_columns.reserve(this->columns.size());
-	for (const auto col : this->columns) {
-		update_columns.insert(col.index);
+	unordered_set<column_t> referenced_column_set;
+	referenced_column_set.reserve(this->referenced_columns.size());
+	for (const auto col : this->referenced_columns) {
+		referenced_column_set.insert(col.index);
 	}
 
 	for (const auto &col : table.Columns()) {
 		if (index_columns.find(col.Physical().index) == index_columns.end()) {
 			continue;
 		}
-		if (update_columns.find(col.Physical().index) == update_columns.end()) {
+		if (referenced_column_set.find(col.Physical().index) == referenced_column_set.end()) {
 			continue;
 		}
 		index_update = true;
@@ -155,7 +156,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		// Default expression, set to the default value of the column.
 		if (expressions[i]->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
-			l_state.default_executor.ExecuteExpression(columns[i].index, update_chunk.data[i]);
+			l_state.default_executor.ExecuteExpression(referenced_columns[i].index, update_chunk.data[i]);
 			continue;
 		}
 
@@ -192,13 +193,14 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 		if (return_chunk) {
 			// (re)reference all output columns first, then validate + set the cardinality. mock_chunk is not reset
 			// here, but with return_chunk the update projects every table column, so all columns are referenced.
-			for (idx_t i = 0; i < columns.size(); i++) {
-				mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
+			for (idx_t i = 0; i < referenced_columns.size(); i++) {
+				mock_chunk.data[referenced_columns[i].index].Reference(update_chunk.data[i]);
 			}
 			mock_chunk.CheckCardinality(update_count);
 		}
 		auto &update_state = l_state.GetUpdateState(table, tableref, context.client);
-		table.Update(update_state, context.client, tableref, update_row_ids, columns, update_chunk);
+		table.Update(update_state, context.client, tableref, update_row_ids, referenced_columns, columns_to_update,
+		             update_chunk);
 
 		if (return_chunk) {
 			lock_guard<mutex> glock(g_state.lock);
@@ -260,8 +262,8 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	// Arrange the columns in the standard table order, then validate + set the cardinality from the referenced
 	// columns. The del+insert path projects every table column (it re-inserts the full row), so all are referenced.
-	for (idx_t i = 0; i < columns.size(); i++) {
-		mock_chunk.data[columns[i].index].Reference(update_chunk.data[i]);
+	for (idx_t i = 0; i < referenced_columns.size(); i++) {
+		mock_chunk.data[referenced_columns[i].index].Reference(update_chunk.data[i]);
 	}
 	mock_chunk.CheckCardinality(update_count);
 
