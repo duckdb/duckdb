@@ -676,8 +676,6 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 
 	auto &agg_idx = aggregation_idx;
 	for (; agg_idx < op.grouped_aggregate_data.aggregates.size(); agg_idx++) {
-		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
-
 		// If aggregate is not distinct, skip it
 		if (!distinct_data.IsDistinct(agg_idx)) {
 			continue;
