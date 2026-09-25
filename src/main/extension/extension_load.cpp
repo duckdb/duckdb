@@ -154,6 +154,10 @@ void DuckDB::LoadStaticExtension(duckdb_extension_describe_t describe) {
 	if (!error.empty()) {
 		throw InvalidInputException("Failed to load statically linked extension: %s", error);
 	}
+	if (description.descriptor.database_callback) {
+		reinterpret_cast<void (*)(DatabaseInstance &)>(description.descriptor.database_callback)(*instance);
+		return;
+	}
 	// C++ first, then C API v2, then C API v1
 	auto &descriptor = description.descriptor;
 	if (!descriptor.entry_cpp) {
