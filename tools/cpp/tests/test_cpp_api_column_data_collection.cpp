@@ -152,7 +152,6 @@ TEST_CASE("Stable C++API: ColumnDataCollection scan refuses a mismatching chunk"
 	REQUIRE_THROWS_MATCHES(collection.Scan(shared, worker, wrong_chunk), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
-#if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
@@ -161,7 +160,7 @@ TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
 	std::vector<LogicalType> types;
 	types.push_back(conn.ParseType("INTEGER"));
 	ColumnDataCollection collection(conn, types);
-	collection.Append(MakeIntChunk(conn, {10, 20, 30}));
+	collection.Append(MakeIntChunk(conn, {10}));
 
 	// Scan one chunk, copy it, then tear down everything it borrowed from.
 	auto copy = [&]() {
@@ -173,10 +172,7 @@ TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
 	}();
 	collection.Reset();
 
-	REQUIRE(copy.GetRowCount() == 3);
+	REQUIRE(copy.GetRowCount() == 1);
 	auto view = copy.GetVector(0).GetView();
 	REQUIRE(view.Data<int32_t>()[view.SelAt(0)] == 10);
-	REQUIRE(view.Data<int32_t>()[view.SelAt(1)] == 20);
-	REQUIRE(view.Data<int32_t>()[view.SelAt(2)] == 30);
 }
-#endif

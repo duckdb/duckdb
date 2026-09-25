@@ -73,6 +73,14 @@
 
 namespace duckdb {
 
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_MS) == LogicalTypeId::TIMESTAMP_TZ);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_MICROS) == LogicalTypeId::TIMESTAMP_TZ);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_NS) == LogicalTypeId::TIMESTAMP_TZ_NS);
+
+static_assert(ParquetTimeTzLogicalType(ParquetExtraTypeInfo::UNIT_MS) == LogicalTypeId::TIME_TZ);
+static_assert(ParquetTimeTzLogicalType(ParquetExtraTypeInfo::UNIT_MICROS) == LogicalTypeId::TIME_TZ);
+static_assert(ParquetTimeTzLogicalType(ParquetExtraTypeInfo::UNIT_NS) == LogicalTypeId::TIME_TZ);
+
 const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy) {
 	switch (strategy) {
 	case ParquetPrefetchStrategy::WHOLE_GROUP:
@@ -422,14 +430,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw NotImplementedException("Unimplemented TIMESTAMP encoding - missing UNIT");
 			}
 			if (s_ele.logicalType.TIMESTAMP.isAdjustedToUTC) {
-				if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-					return LogicalType::TIMESTAMP_TZ_NS;
-				}
-				return LogicalType::TIMESTAMP_TZ;
-			} else if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-				return LogicalType::TIMESTAMP_NS;
+				return LogicalType(ParquetTimestampTzLogicalType(schema.type_info));
 			}
-			return LogicalType::TIMESTAMP;
+			return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 		} else if (s_ele.logicalType.__isset.TIME) {
 			if (s_ele.logicalType.TIME.unit.__isset.MILLIS) {
 				schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
@@ -441,11 +444,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw NotImplementedException("Unimplemented TIME encoding - missing UNIT");
 			}
 			if (s_ele.logicalType.TIME.isAdjustedToUTC) {
-				return LogicalType::TIME_TZ;
-			} else if (s_ele.logicalType.TIME.unit.__isset.NANOS) {
-				return LogicalType::TIME_NS;
+				return LogicalType(ParquetTimeTzLogicalType(schema.type_info));
 			}
-			return LogicalType::TIME;
+			return LogicalType(ParquetTimeLogicalType(schema.type_info));
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -511,14 +512,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		case ConvertedType::TIMESTAMP_MICROS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
 			if (s_ele.type == Type::INT64) {
-				return LogicalType::TIMESTAMP;
+				return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
 			}
 		case ConvertedType::TIMESTAMP_MILLIS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
 			if (s_ele.type == Type::INT64) {
-				return LogicalType::TIMESTAMP;
+				return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
 			}
@@ -559,14 +560,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		case ConvertedType::TIME_MILLIS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
 			if (s_ele.type == Type::INT32) {
-				return LogicalType::TIME;
+				return LogicalType(ParquetTimeLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIME_MILLIS converted type can only be set for value of Type::INT32");
 			}
 		case ConvertedType::TIME_MICROS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
 			if (s_ele.type == Type::INT64) {
-				return LogicalType::TIME;
+				return LogicalType(ParquetTimeLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
 			}
@@ -593,7 +594,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			return LogicalType::BIGINT;
 		case Type::INT96: // always a timestamp it would seem
 			schema.type_info = ParquetExtraTypeInfo::IMPALA_TIMESTAMP;
-			return LogicalType::TIMESTAMP;
+			return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 		case Type::FLOAT:
 			return LogicalType::FLOAT;
 		case Type::DOUBLE:

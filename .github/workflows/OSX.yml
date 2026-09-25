@@ -168,13 +168,39 @@ jobs:
             lipo "build/release_amd64/src/$library_name" -verify_arch x86_64
           done
 
-          for library in build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a; do
+          for library in build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/extension/*/lib*_extension.a; do
             library_name="$(basename "$library")"
             lipo -extract arm64 -output "build/release_arm64/libs/$library_name" "$library"
             lipo "build/release_arm64/libs/$library_name" -verify_arch arm64
             lipo -extract x86_64 -output "build/release_amd64/libs/$library_name" "$library"
             lipo "build/release_amd64/libs/$library_name" -verify_arch x86_64
           done
+
+          # The universal build emits arm64 metadata; relink x86_64 with its platform metadata.
+          prebuilt_extensions=()
+          loadable_targets=()
+          for library in build/release_arm64/libs/lib*_extension.a; do
+            extension_name="$(basename "$library")"
+            extension_name="${extension_name#lib}"
+            extension_name="${extension_name%_extension.a}"
+            prebuilt_extensions+=("$extension_name")
+            loadable_targets+=("${extension_name}_loadable_extension")
+          done
+          prebuilt_extension_list="$(IFS=';'; echo "${prebuilt_extensions[*]}")"
+
+          extension_build_dir=build/release_amd64/core_extensions
+          cmake -S . -B "$extension_build_dir" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DOSX_BUILD_ARCH=x86_64 \
+            -DBUILD_UNITTESTS=OFF \
+            -DBUILD_BENCHMARKS=OFF \
+            -DBUILD_SHELL=OFF \
+            -DDUCKDB_EXPLICIT_PLATFORM=osx_amd64 \
+            -DPREBUILT_BINARY="$PWD/build/release_amd64/libs/libduckdb_static.a" \
+            -DPREBUILT_EXTENSIONS="$prebuilt_extension_list" \
+            -DDUCKDB_EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"
+          cmake --build "$extension_build_dir" --target "${loadable_targets[@]}"
+          cmake --build "$extension_build_dir" --target duckdb_local_extension_repo
 
           make cli-release-artifact ARTIFACT_SUFFIX=osx-universal CLI_BINARY=build/release/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb
@@ -234,6 +260,18 @@ jobs:
         with:
           path: duckdb-static-libs-osx-amd64.tar.gz
           archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-core-extensions-osx-arm64
+          path: build/release/repository
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-core-extensions-osx-amd64
+          path: build/release_amd64/core_extensions/repository
+          if-no-files-found: error
 
       - name: Unit Test
         shell: bash
