@@ -268,10 +268,11 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
 	}
 	if (state.scan_options && state.scan_options->force_fetch_row) {
+		auto start = state.GetPositionInSegment();
 		for (idx_t i = 0; i < sel_count; i++) {
 			auto source_idx = sel.get_index(i);
 			ColumnFetchState fetch_state;
-			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + source_idx), result, i);
+			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(start + source_idx), result, i);
 		}
 	} else {
 		current.Select(state, target_count, result, sel, sel_count);

@@ -82,6 +82,8 @@ struct ZSTDStorage {
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
+	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+	                   const SelectionVector &sel, idx_t sel_count);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
 	static void StringSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
@@ -837,6 +839,23 @@ public:
 		return scan_state;
 	}
 
+	//! Like LoadVector, but tolerates a stream that is already positioned inside the vector.
+	//! LoadVector only reuses the cached state on an exact offset match, which would force a full
+	//! re-initialization (and a skip from the start of the frame) for every selected row.
+	ZSTDVectorScanState &LoadVectorForSelect(idx_t vector_idx, idx_t internal_offset) {
+		if (current_vector && current_vector->metadata.vector_idx == vector_idx &&
+		    current_vector->scanned_count <= internal_offset) {
+			auto &scan_state = *current_vector;
+			if (scan_state.scanned_count < internal_offset) {
+				Skip(scan_state, internal_offset - scan_state.scanned_count);
+			}
+			return scan_state;
+		}
+		// Either no vector is loaded, a different vector is loaded, or the stream is already past the
+		// requested row - a zstd frame can only be read forwards, so restart from the beginning.
+		return LoadVector(vector_idx, internal_offset);
+	}
+
 	void LoadNextPageForVector(ZSTDVectorScanState &scan_state) {
 		if (scan_state.in_buffer.pos != scan_state.in_buffer.size) {
 			throw InternalException(
@@ -950,6 +969,34 @@ public:
 		scanned_count += count;
 	}
 
+	//! Decompress only the selected rows. The gaps between them are streamed through the fixed-size
+	//! skip_buffer, so the memory required is proportional to the selected data instead of to the
+	//! size of the entire vector.
+	void SelectPartial(idx_t start_idx, Vector &result, const SelectionVector &sel, idx_t sel_count) {
+		D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
+		auto result_data = FlatVector::GetDataMutable<string_t>(result);
+
+		for (idx_t i = 0; i < sel_count; i++) {
+			idx_t internal_offset;
+			idx_t vector_idx = GetVectorIndex(start_idx + sel.get_index(i), internal_offset);
+			auto &scan_state = LoadVectorForSelect(vector_idx, internal_offset);
+			D_ASSERT(scan_state.scanned_count == internal_offset);
+
+			auto string_length = scan_state.string_lengths[internal_offset];
+			auto str = StringVector::EmptyString(result, string_length);
+			DecompressString(scan_state, data_ptr_cast(str.GetDataWriteable()), string_length);
+			str.Finalize();
+			result_data[i] = str;
+
+			scan_state.scanned_count++;
+			scanned_count++;
+		}
+
+		// The remainder of the vector is never decompressed. The stream is left in the middle of the
+		// frame, which the scan path cannot reuse, so release it here to unpin the frame's pages.
+		current_vector.reset();
+	}
+
 	void ScanPartial(idx_t start_idx, Vector &result, idx_t offset, idx_t count) {
 		idx_t remaining = count;
 		idx_t scanned = 0;
@@ -1018,6 +1065,17 @@ void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 }
 
 //===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+void ZSTDStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+                         const SelectionVector &sel, idx_t sel_count) {
+	auto &scan_state = state.scan_state->template Cast<ZSTDScanState>();
+	auto start = state.GetPositionInSegment();
+
+	scan_state.SelectPartial(start, result, sel, sel_count);
+}
+
+//===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 void ZSTDStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
@@ -1072,6 +1130,7 @@ CompressionFunction ZSTDFun::GetFunction(PhysicalType data_type) {
 	    ZSTDStorage::StringFinalAnalyze, ZSTDStorage::InitCompression, ZSTDStorage::Compress,
 	    ZSTDStorage::FinalizeCompress, ZSTDStorage::StringInitScan, ZSTDStorage::StringScan,
 	    ZSTDStorage::StringScanPartial, ZSTDStorage::StringFetchRow, ZSTDStorage::StringSkip);
+	zstd.select = ZSTDStorage::Select;
 	zstd.init_segment = ZSTDStorage::StringInitSegment;
 	zstd.serialize_state = ZSTDStorage::SerializeState;
 	zstd.deserialize_state = ZSTDStorage::DeserializeState;
