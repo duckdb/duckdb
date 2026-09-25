@@ -82,8 +82,9 @@ TableIndexList::~TableIndexList() {
 	}
 }
 
-void TableIndexList::AddIndex(unique_ptr<Index> index, optional_idx index_oid) {
+void TableIndexList::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
 	D_ASSERT(index);
+	D_ASSERT(index_oid != DConstants::INVALID_INDEX);
 	annotated_lock_guard lock(index_entries_lock);
 	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), index_oid);
 	if (index_entry->GetBindState() != IndexBindState::BOUND) {
@@ -169,35 +170,13 @@ void TableIndexList::RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, const 
 	}
 }
 
-void TableIndexList::RemoveIndex(const Identifier &name) {
-	shared_ptr<IndexEntry> removed_entry;
-	{
-		annotated_lock_guard lock(index_entries_lock);
-		for (idx_t i = 0; i < index_entries.size(); i++) {
-			auto &entry = index_entries[i];
-			if (entry->GetName() != name) {
-				continue;
-			}
-			if (entry->GetBindState() != IndexBindState::BOUND) {
-				unbound_count--;
-			}
-			removed_entry = std::move(entry);
-			index_entries.erase_at(i);
-			break;
-		}
-	}
-	if (removed_entry) {
-		removed_entry->Retire();
-	}
-}
-
 void TableIndexList::RemoveIndex(idx_t index_oid) {
 	shared_ptr<IndexEntry> removed_entry;
 	{
 		annotated_lock_guard lock(index_entries_lock);
 		for (idx_t i = 0; i < index_entries.size(); i++) {
 			auto &entry = index_entries[i];
-			if (entry->GetCatalogIndexOid() != index_oid) {
+			if (entry->GetIndexOid() != index_oid) {
 				continue;
 			}
 			if (entry->GetBindState() != IndexBindState::BOUND) {
@@ -386,13 +365,10 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
 }
 
 shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const {
-	auto catalog_index_oid = index.GetCatalogIndexOid();
+	auto index_oid = index.GetIndexOid();
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		if (entry->GetCatalogIndexOid() != catalog_index_oid) {
-			continue;
-		}
-		if (!catalog_index_oid.IsValid() && entry->GetName() != index.GetName()) {
+		if (entry->GetIndexOid() != index_oid) {
 			continue;
 		}
 		if (entry->GetBindState() != IndexBindState::BOUND) {
@@ -584,18 +560,7 @@ unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(idx_t index_oid,
                                                             const case_insensitive_map_t<Value> &options) {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		if (entry->GetCatalogIndexOid() == index_oid) {
-			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(options));
-		}
-	}
-	return nullptr;
-}
-
-unique_ptr<IndexStorageInfo> TableIndexList::SerializeToWAL(const Identifier &name,
-                                                            const case_insensitive_map_t<Value> &options) {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->GetName() == name) {
+		if (entry->GetIndexOid() == index_oid) {
 			return make_uniq<IndexStorageInfo>(entry->SerializeToWAL(options));
 		}
 	}
