@@ -157,19 +157,19 @@ ColumnElements
 PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transformer,
                                                       vector<CreateTableColumnElement> create_table_column_element) {
 	ColumnElements result;
-	for (idx_t col_idx = 0; col_idx < create_table_column_element.size(); ++col_idx) {
-		auto &column_element = create_table_column_element[col_idx];
+	for (auto &column_element : create_table_column_element) {
 		if (column_element.column_definition) {
 			auto &column_result = *column_element.column_definition;
+			auto column_index = LogicalIndex(result.columns.LogicalColumnCount());
 			for (auto &constraint : column_result.constraints) {
 				result.constraints.push_back(std::move(constraint));
 			}
 			for (auto constraint_type : column_result.constraint_types) {
 				if (constraint_type.second == ConstraintType::NOT_NULL) {
-					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
+					result.constraints.push_back(make_uniq<NotNullConstraint>(column_index));
 				} else if (constraint_type.second == ConstraintType::UNIQUE) {
 					result.constraints.push_back(make_uniq<UniqueConstraint>(
-					    LogicalIndex(col_idx), column_result.column_definition.GetName(), constraint_type.first));
+					    column_index, column_result.column_definition.GetName(), constraint_type.first));
 				}
 			}
 			result.columns.AddColumn(std::move(column_result.column_definition));
