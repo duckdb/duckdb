@@ -19,6 +19,11 @@ namespace duckdb {
 class ResultFormat;
 
 struct QueryParameters {
+	QueryParameters() = default;
+	//! So a caller that wants only a format does not have to spell out the other fields
+	explicit QueryParameters(shared_ptr<ResultFormat> format_p) : format(std::move(format_p)) {
+	}
+
 	//! Arguments for a parameterized statement (may be null)
 	optional_ptr<identifier_map_t<BoundParameterData>> statement_args;
 	//! FORCED by Query and Execute. AUTO defers to the statement: a statement whose eagerness is

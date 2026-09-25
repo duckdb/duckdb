@@ -887,8 +887,7 @@ TEST_CASE("Test buffer managed query result", "[api]") {
 	REQUIRE_THROWS(result->ToString());
 
 	reopen_database();
-	result = con->Submit("SELECT 42;");
-	result->SetFormat(ChunkFormat::BufferManaged());
+	result = con->Submit("SELECT 42;", ChunkFormat::BufferManaged());
 	result->Materialize();
 	REQUIRE_NOTHROW(result->ToString());
 	close_database();

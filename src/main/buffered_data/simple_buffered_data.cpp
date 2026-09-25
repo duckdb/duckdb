@@ -8,9 +8,9 @@
 namespace duckdb {
 
 SimpleBufferedData::SimpleBufferedData(ClientContext &context, ResultLifetime lifetime,
-                                       ResultFormatContext format_context)
-    : BufferedData(BufferedData::Type::SIMPLE, context, lifetime, std::move(format_context)), buffered_count(0),
-      buffer_size(total_buffer_size) {
+                                       ResultFormatContext format_context, shared_ptr<ResultFormat> format)
+    : BufferedData(BufferedData::Type::SIMPLE, context, lifetime, std::move(format_context), std::move(format)),
+      buffered_count(0), buffer_size(total_buffer_size) {
 }
 
 SimpleBufferedData::~SimpleBufferedData() {

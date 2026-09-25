@@ -25,7 +25,8 @@ public:
 	static constexpr const BufferedData::Type TYPE = BufferedData::Type::SIMPLE;
 
 public:
-	SimpleBufferedData(ClientContext &context, ResultLifetime lifetime, ResultFormatContext format_context);
+	SimpleBufferedData(ClientContext &context, ResultLifetime lifetime, ResultFormatContext format_context,
+	                   shared_ptr<ResultFormat> format);
 	~SimpleBufferedData() override;
 
 public:

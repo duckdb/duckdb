@@ -40,6 +40,85 @@ void RequireSameMultiset(vector<int64_t> rows, idx_t expected_count) {
 
 } // namespace
 
+TEST_CASE("The format is observable right after Submit while the lifetime is still undecided",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	SECTION("a TestFormat") {
+		auto handle = con.Submit("SELECT i FROM range(1000) t(i)", make_shared_ptr<TestFormat>(4096));
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+		REQUIRE(StringUtil::Equals(handle->Format().Name(), TestFormat::NAME));
+		auto &state = handle->FormatState<TestFormat>();
+		REQUIRE(state.types.size() == 1);
+		REQUIRE(state.names.size() == 1);
+	}
+	SECTION("the default chunk format") {
+		auto handle = con.Submit("SELECT i FROM range(1000) t(i)");
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+		REQUIRE(StringUtil::Equals(handle->Format().Name(), ChunkFormat::NAME));
+		REQUIRE_NOTHROW(handle->FormatState<ChunkFormat>());
+	}
+}
+
+TEST_CASE("A completed result reports the format it was submitted with", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DrainWatchdog watchdog(con);
+
+	auto format = ChunkFormat::BufferManaged();
+	auto handle = con.Submit("SELECT i FROM range(5000) t(i)", format);
+	REQUIRE(!handle->HasError());
+	auto &state = handle->FormatState<ChunkFormat>();
+	handle->Complete();
+	REQUIRE_NO_FAIL(*handle);
+	REQUIRE(&handle->Format() == format.get());
+	REQUIRE(&handle->FormatState<ChunkFormat>() == &state);
+	REQUIRE(handle->RowCount() == 5000);
+}
+
+TEST_CASE("A throwing InitGlobal surfaces from Submit", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto format = make_shared_ptr<TestFormat>(1024);
+	format->throw_in_init_global = true;
+	auto handle = con.Submit("SELECT i FROM range(1000) t(i)", std::move(format));
+	REQUIRE(handle->HasError());
+	REQUIRE(StringUtil::Contains(handle->GetError(), "TestFormat::InitGlobal"));
+
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("InitGlobal runs on the submitting thread when a different thread drains", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto submitting_thread = std::this_thread::get_id();
+
+	auto handle = con.Submit("SELECT i FROM range(20000) t(i)", make_shared_ptr<TestFormat>(4096));
+	REQUIRE(!handle->HasError());
+	// InitGlobal already ran, synchronously inside Submit, on this thread, before any drain starts
+	REQUIRE(handle->FormatState<TestFormat>().init_global_thread == submitting_thread);
+
+	DrainWatchdog watchdog(con);
+	idx_t rows = 0;
+	std::thread::id draining_thread;
+	std::thread drainer([&]() {
+		draining_thread = std::this_thread::get_id();
+		FormattedResultStream<TestFormat> stream(std::move(handle));
+		while (auto unit = stream.Fetch()) {
+			rows += unit->row_count;
+		}
+	});
+	drainer.join();
+
+	REQUIRE(rows == 20000);
+	REQUIRE(draining_thread != submitting_thread);
+}
+
 TEST_CASE("A formatted stream drains an ordered plan in row order", "[api][query_result_format]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -205,9 +284,8 @@ TEST_CASE("A throw from the format surfaces as the stream's error", "[api][query
 			format->throw_in_finish = true;
 			break;
 		}
-		auto handle = con.Submit("SELECT i FROM range(100000) t(i)");
+		auto handle = con.Submit("SELECT i FROM range(100000) t(i)", std::move(format));
 		REQUIRE(!handle->HasError());
-		handle->SetFormat(std::move(format));
 		DrainWatchdog watchdog(con);
 		FormattedResultStream<TestFormat> stream(std::move(handle));
 		while (stream.Fetch()) {
@@ -239,9 +317,8 @@ TEST_CASE("A throw from the format on the retained path surfaces as the result's
 	auto retain_with = [&](const char *expected, const std::function<void(TestFormat &)> &arm) {
 		auto format = make_shared_ptr<TestFormat>(1024);
 		arm(*format);
-		auto handle = con.Submit("SELECT i FROM range(100000) t(i)");
+		auto handle = con.Submit("SELECT i FROM range(100000) t(i)", std::move(format));
 		REQUIRE(!handle->HasError());
-		handle->SetFormat(std::move(format));
 		DrainWatchdog watchdog(con);
 		handle->Complete();
 		REQUIRE(handle->HasError());
@@ -375,22 +452,21 @@ TEST_CASE("TakeCollection hands over the whole format store, fetched units inclu
 TEST_CASE("A format given at submission reaches every completed result", "[api][query_result_format]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	QueryParameters parameters;
-	parameters.format = make_shared_ptr<TestFormat>(4096);
+	auto format = make_shared_ptr<TestFormat>(4096);
 
 	SECTION("a single statement") {
-		auto result = con.context->Query("SELECT i FROM range(20000) t(i)", parameters);
+		auto result = con.context->Query("SELECT i FROM range(20000) t(i)", format);
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->Collection<TestFormat>().Count() == 20000);
 	}
 	SECTION("a statement that completes at submission") {
-		auto result = con.context->Query("CREATE TABLE t AS SELECT range i FROM range(20000)", parameters);
+		auto result = con.context->Query("CREATE TABLE t AS SELECT range i FROM range(20000)", format);
 		REQUIRE_NO_FAIL(*result);
 		// The planner marks it FORCED, so the buffer settled the format before execution started
 		REQUIRE(result->Collection<TestFormat>().Count() == 1);
 	}
 	SECTION("every row-returning statement of a multi-statement query") {
-		auto result = con.context->Query("SELECT 1 AS a; SELECT i FROM range(5000) t(i);", parameters);
+		auto result = con.context->Query("SELECT 1 AS a; SELECT i FROM range(5000) t(i);", format);
 		REQUIRE_NO_FAIL(*result);
 		REQUIRE(result->Collection<TestFormat>().Count() == 1);
 		REQUIRE(result->next);
@@ -398,43 +474,41 @@ TEST_CASE("A format given at submission reaches every completed result", "[api][
 	}
 }
 
-TEST_CASE("SetFormat is refused once the result is decided", "[api][query_result_format]") {
+TEST_CASE("The Connection Query and Submit format overloads reach the format", "[api][query_result_format]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	auto another = []() {
-		return make_shared_ptr<TestFormat>(1024);
-	};
+	DrainWatchdog watchdog(con);
 
-	SECTION("after a fetch") {
-		auto handle = con.Submit("SELECT i FROM range(1000) t(i)");
-		DrainWatchdog watchdog(con);
-		REQUIRE(handle->Fetch());
-		REQUIRE_THROWS_AS(handle->SetFormat(another()), InvalidInputException);
-	}
-	SECTION("never after a stream was opened: the stream consumed the handle SetFormat needs") {
-		auto handle = con.Submit("SELECT i FROM range(1000) t(i)");
-		DrainWatchdog watchdog(con);
-		QueryResultStream stream(std::move(handle));
-		REQUIRE(!handle);
-	}
-	SECTION("after Materialize") {
-		auto handle = con.Submit("SELECT i FROM range(1000) t(i)");
-		handle->Materialize();
-		REQUIRE_THROWS_AS(handle->SetFormat(another()), InvalidInputException);
-	}
-	SECTION("on a Connection::Query result") {
-		auto result = con.Query("SELECT i FROM range(1000) t(i)");
+	SECTION("Query with a query string, given a shared_ptr<TestFormat>") {
+		auto result = con.Query("SELECT i FROM range(1000) t(i)", make_shared_ptr<TestFormat>(4096));
 		REQUIRE_NO_FAIL(*result);
-		REQUIRE_THROWS_AS(result->SetFormat(another()), InvalidInputException);
+		REQUIRE(result->Collection<TestFormat>().Count() == 1000);
 	}
-	SECTION("but allowed after Poll and ExecuteTask, which settle nothing") {
-		auto handle = con.Submit("SELECT i FROM range(200000) t(i)");
-		DrainWatchdog watchdog(con);
-		handle->Poll();
-		handle->ExecuteTask();
-		REQUIRE_NOTHROW(handle->SetFormat(another()));
-		FormattedResultStream<TestFormat> stream(std::move(handle));
-		RequireAscending(DrainRows(stream), 200000);
+	SECTION("Query with a statement, given a shared_ptr<TestFormat>") {
+		auto statements = con.ExtractStatements("SELECT i FROM range(1000) t(i)");
+		auto result = con.Query(std::move(statements[0]), make_shared_ptr<TestFormat>(4096));
+		REQUIRE_NO_FAIL(*result);
+		REQUIRE(result->Collection<TestFormat>().Count() == 1000);
+	}
+	SECTION("Submit with a query string, given a shared_ptr<TestFormat>") {
+		auto handle = con.Submit("SELECT i FROM range(1000) t(i)", make_shared_ptr<TestFormat>(4096));
+		REQUIRE(!handle->HasError());
+		handle->Complete();
+		REQUIRE(handle->Collection<TestFormat>().Count() == 1000);
+	}
+	SECTION("Submit with a statement, given a shared_ptr<TestFormat>") {
+		auto statements = con.ExtractStatements("SELECT i FROM range(1000) t(i)");
+		auto handle = con.Submit(std::move(statements[0]), make_shared_ptr<TestFormat>(4096));
+		REQUIRE(!handle->HasError());
+		handle->Complete();
+		REQUIRE(handle->Collection<TestFormat>().Count() == 1000);
+	}
+	SECTION("Submit with a query string, given a plain shared_ptr<ResultFormat>") {
+		shared_ptr<ResultFormat> format = make_shared_ptr<TestFormat>(4096);
+		auto handle = con.Submit("SELECT i FROM range(1000) t(i)", format);
+		REQUIRE(!handle->HasError());
+		handle->Complete();
+		REQUIRE(handle->Collection<TestFormat>().Count() == 1000);
 	}
 }
 

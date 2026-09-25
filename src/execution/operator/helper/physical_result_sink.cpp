@@ -33,7 +33,7 @@ class ResultSinkGlobalState : public GlobalSinkState {
 public:
 	//! This is weak to avoid creating a cyclical reference
 	weak_ptr<ClientContext> context;
-	//! The buffer behind a stream result. It also holds the retention decision and the settled format,
+	//! The buffer behind a stream result. It also holds the retention decision and the format,
 	//! so it exists whenever the plan left retention open. Null for a sink retained by the plan
 	shared_ptr<BufferedData> buffered_data;
 	annotated_mutex glock;
@@ -56,7 +56,7 @@ public:
 	ColumnDataAppendState append_state;
 	//! Local CDC (batch order) that will be merged later, in Combine
 	unique_ptr<BatchedDataCollection> batch_data;
-	//! Created at the first Append, because the format is not settled yet when the local sink state is
+	//! Created at the first Append, because the lifetime is not settled yet when the local sink state is
 	unique_ptr<ResultFormatLocalState> format_state;
 	//! Never go through the buffer: Combine merges them into the global state
 	vector<RetainedUnit> units;

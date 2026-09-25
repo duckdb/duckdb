@@ -94,25 +94,29 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
                          vector<LogicalType> types_p, vector<Identifier> names_p, ClientProperties client_properties_p)
     : BaseQueryResult(type, statement_type, std::move(properties), std::move(types_p), std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()) {
+	InitializeChunkFormatState();
 }
 
 QueryResult::QueryResult(QueryResultType type, ErrorData error)
     : BaseQueryResult(type, std::move(error)),
       client_properties("UTC", ArrowOffsetSize::REGULAR, false, false, false, ArrowFormatVersion::V1_0, nullptr),
       format(ResultFormat::Chunk()) {
+	InitializeChunkFormatState();
 }
 
 QueryResult::QueryResult(shared_ptr<ClientContext> context_p, PreparedStatementData &statement,
                          vector<LogicalType> types_p, ClientProperties client_properties_p,
-                         shared_ptr<BufferedData> buffer_p, shared_ptr<ResultFormat> format_p)
+                         shared_ptr<BufferedData> buffer_p)
     : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement.statement_type, statement.properties,
                       std::move(types_p), statement.names),
-      client_properties(std::move(client_properties_p)), context(std::move(context_p)), buffer(std::move(buffer_p)),
-      format(std::move(format_p)) {
-	if (!format) {
+      client_properties(std::move(client_properties_p)), context(std::move(context_p)), buffer(std::move(buffer_p)) {
+	if (buffer) {
+		format = buffer->SharedFormat();
+		format_state = buffer->SharedFormatState();
+	} else {
 		format = ResultFormat::Chunk();
+		InitializeChunkFormatState();
 	}
-	AdoptSettledFormat();
 }
 
 QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names_p,
@@ -121,6 +125,7 @@ QueryResult::QueryResult(StatementType statement_type, StatementProperties prope
                       collection_p->Types(), std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()),
       collection(std::move(collection_p)) {
+	InitializeChunkFormatState();
 }
 
 QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<LogicalType> types_p,
@@ -271,22 +276,9 @@ void QueryResult::Close() {
 //===--------------------------------------------------------------------===//
 // Format
 //===--------------------------------------------------------------------===//
-void QueryResult::SetFormat(shared_ptr<ResultFormat> format_p) {
-	if (HasError()) {
-		throw InvalidInputException("Attempting to set a format on an unsuccessful query result\nError: %s",
-		                            GetError());
-	}
-	if (IsCollected() || !context || !buffer) {
-		throw InvalidInputException("Attempting to set a format on a query result that already holds its rows");
-	}
-	if (buffer->Lifetime() != ResultLifetime::UNDECIDED) {
-		throw InvalidInputException("Attempting to set a format on a query result that is already being %s",
-		                            buffer->Lifetime() == ResultLifetime::DRAINING ? "streamed" : "materialized");
-	}
-	if (!format_p) {
-		format_p = ResultFormat::Chunk();
-	}
-	format = std::move(format_p);
+void QueryResult::InitializeChunkFormatState() {
+	ResultFormatContext format_context {GetTypes(), GetNames(), client_properties, ResultOrdering::UNORDERED};
+	format_state = format->InitGlobal(format_context);
 }
 
 const ResultFormat &QueryResult::Format() const {
@@ -294,21 +286,9 @@ const ResultFormat &QueryResult::Format() const {
 	return *format;
 }
 
-void QueryResult::AdoptSettledFormat() {
-	if (!buffer || buffer->Lifetime() == ResultLifetime::UNDECIDED) {
-		return;
-	}
-	format = buffer->SharedFormat();
-	format_state = buffer->SharedFormatState();
-}
-
 void QueryResult::AdoptCollected(QueryResult &produced) {
 	collection = std::move(produced.collection);
 	unit_collection = std::move(produced.unit_collection);
-	if (produced.format_state) {
-		format = produced.format;
-		format_state = produced.format_state;
-	}
 }
 
 void QueryResult::ThrowFormatMismatch(const char *expected) const {
@@ -324,10 +304,7 @@ const ResultFormatGlobalState &QueryResult::CheckedFormatState(const char *expec
 	if (!StringUtil::Equals(Format().Name(), expected)) {
 		ThrowFormatMismatch(expected);
 	}
-	if (!format_state) {
-		throw InvalidInputException("This query result has no format state yet: its format is settled by the first "
-		                            "consuming call");
-	}
+	D_ASSERT(format_state);
 	return *format_state;
 }
 
@@ -359,8 +336,7 @@ void QueryResult::Materialize() {
 		return;
 	}
 	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED, format);
-	AdoptSettledFormat();
+	buffer->Decide(ResultLifetime::RETAINED);
 }
 
 void QueryResult::Complete() {
@@ -383,8 +359,7 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 		return;
 	}
 	D_ASSERT(buffer);
-	buffer->Decide(ResultLifetime::RETAINED, format);
-	AdoptSettledFormat();
+	buffer->Decide(ResultLifetime::RETAINED);
 	QueryResultState state;
 	while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
 		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {

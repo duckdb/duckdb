@@ -24,10 +24,9 @@ ResultStreamBase::ResultStreamBase(unique_ptr<QueryResult> result, const char *e
 	if (!handle->HasBufferedData()) {
 		throw InvalidInputException("Attempting to open a stream on a query result that has no streaming buffer");
 	}
-	if (handle->GetBufferedData().Decide(ResultLifetime::DRAINING, handle->format) != ResultLifetime::DRAINING) {
+	if (handle->GetBufferedData().Decide(ResultLifetime::DRAINING) != ResultLifetime::DRAINING) {
 		throw InvalidInputException("Attempting to open a stream on a query result that is being retained");
 	}
-	handle->AdoptSettledFormat();
 	if (!StringUtil::Equals(handle->Format().Name(), expected_format)) {
 		throw InvalidInputException("Attempting to open a \"%s\" stream on a query result in the \"%s\" format",
 		                            expected_format, handle->Format().Name());

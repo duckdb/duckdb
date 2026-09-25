@@ -678,22 +678,23 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	auto types = statement_data.types;
 
 	// The buffer is created here, on the client thread, and handed to the sink, the executor and the
-	// handle. It carries the retention decision and the settled format, so it exists for every query
-	// the sink serves
+	// handle. It runs the format's InitGlobal before any worker starts, so workers only read the format state
 	shared_ptr<BufferedData> buffer;
 	if (!delegating) {
 		auto &sink = collector->Cast<PhysicalResultSink>();
 		ResultFormatContext format_context {statement_data.types, statement_data.names, client_properties,
 		                                    sink.ordering};
 		if (sink.ordering == ResultOrdering::BATCH_INDEX_ORDERED) {
-			buffer = make_shared_ptr<BatchedBufferedData>(*this, sink.lifetime, std::move(format_context));
+			buffer = make_shared_ptr<BatchedBufferedData>(*this, sink.lifetime, std::move(format_context),
+			                                              parameters.format);
 		} else {
-			buffer = make_shared_ptr<SimpleBufferedData>(*this, sink.lifetime, std::move(format_context));
+			buffer =
+			    make_shared_ptr<SimpleBufferedData>(*this, sink.lifetime, std::move(format_context), parameters.format);
 		}
 		if (parameters.result_eagerness == ResultEagerness::FORCED ||
 		    statement_data.properties.result_eagerness == ResultEagerness::FORCED) {
 			// Settled before execution starts, so no producer ever parks for the decision
-			buffer->Decide(ResultLifetime::RETAINED, parameters.format);
+			buffer->Decide(ResultLifetime::RETAINED);
 		}
 		sink.SetResultBuffer(buffer);
 	}
@@ -705,7 +706,7 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	D_ASSERT(!active_query->HasOpenResult());
 
 	auto result = make_uniq<QueryResult>(shared_from_this(), *statement_data_p, std::move(types),
-	                                     std::move(client_properties), std::move(buffer), parameters.format);
+	                                     std::move(client_properties), std::move(buffer));
 	active_query->prepared = std::move(statement_data_p);
 	active_query->SetOpenResult(*result);
 	if (delegating) {
@@ -1303,6 +1304,14 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	return result;
 }
 
+unique_ptr<QueryResult> ClientContext::Query(const string &query, shared_ptr<ResultFormat> format) {
+	return Query(query, QueryParameters(std::move(format)));
+}
+
+unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return Query(std::move(statement), QueryParameters(std::move(format)));
+}
+
 unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
@@ -1333,6 +1342,14 @@ unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement
 	} catch (std::exception &ex) {
 		return make_uniq<QueryResult>(ErrorData(ex));
 	}
+}
+
+unique_ptr<QueryResult> ClientContext::Submit(const string &query, shared_ptr<ResultFormat> format) {
+	return Submit(query, QueryParameters(std::move(format)));
+}
+
+unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return Submit(std::move(statement), QueryParameters(std::move(format)));
 }
 
 unique_ptr<QueryResult> ClientContext::Submit(const string &query, identifier_map_t<BoundParameterData> &values,

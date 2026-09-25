@@ -83,9 +83,11 @@ unique_ptr<QueryResult> Connection::Query(const string &query) {
 }
 
 unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
-	QueryParameters query_parameters;
-	query_parameters.format = std::move(format);
-	return context->Query(std::move(statement), query_parameters);
+	return context->Query(std::move(statement), std::move(format));
+}
+
+unique_ptr<QueryResult> Connection::Query(const string &query, shared_ptr<ResultFormat> format) {
+	return context->Query(query, std::move(format));
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParameters &query_parameters) {
@@ -95,6 +97,14 @@ unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParam
 unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
                                            const QueryParameters &query_parameters) {
 	return context->Submit(std::move(statement), query_parameters);
+}
+
+unique_ptr<QueryResult> Connection::Submit(const string &query, shared_ptr<ResultFormat> format) {
+	return context->Submit(query, std::move(format));
+}
+
+unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return context->Submit(std::move(statement), std::move(format));
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,

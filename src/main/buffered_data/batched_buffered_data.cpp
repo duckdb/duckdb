@@ -8,9 +8,9 @@
 namespace duckdb {
 
 BatchedBufferedData::BatchedBufferedData(ClientContext &context, ResultLifetime lifetime,
-                                         ResultFormatContext format_context)
-    : BufferedData(BufferedData::Type::BATCHED, context, lifetime, std::move(format_context)), buffer_byte_count(0),
-      read_queue_byte_count(0), min_batch(0) {
+                                         ResultFormatContext format_context, shared_ptr<ResultFormat> format)
+    : BufferedData(BufferedData::Type::BATCHED, context, lifetime, std::move(format_context), std::move(format)),
+      buffer_byte_count(0), read_queue_byte_count(0), min_batch(0) {
 }
 
 bool BatchedBufferedData::AppendOrBlock(unique_ptr<ResultUnit> unit, idx_t batch, const InterruptState &blocked_sink) {

@@ -48,13 +48,16 @@ public:
 class TestFormatGlobalState : public ResultFormatGlobalState {
 public:
 	TestFormatGlobalState(vector<LogicalType> types_p, vector<Identifier> names_p, ResultOrdering ordering_p)
-	    : types(std::move(types_p)), names(std::move(names_p)), ordering(ordering_p) {
+	    : types(std::move(types_p)), names(std::move(names_p)), ordering(ordering_p),
+	      init_global_thread(std::this_thread::get_id()) {
 	}
 
 public:
 	vector<LogicalType> types;
 	vector<Identifier> names;
 	ResultOrdering ordering;
+	//! The thread that called InitGlobal, i.e. the thread that submitted the query
+	std::thread::id init_global_thread;
 	//! How many worker threads built a unit for this query
 	atomic<idx_t> local_states {0};
 	//! Units finished short of the row cap: one per batch boundary and one per producer at its end
@@ -95,6 +98,9 @@ public:
 	}
 
 	unique_ptr<ResultFormatGlobalState> InitGlobal(const ResultFormatContext &context) override {
+		if (throw_in_init_global) {
+			throw InvalidInputException("TestFormat::InitGlobal");
+		}
 		return make_uniq<TestFormatGlobalState>(context.types, context.names, context.ordering);
 	}
 
@@ -180,6 +186,7 @@ public:
 	idx_t max_unit_rows;
 	//! AppendToUnit slices the incoming chunk at the cap instead of concatenating whole chunks
 	bool slice_at_cap;
+	atomic<bool> throw_in_init_global {false};
 	atomic<bool> throw_in_append {false};
 	atomic<bool> throw_in_is_finished {false};
 	atomic<bool> throw_in_finish {false};
@@ -239,9 +246,8 @@ inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
 
 inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t max_unit_rows,
                                                bool slice_at_cap = false) {
-	auto handle = con.Submit(query);
+	auto handle = con.Submit(query, make_shared_ptr<TestFormat>(max_unit_rows, slice_at_cap));
 	REQUIRE(!handle->HasError());
-	handle->SetFormat(make_shared_ptr<TestFormat>(max_unit_rows, slice_at_cap));
 	return handle;
 }
 

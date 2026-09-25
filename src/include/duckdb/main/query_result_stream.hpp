@@ -17,12 +17,12 @@
 
 namespace duckdb {
 
-//! Opening a stream settles retention on draining and the format, and consumes the handle: no random access
+//! Opening a stream settles retention on draining and consumes the handle: no random access
 class ResultStreamBase {
 public:
 	//! Opens a stream on a submitted query. Throws InvalidInputException when the handle carries an
 	//! error, when its retention is already retained, when the planner marked the statement as
-	//! completing before its result is returned, or when the settled format is not the expected one.
+	//! completing before its result is returned, or when the result's format is not the expected one.
 	//! A throw consumes the handle: it is destroyed with this object, which ends the query
 	DUCKDB_API ResultStreamBase(unique_ptr<QueryResult> result, const char *expected_format);
 	DUCKDB_API virtual ~ResultStreamBase();

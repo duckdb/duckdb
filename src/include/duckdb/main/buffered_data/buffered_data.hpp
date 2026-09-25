@@ -47,7 +47,9 @@ protected:
 	enum class Type { SIMPLE, BATCHED };
 
 public:
-	BufferedData(Type type, ClientContext &context, ResultLifetime lifetime, ResultFormatContext format_context);
+	//! Runs the format's InitGlobal on the constructing thread, before any worker sees it. A null format means chunks
+	BufferedData(Type type, ClientContext &context, ResultLifetime lifetime, ResultFormatContext format_context,
+	             shared_ptr<ResultFormat> format);
 	virtual ~BufferedData();
 
 public:
@@ -55,14 +57,14 @@ public:
 	ResultLifetime Lifetime() const {
 		return lifetime;
 	}
-	//! The first decision stands, and a null format means chunks
-	ResultLifetime Decide(ResultLifetime decision, shared_ptr<ResultFormat> format = nullptr);
-	//! Only valid once the retention is settled
+	//! The first decision stands
+	ResultLifetime Decide(ResultLifetime decision);
+	//! Fixed at construction; safe to read without synchronization
 	ResultFormat &Format() const {
 		D_ASSERT(format);
 		return *format;
 	}
-	//! Only valid once the retention is settled
+	//! Fixed at construction; safe to read without synchronization
 	ResultFormatGlobalState &FormatState() const {
 		D_ASSERT(format_state);
 		return *format_state;
@@ -157,7 +159,7 @@ protected:
 	//! Producers parked with their first chunk unconsumed, until the retention is decided
 	vector<InterruptState> undecided_sinks DUCKDB_GUARDED_BY(glock);
 	const ResultFormatContext format_context;
-	//! Written before the lifetime is published, so a producer that sees a settled lifetime sees these
+	//! Set at construction and never changed afterwards, so workers read these without synchronization
 	shared_ptr<ResultFormat> format;
 	shared_ptr<ResultFormatGlobalState> format_state;
 };

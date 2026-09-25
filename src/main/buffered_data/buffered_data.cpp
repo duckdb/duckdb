@@ -8,35 +8,36 @@
 
 namespace duckdb {
 
+static shared_ptr<ResultFormat> FormatOrChunk(shared_ptr<ResultFormat> format) {
+	if (!format) {
+		return ResultFormat::Chunk();
+	}
+	return format;
+}
+
 BufferedData::BufferedData(Type type, ClientContext &context_p, ResultLifetime lifetime,
-                           ResultFormatContext format_context_p)
+                           ResultFormatContext format_context_p, shared_ptr<ResultFormat> format_p)
     : type(type), context(context_p.shared_from_this()),
       // The setting has no lower bound. A buffer that can never admit a chunk blocks
       // every sink while empty, and the stream silently ends with zero rows
       total_buffer_size(MaxValue<idx_t>(ClientConfig::GetConfig(context_p).max_streaming_buffer_size, 1)),
-      lifetime(lifetime), format_context(std::move(format_context_p)) {
+      lifetime(lifetime), format_context(std::move(format_context_p)), format(FormatOrChunk(std::move(format_p))),
+      format_state(format->InitGlobal(format_context)) {
 }
 
 BufferedData::~BufferedData() {
 }
 
-ResultLifetime BufferedData::Decide(ResultLifetime decision, shared_ptr<ResultFormat> decided_format) {
+ResultLifetime BufferedData::Decide(ResultLifetime decision) {
 	D_ASSERT(decision != ResultLifetime::UNDECIDED);
 	// Decided once and never changed, so a settled buffer answers without the lock
 	if (lifetime != ResultLifetime::UNDECIDED) {
 		return lifetime;
 	}
-	if (!decided_format) {
-		decided_format = ResultFormat::Chunk();
-	}
-	// Built before the lifetime is published, so a throw here leaves the buffer undecided
-	auto chosen_state = decided_format->InitGlobal(format_context);
 	vector<InterruptState> to_wake;
 	{
 		annotated_lock_guard<annotated_mutex> lock(glock);
 		if (lifetime == ResultLifetime::UNDECIDED) {
-			format = std::move(decided_format);
-			format_state = std::move(chosen_state);
 			lifetime = decision;
 		}
 		to_wake = std::move(undecided_sinks);

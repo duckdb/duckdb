@@ -92,10 +92,10 @@ private:
 	ErrorData error;
 };
 
-//! A query result. Calling Materialize, Collection, TakeCollection, Fetch or RowCount will materialize the
-//! result's data into the settled format's collection. If instead the caller wants a streaming interface, it can be
-//! moved into a QueryResultStream or a FormattedResultStream.
-//! An accessor taking FORMAT throws InvalidInputException when FORMAT is not the settled format
+//! A query result. The format is fixed at submission; calling Materialize, Collection, TakeCollection, Fetch or
+//! RowCount will materialize the result's data into that format's collection. If instead the caller wants a
+//! streaming interface, it can be moved into a QueryResultStream or a FormattedResultStream.
+//! An accessor taking FORMAT throws InvalidInputException when FORMAT is not the result's format
 class QueryResult : public BaseQueryResult {
 	friend class BufferedData;
 	friend class ClientContext;
@@ -107,7 +107,7 @@ public:
 	//! Creates the handle of a freshly submitted query
 	DUCKDB_API QueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
 	                       vector<LogicalType> types, ClientProperties client_properties,
-	                       shared_ptr<BufferedData> buffer, shared_ptr<ResultFormat> format);
+	                       shared_ptr<BufferedData> buffer);
 	//! Creates a detached result over an existing collection
 	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names,
 	                       unique_ptr<ColumnDataCollection> collection, ClientProperties client_properties);
@@ -160,8 +160,6 @@ public:
 	DUCKDB_API QueryResultState ExecuteTask();
 	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task.
 	DUCKDB_API void WaitForTask();
-	//! Only allowed while nothing was fetched, no stream was opened and the result was not born materialized
-	DUCKDB_API void SetFormat(shared_ptr<ResultFormat> format);
 	DUCKDB_API const ResultFormat &Format() const;
 	//! Non-blocking. Tells the engine to fully materialize the result. Call Collection(), Fetch[Raw](), or
 	//! ExecuteTask() to execute tasks, or (if multithreaded) Poll until the result is complete.
@@ -177,7 +175,7 @@ public:
 	unique_ptr<typename ResultCollectionOf<FORMAT>::type> TakeCollection() {
 		return ResultAccess<FORMAT>::TakeCollection(*this);
 	}
-	//! Throws before the format is settled
+	//! Throws when FORMAT is not the result's format
 	template <class FORMAT>
 	const typename FORMAT::GlobalState &FormatState() const {
 		return CheckedFormatState(FORMAT::NAME).template Cast<typename FORMAT::GlobalState>();
@@ -250,8 +248,9 @@ private:
 	bool IsCollected() const {
 		return collection != nullptr || unit_collection != nullptr;
 	}
-	//! Copies the buffer's settled format so it outlives the query
-	void AdoptSettledFormat();
+	//! A result without a buffer is in the chunk format, with a state built from its own metadata
+	void InitializeChunkFormatState();
+	//! Takes the rows only: the handle already holds the format and state its buffer settled at submission
 	void AdoptCollected(QueryResult &produced);
 	void PrepareCollected(const char *expected);
 	const ResultFormatGlobalState &CheckedFormatState(const char *expected) const;
@@ -264,9 +263,9 @@ private:
 	//! The buffer created for this query at submission. It carries the retention decision and, for
 	//! a stream, the units (null for a detached or an error result)
 	shared_ptr<BufferedData> buffer;
-	//! Never null
+	//! Set at construction; never null for a non-error result
 	shared_ptr<ResultFormat> format;
-	//! Null until the format is settled
+	//! Set at construction; never null for a non-error result
 	shared_ptr<ResultFormatGlobalState> format_state;
 	//! The retained storage of a chunk-format result (may be null)
 	unique_ptr<ColumnDataCollection> collection;

@@ -375,14 +375,19 @@ TEST_CASE("A custom collector refuses a submission that asks for a format", "[ap
 	auto &config = ClientConfig::GetConfig(*con.context);
 	DrainWatchdog watchdog(con);
 
-	QueryParameters parameters;
-	parameters.format = make_shared_ptr<TestFormat>(1024);
-	{
+	auto refuse = [&](shared_ptr<ResultFormat> format, const char *expected) {
 		auto setting = UseTestStreamingCollector(config);
-		auto refused = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+		auto refused = con.Submit("SELECT i FROM range(1000) t(i)", std::move(format));
 		REQUIRE(refused->HasError());
 		REQUIRE(refused->GetErrorType() == ExceptionType::INVALID_INPUT);
-		REQUIRE(StringUtil::Contains(refused->GetError(), "cannot be combined with a custom result collector"));
+		REQUIRE(StringUtil::Contains(refused->GetError(), expected));
+	};
+	SECTION("a format that is not the chunk format") {
+		refuse(make_shared_ptr<TestFormat>(1024), "A result format cannot be combined with a custom result collector");
+	}
+	SECTION("the buffer-managed chunk format") {
+		refuse(ChunkFormat::BufferManaged(),
+		       "A buffer-managed result cannot be combined with a custom result collector");
 	}
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));

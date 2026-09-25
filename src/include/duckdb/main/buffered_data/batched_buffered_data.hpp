@@ -37,7 +37,8 @@ public:
 	static constexpr const BufferedData::Type TYPE = BufferedData::Type::BATCHED;
 
 public:
-	BatchedBufferedData(ClientContext &context, ResultLifetime lifetime, ResultFormatContext format_context);
+	BatchedBufferedData(ClientContext &context, ResultLifetime lifetime, ResultFormatContext format_context,
+	                    shared_ptr<ResultFormat> format);
 
 public:
 	//! Buffer the finished unit under its batch, or block the sink when the unit does not fit. Returns true on block.

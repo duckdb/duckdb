@@ -379,7 +379,7 @@ TEST_CASE("A parked read-ahead batch does not report the batched buffer waiting 
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='" + to_string(4 * chunk_bytes) + " bytes'"));
 	ResultFormatContext format_context {
 	    {LogicalType::BIGINT}, {Identifier("i")}, ClientProperties(), ResultOrdering::BATCH_INDEX_ORDERED};
-	BatchedBufferedData buffered(*con.context, ResultLifetime::DRAINING, std::move(format_context));
+	BatchedBufferedData buffered(*con.context, ResultLifetime::DRAINING, std::move(format_context), nullptr);
 	auto signal = make_shared_ptr<InterruptDoneSignalState>();
 	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
 	InterruptState read_ahead(weak_signal);
@@ -424,7 +424,7 @@ TEST_CASE("The simple buffer's peak counts the unit a parked producer holds", "[
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='" + to_string(2 * chunk_bytes) + " bytes'"));
 	ResultFormatContext format_context {
 	    {LogicalType::BIGINT}, {Identifier("i")}, ClientProperties(), ResultOrdering::UNORDERED};
-	SimpleBufferedData buffered(*con.context, ResultLifetime::DRAINING, std::move(format_context));
+	SimpleBufferedData buffered(*con.context, ResultLifetime::DRAINING, std::move(format_context), nullptr);
 	auto signal = make_shared_ptr<InterruptDoneSignalState>();
 	weak_ptr<InterruptDoneSignalState> weak_signal(signal);
 	InterruptState parked(weak_signal);
