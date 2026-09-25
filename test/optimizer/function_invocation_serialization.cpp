@@ -100,9 +100,11 @@ static void RequireSameValues(QueryResult &expected, QueryResult &actual) {
 	REQUIRE_NO_FAIL(actual);
 	REQUIRE(expected.GetTypes() == actual.GetTypes());
 	REQUIRE(expected.RowCount() == actual.RowCount());
-	for (idx_t row = 0; row < expected.RowCount(); row++) {
+	auto expected_rows = expected.Collection().GetRows();
+	auto actual_rows = actual.Collection().GetRows();
+	for (idx_t row = 0; row < expected_rows.size(); row++) {
 		for (idx_t col = 0; col < expected.ColumnCount(); col++) {
-			REQUIRE(Value::NotDistinctFrom(expected.GetValue(col, row), actual.GetValue(col, row)));
+			REQUIRE(Value::NotDistinctFrom(expected_rows.GetValue(col, row), actual_rows.GetValue(col, row)));
 		}
 	}
 }
