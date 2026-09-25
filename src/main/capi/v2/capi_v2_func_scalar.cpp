@@ -309,7 +309,7 @@ DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar_function_han
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(Convert(*name)); });
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(*name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_scalar_function_get_signature(duckdb_v2_scalar_function_handle function,

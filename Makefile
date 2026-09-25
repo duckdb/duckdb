@@ -709,6 +709,11 @@ symbol-leakage-check:
 banned-symbol-check:
 	$(PYTHON) scripts/banned_symbols_check.py --directory build/release/src
 
+.PHONY: linux-release-link-checks
+
+linux-release-link-checks:
+	bash scripts/ci/linux_release_link_checks.sh
+
 define ensure_apt_commands
 	missing=0; \
 	for cmd in $(1); do \

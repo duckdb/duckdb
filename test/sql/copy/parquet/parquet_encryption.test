@@ -43,6 +43,10 @@ PRAGMA add_parquet_key('key192', '012345678911234501234567')
 statement ok
 PRAGMA add_parquet_key('key256', '01234567891123450123456789112345')
 
+# encryption options must survive serialization for both COPY and scans
+statement ok
+SET debug_verify_serializer=true
+
 # test all valid AES key lengths
 foreach key_len 128 192 256
 
@@ -66,6 +70,9 @@ SELECT * FROM test
 42
 
 endloop
+
+statement ok
+SET debug_verify_serializer=false
 
 # what happens if we don't try to decrypt even if the file is encrypted?
 statement error

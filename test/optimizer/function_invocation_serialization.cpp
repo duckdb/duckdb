@@ -34,7 +34,67 @@
 
 using namespace duckdb;
 
+TEST_CASE("Serialize-only table functions retain rebinding inputs in legacy plans",
+          "[serialization][function_invocation][logical_get_bwc]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto &context = *connection.context;
+	TableFunction function("legacy_rebind_inputs", {LogicalType::VARCHAR}, nullptr);
+	function.bind = [](ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
+	                   vector<Identifier> &names) -> unique_ptr<FunctionData> {
+		REQUIRE(input.inputs.size() == 1);
+		REQUIRE(input.inputs[0] == Value("scan_source"));
+		REQUIRE(input.named_parameters.size() == 1);
+		REQUIRE(input.named_parameters.at("option") == Value::INTEGER(42));
+		REQUIRE(input.input_table_types == vector<LogicalType> {LogicalType::BIGINT});
+		REQUIRE(input.input_table_names == vector<Identifier> {Identifier("input_column")});
+		types.emplace_back(LogicalType::BIGINT);
+		names.emplace_back("result");
+		return make_uniq<TableFunctionData>();
+	};
+	SECTION("Serialize callback without deserialize callback") {
+		function.serialize = [](Serializer &, const optional_ptr<FunctionData>, const TableFunction &) {
+			throw NotImplementedException("This scan cannot serialize its bind data");
+		};
+	}
+	SECTION("No serialization callbacks") {
+	}
+	CreateTableFunctionInfo info(function);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+	LogicalGet get(TableIndex(0), function, make_uniq<TableFunctionData>(), {LogicalType::BIGINT},
+	               {Identifier("result")});
+	get.parameters = {Value("scan_source")};
+	get.named_parameters["option"] = Value::INTEGER(42);
+	get.input_table_types = {LogicalType::BIGINT};
+	get.input_table_names = {Identifier("input_column")};
+
+	for (const auto &version : {"v1.3.0", "v1.4.0", "v1.5.0", "latest"}) {
+		CAPTURE(version);
+		SerializationOptions options;
+		options.storage_compatibility = StorageCompatibility::FromString(version);
+		MemoryStream stream(Allocator::Get(context));
+		BinarySerializer::Serialize(get, stream, options);
+		stream.Rewind();
+		bound_parameter_map_t parameters;
+		auto copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+		auto &copied_get = copy->Cast<LogicalGet>();
+		REQUIRE(copied_get.bind_data);
+		REQUIRE(copied_get.parameters == get.parameters);
+		REQUIRE(copied_get.named_parameters == get.named_parameters);
+		REQUIRE(copied_get.input_table_types == get.input_table_types);
+		REQUIRE(copied_get.input_table_names == get.input_table_names);
+	}
+	connection.Rollback();
+}
+
 namespace {
+
+struct LegacyScanBindData : public TableFunctionData {
+	explicit LegacyScanBindData(int64_t value_p) : value(value_p) {
+	}
+	int64_t value;
+};
 
 static void RequireSameValues(QueryResult &expected, QueryResult &actual) {
 	REQUIRE_NO_FAIL(actual);
@@ -48,6 +108,59 @@ static void RequireSameValues(QueryResult &expected, QueryResult &actual) {
 }
 
 } // namespace
+
+TEST_CASE("Table function bind data remains readable after removing its serialize callback",
+          "[serialization][function_invocation][deserialize_only]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto &context = *connection.context;
+	TableFunction writer("legacy_scan", {}, nullptr);
+	writer.bind = [](ClientContext &, TableFunctionBindInput &, vector<LogicalType> &,
+	                 vector<Identifier> &) -> unique_ptr<FunctionData> {
+		throw InternalException("Serialized bind data must not be rebound");
+	};
+	writer.serialize = [](Serializer &serializer, const optional_ptr<FunctionData> data, const TableFunction &) {
+		serializer.WriteProperty(100, "value", data->Cast<LegacyScanBindData>().value);
+	};
+	writer.deserialize = [](Deserializer &deserializer, TableFunction &) -> unique_ptr<FunctionData> {
+		return make_uniq<LegacyScanBindData>(deserializer.ReadProperty<int64_t>(100, "value"));
+	};
+	auto reader = writer;
+	bool can_deserialize = true;
+	SECTION("Reader retains only the deserialize callback") {
+		reader.serialize = nullptr;
+	}
+	SECTION("Reader retains both callbacks") {
+	}
+	SECTION("Reader lacks the deserialize callback") {
+		reader.deserialize = nullptr;
+		can_deserialize = false;
+	}
+	CreateTableFunctionInfo info(reader);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+	LogicalGet get(TableIndex(0), writer, make_uniq<LegacyScanBindData>(42), {LogicalType::BIGINT},
+	               {Identifier("result")});
+	for (const auto &version : {"v1.4.0", "v1.5.0", "latest"}) {
+		CAPTURE(version);
+		SerializationOptions options;
+		options.storage_compatibility = StorageCompatibility::FromString(version);
+		MemoryStream stream(Allocator::Get(context));
+		BinarySerializer::Serialize(get, stream, options);
+		stream.Rewind();
+		bound_parameter_map_t parameters;
+		if (!can_deserialize) {
+			REQUIRE_THROWS_WITH(BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters),
+			                    Catch::Matchers::Contains("no deserialization function for"));
+			continue;
+		}
+		auto copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+		auto &copied_get = copy->Cast<LogicalGet>();
+		REQUIRE(copied_get.bind_data);
+		REQUIRE(copied_get.bind_data->Cast<LegacyScanBindData>().value == 42);
+	}
+	connection.Rollback();
+}
 
 TEST_CASE("Current list serialization preserves bound ordering across repeated copies",
           "[serialization][function_invocation]") {
