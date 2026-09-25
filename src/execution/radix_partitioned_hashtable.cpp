@@ -718,6 +718,36 @@ bool StatePressureExceeded(RadixHTGlobalSinkState &gstate, GroupedAggregateHashT
 	       gstate.GetThreadLimit() / RadixHTConfig::AGGREGATE_STATE_PRESSURE_DIVISOR;
 }
 
+bool TryGrowSinkHashTable(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
+	if (gstate.number_of_threads <= RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
+		return false;
+	}
+	auto &ht = *lstate.ht;
+	if (ht.LookupsSkipped() || ht.Count() != ht.GetMaterializedCount() ||
+	    (gstate.spill_plan && StatePressureExceeded(gstate, ht))) {
+		return false;
+	}
+
+	const auto next_capacity = ht.Capacity() * 2;
+	const auto thread_limit = gstate.GetThreadLimit();
+	if (next_capacity > thread_limit / sizeof(ht_entry_t)) {
+		return false;
+	}
+	const auto remaining_after_new_table = thread_limit - next_capacity * sizeof(ht_entry_t);
+	if (ht.Capacity() > remaining_after_new_table / sizeof(ht_entry_t)) {
+		return false;
+	}
+	const auto remaining_after_tables = remaining_after_new_table - ht.Capacity() * sizeof(ht_entry_t);
+	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
+	if (arena_size > remaining_after_tables || ht.GetDataSizeInBytes() > remaining_after_tables - arena_size) {
+		return false;
+	}
+
+	ht.Resize(next_capacity);
+	lstate.local_sink_capacity = next_capacity;
+	return true;
+}
+
 // Whether this thread's aggregate states should be exported to spillable storage
 bool ShouldExportStates(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate, GroupedAggregateHashTable &ht) {
 	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
@@ -841,6 +871,10 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		// We can fit another chunk, and the aggregate states are not under memory pressure either.
 		// The state check matters for few groups with large states: those never fill the hash
 		// table, but their arena must still be flushed and exported before it exhausts the limit.
+		return;
+	}
+
+	if (TryGrowSinkHashTable(gstate, lstate)) {
 		return;
 	}
 

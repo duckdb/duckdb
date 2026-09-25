@@ -126,6 +126,10 @@ const PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() cons
 	return *partitioned_data;
 }
 
+idx_t GroupedAggregateHashTable::GetDataSizeInBytes() const {
+	return partitioned_data->SizeInBytes() + (unpartitioned_data ? unpartitioned_data->SizeInBytes() : 0);
+}
+
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 		// Flush/unpin unpartitioned data and append to partitioned data
@@ -295,6 +299,10 @@ void GroupedAggregateHashTable::SkipLookups() {
 	skip_lookups = true;
 }
 
+bool GroupedAggregateHashTable::LookupsSkipped() const {
+	return skip_lookups;
+}
+
 void GroupedAggregateHashTable::EnableHLL(bool enable) {
 	enable_hll = enable;
 }
@@ -315,8 +323,9 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	}
 	D_ASSERT(Count() == 0 || Count() == GetMaterializedCount());
 
+	auto new_hash_map = buffer_manager.GetBufferAllocator().Allocate(size * sizeof(ht_entry_t));
 	capacity = size;
-	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
+	hash_map = std::move(new_hash_map);
 	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
 	ClearPointerTable();
 	bitmask = capacity - 1;
