@@ -1,3 +1,12 @@
+# Conditionally compile installing and loading external extensions based on
+# whether extension loading is enabled or not
+if(ENABLE_EXTENSION_LOAD)
+  set(EXTENSION_LOAD_SOURCES extension_install_dynamic.cpp
+                             extension_load_dynamic.cpp)
+else()
+  set(EXTENSION_LOAD_SOURCES extension_load_none.cpp)
+endif()
+
 add_library(
   duckdb_main_extension OBJECT
   extension_alias.cpp
@@ -6,7 +15,8 @@ add_library(
   extension_load.cpp
   extension_loader.cpp
   extension_repository_manager.cpp
-  linked_extension_registry.cpp)
+  linked_extension_registry.cpp
+  ${EXTENSION_LOAD_SOURCES})
 
 # Escape ; in the string to ensure this is treated as a plain string instead of
 # a list
