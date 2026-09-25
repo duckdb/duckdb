@@ -91,11 +91,24 @@ static bool IsDroppedBlock(CacheBlock &block) {
 	return memory.IsUnloaded() && !memory.MustWriteToTemporaryFile();
 }
 
+static bool IsLoadedBlock(CacheBlock &block) {
+	const annotated_lock_guard<annotated_mutex> block_guard(block.mtx);
+	return block.state == CacheBlockState::LOADED;
+}
+
+//! Number of blocks, and so requests, that a gap of nr_bytes is fetched with
+static idx_t GapBlockCount(idx_t nr_bytes, idx_t max_block_size) {
+	return (nr_bytes + max_block_size - 1) / max_block_size;
+}
+
 vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
                                                                 idx_t max_block_size) {
 	D_ASSERT(nr_bytes > 0);
 	D_ASSERT(max_block_size > 0);
 	const idx_t end = location + nr_bytes;
+	// smaller cached blocks between two gaps are re-fetched with them when that saves a request, so
+	// scattered cached pieces do not split a read into many small requests
+	const idx_t absorb_size = max_block_size / 8;
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
 	auto &blocks = cached_file.blocks;
@@ -122,7 +135,23 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 			it = blocks.erase(it);
 		}
 		// create blocks for the missing bytes up to the next cached block
-		const idx_t gap_end = it == blocks.end() ? end : MinValue(end, it->first);
+		idx_t gap_end = it == blocks.end() ? end : MinValue(end, it->first);
+		while (it != blocks.end() && it->first < end && it->second->size < absorb_size && IsLoadedBlock(*it->second)) {
+			const idx_t block_end = it->first + it->second->size;
+			const auto next = std::next(it);
+			const idx_t next_gap_end = next == blocks.end() ? end : MinValue(end, next->first);
+			if (block_end >= next_gap_end) {
+				break;
+			}
+			const idx_t gap_before = gap_end - pos;
+			const idx_t gap_after = next_gap_end - block_end;
+			if (GapBlockCount(gap_before + it->second->size + gap_after, max_block_size) >=
+			    GapBlockCount(gap_before, max_block_size) + GapBlockCount(gap_after, max_block_size)) {
+				break;
+			}
+			it = blocks.erase(it);
+			gap_end = next_gap_end;
+		}
 		while (pos < gap_end) {
 			const idx_t size = MinValue(gap_end - pos, max_block_size);
 			auto block = make_shared_ptr<CacheBlock>(pos, size);

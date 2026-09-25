@@ -255,6 +255,93 @@ TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[
 	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 }
 
+TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	// cached ranges smaller than an eighth of the block size are fetched with the gaps around them
+	const idx_t BLOCK_SIZE = 8192;
+	const idx_t ABSORB_SIZE = BLOCK_SIZE / 8;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+
+	const idx_t FILE_SIZE = 20000;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_absorb.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	REQUIRE(ReadFull(*handle, 100, 1000) == content.substr(1000, 100));
+	REQUIRE(ReadFull(*handle, ABSORB_SIZE, 3000) == content.substr(3000, ABSORB_SIZE));
+	recording_fs->TakeReads();
+
+	// the 100 byte range is fetched again with its gaps, the range of exactly ABSORB_SIZE is kept
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	const idx_t after = 3000 + ABSORB_SIZE;
+	REQUIRE(recording_fs->TakeReads() ==
+	        vector<pair<idx_t, idx_t>> {
+	            {0, 3000}, {after, BLOCK_SIZE}, {after + BLOCK_SIZE, FILE_SIZE - after - BLOCK_SIZE}});
+	REQUIRE(CountCachedBlocks(cache) == 4);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads().empty());
+}
+
+TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves no request", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 8192;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+
+	// the gaps around the cached range need one request each, merged they would still need two
+	const idx_t FILE_SIZE = 1000 + 100 + 7500;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_absorb_no_saving.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	REQUIRE(ReadFull(*handle, 100, 1000) == content.substr(1000, 100));
+	recording_fs->TakeReads();
+
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, 1000}, {1100, 7500}});
+	REQUIRE(CountCachedBlocks(cache) == 3);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+}
+
+TEST_CASE("Cached ranges of local files between gaps are kept at the default block size", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	// larger than the default local block size, so the file is not fetched whole
+	const idx_t FILE_SIZE = 20480;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_keep_local.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto &cache = db_instance.GetExternalFileCache();
+
+	REQUIRE(ReadFull(*handle, 4096, 4096) == content.substr(4096, 4096));
+	REQUIRE(ReadFull(*handle, 4096, 12288) == content.substr(12288, 4096));
+	recording_fs->TakeReads();
+
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, 4096}, {8192, 4096}, {16384, 4096}});
+	REQUIRE(CountCachedBlocks(cache) == 5);
+	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
+}
+
 TEST_CASE("A file no larger than the block size is fetched whole on the first read", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
