@@ -54,7 +54,7 @@ TEST_CASE("Serialize-only table functions retain rebinding inputs in legacy plan
 		return make_uniq<TableFunctionData>();
 	};
 	SECTION("Serialize callback without deserialize callback") {
-		function.serialize = [](Serializer &, const optional_ptr<FunctionData>, const TableFunction &) {
+		function.serialize = [](Serializer &, const optional_ptr<FunctionData>, const BoundTableFunction &) {
 			throw NotImplementedException("This scan cannot serialize its bind data");
 		};
 	}
@@ -62,7 +62,7 @@ TEST_CASE("Serialize-only table functions retain rebinding inputs in legacy plan
 	}
 	CreateTableFunctionInfo info(function);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
-	LogicalGet get(TableIndex(0), function, make_uniq<TableFunctionData>(), {LogicalType::BIGINT},
+	LogicalGet get(TableIndex(0), BoundTableFunction(function), make_uniq<TableFunctionData>(), {LogicalType::BIGINT},
 	               {Identifier("result")});
 	get.parameters = {Value("scan_source")};
 	get.named_parameters["option"] = Value::INTEGER(42);
@@ -120,10 +120,10 @@ TEST_CASE("Table function bind data remains readable after removing its serializ
 	                 vector<Identifier> &) -> unique_ptr<FunctionData> {
 		throw InternalException("Serialized bind data must not be rebound");
 	};
-	writer.serialize = [](Serializer &serializer, const optional_ptr<FunctionData> data, const TableFunction &) {
+	writer.serialize = [](Serializer &serializer, const optional_ptr<FunctionData> data, const BoundTableFunction &) {
 		serializer.WriteProperty(100, "value", data->Cast<LegacyScanBindData>().value);
 	};
-	writer.deserialize = [](Deserializer &deserializer, TableFunction &) -> unique_ptr<FunctionData> {
+	writer.deserialize = [](Deserializer &deserializer, BoundTableFunction &) -> unique_ptr<FunctionData> {
 		return make_uniq<LegacyScanBindData>(deserializer.ReadProperty<int64_t>(100, "value"));
 	};
 	auto reader = writer;
@@ -139,7 +139,7 @@ TEST_CASE("Table function bind data remains readable after removing its serializ
 	}
 	CreateTableFunctionInfo info(reader);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
-	LogicalGet get(TableIndex(0), writer, make_uniq<LegacyScanBindData>(42), {LogicalType::BIGINT},
+	LogicalGet get(TableIndex(0), BoundTableFunction(writer), make_uniq<LegacyScanBindData>(42), {LogicalType::BIGINT},
 	               {Identifier("result")});
 	for (const auto &version : {"v1.4.0", "v1.5.0", "latest"}) {
 		CAPTURE(version);
