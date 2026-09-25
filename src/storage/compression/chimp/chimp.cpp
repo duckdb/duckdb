@@ -37,7 +37,7 @@ CompressionFunction GetChimpFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_CHIMP, data_type, ChimpInitAnalyze<T>, ChimpAnalyze<T>,
 	                           ChimpFinalAnalyze<T>, ChimpInitCompression<T>, ChimpCompress<T>,
 	                           ChimpFinalizeCompress<T>, ChimpInitScan<T>, ChimpScan<T>, ChimpScanPartial<T>,
-	                           ChimpFetchRow<T>, ChimpSkip<T>);
+	                           FetchRowsFromSingle<ChimpFetchRow<T>>, ChimpSkip<T>);
 }
 
 CompressionFunction ChimpCompressionFun::GetFunction(PhysicalType type) {

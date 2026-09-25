@@ -282,9 +282,9 @@ CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, FixedSizeInitAnalyze,
 	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
-	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>, FixedSizeFetchRow<T>,
-	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeInitAppend,
-	                           FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
+	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>,
+	                           FetchRowsFromSingle<FixedSizeFetchRow<T>>, UncompressedFunctions::EmptySkip, nullptr,
+	                           FixedSizeInitAppend, FixedSizeAppend<T, APPENDER>, FixedSizeFinalizeAppend<T>);
 }
 
 CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {
