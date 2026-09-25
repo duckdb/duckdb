@@ -363,8 +363,8 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	PageHeader page_hdr;
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
-	if (trans.HasPrefetch()) {
-		// Already has some data prefetched, let's not mess with it
+	if (trans.HasReadBuffer()) {
+		// Prefetch or demand buffering already batches the header reads.
 		Read(page_hdr);
 	} else {
 		// No prefetch yet, prefetch the full header in one go (so thrift won't read byte-by-byte from storage)

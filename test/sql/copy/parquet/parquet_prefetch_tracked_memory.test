@@ -28,3 +28,13 @@ query II
 select count(*), sum(i) from '{TEST_DIR}/prefetch_tracked_big.parquet';
 ----
 16000000	127999992000000
+
+# On-demand reads also fit without retaining the whole row group.
+statement ok
+RESET disable_parquet_prefetching;
+
+query II
+SELECT count(*), sum(i)
+FROM read_parquet('{TEST_DIR}/prefetch_tracked_big.parquet', prefetch_strategy='on_demand');
+----
+16000000	127999992000000

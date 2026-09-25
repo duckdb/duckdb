@@ -591,6 +591,8 @@ const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStra
 		return "AUTO";
 	case ParquetPrefetchStrategyOption::WHOLE_GROUP:
 		return "WHOLE_GROUP";
+	case ParquetPrefetchStrategyOption::ON_DEMAND:
+		return "ON_DEMAND";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 	}
@@ -603,6 +605,9 @@ ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption
 	}
 	if (StringUtil::Equals(value, "WHOLE_GROUP")) {
 		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
+	}
+	if (StringUtil::Equals(value, "ON_DEMAND")) {
+		return ParquetPrefetchStrategyOption::ON_DEMAND;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1079,8 +1084,10 @@ static void LoadInternal(ExtensionLoader &loader) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
 	                          LogicalType::BOOLEAN, Value(false));
-	config.AddExtensionOption("disable_parquet_prefetching", "Disable the prefetching mechanism in Parquet",
-	                          LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("disable_parquet_prefetching",
+	                          "Deprecated: sets the default Parquet prefetch strategy to 'on_demand'. "
+	                          "Use read_parquet(..., prefetch_strategy='on_demand') instead.",
+	                          LogicalType::BOOLEAN, Value(false), nullptr, SetScope::SESSION, false, true);
 	config.AddExtensionOption("prefetch_all_parquet_files",
 	                          "(deprecated) Parquet files are now always prefetched, this setting has no effect",
 	                          LogicalType::BOOLEAN, Value(false));
