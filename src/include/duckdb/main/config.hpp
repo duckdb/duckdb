@@ -40,6 +40,7 @@
 #include "duckdb/common/enums/debug_order_verification.hpp"
 
 namespace duckdb {
+class ExternalExtensionProvider;
 class ArrowTypeExtension;
 struct ArrowExtensionMetadata;
 struct ArrowTypeExtensionSet;
@@ -325,6 +326,9 @@ public:
 
 	void SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util);
 	HTTPUtil &GetHTTPUtil() const;
+	//! Replace how external extensions are installed and loaded, before the database runs queries
+	DUCKDB_API void SetExternalExtensionProvider(const shared_ptr<ExternalExtensionProvider> &new_provider);
+	DUCKDB_API ExternalExtensionProvider &GetExternalExtensionProvider() const;
 	DUCKDB_API HTTPTransportManager &GetHTTPTransportManager();
 	DUCKDB_API const HTTPTransportManager &GetHTTPTransportManager() const;
 
@@ -342,6 +346,8 @@ private:
 	bool is_user_config = true;
 	//! HTTP provider publication and bounded client ownership
 	unique_ptr<HTTPTransportManager> http_transport_manager;
+	//! Installs and loads external extensions; "none" unless a loader library is linked
+	shared_ptr<ExternalExtensionProvider> external_extension_provider;
 };
 
 } // namespace duckdb

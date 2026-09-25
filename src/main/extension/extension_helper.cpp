@@ -1,5 +1,6 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/main/extension/linked_extension_registry.hpp"
 
 #include "duckdb/common/file_system.hpp"
@@ -126,8 +127,8 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 	return false;
 }
 
-bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
-	if (!SupportsExternalExtensions()) {
+bool ExtensionHelper::CanAutoloadExtension(DatabaseInstance &db, const string &ext_name) {
+	if (!DBConfig::GetConfig(db).GetExternalExtensionProvider().SupportsExternalExtensions()) {
 		return false;
 	}
 
@@ -150,7 +151,7 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, 
                                                           const string &extension_name) {
 	string install_hint;
 
-	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
+	if (!ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
 		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
 	} else if (!Settings::Get<AutoloadKnownExtensionsSetting>(db)) {

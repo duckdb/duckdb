@@ -663,7 +663,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 		return false;
 	}
 	try {
-		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (ExtensionHelper::CanAutoloadExtension(*context.db, extension_name)) {
 			return ExtensionHelper::TryAutoLoadExtension(context, extension_name);
 		}
 	} catch (...) {
@@ -675,7 +675,7 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name) {
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
-		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (ExtensionHelper::CanAutoloadExtension(*context.db, extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
 			return extension_name;
 		}
@@ -749,7 +749,7 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COLLATIONS);
 		}
 
-		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 			ExtensionHelper::AutoLoadExtension(db, extension_name);
 			return true;
 		}

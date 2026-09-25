@@ -9,14 +9,11 @@ import tempfile
 excluded_objects = ['utf8proc_data.cpp']
 # the built-in httplib client, registered like a static extension when it is packaged
 httplib_source = os.path.join('src', 'main', 'http', 'http_client_httplib.cpp')
-# external extension install and load implementations, exactly one set of them is compiled
-extension_load_sources = {
-    True: [
-        os.path.join('src', 'main', 'extension', 'extension_install_dynamic.cpp'),
-        os.path.join('src', 'main', 'extension', 'extension_load_dynamic.cpp'),
-    ],
-    False: [os.path.join('src', 'main', 'extension', 'extension_load_none.cpp')],
-}
+# installing and loading external extensions, registered like a static extension when it is packaged
+loadable_extensions_sources = [
+    os.path.join('src', 'main', 'extension', 'extension_install_dynamic.cpp'),
+    os.path.join('src', 'main', 'extension', 'extension_load_dynamic.cpp'),
+]
 
 
 def third_party_includes():
@@ -280,7 +277,7 @@ def build_package(
     # obtain the list of source files from the amalgamation
     source_list = amalgamation.list_sources()
     builtin_httplib = builtin_httplib and extension_load
-    excluded_sources = extension_load_sources[not extension_load]
+    excluded_sources = [] if extension_load else list(loadable_extensions_sources)
     if not builtin_httplib:
         excluded_sources.append(httplib_source)
     source_list = [x for x in source_list if x not in excluded_sources]
@@ -308,13 +305,14 @@ def build_package(
     ext_loader_defines = ''
     ext_describers = ''
     ext_registrations = ''
-    if builtin_httplib:
-        # the httplib client is not an extension, but registers the same way, ahead of the extensions
+    # the httplib client and the loadable extensions support are not extensions, but register the same way, first
+    registered_first = (['httplib'] if builtin_httplib else []) + (['loadable_extensions'] if extension_load else [])
+    for name in registered_first:
         ext_describers += (
-            'extern "C" int32_t duckdb_extension_httplib_describe(duckdb_extension_descriptor *descriptor);\n\n'
+            f'extern "C" int32_t duckdb_extension_{name}_describe(duckdb_extension_descriptor *descriptor);\n\n'
         )
         ext_registrations += (
-            "\tif (duckdb_register_static_extension(duckdb_extension_httplib_describe) != 0) {\n"
+            f"\tif (duckdb_register_static_extension(duckdb_extension_{name}_describe) != 0) {{\n"
             "\t\tresult = 1;\n"
             "\t}\n"
         )

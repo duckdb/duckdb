@@ -242,7 +242,7 @@ public:
 	                                 const ExtensionEntry (&entries)[N]) {
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
-			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			if (ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 				ExtensionHelper::AutoLoadExtension(db, extension_name);
 			}
 		}
@@ -250,7 +250,7 @@ public:
 
 	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
 	//! extension_entries.hpp)
-	static bool CanAutoloadExtension(const string &ext_name);
+	static bool CanAutoloadExtension(DatabaseInstance &db, const string &ext_name);
 
 	//! Utility functions for creating meaningful error messages regarding missing extensions
 	static string WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,
@@ -285,14 +285,6 @@ private:
 	static void LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
 	                                          const string &repository_name, bool core_only, ExtensionActiveLoad &info,
 	                                          optional_ptr<ClientContext> context);
-	//! Whether this build can install and load external extensions
-	static bool SupportsExternalExtensions();
-	//! Open the library of an external extension, throws if it cannot be opened
-	static void *OpenExtensionLibrary(const string &filename, const string &filebase);
-	//! Look up a function in an opened extension library, returns nullptr if it is not there
-	static void *TryLoadFunctionFromLibrary(void *library, const string &function_name);
-	//! The error of the last failed extension library operation
-	static string GetExtensionLibraryError();
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);
