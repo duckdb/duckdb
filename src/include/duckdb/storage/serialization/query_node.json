@@ -36,7 +36,8 @@
       {
         "id": 200,
         "name": "select_list",
-        "type": "vector<ParsedExpression*>"
+        "type": "vector<ParsedExpression*>",
+        "serialize_property": "GetSelectListForSerialization(serializer)"
       },
       {
         "id": 201,

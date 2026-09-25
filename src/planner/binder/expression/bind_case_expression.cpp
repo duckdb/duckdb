@@ -1,4 +1,8 @@
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -6,16 +10,89 @@
 
 namespace duckdb {
 
+static unique_ptr<ParsedExpression> CreateCaseInvokeExpression(const CaseExpression &expr, idx_t lambda_index,
+                                                               Identifier parameter_name,
+                                                               QueryLocation operand_location,
+                                                               unique_ptr<ParsedExpression> case_operand) {
+	auto case_body = make_uniq<CaseExpression>();
+	for (auto &check : expr.CaseChecks()) {
+		CaseCheck invoke_check;
+		auto lambda_ref = make_uniq<LambdaRefExpression>(lambda_index, parameter_name);
+		lambda_ref->SetQueryLocation(operand_location);
+		invoke_check.when_expr = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(lambda_ref),
+		                                                         check.when_expr->Copy());
+		invoke_check.when_expr->SetQueryLocation(operand_location);
+		invoke_check.then_expr = check.then_expr->Copy();
+		case_body->CaseChecksMutable().push_back(std::move(invoke_check));
+	}
+	case_body->ElseMutable() = expr.Else().Copy();
+
+	vector<string> parameters;
+	parameters.push_back(parameter_name.GetIdentifierName());
+	vector<unique_ptr<ParsedExpression>> arguments;
+	arguments.push_back(make_uniq<LambdaExpression>(std::move(parameters), std::move(case_body)));
+	arguments.push_back(std::move(case_operand));
+	auto invoke_name = QualifiedName(Identifier(SYSTEM_CATALOG), Identifier(DEFAULT_SCHEMA), Identifier("invoke"));
+	auto result = make_uniq<FunctionExpression>(invoke_name, std::move(arguments));
+	result->SetAlias(expr.GetAlias());
+	result->SetQueryLocation(expr.GetQueryLocation());
+	return std::move(result);
+}
+
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
-	// first try to bind the children of the case expression
 	ErrorData error;
 	vector<pair<unique_ptr<Expression>, unique_ptr<Expression>>> checks;
-	for (auto &check : expr.CaseChecksMutable()) {
-		auto when_expr = BindChild(check.when_expr, depth, error);
-		auto then_expr = BindChild(check.then_expr, depth, error);
-		checks.emplace_back(std::move(when_expr), std::move(then_expr));
+	unique_ptr<Expression> else_expr;
+	if (expr.CaseOperand()) {
+		if (expr.CaseChecks().size() == 1) {
+			auto legacy_case = expr.GetLegacyCaseExpression();
+			return BindExpression(*legacy_case, depth);
+		}
+
+		auto parameter_name = expr.CaseOperand()->GetName();
+		auto operand_location = expr.CaseOperand()->GetQueryLocation();
+		auto lambda_index = lambda_bindings ? lambda_bindings->size() : 0;
+		if (expr.CaseOperand()->HasSubquery()) {
+			auto invoke_expr = CreateCaseInvokeExpression(expr, lambda_index, std::move(parameter_name),
+			                                              operand_location, std::move(expr.CaseOperandMutable()));
+			return BindExpression(invoke_expr, depth);
+		}
+
+		auto initial_bound_column_count = GetBoundColumns().size();
+		auto case_operand_expr = expr.CaseOperand()->Copy();
+		auto case_operand = BindChild(case_operand_expr, depth, error);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
+		}
+
+		if (!case_operand->IsVolatile()) {
+			for (auto &check : expr.CaseChecksMutable()) {
+				auto when_expr = BindChild(check.when_expr, depth, error);
+				auto then_expr = BindChild(check.then_expr, depth, error);
+				unique_ptr<Expression> comparison;
+				if (when_expr) {
+					comparison = CreateBoundComparison(ExpressionType::COMPARE_EQUAL, case_operand->Copy(),
+					                                   std::move(when_expr), error);
+				}
+				checks.emplace_back(std::move(comparison), std::move(then_expr));
+			}
+			else_expr = BindChild(expr.ElseMutable(), depth, error);
+		} else {
+			TruncateBoundColumns(initial_bound_column_count);
+			auto invoke_expr = CreateCaseInvokeExpression(expr, lambda_index, std::move(parameter_name),
+			                                              operand_location, std::move(expr.CaseOperandMutable()));
+			// FIXME: Support subqueries and UNNEST without falling back to repeated operand evaluation.
+			return BindExpression(invoke_expr, depth);
+		}
+	} else {
+		// first try to bind the children of the case expression
+		for (auto &check : expr.CaseChecksMutable()) {
+			auto when_expr = BindChild(check.when_expr, depth, error);
+			auto then_expr = BindChild(check.then_expr, depth, error);
+			checks.emplace_back(std::move(when_expr), std::move(then_expr));
+		}
+		else_expr = BindChild(expr.ElseMutable(), depth, error);
 	}
-	auto else_expr = BindChild(expr.ElseMutable(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
