@@ -56,6 +56,8 @@ public:
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations
 	void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
 	idx_t GetAllocatorBulkDeallocationFlushThreshold();
+	//! Number of times the allocator was flushed by the buffer pool
+	idx_t GetAllocatorFlushCount() const;
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
@@ -97,6 +99,13 @@ protected:
 
 	//! Evict object cache entries if needed.
 	EvictionResult EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit);
+
+	//! Return freed memory to the OS, optionally releasing up to extra_memory from the block allocator's pool
+	void FlushAllocator(optional_idx extra_memory = optional_idx());
+	//! Flush the allocator if the memory freed since the last flush could push resident memory past the limit
+	void FlushOnBulkDeallocation();
+	//! Freed memory that has to accumulate before the allocator is flushed
+	idx_t GetBulkDeallocationFlushThreshold() const;
 
 	//! Purge all blocks that haven't been pinned within the last N seconds
 	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
@@ -171,6 +180,10 @@ protected:
 	atomic<idx_t> maximum_memory;
 	//! If bulk deallocation larger than this occurs, flush outstanding allocations
 	atomic<idx_t> allocator_bulk_deallocation_flush_threshold;
+	//! Number of allocator flushes
+	atomic<idx_t> allocator_flush_count {0};
+	//! Freed memory is flushed once it exceeds this fraction of the memory limit
+	static constexpr idx_t BULK_DEALLOCATION_FLUSH_DIVISOR = 16;
 	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
 	bool track_eviction_timestamps;
 	//! Eviction queues
