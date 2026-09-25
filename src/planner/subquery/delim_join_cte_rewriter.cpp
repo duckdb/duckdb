@@ -2611,6 +2611,7 @@ static bool CanRestrictCorrelationDomain(LogicalOperator &op, unordered_set<Tabl
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
+	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		break;
 	default:
