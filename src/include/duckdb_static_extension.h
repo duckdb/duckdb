@@ -34,12 +34,12 @@ extern "C" {
 #endif
 
 //! Descriptor layout this header defines.
-#define DUCKDB_EXTENSION_DESCRIPTOR_VERSION 1
+#define DUCKDB_EXTENSION_DESCRIPTOR_VERSION 2
 
 typedef struct duckdb_extension_descriptor duckdb_extension_descriptor;
 
-//! Describes a statically linked extension. DuckDB allocates and zero-fills it, the extension's describe function fills
-//! it in.
+//! Describes a statically linked extension, or something linked in the same way that is not an extension. DuckDB
+//! allocates and zero-fills it, the describe function fills it in.
 struct duckdb_extension_descriptor {
 	//! In: the layout DuckDB offers. Out: the layout the describe function filled, never higher than the offer.
 	uint32_t version;
@@ -63,13 +63,19 @@ struct duckdb_extension_descriptor {
 	void (*entry_capi_v1)(void);
 	//! void (struct duckdb_v2_extension_input *)
 	void (*entry_capi_v2)(void);
+
+	// Layout 2, set by the describe function
+	//! Set instead of an entry point by something that is not an extension: DuckDB calls it for every database it
+	//! opens, before loading extensions, and neither lists nor loads it as an extension.
+	//! void (duckdb::DatabaseInstance &)
+	void (*database_callback)(void);
 };
 
 //! Every statically linkable extension provides duckdb_extension_<name>_describe with this signature. Returns 0 on
 //! success.
 typedef int32_t (*duckdb_extension_describe_t)(duckdb_extension_descriptor *descriptor);
 
-//! Calls describe and registers the extension it describes for every database opened afterwards. Returns 0 on
+//! Calls describe and registers what it describes for every database opened afterwards. Returns 0 on
 //! success. Registering the same describe function again is a no-op; a different one under a registered name is an
 //! error. A failed registration also makes opening a database fail with the reason.
 DUCKDB_C_API int32_t duckdb_register_static_extension(duckdb_extension_describe_t describe);

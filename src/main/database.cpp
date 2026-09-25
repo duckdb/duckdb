@@ -339,6 +339,11 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	Configure(*config_ptr, database_path);
 	// publish what this binary links, unless the config already carries a set handed to us
 	ExtensionHelper::RegisterLinkedExtensions(config);
+	for (auto &linked : config.linked_extensions) {
+		if (linked.database_callback) {
+			linked.database_callback(*this);
+		}
+	}
 
 	create_api_v1 = CreateAPIv1Wrapper;
 	invoke_capi_v2 = InvokeCAPIV2Entrypoint;

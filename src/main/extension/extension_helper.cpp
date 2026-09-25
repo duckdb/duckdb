@@ -40,7 +40,7 @@ void ExtensionHelper::RegisterLinkedExtensions(DBConfig &config) {
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
 	auto &config = DBConfig::GetConfig(*db.instance);
 	for (auto &linked : config.linked_extensions) {
-		if (StringUtil::CIEquals(linked.name, extension)) {
+		if (linked.load && StringUtil::CIEquals(linked.name, extension)) {
 			linked.load(db);
 			return ExtensionLoadResult::LOADED_EXTENSION;
 		}
@@ -53,7 +53,9 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	auto &config = DBConfig::GetConfig(*db.instance);
 	auto linked = config.linked_extensions;
 	for (auto &entry : linked) {
-		entry.load(db);
+		if (entry.load) {
+			entry.load(db);
+		}
 	}
 }
 
