@@ -7,6 +7,7 @@
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_shredding.hpp"
+#include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
@@ -919,6 +920,15 @@ struct NumericStatsUnifier : public BaseNumericStatsUnifier<T> {
 	}
 };
 
+struct TimeTZStatsUnifier : public BaseNumericStatsUnifier<int64_t> {
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		return Value::TIMETZ(ParquetIntToTimeTZ(Load<int64_t>(const_data_ptr_cast(stats.data())))).ToString();
+	}
+};
+
 template <class T>
 struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 	DecimalStatsUnifier(uint8_t width, uint8_t scale) : width(width), scale(scale) {
@@ -1117,7 +1127,7 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_uniq<NumericStatsUnifier<timestamp_ns_t>>();
 	case LogicalTypeId::TIME_TZ:
-		return make_uniq<NumericStatsUnifier<dtime_tz_t>>();
+		return make_uniq<TimeTZStatsUnifier>();
 	case LogicalTypeId::UINTEGER:
 		return make_uniq<NumericStatsUnifier<uint32_t>>();
 	case LogicalTypeId::UBIGINT:
