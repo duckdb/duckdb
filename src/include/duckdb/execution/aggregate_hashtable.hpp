@@ -146,6 +146,7 @@ public:
 
 	const PartitionedTupleData &GetPartitionedData() const;
 	idx_t GetDataSizeInBytes() const;
+	idx_t GetAllocatedDataSizeInBytes() const;
 	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
 	void Abandon();
 	void Repartition();
@@ -240,7 +241,7 @@ private:
 	//! Whether to enable HLL counting the hashes
 	bool enable_hll;
 	//! The associated HLL
-	HyperLogLog hll;
+	HyperLogLogP<8> hll;
 
 	//! The active arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;

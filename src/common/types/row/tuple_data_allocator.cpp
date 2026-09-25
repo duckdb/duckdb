@@ -119,6 +119,21 @@ idx_t TupleDataAllocator::HeapBlockCount() const {
 	return heap_blocks.size();
 }
 
+idx_t TupleDataAllocator::GetBlockAllocationSize() const {
+	idx_t result = 0;
+	for (const auto &block : row_blocks) {
+		if (block.handle) {
+			result += block.handle->GetMemory().GetMemoryUsage();
+		}
+	}
+	for (const auto &block : heap_blocks) {
+		if (block.handle) {
+			result += block.handle->GetMemory().GetMemoryUsage();
+		}
+	}
+	return result;
+}
+
 void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
 	D_ASSERT(!partition_index.IsValid());
 	D_ASSERT(row_blocks.empty() && heap_blocks.empty());
