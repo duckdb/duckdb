@@ -3,6 +3,8 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/expression_map.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -446,6 +448,190 @@ void QueryGraphManager::ClearExtractedExpressions() {
 	}
 }
 
+namespace {
+
+// Facts refer only to retained equalities in this subtree, never to the candidate graph.
+class RetainedEqualities {
+public:
+	idx_t Size() const {
+		return expressions.size();
+	}
+
+	// Returns false when the endpoints are already connected by retained equalities.
+	bool TryUnion(const Expression &left, const Expression &right) {
+		auto a = Find(Intern(left));
+		auto b = Find(Intern(right));
+		if (a == b) {
+			return false;
+		}
+		if (sizes[a] < sizes[b]) {
+			std::swap(a, b);
+		}
+		parents[b] = a;
+		sizes[a] += sizes[b];
+		return true;
+	}
+
+	void Merge(RetainedEqualities &other) {
+		for (idx_t i = 0; i < other.Size(); i++) {
+			TryUnion(other.expressions[i], other.expressions[other.Find(i)]);
+		}
+	}
+
+private:
+	idx_t Find(idx_t index) {
+		while (parents[index] != index) {
+			parents[index] = parents[parents[index]];
+			index = parents[index];
+		}
+		return index;
+	}
+
+	idx_t Intern(const Expression &expr) {
+		auto entry = indices.find(expr);
+		if (entry != indices.end()) {
+			return entry->second;
+		}
+		auto index = expressions.size();
+		indices.emplace(expr, index);
+		expressions.emplace_back(expr);
+		parents.push_back(index);
+		sizes.push_back(1);
+		return index;
+	}
+
+private:
+	expression_map_t<idx_t> indices;
+	vector<const_reference<Expression>> expressions;
+	vector<idx_t> parents;
+	vector<idx_t> sizes;
+};
+
+static bool SafeEqualityExpression(const Expression &expr) {
+	if (expr.IsVolatile() || expr.CanThrow() || ExpressionBarrier::Contains(expr)) {
+		return false;
+	}
+	bool safe = true;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+	    expr, [&](const BoundColumnRefExpression &col) { safe &= col.Depth() == 0; });
+	ExpressionIterator::VisitExpression<BoundFunctionExpression>(
+	    expr, [&](const BoundFunctionExpression &func) { safe &= !func.Function().RequiresOrderedExecution(); });
+	return safe;
+}
+
+class RedundantJoinConditions {
+public:
+	explicit RedundantJoinConditions(const reference_set_t<LogicalOperator> &boundaries) : boundaries(boundaries) {
+	}
+
+	void Run(LogicalOperator &root) {
+		// Discard the returned facts before Apply can destroy referenced expressions.
+		Analyze(root);
+		Apply();
+	}
+
+private:
+	RetainedEqualities Analyze(LogicalOperator &op) {
+		if (boundaries.count(op)) {
+			return RetainedEqualities();
+		}
+		if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+			auto facts = Analyze(*op.children[0]);
+			for (auto &expr : op.expressions) {
+				if (!SafeEqualityExpression(*expr)) {
+					return RetainedEqualities();
+				}
+			}
+			return facts;
+		}
+		bool inner = op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+		             op.Cast<LogicalComparisonJoin>().join_type == JoinType::INNER;
+		if (!inner && op.type != LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+			for (auto &child : op.children) {
+				Analyze(*child);
+			}
+			return RetainedEqualities();
+		}
+
+		// Analyze inputs independently, then merge the smaller set into the larger one.
+		// Parent predicates must not affect which predicates are retained in either input.
+		auto facts = Analyze(*op.children[0]);
+		auto right = Analyze(*op.children[1]);
+		if (facts.Size() < right.Size()) {
+			std::swap(facts, right);
+		}
+		facts.Merge(right);
+		if (!inner) {
+			return facts;
+		}
+		AnalyzeConditions(op.Cast<LogicalComparisonJoin>(), facts);
+		return facts;
+	}
+
+	void AnalyzeConditions(LogicalComparisonJoin &join, RetainedEqualities &facts) {
+		vector<bool> remove;
+		idx_t remaining = join.conditions.size();
+		// Prefer direct column keys without changing the order of surviving conditions.
+		for (idx_t pass = 0; pass < 2; pass++) {
+			for (idx_t i = 0; i < join.conditions.size(); i++) {
+				auto &condition = join.conditions[i];
+				if (!condition.IsComparison() || condition.GetComparisonType() != ExpressionType::COMPARE_EQUAL) {
+					continue;
+				}
+				auto &left = condition.GetLHS();
+				auto &right_expr = condition.GetRHS();
+				bool columns = left.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+				               right_expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+				// x=x rejects NULL, so it is not a tautology and remains outside the proof.
+				if (columns != (pass == 0) || left.GetReturnType() != right_expr.GetReturnType() ||
+				    left.Equals(right_expr) || !SafeEqualityExpression(left) || !SafeEqualityExpression(right_expr)) {
+					continue;
+				}
+				// The retained path, rather than the original equality graph, proves redundancy.
+				if (!facts.TryUnion(left, right_expr) && remaining > 1) {
+					if (remove.empty()) {
+						remove.resize(join.conditions.size(), false);
+					}
+					remove[i] = true;
+					remaining--;
+				}
+			}
+		}
+		if (remaining != join.conditions.size()) {
+			removals.push_back({join, std::move(remove)});
+		}
+	}
+
+	void Apply() {
+		// Analyze has finished and all borrowed-expression maps have been destroyed.
+		for (auto &entry : removals) {
+			auto &join = entry.join.get();
+			vector<JoinCondition> conditions;
+			conditions.reserve(join.conditions.size());
+			for (idx_t i = 0; i < join.conditions.size(); i++) {
+				if (!entry.remove_conditions[i]) {
+					conditions.push_back(std::move(join.conditions[i]));
+				}
+			}
+			join.conditions = std::move(conditions);
+		}
+	}
+
+private:
+	const reference_set_t<LogicalOperator> &boundaries;
+	struct PendingRemoval {
+		reference<LogicalComparisonJoin> join;
+		vector<bool> remove_conditions;
+	};
+	vector<PendingRemoval> removals;
+};
+
+void RemoveRedundantConditions(LogicalOperator &root, const reference_set_t<LogicalOperator> &boundaries) {
+	RedundantJoinConditions cleanup(boundaries);
+	cleanup.Run(root);
+}
+} // namespace
+
 unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> plan) {
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
@@ -465,6 +651,11 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 	}
 
 	// now we generate the actual joins
+	// Extracted relations have already been optimized and are opaque to this reconstruction.
+	reference_set_t<LogicalOperator> boundaries;
+	for (auto &relation : extracted_relations) {
+		boundaries.insert(*relation);
+	}
 	auto join_tree = GenerateJoins(extracted_relations, total_relation);
 	for (auto &join_operator : join_operators) {
 		if (JoinOrderConflictDetector::MustApplyAsOperator(*join_operator) &&
@@ -488,6 +679,8 @@ unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOpe
 			join_tree.op = PushFilter(std::move(join_tree.op), std::move(filter->filter));
 		}
 	}
+
+	RemoveRedundantConditions(*join_tree.op, boundaries);
 
 	// find the first join in the relation to know where to place this node
 	if (root_is_join) {
