@@ -134,7 +134,7 @@ CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(c
 			ThrowDictionarySelectionBufferOutOfRange();
 		}
 	} else {
-		// Require exactly enough whole groups for the rows. Compare by division to avoid overflowing
+		// Require exactly enough whole groups for the rows. Compare by division to avoid overflowing.
 		if (selection_reader.Size() % group_bytes != 0 || selection_reader.Size() / group_bytes != group_count) {
 			ThrowDictionarySelectionBufferOutOfRange();
 		}

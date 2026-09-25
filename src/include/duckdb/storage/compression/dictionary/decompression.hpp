@@ -12,6 +12,7 @@ struct CompressedStringScanState : public SegmentScanState {
 private:
 	//! Dictionary segment data from disk, with byte ranges checked by ReadLayout.
 	struct SegmentLayout {
+		//! Check each selected dictionary index against the offset table.
 		//! The selection must be set and the requested range must fit within its capacity.
 		void ValidateDictionaryIndices(const SelectionVector &sel, idx_t start_offset, idx_t scan_count) const;
 		//! Validate the index buffer (offsets monotonic and within the dictionary) so scans can trust it.
