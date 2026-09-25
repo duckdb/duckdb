@@ -21,6 +21,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/thread_annotation.hpp"
+#include "duckdb/main/result_format.hpp"
 #include "duckdb/main/result_unit.hpp"
 
 namespace duckdb {
@@ -46,7 +47,7 @@ protected:
 	enum class Type { SIMPLE, BATCHED };
 
 public:
-	BufferedData(Type type, ClientContext &context, ResultLifetime lifetime);
+	BufferedData(Type type, ClientContext &context, ResultLifetime lifetime, ResultFormatContext format_context);
 	virtual ~BufferedData();
 
 public:
@@ -54,8 +55,28 @@ public:
 	ResultLifetime Lifetime() const {
 		return lifetime;
 	}
-	//! Settle the retention and wake the producers parked on it. The first decision stands
-	ResultLifetime Decide(ResultLifetime decision);
+	//! The first decision stands, and a null format means chunks
+	ResultLifetime Decide(ResultLifetime decision, shared_ptr<ResultFormat> format = nullptr);
+	//! Only valid once the retention is settled
+	ResultFormat &Format() const {
+		D_ASSERT(format);
+		return *format;
+	}
+	//! Only valid once the retention is settled
+	ResultFormatGlobalState &FormatState() const {
+		D_ASSERT(format_state);
+		return *format_state;
+	}
+	const shared_ptr<ResultFormat> &SharedFormat() const {
+		return format;
+	}
+	const shared_ptr<ResultFormatGlobalState> &SharedFormatState() const {
+		return format_state;
+	}
+	//! The ordering the plan established, as InitGlobal receives it
+	ResultOrdering Ordering() const {
+		return format_context.ordering;
+	}
 	//! Choose draining, as every fetch-shaped call does. Throws when the result is being materialized
 	void DecideDraining();
 	//! Park a producer until the retention is decided. False when it already is
@@ -76,8 +97,10 @@ public:
 	shared_ptr<ClientContext> GetContext() {
 		return context.lock();
 	}
-	//! The highest number of bytes the buffer ever held.
+	//! The highest number of bytes the buffer ever queued. This is what the cap governs
 	virtual idx_t PeakBufferedBytes() = 0;
+	//! Queued bytes plus the units parked producers hold, as system.peak_streaming_buffer_size reports
+	virtual idx_t PeakStreamingBytes() = 0;
 	//! Whether a producer is parked for space.
 	virtual bool HasBlockedSink() = 0;
 	//! Whether a unit is ready for the consumer to pop.
@@ -137,6 +160,10 @@ protected:
 	atomic<ResultLifetime> lifetime;
 	//! Producers parked with their first chunk unconsumed, until the retention is decided
 	vector<InterruptState> undecided_sinks DUCKDB_GUARDED_BY(glock);
+	const ResultFormatContext format_context;
+	//! Written before the lifetime is published, so a producer that sees a settled lifetime sees these
+	shared_ptr<ResultFormat> format;
+	shared_ptr<ResultFormatGlobalState> format_state;
 };
 
 } // namespace duckdb

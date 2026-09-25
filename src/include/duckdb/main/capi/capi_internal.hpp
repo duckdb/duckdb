@@ -68,7 +68,6 @@ struct PendingStatementWrapper {
 
 struct ArrowResultWrapper {
 	unique_ptr<QueryResult> result;
-	unique_ptr<DataChunk> current_chunk;
 };
 
 struct AppenderWrapper {

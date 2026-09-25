@@ -18,7 +18,7 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 	REQUIRE(!result->HasError());
 	auto types = result->GetTypes();
 	auto names = IdentifiersToStrings(result->GetNames());
-	return make_uniq<ArrowTestFactory>(std::move(types), std::move(names), std::move(result), false, client_properties,
+	return make_uniq<ArrowTestFactory>(std::move(types), std::move(names), std::move(result), client_properties,
 	                                   *con.context);
 }
 
@@ -31,7 +31,7 @@ static string GetExplainForFilter(Connection &con, ArrowTestFactory &factory, co
 	const auto explain_result = rel->Explain();
 	REQUIRE(!explain_result->HasError());
 	auto &mat = *explain_result;
-	return mat.GetValue(1, 0).ToString();
+	return mat.Collection().GetValue(1, 0).ToString();
 }
 
 // Helper: check for a standalone FILTER operator node in the explain output

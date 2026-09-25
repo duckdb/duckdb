@@ -6,6 +6,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 #include "duckdb/common/enums/query_result_state.hpp"
+#include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 
 namespace duckdb::capiv2 {
@@ -109,6 +110,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::HandleExecutionError(ErrorData err
 	bool user_cancelled = error_data.Type() == ExceptionType::INTERRUPT && busy_slot &&
 	                      busy_slot->cancel_requested.load(std::memory_order_relaxed);
 	stream.reset();
+	unit_stream.reset();
 	handle.reset();
 	fragments.clear();
 	try {
@@ -130,8 +132,59 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::HandleExecutionError(ErrorData err
 	error.Throw();
 }
 
+void ResultWrapperV2::SettlePrincipal() {
+	principal_settled = true;
+	bool materialized = handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED;
+	if (requested_format && !handle->HasBufferedData()) {
+		throw InvalidInputException("A result format cannot be combined with a custom result collector");
+	}
+	if (requested_format && !materialized) {
+		handle->SetFormat(requested_format);
+		unit_stream = make_uniq<FormattedResultStream<ArrowFormat>>(std::move(handle));
+		return;
+	}
+	if (requested_format) {
+		// A handle born materialized cannot take a format: its chunks are converted as they are fetched
+		format_state =
+		    requested_format->InitGlobal(types, names, handle->client_properties, handle->GetBufferedData().Ordering());
+		format_lstate = requested_format->InitLocal(*format_state);
+	}
+	if (materialized) {
+		// The statement completes before its result is returned: its rows come from the retained handle
+		handle->Complete();
+		return;
+	}
+	stream = make_uniq<QueryResultStream>(std::move(handle));
+}
+
+unique_ptr<ResultUnit> ResultWrapperV2::NextConvertedUnit() {
+	auto &format = *requested_format;
+	while (true) {
+		if (auto unit = format.Finish(*format_state, *format_lstate, false)) {
+			return unit;
+		}
+		auto chunk = handle->Fetch();
+		if (!chunk || chunk->size() == 0) {
+			return format.Finish(*format_state, *format_lstate, true);
+		}
+		format.Append(*format_state, *format_lstate, *chunk);
+	}
+}
+
 DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_chunk) {
+	unique_ptr<ResultUnit> discard;
+	return StepInternal(out_chunk, discard);
+}
+
+DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::StepUnit(unique_ptr<ResultUnit> &out_unit) {
+	unique_ptr<DataChunk> discard;
+	return StepInternal(discard, out_unit);
+}
+
+DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::StepInternal(unique_ptr<DataChunk> &out_chunk,
+                                                           unique_ptr<ResultUnit> &out_unit) {
 	out_chunk.reset();
+	out_unit.reset();
 	switch (state) {
 	case State::FINISHED:
 		return DUCKDB_V2_RESULT_STEP_STATUS_FINISHED;
@@ -161,15 +214,17 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 			// transition keeps the contract simple: one unit of work per
 			// step; the next step hits the stream.
 			try {
-				if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
+				if (principal_active) {
+					SettlePrincipal();
+				} else if (handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED) {
 					// The statement completes before its result is returned:
 					// its chunks come from the retained handle instead.
 					handle->Complete();
-					if (handle->HasError()) {
-						return HandleExecutionError(handle->GetErrorObject());
-					}
 				} else {
 					stream = make_uniq<QueryResultStream>(std::move(handle));
+				}
+				if (handle && handle->HasError()) {
+					return HandleExecutionError(handle->GetErrorObject());
 				}
 			} catch (std::exception &ex) {
 				return HandleExecutionError(ErrorData(ex));
@@ -182,10 +237,11 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 		return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
 	}
 	case State::STREAMING: {
-		if (stream) {
+		auto active = ActiveStream();
+		if (active) {
 			QueryResultState exec;
 			try {
-				exec = stream->ExecuteTask();
+				exec = active->ExecuteTask();
 			} catch (std::exception &ex) {
 				// The stream records an interrupt as an error rather than
 				// throwing; this is a guard for anything that escapes.
@@ -197,7 +253,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 			case QueryResultState::NO_TASKS_AVAILABLE:
 				return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
 			case QueryResultState::EXECUTION_ERROR:
-				return HandleExecutionError(stream->GetErrorObject());
+				return HandleExecutionError(active->GetErrorObject());
 			case QueryResultState::READY:
 			case QueryResultState::FINISHED:
 				// Both states mean "Fetch without doing more execution
@@ -207,25 +263,40 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 				break;
 			}
 		}
-		// Fetch the next chunk. For a statement that completes before its
-		// result is returned the data is fully available and every step
-		// lands here directly.
+		// Fetch the next chunk, or the next unit when the principal fragment took a format. For a
+		// statement that completes before its result is returned the data is fully available and every
+		// step lands here directly.
 		unique_ptr<DataChunk> chunk;
+		unique_ptr<ResultUnit> unit;
+		bool exhausted;
 		try {
-			chunk = stream ? stream->Fetch() : handle->Fetch();
+			if (unit_stream) {
+				unit = unit_stream->Fetch();
+				exhausted = !unit || unit->row_count == 0;
+			} else if (stream) {
+				chunk = stream->Fetch();
+				exhausted = !chunk || chunk->size() == 0;
+			} else if (principal_active && format_lstate) {
+				unit = NextConvertedUnit();
+				exhausted = !unit;
+			} else {
+				chunk = handle->Fetch();
+				exhausted = !chunk || chunk->size() == 0;
+			}
 		} catch (std::exception &ex) {
 			return HandleExecutionError(ErrorData(ex));
 		}
-		if (stream ? stream->HasError() : handle->HasError()) {
+		if (active ? active->HasError() : handle->HasError()) {
 			// The stream reports late execution errors by setting the error
 			// and returning null.
-			return HandleExecutionError(stream ? stream->GetErrorObject() : handle->GetErrorObject());
+			return HandleExecutionError(active ? active->GetErrorObject() : handle->GetErrorObject());
 		}
-		if (!chunk || chunk->size() == 0) {
+		if (exhausted) {
 			// A stream normalizes end-of-stream to null (and closes); the
 			// size() == 0 arm is needed for the retained handle, whose Fetch
 			// does not normalize.
 			stream.reset();
+			unit_stream.reset();
 			handle.reset();
 			if (fragment_index < fragments.size()) {
 				// More fragments in the group: start the next one and keep
@@ -249,6 +320,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 			return DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
 		}
 		out_chunk = std::move(chunk);
+		out_unit = std::move(unit);
 		return DUCKDB_V2_RESULT_STEP_STATUS_CHUNK;
 	}
 	}
@@ -289,13 +361,13 @@ void ResultWrapperV2::Wait() {
 		}
 	}
 	case State::STREAMING:
-		if (stream) {
-			if (!stream->IsOpen()) {
+		if (auto active = ActiveStream()) {
+			if (!active->IsOpen()) {
 				// Closed or invalidated: the next step returns without
 				// blocking, so there is nothing to wait for.
 				return;
 			}
-			stream->WaitForTask();
+			active->WaitForTask();
 		}
 		// A retained result makes progress on every step; nothing to wait for.
 		return;
@@ -305,29 +377,42 @@ void ResultWrapperV2::Wait() {
 	}
 }
 
-unique_ptr<DataChunk> ResultWrapperV2::FetchChunkBlocking() {
+namespace {
+
+//! The blocking loop behind both fetches: step until the result produces something or the stream ends.
+template <class OUTPUT, class STEP>
+unique_ptr<OUTPUT> FetchBlocking(ResultWrapperV2 &wrapper, STEP step) {
 	while (true) {
-		unique_ptr<DataChunk> chunk;
-		switch (Step(chunk)) {
+		unique_ptr<OUTPUT> out;
+		switch (step(out)) {
 		case DUCKDB_V2_RESULT_STEP_STATUS_CHUNK:
-			return chunk;
+			return out;
 		case DUCKDB_V2_RESULT_STEP_STATUS_FINISHED:
 			return nullptr;
 		case DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED:
-			// fetch_chunk has no status channel, so cancellation surfaces
-			// as ERROR_RUNTIME_INTERRUPT. The state stays CANCELLED (not
-			// ERRORED), so steps keep reporting the status. Throwing a
-			// fresh InterruptException means the error text is the generic
-			// "Interrupted!", not the engine's message; deliberate, since
-			// the CANCELLED state carries no message either.
+			// Neither fetch_chunk nor the Arrow stream's get_next has a status channel, so
+			// cancellation surfaces as ERROR_RUNTIME_INTERRUPT. The state stays CANCELLED (not
+			// ERRORED), so steps keep reporting the status. Throwing a fresh InterruptException means
+			// the error text is the generic "Interrupted!", not the engine's message; deliberate,
+			// since the CANCELLED state carries no message either.
 			throw InterruptException();
 		case DUCKDB_V2_RESULT_STEP_STATUS_WAITING:
-			Wait();
+			wrapper.Wait();
 			break;
 		default:
 			break;
 		}
 	}
+}
+
+} // anonymous namespace
+
+unique_ptr<ResultUnit> ResultWrapperV2::FetchUnitBlocking() {
+	return FetchBlocking<ResultUnit>(*this, [this](unique_ptr<ResultUnit> &out) { return StepUnit(out); });
+}
+
+unique_ptr<DataChunk> ResultWrapperV2::FetchChunkBlocking() {
+	return FetchBlocking<DataChunk>(*this, [this](unique_ptr<DataChunk> &out) { return Step(out); });
 }
 
 auto Convert(ResultWrapperV2 *wrapper) -> duckdb_v2_result_handle {

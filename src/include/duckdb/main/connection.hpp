@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/main/profiler/profiler_print_format.hpp"
-#include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/prepared_statement.hpp"
@@ -27,6 +26,7 @@ class ClientContext;
 class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
+class ResultFormat;
 class SelectStatement;
 struct CSVReaderOptions;
 struct TableFunctionInfo;
@@ -78,7 +78,7 @@ public:
 	//! repeatedly and at random.
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement,
-	                                         QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY);
+	                                         shared_ptr<ResultFormat> format = nullptr);
 	// prepared statements
 	template <typename... ARGS>
 	unique_ptr<QueryResult> Query(const string &query, ARGS... args) {
