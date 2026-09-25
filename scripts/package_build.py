@@ -7,11 +7,8 @@ import re
 import tempfile
 
 excluded_objects = ['utf8proc_data.cpp']
-# default HTTP client implementations, exactly one of them is compiled
-http_client_sources = {
-    True: os.path.join('src', 'main', 'http', 'http_client_httplib.cpp'),
-    False: os.path.join('src', 'main', 'http', 'http_client_none.cpp'),
-}
+# the built-in httplib client, registered like a static extension when it is packaged
+httplib_source = os.path.join('src', 'main', 'http', 'http_client_httplib.cpp')
 # external extension install and load implementations, exactly one set of them is compiled
 extension_load_sources = {
     True: [
@@ -283,7 +280,9 @@ def build_package(
     # obtain the list of source files from the amalgamation
     source_list = amalgamation.list_sources()
     builtin_httplib = builtin_httplib and extension_load
-    excluded_sources = [http_client_sources[not builtin_httplib]] + extension_load_sources[not extension_load]
+    excluded_sources = extension_load_sources[not extension_load]
+    if not builtin_httplib:
+        excluded_sources.append(httplib_source)
     source_list = [x for x in source_list if x not in excluded_sources]
     include_list = amalgamation.list_include_dirs()
     include_files = amalgamation.list_includes()
@@ -309,6 +308,16 @@ def build_package(
     ext_loader_defines = ''
     ext_describers = ''
     ext_registrations = ''
+    if builtin_httplib:
+        # the httplib client is not an extension, but registers the same way, ahead of the extensions
+        ext_describers += (
+            'extern "C" int32_t duckdb_extension_httplib_describe(duckdb_extension_descriptor *descriptor);\n\n'
+        )
+        ext_registrations += (
+            "\tif (duckdb_register_static_extension(duckdb_extension_httplib_describe) != 0) {\n"
+            "\t\tresult = 1;\n"
+            "\t}\n"
+        )
     with open(
         os.path.join(scripts_dir, '..', 'extension', 'loader', 'extension_describe.c.in')
     ) as describe_template_file:

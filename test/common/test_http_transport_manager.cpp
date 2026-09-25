@@ -1231,6 +1231,20 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 	TestDeleteDirectory(extension_directory);
 }
 
+TEST_CASE("A linked httplib client is the default HTTP provider", "[http_transport_manager]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	auto &http_util = HTTPUtil::Get(*db.instance);
+	if (http_util.GetName() == "none") {
+		// this binary does not link duckdb_httplib
+		return;
+	}
+	CHECK(http_util.GetName() == "Built-In");
+	auto result = connection.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'httplib'");
+	REQUIRE_NO_FAIL(*result);
+	CHECK(CHECK_COLUMN(result, 0, {0}));
+}
+
 class NoClientHTTPUtil : public HTTPUtil {
 public:
 	string GetName() const override {
