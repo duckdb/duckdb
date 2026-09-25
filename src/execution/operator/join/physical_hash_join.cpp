@@ -51,6 +51,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(conds), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
+	D_ASSERT(join_type != JoinType::MARK || !predicate);
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
