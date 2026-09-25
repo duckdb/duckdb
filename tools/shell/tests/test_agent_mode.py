@@ -1,11 +1,13 @@
 # fmt: off
 
+import re
 import pytest
 from conftest import ShellTest
 
-# Agent mode renders output for an AI coding agent that reads it through a pipe: every row as a compact markdown
-# table (no padding, the type in the header cell, a row count when it is not obvious), JSON errors, compact plans,
-# and estimate/progress lines on stderr. It is detected from the environment variables coding agents set for the
+# Agent mode renders output for an AI coding agent that reads it through a pipe: a compact markdown table (no
+# padding, the type in the header cell) capped loudly at 1000 rows / 10000 bytes / 500 chars per cell, a footer with
+# the row count and a hash of the whole result, JSON errors, compact plans, and a preamble plus estimate/progress
+# lines on stderr. It is detected from the environment variables coding agents set for the
 # commands they run, and can be forced with -agent / -no-agent.
 
 FIFTY_ROWS = "SELECT range AS r FROM range(50)"
@@ -33,7 +35,7 @@ def test_default_is_unchanged(shell):
 def test_detect_agent(shell, agent_var, agent_value):
     test = agent_shell(shell, agent_var, agent_value).statement(FIFTY_ROWS)
     result = test.run()
-    # compact markdown, types in the header, all rows
+    # compact markdown, types in the header, all 50 rows (under the cap)
     result.check_stdout("| r:BIGINT |\n|---|\n| 0 |")
     result.check_stdout("| 49 |\n50 rows")
     result.check_not_exist("shown")
@@ -93,7 +95,7 @@ def test_explicit_mode_wins(shell):
     result.check_not_exist("|")
 
 def test_duckbox_all_rows(shell):
-    # switching back to duckbox keeps every row (unless .maxrows says otherwise)
+    # switching back to duckbox keeps the agent-mode row cap (1000), so all 50 rows show
     test = agent_shell(shell).statement(".mode duckbox").statement(FIFTY_ROWS)
     result = test.run()
     result.check_stdout("│    49 │")
@@ -236,3 +238,139 @@ def test_tables_compact(shell):
     result.check_stdout("memory.main.t1 (table, ~0 rows): a INTEGER PK, b VARCHAR")
     result.check_stdout("memory.main.v1 (view): a INTEGER")
     result.check_not_exist("\x1b[")
+
+def test_preamble_on_stderr(shell):
+    # before anything runs: what the output means, and the knobs the reader would not know about
+    test = agent_shell(shell).statement("SELECT 1 AS a")
+    result = test.run()
+    result.check_stderr("duckdb agent mode: markdown tables show the first 1000 rows or 10000 bytes")
+    result.check_stderr("tips: SET max_execution_time=<ms>")
+    result.check_stdout("| a:INTEGER |\n|---|\n| 1 |")
+    assert "agent mode" not in result.stdout
+
+def test_no_preamble_without_agent(shell):
+    test = ShellTest(shell).statement("SELECT 1 AS a")
+    result = test.run()
+    assert "agent mode" not in result.stderr
+
+def test_preamble_off_via_init_file(shell, tmp_path):
+    # the preamble follows the init file, so ~/.duckdbrc can silence it and set the caps
+    init = tmp_path / "duckdbrc"
+    init.write_text(".startup_text none\n.maxrows 5\n")
+    test = ShellTest(shell, ["-init", str(init)]).env_var("AI_AGENT", "test-agent").statement("SELECT range AS r FROM range(20)")
+    result = test.run()
+    assert "agent mode" not in result.stderr
+    result.check_stdout("| 4 |\nfirst 5 of 20 rows (.maxrows -1 for all), hash ")
+
+def test_row_cap_is_loud(shell):
+    test = agent_shell(shell).statement("SELECT range AS r FROM range(2500)")
+    result = test.run()
+    result.check_stdout("| 999 |\nfirst 1000 of 2500 rows (.maxrows -1 for all), hash ")
+    assert "| 1000 |" not in result.stdout
+
+def test_byte_cap_is_loud(shell):
+    test = agent_shell(shell).statement("SELECT repeat('x', 400) AS s FROM range(2500)")
+    result = test.run()
+    result.check_stdout("first 25 of 2500 rows (.maxbytes 0 for all), hash ")
+
+def test_first_row_always_renders(shell):
+    # a budget below one row is no reason to show nothing
+    test = agent_shell(shell).statement(".maxbytes 10").statement("SELECT repeat('x', 50) AS s FROM range(3)")
+    result = test.run()
+    result.check_stdout("| " + "x" * 50 + " |\nfirst 1 of 3 rows (.maxbytes 0 for all), hash ")
+
+def test_caps_lifted(shell):
+    test = (
+        agent_shell(shell)
+        .statement(".maxrows -1")
+        .statement(".maxbytes 0")
+        .statement("SELECT range AS r FROM range(1200)")
+    )
+    result = test.run()
+    result.check_stdout("| 1199 |\n1200 rows, hash ")
+
+def test_huge_result_stops_early(shell):
+    # beyond the cap the rows are only counted (and hashed) for a while, then the query is stopped: the count is a
+    # lower bound and there is no hash of a result that was not read to the end
+    test = agent_shell(shell).statement("SELECT range AS r FROM range(1000000000)")
+    result = test.run()
+    result.check_stdout("| 999 |\nfirst 1000 of at least ")
+    result.check_stdout(" rows (query stopped early; .maxrows -1 for all)")
+    assert "hash" not in result.stdout
+
+def test_hash_is_order_independent(shell):
+    test = (
+        agent_shell(shell)
+        .statement("SELECT range AS r FROM range(20) ORDER BY r")
+        .statement("SELECT range AS r FROM range(20) ORDER BY r DESC")
+        .statement("SELECT range AS r FROM range(20) WHERE r <> 5")
+        .statement("SELECT range AS r FROM range(20) UNION ALL SELECT 5")
+    )
+    result = test.run()
+    hashes = re.findall(r"hash ([0-9a-f]{16})", result.stdout)
+    assert len(hashes) == 4
+    assert hashes[0] == hashes[1]
+    assert hashes[2] != hashes[0]
+    assert hashes[3] != hashes[0]
+
+def test_hash_covers_rows_beyond_cap(shell):
+    test = (
+        agent_shell(shell)
+        .statement(".maxrows 5")
+        .statement("SELECT range AS r FROM range(20) ORDER BY r")
+        .statement("SELECT range AS r FROM range(20) ORDER BY r DESC")
+    )
+    result = test.run()
+    hashes = re.findall(r"first 5 of 20 rows \(\.maxrows -1 for all\), hash ([0-9a-f]{16})", result.stdout)
+    assert len(hashes) == 2
+    assert hashes[0] == hashes[1]
+
+def test_hash_column_order_and_null(shell):
+    test = (
+        agent_shell(shell)
+        .statement("SELECT range AS a, range + 1 AS b FROM range(10)")
+        .statement("SELECT range + 1 AS b, range AS a FROM range(10)")
+        .statement("SELECT NULL AS x FROM range(10)")
+        .statement("SELECT 'NULL' AS x FROM range(10)")
+    )
+    result = test.run()
+    hashes = re.findall(r"hash ([0-9a-f]{16})", result.stdout)
+    assert len(hashes) == 4
+    assert len(set(hashes)) == 4
+
+def test_cell_cut_is_loud(shell):
+    # cut at 500 characters (not bytes), pipes still escaped, and the cut is marked
+    test = agent_shell(shell).statement("SELECT repeat('é|', 300) AS s, 'short' AS t")
+    result = test.run()
+    result.check_stdout("é\\|…(+100 chars) | short |")
+
+def test_maxcellwidth(shell):
+    test = agent_shell(shell).statement(".maxcellwidth 0").statement("SELECT repeat('x', 600) AS s")
+    result = test.run()
+    result.check_stdout("x" * 600)
+    assert "chars)" not in result.stdout
+
+def test_timeout_is_a_json_error(shell):
+    test = (
+        agent_shell(shell)
+        .statement("SET max_execution_time=200")
+        .statement("SELECT count(*) FROM range(3000000000) t1, range(100) t2 WHERE (t1.range * t2.range) % 7 = 3")
+    )
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr('"exception_type":"INTERRUPT"')
+    result.check_stderr("Query exceeded maximum execution time")
+
+def test_streamed_error_is_reported(shell):
+    # an error raised while the result streams (after the header went out) is reported, not swallowed
+    test = agent_shell(shell).statement("SELECT (1 / (r - 5))::INTEGER AS x FROM range(10) t(r)")
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr('"exception_type":"Conversion"')
+    assert "rows" not in result.stdout
+
+def test_streamed_error_without_agent(shell):
+    test = ShellTest(shell).add_argument("-csv").statement("SELECT (1 / (r - 5))::INTEGER AS x FROM range(10) t(r)")
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr("Conversion Error")

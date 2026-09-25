@@ -191,7 +191,9 @@ public:
 	string zDbFilename;                       /* name of the database file */
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
-	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	size_t max_width = 0;      /* The maximum number of characters to render horizontally in DuckBox mode */
+	size_t max_bytes = 0;      /* The maximum number of bytes of rows to render in markdown mode (0 = all) */
+	size_t max_cell_width = 0; /* The maximum number of characters to render per cell in markdown mode (0 = all) */
 	//! The maximum number of rows to analyze in order to determine column widths in DuckBox mode
 	idx_t max_analyze_rows = 0;
 	//! Decimal separator (if any)
@@ -443,6 +445,8 @@ public:
 	void DetectAgentMode();
 	//! Whether the environment marks the shell as being run by an AI coding agent, and which one
 	static bool DetectAgentEnvironment(string &agent_name);
+	//! Print the two-line summary of how agent mode renders, and the engine features an agent should know about
+	void PrintAgentHelp(PrintOutput output);
 	//! Print the planner's estimate of what a statement will read and return to stderr (agent mode)
 	void PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement);
 #if defined(_WIN32) || defined(WIN32)

@@ -1015,6 +1015,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	// analyze the query result so we know how long/wide the result will be
 	auto render_state = stream ? RenderQueryResult(*renderer, *stream) : RenderQueryResult(*renderer, res);
+	if (stream && stream->HasError()) {
+		// the query failed after it started streaming rows (e.g. a division by zero, or max_execution_time)
+		PrintDatabaseError(stream->GetError());
+		return SuccessState::FAILURE;
+	}
 	return render_state;
 }
 
@@ -3541,10 +3546,24 @@ void ShellState::DetectAgentMode() {
 	if (agent_name.empty()) {
 		DetectAgentEnvironment(agent_name);
 	}
-	// a compact markdown table (see ModeMarkdownRenderer), and every row: a truncated result is silently wrong for a
-	// reader that cannot ask for more
+	// a compact markdown table (see ModeMarkdownRenderer). The result is capped, but loudly: the first rows are
+	// rendered and the footer says how many there are in total and how to get the rest. A silent cut (the duckbox's
+	// dotted middle) is what a reader that cannot ask for more acts on as if it were the whole result.
 	normalMode = cMode = mode = RenderMode::MARKDOWN;
-	max_rows = (size_t)-1;
+	max_rows = 1000;
+	max_bytes = 10000;
+	max_cell_width = 500;
+}
+
+void ShellState::PrintAgentHelp(PrintOutput output) {
+	PrintF(output,
+	       "duckdb agent mode: markdown tables show the first %zu rows or %zu bytes (.maxrows N, .maxbytes N; -1 / 0 "
+	       "= all) and cut cells at %zu chars (.maxcellwidth N); the footer has the row count and, when the whole "
+	       "result was read, an order-independent hash of it; errors are JSON, estimate/progress lines go to stderr\n",
+	       max_rows, max_bytes, max_cell_width);
+	PrintF(output, "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
+	               "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples; "
+	               "-no-agent turns this off\n");
 }
 
 struct ScanEstimate {
@@ -3763,6 +3782,12 @@ int RunShell(int argc, const char **argv) {
 			}
 			return 1;
 		}
+	}
+
+	if (data.agent_mode_active && data.startup_text != StartupText::NONE) {
+		// before anything runs (after the init file, so that .startup_text none and .maxrows in ~/.duckdbrc apply):
+		// what the output means, and the knobs the reader would otherwise not know about
+		data.PrintAgentHelp(PrintOutput::STDERR);
 	}
 
 	data.DetectDarkLightMode();

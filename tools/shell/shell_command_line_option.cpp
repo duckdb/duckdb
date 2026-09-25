@@ -344,8 +344,9 @@ MetadataResult FormatFile(ShellState &state, const vector<string> &args) {
 
 static const CommandLineOption command_line_options[] = {
     {"agent", 0, "", SetAgentMode<OptionType::ON>, nullptr,
-     "render output for an AI coding agent (all rows, ASCII tables, JSON errors, compact plans, cost estimates "
-     "and progress on stderr). Default: on when an agent's environment variable is set and stdout is not a terminal"},
+     "render output for an AI coding agent (compact markdown tables with a loud row/byte cap and a result hash, "
+     "JSON errors, compact plans, cost estimates and progress on stderr). Default: on when an agent's environment "
+     "variable is set and stdout is not a terminal"},
     {"ascii", 0, "", nullptr, ToggleASCIIMode, "set output mode to 'ascii'"},
     {"bail", 0, "", nullptr, EnableBail, "stop after hitting an error"},
     {"batch", 0, "", EnableBatch, EnableBatch, "force batch I/O'"},

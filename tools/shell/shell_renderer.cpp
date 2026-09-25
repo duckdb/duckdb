@@ -5,6 +5,7 @@
 #include "shell_highlight.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/hash.hpp"
 #include <stdexcept>
 #include <cstring>
 
@@ -278,8 +279,16 @@ SuccessState ShellRenderer::RenderQueryResult(PrintStream &out, ShellState &stat
 		}
 		RenderRow(out, result.metadata, row_data);
 	}
+	if (result.HasError()) {
+		// the query failed while streaming - the caller reports it, no footer
+		return SuccessState::FAILURE;
+	}
 	RenderFooter(out, result.metadata);
 	return SuccessState::SUCCESS;
+}
+
+bool RenderingQueryResult::HasError() const {
+	return stream && stream->HasError();
 }
 
 //===--------------------------------------------------------------------===//
@@ -572,32 +581,157 @@ public:
 
 class ModeMarkdownRenderer : public ColumnRenderer {
 public:
-	//! In agent mode the table is rendered for a machine reader: no alignment padding, the type in the header cell
-	//! and a row count footer when it is not obvious from the rows (see DetectAgentMode)
-	explicit ModeMarkdownRenderer(ShellState &state) : ColumnRenderer(state), compact(state.agent_mode_active) {
+	//! In agent mode the table is rendered for a machine reader: no alignment padding, the type in the header cell,
+	//! only the first max_rows rows / max_bytes bytes and at most max_cell_width characters per cell, and a footer
+	//! with the row count and a hash of the whole result when they are not obvious from the rows (see
+	//! DetectAgentMode). The result is streamed: after the cap the rows are only counted and hashed, and a query that
+	//! keeps producing rows beyond LOOKAHEAD_ROWS is stopped, with the count reported as a lower bound.
+	explicit ModeMarkdownRenderer(ShellState &state)
+	    : ColumnRenderer(state), compact(state.agent_mode_active), max_rows(state.max_rows), max_bytes(state.max_bytes),
+	      max_cell_width(state.max_cell_width) {
+	}
+
+	bool RequireMaterializedResult() const override {
+		// the compact table needs no column widths, so it can stream (and stop a query it will not render)
+		return !compact;
 	}
 
 	void Analyze(RenderingQueryResult &result) override {
-		ColumnRenderer::Analyze(result);
-		row_count = result.loaded_row_count;
-		if (compact) {
-			for (auto &width : column_width) {
-				width = 0;
+		if (!compact) {
+			ColumnRenderer::Analyze(result);
+			row_count = result.loaded_row_count;
+			return;
+		}
+		for (auto &column_name : result.metadata.column_names) {
+			column_name = ConvertValue(column_name.c_str(), column_name.size());
+		}
+		column_width.assign(result.ColumnCount(), 0);
+		right_align.assign(result.ColumnCount(), false);
+	}
+
+	void RemoveRenderLimits() override {
+		max_rows = (size_t)-1;
+		max_bytes = 0;
+		max_cell_width = 0;
+	}
+
+	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override {
+		if (!compact) {
+			return ColumnRenderer::RenderQueryResult(out, state, result);
+		}
+		RenderHeader(out, result.metadata);
+		idx_t rendered_bytes = 0;
+		for (auto &row_data : result) {
+			if (state.seenInterrupt) {
+				state.PrintF("Interrupt\n");
+				return SuccessState::FAILURE;
+			}
+			// the first row always renders: a budget below one row is no reason to show nothing
+			bool within_rows = rendered_rows < max_rows;
+			bool within_bytes = max_bytes == 0 || rendered_bytes < max_bytes || rendered_rows == 0;
+			if (within_rows && within_bytes) {
+				auto line = FormatRow(row_data);
+				out.Print(line);
+				rendered_bytes += line.size();
+				rendered_rows++;
+				continue;
+			}
+			if (!within_rows) {
+				cap_hint = ".maxrows -1 for all";
+			} else {
+				cap_hint = ".maxbytes 0 for all";
+			}
+			// beyond the cap the rows are only counted and hashed - up to a point: the count is then a lower bound
+			if (row_data.row_index >= rendered_rows + LOOKAHEAD_ROWS) {
+				break;
 			}
 		}
+		if (result.HasError()) {
+			return SuccessState::FAILURE;
+		}
+		row_count = result.loaded_row_count;
+		complete = result.exhausted_result;
+		RenderFooter(out, result.metadata);
+		return SuccessState::SUCCESS;
 	}
 
 	void RenderFooter(PrintStream &out, ResultMetadata &result) override {
-		if (compact && (row_count == 0 || row_count >= 10)) {
-			out.Print(StringUtil::Format("%llu rows\n", row_count));
+		if (!compact) {
+			return;
 		}
+		if (!complete) {
+			out.Print(StringUtil::Format("first %llu of at least %llu rows (query stopped early; %s)\n", rendered_rows,
+			                             row_count, cap_hint));
+		} else if (rendered_rows < row_count) {
+			out.Print(StringUtil::Format("first %llu of %llu rows (%s), hash %016llx\n", rendered_rows, row_count,
+			                             cap_hint, result_hash));
+		} else if (row_count == 0 || row_count >= 10) {
+			out.Print(StringUtil::Format("%llu rows, hash %016llx\n", row_count, result_hash));
+		}
+	}
+
+	//! Fingerprint the whole result, not only the rendered rows: two results with the same footer are the same
+	//! result. The sum over the row hashes is independent of the row order (which is arbitrary without ORDER BY)
+	//! while it keeps counting duplicate rows.
+	void HashChunk(duckdb::DataChunk &chunk) {
+		for (idx_t r = 0; r < chunk.size(); r++) {
+			duckdb::hash_t row_hash = 0;
+			for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+				auto &vector = chunk.data[c];
+				duckdb::hash_t value_hash;
+				if (duckdb::FlatVector::IsNull(vector, r)) {
+					value_hash = NULL_HASH;
+				} else {
+					auto &str = duckdb::FlatVector::GetData<duckdb::string_t>(vector)[r];
+					value_hash = duckdb::Hash(str.GetData(), str.GetSize());
+				}
+				// positional mix, so that swapping two columns changes the hash
+				row_hash = duckdb::MurmurHash64(row_hash ^ value_hash);
+			}
+			result_hash += row_hash;
+		}
+	}
+
+	string FormatRow(RowData &row) {
+		string line = GetRowStart();
+		for (idx_t c = 0; c < row.data.size(); c++) {
+			if (c > 0) {
+				line += GetColumnSeparator();
+			}
+			line += row.data[c].GetString();
+		}
+		line += GetRowSeparator();
+		return line;
 	}
 
 	bool HasConvertValue() override {
 		return true;
 	}
 
+	//! Whether a cell exceeds max_cell_width; sets `cut` to the byte offset of the first character past it
+	bool ExceedsCellWidth(const char *value, idx_t str_len, idx_t &cut, idx_t &char_count) {
+		if (!compact || max_cell_width == 0) {
+			return false;
+		}
+		char_count = 0;
+		cut = str_len;
+		for (idx_t i = 0; i < str_len; i++) {
+			if ((static_cast<unsigned char>(value[i]) & 0xC0) == 0x80) {
+				continue; // UTF-8 continuation byte
+			}
+			if (char_count == max_cell_width) {
+				cut = i;
+			}
+			char_count++;
+		}
+		return char_count > max_cell_width;
+	}
+
 	bool ShouldConvertValue(const char *value, idx_t str_len) override {
+		idx_t cut, char_count;
+		if (ExceedsCellWidth(value, str_len, cut, char_count)) {
+			return true;
+		}
 		for (idx_t i = 0; i < str_len; i++) {
 			if (value[i] == '|') {
 				return true;
@@ -607,6 +741,13 @@ public:
 	}
 
 	string ConvertValue(const char *value, idx_t str_len) override {
+		// cut an over-long cell, but say so: a reader cannot tell a cut value from a short one otherwise
+		string marker;
+		idx_t cut, char_count;
+		if (ExceedsCellWidth(value, str_len, cut, char_count)) {
+			marker = StringUtil::Format("…(+%llu chars)", char_count - max_cell_width);
+			str_len = cut;
+		}
 		// when rendering for markdown we need to escape pipes
 		string result;
 		for (idx_t idx = 0; idx < str_len; idx++) {
@@ -616,7 +757,16 @@ public:
 			}
 			result += c;
 		}
-		return result;
+		return result + marker;
+	}
+
+	unique_ptr<duckdb::DataChunk> ConvertChunk(duckdb::DataChunk &chunk) override {
+		auto varchar_chunk = ColumnRenderer::ConvertChunk(chunk);
+		if (compact) {
+			// fingerprint the values before they are cut or escaped for rendering
+			HashChunk(*varchar_chunk);
+		}
+		return varchar_chunk;
 	}
 
 	void RenderHeader(PrintStream &out, ResultMetadata &result) override {
@@ -673,8 +823,20 @@ public:
 	}
 
 private:
+	//! Hash of a NULL cell, distinct from any string's hash
+	static constexpr duckdb::hash_t NULL_HASH = 0x9E3779B97F4A7C15ULL;
+	//! How many rows past the cap are still read (counted and hashed) before the query is stopped
+	static constexpr idx_t LOOKAHEAD_ROWS = 100000;
+
 	bool compact;
+	idx_t max_rows;
+	idx_t max_bytes;
+	idx_t max_cell_width;
 	idx_t row_count = 0;
+	idx_t rendered_rows = 0;
+	bool complete = true;
+	const char *cap_hint = "";
+	duckdb::hash_t result_hash = 0;
 };
 
 /*
