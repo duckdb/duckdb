@@ -357,6 +357,7 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 	}
 
 	shared_ptr<AttachedDatabase> attached_db;
+	string db_path;
 	{
 		lock_guard<mutex> guard(databases_lock);
 		auto old_entry = databases.find(old_name);
@@ -374,6 +375,7 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 		}
 
 		attached_db = old_entry->second;
+		db_path = attached_db->GetCatalog().GetDBPath();
 		databases.erase(old_entry);
 		attached_db->SetName(new_name);
 		databases[new_name] = attached_db;
@@ -381,6 +383,7 @@ void DatabaseManager::RenameDatabase(ClientContext &context, const Identifier &o
 			default_database = new_name;
 		}
 	}
+	path_manager->RenameDatabasePath(db_path, old_name, new_name);
 }
 
 shared_ptr<AttachedDatabase> DatabaseManager::DetachInternal(const Identifier &name) {

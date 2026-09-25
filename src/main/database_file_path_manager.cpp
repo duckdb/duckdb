@@ -87,4 +87,19 @@ void DatabaseFilePathManager::DetachDatabase(DatabaseManager &manager, const str
 	}
 }
 
+void DatabaseFilePathManager::RenameDatabasePath(const string &path, const Identifier &old_name,
+                                                 const Identifier &new_name) {
+	if (path.empty() || path == IN_MEMORY_PATH) {
+		return;
+	}
+	const lock_guard<mutex> path_lock(db_paths_lock);
+	auto entry = db_paths.find(path);
+	if (entry == db_paths.end()) {
+		return;
+	}
+	if (entry->second.name == old_name.GetIdentifierName()) {
+		entry->second.name = new_name.GetIdentifierName();
+	}
+}
+
 } // namespace duckdb
