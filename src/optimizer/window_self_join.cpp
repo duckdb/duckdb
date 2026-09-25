@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/window_self_join.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/operator/logical_prepare.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
@@ -191,6 +192,9 @@ bool WindowSelfJoinOptimizer::CanOptimize(const LogicalOperator &op) {
 
 unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr<LogicalOperator> op,
                                                                       ColumnBindingReplacer &replacer) {
+	if (op->type == LogicalOperatorType::LOGICAL_PREPARE) {
+		parameter_data = op->Cast<LogicalPrepare>().prepared->value_map;
+	}
 	if (op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 		auto &window = op->Cast<LogicalWindow>();
 
@@ -220,7 +224,7 @@ unique_ptr<LogicalOperator> WindowSelfJoinOptimizer::OptimizeInternal(unique_ptr
 		unique_ptr<LogicalOperator> copy_child;
 		// Reuse the LogicalOperatorDeepCopy from CTE inlining, as the copying requirements are similar (copying an
 		// operator subtree and replacing table indices)
-		LogicalOperatorDeepCopy deep_copy(optimizer.binder, nullptr);
+		LogicalOperatorDeepCopy deep_copy(optimizer.binder, parameter_data);
 		try {
 			copy_child = deep_copy.DeepCopy(window.children[0]);
 		} catch (std::exception &ex) {

@@ -352,3 +352,44 @@ ORDER BY n;
 4	3	3
 5	4	4
 6	5	5
+
+#
+# Prepared statement interaction
+#
+
+# The copied subtree must see the values bound at EXECUTE time
+statement ok
+PREPARE unpartitioned AS 
+	SELECT i, count(*) OVER () 
+	FROM (VALUES (0, 0), (1, 1), (2, 2), (3, 0)) v(i, g) 
+	WHERE i < $1 
+	ORDER BY i;
+
+query II
+EXECUTE unpartitioned(3);
+----
+0	3
+1	3
+2	3
+
+statement ok
+PREPARE partitioned AS 
+	SELECT 
+		i, 
+		count(*) OVER (PARTITION BY g) 
+	FROM (VALUES 
+		(0, 0), 
+		(1, 1), 
+		(2, 2), 
+		(3, 0)
+	) v(i, g) 
+	WHERE i < $1 
+	ORDER BY i;
+
+query II
+EXECUTE partitioned(4);
+----
+0	2
+1	1
+2	1
+3	2
