@@ -65,37 +65,38 @@ unique_ptr<FunctionData> WriteLogBind(BindScalarFunctionInput &input) {
 	// Default return type
 	bound_function.SetReturnType(LogicalType::VARCHAR);
 
+	auto &names = *input.GetArgumentNames();
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto &arg = arguments[i];
 		if (arg->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
-		if (arg->GetAlias() == "disable_logging") {
+		if (names[i] == "disable_logging") {
 			if (arg->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("write_log: 'disable_logging' argument must be a boolean");
 			}
 			result->disable_logging = BooleanValue::Get(input.GetConstant(i));
-		} else if (arg->GetAlias() == "scope") {
+		} else if (names[i] == "scope") {
 			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'scope' argument must be a string");
 			}
 			result->scope = StringValue::Get(input.GetConstant(i));
-		} else if (arg->GetAlias() == "level") {
+		} else if (names[i] == "level") {
 			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'level' argument must be a string");
 			}
 			result->level = EnumUtil::FromString<LogLevel>(StringValue::Get(input.GetConstant(i)));
-		} else if (arg->GetAlias() == "log_type") {
+		} else if (names[i] == "log_type") {
 			if (arg->GetReturnType().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("write_log: 'log_type' argument must be a string");
 			}
 			result->type = StringValue::Get(input.GetConstant(i));
-		} else if (arg->GetAlias() == "return_value") {
+		} else if (names[i] == "return_value") {
 			result->return_type = arg->GetReturnType();
 			result->output_col = i;
 			bound_function.SetReturnType(result->return_type);
 		} else {
-			throw BinderException(StringUtil::Format("write_log: Unknown argument '%s'", arg->GetAlias()));
+			throw BinderException(StringUtil::Format("write_log: Unknown argument '%s'", names[i]));
 		}
 	}
 
@@ -152,9 +153,9 @@ void WriteLogFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 ScalarFunctionSet WriteLogFun::GetFunctions() {
 	ScalarFunctionSet set("write_log");
 
-	ScalarFunction fun({}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr, nullptr, LogicalType::ANY,
-	                   FunctionStability::VOLATILE);
-	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	ScalarFunction fun({{"string", LogicalType::VARCHAR}}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr,
+	                   nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
+	fun.GetSignature().AddKwargsParameter("kwargs", LogicalType::ANY);
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	set.AddFunction(std::move(fun));
 

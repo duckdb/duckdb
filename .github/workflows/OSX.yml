@@ -97,8 +97,6 @@ jobs:
       - name: Build
         run: python3 scripts/ci/retry.py -- make
 
-      - name: Bundle static libraries
-        run: make gather-libs
 
       - name: CLI check
         run: |
@@ -170,7 +168,7 @@ jobs:
             lipo "build/release_amd64/src/$library_name" -verify_arch x86_64
           done
 
-          for library in build/release/libs/*.a; do
+          for library in build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a; do
             library_name="$(basename "$library")"
             lipo -extract arm64 -output "build/release_arm64/libs/$library_name" "$library"
             lipo "build/release_arm64/libs/$library_name" -verify_arch arm64

@@ -536,7 +536,7 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	    .AddParameter("function_name", LogicalType::VARCHAR);
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	result.SetVarArgs(LogicalType::ANY);
+	result.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	result.SetSerializeCallback(ListAggregatesBindData::SerializeFunction);
 	result.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 	return result;

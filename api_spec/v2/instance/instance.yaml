@@ -233,9 +233,9 @@ functions:
       produce: the engine casts the options it knows (READ_ONLY,
       RECOVERY_MODE, TYPE, DEFAULT_TABLE, VACUUM_REBUILD_INDEXES, BLOCK_SIZE,
       ENCRYPTION_KEY, ...) and hands the rest to the storage extension that
-      ends up owning the database, which decides what they mean. Nothing is
-      validated here; an unknown or ill-typed option fails the attach. Both
-      views are borrowed and copied. Setting the same key again replaces it.
+      ends up owning the database, which decides what they mean. Keys must be
+      valid UTF-8; an unknown or ill-typed option fails the attach. Both views
+      are borrowed and copied. Setting the same key again replaces it.
     role: setter
     belongs_to: attach_options
     parameters:

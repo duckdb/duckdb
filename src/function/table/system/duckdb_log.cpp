@@ -13,6 +13,7 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 	explicit DuckDBLogData(shared_ptr<LogStorage> log_storage_p) : log_storage(std::move(log_storage_p)) {
 		scan_state = log_storage->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
 		log_storage->InitializeScan(*scan_state);
+		total_rows = log_storage->GetScanRowCount(LoggingTargetTable::LOG_ENTRIES);
 	}
 	DuckDBLogData() : log_storage(nullptr) {
 	}
@@ -20,6 +21,9 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 	//! The log storage we are scanning
 	shared_ptr<LogStorage> log_storage;
 	unique_ptr<LogStorageScanState> scan_state;
+	//! The number of log entries when the scan started, if known (for progress)
+	optional_idx total_rows;
+	atomic<idx_t> scanned_rows {0};
 };
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -53,7 +57,25 @@ void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataC
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
 	if (data.log_storage) {
 		data.log_storage->Scan(*data.scan_state, output);
+		data.scanned_rows.fetch_add(output.size(), std::memory_order_relaxed);
 	}
+}
+
+static double DuckDBLogProgress(ClientContext &context, const FunctionData *bind_data,
+                                const GlobalTableFunctionState *global_state) {
+	auto &data = global_state->Cast<DuckDBLogData>();
+	if (!data.log_storage) {
+		return 100.0;
+	}
+	if (!data.total_rows.IsValid()) {
+		return -1;
+	}
+	auto total_rows = data.total_rows.GetIndex();
+	if (total_rows == 0) {
+		return 100.0;
+	}
+	// log entries that are added while scanning are not part of the total
+	return MinValue<double>(100.0 * static_cast<double>(data.scanned_rows) / static_cast<double>(total_rows), 100.0);
 }
 
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
@@ -96,6 +118,7 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 void DuckDBLogFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction logs_fun("duckdb_logs", {}, DuckDBLogFunction, DuckDBLogBind, DuckDBLogInit);
 	logs_fun.bind_replace = DuckDBLogBindReplace;
+	logs_fun.table_scan_progress = DuckDBLogProgress;
 	logs_fun.named_parameters["denormalized_table"] = LogicalType::BOOLEAN;
 	set.AddFunction(logs_fun);
 }

@@ -13,6 +13,12 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "Keyword-only arguments cannot be serialized to v1.x storage.",
+      "paths": [
+        "test/extension/test_function_args_kwargs.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/sql/json/test_json_serialize_sql.test",

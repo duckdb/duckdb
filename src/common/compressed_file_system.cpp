@@ -74,7 +74,8 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 	stream_data.out_buff_start = stream_data.out_buff.get();
 	stream_data.out_buff_end = stream_data.out_buff.get();
 
-	current_position = 0;
+	compressed_bytes_read = 0;
+	compressed_bytes_consumed.store(0, std::memory_order_relaxed);
 
 	stream_wrapper = compressed_fs.CreateStream();
 	stream_wrapper->Initialize(context, *this, write);
@@ -82,7 +83,7 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 }
 
 idx_t CompressedFile::GetProgress() {
-	return current_position;
+	return compressed_bytes_consumed.load(std::memory_order_relaxed);
 }
 
 int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
@@ -108,7 +109,6 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		if (!stream_wrapper) {
 			return UnsafeNumericCast<int64_t>(total_read);
 		}
-		current_position += static_cast<idx_t>(stream_data.in_buff_end - stream_data.in_buff_start);
 		// ran out of buffer: read more data from the child stream
 		stream_data.out_buff_start = stream_data.out_buff.get();
 		stream_data.out_buff_end = stream_data.out_buff.get();
@@ -124,13 +124,19 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			if (sz <= 0) {
 				stream_wrapper->FinalizeRead(stream_data);
 				stream_wrapper.reset();
+				compressed_bytes_consumed.store(compressed_bytes_read, std::memory_order_relaxed);
 				break;
 			} else {
 				stream_data.in_buff_end = stream_data.in_buff_start + sz;
+				compressed_bytes_read += UnsafeNumericCast<idx_t>(sz);
 			}
 		}
 
 		auto finished = stream_wrapper->Read(stream_data);
+		// the input that remains in the buffer has not been consumed by the decompressor yet
+		auto unconsumed = static_cast<idx_t>(stream_data.in_buff_end - stream_data.in_buff_start);
+		compressed_bytes_consumed.store(compressed_bytes_read - MinValue(unconsumed, compressed_bytes_read),
+		                                std::memory_order_relaxed);
 		if (finished) {
 			stream_wrapper.reset();
 		}

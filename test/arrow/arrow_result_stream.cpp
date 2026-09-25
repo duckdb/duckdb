@@ -245,3 +245,43 @@ TEST_CASE("Releasing a streamed result before the end closes the query", "[arrow
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
+
+TEST_CASE("A streamed result outlives the connection that submitted it", "[arrow][result_arrow_stream]") {
+	DuckDB db(nullptr);
+	auto con = make_uniq<Connection>(db);
+
+	auto wrapper = Wrap(con->Submit("SELECT i FROM range(3000) t(i)"), 1024);
+	ArrowArray first;
+	REQUIRE(Next(*wrapper, first) == 0);
+	REQUIRE(first.length == 1024);
+	first.release(&first);
+
+	// The stream keeps the query, and with it the context, alive
+	con.reset();
+
+	vector<idx_t> batch_sizes;
+	auto rest = Drain(*wrapper, batch_sizes);
+	REQUIRE(rest.size() == 3000 - 1024);
+	REQUIRE(rest.front() == 1024);
+	REQUIRE(rest.back() == 2999);
+	wrapper->stream.release(&wrapper->stream);
+}
+
+TEST_CASE("A statement on the connection ends the streamed result, which the stream reports",
+          "[arrow][result_arrow_stream]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto wrapper = Wrap(con.Submit("SELECT i FROM range(200000) t(i)"), 1000);
+	ArrowArray first;
+	REQUIRE(Next(*wrapper, first) == 0);
+	REQUIRE(first.length == 1000);
+	first.release(&first);
+
+	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+
+	ArrowArray next;
+	REQUIRE(Next(*wrapper, next) != 0);
+	REQUIRE(StringUtil::Contains(LastError(*wrapper), "cancelled"));
+	wrapper->stream.release(&wrapper->stream);
+}

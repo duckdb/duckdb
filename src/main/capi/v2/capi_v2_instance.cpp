@@ -236,7 +236,7 @@ DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, du
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		duckdb::Identifier attach_name = name ? duckdb::Identifier(Convert(*name)) : duckdb::Identifier();
+		duckdb::Identifier attach_name = name ? duckdb::Identifier(ConvertIdentifierName(*name)) : duckdb::Identifier();
 		wrapper.Attach(duckdb::string(Convert(path)), attach_name, Convert(options), make_default);
 	});
 }
@@ -260,7 +260,7 @@ DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle opt
 	DUCKDB_CHECK_ARG(setting);
 	return WithErrorHandler(err, [&]() {
 		// Keys are unquoted SQL identifiers, which the parser lowercases.
-		auto lowered = duckdb::StringUtil::Lower(duckdb::string(Convert(key)));
+		auto lowered = duckdb::StringUtil::Lower(duckdb::string(ConvertIdentifierName(key)));
 		Convert(options)->options[lowered] = duckdb::Value(duckdb::string(Convert(setting)));
 	});
 }
@@ -307,7 +307,7 @@ DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		wrapper.SetOption(duckdb::Identifier(Convert(name)), duckdb::string(Convert(setting)));
+		wrapper.SetOption(duckdb::Identifier(ConvertIdentifierName(name)), duckdb::string(Convert(setting)));
 	});
 }
 
@@ -321,7 +321,7 @@ DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_name(duckdb_v2_instance_handle 
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		*out_option = Convert(wrapper.GetOption(Convert(name)).release());
+		*out_option = Convert(wrapper.GetOption(ConvertIdentifierName(name)).release());
 	});
 }
 

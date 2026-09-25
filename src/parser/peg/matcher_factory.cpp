@@ -217,27 +217,11 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// START GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
 	AddPackratMemoizedRule("Expression");
-	AddPackratMemoizedRule("LambdaArrowExpression");
-	AddPackratMemoizedRule("LogicalOrExpression");
-	AddPackratMemoizedRule("LogicalAndExpression");
-	AddPackratMemoizedRule("LogicalNotExpression");
-	AddPackratMemoizedRule("IsExpression");
-	AddPackratMemoizedRule("ComparisonExpression");
-	AddPackratMemoizedRule("BitwiseExpression");
-	AddPackratMemoizedRule("AdditiveExpression");
-	AddPackratMemoizedRule("MultiplicativeExpression");
-	AddPackratMemoizedRule("ExponentiationExpression");
-	AddPackratMemoizedRule("PrefixExpression");
-	AddPackratMemoizedRule("CollateExpression");
-	AddPackratMemoizedRule("AtTimeZoneExpression");
-	AddPackratMemoizedRule("SingleExpression");
-	AddPackratMemoizedRule("BaseExpression");
-	AddPackratMemoizedRule("ParensExpression");
-	AddPackratMemoizedRule("ParenthesisExpression");
 	AddPackratMemoizedRule("Identifier");
 	AddPackratMemoizedRule("ColId");
-	AddPackratMemoizedRule("ColumnReference");
-	AddPackratMemoizedRule("FunctionExpression");
+	AddPackratMemoizedRule("CatalogQualification");
+	AddPackratMemoizedRule("SchemaQualification");
+	AddPackratMemoizedRule("ReservedSchemaQualification");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//

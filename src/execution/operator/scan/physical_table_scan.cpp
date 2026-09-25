@@ -65,11 +65,11 @@ public:
 
 	idx_t max_threads = 0;
 	PhysicalTableScanExecutionStrategy physical_table_scan_execution_strategy;
+	//! Combined dynamic table filters - before global_state, which references them during teardown
+	unique_ptr<TableFilterSet> table_filters;
 	unique_ptr<GlobalTableFunctionState> global_state;
 	bool in_out_final = false;
 	DataChunk input_chunk;
-	//! Combined table filters, if we have dynamic filters
-	unique_ptr<TableFilterSet> table_filters;
 
 	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
 		return table_filters ? table_filters.get() : op.table_filters.get();

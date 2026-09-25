@@ -1354,7 +1354,7 @@ TEST_CASE("V2: MAP takes parallel keys and values", "[capi_v2][value][composite]
 	duckdb_v2_value_destroy(&one_value[0]);
 }
 
-TEST_CASE("V2: composite constructors null-arg refusals", "[capi_v2][value][composite]") {
+TEST_CASE("V2: composite constructors invalid-arg refusals", "[capi_v2][value][composite]") {
 	EnvFixture fx;
 	duckdb_v2_value_handle out = nullptr;
 
@@ -1380,6 +1380,11 @@ TEST_CASE("V2: composite constructors null-arg refusals", "[capi_v2][value][comp
 	const duckdb_v2_value_handle fields[1] = {one};
 	REQUIRE(duckdb_v2_value_create_struct_with_connection(fx.conn, nullptr, fields, 1, &out, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	// Field names must contain valid UTF-8.
+	const duckdb_v2_identifier_t invalid_names[1] = {Convert("\x80")};
+	REQUIRE(duckdb_v2_value_create_struct_with_connection(fx.conn, invalid_names, fields, 1, &out, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(out == nullptr);
 	duckdb_v2_value_destroy(&one);
 }
 

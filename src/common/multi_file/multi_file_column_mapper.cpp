@@ -119,7 +119,9 @@ struct FieldIdMapper : public ColumnMapper {
 	static unique_ptr<Expression> GetDefault(ClientContext &context, const MultiFileColumnDefinition &column) {
 		auto &default_val = column.default_expression;
 		if (!default_val) {
-			throw InternalException("No default expression in FieldId Map");
+			throw InvalidInputException("Field \"%s\" (field id %d) is missing from the file schema and has no default "
+			                            "expression",
+			                            column.name, column.GetIdentifierFieldId());
 		}
 		auto binder = Binder::CreateBinder(context);
 		binder->SetCanContainNulls(true);

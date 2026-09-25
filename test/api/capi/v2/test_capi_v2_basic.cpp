@@ -350,6 +350,8 @@ TEST_CASE("V2: attach options give a name and per-database options", "[capi_v2][
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_attach_options_set(opts, duckdb_v2_str {nullptr, 1}, Convert("1"), nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_attach_options_set(opts, Convert("\x80"), Convert("1"), nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_attach_options_destroy(&opts) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(opts == nullptr);
 	REQUIRE(duckdb_v2_attach_options_destroy(&opts) == DUCKDB_V2_ERROR_NONE);

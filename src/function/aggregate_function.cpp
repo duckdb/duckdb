@@ -124,14 +124,18 @@ BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunctio
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)
 	for (auto &param : function.GetSignature().GetParameters()) {
-		arguments.push_back(param.GetType());
+		if (!param.IsVariadic()) {
+			arguments.push_back(param.GetType());
+		}
 	}
+	positional_arguments = arguments.size();
 	logical_arguments = arguments;
 	logical_return_type = return_type;
 }
 
 bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
 	return callbacks == rhs.callbacks && properties == rhs.properties && arguments == rhs.arguments &&
+	       positional_arguments == rhs.positional_arguments && named_arguments == rhs.named_arguments &&
 	       return_type == rhs.return_type;
 }
 bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const {
@@ -161,7 +165,9 @@ void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &func
 	// "bind" callback)
 	arguments.clear();
 	for (auto &param : function.GetSignature().GetParameters()) {
-		arguments.push_back(param.GetType());
+		if (!param.IsVariadic()) {
+			arguments.push_back(param.GetType());
+		}
 	}
 }
 

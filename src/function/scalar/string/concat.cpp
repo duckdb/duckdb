@@ -341,7 +341,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
 	auto fun =
 	    ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
-	fun.SetVarArgs(LogicalType::LIST(LogicalType::ANY));
+	fun.GetSignature().AddArgsParameter("args", LogicalType::LIST(LogicalType::ANY));
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
@@ -357,7 +357,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 ScalarFunction ConcatFun::GetFunction() {
 	ScalarFunction concat = ScalarFunction("concat", {}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
 	concat.GetSignature().AddParameter("value", LogicalType::ANY);
-	concat.SetVarArgs(LogicalType::ANY);
+	concat.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return concat;
 }

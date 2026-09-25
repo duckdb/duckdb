@@ -224,12 +224,13 @@ unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 class DeleteSourceState : public GlobalSourceState {
 public:
-	explicit DeleteSourceState(const PhysicalDelete &op) {
+	explicit DeleteSourceState(const PhysicalDelete &op) : total_rows(1), rows_scanned(0) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<DeleteGlobalState>();
 			g.return_collection.InitializeScan(global_scan_state);
 			max_threads = MaxValue<idx_t>(g.return_collection.ChunkCount(), 1);
+			total_rows = g.return_collection.Count();
 		} else {
 			max_threads = 1;
 		}
@@ -241,6 +242,8 @@ public:
 
 	ColumnDataParallelScanState global_scan_state;
 	idx_t max_threads;
+	idx_t total_rows;
+	atomic<idx_t> rows_scanned;
 };
 
 class DeleteLocalSourceState : public LocalSourceState {
@@ -256,17 +259,27 @@ unique_ptr<LocalSourceState> PhysicalDelete::GetLocalSourceState(ExecutionContex
 	return make_uniq<DeleteLocalSourceState>();
 }
 
+ProgressData PhysicalDelete::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	auto &state = gstate.Cast<DeleteSourceState>();
+	ProgressData progress;
+	progress.total = double(MaxValue<idx_t>(state.total_rows, 1));
+	progress.done = state.total_rows == 0 ? 1.0 : double(state.rows_scanned.load(std::memory_order_relaxed));
+	return progress;
+}
+
 SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                  OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.deleted_count.load())));
+		state.rows_scanned.store(1, std::memory_order_relaxed);
 		return SourceResultType::FINISHED;
 	}
 
 	auto &lstate = input.local_state.Cast<DeleteLocalSourceState>();
 	g.return_collection.Scan(state.global_scan_state, lstate.local_scan_state, chunk);
+	state.rows_scanned.fetch_add(chunk.size(), std::memory_order_relaxed);
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 

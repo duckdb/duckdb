@@ -1155,7 +1155,7 @@ duckdb::Value BuildStruct(const duckdb_v2_identifier_t *names, const duckdb_v2_v
 		if (!names[i].ptr && names[i].len > 0) {
 			throw duckdb::InvalidInputException("field names cannot be null");
 		}
-		fields.emplace_back(std::string(names[i].ptr ? names[i].ptr : "", names[i].len), std::move(values[i]));
+		fields.emplace_back(std::string(ConvertIdentifierName(names[i])), std::move(values[i]));
 	}
 	return duckdb::Value::STRUCT(std::move(fields));
 }

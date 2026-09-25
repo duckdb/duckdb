@@ -1477,7 +1477,7 @@ unique_ptr<Expression> JSONFunctions::CreateJSONCopyToJSONExpression(ClientConte
 ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 	ScalarFunction fun("json_object", {}, LogicalType::JSON(), ObjectFunction, JSONObjectBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	// throws if a key is NULL
 	fun.SetFallible();
@@ -1487,7 +1487,7 @@ ScalarFunctionSet JSONFunctions::GetObjectFunction() {
 ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	ScalarFunction fun("json_array", {}, LogicalType::JSON(), ArrayFunction, JSONArrayBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunctionSet(fun);
 }
@@ -1495,7 +1495,7 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	ScalarFunction fun("to_json", {}, LogicalType::JSON(), ToJSONFunction, ToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 
@@ -1531,14 +1531,14 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
 	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction, ArrayToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
 	ScalarFunction fun("row_to_json", {}, LogicalType::JSON(), ToJSONFunction, RowToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
 

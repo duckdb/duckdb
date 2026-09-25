@@ -187,7 +187,7 @@ ScalarFunction PrintfFun::GetFunction() {
 	ScalarFunction printf_fun({}, LogicalType::VARCHAR, PrintfFunction<FMTPrintf, duckdb_fmt::printf_context>,
 	                          BindPrintfFunction);
 	printf_fun.GetSignature().AddParameter("format", LogicalType::VARCHAR);
-	printf_fun.SetVarArgs(LogicalType::ANY);
+	printf_fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	printf_fun.SetFallible();
 	return printf_fun;
 }
@@ -197,7 +197,7 @@ ScalarFunction FormatFun::GetFunction() {
 	ScalarFunction format_fun({}, LogicalType::VARCHAR, PrintfFunction<FMTFormat, duckdb_fmt::format_context>,
 	                          BindPrintfFunction);
 	format_fun.GetSignature().AddParameter("format", LogicalType::VARCHAR);
-	format_fun.SetVarArgs(LogicalType::ANY);
+	format_fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	format_fun.SetFallible();
 	return format_fun;
 }

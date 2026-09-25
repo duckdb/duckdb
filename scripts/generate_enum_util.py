@@ -319,6 +319,11 @@ with open(enum_util_source_file, "w") as f:
         f.write("\n\t};")
         f.write("\n\treturn values;")
         f.write("\n}\n\n")
+        # An enum whose last member is ENUM_SIZE counts itself: the sentinel is not one of the values,
+        # and appending a member no longer changes the generated count.
+        last_member = enum_members[-1][0] if enum_members else ""
+        if last_member == "ENUM_SIZE":
+            member_count = f"static_cast<uint32_t>({enum_name}::{last_member})"
         f.write(f"template<>\nconst char* EnumUtil::ToChars<{enum_name}>({enum_name} value) {{\n")
         f.write(
             f"\treturn StringUtil::EnumToString({enum_string_array}, {member_count}, \"{enum_name}\", static_cast<uint32_t>(value));\n"

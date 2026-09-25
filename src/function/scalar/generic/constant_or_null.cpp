@@ -96,7 +96,7 @@ ScalarFunction ConstantOrNullFun::GetFunction() {
 	auto fun = ScalarFunction("constant_or_null", {}, LogicalType::ANY, ConstantOrNullFunction);
 	fun.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	fun.SetBindCallback(ConstantOrNullBind);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	return fun;
 }
 

@@ -678,7 +678,7 @@ public:
 	ReservationLock LockForReservation() DUCKDB_EXCLUDES(lock);
 	PartitionFileStateReservation ReserveFileState(ReservationLock &reservation_lock, const vector<Value> &values,
 	                                               FileCreationReason reason) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
-	//! Claims the directory of a partition, throws if it equals, contains or is inside another partition's directory
+	//! Claims the directory of a partition, throws if another partition already owns it
 	void ClaimDirectory(ReservationLock &reservation_lock, const vector<Value> &values,
 	                    const string &directory) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	FileStateHandle TryTakeInactiveFileState(const vector<Value> &values) DUCKDB_EXCLUDES(lock);
@@ -697,7 +697,7 @@ private:
 	idx_t global_offset DUCKDB_GUARDED_BY(lock) = 0;
 	//! The claimed directory of each partition, and the partition owning each directory
 	vector_of_value_map_t<string> partition_directories DUCKDB_GUARDED_BY(lock);
-	map<string, vector<Value>> directory_partitions DUCKDB_GUARDED_BY(lock);
+	unordered_map<string, vector<Value>> directory_partitions DUCKDB_GUARDED_BY(lock);
 
 	friend class PartitionWriteLease;
 };
@@ -1879,29 +1879,11 @@ void PartitionWriteManager::ClaimDirectory(ReservationLock &reservation_lock, co
 	if (claimed != partition_directories.end() && claimed->second == directory) {
 		return;
 	}
-	auto throw_overlap = [&](const string &other_directory, const vector<Value> &other_values) {
-		if (other_directory == directory) {
-			throw InvalidInputException("PARTITION_PATH puts partitions (%s) and (%s) in the same directory \"%s\"",
-			                            PartitionValuesToString(op, other_values), PartitionValuesToString(op, values),
-			                            directory);
-		}
-		throw InvalidInputException(
-		    "PARTITION_PATH puts partitions (%s) and (%s) in overlapping directories \"%s\" and \"%s\"",
-		    PartitionValuesToString(op, other_values), PartitionValuesToString(op, values), other_directory, directory);
-	};
-	// the same directory, or a directory containing it
-	string ancestor;
-	for (auto &component : StringUtil::Split(directory, '/')) {
-		ancestor += ancestor.empty() ? component : "/" + component;
-		auto owner = directory_partitions.find(ancestor);
-		if (owner != directory_partitions.end()) {
-			throw_overlap(owner->first, owner->second);
-		}
-	}
-	// a directory inside it - those all start with the directory and a separator, so they are adjacent in the map
-	auto descendant = directory_partitions.lower_bound(directory + "/");
-	if (descendant != directory_partitions.end() && StringUtil::StartsWith(descendant->first, directory + "/")) {
-		throw_overlap(descendant->first, descendant->second);
+	auto owner = directory_partitions.find(directory);
+	if (owner != directory_partitions.end()) {
+		throw InvalidInputException("PARTITION_PATH puts partitions (%s) and (%s) in the same directory \"%s\"",
+		                            PartitionValuesToString(op, owner->second), PartitionValuesToString(op, values),
+		                            directory);
 	}
 	directory_partitions.emplace(directory, values);
 	partition_directories[values] = directory;

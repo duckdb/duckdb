@@ -2480,12 +2480,12 @@ struct VacuumRebuildIndexesSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "vacuum_rebuild_indexes";
 	static constexpr const char *Description =
-	    "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes "
-	    "afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set "
-	    "per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.";
+	    "Deprecated compatibility setting: maximum table row count for rebuilding bound ART indexes when checkpoint "
+	    "vacuum cannot remap their row IDs. 0 disables the rebuild fallback but does not disable index remapping on "
+	    "v2.0 storage. The 'vacuum_rebuild_indexes' ATTACH option overrides this default per database.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr bool IsDebug = false;
-	static constexpr bool IsDeprecated = false;
+	static constexpr bool IsDeprecated = true;
 	static constexpr const char *DefaultValue = "0";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();

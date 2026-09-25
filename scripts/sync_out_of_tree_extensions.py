@@ -153,17 +153,19 @@ def get_patch_files(patch_dir):
 
 def apply_patches_as_commits(ext_dir, patch_dir, patches):
     """
-    Apply each patch file with git-apply and create a commit whose message is
-    the patch filename (e.g. "fix.patch").
+    Apply each patch file and create a commit whose message is the patch filename
+    (e.g. "fix.patch").
     """
     for patch_name in patches:
         patch_file = patch_dir / patch_name
-        # Apply to the working tree (not --index): a patch may touch files inside a checked-out
-        # submodule (e.g. database-connector/...), and "git apply --index" cannot stage paths that
-        # live in a submodule ("does not exist in index"). We stage everything explicitly afterwards.
-        # --whitespace=nowarn: never rewrite patch content; --whitespace=fix corrupts
-        # patches that themselves add patch files containing trailing whitespace.
-        run_cmd(['git', 'apply', '--whitespace=nowarn', str(patch_file)], cwd=ext_dir)
+        # Apply exactly as scripts/apply_extension_patches.py does for the FetchContent build, so a
+        # patch that builds there builds here too: `patch -p1 --forward` tolerates the context drift
+        # (fuzz) an extension bump can introduce, where `git apply` rejects a single changed context
+        # line.  It writes to the working tree, not the index, so a patch may touch files inside a
+        # checked-out submodule (e.g. database-connector/...); everything is staged explicitly below.
+        # --no-backup-if-mismatch: a fuzzy apply otherwise leaves <file>.orig behind, which the
+        # `git add -A` below would commit into the extension.
+        run_cmd(['patch', '-p1', '--forward', '--no-backup-if-mismatch', '-i', str(patch_file)], cwd=ext_dir)
         run_cmd(['git', 'add', '-A'], cwd=ext_dir)
         run_cmd(
             [
