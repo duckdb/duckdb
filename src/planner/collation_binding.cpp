@@ -8,6 +8,7 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 constexpr const char *CollateCatalogEntry::Name;
@@ -163,6 +164,24 @@ static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &
 	}
 	source = std::move(function);
 	return true;
+}
+
+bool CollationBinding::SameCollation(const LogicalType &lhs, const LogicalType &rhs) {
+	if (lhs.id() != rhs.id()) {
+		// different types are already told apart by the type itself
+		return true;
+	}
+	switch (lhs.id()) {
+	case LogicalTypeId::VARCHAR:
+		return StringUtil::CIEquals(StringType::GetCollation(lhs), StringType::GetCollation(rhs));
+	case LogicalTypeId::LIST:
+		return SameCollation(ListType::GetChildType(lhs), ListType::GetChildType(rhs));
+	case LogicalTypeId::ARRAY:
+		return SameCollation(ArrayType::GetChildType(lhs), ArrayType::GetChildType(rhs));
+	default:
+		// no other type can carry a collation (see PushCollation)
+		return true;
+	}
 }
 
 bool CollationBinding::PushCollation(ClientContext &context, unique_ptr<Expression> &source,
