@@ -300,7 +300,6 @@ private:
 		// do nothing
 	}
 
-
 	template <typename... Args>
 	static ReturnType VisitString(VariantLogicalType type_id, const UnifiedVariantVectorData &variant, idx_t row,
 	                              uint32_t values_idx, Args &&...args) {
