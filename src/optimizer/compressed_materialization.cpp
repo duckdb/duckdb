@@ -533,8 +533,13 @@ void CompressedMaterialization::CreateCompressProjection(unique_ptr<LogicalOpera
 		const auto &new_type = new_types[col_idx];
 		replacement_bindings.emplace_back(old_binding, new_binding, new_type);
 
-		// Remove the old binding from the statistics map
+		// Preserve statistics when updating bindings: save before erasing, re-add with new binding
+		auto old_stats_it = statistics_map.find(old_binding);
+		auto old_stats = (old_stats_it != statistics_map.end()) ? std::move(old_stats_it->second) : nullptr;
 		statistics_map.erase(old_binding);
+		if (old_stats) {
+			statistics_map[new_binding] = std::move(old_stats);
+		}
 	}
 
 	// Make sure we stop at the compress operator when replacing bindings

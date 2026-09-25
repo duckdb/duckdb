@@ -1,0 +1,47 @@
+# Test for issue #25702: hash join incorrectly drops rows when build side spills to disk
+# When a hash join's build side exceeds the memory limit, it spills to disk and processes multiple partitions.
+# The Bloom filter used for join filter pushdown should NOT be used in external joins because it would
+# only contain keys from the first partition, causing rows from later partitions to be incorrectly filtered out.
+
+statement ok
+SET threads=1;
+
+# Create test tables with 3,000,000 rows each, 25 distinct keys
+statement ok
+CREATE TABLE t AS SELECT (i%25)::int AS a FROM range(3000000) tbl(i);
+
+statement ok
+CREATE TABLE u AS SELECT (i%25)::int AS b FROM range(3000000) tbl(i);
+
+# Force external join with small memory limit (60MB)
+statement ok
+SET memory_limit='60MB';
+
+# Test 1: Semi join with IN subquery should return all 3,000,000 rows
+# (Previously buggy: returned only 480,000 rows when Bloom filter was stale)
+query I
+SELECT count(*) FROM t WHERE a IN (SELECT b FROM u)
+----
+3000000
+
+# Test 2: Test with EXISTS (similar to IN)
+query I
+SELECT count(*) FROM t WHERE EXISTS (SELECT 1 FROM u WHERE u.b = t.a)
+----
+3000000
+
+# Test 3: INNER join count (all rows should match, each t row has 120k matches in u)
+# Use LIMIT to keep the result set manageable for testing
+query I
+SELECT count(*) FROM (SELECT * FROM t INNER JOIN u ON t.a = u.b LIMIT 10000000)
+----
+10000000
+
+# Test 4: With join filter pushdown disabled, should still get correct results
+statement ok
+SET disabled_optimizers='join_filter_pushdown';
+
+query I
+SELECT count(*) FROM t WHERE a IN (SELECT b FROM u)
+----
+3000000
