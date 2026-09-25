@@ -77,10 +77,6 @@ public:
 	idx_t GetBackingIndexOid() const;
 	void SetBackingIndexOid(idx_t oid);
 
-protected:
-	//! The backing index identity is local to this database instance and is never persisted.
-	optional_idx backing_index_oid;
-
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -99,7 +95,10 @@ public:
 	}
 
 private:
-	//! Whether the table enforces this constraint through an index it owns.
+	//! Whether the table enforces this constraint through an index it owns.//! Whether the table enforces this constraint through an index it owns.
 	bool NeedsBackingIndex() const;
+
+	//! The backing index identity is local to this database instance and is never persisted.
+	optional_idx backing_index_oid;
 };
 } // namespace duckdb
