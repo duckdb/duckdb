@@ -1489,6 +1489,7 @@ ScalarFunctionSet JSONFunctions::GetArrayFunction() {
 	                   JSONFunctionLocalState::Init);
 	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
@@ -1496,6 +1497,7 @@ ScalarFunctionSet JSONFunctions::GetToJSONFunction() {
 	ScalarFunction fun("to_json", {}, LogicalType::JSON(), ToJSONFunction, ToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
 	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
+	fun.SetFallible();
 	return ScalarFunctionSet(fun);
 }
 
@@ -1506,6 +1508,7 @@ ScalarFunction JSONFunctions::GetJSONCopyToJSONFunction() {
 	fun.GetSignature().GetParameter(0).SetName("value");
 	fun.GetSignature().GetParameter(1).SetName("date_format");
 	fun.GetSignature().GetParameter(2).SetName("timestamp_format");
+	fun.SetFallible();
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(JSONCopyToJSONSerialize);
 	fun.SetDeserializeCallback(JSONCopyToJSONDeserialize);
@@ -1524,6 +1527,7 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 	fun.GetSignature().GetParameter(3).SetName("geometry_column");
 	fun.GetSignature().GetParameter(4).SetName("id_column");
 	fun.GetSignature().GetParameter(5).SetName("write_bbox");
+	fun.SetFallible();
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
@@ -1531,6 +1535,7 @@ ScalarFunction JSONFunctions::GetJSONCopyToGeoJSONFunction() {
 ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
 	ScalarFunction fun("array_to_json", {}, LogicalType::JSON(), ToJSONFunction, ArrayToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	fun.SetFallible();
 	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
@@ -1538,6 +1543,7 @@ ScalarFunctionSet JSONFunctions::GetArrayToJSONFunction() {
 ScalarFunctionSet JSONFunctions::GetRowToJSONFunction() {
 	ScalarFunction fun("row_to_json", {}, LogicalType::JSON(), ToJSONFunction, RowToJSONBind, nullptr,
 	                   JSONFunctionLocalState::Init);
+	fun.SetFallible();
 	fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	return ScalarFunctionSet(fun);
 }
