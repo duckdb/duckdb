@@ -13,6 +13,21 @@
 
 namespace duckdb {
 
+static unique_ptr<LogicalOperator> PromoteJoinSide(unique_ptr<LogicalOperator> child,
+                                                   vector<ProjectionIndex> projection_map) {
+	if (projection_map.empty()) {
+		return child;
+	}
+	auto filter = make_uniq<LogicalFilter>();
+	filter->projection_map = std::move(projection_map);
+	filter->children.push_back(std::move(child));
+	if (filter->children[0]->has_estimated_cardinality) {
+		filter->SetEstimatedCardinality(filter->children[0]->estimated_cardinality);
+	}
+	filter->ResolveOperatorTypes();
+	return std::move(filter);
+}
+
 bool StatisticsPropagator::HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	switch (join.join_type) {
 	case JoinType::RIGHT_SEMI:
@@ -21,15 +36,15 @@ bool StatisticsPropagator::HandleJoinNeverMatches(LogicalJoin &join, unique_ptr<
 		// semi or inner join on false; entire node can be pruned
 		ReplaceWithEmptyResult(node_ptr);
 		return true;
+
+		// If the filter is always false or Null, the join output is exactly one of its sides:
+		// promote that side together with its projection map so the output layout stays unchanged.
 	case JoinType::RIGHT_ANTI:
-	case JoinType::ANTI: {
-		if (join.join_type == JoinType::RIGHT_ANTI) {
-			std::swap(join.children[0], join.children[1]);
-		}
-		// If the filter is always false or Null, just return the left child.
-		node_ptr = std::move(join.children[0]);
+		node_ptr = PromoteJoinSide(std::move(join.children[1]), std::move(join.right_projection_map));
 		return true;
-	}
+	case JoinType::ANTI:
+		node_ptr = PromoteJoinSide(std::move(join.children[0]), std::move(join.left_projection_map));
+		return true;
 	case JoinType::LEFT:
 		// anti/left outer join: replace right side with empty node
 		ReplaceWithEmptyResult(join.children[1]);
