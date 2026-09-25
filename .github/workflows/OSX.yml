@@ -70,8 +70,6 @@ jobs:
     runs-on: ${{ inputs.runner_macos_arm64 || 'macos-latest' }}
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
       OSX_BUILD_UNIVERSAL: 1
       GEN: ninja
 

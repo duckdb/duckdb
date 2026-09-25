@@ -337,10 +337,6 @@ endfunction()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
-option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default."
-       FALSE)
-option(ENABLE_EXTENSION_AUTOINSTALL
-       "Enable extension auto-installing by default." FALSE)
 option(
   EXTENSION_TESTS_ONLY
   "Only load the tests for extensions, don't actually build them; useful for testing loadable extensions"
@@ -448,12 +444,16 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 if(UNSAFE_NUMERIC_CAST)
   add_definitions(-DUNSAFE_NUMERIC_CAST=1)
 endif()
-if(ENABLE_EXTENSION_AUTOLOADING)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
-endif()
-if(ENABLE_EXTENSION_AUTOINSTALL)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1)
-endif()
+foreach(REMOVED_OPTION ENABLE_EXTENSION_AUTOLOADING
+                       ENABLE_EXTENSION_AUTOINSTALL)
+  if(DEFINED ${REMOVED_OPTION})
+    message(
+      WARNING
+        "${REMOVED_OPTION} has no effect: autoload_known_extensions and autoinstall_known_extensions default to true, change them at runtime instead"
+    )
+    unset(${REMOVED_OPTION} CACHE)
+  endif()
+endforeach()
 
 option(
   OSX_BUILD_UNIVERSAL
