@@ -252,6 +252,8 @@ public:
 	bool agent_mode_active = false;
 	//! The name of the detected agent (e.g. "claude-code"), if any
 	string agent_name;
+	//! The environment variable that switched agent mode on (e.g. "CLAUDECODE"), empty when forced with -agent
+	string agent_marker;
 
 	//! True if an interrupt (Control-C) has been received.
 	atomic<idx_t> seenInterrupt;
@@ -443,8 +445,8 @@ public:
 	void DetectDarkLightMode();
 	//! Decide whether agent mode is active, from the -agent/-no-agent flags or the environment (see agent_mode)
 	void DetectAgentMode();
-	//! Whether the environment marks the shell as being run by an AI coding agent, and which one
-	static bool DetectAgentEnvironment(string &agent_name);
+	//! Whether the environment marks the shell as being run by an AI coding agent, which one, and by which variable
+	static bool DetectAgentEnvironment(string &agent_name, string &marker);
 	//! Print the two-line summary of how agent mode renders, and the engine features an agent should know about
 	void PrintAgentHelp(PrintOutput output);
 	//! Print the planner's estimate of what a statement will read and return to stderr (agent mode)

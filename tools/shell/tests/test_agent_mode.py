@@ -240,13 +240,30 @@ def test_tables_compact(shell):
     result.check_not_exist("\x1b[")
 
 def test_preamble_on_stderr(shell):
-    # before anything runs: what the output means, and the knobs the reader would not know about
+    # before anything runs: that the mode switched itself on and how to undo that, what the output means, and the
+    # knobs the reader would not know about
     test = agent_shell(shell).statement("SELECT 1 AS a")
     result = test.run()
-    result.check_stderr("duckdb agent mode: markdown tables show the first 1000 rows or 10000 bytes")
+    result.check_stderr(
+        "duckdb agent mode on: AI_AGENT is set and stdout is not a terminal; -no-agent turns it off, "
+        ".startup_text none in ~/.duckdbrc hides this note\n"
+    )
+    result.check_stderr("output: markdown tables show the first 1000 rows or 10000 bytes")
     result.check_stderr("tips: SET max_execution_time=<ms>")
     result.check_stdout("| a:INTEGER |\n|---|\n| 1 |")
     assert "agent mode" not in result.stdout
+
+def test_preamble_names_the_marker(shell):
+    test = agent_shell(shell, "CLAUDECODE", "1").statement("SELECT 1 AS a")
+    result = test.run()
+    result.check_stderr("duckdb agent mode on: CLAUDECODE is set and stdout is not a terminal;")
+
+def test_preamble_when_forced(shell):
+    # nothing to undo when the flag asked for it
+    test = ShellTest(shell).add_argument("-agent").statement("SELECT 1 AS a")
+    result = test.run()
+    result.check_stderr("duckdb agent mode on (-agent); .startup_text none in ~/.duckdbrc hides this note\n")
+    assert "-no-agent" not in result.stderr
 
 def test_no_preamble_without_agent(shell):
     test = ShellTest(shell).statement("SELECT 1 AS a")

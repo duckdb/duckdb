@@ -3514,14 +3514,15 @@ static const AgentEnvironmentMarker AGENT_ENVIRONMENT_MARKERS[] = {{"AI_AGENT", 
                                                                    {"COPILOT_AGENT_SESSION_ID", "github-copilot"},
                                                                    {nullptr, nullptr}};
 
-bool ShellState::DetectAgentEnvironment(string &agent_name) {
+bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
 	for (idx_t i = 0; AGENT_ENVIRONMENT_MARKERS[i].variable; i++) {
-		auto &marker = AGENT_ENVIRONMENT_MARKERS[i];
-		auto value = getenv(marker.variable);
+		auto &entry = AGENT_ENVIRONMENT_MARKERS[i];
+		auto value = getenv(entry.variable);
 		if (!value || !value[0]) {
 			continue;
 		}
-		agent_name = marker.agent_name ? marker.agent_name : value;
+		agent_name = entry.agent_name ? entry.agent_name : value;
+		marker = entry.variable;
 		return true;
 	}
 	return false;
@@ -3537,14 +3538,15 @@ void ShellState::DetectAgentMode() {
 		break;
 	default:
 		// auto-detect: an agent reads our output through a pipe, never from a terminal
-		agent_mode_active = !stdout_is_console && DetectAgentEnvironment(agent_name);
+		agent_mode_active = !stdout_is_console && DetectAgentEnvironment(agent_name, agent_marker);
 		break;
 	}
 	if (!agent_mode_active) {
 		return;
 	}
 	if (agent_name.empty()) {
-		DetectAgentEnvironment(agent_name);
+		string marker;
+		DetectAgentEnvironment(agent_name, marker);
 	}
 	// a compact markdown table (see ModeMarkdownRenderer). The result is capped, but loudly: the first rows are
 	// rendered and the footer says how many there are in total and how to get the rest. A silent cut (the duckbox's
@@ -3556,14 +3558,23 @@ void ShellState::DetectAgentMode() {
 }
 
 void ShellState::PrintAgentHelp(PrintOutput output) {
+	// first: that the shell switched modes on its own, why, and how to undo it
+	if (agent_marker.empty()) {
+		PrintF(output, "duckdb agent mode on (-agent); .startup_text none in ~/.duckdbrc hides this note\n");
+	} else {
+		PrintF(output,
+		       "duckdb agent mode on: %s is set and stdout is not a terminal; -no-agent turns it off, .startup_text "
+		       "none in ~/.duckdbrc hides this note\n",
+		       agent_marker);
+	}
 	PrintF(output,
-	       "duckdb agent mode: markdown tables show the first %zu rows or %zu bytes (.maxrows N, .maxbytes N; -1 / 0 "
-	       "= all) and cut cells at %zu chars (.maxcellwidth N); the footer has the row count and, when the whole "
-	       "result was read, an order-independent hash of it; errors are JSON, estimate/progress lines go to stderr\n",
+	       "output: markdown tables show the first %zu rows or %zu bytes (.maxrows N, .maxbytes N; -1 / 0 = all) and "
+	       "cut cells at %zu chars (.maxcellwidth N); the footer has the row count and, when the whole result was "
+	       "read, an order-independent hash of it; errors are JSON, estimate/progress lines go to stderr\n",
 	       max_rows, max_bytes, max_cell_width);
-	PrintF(output, "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
-	               "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples; "
-	               "-no-agent turns this off\n");
+	PrintF(output,
+	       "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
+	       "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples\n");
 }
 
 struct ScanEstimate {
