@@ -156,7 +156,7 @@ SimpleFunction::SimpleFunction(Identifier name_p, vector<LogicalType> arguments_
                                LogicalType varargs_p)
     : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(return_type)) {
 	if (varargs_p.id() != LogicalTypeId::INVALID) {
-		signature.AddArgs("args", varargs_p).AddKwargs("kwargs", varargs_p);
+		signature.AddArgs("args", varargs_p).AddKwargs("kwargs", std::move(varargs_p));
 	}
 }
 

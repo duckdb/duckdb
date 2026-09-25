@@ -8,7 +8,7 @@ require tpch
 statement error
 CALL dbgen(sf=0.01, children=-1);
 ----
-<REGEX>:Binder Error:.*No function matches.*
+Invalid named parameter "children" for function dbgen: expected UINTEGER, but got INTEGER
 
 statement error
 CALL dbgen(sf=0.01, children=2);

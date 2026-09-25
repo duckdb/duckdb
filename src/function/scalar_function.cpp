@@ -78,7 +78,7 @@ ScalarFunction::ScalarFunction(Identifier name, std::initializer_list<FunctionPa
                                bind_lambda_function_t bind_lambda)
     : SimpleFunction(std::move(name), FunctionSignature(params, std::move(return_type))) {
 	if (varargs.id() != LogicalTypeId::INVALID) {
-		signature.AddArgs("args", varargs).AddKwargs("kwargs", varargs);
+		signature.AddArgs("args", varargs).AddKwargs("kwargs", std::move(varargs));
 	}
 	properties.stability = side_effects;
 	properties.null_handling = null_handling;

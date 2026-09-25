@@ -219,7 +219,7 @@ unique_ptr<FunctionData> DefaultsProbeBind(ClientContext &, TableFunctionBindInp
 }
 
 void DefaultsProbeScan(ClientContext &, TableFunctionInput &, DataChunk &output) {
-	output.SetCardinality(0);
+	output.SetChildCardinality(0);
 }
 
 } // namespace
