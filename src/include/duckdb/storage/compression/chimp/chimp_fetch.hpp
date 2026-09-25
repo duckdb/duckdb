@@ -24,16 +24,16 @@ void ChimpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
-	ChimpScanState<T> scan_state(std::move(handle), segment);
-	scan_state.Skip(segment, UnsafeNumericCast<idx_t>(row_id));
+	auto scan_state = make_uniq<ChimpScanState<T>>(std::move(handle), segment);
+	scan_state->Skip(segment, UnsafeNumericCast<idx_t>(row_id));
 	auto result_data = FlatVector::GetDataMutableUnsafe<INTERNAL_TYPE>(result);
 
-	if (scan_state.GroupFinished() && scan_state.total_value_count < scan_state.segment_count) {
-		scan_state.LoadGroup(scan_state.group_state.values);
+	if (scan_state->GroupFinished() && scan_state->total_value_count < scan_state->segment_count) {
+		scan_state->LoadGroup(scan_state->group_state.values);
 	}
-	scan_state.group_state.Scan(&result_data[result_idx], 1);
+	scan_state->group_state.Scan(&result_data[result_idx], 1);
 
-	scan_state.total_value_count++;
+	scan_state->total_value_count++;
 }
 
 } // namespace duckdb
