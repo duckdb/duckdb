@@ -34,8 +34,8 @@ constexpr uint64_t c_log2() {
 }
 
 // Users of I64VectorSumSafe accumulate sum into int64_t. One bit is for sign,
-// and there are 2048=2^11 values in Vector for sum partials, so we can
-// guarantee no overflow only if 64 - 11 - 1 = at most 52 low bits are set.
+// and there are log2(vector size) bits occupied by Vector values, so we can
+// guarantee no overflow if at most 64 - 1 - log2(size) bits are set.
 static constexpr uint64_t VECTOR_SIZE_LOG2 = c_log2<STANDARD_VECTOR_SIZE>();
 static constexpr uint64_t SUM_OVERFLOW_MAX_BITS = 64 - 1 - VECTOR_SIZE_LOG2;
 static constexpr uint64_t SUM_OVERFLOW_MASK = ~((uint64_t(1) << SUM_OVERFLOW_MAX_BITS) - 1);
