@@ -1,12 +1,3 @@
-# Conditionally compile installing and loading external extensions based on
-# whether extension loading is enabled or not
-if(ENABLE_EXTENSION_LOAD)
-  set(EXTENSION_LOAD_SOURCES extension_install_dynamic.cpp
-                             extension_load_dynamic.cpp)
-else()
-  set(EXTENSION_LOAD_SOURCES extension_load_none.cpp)
-endif()
-
 add_library(
   duckdb_main_extension OBJECT
   extension_alias.cpp
@@ -15,8 +6,8 @@ add_library(
   extension_load.cpp
   extension_loader.cpp
   extension_repository_manager.cpp
-  linked_extension_registry.cpp
-  ${EXTENSION_LOAD_SOURCES})
+  external_extension_provider.cpp
+  linked_extension_registry.cpp)
 
 # Escape ; in the string to ensure this is treated as a plain string instead of
 # a list
@@ -29,3 +20,16 @@ target_compile_definitions(
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
     PARENT_SCOPE)
+
+# Installing and loading external extensions is its own archive, registered like
+# a static extension through duckdb_extension_loadable_extensions_describe
+if(ENABLE_EXTENSION_LOAD)
+  add_library(duckdb_loadable_extensions STATIC extension_install_dynamic.cpp
+                                                extension_load_dynamic.cpp)
+  target_link_libraries(duckdb_loadable_extensions duckdb_static)
+  install(
+    TARGETS duckdb_loadable_extensions
+    EXPORT "${DUCKDB_EXPORT_SET}"
+    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+endif()

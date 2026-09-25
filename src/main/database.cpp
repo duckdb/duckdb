@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
@@ -63,6 +64,7 @@ DBConfig::DBConfig() {
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
 	http_transport_manager = HTTPTransportManager::Create(make_shared_ptr<HTTPUtil>());
+	external_extension_provider = make_shared_ptr<ExternalExtensionProvider>();
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 }
 

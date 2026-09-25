@@ -347,12 +347,11 @@ static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string 
 	}
 }
 
-unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
-                                                                           const string &local_path,
-                                                                           const string &extension,
-                                                                           ExtensionInstallOptions &options,
-                                                                           optional_ptr<ClientContext> context) {
-	auto extension_name = ApplyExtensionAlias(fs.ExtractBaseName(extension));
+unique_ptr<ExtensionInstallInfo> InstallExternalExtension(DatabaseInstance &db, FileSystem &fs,
+                                                          const string &local_path, const string &extension,
+                                                          ExtensionInstallOptions &options,
+                                                          optional_ptr<ClientContext> context) {
+	auto extension_name = ExtensionHelper::ApplyExtensionAlias(fs.ExtractBaseName(extension));
 
 	if (ExtensionHelper::IsFullPath(extension) && options.repository) {
 		throw InvalidInputException("Cannot pass both a repository and a full path url");
@@ -417,7 +416,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(Datab
 #else
 
 	// Full path direct installation
-	if (IsFullPath(extension)) {
+	if (ExtensionHelper::IsFullPath(extension)) {
 		if (StringUtil::StartsWith(extension, "http://")) {
 			// HTTP takes separate path to avoid dependency on httpfs extension
 			return InstallFromHttpUrl(db, extension, extension_name, temp_path, local_extension_path, options, context);

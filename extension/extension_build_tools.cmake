@@ -86,12 +86,15 @@ function(duckdb_link_extensions TARGET)
 endfunction()
 
 # Links the extensions this build is configured to link by default (every loaded extension without DONT_LINK), after
-# the built-in httplib client when it is built.
+# the built-in httplib client and the loadable extensions support when they are built.
 function(link_extension_libraries LIBRARY LINKAGE)
     get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
     set(DEFAULT_EXTENSIONS "")
     if(TARGET duckdb_httplib)
         list(APPEND DEFAULT_EXTENSIONS httplib)
+    endif()
+    if(TARGET duckdb_loadable_extensions)
+        list(APPEND DEFAULT_EXTENSIONS loadable_extensions)
     endif()
     foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
         string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)

@@ -6,6 +6,7 @@
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/capi_v2/extension_load_v2.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_manager.hpp"
@@ -469,8 +470,10 @@ bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
                                      const string &repository_name, bool core_only, ExtensionInitResult &result,
                                      string &error) {
-	if (!SupportsExternalExtensions()) {
-		throw PermissionException("Loading external extensions is disabled through a compile time flag");
+	auto &provider = db.config.GetExternalExtensionProvider();
+	if (!provider.SupportsExternalExtensions()) {
+		throw PermissionException("Loading external extensions is not supported: this build does not link the "
+		                          "loadable_extensions library");
 	}
 	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
@@ -683,7 +686,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		}
 	}
 
-	auto lib_hdl = OpenExtensionLibrary(filename, filebase);
+	auto lib_hdl = provider.OpenLibrary(filename, filebase);
 
 	// Initialize the ExtensionInitResult
 	result.filebase = lowercase_extension_name;
@@ -800,8 +803,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
 		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
-		ext_init_fun_t init_fun =
-		    (ext_init_fun_t)TryLoadFunctionFromLibrary(extension_init_result.lib_hdl, init_fun_name);
+		ext_init_fun_t init_fun = (ext_init_fun_t)db.config.GetExternalExtensionProvider().TryLoadFunction(
+		    extension_init_result.lib_hdl, init_fun_name);
 		if (!init_fun) {
 			throw IOException("Extension '%s' did not contain the expected entrypoint function '%s'", extension,
 			                  init_fun_name);
@@ -826,8 +829,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C ABI, V2
 	if (UsesCAPIV2(extension_init_result)) {
 		auto init_fun_name = extension_init_result.filebase + "_init_c_api_v2";
-		auto init_fun_capi_v2 =
-		    (ext_init_c_api_v2_fun_t)TryLoadFunctionFromLibrary(extension_init_result.lib_hdl, init_fun_name);
+		auto init_fun_capi_v2 = (ext_init_c_api_v2_fun_t)db.config.GetExternalExtensionProvider().TryLoadFunction(
+		    extension_init_result.lib_hdl, init_fun_name);
 
 		if (!init_fun_capi_v2) {
 			throw IOException(
@@ -851,11 +854,12 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT) {
 		auto init_fun_name = extension_init_result.filebase + "_init_c_api";
 		ext_init_c_api_fun_t init_fun_capi =
-		    (ext_init_c_api_fun_t)TryLoadFunctionFromLibrary(extension_init_result.lib_hdl, init_fun_name);
+		    (ext_init_c_api_fun_t)db.config.GetExternalExtensionProvider().TryLoadFunction(
+		        extension_init_result.lib_hdl, init_fun_name);
 
 		if (!init_fun_capi) {
 			throw IOException("File \"%s\" did not contain function \"%s\": %s", extension_init_result.filename,
-			                  init_fun_name, GetExtensionLibraryError());
+			                  init_fun_name, db.config.GetExternalExtensionProvider().GetLibraryError());
 		}
 		// Create the load state
 		DuckDBExtensionLoadState load_state(db, extension_init_result);

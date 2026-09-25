@@ -9,6 +9,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
@@ -236,6 +237,15 @@ string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template,
 	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
 	url = StringUtil::Replace(url, "${NAME}", extension_name);
 	return url;
+}
+
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+                                                                           const string &local_path,
+                                                                           const string &extension,
+                                                                           ExtensionInstallOptions &options,
+                                                                           optional_ptr<ClientContext> context) {
+	return DBConfig::GetConfig(db).GetExternalExtensionProvider().Install(db, fs, local_path, extension, options,
+	                                                                      context);
 }
 
 } // namespace duckdb
