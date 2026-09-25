@@ -136,39 +136,45 @@ TEST_CASE("Stable C++API: positional file read and write", "[cpp_api]") {
 
 	// Positional access leaves the file's own position alone.
 	char buffer[4] = {0};
-	file.ReadAt(buffer, 4, 2);
+	REQUIRE(file.ReadAt(buffer, 4, 2) == 4);
 	REQUIRE(std::string(buffer, 4) == "cdef");
 	REQUIRE(file.Tell() == 10);
 
-	file.WriteAt("XY", 2, 4);
+	REQUIRE(file.WriteAt("XY", 2, 4) == 2);
 	REQUIRE(file.Tell() == 10);
-	file.ReadAt(buffer, 4, 2);
+	REQUIRE(file.ReadAt(buffer, 4, 2) == 4);
 	REQUIRE(std::string(buffer, 4) == "cdXY");
 
-	// A short positional read is an error, not a result.
-	REQUIRE_THROWS_AS(file.ReadAt(buffer, 4, 8), Exception);
+	// A positional read crossing the end comes up short, and one past it reads nothing.
+	REQUIRE(file.ReadAt(buffer, 4, 8) == 2);
+	REQUIRE(std::string(buffer, 2) == "ij");
+	REQUIRE(file.ReadAt(buffer, 4, 10) == 0);
 }
 
-TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
+TEST_CASE("Stable C++API: opening a file with metadata", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_options.bin");
 
-	auto options = fs.CreateOpenOptions();
-	options.SetFlag(FileFlags::WRITE)
-	    .SetFlag(FileFlags::FILE_CREATE_NEW)
-	    .SetValue("file_size", Value::Create(conn, int64_t {4}))
-	    .SetValue("made_up_option", Value::Create(conn, varchar_t("nobody-reads-this")));
+	// A hint no file system reads is ignored rather than rejected.
+	auto metadata = FileMetadata::Create();
+	metadata.SetSize(4).SetValue("made_up_option", Value::Create(conn, varchar_t("nobody-reads-this")));
+	REQUIRE(metadata.GetValue("made_up_option").has_value());
+	REQUIRE(!metadata.GetValue("another_option").has_value());
+	// The typed fields have setters of their own.
+	REQUIRE_THROWS_MATCHES(metadata.SetValue("file_size", Value::Create(conn, int64_t {4})), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
+	const std::vector<FileFlags> flags {FileFlags::WRITE, FileFlags::FILE_CREATE_NEW};
 	{
-		auto file = fs.OpenFile(path, options);
+		auto file = fs.OpenFile(path, flags, metadata);
 		WriteAll(file, "data");
 	}
-	// One options object opens as many files as you like.
+	// The same flags and metadata open as many files as you like.
 	{
-		auto file = fs.OpenFile(duckdb::TestCreatePath("cpp_fs_options_second.bin"), options);
+		auto file = fs.OpenFile(duckdb::TestCreatePath("cpp_fs_options_second.bin"), flags, metadata);
 		WriteAll(file, "more");
 	}
 	{
@@ -176,7 +182,9 @@ TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
 		REQUIRE(ReadAll(file, 32) == "data");
 	}
 
-	// Options carrying no flags cannot say whether the file is read or written.
-	auto empty = fs.CreateOpenOptions();
-	REQUIRE_THROWS_MATCHES(fs.OpenFile(path, empty), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	// A copy carries everything, named values included.
+	auto copy = FileMetadata::Create();
+	copy.CopyFrom(metadata);
+	REQUIRE(copy.GetSize() == metadata.GetSize());
+	REQUIRE(copy.GetValue("made_up_option").has_value());
 }

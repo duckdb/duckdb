@@ -158,7 +158,8 @@ static constexpr ExceptionEntry EXCEPTION_MAP[] = {{ExceptionType::INVALID, "Inv
                                                    {ExceptionType::SEQUENCE, "Sequence"},
                                                    {ExceptionType::INVALID_CONFIGURATION, "Invalid Configuration"},
                                                    {ExceptionType::DATA_CORRUPTION, "Data Corruption"},
-                                                   {ExceptionType::RESOURCE_IN_USE, "Resource In Use"}};
+                                                   {ExceptionType::RESOURCE_IN_USE, "Resource In Use"},
+                                                   {ExceptionType::FILE_NOT_FOUND, "File Not Found"}};
 
 string Exception::ExceptionTypeToString(ExceptionType type) {
 	for (auto &e : EXCEPTION_MAP) {
@@ -316,6 +317,9 @@ IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) 
 
 IOException::IOException(const unordered_map<string, string> &extra_info, const string &msg)
     : Exception(extra_info, ExceptionType::IO, msg) {
+}
+
+FileNotFoundException::FileNotFoundException(const string &msg) : IOException(ExceptionType::FILE_NOT_FOUND, msg) {
 }
 
 DataCorruptionException::DataCorruptionException(const string &msg) : Exception(ExceptionType::DATA_CORRUPTION, msg) {
