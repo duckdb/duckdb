@@ -1484,11 +1484,12 @@ struct ExtensionRepositoryDirectorySetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct ExternalFileCacheLocalBlockSizeSetting {
+struct ExternalFileCacheLocalMaxBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
-	static constexpr const char *Name = "external_file_cache_local_block_size";
+	static constexpr const char *Name = "external_file_cache_local_max_block_size";
 	static constexpr const char *Description =
-	    "Block size in bytes for the external file cache when reading local (non-remote) files.";
+	    "Maximum size in bytes of an external file cache block for local (non-remote) files. Larger reads are split "
+	    "into blocks of this size, which are fetched in parallel.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
@@ -1498,15 +1499,30 @@ struct ExternalFileCacheLocalBlockSizeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct ExternalFileCacheRemoteBlockSizeSetting {
+struct ExternalFileCacheRemoteMaxBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
-	static constexpr const char *Name = "external_file_cache_remote_block_size";
+	static constexpr const char *Name = "external_file_cache_remote_max_block_size";
 	static constexpr const char *Description =
-	    "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).";
+	    "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split "
+	    "into blocks of this size, which are fetched in parallel.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
 	static constexpr const char *DefaultValue = "2097152";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct ExternalFileCacheRemoteMinBlockSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "external_file_cache_remote_min_block_size";
+	static constexpr const char *Description = "Reads of remote files smaller than this are widened to aligned blocks "
+	                                           "of this size, so tiny reads do not each cost a request.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "4096";
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);

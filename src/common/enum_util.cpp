@@ -5281,6 +5281,24 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
 	return static_cast<RenderMode>(StringUtil::StringToEnum(GetRenderModeValues(), 2, "RenderMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetRequestSizingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RequestSizing::BY_CACHE), "BY_CACHE" },
+		{ static_cast<uint32_t>(RequestSizing::BY_READER), "BY_READER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value) {
+	return StringUtil::EnumToString(GetRequestSizingValues(), 2, "RequestSizing", static_cast<uint32_t>(value));
+}
+
+template<>
+RequestSizing EnumUtil::FromString<RequestSizing>(const char *value) {
+	return static_cast<RequestSizing>(StringUtil::StringToEnum(GetRequestSizingValues(), 2, "RequestSizing", value));
+}
+
 const StringUtil::EnumStringLiteral *GetRequestTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(RequestType::GET_REQUEST), "GET" },

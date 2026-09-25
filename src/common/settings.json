@@ -901,8 +901,8 @@
         ]
     },
     {
-        "name": "external_file_cache_local_block_size",
-        "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
+        "name": "external_file_cache_local_max_block_size",
+        "description": "Maximum size in bytes of an external file cache block for local (non-remote) files. Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "16384",
@@ -914,11 +914,24 @@
         ]
     },
     {
-        "name": "external_file_cache_remote_block_size",
-        "description": "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).",
+        "name": "external_file_cache_remote_max_block_size",
+        "description": "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "2097152",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "external_file_cache_remote_min_block_size",
+        "description": "Reads of remote files smaller than this are widened to aligned blocks of this size, so tiny reads do not each cost a request.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "4096",
         "custom_implementation": [
             "set"
         ],
