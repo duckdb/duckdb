@@ -32,6 +32,7 @@
       "paths": [
         "test/sql/topn/top_n_pruning.test",
         "test/optimizer/eager_aggregate_execution.test",
+        "test/optimizer/max_len_skip.test",
         "test/optimizer/partial_aggregate_precomputation.test"
       ]
     },
