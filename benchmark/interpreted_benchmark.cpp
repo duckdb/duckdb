@@ -702,7 +702,7 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 		auto properties = handle->GetStatementProperties();
 		auto names = handle->GetNames();
 		auto client_properties = handle->client_properties;
-		QueryResultStream stream(std::move(handle));
+		QueryResultStream<> stream(std::move(handle));
 		unique_ptr<ColumnDataCollection> collection;
 		ColumnDataAppendState append_state;
 		if (!discard_stream_result) {

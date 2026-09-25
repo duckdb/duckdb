@@ -69,11 +69,11 @@ bool NO_FAIL(QueryResult &result) {
 	return !result.HasError();
 }
 
-duckdb::unique_ptr<duckdb::QueryResultStream> OpenStream(duckdb::Connection &con, const string &query) {
-	return duckdb::make_uniq<duckdb::QueryResultStream>(con.Submit(query));
+duckdb::unique_ptr<duckdb::QueryResultStream<>> OpenStream(duckdb::Connection &con, const string &query) {
+	return duckdb::make_uniq<duckdb::QueryResultStream<>>(con.Submit(query));
 }
 
-duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream &stream) {
+duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> &stream) {
 	auto statement_type = stream.GetStatementType();
 	auto properties = stream.GetStatementProperties();
 	auto names = stream.GetNames();

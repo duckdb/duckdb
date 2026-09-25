@@ -102,7 +102,7 @@ public:
 
 class ChunkFormat : public ResultFormat {
 public:
-	using Unit = DataChunk;
+	using T = DataChunk;
 	using GlobalState = ResultFormatGlobalState;
 	static constexpr const char *NAME = "chunk";
 
@@ -129,6 +129,9 @@ public:
 	DUCKDB_API bool IsUnitFinished(ResultFormatLocalState &lstate) override;
 	DUCKDB_API unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate,
 	                                             ResultFormatLocalState &lstate) override;
+
+public:
+	DUCKDB_API static unique_ptr<T> UnpackUnit(unique_ptr<ResultUnit> unit);
 
 private:
 	QueryResultMemoryType memory_type;

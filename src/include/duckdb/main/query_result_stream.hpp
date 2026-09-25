@@ -80,51 +80,30 @@ private:
 	unique_ptr<QueryResult> handle;
 };
 
+template <class FORMAT = ChunkFormat>
 class QueryResultStream : public ResultStreamBase {
 public:
-	DUCKDB_API explicit QueryResultStream(unique_ptr<QueryResult> result);
+	explicit QueryResultStream(unique_ptr<QueryResult> result) : ResultStreamBase(std::move(result), FORMAT::NAME) {
+	}
 
 public:
-	//! Pops a chunk when one is observable, else reports where execution stands. Runs no task:
-	//! chunks are produced by worker threads or by participating calls such as Fetch. After the end
+	//! Pops a payload when one is observable, else reports where execution stands. Runs no task:
+	//! payloads are produced by worker threads or by participating calls such as Fetch. After the end
 	//! of the stream the terminal state keeps repeating
-	DUCKDB_API QueryResultState TryFetch(unique_ptr<DataChunk> &out_chunk);
-	//! Runs tasks on the calling thread until a chunk is buffered or the stream ends. Returns null at
-	//! the end of the stream, and on an execution error, which is recorded on the stream. After a
-	//! clean end it keeps returning null; after an error it throws
-	DUCKDB_API unique_ptr<DataChunk> Fetch();
-};
-
-template <class FORMAT>
-class FormattedResultStream : public ResultStreamBase {
-	static_assert(std::is_base_of<ResultUnit, typename FORMAT::Unit>::value,
-	              "a format's Unit must derive from ResultUnit");
-
-public:
-	explicit FormattedResultStream(unique_ptr<QueryResult> result) : ResultStreamBase(std::move(result), FORMAT::NAME) {
-	}
-
-public:
-	unique_ptr<typename FORMAT::Unit> Fetch() {
-		return UnitCast(FetchUnit());
-	}
-	QueryResultState TryFetch(unique_ptr<typename FORMAT::Unit> &out_unit) {
+	QueryResultState TryFetch(unique_ptr<typename FORMAT::T> &out) {
 		unique_ptr<ResultUnit> unit;
 		auto state = TryFetchUnit(unit);
-		out_unit = UnitCast(std::move(unit));
+		out = FORMAT::UnpackUnit(std::move(unit));
 		return state;
+	}
+	//! Runs tasks on the calling thread until a payload is buffered or the stream ends. Returns null
+	//! at the end of the stream, and on an execution error, which is recorded on the stream. After a
+	//! clean end it keeps returning null; after an error it throws
+	unique_ptr<typename FORMAT::T> Fetch() {
+		return FORMAT::UnpackUnit(FetchUnit());
 	}
 	const typename FORMAT::GlobalState &FormatState() const {
 		return FormatStateInternal().template Cast<typename FORMAT::GlobalState>();
-	}
-
-private:
-	static unique_ptr<typename FORMAT::Unit> UnitCast(unique_ptr<ResultUnit> unit) {
-		if (!unit) {
-			return nullptr;
-		}
-		unit->Cast<typename FORMAT::Unit>();
-		return unique_ptr<typename FORMAT::Unit>(static_cast<typename FORMAT::Unit *>(unit.release()));
 	}
 };
 

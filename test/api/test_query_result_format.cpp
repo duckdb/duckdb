@@ -15,7 +15,7 @@ using namespace duckdb;
 
 namespace {
 
-vector<int64_t> DrainRows(FormattedResultStream<TestFormat> &stream, idx_t *unit_count = nullptr) {
+vector<int64_t> DrainRows(QueryResultStream<TestFormat> &stream, idx_t *unit_count = nullptr) {
 	vector<int64_t> rows;
 	while (auto unit = stream.Fetch()) {
 		REQUIRE(unit->row_count > 0);
@@ -108,7 +108,7 @@ TEST_CASE("InitGlobal runs on the submitting thread when a different thread drai
 	std::thread::id draining_thread;
 	std::thread drainer([&]() {
 		draining_thread = std::this_thread::get_id();
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		while (auto unit = stream.Fetch()) {
 			rows += unit->row_count;
 		}
@@ -127,7 +127,7 @@ TEST_CASE("A formatted stream drains an ordered plan in row order", "[api][query
 	SECTION("through the simple store") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(200000) t(i)", 4096);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		REQUIRE(stream.GetBufferedData().Lifetime() == ResultLifetime::DRAINING);
 		REQUIRE(stream.FormatState().types.size() == 1);
 		REQUIRE_NOTHROW(stream.GetBufferedData().Cast<SimpleBufferedData>());
@@ -136,7 +136,7 @@ TEST_CASE("A formatted stream drains an ordered plan in row order", "[api][query
 	SECTION("through the batched store") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM t", 4096);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		REQUIRE_NOTHROW(stream.GetBufferedData().Cast<BatchedBufferedData>());
 		REQUIRE(stream.FormatState().ordering == ResultOrdering::BATCH_INDEX_ORDERED);
 		RequireAscending(DrainRows(stream), 200000);
@@ -151,7 +151,7 @@ TEST_CASE("A formatted stream of an order-free plan delivers the right multiset"
 
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 4096);
 	DrainWatchdog watchdog(con);
-	FormattedResultStream<TestFormat> stream(std::move(handle));
+	QueryResultStream<TestFormat> stream(std::move(handle));
 	REQUIRE(stream.FormatState().ordering == ResultOrdering::UNORDERED);
 	RequireSameMultiset(DrainRows(stream), 200000);
 }
@@ -164,7 +164,7 @@ TEST_CASE("No unit spans two batch indexes", "[api][query_result_format]") {
 	// A row cap well past one row group makes the batch boundary, not the cap, finish most units
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 400000);
 	DrainWatchdog watchdog(con);
-	FormattedResultStream<TestFormat> stream(std::move(handle));
+	QueryResultStream<TestFormat> stream(std::move(handle));
 
 	const int64_t group_size = NumericCast<int64_t>(DEFAULT_ROW_GROUP_SIZE);
 	idx_t row_count = 0;
@@ -202,10 +202,10 @@ TEST_CASE("Slicing at the cap finishes several units from one append", "[api][qu
 	SECTION("drained") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(50000) t(i)", cap, true);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		vector<int64_t> rows;
 		idx_t units = 0;
-		unique_ptr<TestUnit> previous;
+		unique_ptr<TestPayload> previous;
 		while (auto unit = stream.Fetch()) {
 			if (previous) {
 				REQUIRE(previous->row_count == cap);
@@ -248,7 +248,7 @@ TEST_CASE("Combine finishes the partial unit of every producer", "[api][query_re
 		// The simple store runs no NextBatch, so Combine is the only thing that can finish the unit
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 1000000);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		idx_t units = 0;
 		RequireAscending(DrainRows(stream, &units), 1000);
 		REQUIRE(units == 1);
@@ -258,7 +258,7 @@ TEST_CASE("Combine finishes the partial unit of every producer", "[api][query_re
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(100000)"));
 		auto handle = SubmitFormatted(con, "SELECT i FROM t WHERE i < 0", 1024);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		REQUIRE(stream.Fetch() == nullptr);
 		REQUIRE(!stream.HasError());
 		REQUIRE(stream.FormatState().partial_units == 0);
@@ -287,7 +287,7 @@ TEST_CASE("A throw from the format surfaces as the stream's error", "[api][query
 		auto handle = con.Submit("SELECT i FROM range(100000) t(i)", std::move(format));
 		REQUIRE(!handle->HasError());
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		while (stream.Fetch()) {
 		}
 		REQUIRE(stream.HasError());
@@ -395,7 +395,7 @@ TEST_CASE("Fetching from a retained format collection copies units out of an unc
 		const auto total_units = collection.UnitCount();
 		REQUIRE(total_units > 1);
 
-		vector<unique_ptr<TestUnit>> fetched;
+		vector<unique_ptr<TestPayload>> fetched;
 		while (auto unit = handle->Fetch<TestFormat>()) {
 			fetched.push_back(std::move(unit));
 		}
@@ -518,22 +518,22 @@ TEST_CASE("A stream and an accessor refuse a format that is not the settled one"
 
 	SECTION("a chunk stream on a formatted result") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 1024);
-		REQUIRE_THROWS_AS(QueryResultStream(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
 	}
 	SECTION("a formatted stream on a chunk result") {
 		auto handle = con.Submit("SELECT i FROM range(1000) t(i)");
-		REQUIRE_THROWS_AS(FormattedResultStream<TestFormat>(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<TestFormat>(std::move(handle)), InvalidInputException);
 	}
 	SECTION("a formatted fetch on a chunk result") {
 		auto handle = con.Submit("SELECT i FROM range(1000) t(i)");
 		DrainWatchdog watchdog(con);
 		REQUIRE_THROWS_AS(handle->Fetch<TestFormat>(), InvalidInputException);
 	}
-	SECTION("a stream of another format that declares the same unit type") {
+	SECTION("a stream of another format that declares the same payload type") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 1024);
-		REQUIRE_THROWS_AS(FormattedResultStream<OtherTestFormat>(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<OtherTestFormat>(std::move(handle)), InvalidInputException);
 	}
-	SECTION("a fetch in another format that declares the same unit type") {
+	SECTION("a fetch in another format that declares the same payload type") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 1024);
 		DrainWatchdog watchdog(con);
 		REQUIRE_THROWS_AS(handle->Fetch<OtherTestFormat>(), InvalidInputException);
@@ -542,6 +542,99 @@ TEST_CASE("A stream and an accessor refuse a format that is not the settled one"
 	}
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A fetched TestFormat payload outlives the result, connection, and database", "[api][query_result_format]") {
+	unique_ptr<TestPayload> payload;
+	{
+		auto db = make_uniq<DuckDB>(nullptr);
+		auto con = make_uniq<Connection>(*db);
+		auto handle =
+		    SubmitFormatted(*con, "SELECT i, 'payload beyond inlining length ' || i AS s FROM range(3000) t(i)", 4096);
+		auto stream = make_uniq<QueryResultStream<TestFormat>>(std::move(handle));
+		payload = stream->Fetch();
+		REQUIRE(payload);
+		REQUIRE(payload->row_count > 0);
+		stream.reset();
+		con.reset();
+		db.reset();
+	}
+	// The payload's chunks are its own copies, so they read cleanly with nothing else left alive
+	auto ints = UnitValues(*payload, 0);
+	auto strings = UnitValues(*payload, 1);
+	REQUIRE(ints.front().GetValue<int64_t>() == 0);
+	auto last_row = ints.size() - 1;
+	REQUIRE(strings.back().GetValue<string>() == "payload beyond inlining length " + to_string(last_row));
+}
+
+TEST_CASE("A payload fetched from a retained TestFormat result outlives the result, connection, and database",
+          "[api][query_result_format]") {
+	unique_ptr<TestPayload> payload;
+	{
+		auto db = make_uniq<DuckDB>(nullptr);
+		auto con = make_uniq<Connection>(*db);
+		auto handle =
+		    SubmitFormatted(*con, "SELECT i, 'payload beyond inlining length ' || i AS s FROM range(3000) t(i)", 4096);
+		handle->Complete();
+		payload = handle->Fetch<TestFormat>();
+		REQUIRE(payload);
+		REQUIRE(payload->row_count > 0);
+		handle.reset();
+		con.reset();
+		db.reset();
+	}
+	// Fetch copies the unit out of the collection, so it too reads cleanly with nothing else left alive
+	auto ints = UnitValues(*payload, 0);
+	auto strings = UnitValues(*payload, 1);
+	REQUIRE(ints.front().GetValue<int64_t>() == 0);
+	auto last_row = ints.size() - 1;
+	REQUIRE(strings.back().GetValue<string>() == "payload beyond inlining length " + to_string(last_row));
+}
+
+TEST_CASE("TryFetch returns the same payload rows, in order, as Fetch", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(200000)"));
+
+	vector<int64_t> fetched_rows;
+	{
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 4096);
+		DrainWatchdog watchdog(con);
+		QueryResultStream<TestFormat> stream(std::move(handle));
+		fetched_rows = DrainRows(stream);
+	}
+
+	vector<int64_t> polled_rows;
+	{
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 4096);
+		DrainWatchdog watchdog(con);
+		QueryResultStream<TestFormat> stream(std::move(handle));
+		Deadline deadline;
+		QueryResultState state = QueryResultState::NOT_READY;
+		while (!IsTerminal(state)) {
+			unique_ptr<TestPayload> payload;
+			state = stream.TryFetch(payload);
+			if (state == QueryResultState::READY) {
+				for (auto &value : UnitValues(*payload, 0)) {
+					polled_rows.push_back(value.GetValue<int64_t>());
+				}
+				continue;
+			}
+			if (IsTerminal(state)) {
+				break;
+			}
+			// No worker will do it for us: the consumer runs the tasks
+			if (stream.ExecuteTask() == QueryResultState::BLOCKED) {
+				stream.WaitForTask();
+			}
+			REQUIRE(!deadline.Passed());
+		}
+		REQUIRE(state == QueryResultState::FINISHED);
+		REQUIRE(!stream.HasError());
+	}
+
+	RequireAscending(fetched_rows, 200000);
+	REQUIRE(fetched_rows == polled_rows);
 }
 
 #endif

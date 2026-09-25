@@ -109,4 +109,16 @@ unique_ptr<ResultUnit> ChunkFormat::FinishUnit(ResultFormatGlobalState &gstate, 
 	return std::move(lstate.unit);
 }
 
+unique_ptr<DataChunk> ChunkFormat::UnpackUnit(unique_ptr<ResultUnit> unit) {
+	if (!unit) {
+		return nullptr;
+	}
+	auto &chunk_unit = unit->Cast<ChunkUnit>();
+	for (idx_t i = 0; i < chunk_unit.chunk->ColumnCount(); i++) {
+		// CopyForBuffering copies into a freshly initialized chunk, so every column is already flat
+		D_ASSERT(chunk_unit.chunk->data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+	}
+	return std::move(chunk_unit.chunk);
+}
+
 } // namespace duckdb

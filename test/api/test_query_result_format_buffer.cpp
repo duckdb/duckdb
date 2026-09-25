@@ -23,7 +23,7 @@ struct DrainReport {
 	vector<int64_t> rows;
 };
 
-DrainReport Drain(FormattedResultStream<TestFormat> &stream) {
+DrainReport Drain(QueryResultStream<TestFormat> &stream) {
 	DrainReport report;
 	while (true) {
 		report.saw_blocked_sink |= stream.GetBufferedData().HasBlockedSink();
@@ -52,7 +52,7 @@ TEST_CASE("A unit larger than the cap is admitted into an empty queue", "[api][q
 
 	auto handle = SubmitFormatted(con, "SELECT i FROM range(100000) t(i)", 20000);
 	DrainWatchdog watchdog(con);
-	FormattedResultStream<TestFormat> stream(std::move(handle));
+	QueryResultStream<TestFormat> stream(std::move(handle));
 	auto report = Drain(stream);
 
 	RequireAscending(report.rows, 100000);
@@ -70,7 +70,7 @@ TEST_CASE("Queued bytes stay under the cap plus one unit", "[api][query_result_f
 	SECTION("the simple store") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(200000) t(i)", 8192);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		auto report = Drain(stream);
 		RequireAscending(report.rows, 200000);
 		REQUIRE(stream.GetBufferedData().PeakBufferedBytes() <= 250000 + report.largest_unit_bytes);
@@ -78,7 +78,7 @@ TEST_CASE("Queued bytes stay under the cap plus one unit", "[api][query_result_f
 	SECTION("the batched store, with the minimum batch admitted ahead of blocked later batches") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM t", 8192);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		auto &buffered = stream.GetBufferedData().Cast<BatchedBufferedData>();
 		auto report = Drain(stream);
 		// Order is restored even though later batches finished units first and parked for space
@@ -99,7 +99,7 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 	SECTION("the simple store") {
 		auto handle = SubmitFormatted(con, "SELECT i FROM range(20000) t(i)", 300, true);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		auto report = Drain(stream);
 		RequireAscending(report.rows, 20000);
 		REQUIRE(report.saw_blocked_sink);
@@ -110,7 +110,7 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 		REQUIRE_NO_FAIL(con.Query("SET threads=4"));
 		auto handle = SubmitFormatted(con, "SELECT i FROM t", 300, true);
 		DrainWatchdog watchdog(con);
-		FormattedResultStream<TestFormat> stream(std::move(handle));
+		QueryResultStream<TestFormat> stream(std::move(handle));
 		auto report = Drain(stream);
 		RequireAscending(report.rows, 400000);
 		REQUIRE(report.saw_blocked_sink);
@@ -133,7 +133,7 @@ TEST_CASE("Several producers build units while the others park holding theirs", 
 	// A row cap that no whole number of row groups is a multiple of, so every producer ends partial
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
 	DrainWatchdog watchdog(con);
-	FormattedResultStream<TestFormat> stream(std::move(handle));
+	QueryResultStream<TestFormat> stream(std::move(handle));
 	auto report = Drain(stream);
 
 	std::sort(report.rows.begin(), report.rows.end());
@@ -159,7 +159,7 @@ TEST_CASE("A producer parked at Combine is deposited on the consumer's pop", "[a
 	// No whole number of row groups is a multiple of the row cap, so every producer ends partial
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
 	DrainWatchdog watchdog(con);
-	FormattedResultStream<TestFormat> stream(std::move(handle));
+	QueryResultStream<TestFormat> stream(std::move(handle));
 	REQUIRE_NOTHROW(stream.GetBufferedData().Cast<SimpleBufferedData>());
 	auto report = Drain(stream);
 
@@ -182,7 +182,7 @@ TEST_CASE("The peak metric reports the bytes a formatted stream held", "[api][qu
 
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 8192);
 	DrainWatchdog watchdog(con);
-	FormattedResultStream<TestFormat> stream(std::move(handle));
+	QueryResultStream<TestFormat> stream(std::move(handle));
 	auto report = Drain(stream);
 	RequireAscending(report.rows, 200000);
 
@@ -204,7 +204,7 @@ TEST_CASE("An interrupt while a producer holds a unit ends the stream", "[api][q
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='128KB'"));
 
 	auto handle = SubmitFormatted(con, "SELECT i FROM t", 14336);
-	FormattedResultStream<TestFormat> stream(std::move(handle));
+	QueryResultStream<TestFormat> stream(std::move(handle));
 
 	// Cancel once a producer is parked holding a finished unit it could not hand over
 	Deadline deadline;

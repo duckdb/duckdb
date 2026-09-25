@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-QueryResultStreamChunkScanState::QueryResultStreamChunkScanState(QueryResultStream &stream)
+QueryResultStreamChunkScanState::QueryResultStreamChunkScanState(QueryResultStream<ChunkFormat> &stream)
     : ChunkScanState(), stream(stream) {
 }
 

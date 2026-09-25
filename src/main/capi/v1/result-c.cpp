@@ -296,7 +296,7 @@ duckdb_state deprecated_duckdb_translate_column(QueryResult &result, duckdb_colu
 	return DuckDBSuccess;
 }
 
-duckdb_state DuckDBTranslateStreamResult(unique_ptr<QueryResultStream> stream_p, duckdb_result *out) {
+duckdb_state DuckDBTranslateStreamResult(unique_ptr<QueryResultStream<>> stream_p, duckdb_result *out) {
 	D_ASSERT(stream_p);
 	auto &stream = *stream_p;
 	if (!out) {
@@ -348,7 +348,7 @@ duckdb_state DuckDBTranslateResult(unique_ptr<QueryResult> result_p, duckdb_resu
 }
 
 //! Drain a stream into a retained result, for the random-access deprecated result set
-static unique_ptr<QueryResult> DrainStreamIntoResult(QueryResultStream &stream) {
+static unique_ptr<QueryResult> DrainStreamIntoResult(QueryResultStream<> &stream) {
 	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);

@@ -30,12 +30,12 @@ string PhysicalPlanText(Connection &con, const string &query) {
 	return plan;
 }
 
-unique_ptr<QueryResultStream> ExecuteStreaming(Connection &con, const string &query) {
+unique_ptr<QueryResultStream<>> ExecuteStreaming(Connection &con, const string &query) {
 	auto handle = con.Submit(query);
 	if (handle->HasError()) {
 		FAIL(handle->GetError());
 	}
-	return make_uniq<QueryResultStream>(std::move(handle));
+	return make_uniq<QueryResultStream<>>(std::move(handle));
 }
 
 //! Submit a query, leaving the retention undecided
@@ -48,7 +48,7 @@ unique_ptr<QueryResult> Submit(Connection &con, const string &query) {
 }
 
 //! Drive the non-blocking API until execution reaches a terminal state
-QueryResultState PollToTerminal(QueryResultStream &stream) {
+QueryResultState PollToTerminal(QueryResultStream<> &stream) {
 	Deadline deadline;
 	while (true) {
 		auto result = stream.ExecuteTask();
@@ -507,7 +507,7 @@ TEST_CASE("Submit returns before any chunk is buffered", "[api][stream_buffer]")
 		REQUIRE(buffered.Lifetime() == ResultLifetime::UNDECIDED);
 		REQUIRE(buffered.PeakBufferedBytes() == 0);
 		DrainWatchdog watchdog(con);
-		QueryResultStream stream(std::move(handle));
+		QueryResultStream<> stream(std::move(handle));
 		auto chunk = stream.Fetch();
 		REQUIRE(chunk);
 		REQUIRE(chunk->size() > 0);

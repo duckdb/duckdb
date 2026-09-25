@@ -169,7 +169,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::Step(unique_ptr<DataChunk> &out_ch
 						return HandleExecutionError(handle->GetErrorObject());
 					}
 				} else {
-					stream = make_uniq<QueryResultStream>(std::move(handle));
+					stream = make_uniq<QueryResultStream<>>(std::move(handle));
 				}
 			} catch (std::exception &ex) {
 				return HandleExecutionError(ErrorData(ex));

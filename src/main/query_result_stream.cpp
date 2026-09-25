@@ -224,28 +224,4 @@ ClientProperties &ResultStreamBase::GetClientProperties() {
 	return handle->client_properties;
 }
 
-//===--------------------------------------------------------------------===//
-// QueryResultStream
-//===--------------------------------------------------------------------===//
-QueryResultStream::QueryResultStream(unique_ptr<QueryResult> result)
-    : ResultStreamBase(std::move(result), ChunkFormat::NAME) {
-}
-
-QueryResultState QueryResultStream::TryFetch(unique_ptr<DataChunk> &out_chunk) {
-	unique_ptr<ResultUnit> unit;
-	auto state = TryFetchUnit(unit);
-	out_chunk = unit ? std::move(unit->Cast<ChunkUnit>().chunk) : nullptr;
-	return state;
-}
-
-unique_ptr<DataChunk> QueryResultStream::Fetch() {
-	auto unit = FetchUnit();
-	if (!unit) {
-		return nullptr;
-	}
-	auto chunk = std::move(unit->Cast<ChunkUnit>().chunk);
-	chunk->Flatten();
-	return chunk;
-}
-
 } // namespace duckdb

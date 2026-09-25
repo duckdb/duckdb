@@ -94,7 +94,7 @@ private:
 
 //! A query result. The format is fixed at submission; calling Materialize, Collection, TakeCollection, Fetch or
 //! RowCount will materialize the result's data into that format's collection. If instead the caller wants a
-//! streaming interface, it can be moved into a QueryResultStream or a FormattedResultStream.
+//! streaming interface, it can be moved into a QueryResultStream<FORMAT>.
 //! An accessor taking FORMAT throws InvalidInputException when FORMAT is not the result's format
 class QueryResult : public BaseQueryResult {
 	friend class BufferedData;
@@ -191,7 +191,7 @@ public:
 	DUCKDB_API const Identifier &ColumnName(idx_t index) const;
 	//! Copies the next unit, leaving the collection intact, and materializes the result first if needed
 	template <class FORMAT = ChunkFormat>
-	unique_ptr<typename FORMAT::Unit> Fetch() {
+	unique_ptr<typename FORMAT::T> Fetch() {
 		return ResultAccess<FORMAT>::Fetch(*this);
 	}
 	//! Fetches a DataChunk from the query result. The vectors are not normalized and hence any vector types can be
@@ -375,18 +375,14 @@ private:
 
 template <class FORMAT>
 struct ResultAccess {
-	static_assert(std::is_base_of<ResultUnit, typename FORMAT::Unit>::value,
-	              "a format's Unit must derive from ResultUnit");
-
-	static unique_ptr<typename FORMAT::Unit> Fetch(QueryResult &result) {
+	static unique_ptr<typename FORMAT::T> Fetch(QueryResult &result) {
 		result.PrepareCollected(FORMAT::NAME);
 		auto &units = result.unit_collection->Units();
 		if (result.unit_scan_index >= units.size()) {
 			return nullptr;
 		}
 		auto unit = units[result.unit_scan_index++]->Copy();
-		unit->Cast<typename FORMAT::Unit>();
-		return unique_ptr<typename FORMAT::Unit>(static_cast<typename FORMAT::Unit *>(unit.release()));
+		return FORMAT::UnpackUnit(std::move(unit));
 	}
 	static ResultUnitCollection &Collection(QueryResult &result) {
 		result.PrepareCollected(FORMAT::NAME);

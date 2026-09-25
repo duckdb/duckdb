@@ -43,16 +43,16 @@ TEST_CASE("The stream constructor refuses a handle it cannot drain", "[api][quer
 	SECTION("an error handle") {
 		auto handle = con.Submit("SELECT * FROM no_such_table");
 		REQUIRE(handle->HasError());
-		REQUIRE_THROWS_AS(QueryResultStream(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
 	}
 	SECTION("a handle whose retention is already retained") {
 		auto handle = con.Submit("SELECT i FROM range(1000) t(i)");
 		handle->Materialize();
-		REQUIRE_THROWS_AS(QueryResultStream(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
 	}
 	SECTION("a statement that completes on return") {
 		auto handle = con.Submit("CREATE TABLE refused AS SELECT 42 AS i");
-		REQUIRE_THROWS_AS(QueryResultStream(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
 	}
 	// A refused stream released the query it consumed
 	auto next = con.Query("SELECT 42");

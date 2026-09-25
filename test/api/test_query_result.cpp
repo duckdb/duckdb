@@ -294,7 +294,7 @@ TEST_CASE("A statement that completes on return is retained and refuses a stream
 		REQUIRE(handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED);
 		// The store is settled before execution starts, so no producer parks for a decision
 		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
-		REQUIRE_THROWS_AS(QueryResultStream(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
 	}
 	// The refused streams released their queries, so the connection is free again
 	auto inserted = con.Query("INSERT INTO t VALUES (1), (2) RETURNING i");

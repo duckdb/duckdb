@@ -207,7 +207,7 @@ static unique_ptr<QueryResult> DrainStream(unique_ptr<QueryResult> handle) {
 	auto properties = handle->GetStatementProperties();
 	auto names = handle->GetNames();
 	auto client_properties = handle->client_properties;
-	QueryResultStream stream(std::move(handle));
+	QueryResultStream<> stream(std::move(handle));
 	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);

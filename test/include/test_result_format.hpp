@@ -25,24 +25,34 @@
 
 namespace duckdb {
 
+//! What a test unit holds: whole chunks, the producer that built it, and the totals the format tests check
+struct TestPayload {
+	vector<unique_ptr<DataChunk>> chunks;
+	std::thread::id producer;
+	idx_t row_count = 0;
+	idx_t byte_size = 0;
+};
+
 class TestUnit : public ResultUnit {
 public:
-	TestUnit(vector<unique_ptr<DataChunk>> chunks_p, std::thread::id producer_p, idx_t rows, idx_t bytes)
-	    : ResultUnit(rows, bytes), chunks(std::move(chunks_p)), producer(producer_p) {
+	explicit TestUnit(unique_ptr<TestPayload> payload_p)
+	    : ResultUnit(payload_p->row_count, payload_p->byte_size), payload(std::move(payload_p)) {
 	}
 
 public:
 	unique_ptr<ResultUnit> Copy() const override {
-		vector<unique_ptr<DataChunk>> copies;
-		for (auto &chunk : chunks) {
-			copies.push_back(BufferedData::CopyForBuffering(*chunk));
+		auto copy = make_uniq<TestPayload>();
+		for (auto &chunk : payload->chunks) {
+			copy->chunks.push_back(BufferedData::CopyForBuffering(*chunk));
 		}
-		return make_uniq<TestUnit>(std::move(copies), producer, row_count, byte_size);
+		copy->producer = payload->producer;
+		copy->row_count = payload->row_count;
+		copy->byte_size = payload->byte_size;
+		return make_uniq<TestUnit>(std::move(copy));
 	}
 
 public:
-	vector<unique_ptr<DataChunk>> chunks;
-	std::thread::id producer;
+	unique_ptr<TestPayload> payload;
 };
 
 class TestFormatGlobalState : public ResultFormatGlobalState {
@@ -83,7 +93,7 @@ public:
 //! append can finish several units of exactly max_unit_rows rows
 class TestFormat : public ResultFormat {
 public:
-	using Unit = TestUnit;
+	using T = TestPayload;
 	using GlobalState = TestFormatGlobalState;
 	static constexpr const char *NAME = "test";
 
@@ -183,6 +193,14 @@ public:
 	}
 
 public:
+	static unique_ptr<TestPayload> UnpackUnit(unique_ptr<ResultUnit> unit) {
+		if (!unit) {
+			return nullptr;
+		}
+		return std::move(unit->Cast<TestUnit>().payload);
+	}
+
+public:
 	idx_t max_unit_rows;
 	//! AppendToUnit slices the incoming chunk at the cap instead of concatenating whole chunks
 	bool slice_at_cap;
@@ -194,18 +212,22 @@ public:
 private:
 	//! Takes whatever is currently accumulated, whether it reached the cap or not
 	unique_ptr<TestUnit> Seal(TestFormatLocalState &lstate) const {
-		auto unit = make_uniq<TestUnit>(std::move(lstate.chunks), lstate.producer, lstate.rows, lstate.bytes);
+		auto payload = make_uniq<TestPayload>();
+		payload->chunks = std::move(lstate.chunks);
+		payload->producer = lstate.producer;
+		payload->row_count = lstate.rows;
+		payload->byte_size = lstate.bytes;
 		lstate.chunks.clear();
 		lstate.rows = 0;
 		lstate.bytes = 0;
-		return unit;
+		return make_uniq<TestUnit>(std::move(payload));
 	}
 };
 
-//! Declares the same unit type as TestFormat, so only the name check can refuse the mismatch
+//! Declares the same payload type as TestFormat, so only the name check can refuse the mismatch
 class OtherTestFormat : public ResultFormat {
 public:
-	using Unit = TestUnit;
+	using T = TestPayload;
 	using GlobalState = TestFormatGlobalState;
 	static constexpr const char *NAME = "other";
 
@@ -232,16 +254,25 @@ public:
 	unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) override {
 		return nullptr;
 	}
+
+public:
+	static unique_ptr<TestPayload> UnpackUnit(unique_ptr<ResultUnit> unit) {
+		return TestFormat::UnpackUnit(std::move(unit));
+	}
 };
 
-inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
+inline vector<Value> UnitValues(const TestPayload &payload, idx_t column) {
 	vector<Value> values;
-	for (auto &chunk : unit.Cast<TestUnit>().chunks) {
+	for (auto &chunk : payload.chunks) {
 		for (idx_t row = 0; row < chunk->size(); row++) {
 			values.push_back(chunk->GetValue(column, row));
 		}
 	}
 	return values;
+}
+
+inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
+	return UnitValues(*unit.Cast<TestUnit>().payload, column);
 }
 
 inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t max_unit_rows,

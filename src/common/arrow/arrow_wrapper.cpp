@@ -180,7 +180,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 		throw std::runtime_error("Approximate Batch Size of Record Batch MUST be higher than 0");
 	}
 	if (CanDrain(*result_p)) {
-		stream_result = make_uniq<QueryResultStream>(std::move(result_p));
+		stream_result = make_uniq<QueryResultStream<>>(std::move(result_p));
 		scan_state = make_uniq<QueryResultStreamChunkScanState>(*stream_result);
 	} else {
 		result = std::move(result_p);

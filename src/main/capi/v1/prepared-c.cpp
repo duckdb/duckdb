@@ -453,7 +453,8 @@ duckdb_state duckdb_execute_prepared_streaming(duckdb_prepared_statement prepare
 			result->Complete();
 			return DuckDBTranslateResult(std::move(result), out_result);
 		}
-		return DuckDBTranslateStreamResult(duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result)), out_result);
+		return DuckDBTranslateStreamResult(duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result)),
+		                                   out_result);
 	} catch (...) {
 		return DuckDBError;
 	}
