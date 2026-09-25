@@ -1,0 +1,246 @@
+# name: test/sql/aggregate/distinct/collated.test
+# description: Collation-aware ordinary DISTINCT aggregates
+# group: [distinct]
+
+statement ok
+CREATE TABLE collated_values(g INTEGER, name VARCHAR COLLATE NOCASE, keep BOOLEAN);
+
+statement ok
+INSERT INTO collated_values VALUES
+    (1, 'Alice', true),
+    (1, 'alice', true),
+    (1, 'Bob', false),
+    (2, 'Bob', true),
+    (2, 'BOB', true),
+    (2, NULL, true);
+
+# Ungrouped DISTINCT aggregates use the collation and can share their DISTINCT table
+query II
+SELECT count(DISTINCT name), list_count(list(DISTINCT name))
+FROM collated_values;
+----
+2	2
+
+# Collated DISTINCT aggregates remain correct when other aggregates use optimizer rewrites
+query III
+SELECT count(DISTINCT name), count(DISTINCT g), sum(g)
+FROM collated_values;
+----
+2	2	9
+
+# Value-returning aggregates retain an original representative, not the normalized comparison key
+query I
+SELECT bool_and(value COLLATE C IN ('Alice', 'alice', 'Bob', 'BOB'))
+FROM unnest((SELECT list(DISTINCT name) FROM collated_values)) AS values(value);
+----
+true
+
+# Filters are applied before collation-aware deduplication
+query II
+SELECT count(DISTINCT name) FILTER (WHERE keep),
+       count(DISTINCT name) FILTER (WHERE NOT keep)
+FROM collated_values;
+----
+2	1
+
+# Grouped filters preserve groups even when no rows qualify
+query II
+SELECT g, count(DISTINCT name) FILTER (WHERE false)
+FROM collated_values
+GROUP BY g
+ORDER BY g;
+----
+1	0
+2	0
+
+# Filtered value-returning aggregates keep their original representatives aligned
+query II
+SELECT count(*), bool_and(value COLLATE C IN ('Alice', 'alice', 'Bob', 'BOB'))
+FROM unnest((
+    SELECT list(DISTINCT name) FILTER (WHERE keep AND name IS NOT NULL)
+    FROM collated_values
+)) AS values(value);
+----
+2	true
+
+# Collated aggregate ORDER BY expressions remain in the DISTINCT rewrite
+query T
+SELECT lower(string_agg(DISTINCT name, ',' ORDER BY name))
+FROM collated_values;
+----
+alice,bob
+
+# Extra ORDER BY expressions must not split values that are equal under the DISTINCT collation
+query T
+SELECT lower(string_agg(DISTINCT name, ',' ORDER BY name COLLATE C))
+FROM collated_values;
+----
+alice,bob
+
+# Shared DISTINCT keys retain separate ordering semantics
+statement ok
+CREATE TABLE collated_order_values(name VARCHAR COLLATE NOCASE);
+
+statement ok
+INSERT INTO collated_order_values VALUES ('a'), ('A'), ('B'), ('b');
+
+query TT
+SELECT string_agg(DISTINCT name, ',' ORDER BY name),
+       string_agg(DISTINCT name, ',' ORDER BY name COLLATE C)
+FROM collated_order_values;
+----
+a,B	B,a
+
+# Empty and all-NULL inputs do not create invalid representatives
+query II
+SELECT count(DISTINCT name), list(DISTINCT name) IS NULL
+FROM collated_values
+WHERE false;
+----
+0	true
+
+query III
+SELECT count(DISTINCT name), list(DISTINCT name) IS NULL, array_length(list(DISTINCT name))
+FROM collated_values
+WHERE name IS NULL;
+----
+0	false	1
+
+# Grouped DISTINCT aggregates deduplicate within each SQL group
+query III
+SELECT g, count(DISTINCT name), list_count(list(DISTINCT name))
+FROM collated_values
+GROUP BY g
+ORDER BY g;
+----
+1	2	2
+2	1	1
+
+# Grouping sets preserve the input layout before normalized DISTINCT keys
+query II
+SELECT g, count(DISTINCT name)
+FROM collated_values
+GROUP BY GROUPING SETS ((g), ())
+ORDER BY g NULLS LAST;
+----
+1	2
+2	1
+NULL	2
+
+# Multi-argument aggregates can mix normalized and direct DISTINCT keys
+query T
+SELECT lower(arg_min(DISTINCT name, -g))
+FROM collated_values;
+----
+bob
+
+statement ok
+CREATE TABLE accented_values(name VARCHAR COLLATE NOACCENT.NOCASE);
+
+statement ok
+INSERT INTO accented_values VALUES ('Hélène'), ('helene'), ('HELENE'), ('Zoë');
+
+query I
+SELECT count(DISTINCT name) FROM accented_values;
+----
+2
+
+# Collation normalization does not evaluate volatile DISTINCT arguments more than once
+statement ok
+CREATE SEQUENCE collated_distinct_sequence START 1;
+
+query I
+SELECT list_count(list(DISTINCT (nextval('collated_distinct_sequence')::VARCHAR COLLATE NOCASE)))
+FROM range(4);
+----
+4
+
+query I
+SELECT currval('collated_distinct_sequence');
+----
+4
+
+# Uncollated values retain byte-wise DISTINCT behavior
+query I
+SELECT count(DISTINCT name COLLATE C) FROM collated_values;
+----
+4
+
+# DISTINCT aggregates with different collations must not be deduplicated or share state
+query II
+SELECT count(DISTINCT name), count(DISTINCT name COLLATE C)
+FROM collated_values;
+----
+2	4
+
+query II
+SELECT count(DISTINCT name COLLATE C), count(DISTINCT name)
+FROM collated_values;
+----
+4	2
+
+# Nested collations remain distinct during aggregate binding and DISTINCT input sharing
+query II
+SELECT count(DISTINCT [name]), count(DISTINCT [name COLLATE C])
+FROM collated_values;
+----
+3	5
+
+query II
+SELECT count(DISTINCT [name]), list_count(list(DISTINCT [name COLLATE C]))
+FROM collated_values;
+----
+3	5
+
+query II
+SELECT count(DISTINCT array_value(name)), count(DISTINCT array_value(name COLLATE C))
+FROM collated_values;
+----
+3	5
+
+query II
+SELECT count(DISTINCT [[name]]), count(DISTINCT [[name COLLATE C]])
+FROM collated_values;
+----
+3	5
+
+# The session default collation is also used for DISTINCT aggregate keys
+statement ok
+PRAGMA default_collation='NOCASE';
+
+statement ok
+CREATE TABLE default_collated_values(name VARCHAR);
+
+statement ok
+INSERT INTO default_collated_values VALUES ('DuckDB'), ('duckdb');
+
+query II
+SELECT count(DISTINCT name), list_count(list(DISTINCT name))
+FROM default_collated_values;
+----
+1	1
+
+statement ok
+PRAGMA default_collation='C';
+
+statement ok
+PRAGMA explain_output='optimized_only';
+
+statement ok
+CREATE TABLE collated_plan_values(g INTEGER, name VARCHAR COLLATE NOCASE);
+
+# Collated DISTINCT is lowered to normalized grouping, a representative, and an ordinary aggregate
+query II
+EXPLAIN (FORMAT JSON)
+SELECT list(DISTINCT name)
+FROM collated_plan_values;
+----
+logical_opt	<REGEX>:.*"Groups":.*lower\(name\).*"Expressions":.*first.*name.*"Expressions":.*list\(#[0-9]+\).*
+
+# Collated DISTINCT remains rewritten when its input is shared with a regular aggregate
+query II
+EXPLAIN (FORMAT JSON)
+SELECT count(DISTINCT name), sum(g)
+FROM collated_plan_values;
+----
+logical_opt	<REGEX>:.*"name":\s*"CTE".*"Groups":.*lower\(name\).*"Expressions":.*count\(#[0-9]+\).*
