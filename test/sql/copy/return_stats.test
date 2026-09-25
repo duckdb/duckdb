@@ -152,6 +152,12 @@ COPY decimal_test TO '{TEST_DIR}/decimal_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"dec_i128"'={column_size_bytes=51, max=12345678912345678912345678912345678.912, max_is_exact=true, min=4.567, min_is_exact=true, null_count=0, num_values=2}, '"dec_i16"'={column_size_bytes=27, max=25.3, max_is_exact=true, min=1.1, min_is_exact=true, null_count=0, num_values=2}, '"dec_i32"'={column_size_bytes=27, max=123456.789, max_is_exact=true, min=2.123, min_is_exact=true, null_count=0, num_values=2}, '"dec_i64"'={column_size_bytes=35, max=123456789123.456, max_is_exact=true, min=3.456, min_is_exact=true, null_count=0, num_values=2}}	NULL	{row_group_count=1}
 
+# time with time zone, stored as UTC microseconds
+query IIIIIII
+COPY (SELECT '10:34:56+00'::TIMETZ AS t UNION ALL SELECT '23:00:00+02'::TIMETZ UNION ALL SELECT '01:00:00-03'::TIMETZ) TO '{TEST_DIR}/timetz_test.parquet' (RETURN_STATS, ROW_GROUP_SIZE 1);
+----
+<REGEX>:.*timetz_test.parquet	3	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"t"'={column_size_bytes=\d+, max='21:00:00\+00', max_is_exact=true, min='04:00:00\+00', min_is_exact=true, null_count=0, num_values=3}}	NULL	{row_group_count=3}
+
 # floating point numbers
 query IIIIIII
 COPY floating_point_test TO '{TEST_DIR}/fp.parquet' (RETURN_STATS);
