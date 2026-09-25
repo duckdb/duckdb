@@ -185,9 +185,9 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	vector<idx_t> remaining;
 	for (idx_t i = 0; i < children.bytes.size(); i++) {
 		const auto byte = children.bytes[i];
-		auto child_ptr = entry.left_ptr.GetChildMutable(art, byte);
+		auto child_ptr_ref = entry.left_ptr.GetChildMutable(art, byte);
 
-		if (!child_ptr) {
+		if (!child_ptr_ref) {
 			// There is no child at this byte.
 			// We can insert the right node's child at byte and are done.
 			auto &right_child_ptr = children.children[i];
@@ -203,8 +203,8 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	for (idx_t i = 0; i < remaining.size(); i++) {
 		const auto byte = children.bytes[remaining[i]];
 		auto &right_child_ptr = children.children[remaining[i]];
-		auto child_ptr = entry.left_ptr.GetChildMutable(art, byte);
-		Emplace(*child_ptr, right_child_ptr, entry.status, entry.depth + 1);
+		auto child_ptr_ref = entry.left_ptr.GetChildMutable(art, byte);
+		Emplace(*child_ptr_ref, right_child_ptr, entry.status, entry.depth + 1);
 	}
 }
 
@@ -215,14 +215,14 @@ void ARTMerger::MergeNodeAndPrefix(NodePtr &node_ptr, NodePtr &prefix_ptr, const
 
 	// Get the child at the prefix byte, or nullptr, if there is no child.
 	const auto byte = Prefix::GetByte(art, prefix_ptr, pos);
-	auto child_ptr = node_ptr.GetChildMutable(art, byte);
+	auto child_ptr_ref = node_ptr.GetChildMutable(art, byte);
 
 	// Reduce the prefix to the bytes after pos.
 	Prefix::Reduce(art, prefix_ptr, pos);
 
-	if (child_ptr) {
+	if (child_ptr_ref) {
 		// Iterate on the child and the remaining prefix.
-		Emplace(*child_ptr, prefix_ptr, parent_status, parent_depth + 1);
+		Emplace(*child_ptr_ref, prefix_ptr, parent_status, parent_depth + 1);
 		return;
 	}
 

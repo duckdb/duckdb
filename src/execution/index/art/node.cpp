@@ -57,8 +57,8 @@ void NodePtr::FreeNode(ART &art, NodePtr &node_ptr) {
 	node_ptr.Clear();
 }
 
-void NodePtr::FreeTree(ART &art, NodePtr &tree_ptr) {
-	if (!tree_ptr.HasMetadata()) {
+void NodePtr::FreeTree(ART &art, NodePtr &subtree_root_ptr) {
+	if (!subtree_root_ptr.HasMetadata()) {
 		return;
 	}
 	// All nodes should be pushed onto the stack.
@@ -90,8 +90,8 @@ void NodePtr::FreeTree(ART &art, NodePtr &tree_ptr) {
 			throw InternalException("invalid node type for FreeTree: %d", type);
 		}
 	};
-	ARTScanPostorder(art, tree_ptr, child_handler, post_handler);
-	tree_ptr.Clear();
+	ARTScanPostorder(art, subtree_root_ptr, child_handler, post_handler);
+	subtree_root_ptr.Clear();
 }
 
 //===--------------------------------------------------------------------===//

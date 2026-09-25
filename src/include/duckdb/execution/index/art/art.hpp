@@ -204,7 +204,7 @@ private:
 	                                     DataChunk &input) const override DUCKDB_EXCLUDES(lock);
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
-	void InitializeMerge(NodePtr &other_tree_ptr, unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(NodePtr &other_root_ptr, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);

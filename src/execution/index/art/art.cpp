@@ -1355,8 +1355,8 @@ void ART::InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds) {
 	}
 }
 
-void ART::InitializeMerge(NodePtr &other_tree_ptr, unsafe_vector<idx_t> &upper_bounds) {
-	D_ASSERT(other_tree_ptr.HasMetadata());
+void ART::InitializeMerge(NodePtr &other_root_ptr, unsafe_vector<idx_t> &upper_bounds) {
+	D_ASSERT(other_root_ptr.HasMetadata());
 
 	auto child_handler = [&](NodePtr &child_ptr) -> OptionalNodePtr {
 		D_ASSERT(child_ptr.HasMetadata());
@@ -1397,7 +1397,7 @@ void ART::InitializeMerge(NodePtr &other_tree_ptr, unsafe_vector<idx_t> &upper_b
 		return ARTScanNodeResult::SCAN_CHILDREN;
 	};
 
-	ARTScanPreorder(*this, other_tree_ptr, child_handler, on_pop);
+	ARTScanPreorder(*this, other_root_ptr, child_handler, on_pop);
 }
 
 bool ART::MergeIndexes(IndexLock &state, BoundIndex &source_index) {

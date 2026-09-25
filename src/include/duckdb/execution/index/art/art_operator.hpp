@@ -186,10 +186,10 @@ public:
 			case NType::NODE_48:
 			case NType::NODE_256: {
 				D_ASSERT(depth < active_key.len);
-				auto child_ptr = active_node_ptr.GetChildMutable(art, active_key[depth]);
-				if (child_ptr) {
+				auto child_ptr_ref = active_node_ptr.GetChildMutable(art, active_key[depth]);
+				if (child_ptr_ref) {
 					// Continue in the child.
-					active_node_ptr_ref = *child_ptr;
+					active_node_ptr_ref = *child_ptr_ref;
 					depth++;
 					D_ASSERT(active_node_ptr_ref.get().HasMetadata());
 					continue;
@@ -308,13 +308,13 @@ public:
 				grandparent_depth = parent_depth;
 				parent_depth = depth;
 
-				auto child_ptr = current_ptr_ref.get().GetChildMutable(art, current_key_ref.get()[depth]);
-				if (!child_ptr) {
+				auto child_ptr_ref = current_ptr_ref.get().GetChildMutable(art, current_key_ref.get()[depth]);
+				if (!child_ptr_ref) {
 					// No child at the byte: nothing to erase.
 					return false;
 				}
 
-				current_ptr_ref = *child_ptr;
+				current_ptr_ref = *child_ptr_ref;
 				depth++;
 				break;
 			}

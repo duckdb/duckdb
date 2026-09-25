@@ -125,7 +125,7 @@ public:
 	//! Free the node.
 	static void FreeNode(ART &art, NodePtr &node_ptr);
 	//! Free the node and its children.
-	static void FreeTree(ART &art, NodePtr &tree_ptr);
+	static void FreeTree(ART &art, NodePtr &subtree_root_ptr);
 
 	//! Get a reference to the allocator.
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
