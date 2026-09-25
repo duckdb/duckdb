@@ -89,7 +89,7 @@ public:
 	virtual bool IsUnitFinished(ResultFormatLocalState &lstate) = 0;
 	//! The next finished unit; with none ready, the partial unit under construction; null when empty
 	virtual unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) = 0;
-	//! One retained collection per producer, later merged into one global instance under the sink's lock
+	//! Called for each producer and once for the global instance the producers are merged into
 	virtual unique_ptr<RetainedResultCollection> CreateCollection(ClientContext &context,
 	                                                              ResultFormatGlobalState &gstate,
 	                                                              const ResultFormatContext &format_context) = 0;
