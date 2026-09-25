@@ -41,3 +41,5 @@ benchmark/micro/functions/nested_macros.benchmark
 benchmark/micro/result_collection/stream_drop.benchmark
 benchmark/micro/result_collection/stream_materialize.benchmark
 benchmark/parquet/dlba_read-long-1000000.benchmark
+benchmark/micro/aggregate/min_double.benchmark
+benchmark/micro/aggregate/max_double.benchmark

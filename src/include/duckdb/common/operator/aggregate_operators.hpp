@@ -43,13 +43,13 @@ inline T MinFloatingPoint(T left, T right) {
 
 template <class T>
 inline T MaxFloatingPoint(T left, T right) {
-	if (std::isnan(right)) {
-		return right;
-	}
 	if (std::isnan(left)) {
 		return left;
 	}
-	return left > right ? left : right;
+	if (std::isnan(right)) {
+		return right;
+	}
+	return right < left ? left : right;
 }
 
 template <>
