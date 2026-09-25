@@ -36,6 +36,8 @@ public:
 	vector<unique_ptr<Expression>> bound_defaults;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	bool update_is_del_and_insert;
+	//! See TableDeleteState::skip_unchanged_fk_delete_check.
+	bool skip_unchanged_fk_delete_check = false;
 	//! If the returning statement is present, or transition tables are captured, return the whole chunk
 	bool return_chunk;
 	//! If set, also emit the pre-update (OLD) row image after the NEW image
