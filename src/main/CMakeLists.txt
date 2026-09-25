@@ -52,6 +52,7 @@ add_library_unity(
   result_format.cpp
   result_set_manager.cpp
   result_unit.cpp
+  retained_result_collection.cpp
   user_settings.cpp
   valid_checker.cpp)
 set(ALL_OBJECT_FILES

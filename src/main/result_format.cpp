@@ -6,6 +6,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/retained_result_collection.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -107,6 +108,13 @@ bool ChunkFormat::IsUnitFinished(ResultFormatLocalState &lstate_p) {
 unique_ptr<ResultUnit> ChunkFormat::FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p) {
 	auto &lstate = lstate_p.Cast<ChunkFormatLocalState>();
 	return std::move(lstate.unit);
+}
+
+unique_ptr<RetainedResultCollection> ChunkFormat::CreateCollection(ClientContext &context,
+                                                                   ResultFormatGlobalState &gstate,
+                                                                   const ResultFormatContext &format_context) {
+	bool batch_ordered = format_context.ordering == ResultOrdering::BATCH_INDEX_ORDERED;
+	return make_uniq<ChunkRetainedCollection>(context, format_context.types, memory_type, batch_ordered);
 }
 
 unique_ptr<DataChunk> ChunkFormat::UnpackUnit(unique_ptr<ResultUnit> unit) {

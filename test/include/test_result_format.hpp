@@ -18,6 +18,7 @@
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/result_format.hpp"
 #include "duckdb/main/result_unit.hpp"
+#include "duckdb/main/retained_result_collection.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 
@@ -33,6 +34,17 @@ struct TestPayload {
 	idx_t byte_size = 0;
 };
 
+inline unique_ptr<TestPayload> CopyTestPayload(const TestPayload &payload) {
+	auto copy = make_uniq<TestPayload>();
+	for (auto &chunk : payload.chunks) {
+		copy->chunks.push_back(BufferedData::CopyForBuffering(*chunk));
+	}
+	copy->producer = payload.producer;
+	copy->row_count = payload.row_count;
+	copy->byte_size = payload.byte_size;
+	return copy;
+}
+
 class TestUnit : public ResultUnit {
 public:
 	explicit TestUnit(unique_ptr<TestPayload> payload_p)
@@ -41,14 +53,7 @@ public:
 
 public:
 	unique_ptr<ResultUnit> Copy() const override {
-		auto copy = make_uniq<TestPayload>();
-		for (auto &chunk : payload->chunks) {
-			copy->chunks.push_back(BufferedData::CopyForBuffering(*chunk));
-		}
-		copy->producer = payload->producer;
-		copy->row_count = payload->row_count;
-		copy->byte_size = payload->byte_size;
-		return make_uniq<TestUnit>(std::move(copy));
+		return make_uniq<TestUnit>(CopyTestPayload(*payload));
 	}
 
 public:
@@ -91,7 +96,7 @@ public:
 //! Deterministic: whole chunks are concatenated until max_unit_rows is reached, so a unit may exceed
 //! the cap. With slice_at_cap, AppendToUnit instead slices the incoming chunk at the cap, so one
 //! append can finish several units of exactly max_unit_rows rows
-class TestFormat : public ResultFormat {
+class TestFormat : public ResultFormatBase<TestFormat> {
 public:
 	using T = TestPayload;
 	using GlobalState = TestFormatGlobalState;
@@ -199,6 +204,9 @@ public:
 		}
 		return std::move(unit->Cast<TestUnit>().payload);
 	}
+	static unique_ptr<TestPayload> CopyPayload(const TestPayload &payload) {
+		return CopyTestPayload(payload);
+	}
 
 public:
 	idx_t max_unit_rows;
@@ -225,7 +233,7 @@ private:
 };
 
 //! Declares the same payload type as TestFormat, so only the name check can refuse the mismatch
-class OtherTestFormat : public ResultFormat {
+class OtherTestFormat : public ResultFormatBase<OtherTestFormat> {
 public:
 	using T = TestPayload;
 	using GlobalState = TestFormatGlobalState;
@@ -258,6 +266,9 @@ public:
 public:
 	static unique_ptr<TestPayload> UnpackUnit(unique_ptr<ResultUnit> unit) {
 		return TestFormat::UnpackUnit(std::move(unit));
+	}
+	static unique_ptr<TestPayload> CopyPayload(const TestPayload &payload) {
+		return CopyTestPayload(payload);
 	}
 };
 

@@ -23,9 +23,11 @@
 namespace duckdb {
 
 class BatchedDataCollection;
+class ChunkRetainedCollection;
 class ClientContext;
 class ColumnDataCollection;
 class DataChunk;
+class RetainedResultCollection;
 
 class ResultFormatGlobalState {
 public:
@@ -65,9 +67,11 @@ struct ResultFormatContext {
 	ResultOrdering ordering = ResultOrdering::UNORDERED;
 };
 
-//! Subclasses declare Unit, GlobalState and NAME. Formats are identified by NAME, never by type
+//! Subclasses declare T, C, Collection, GlobalState and NAME. Formats are identified by NAME, never by type
 //! Workers call AppendToUnit, IsUnitFinished and FinishUnit concurrently and share the format and global
 //! state, so only local state is mutable
+//! AppendToUnit must copy out of the chunk: the pipeline reuses it (DataChunk::Reset restores the vector
+//! cache's buffers), and this is not enforced structurally
 class ResultFormat {
 public:
 	DUCKDB_API virtual ~ResultFormat();
@@ -81,6 +85,10 @@ public:
 	virtual bool IsUnitFinished(ResultFormatLocalState &lstate) = 0;
 	//! The next finished unit; with none ready, the partial unit under construction; null when empty
 	virtual unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) = 0;
+	//! One retained collection per producer, later merged into one global instance under the sink's lock
+	virtual unique_ptr<RetainedResultCollection> CreateCollection(ClientContext &context,
+	                                                              ResultFormatGlobalState &gstate,
+	                                                              const ResultFormatContext &format_context) = 0;
 
 public:
 	DUCKDB_API bool IsChunk() const;
@@ -103,6 +111,8 @@ public:
 class ChunkFormat : public ResultFormat {
 public:
 	using T = DataChunk;
+	using C = ColumnDataCollection;
+	using Collection = ChunkRetainedCollection;
 	using GlobalState = ResultFormatGlobalState;
 	static constexpr const char *NAME = "chunk";
 
@@ -129,6 +139,9 @@ public:
 	DUCKDB_API bool IsUnitFinished(ResultFormatLocalState &lstate) override;
 	DUCKDB_API unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate,
 	                                             ResultFormatLocalState &lstate) override;
+	DUCKDB_API unique_ptr<RetainedResultCollection>
+	CreateCollection(ClientContext &context, ResultFormatGlobalState &gstate,
+	                 const ResultFormatContext &format_context) override;
 
 public:
 	DUCKDB_API static unique_ptr<T> UnpackUnit(unique_ptr<ResultUnit> unit);
