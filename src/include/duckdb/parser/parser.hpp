@@ -23,6 +23,7 @@ struct CompiledGrammar;
 struct MatcherToken;
 class TokenIterator;
 class GroupByNode;
+class ClientContext;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
 	}
@@ -36,8 +37,12 @@ struct UnicodeSpace {
 //! plan and executed.
 class Parser {
 public:
-	explicit Parser(const ParserOptions &options = ParserOptions());
+	explicit Parser(ClientContext &context);
+	explicit Parser(const ParserOptions &options);
 	~Parser();
+
+	//! Create a parser with built-in settings and grammar.
+	static Parser GetBuiltinParser();
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
 	vector<unique_ptr<SQLStatement>> statements;

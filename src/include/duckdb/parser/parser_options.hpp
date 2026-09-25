@@ -26,6 +26,7 @@ struct ParserOptions {
 	idx_t max_expression_depth = 1000;
 	optional_ptr<const ExtensionCallbackManager> extensions;
 	AllowParserOverride parser_override_setting = AllowParserOverride::DEFAULT_OVERRIDE;
+	//! Optional grammar override; otherwise parsing uses the shared base grammar.
 	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 

@@ -2,11 +2,14 @@
 #include <type_traits>
 #include "test_helpers.hpp"
 
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/autocomplete_catalog_provider.hpp"
 #include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
@@ -18,7 +21,134 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
+#include <stdexcept>
+#include <type_traits>
+#ifndef DUCKDB_NO_THREADS
+#include <thread>
+#endif
+
 using namespace duckdb;
+
+static_assert(!std::is_default_constructible<Parser>::value,
+              "Parser construction must select parser options explicitly");
+
+#ifndef DUCKDB_NO_THREADS
+TEST_CASE("Standalone parsers share the base grammar across threads", "[api][grammar_extension][parser_cache]") {
+	constexpr idx_t thread_count = 8;
+	vector<shared_ptr<CompiledGrammar>> grammars(thread_count);
+	vector<string> errors(thread_count);
+	vector<std::thread> threads;
+	atomic<idx_t> ready {0};
+	atomic<bool> start {false};
+	for (idx_t thread_idx = 0; thread_idx < thread_count; thread_idx++) {
+		threads.emplace_back([&, thread_idx]() {
+			ready++;
+			while (!start) {
+				std::this_thread::yield();
+			}
+			try {
+				grammars[thread_idx] = CompiledGrammar::GetDefault();
+				for (idx_t i = 0; i < 32; i++) {
+					auto parser = Parser::GetBuiltinParser();
+					const auto query = "SELECT " + to_string(thread_idx * 32 + i);
+					parser.ParseQuery(query);
+					if (parser.statements.size() != 1 || parser.statements[0]->ToString() != query) {
+						throw std::runtime_error("Concurrent parser returned an unexpected statement");
+					}
+					bool rejected_invalid_sql = false;
+					try {
+						auto invalid = Parser::GetBuiltinParser();
+						invalid.ParseQuery("SELECT AND");
+					} catch (ParserException &) {
+						rejected_invalid_sql = true;
+					}
+					if (!rejected_invalid_sql) {
+						throw std::runtime_error("Concurrent parser accepted invalid SQL");
+					}
+					auto next = Parser::GetBuiltinParser();
+					next.ParseQuery(query);
+					if (next.statements.size() != 1 || next.statements[0]->ToString() != query) {
+						throw std::runtime_error("Concurrent parser state leaked after a syntax error");
+					}
+				}
+			} catch (std::exception &ex) {
+				errors[thread_idx] = ex.what();
+			}
+		});
+	}
+	while (ready != thread_count) {
+		std::this_thread::yield();
+	}
+	start = true;
+	for (auto &thread : threads) {
+		thread.join();
+	}
+	for (idx_t i = 0; i < thread_count; i++) {
+		INFO(errors[i]);
+		REQUIRE(errors[i].empty());
+		REQUIRE(grammars[i] == CompiledGrammar::GetDefault());
+	}
+}
+#endif
+
+TEST_CASE("Built-in parsers retain the shared grammar but not parser state", "[api][grammar_extension][parser_cache]") {
+	auto grammar = CompiledGrammar::GetDefault();
+	const auto initial_references = grammar.use_count();
+	{
+		auto first = Parser::GetBuiltinParser();
+		REQUIRE(grammar.use_count() == initial_references);
+		first.ParseQuery("SELECT 1");
+		REQUIRE(grammar.use_count() == initial_references + 1);
+		auto second = Parser::GetBuiltinParser();
+		second.ParseQuery("SELECT 2; SELECT 3");
+		REQUIRE(grammar.use_count() == initial_references + 2);
+		REQUIRE(first.statements.size() == 1);
+		REQUIRE(first.statements[0]->ToString() == "SELECT 1");
+		REQUIRE(second.statements.size() == 2);
+		REQUIRE_THROWS_AS(second.ParseQuery("SELECT AND"), ParserException);
+		REQUIRE(first.statements[0]->ToString() == "SELECT 1");
+	}
+	REQUIRE(grammar.use_count() == initial_references);
+	REQUIRE(Parser::ParseExpressionList("1, 2").size() == 2);
+	REQUIRE(Parser::ParseColumnList("i BIGINT, s VARCHAR").LogicalColumnCount() == 2);
+}
+
+TEST_CASE("Explicit parser grammars override the shared default", "[api][grammar_extension][parser_cache]") {
+	auto base = CompiledGrammar::GetDefault();
+	auto explicit_grammar = CompiledGrammar::Create();
+	REQUIRE(explicit_grammar != base);
+	ParserOptions options;
+	options.compiled_grammar = explicit_grammar;
+	const auto initial_references = explicit_grammar.use_count();
+	const auto base_references = base.use_count();
+	{
+		Parser parser(options);
+		parser.ParseQuery("SELECT 42");
+		REQUIRE(parser.statements.size() == 1);
+		REQUIRE(explicit_grammar.use_count() == initial_references + 2);
+		REQUIRE(base.use_count() == base_references);
+	}
+	REQUIRE(explicit_grammar.use_count() == initial_references);
+}
+
+TEST_CASE("Database and empty autocomplete caches share the standalone base grammar",
+          "[api][grammar_extension][parser_cache]") {
+	weak_ptr<CompiledGrammar> retained;
+	{
+		DuckDB first(nullptr);
+		DuckDB second(nullptr);
+		EmptyCatalogProvider first_provider;
+		EmptyCatalogProvider second_provider;
+		auto base = CompiledGrammar::GetDefault();
+		REQUIRE(first.instance->GetParserCache().GetMatcher() == base);
+		REQUIRE(second.instance->GetParserCache().GetMatcher() == base);
+		REQUIRE(first_provider.GetCompiledGrammar() == base);
+		REQUIRE(second_provider.GetCompiledGrammar() == base);
+		retained = base;
+	}
+	REQUIRE_FALSE(retained.expired());
+	REQUIRE(retained.lock() == CompiledGrammar::GetDefault());
+}
 
 struct LiteralChoiceTestResult {
 	bool success;
@@ -1203,8 +1333,14 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	Parser parser(std::move(options));
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
+	REQUIRE(parser.statements[0]->ToString() == "SELECT 42");
 
-	Parser base_parser;
+	auto default_syntax = Parser::GetBuiltinParser();
+	REQUIRE_NOTHROW(default_syntax.ParseQuery("ANSWER"));
+	REQUIRE(default_syntax.statements.size() == 1);
+	REQUIRE(default_syntax.statements[0]->ToString() == "SELECT * FROM ANSWER");
+
+	auto base_parser = Parser::GetBuiltinParser();
 	REQUIRE_NOTHROW(base_parser.ParseQuery("SELECT 42"));
 	REQUIRE(base_parser.statements.size() == 1);
 }

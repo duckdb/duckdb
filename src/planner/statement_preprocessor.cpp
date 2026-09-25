@@ -113,7 +113,7 @@ vector<unique_ptr<SQLStatement>> StatementPreprocessor::TryReparsePragma(unique_
 		// Needs reparsing
 		FunctionParameters parameters {bound_info->parameters, bound_info->named_parameters};
 		const auto query_to_reparse = bound_info->function.query(context, parameters);
-		Parser parser(context.GetParserOptions());
+		Parser parser(context);
 		parser.ParseQuery(query_to_reparse);
 		return std::move(parser.statements);
 	}

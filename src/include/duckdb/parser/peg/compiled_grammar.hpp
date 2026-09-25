@@ -36,6 +36,8 @@ public:
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
+	//! Get the shared base DuckDB grammar, retained for the library lifetime.
+	static shared_ptr<CompiledGrammar> GetDefault();
 	//! Compile the base DuckDB grammar.
 	static shared_ptr<CompiledGrammar> Create();
 	//! Compile a grammar for the selected extensions without changing the client configuration.
@@ -50,14 +52,10 @@ private:
 	const Matcher &top_level_statement_matcher;
 };
 
-//! Per-database holder for the compiled base grammar.
+//! Access to the shared base grammar for database callers.
 struct ParserCache {
 public:
 	shared_ptr<CompiledGrammar> GetMatcher();
-
-private:
-	std::mutex mutex;
-	shared_ptr<CompiledGrammar> matcher;
 };
 
 } // namespace duckdb

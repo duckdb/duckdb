@@ -77,14 +77,8 @@ public:
 		return {};
 	}
 	shared_ptr<CompiledGrammar> GetCompiledGrammar() override {
-		if (!compiled_grammar) {
-			compiled_grammar = CompiledGrammar::Create();
-		}
-		return compiled_grammar;
+		return CompiledGrammar::GetDefault();
 	}
-
-private:
-	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 
 //! Get a human-readable string for a suggestion type.

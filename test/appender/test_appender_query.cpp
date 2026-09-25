@@ -65,6 +65,23 @@ TEST_CASE("Test custom column + table names in the query appender", "[appender]"
 	REQUIRE(CHECK_COLUMN(result, 1, {"world", "again"}));
 }
 
+TEST_CASE("Query appender uses the connection parser options", "[appender]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("SET integer_division = true"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl(value DOUBLE)"));
+
+	duckdb::vector<LogicalType> types {LogicalType::INTEGER};
+	duckdb::vector<duckdb::Identifier> column_names {"i"};
+	QueryAppender appender(con, "INSERT INTO tbl SELECT i / 2 FROM appended_data", types, column_names);
+	appender.AppendRow(1);
+	appender.Flush();
+
+	auto result = con.Query("SELECT value FROM tbl");
+	REQUIRE(CHECK_COLUMN(result, 0, {0.0}));
+}
+
 TEST_CASE("Test various error conditions of the query appender", "[appender]") {
 	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

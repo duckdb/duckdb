@@ -2,6 +2,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -21,17 +22,24 @@
 
 namespace duckdb {
 
+Parser::Parser(ClientContext &context) : Parser(context.GetParserOptions()) {
+}
+
 Parser::Parser(const ParserOptions &options_p) : options(options_p) {
 }
 
 Parser::~Parser() = default;
+
+Parser Parser::GetBuiltinParser() {
+	return Parser(ParserOptions());
+}
 
 CompiledGrammar &Parser::GetGrammar() {
 	if (!compiled_grammar) {
 		if (options.compiled_grammar) {
 			compiled_grammar = options.compiled_grammar;
 		} else {
-			compiled_grammar = CompiledGrammar::Create();
+			compiled_grammar = CompiledGrammar::GetDefault();
 		}
 	}
 	return *compiled_grammar;

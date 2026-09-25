@@ -1,0 +1,52 @@
+# name: test/sql/json/test_json_serialize_parser_options.test
+# description: JSON serializers reuse grammar without inheriting session parser settings
+# group: [json]
+
+require json
+
+# Exercise multiple chunks, including errors and NULLs between valid inputs.
+statement ok
+CREATE TABLE serialize_inputs AS
+SELECT i, CASE WHEN i % 3 = 0 THEN NULL WHEN i % 3 = 1 THEN 'SELECT AND' ELSE 'SELECT ' || i::VARCHAR || ' / 2 AS MixedCase' END AS sql
+FROM range(5000) AS r(i);
+
+statement ok
+CREATE TABLE serialized_defaults AS
+SELECT i, json_serialize_sql(sql) AS serialized_sql, json_serialize_plan(sql) AS serialized_plan
+FROM serialize_inputs;
+
+query III
+SELECT count(*) FILTER (WHERE serialized_sql IS NULL),
+       count(*) FILTER (WHERE serialized_sql->>'error' = 'true'),
+       count(*) FILTER (WHERE serialized_sql->>'error' = 'false')
+FROM serialized_defaults;
+----
+1667	1667	1666
+
+query III
+SELECT count(*) FILTER (WHERE serialized_plan IS NULL),
+       count(*) FILTER (WHERE serialized_plan->>'error' = 'true'),
+       count(*) FILTER (WHERE serialized_plan->>'error' = 'false')
+FROM serialized_defaults;
+----
+1667	1667	1666
+
+statement ok
+SET integer_division = true;
+
+statement ok
+SET preserve_identifier_case = 'lowercase';
+
+# The serializers must use the current connection's parser semantics.
+query II
+SELECT count(*) FILTER (WHERE json_serialize_sql(sql) IS DISTINCT FROM serialized_sql),
+       count(*) FILTER (WHERE json_serialize_plan(sql) IS DISTINCT FROM serialized_plan)
+FROM serialize_inputs JOIN serialized_defaults USING (i);
+----
+1666	1666
+
+statement ok
+RESET integer_division;
+
+statement ok
+RESET preserve_identifier_case;

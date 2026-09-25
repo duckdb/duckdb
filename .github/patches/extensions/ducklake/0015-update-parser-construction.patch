@@ -1,0 +1,26 @@
+diff --git a/src/storage/ducklake_catalog.cpp b/src/storage/ducklake_catalog.cpp
+index cd279684..e05d7ede 100644
+--- a/src/storage/ducklake_catalog.cpp
++++ b/src/storage/ducklake_catalog.cpp
+@@ -470,7 +470,7 @@ unique_ptr<CreateMacroInfo> CreateMacroInfoFromDucklake(ClientContext &context,
+ 			}
+ 			macro_function = make_uniq<ScalarMacroFunction>(std::move(sql_expr[0]));
+ 		} else if (impl.type == "table") {
+-			Parser parser;
++			auto parser = Parser::GetBuiltinParser();
+ 			parser.ParseQuery(impl.sql);
+ 			if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+ 				throw InternalException("Expected a single select statement");
+diff --git a/src/storage/ducklake_view_entry.cpp b/src/storage/ducklake_view_entry.cpp
+index 2d9639f0..f2e80261 100644
+--- a/src/storage/ducklake_view_entry.cpp
++++ b/src/storage/ducklake_view_entry.cpp
+@@ -134,7 +134,7 @@ unique_ptr<CatalogEntry> DuckLakeViewEntry::Copy(ClientContext &context) const {
+ }
+ 
+ unique_ptr<SelectStatement> DuckLakeViewEntry::ParseSelectStatement() const {
+-	Parser parser;
++	auto parser = Parser::GetBuiltinParser();
+ 	// switcharoo of generic {DUCKLAKE_CATALOG}. with actual catalog name
+ 	auto resolved_sql = DuckLakeUtil::ReplaceSkippingQuotes(query_sql, "{DUCKLAKE_CATALOG}.", catalog.GetName() + ".");
+ 	parser.ParseQuery(resolved_sql);
