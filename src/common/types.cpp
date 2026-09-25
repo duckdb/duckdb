@@ -582,7 +582,46 @@ string LogicalType::ToString() const {
 		if (!HasParameters()) {
 			return "LIST";
 		}
-		return ListType::GetChildType(*this).ToString() + "[]";
+		string suffixes = "[]";
+		const LogicalType *curr = &ListType::GetChildType(*this);
+		while (curr->id() == LogicalTypeId::LIST) {
+			if (!curr->GetAlias().empty() || !curr->HasParameters()) {
+				break;
+			}
+			suffixes += "[]";
+			curr = &ListType::GetChildType(*curr);
+		}
+		return curr->ToString() + suffixes;
+	}
+	case LogicalTypeId::ARRAY: {
+		if (!HasParameters()) {
+			return "ARRAY";
+		}
+		vector<string> brackets;
+		auto size = ArrayType::GetSize(*this);
+		if (size == 0) {
+			brackets.push_back("[ANY]");
+		} else {
+			brackets.push_back("[" + to_string(size) + "]");
+		}
+		const LogicalType *curr = &ArrayType::GetChildType(*this);
+		while (curr->id() == LogicalTypeId::ARRAY) {
+			if (!curr->GetAlias().empty() || !curr->HasParameters()) {
+				break;
+			}
+			auto curr_size = ArrayType::GetSize(*curr);
+			if (curr_size == 0) {
+				brackets.push_back("[ANY]");
+			} else {
+				brackets.push_back("[" + to_string(curr_size) + "]");
+			}
+			curr = &ArrayType::GetChildType(*curr);
+		}
+		string ret = curr->ToString();
+		for (auto it = brackets.rbegin(); it != brackets.rend(); ++it) {
+			ret += *it;
+		}
+		return ret;
 	}
 	case LogicalTypeId::MAP: {
 		if (!HasParameters()) {
@@ -608,17 +647,6 @@ string LogicalType::ToString() const {
 		}
 		ret += ")";
 		return ret;
-	}
-	case LogicalTypeId::ARRAY: {
-		if (!HasParameters()) {
-			return "ARRAY";
-		}
-		auto size = ArrayType::GetSize(*this);
-		if (size == 0) {
-			return ArrayType::GetChildType(*this).ToString() + "[ANY]";
-		} else {
-			return ArrayType::GetChildType(*this).ToString() + "[" + to_string(size) + "]";
-		}
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!HasParameters()) {
