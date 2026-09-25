@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/thread_annotation.hpp"
