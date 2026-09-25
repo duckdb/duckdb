@@ -27,3 +27,8 @@ SELECT x FROM read_parquet('{DATA_DIR}/parquet-testing/parquet_column_num_values
 
 statement ok
 PRAGMA enable_optimizer
+
+statement error
+SELECT b FROM read_parquet('{DATA_DIR}/parquet-testing/row_group_missing_column.parquet')
+----
+row group 1 has 1 columns, but schema requires 2
