@@ -15,7 +15,41 @@ using namespace duckdb;
 #include "result_wait_helpers.hpp"
 #include "test_result_format.hpp"
 
+#include <future>
+
 namespace {
+
+//! Its retained collection fails at the point GetResult used to call it directly, outside any pipeline task
+class ThrowingFinalizeCollection : public DefaultRetainedCollection<TestFormat> {
+public:
+	using DefaultRetainedCollection<TestFormat>::DefaultRetainedCollection;
+
+	void Finalize() override {
+		throw InvalidInputException("finalize failed");
+	}
+};
+
+class ThrowingFinalizeFormat : public TestFormat {
+public:
+	explicit ThrowingFinalizeFormat(idx_t max_unit_rows_p) : TestFormat(max_unit_rows_p) {
+	}
+
+	unique_ptr<RetainedResultCollection> CreateCollection(ClientContext &context, ResultFormatGlobalState &gstate,
+	                                                      const ResultFormatContext &format_context) override {
+		return make_uniq<ThrowingFinalizeCollection>(*this, gstate);
+	}
+};
+
+class ThrowingCreateCollectionFormat : public TestFormat {
+public:
+	explicit ThrowingCreateCollectionFormat(idx_t max_unit_rows_p) : TestFormat(max_unit_rows_p) {
+	}
+
+	unique_ptr<RetainedResultCollection> CreateCollection(ClientContext &context, ResultFormatGlobalState &gstate,
+	                                                      const ResultFormatContext &format_context) override {
+		throw InvalidInputException("create collection failed");
+	}
+};
 
 vector<int64_t> DrainRows(QueryResultStream<TestFormat> &stream, idx_t *unit_count = nullptr) {
 	vector<int64_t> rows;
@@ -913,6 +947,119 @@ TEST_CASE("SOURCE_ORDERED has exactly one local state under threads=4, drained a
 		RequireAscending(rows, row_count);
 		REQUIRE(handle->FormatState<TestFormat>().local_states == 1);
 	}
+}
+
+TEST_CASE("A throwing Finalize does not deadlock Connection::Query", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	std::promise<unique_ptr<QueryResult>> promise;
+	auto future = promise.get_future();
+	std::thread worker([&]() {
+		promise.set_value(con.Query("SELECT i FROM range(1000) t(i)", make_shared_ptr<ThrowingFinalizeFormat>(1024)));
+	});
+
+	if (future.wait_for(std::chrono::seconds(60)) != std::future_status::ready) {
+		worker.detach();
+		FAIL("Connection::Query did not return within the deadline; a throwing Finalize deadlocked it");
+	}
+	worker.join();
+
+	auto result = future.get();
+	REQUIRE(result->HasError());
+	REQUIRE(StringUtil::Contains(result->GetError(), "finalize failed"));
+
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A throwing Finalize surfaces from Submit and Complete without escaping and a second Complete keeps it",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DrainWatchdog watchdog(con);
+
+	auto handle = con.Submit("SELECT i FROM range(1000) t(i)", make_shared_ptr<ThrowingFinalizeFormat>(1024));
+	REQUIRE(!handle->HasError());
+
+	REQUIRE_NOTHROW(handle->Complete());
+	REQUIRE(handle->HasError());
+	REQUIRE(StringUtil::Contains(handle->GetError(), "finalize failed"));
+
+	// The error is sticky: a retry must not silently produce a successful, empty result
+	REQUIRE_NOTHROW(handle->Complete());
+	REQUIRE(handle->HasError());
+	REQUIRE(StringUtil::Contains(handle->GetError(), "finalize failed"));
+
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A throwing CreateCollection on an empty result surfaces as the result's error",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	DrainWatchdog watchdog(con);
+
+	SECTION("Query") {
+		auto result = con.Query("SELECT i FROM range(1000) t(i) WHERE false",
+		                        make_shared_ptr<ThrowingCreateCollectionFormat>(1024));
+		REQUIRE(result->HasError());
+		REQUIRE(StringUtil::Contains(result->GetError(), "create collection failed"));
+	}
+	SECTION("Submit then Complete, decided before any chunk is sunk") {
+		auto handle = con.Submit("SELECT i FROM range(1000) t(i) WHERE false",
+		                         make_shared_ptr<ThrowingCreateCollectionFormat>(1024));
+		REQUIRE(!handle->HasError());
+		REQUIRE_NOTHROW(handle->Complete());
+		REQUIRE(handle->HasError());
+		REQUIRE(StringUtil::Contains(handle->GetError(), "create collection failed"));
+	}
+	SECTION("Submit then Complete, finished on its own while still undecided") {
+		REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
+		auto handle = con.Submit("SELECT i FROM t WHERE i < 0", make_shared_ptr<ThrowingCreateCollectionFormat>(1024));
+		REQUIRE(!handle->HasError());
+
+		// No chunk ever reaches the sink, so the query finishes on its own, forcing the fallback
+		// CreateCollection call in Finalize rather than the one a producer's Combine would have made.
+		// The format throws, so the terminal state is an error, never FINISHED
+		Deadline deadline;
+		QueryResultState state = QueryResultState::NOT_READY;
+		while (!IsTerminal(state = handle->Poll())) {
+			REQUIRE(!deadline.Passed());
+			std::this_thread::sleep_for(std::chrono::microseconds(100));
+		}
+		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+
+		REQUIRE_NOTHROW(handle->Complete());
+		REQUIRE(handle->HasError());
+		REQUIRE(StringUtil::Contains(handle->GetError(), "create collection failed"));
+	}
+
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A zero-row query finishes with the lifetime still undecided and then completes empty",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(500000)"));
+
+	auto handle = con.Submit("SELECT i FROM t WHERE i < 0", make_shared_ptr<TestFormat>(1024));
+	REQUIRE(!handle->HasError());
+
+	// No chunk ever reaches the sink, so the query can finish on its own before the consumer decides
+	Deadline deadline;
+	while (handle->Poll() != QueryResultState::FINISHED) {
+		REQUIRE(!deadline.Passed());
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
+	REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::UNDECIDED);
+
+	handle->Complete();
+	REQUIRE(!handle->HasError());
+	REQUIRE(handle->RowCount() == 0);
 }
 
 #endif

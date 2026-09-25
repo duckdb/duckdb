@@ -212,6 +212,24 @@ SinkCombineResultType PhysicalResultSink::CombineRetained(ClientContext &context
 	return SinkCombineResultType::FINISHED;
 }
 
+SinkFinalizeType PhysicalResultSink::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                              OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
+	if (CurrentLifetime(gstate) == ResultLifetime::DRAINING) {
+		return SinkFinalizeType::READY;
+	}
+	auto &buffered_data = *gstate.buffered_data;
+	annotated_lock_guard<annotated_mutex> l(gstate.glock);
+	if (!gstate.collection) {
+		// A query that sinks no rows can reach here still UNDECIDED: no producer ever parked, so an empty
+		// deposit is correct whether the consumer goes on to retain or to drain instead
+		gstate.collection = buffered_data.Format().CreateCollection(context, buffered_data.FormatState(),
+		                                                            buffered_data.FormatContext());
+	}
+	gstate.collection->Finalize();
+	return SinkFinalizeType::READY;
+}
+
 SinkNextBatchType PhysicalResultSink::NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const {
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
 	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
@@ -259,12 +277,8 @@ unique_ptr<QueryResult> PhysicalResultSink::GetResult(GlobalSinkState &state) co
 		annotated_lock_guard<annotated_mutex> l(gstate.glock);
 		collection = std::move(gstate.collection);
 	}
-	if (!collection) {
-		// No producer ever appended: build an empty deposit so the result still has a store
-		collection =
-		    buffered_data.Format().CreateCollection(*cc, buffered_data.FormatState(), buffered_data.FormatContext());
-	}
-	collection->Finalize();
+	// Finalize already built and finalized it, inside the pipeline's finish task
+	D_ASSERT(collection);
 	return make_uniq<QueryResult>(statement_type, properties, types, names, std::move(collection),
 	                              buffered_data.SharedFormat(), buffered_data.SharedFormatState(),
 	                              cc->GetClientProperties());
