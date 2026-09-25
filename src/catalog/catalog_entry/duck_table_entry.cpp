@@ -1441,7 +1441,6 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 			auto existing_name = existing_pk->ToString();
 			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
 		}
-		unique.SetBackingIndexOid(DatabaseManager::Get(context).NextOid());
 		table_info.constraints.push_back(info.constraint->Copy());
 
 	} else {

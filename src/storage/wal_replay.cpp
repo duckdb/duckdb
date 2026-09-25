@@ -20,6 +20,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -1004,9 +1005,10 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 	auto index_instance = index_type->create_instance(input);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
+	auto index_oid = DatabaseManager::Get(context).NextOid();
+	unique_info.SetBackingIndexOid(index_oid);
 	catalog.Alter(context, alter_info);
-	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      unique_info.GetBackingIndexOid());
+	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid, index_oid);
 }
 
 //===--------------------------------------------------------------------===//
