@@ -13,7 +13,7 @@ statement ok
 SET cache_local_files=true;
 
 statement ok
-SET external_file_cache_local_block_size=2097152;
+SET external_file_cache_local_max_block_size=2097152;
 
 statement ok
 SET memory_limit='200MB';
@@ -64,7 +64,7 @@ FROM read_parquet('{TEST_DIR}/efc_spill.parquet');
 
 # reads reassemble the correct content after a cache block size change
 statement ok
-SET external_file_cache_local_block_size=16384;
+SET external_file_cache_local_max_block_size=16384;
 
 query I
 SELECT sum(a) - (SELECT sum(hash(i)) FROM range(12000000) t(i)) FROM read_parquet('{TEST_DIR}/efc_spill.parquet');

@@ -21,8 +21,6 @@ class DatabaseInstance;
 
 namespace {
 
-constexpr idx_t MIN_REQUEST_SIZE = 4096;
-
 // Allocate an uncached read buffer to make sure it's de-allocated immediately, and its metadata is not stored in the
 // eviction queue.
 BufferHandle AllocateUncachedReadBuffer(BufferManager &buffer_manager, idx_t size) {
@@ -353,7 +351,8 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	idx_t fetch_location = location;
 	idx_t fetch_end = location + nr_bytes;
 	const idx_t file_size = GetFileSize();
-	const idx_t min_request = MinValue(MIN_REQUEST_SIZE, max_block_size);
+	const idx_t min_block_size =
+	    MinValue(external_file_cache.GetCacheMinBlockSize(current_cached_file->path), max_block_size);
 	if (fetch_end <= file_size) {
 		if (file_size <= max_block_size) {
 			// fetch a file that fits in one block whole, so later reads of it hit the cache
@@ -362,9 +361,9 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		} else if (flags.GetRequestSizing() == RequestSizing::BY_CACHE) {
 			fetch_location = location - location % max_block_size;
 			fetch_end = MinValue(file_size, AlignValue(fetch_end, max_block_size));
-		} else if (nr_bytes < min_request) {
-			fetch_location = location - location % min_request;
-			fetch_end = MinValue(file_size, AlignValue(fetch_end, min_request));
+		} else if (nr_bytes < min_block_size) {
+			fetch_location = location - location % min_block_size;
+			fetch_end = MinValue(file_size, AlignValue(fetch_end, min_block_size));
 		}
 	}
 	auto blocks = external_file_cache.AcquireBlocks(*current_cached_file, fetch_location, fetch_end - fetch_location,

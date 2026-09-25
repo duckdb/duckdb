@@ -107,6 +107,17 @@ private:
 	vector<pair<idx_t, idx_t>> reads DUCKDB_GUARDED_BY(lock);
 };
 
+const string REMOTE_PREFIX = "s3://efc-test/";
+
+//! Serves REMOTE_PREFIX + local path from the local file, so the cache treats it as a remote file.
+class RemotePathFileSystem : public ReadRecordingFileSystem {
+public:
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override {
+		return ReadRecordingFileSystem::OpenFile(path.substr(REMOTE_PREFIX.size()), flags, opener);
+	}
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
@@ -214,7 +225,7 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	const idx_t BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
 	Connection con(db);
-	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
 
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_split_reads.bin", content);
@@ -231,7 +242,7 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 
 	// Cached blocks stay valid when the block size changes
-	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE * 4));
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE * 4));
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 	REQUIRE(recording_fs->TakeReads().empty());
 	REQUIRE(CountCachedBlocks(cache) == 4);
@@ -269,7 +280,7 @@ TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[extern
 	const idx_t BLOCK_SIZE = 65536;
 	const idx_t ABSORB_SIZE = BLOCK_SIZE / 8;
 	Connection con(db);
-	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
 
 	const idx_t FILE_SIZE = 100000;
 	auto content = MakeTestContent(FILE_SIZE);
@@ -303,7 +314,7 @@ TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves n
 
 	const idx_t BLOCK_SIZE = 65536;
 	Connection con(db);
-	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
 
 	// the gaps around the cached range need one request each, merged they would still need two
 	const idx_t FILE_SIZE = 8192 + 4096 + 61440;
@@ -370,30 +381,48 @@ TEST_CASE("A file no larger than the block size is fetched whole on the first re
 	REQUIRE(recording_fs->TakeReads().empty());
 }
 
-TEST_CASE("Reads shorter than 4 KiB fetch the 4 KiB pages around them", "[external_file_cache]") {
+TEST_CASE("Short reads of remote files fetch the minimum blocks around them", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto remote_fs = make_uniq<RemotePathFileSystem>();
+
+	Connection con(db);
+	con.Query("SET external_file_cache_remote_max_block_size=16384");
+	const idx_t MIN_BLOCK_SIZE = 4096;
+	const idx_t FILE_SIZE = 16 * MIN_BLOCK_SIZE + 100;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_min_block.bin", content);
+
+	CachingFileSystem cfs(*remote_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(REMOTE_PREFIX + test_file.GetPath()), ReaderSizedFlags());
+
+	REQUIRE(ReadFull(*handle, 1, 5000) == content.substr(5000, 1));
+	REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{MIN_BLOCK_SIZE, MIN_BLOCK_SIZE}});
+
+	REQUIRE(ReadFull(*handle, 10, 6000) == content.substr(6000, 10));
+	REQUIRE(remote_fs->TakeReads().empty());
+
+	REQUIRE(ReadFull(*handle, 100, 2 * MIN_BLOCK_SIZE - 50) == content.substr(2 * MIN_BLOCK_SIZE - 50, 100));
+	REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{2 * MIN_BLOCK_SIZE, MIN_BLOCK_SIZE}});
+
+	REQUIRE(ReadFull(*handle, 10, FILE_SIZE - 10) == content.substr(FILE_SIZE - 10, 10));
+	REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{16 * MIN_BLOCK_SIZE, 100}});
+}
+
+TEST_CASE("Short reads of local files are not widened", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
 
-	const idx_t PAGE_SIZE = 4096;
-	const idx_t FILE_SIZE = 16 * PAGE_SIZE + 100;
+	const idx_t FILE_SIZE = 65636;
 	auto content = MakeTestContent(FILE_SIZE);
-	EFCTestFileGuard test_file("test_efc_min_request.bin", content);
+	EFCTestFileGuard test_file("test_efc_local_short.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
 	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 
 	REQUIRE(ReadFull(*handle, 1, 5000) == content.substr(5000, 1));
-	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{PAGE_SIZE, PAGE_SIZE}});
-
-	REQUIRE(ReadFull(*handle, 10, 6000) == content.substr(6000, 10));
-	REQUIRE(recording_fs->TakeReads().empty());
-
-	REQUIRE(ReadFull(*handle, 100, 2 * PAGE_SIZE - 50) == content.substr(2 * PAGE_SIZE - 50, 100));
-	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{2 * PAGE_SIZE, PAGE_SIZE}});
-
-	REQUIRE(ReadFull(*handle, 10, FILE_SIZE - 10) == content.substr(FILE_SIZE - 10, 10));
-	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{16 * PAGE_SIZE, 100}});
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{5000, 1}});
 }
 
 TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[external_file_cache]") {
@@ -562,7 +591,7 @@ TEST_CASE("Concurrent SET and Read do not corrupt data or cache state", "[extern
 			idx_t i = s;
 			while (!stop.load()) {
 				const idx_t bs = BLOCK_SIZES[i % BLOCK_SIZES.size()];
-				con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", bs));
+				con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", bs));
 				i++;
 			}
 		});

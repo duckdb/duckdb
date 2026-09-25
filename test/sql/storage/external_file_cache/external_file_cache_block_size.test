@@ -31,7 +31,7 @@ create temp table cached_bytes_before as select sum(nr_bytes) as total from duck
 
 # Change local block size from 16KiB to 4KiB
 statement ok
-set external_file_cache_local_block_size=4096;
+set external_file_cache_local_max_block_size=4096;
 
 # Cache should still have data
 query I
@@ -60,7 +60,7 @@ create temp table cached_bytes_before as select sum(nr_bytes) as total from duck
 
 # Change block size back to 16KiB
 statement ok
-set external_file_cache_local_block_size=16384;
+set external_file_cache_local_max_block_size=16384;
 
 # Total cached bytes should be preserved
 query I
@@ -82,7 +82,7 @@ statement ok
 create temp table cached_bytes_before as select sum(nr_bytes) as total from duckdb_external_file_cache();
 
 statement ok
-set external_file_cache_local_block_size=16384;
+set external_file_cache_local_max_block_size=16384;
 
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
@@ -97,7 +97,7 @@ statement ok
 create temp table cached_bytes_before as select sum(nr_bytes) as total from duckdb_external_file_cache();
 
 statement ok
-reset external_file_cache_local_block_size;
+reset external_file_cache_local_max_block_size;
 
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
@@ -118,7 +118,7 @@ statement ok
 create temp table cached_bytes_before as select sum(nr_bytes) as total from duckdb_external_file_cache();
 
 statement ok
-set external_file_cache_local_block_size=8192;
+set external_file_cache_local_max_block_size=8192;
 
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
@@ -132,7 +132,7 @@ statement ok
 create temp table cached_bytes_before as select sum(nr_bytes) as total from duckdb_external_file_cache();
 
 statement ok
-reset external_file_cache_local_block_size;
+reset external_file_cache_local_max_block_size;
 
 query I
 select (select sum(nr_bytes) from duckdb_external_file_cache()) = (select total from cached_bytes_before);
@@ -146,11 +146,11 @@ select count(*), sum(i) from '{TEST_DIR}/test_block_size.parquet';
 
 # Verify invalid values are rejected
 statement error
-set external_file_cache_local_block_size=0;
+set external_file_cache_local_max_block_size=0;
 ----
 value must be positive
 
 statement error
-set external_file_cache_remote_block_size=0;
+set external_file_cache_remote_max_block_size=0;
 ----
 value must be positive

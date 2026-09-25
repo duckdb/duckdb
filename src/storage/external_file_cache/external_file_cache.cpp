@@ -68,9 +68,17 @@ private:
 idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
 	auto &db = buffer_manager.GetDatabase();
 	if (FileSystem::IsRemoteFile(path)) {
-		return Settings::Get<ExternalFileCacheRemoteBlockSizeSetting>(db);
+		return Settings::Get<ExternalFileCacheRemoteMaxBlockSizeSetting>(db);
 	}
-	return Settings::Get<ExternalFileCacheLocalBlockSizeSetting>(db);
+	return Settings::Get<ExternalFileCacheLocalMaxBlockSizeSetting>(db);
+}
+
+idx_t ExternalFileCache::GetCacheMinBlockSize(const string &path) const {
+	if (!FileSystem::IsRemoteFile(path)) {
+		return 1;
+	}
+	auto &db = buffer_manager.GetDatabase();
+	return Settings::Get<ExternalFileCacheRemoteMinBlockSizeSetting>(db);
 }
 
 bool ExternalFileCache::ShouldCacheFile(const string &path) const {
