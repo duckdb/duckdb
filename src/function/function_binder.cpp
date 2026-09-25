@@ -684,33 +684,48 @@ static bool RequiresCollationPropagation(const LogicalType &type) {
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
 }
 
-//! Recursively extracts the collation of a (possibly nested) type, e.g. the element collation of a LIST(VARCHAR).
+//! Extracts the collation of a (possibly nested) type, e.g. the element collation of a LIST(VARCHAR).
 static string ExtractCollationFromType(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::VARCHAR:
-		return RequiresCollationPropagation(type) ? StringType::GetCollation(type) : string();
-	case LogicalTypeId::LIST:
-		return ExtractCollationFromType(ListType::GetChildType(type));
-	case LogicalTypeId::ARRAY:
-		return ExtractCollationFromType(ArrayType::GetChildType(type));
-	default:
-		return string();
+	const LogicalType *curr = &type;
+	while (true) {
+		switch (curr->id()) {
+		case LogicalTypeId::VARCHAR:
+			return RequiresCollationPropagation(*curr) ? StringType::GetCollation(*curr) : string();
+		case LogicalTypeId::LIST:
+			curr = &ListType::GetChildType(*curr);
+			break;
+		case LogicalTypeId::ARRAY:
+			curr = &ArrayType::GetChildType(*curr);
+			break;
+		default:
+			return string();
+		}
 	}
 }
 
 //! Returns a copy of the type with the collation applied to every (nested) VARCHAR leaf.
 static LogicalType ApplyCollationToType(const LogicalType &type, const LogicalType &collation_type) {
-	switch (type.id()) {
-	case LogicalTypeId::VARCHAR:
-		return RequiresCollationPropagation(type) ? collation_type : type;
-	case LogicalTypeId::LIST:
-		return LogicalType::LIST(ApplyCollationToType(ListType::GetChildType(type), collation_type));
-	case LogicalTypeId::ARRAY:
-		return LogicalType::ARRAY(ApplyCollationToType(ArrayType::GetChildType(type), collation_type),
-		                          ArrayType::GetSize(type));
-	default:
-		return type;
+	vector<pair<LogicalTypeId, idx_t>> wrappers;
+	const LogicalType *curr = &type;
+	while (curr->id() == LogicalTypeId::LIST || curr->id() == LogicalTypeId::ARRAY) {
+		if (curr->id() == LogicalTypeId::LIST) {
+			wrappers.emplace_back(LogicalTypeId::LIST, 0);
+			curr = &ListType::GetChildType(*curr);
+		} else {
+			wrappers.emplace_back(LogicalTypeId::ARRAY, ArrayType::GetSize(*curr));
+			curr = &ArrayType::GetChildType(*curr);
+		}
 	}
+	LogicalType result =
+	    (curr->id() == LogicalTypeId::VARCHAR && RequiresCollationPropagation(*curr)) ? collation_type : *curr;
+	for (auto it = wrappers.rbegin(); it != wrappers.rend(); ++it) {
+		if (it->first == LogicalTypeId::LIST) {
+			result = LogicalType::LIST(result);
+		} else {
+			result = LogicalType::ARRAY(result, it->second);
+		}
+	}
+	return result;
 }
 
 static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {

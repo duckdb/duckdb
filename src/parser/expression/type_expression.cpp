@@ -35,12 +35,43 @@ string TypeExpression::ToString() const {
 
 	// LIST and ARRAY have special syntax
 	if (result.empty() && type_name == "LIST" && params.size() == 1) {
-		return params[0]->ToString() + "[]";
+		string suffixes = "[]";
+		const ParsedExpression *curr = params[0].get();
+		while (curr->GetExpressionClass() == ExpressionClass::TYPE) {
+			auto &type_expr = curr->Cast<TypeExpression>();
+			if (!type_expr.qualified_name.QualificationToString().empty()) {
+				break;
+			}
+			if (type_expr.qualified_name.Name() == "LIST" && type_expr.children.size() == 1) {
+				suffixes += "[]";
+				curr = type_expr.children[0].get();
+			} else {
+				break;
+			}
+		}
+		return curr->ToString() + suffixes;
 	}
 	if (result.empty() && type_name == "ARRAY" && params.size() == 2) {
-		auto &type_param = params[0];
-		auto &size_param = params[1];
-		return type_param->ToString() + "[" + size_param->ToString() + "]";
+		vector<string> brackets;
+		brackets.push_back("[" + params[1]->ToString() + "]");
+		const ParsedExpression *curr = params[0].get();
+		while (curr->GetExpressionClass() == ExpressionClass::TYPE) {
+			auto &type_expr = curr->Cast<TypeExpression>();
+			if (!type_expr.qualified_name.QualificationToString().empty()) {
+				break;
+			}
+			if (type_expr.qualified_name.Name() == "ARRAY" && type_expr.children.size() == 2) {
+				brackets.push_back("[" + type_expr.children[1]->ToString() + "]");
+				curr = type_expr.children[0].get();
+			} else {
+				break;
+			}
+		}
+		string type_str = curr->ToString();
+		for (auto it = brackets.rbegin(); it != brackets.rend(); ++it) {
+			type_str += *it;
+		}
+		return type_str;
 	}
 	// So does STRUCT, MAP and UNION
 	if (result.empty() && type_name == "STRUCT") {

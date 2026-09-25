@@ -1,0 +1,30 @@
+# name: test/sql/types/nested/test_deeply_nested_types.test
+# description: Test deeply nested LIST and ARRAY types without stack overflow
+# group: [nested]
+
+statement ok
+SET max_expression_depth = 300000;
+
+# Deeply nested LIST
+statement ok
+SELECT list_contains(CAST(NULL AS INTEGER[][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][][]), 1);
+
+# Deeply nested ARRAY
+statement ok
+SELECT CAST(NULL AS INTEGER[1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1][1]);
+
+# Mixed LIST and ARRAY
+query T
+SELECT typeof(CAST(NULL AS INTEGER[][2][][2][][2][][2][][2]));
+----
+INTEGER[][2][][2][][2][][2][][2]
+
+# Test ToString on nested list
+query T
+SELECT typeof(CAST(NULL AS INTEGER[][][][][]));
+----
+INTEGER[][][][][]
+
+# Collation propagation on nested LIST
+statement ok
+SELECT list_contains(CAST(NULL AS VARCHAR[][][][][]), 'abc' COLLATE NOCASE);
