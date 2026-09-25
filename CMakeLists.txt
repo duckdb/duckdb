@@ -622,8 +622,10 @@ option(FORCE_QUERY_LOG
        "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+option(ENABLE_EXTENSION_LOAD
+       "Support installing and loading external extensions" TRUE)
 option(DISABLE_EXTENSION_LOAD
-       "Disable support for loading and installing extensions" FALSE)
+       "Deprecated, use ENABLE_EXTENSION_LOAD=OFF instead" FALSE)
 option(ENABLE_BUILTIN_HTTPLIB
        "Use the built-in http-only httplib as the default HTTP client" TRUE)
 option(DISABLE_BUILTIN_HTTPLIB
@@ -735,7 +737,10 @@ if(PREBUILT_EXTENSIONS AND NOT PREBUILT_BINARY)
 endif()
 
 if(DISABLE_EXTENSION_LOAD)
-  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+  message(
+    WARNING
+      "DISABLE_EXTENSION_LOAD is deprecated, use ENABLE_EXTENSION_LOAD=OFF")
+  set(ENABLE_EXTENSION_LOAD FALSE)
 endif()
 
 if(DISABLE_BUILTIN_HTTPLIB)
@@ -744,7 +749,7 @@ if(DISABLE_BUILTIN_HTTPLIB)
       "DISABLE_BUILTIN_HTTPLIB is deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF")
   set(ENABLE_BUILTIN_HTTPLIB FALSE)
 endif()
-if(DISABLE_EXTENSION_LOAD)
+if(NOT ENABLE_EXTENSION_LOAD)
   set(ENABLE_BUILTIN_HTTPLIB FALSE)
 endif()
 

@@ -1,5 +1,4 @@
 #include "duckdb.h"
-#include "duckdb/common/dl.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -17,10 +16,6 @@
 #ifndef DUCKDB_NO_THREADS
 #include <thread>
 #endif // DUCKDB_NO_THREADS
-
-#ifdef WASM_LOADABLE_EXTENSIONS
-#include <emscripten.h>
-#endif
 
 namespace duckdb {
 
@@ -254,30 +249,10 @@ void DuckDB::LoadStaticCAPIExtensionV2(const string &name, ext_init_c_api_v2_fun
 //===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 // The C++ init function
 typedef void (*ext_init_fun_t)(ExtensionLoader &);
 // The C init function
 typedef bool (*ext_init_c_api_fun_t)(duckdb_extension_info info, duckdb_extension_access *access);
-
-template <class T>
-static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
-	auto function = dlsym(dll, function_name.c_str());
-	if (!function) {
-		throw IOException("File \"%s\" did not contain function \"%s\": %s", filename, function_name, GetDLError());
-	}
-	return (T)function;
-}
-#endif
-
-template <class T>
-static T TryLoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
-	auto function = dlsym(dll, function_name.c_str());
-	if (!function) {
-		return nullptr;
-	}
-	return (T)function;
-}
 
 static void ComputeSHA256Buffer(const char *buffer, const idx_t start, const idx_t end, string *res) {
 	// Invoke MbedTls function to actually compute sha256
@@ -490,9 +465,9 @@ bool ExtensionHelper::CheckExtensionBufferSignature(DatabaseInstance &db, const 
 bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
                                      const string &repository_name, bool core_only, ExtensionInitResult &result,
                                      string &error) {
-#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
-	throw PermissionException("Loading external extensions is disabled through a compile time flag");
-#else
+	if (!SupportsExternalExtensions()) {
+		throw PermissionException("Loading external extensions is disabled through a compile time flag");
+	}
 	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
@@ -704,32 +679,7 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 		}
 	}
 
-#ifdef WASM_LOADABLE_EXTENSIONS
-	EM_ASM(
-	    {
-		    // Next few lines should arguably in separate JavaScript-land function call
-		    // TODO: move them out / have them configurable
-		    const xhr = new XMLHttpRequest();
-		    xhr.open("GET", UTF8ToString($0), false);
-		    xhr.responseType = "arraybuffer";
-		    xhr.send(null);
-		    var uInt8Array = xhr.response;
-		    WebAssembly.validate(uInt8Array);
-		    console.log('Loading extension ', UTF8ToString($1));
-
-		    // Here we add the uInt8Array to Emscripten's filesystem, for it to be found by dlopen
-		    FS.writeFile(UTF8ToString($1), new Uint8Array(uInt8Array));
-	    },
-	    filename.c_str(), filebase.c_str());
-	auto dopen_from = filebase;
-#else
-	auto dopen_from = filename;
-#endif
-
-	auto lib_hdl = dlopen(dopen_from.c_str(), RTLD_NOW | RTLD_LOCAL);
-	if (!lib_hdl) {
-		throw IOException("Extension \"%s\" could not be loaded: %s", filename, GetDLError());
-	}
+	auto lib_hdl = OpenExtensionLibrary(filename, filebase);
 
 	// Initialize the ExtensionInitResult
 	result.filebase = lowercase_extension_name;
@@ -759,7 +709,6 @@ bool ExtensionHelper::TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const
 	}
 
 	return true;
-#endif
 }
 
 ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
@@ -842,16 +791,13 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &extension,
                                                     const string &repository_name, bool core_only,
                                                     ExtensionActiveLoad &info, optional_ptr<ClientContext> context) {
-#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
-	throw PermissionException("Loading external extensions is disabled through a compile time flag");
-#else
 	auto extension_init_result = InitialLoad(db, fs, extension, repository_name, core_only);
 
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
 		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
-		ext_init_fun_t init_fun = TryLoadFunctionFromDLL<ext_init_fun_t>(extension_init_result.lib_hdl, init_fun_name,
-		                                                                 extension_init_result.filename);
+		ext_init_fun_t init_fun =
+		    (ext_init_fun_t)TryLoadFunctionFromLibrary(extension_init_result.lib_hdl, init_fun_name);
 		if (!init_fun) {
 			throw IOException("Extension '%s' did not contain the expected entrypoint function '%s'", extension,
 			                  init_fun_name);
@@ -876,8 +822,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C ABI, V2
 	if (UsesCAPIV2(extension_init_result)) {
 		auto init_fun_name = extension_init_result.filebase + "_init_c_api_v2";
-		auto init_fun_capi_v2 = TryLoadFunctionFromDLL<ext_init_c_api_v2_fun_t>(
-		    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
+		auto init_fun_capi_v2 =
+		    (ext_init_c_api_v2_fun_t)TryLoadFunctionFromLibrary(extension_init_result.lib_hdl, init_fun_name);
 
 		if (!init_fun_capi_v2) {
 			throw IOException(
@@ -900,12 +846,12 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C ABI, V1
 	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT) {
 		auto init_fun_name = extension_init_result.filebase + "_init_c_api";
-		ext_init_c_api_fun_t init_fun_capi = TryLoadFunctionFromDLL<ext_init_c_api_fun_t>(
-		    extension_init_result.lib_hdl, init_fun_name, extension_init_result.filename);
+		ext_init_c_api_fun_t init_fun_capi =
+		    (ext_init_c_api_fun_t)TryLoadFunctionFromLibrary(extension_init_result.lib_hdl, init_fun_name);
 
 		if (!init_fun_capi) {
 			throw IOException("File \"%s\" did not contain function \"%s\": %s", extension_init_result.filename,
-			                  init_fun_name, GetDLError());
+			                  init_fun_name, GetExtensionLibraryError());
 		}
 		// Create the load state
 		DuckDBExtensionLoadState load_state(db, extension_init_result);
@@ -938,7 +884,6 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 
 	throw IOException("Unknown ABI type of value '%s' for extension '%s'",
 	                  static_cast<uint8_t>(extension_init_result.abi_type), extension);
-#endif
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const ExtensionLoadOptions &options) {

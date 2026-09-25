@@ -12,6 +12,14 @@ http_client_sources = {
     True: os.path.join('src', 'main', 'http', 'http_client_httplib.cpp'),
     False: os.path.join('src', 'main', 'http', 'http_client_none.cpp'),
 }
+# external extension install and load implementations, exactly one set of them is compiled
+extension_load_sources = {
+    True: [
+        os.path.join('src', 'main', 'extension', 'extension_install_dynamic.cpp'),
+        os.path.join('src', 'main', 'extension', 'extension_load_dynamic.cpp'),
+    ],
+    False: [os.path.join('src', 'main', 'extension', 'extension_load_none.cpp')],
+}
 
 
 def third_party_includes():
@@ -244,6 +252,7 @@ def build_package(
     short_paths=False,
     default_linked_extensions=None,
     builtin_httplib=True,
+    extension_load=True,
 ):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
@@ -273,7 +282,9 @@ def build_package(
 
     # obtain the list of source files from the amalgamation
     source_list = amalgamation.list_sources()
-    source_list = [x for x in source_list if x != http_client_sources[not builtin_httplib]]
+    builtin_httplib = builtin_httplib and extension_load
+    excluded_sources = [http_client_sources[not builtin_httplib]] + extension_load_sources[not extension_load]
+    source_list = [x for x in source_list if x not in excluded_sources]
     include_list = amalgamation.list_include_dirs()
     include_files = amalgamation.list_includes()
 
