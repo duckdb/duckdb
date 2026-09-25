@@ -67,7 +67,7 @@ public:
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
-	NodePtr tree_ptr = NodePtr();
+	NodePtr root_ptr = NodePtr();
 	//! Fixed-size allocators holding the ART nodes.
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.

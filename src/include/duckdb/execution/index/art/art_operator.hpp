@@ -349,7 +349,7 @@ private:
 			// Lookup in the delete_art.
 			for (auto &delete_index : *delete_index_info.delete_indexes) {
 				auto &delete_art = delete_index.get().Cast<ART>();
-				auto delete_leaf_ptr = Lookup(delete_art, delete_art.tree_ptr, key, 0);
+				auto delete_leaf_ptr = Lookup(delete_art, delete_art.root_ptr, key, 0);
 				if (!delete_leaf_ptr) {
 					continue;
 				}

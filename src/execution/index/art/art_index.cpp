@@ -98,9 +98,9 @@ void ARTBuildSinkUnsorted(IndexBuildSinkInput &input, DataChunk &key_chunk, Data
 
 	// Insert each key and its corresponding row ID.
 	for (idx_t i = 0; i < row_count; i++) {
-		auto status = art.tree_ptr.GetGateStatus();
+		auto status = art.root_ptr.GetGateStatus();
 		auto conflict_type =
-		    ARTOperator::Insert(l_state.arena_allocator, art, art.tree_ptr, l_state.keys[i], 0, l_state.row_ids[i],
+		    ARTOperator::Insert(l_state.arena_allocator, art, art.root_ptr, l_state.keys[i], 0, l_state.row_ids[i],
 		                        status, DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 		if (conflict_type == ARTConflictType::CONSTRAINT) {
 			throw ConstraintException("Data contains duplicates on indexed column(s)");
