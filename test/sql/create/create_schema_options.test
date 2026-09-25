@@ -2,6 +2,8 @@
 # description: Test CREATE SCHEMA with a WITH clause
 # group: [create]
 
+require no_force_storage
+
 statement error
 CREATE SCHEMA s1 WITH ('location'='s3://bucket/folder', 'format'='parquet');
 ----

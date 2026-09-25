@@ -2,6 +2,8 @@
 # description: Test ALTER SCHEMA SET/RESET schema options
 # group: [alter]
 
+require no_force_storage
+
 statement ok
 CREATE SCHEMA s1;
 
