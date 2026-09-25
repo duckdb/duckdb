@@ -37,7 +37,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 		D_ASSERT(aggr.Function().HasStateCombineCallback());
 		bindings.push_back(&aggr);
 	}
-	input_layout = make_uniq<AggregateInputLayout>(bindings);
+	input_layout = make_shared_ptr<AggregateInputLayout>(bindings);
 	payload_types = input_layout->Payload().GetTypes();
 	aggregate_objects = AggregateObject::CreateAggregateObjects(bindings);
 }
@@ -45,7 +45,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(PhysicalPlan &physica
 unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Allocator &allocator,
                                                                              ClientContext &context) const {
 	return make_uniq<PerfectAggregateHashTable>(context, allocator, group_types, payload_types, aggregate_objects,
-	                                            group_minima, required_bits);
+	                                            group_minima, required_bits, input_layout);
 }
 
 //===--------------------------------------------------------------------===//
@@ -66,8 +66,7 @@ public:
 class PerfectHashAggregateLocalState : public LocalSinkState {
 public:
 	PerfectHashAggregateLocalState(const PhysicalPerfectHashAggregate &op, ExecutionContext &context)
-	    : ht(op.CreateHT(Allocator::Get(context.client), context.client)),
-	      input_projection(op.input_layout->CreateProjection(op.children[0].get().GetTypes(), op.bindings)) {
+	    : ht(op.CreateHT(Allocator::Get(context.client), context.client)) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -77,7 +76,7 @@ public:
 	//! The local aggregate hash table
 	unique_ptr<PerfectAggregateHashTable> ht;
 	DataChunk group_chunk;
-	ChunkProjection input_projection;
+	unique_ptr<ChunkProjection> input_projection;
 	DataChunk aggregate_input_chunk;
 };
 
@@ -101,7 +100,11 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		group_chunk.data[group_idx].Reference(chunk.data[bound_ref_expr.Index()]);
 	}
-	lstate.input_projection.Reference(chunk, aggregate_input_chunk);
+	if (!lstate.input_projection) {
+		lstate.input_projection =
+		    make_uniq<ChunkProjection>(input_layout->CreateProjection(chunk.GetTypes(), bindings));
+	}
+	lstate.input_projection->Reference(chunk, aggregate_input_chunk);
 
 	group_chunk.Verify(context.client.db);
 	aggregate_input_chunk.Verify(context.client.db);

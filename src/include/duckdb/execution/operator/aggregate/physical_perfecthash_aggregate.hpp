@@ -87,7 +87,7 @@ public:
 	//! The number of bits we need to completely cover each of the groups
 	vector<idx_t> required_bits;
 
-	unique_ptr<AggregateInputLayout> input_layout;
+	shared_ptr<const AggregateInputLayout> input_layout;
 	vector<BoundAggregateExpression *> bindings;
 };
 

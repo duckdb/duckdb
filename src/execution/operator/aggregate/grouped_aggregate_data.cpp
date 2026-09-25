@@ -33,7 +33,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		}
 		aggregates.push_back(std::move(expr));
 	}
-	input_layout = make_uniq<AggregateInputLayout>(bindings);
+	input_layout = make_shared_ptr<AggregateInputLayout>(bindings);
 	payload_types = input_layout->Payload().GetTypes();
 }
 

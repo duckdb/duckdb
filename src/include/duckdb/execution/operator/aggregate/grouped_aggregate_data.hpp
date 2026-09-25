@@ -29,7 +29,7 @@ public:
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
-	unique_ptr<AggregateInputLayout> input_layout;
+	shared_ptr<const AggregateInputLayout> input_layout;
 	//! The payload types
 	vector<LogicalType> payload_types;
 	//! The aggregate return types

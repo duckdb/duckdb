@@ -65,6 +65,7 @@ public:
 	}
 	Vector &Column(idx_t index) const;
 	void ReferenceInto(DataChunk &target) const;
+	//! Populate only this group; the caller finalizes the containing chunk's row count.
 	void ReferenceFrom(const ChunkColumnView &source) const;
 	//! Access the vector array required by aggregate callbacks; empty groups return null.
 	optional_ptr<Vector> ContiguousVectors() const;
@@ -89,6 +90,8 @@ public:
 		return data->types;
 	}
 	ChunkColumnGroup AllColumns() const;
+	//! Resolve a handle for APIs that still require a flat column index.
+	idx_t GetColumnIndex(const ChunkColumn &column) const;
 	Vector &Column(DataChunk &chunk, const ChunkColumn &column) const;
 	ChunkColumnView Columns(DataChunk &chunk, const ChunkColumnGroup &group) const;
 	void Verify(const DataChunk &chunk) const;

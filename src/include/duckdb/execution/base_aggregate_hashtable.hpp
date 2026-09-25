@@ -20,7 +20,8 @@ class BufferManager;
 class BaseAggregateHashTable {
 public:
 	BaseAggregateHashTable(ClientContext &context, Allocator &allocator, const vector<AggregateObject> &aggregates,
-	                       vector<LogicalType> payload_types);
+	                       vector<LogicalType> payload_types,
+	                       shared_ptr<const AggregateInputLayout> input_layout = nullptr);
 	virtual ~BaseAggregateHashTable() {
 	}
 
@@ -34,7 +35,7 @@ protected:
 	shared_ptr<TupleDataLayout> layout_ptr;
 	//! The types of the payload columns stored in the hashtable
 	vector<LogicalType> payload_types;
-	AggregateInputLayout input_layout;
+	shared_ptr<const AggregateInputLayout> input_layout;
 	//! Intermediate structures and data for aggregate filters
 	AggregateFilterDataSet filter_set;
 };

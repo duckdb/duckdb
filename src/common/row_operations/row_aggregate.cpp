@@ -50,34 +50,30 @@ void RowOperations::DestroyStates(RowOperationsState &state, TupleDataLayout &la
 	}
 }
 
-void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
-                                 DataChunk &payload, idx_t arg_idx, optional_ptr<const ClusteredAggr> clustered) {
-	auto count = addresses.size();
+static void UpdateAggregateVectors(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
+                                   optional_ptr<Vector> inputs, idx_t input_count,
+                                   optional_ptr<const ClusteredAggr> clustered) {
 	AggregateInputData aggr_input_data(aggr, state.allocator);
 	auto cluster_update = aggr.function.GetStateClusterUpdateCallback();
 	aggr_input_data.clustered = cluster_update ? clustered : nullptr;
-	auto inputs = aggr.child_count ? payload.data.data() + arg_idx : nullptr;
 	if (clustered && cluster_update) {
-		cluster_update(inputs, aggr_input_data, aggr.child_count, *clustered, count);
+		cluster_update(inputs.get(), aggr_input_data, input_count, *clustered, addresses.size());
 		return;
 	}
-	aggr.function.GetStateUpdateCallback()(inputs, aggr_input_data, aggr.child_count, addresses, count);
+	aggr.function.GetStateUpdateCallback()(inputs.get(), aggr_input_data, input_count, addresses, addresses.size());
+}
+
+void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
+                                 DataChunk &payload, idx_t arg_idx, optional_ptr<const ClusteredAggr> clustered) {
+	optional_ptr<Vector> inputs = aggr.child_count ? &payload.data[arg_idx] : nullptr;
+	UpdateAggregateVectors(state, aggr, addresses, inputs, aggr.child_count, clustered);
 }
 
 void RowOperations::UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
                                  const ChunkColumnView &arguments, optional_ptr<const ClusteredAggr> clustered) {
 	D_ASSERT(arguments.ColumnCount() == aggr.child_count);
 	D_ASSERT(arguments.ColumnCount() == 0 || arguments.Column(0).size() == addresses.size());
-	AggregateInputData aggr_input_data(aggr, state.allocator);
-	auto cluster_update = aggr.function.GetStateClusterUpdateCallback();
-	aggr_input_data.clustered = cluster_update ? clustered : nullptr;
-	auto inputs = arguments.ContiguousVectors();
-	if (clustered && cluster_update) {
-		cluster_update(inputs.get(), aggr_input_data, arguments.ColumnCount(), *clustered, addresses.size());
-		return;
-	}
-	aggr.function.GetStateUpdateCallback()(inputs.get(), aggr_input_data, arguments.ColumnCount(), addresses,
-	                                       addresses.size());
+	UpdateAggregateVectors(state, aggr, addresses, arguments.ContiguousVectors(), arguments.ColumnCount(), clustered);
 }
 
 void RowOperations::UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data,

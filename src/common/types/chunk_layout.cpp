@@ -50,6 +50,12 @@ ChunkColumnGroup ChunkLayout::AllColumns() const {
 	return ChunkColumnGroup(data, 0, data->types.size());
 }
 
+idx_t ChunkLayout::GetColumnIndex(const ChunkColumn &column) const {
+	D_ASSERT(column.layout == data);
+	D_ASSERT(column.index < data->types.size());
+	return column.index;
+}
+
 Vector &ChunkLayout::Column(DataChunk &chunk, const ChunkColumn &column) const {
 	D_ASSERT(column.layout == data);
 	D_ASSERT(column.index < data->types.size());
@@ -118,6 +124,7 @@ void ChunkProjection::Reference(DataChunk &source, DataChunk &target) const {
 	source_layout.Verify(source);
 	target_layout.Verify(target);
 	target.ReferenceColumns(source, columns);
+	target.SetCardinalityUnsafe(source.size());
 }
 
 } // namespace duckdb

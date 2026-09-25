@@ -5,6 +5,7 @@ add_library_unity(
   test_async_file_writer.cpp
   test_managed_async_task_queue.cpp
   test_cast.cpp
+  test_chunk_layout.cpp
   test_checked_integer.cpp
   test_checksum.cpp
   test_column_data_allocator.cpp

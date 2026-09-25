@@ -151,11 +151,13 @@ PhysicalHashAggregate::PhysicalHashAggregate(PhysicalPlan &physical_plan, Client
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i]->Cast<BoundAggregateExpression>();
-		if (aggr.IsDistinct()) {
+		if (aggr.GetAggregateType() == AggregateType::DISTINCT) {
 			distinct_filter.push_back(i);
-		} else {
+		} else if (aggr.GetAggregateType() == AggregateType::NON_DISTINCT) {
 			non_distinct_filter.push_back(i);
-		}
+		} else { // LCOV_EXCL_START
+			throw NotImplementedException("AggregateType not implemented in PhysicalHashAggregate");
+		} // LCOV_EXCL_STOP
 	}
 
 	distinct_collection_info = DistinctAggregateCollectionInfo::Create(grouped_aggregate_data.aggregates);
@@ -213,9 +215,7 @@ public:
 
 class HashAggregateLocalSinkState : public LocalSinkState {
 public:
-	HashAggregateLocalSinkState(const PhysicalHashAggregate &op, ExecutionContext &context)
-	    : op(op), input_projection(op.grouped_aggregate_data.input_layout->CreateProjection(
-	                  op.children[0].get().GetTypes(), op.grouped_aggregate_data.bindings)) {
+	HashAggregateLocalSinkState(const PhysicalHashAggregate &op, ExecutionContext &context) : op(op) {
 		auto &payload_types = op.grouped_aggregate_data.payload_types;
 		if (!payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(payload_types);
@@ -233,11 +233,11 @@ public:
 			aggregate_objects.emplace_back(&aggr);
 		}
 
-		filter_set.Initialize(context.client, aggregate_objects, op.children[0].get().GetTypes());
+		filter_set.Initialize(context.client, aggregate_objects, {});
 	}
 
 	const PhysicalHashAggregate &op;
-	ChunkProjection input_projection;
+	unique_ptr<ChunkProjection> input_projection;
 	DataChunk aggregate_input_chunk;
 	vector<HashAggregateGroupingLocalState> grouping_states;
 	AggregateFilterDataSet filter_set;
@@ -381,7 +381,11 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	}
 
 	DataChunk &aggregate_input_chunk = local_state.aggregate_input_chunk;
-	local_state.input_projection.Reference(chunk, aggregate_input_chunk);
+	if (!local_state.input_projection) {
+		local_state.input_projection = make_uniq<ChunkProjection>(
+		    grouped_aggregate_data.input_layout->CreateProjection(chunk.GetTypes(), grouped_aggregate_data.bindings));
+	}
+	local_state.input_projection->Reference(chunk, aggregate_input_chunk);
 
 	aggregate_input_chunk.Verify(context.client.db);
 

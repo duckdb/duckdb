@@ -12,8 +12,10 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
                                                      const vector<LogicalType> &group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
-                                                     vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
+                                                     vector<Value> group_minima_p, vector<idx_t> required_bits_p,
+                                                     shared_ptr<const AggregateInputLayout> input_layout_p)
+    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p),
+                             std::move(input_layout_p)),
       addresses(LogicalType::POINTER), required_bits(std::move(required_bits_p)), total_required_bits(0),
       group_minima(std::move(group_minima_p)), sel(STANDARD_VECTOR_SIZE),
       aggregate_allocator(make_uniq<ArenaAllocator>(allocator)) {
@@ -161,9 +163,9 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 		auto &aggregate = aggregates[aggr_idx];
 		if (aggregate.filter) {
 			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(aggr_idx), aggregate, addresses,
-			                                    payload, input_layout.Arguments(payload, aggr_idx));
+			                                    payload, input_layout->Arguments(payload, aggr_idx));
 		} else {
-			RowOperations::UpdateStates(row_state, aggregate, addresses, input_layout.Arguments(payload, aggr_idx));
+			RowOperations::UpdateStates(row_state, aggregate, addresses, input_layout->Arguments(payload, aggr_idx));
 		}
 		VectorOperations::AddInPlace(addresses, UnsafeNumericCast<int64_t>(aggregate.payload_size));
 	}
@@ -205,7 +207,7 @@ bool PerfectAggregateHashTable::AddChunkClustered(uintptr_t *address_data, DataC
 
 	auto &aggregates = layout_ptr->GetAggregates();
 	RowOperationsState row_state(*aggregate_allocator);
-	RowOperations::UpdateStatesClustered(row_state, aggregates, &filter_set, nullptr, addresses, payload, input_layout,
+	RowOperations::UpdateStatesClustered(row_state, aggregates, &filter_set, nullptr, addresses, payload, *input_layout,
 	                                     clustered, skip_addresses);
 	return true;
 }

@@ -30,11 +30,15 @@ public:
 	bool HasFilter(idx_t aggregate_idx) const {
 		return filters[aggregate_idx].IsValid();
 	}
+	ChunkColumnView Filters(DataChunk &chunk) const {
+		return layout->Columns(chunk, *filter_columns);
+	}
+	//! Compatibility with filter executors that bind a flat column reference.
 	idx_t FilterColumnIndex(idx_t aggregate_idx) const {
-		return filters[aggregate_idx].GetIndex();
+		return layout->GetColumnIndex(filter_columns->Column(filters[aggregate_idx].GetIndex()));
 	}
 	Vector &Filter(DataChunk &chunk, idx_t aggregate_idx) const {
-		return layout->Column(chunk, layout->AllColumns().Column(FilterColumnIndex(aggregate_idx)));
+		return Filters(chunk).Column(filters[aggregate_idx].GetIndex());
 	}
 	ChunkProjection CreateProjection(const vector<LogicalType> &input_types,
 	                                 const vector<BoundAggregateExpression *> &bindings) const;
@@ -45,6 +49,7 @@ private:
 
 	unique_ptr<ChunkLayout> layout;
 	vector<ChunkColumnGroup> arguments;
+	unique_ptr<ChunkColumnGroup> filter_columns;
 	vector<optional_idx> filters;
 };
 

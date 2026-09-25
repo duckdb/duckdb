@@ -18,7 +18,8 @@ class PerfectAggregateHashTable : public BaseAggregateHashTable {
 public:
 	PerfectAggregateHashTable(ClientContext &context, Allocator &allocator, const vector<LogicalType> &group_types,
 	                          vector<LogicalType> payload_types_p, vector<AggregateObject> aggregate_objects,
-	                          vector<Value> group_minima, vector<idx_t> required_bits);
+	                          vector<Value> group_minima, vector<idx_t> required_bits,
+	                          shared_ptr<const AggregateInputLayout> input_layout = nullptr);
 	~PerfectAggregateHashTable() override;
 
 public:

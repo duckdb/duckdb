@@ -701,8 +701,9 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			info.correlated_aggregates.push_back(std::move(aggr));
 
 			auto &allocator = BufferAllocator::Get(context);
+			vector<LogicalType> argument_types {result->condition_types[delim_types.size()]};
 			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(
-			    context, allocator, delim_types, delim_payload_types, std::move(correlated_aggregates));
+			    context, allocator, delim_types, argument_types, std::move(correlated_aggregates));
 			info.correlated_types = delim_types;
 			info.group_chunk.InitializeEmpty(delim_types);
 			info.result_chunk.Initialize(allocator, delim_payload_types);

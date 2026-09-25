@@ -170,7 +170,7 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 
 unique_ptr<GroupedAggregateHashTable> RecursiveCTEState::CreateUsingKeyHashTable() const {
 	return make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.hash_key_types,
-	                                            op.aggregate_types, payload_aggregate_objects);
+	                                            payload_rows.GetTypes(), payload_aggregate_objects);
 }
 
 RecursiveCTEState::~RecursiveCTEState() {
@@ -434,7 +434,7 @@ public:
 
 	unique_ptr<GroupedAggregateHashTable> Preaggregate(ColumnDataCollection &candidates) {
 		auto result = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.hash_key_types,
-		                                                   op.aggregate_types, aggregates);
+		                                                   payload.GetTypes(), aggregates);
 		ColumnDataScanState scan_state;
 		candidates.InitializeScan(scan_state);
 		while (candidates.Scan(scan_state, input)) {

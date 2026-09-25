@@ -47,6 +47,7 @@ void AggregateInputLayout::Initialize(const vector<LogicalType> &types, const ve
 		arguments.push_back(builder.AddColumns(argument_types));
 		column += count;
 	}
+	vector<LogicalType> filter_types;
 	for (auto has_filter : has_filters) {
 		if (!has_filter) {
 			filters.emplace_back();
@@ -55,9 +56,10 @@ void AggregateInputLayout::Initialize(const vector<LogicalType> &types, const ve
 		if (column >= types.size() || types[column] != LogicalType::BOOLEAN) {
 			throw InternalException("Aggregate filter requires a boolean payload column");
 		}
-		filters.emplace_back(column);
-		builder.AddColumn(types[column++]);
+		filters.emplace_back(filter_types.size());
+		filter_types.push_back(types[column++]);
 	}
+	filter_columns = make_uniq<ChunkColumnGroup>(builder.AddColumns(filter_types));
 	// DISTINCT tables without aggregate states can retain unused payload columns.
 	if (!argument_counts.empty() && column != types.size()) {
 		throw InternalException("Aggregate layout does not cover the payload");
