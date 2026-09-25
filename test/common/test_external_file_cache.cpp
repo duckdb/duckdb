@@ -121,6 +121,12 @@ OpenFileInfo MakeValidatingOpenFileInfo(const string &path) {
 	return info;
 }
 
+FileOpenFlags ReaderSizedFlags() {
+	auto flags = FileFlags::FILE_FLAGS_READ;
+	flags.SetRequestSizing(RequestSizing::BY_READER);
+	return flags;
+}
+
 string MakeTestContent(idx_t size) {
 	string content(size, '\0');
 	for (idx_t i = 0; i < size; i++) {
@@ -181,21 +187,21 @@ TEST_CASE("Reads cache exactly the requested bytes", "[external_file_cache]") {
 	EFCTestFileGuard test_file("test_efc_exact_ranges.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
-	REQUIRE(ReadFull(*handle, 3000, 1000) == content.substr(1000, 3000));
-	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{1000, 3000}});
+	REQUIRE(ReadFull(*handle, 5000, 1000) == content.substr(1000, 5000));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{1000, 5000}});
 	REQUIRE(CountCachedBlocks(cache) == 1);
-	REQUIRE(TotalCachedBytes(cache) == 3000);
+	REQUIRE(TotalCachedBytes(cache) == 5000);
 
 	// A repeated read is served from the cache
-	REQUIRE(ReadFull(*handle, 3000, 1000) == content.substr(1000, 3000));
+	REQUIRE(ReadFull(*handle, 5000, 1000) == content.substr(1000, 5000));
 	REQUIRE(recording_fs->TakeReads().empty());
 
 	// An overlapping read only fetches the bytes that are not cached yet
 	REQUIRE(ReadFull(*handle, 8000, 2000) == content.substr(2000, 8000));
-	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{4000, 6000}});
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{6000, 4000}});
 	REQUIRE(CountCachedBlocks(cache) == 2);
 	REQUIRE(TotalCachedBytes(cache) == 9000);
 }
@@ -214,7 +220,7 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 	EFCTestFileGuard test_file("test_efc_split_reads.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
@@ -242,7 +248,7 @@ TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[
 	EFCTestFileGuard test_file("test_efc_fill_gaps.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
 	REQUIRE(ReadFull(*handle, 4096, 0) == content.substr(0, 4096));
@@ -260,29 +266,29 @@ TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[extern
 	auto &db_instance = *db.instance;
 	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
 
-	const idx_t BLOCK_SIZE = 8192;
+	const idx_t BLOCK_SIZE = 65536;
 	const idx_t ABSORB_SIZE = BLOCK_SIZE / 8;
 	Connection con(db);
 	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
 
-	const idx_t FILE_SIZE = 20000;
+	const idx_t FILE_SIZE = 100000;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_absorb.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
-	REQUIRE(ReadFull(*handle, 100, 1000) == content.substr(1000, 100));
-	REQUIRE(ReadFull(*handle, ABSORB_SIZE, 3000) == content.substr(3000, ABSORB_SIZE));
+	REQUIRE(ReadFull(*handle, 4096, 8192) == content.substr(8192, 4096));
+	REQUIRE(ReadFull(*handle, ABSORB_SIZE, 20480) == content.substr(20480, ABSORB_SIZE));
 	recording_fs->TakeReads();
 
-	// the 100 byte range is fetched again with its gaps, the range of exactly ABSORB_SIZE is kept
+	// the 4096 byte range is fetched again with its gaps, the range of exactly ABSORB_SIZE is kept
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
-	const idx_t after = 3000 + ABSORB_SIZE;
+	const idx_t after = 20480 + ABSORB_SIZE;
 	REQUIRE(recording_fs->TakeReads() ==
 	        vector<pair<idx_t, idx_t>> {
-	            {0, 3000}, {after, BLOCK_SIZE}, {after + BLOCK_SIZE, FILE_SIZE - after - BLOCK_SIZE}});
+	            {0, 20480}, {after, BLOCK_SIZE}, {after + BLOCK_SIZE, FILE_SIZE - after - BLOCK_SIZE}});
 	REQUIRE(CountCachedBlocks(cache) == 4);
 	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 
@@ -295,24 +301,24 @@ TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves n
 	auto &db_instance = *db.instance;
 	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
 
-	const idx_t BLOCK_SIZE = 8192;
+	const idx_t BLOCK_SIZE = 65536;
 	Connection con(db);
 	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
 
 	// the gaps around the cached range need one request each, merged they would still need two
-	const idx_t FILE_SIZE = 1000 + 100 + 7500;
+	const idx_t FILE_SIZE = 8192 + 4096 + 61440;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_absorb_no_saving.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
-	REQUIRE(ReadFull(*handle, 100, 1000) == content.substr(1000, 100));
+	REQUIRE(ReadFull(*handle, 4096, 8192) == content.substr(8192, 4096));
 	recording_fs->TakeReads();
 
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
-	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, 1000}, {1100, 7500}});
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, 8192}, {12288, 61440}});
 	REQUIRE(CountCachedBlocks(cache) == 3);
 	REQUIRE(TotalCachedBytes(cache) == FILE_SIZE);
 }
@@ -328,7 +334,7 @@ TEST_CASE("Cached ranges of local files between gaps are kept at the default blo
 	EFCTestFileGuard test_file("test_efc_keep_local.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
 	REQUIRE(ReadFull(*handle, 4096, 4096) == content.substr(4096, 4096));
@@ -351,7 +357,7 @@ TEST_CASE("A file no larger than the block size is fetched whole on the first re
 	EFCTestFileGuard test_file("test_efc_small_file.bin", content);
 
 	CachingFileSystem cfs(*recording_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
 	auto &cache = db_instance.GetExternalFileCache();
 
 	REQUIRE(ReadFull(*handle, 100, 2800) == content.substr(2800, 100));
@@ -362,6 +368,65 @@ TEST_CASE("A file no larger than the block size is fetched whole on the first re
 	// Any later read of the file is served from the cache
 	REQUIRE(ReadFull(*handle, 500, 100) == content.substr(100, 500));
 	REQUIRE(recording_fs->TakeReads().empty());
+}
+
+TEST_CASE("Reads shorter than 4 KiB fetch the 4 KiB pages around them", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	const idx_t PAGE_SIZE = 4096;
+	const idx_t FILE_SIZE = 16 * PAGE_SIZE + 100;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_min_request.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+
+	REQUIRE(ReadFull(*handle, 1, 5000) == content.substr(5000, 1));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{PAGE_SIZE, PAGE_SIZE}});
+
+	REQUIRE(ReadFull(*handle, 10, 6000) == content.substr(6000, 10));
+	REQUIRE(recording_fs->TakeReads().empty());
+
+	REQUIRE(ReadFull(*handle, 100, 2 * PAGE_SIZE - 50) == content.substr(2 * PAGE_SIZE - 50, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{2 * PAGE_SIZE, PAGE_SIZE}});
+
+	REQUIRE(ReadFull(*handle, 10, FILE_SIZE - 10) == content.substr(FILE_SIZE - 10, 10));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{16 * PAGE_SIZE, 100}});
+}
+
+TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto &cache = db_instance.GetExternalFileCache();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t FILE_SIZE = 3 * BLOCK_SIZE + 50;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_cache_sized.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	REQUIRE(ReadFull(*handle, 100, 0) == content.substr(0, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, BLOCK_SIZE}});
+
+	for (idx_t offset = 100; offset + 1000 <= BLOCK_SIZE; offset += 1000) {
+		REQUIRE(ReadFull(*handle, 1000, offset) == content.substr(offset, 1000));
+	}
+	REQUIRE(recording_fs->TakeReads().empty());
+
+	REQUIRE(ReadFull(*handle, 100, BLOCK_SIZE) == content.substr(BLOCK_SIZE, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE, BLOCK_SIZE}});
+
+	REQUIRE(ReadFull(*handle, 100, 2 * BLOCK_SIZE + 100) == content.substr(2 * BLOCK_SIZE + 100, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{2 * BLOCK_SIZE, BLOCK_SIZE}});
+
+	REQUIRE(ReadFull(*handle, 10, FILE_SIZE - 10) == content.substr(FILE_SIZE - 10, 10));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{3 * BLOCK_SIZE, 50}});
+	REQUIRE(CountCachedBlocks(cache) == 4);
 }
 
 TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[external_file_cache]") {
