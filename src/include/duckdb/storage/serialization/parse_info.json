@@ -262,6 +262,12 @@
         "id": 402,
         "name": "expression",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 403,
+        "name": "column_path",
+        "type": "vector<Identifier>",
+        "default": "{}"
       }
     ]
   },
@@ -279,6 +285,12 @@
         "id": 401,
         "name": "expression",
         "type": "ParsedExpression*"
+      },
+      {
+        "id": 402,
+        "name": "column_path",
+        "type": "vector<Identifier>",
+        "default": "{}"
       }
     ]
   },
@@ -329,6 +341,12 @@
         "id": 400,
         "name": "column_name",
         "type": "Identifier"
+      },
+      {
+        "id": 401,
+        "name": "column_path",
+        "type": "vector<Identifier>",
+        "default": "{}"
       }
     ]
   },
@@ -341,6 +359,12 @@
         "id": 400,
         "name": "column_name",
         "type": "Identifier"
+      },
+      {
+        "id": 401,
+        "name": "column_path",
+        "type": "vector<Identifier>",
+        "default": "{}"
       }
     ]
   },

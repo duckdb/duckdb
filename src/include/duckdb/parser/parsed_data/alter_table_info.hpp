@@ -306,6 +306,8 @@ struct ChangeColumnTypeInfo : public AlterTableInfo {
 	LogicalType target_type;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -331,6 +333,8 @@ struct SetDefaultInfo : public AlterTableInfo {
 	Identifier column_name;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -377,6 +381,8 @@ struct SetNotNullInfo : public AlterTableInfo {
 
 	//! The column name to alter
 	Identifier column_name;
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -397,6 +403,8 @@ struct DropNotNullInfo : public AlterTableInfo {
 
 	//! The column name to alter
 	Identifier column_name;
+	//! Full dotted column path, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
