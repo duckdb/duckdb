@@ -24,6 +24,14 @@ project(DuckDB)
 
 find_package(Threads REQUIRED)
 
+set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
+if(MSVC OR MINGW)
+  list(APPEND DUCKDB_SYSTEM_LIBS ws2_32 rstrtmgr)
+endif()
+if(MSVC)
+  list(APPEND DUCKDB_SYSTEM_LIBS bcrypt)
+endif()
+
 # Consume optional vcpkg-related cache variables passed by CI/Makefile to avoid
 # "manually-specified variables were not used by the project" warnings in
 # extension-config-only runs.
@@ -714,10 +722,15 @@ option(
   SET_DUCKDB_LIBRARY_VERSION
   "Whether or not to set the DuckDB Library version and emit versioned shared libraries"
   FALSE)
-option(
-  PREBUILT_BINARY
-  "Whether to use a prebuilt version of the DuckDB library, typically called libduckdb_static.a"
-  "")
+set(PREBUILT_BINARY
+    ""
+    CACHE FILEPATH "Prebuilt DuckDB static library")
+set(PREBUILT_EXTENSIONS
+    ""
+    CACHE STRING "Extensions supplied as prebuilt static libraries")
+if(PREBUILT_EXTENSIONS AND NOT PREBUILT_BINARY)
+  message(FATAL_ERROR "PREBUILT_EXTENSIONS requires PREBUILT_BINARY")
+endif()
 
 if(DISABLE_EXTENSION_LOAD)
   add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
@@ -1227,7 +1240,9 @@ add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
-if(ENABLE_JEMALLOC
+if(BUILD_MAIN_DUCKDB_LIBRARY
+   AND NOT PREBUILT_BINARY
+   AND ENABLE_JEMALLOC
    AND CMAKE_SIZEOF_VOID_P EQUAL 8
    AND NOT FORCE_32_BIT
    AND OS_NAME STREQUAL "linux"
@@ -1245,15 +1260,63 @@ if(ENABLE_JEMALLOC
 endif()
 
 if(PREBUILT_BINARY)
-  message("Using pre-built static library from file ${PREBUILT_BINARY}")
+  get_filename_component(PREBUILT_BINARY_PATH "${PREBUILT_BINARY}" ABSOLUTE)
+  if(NOT EXISTS "${PREBUILT_BINARY_PATH}")
+    message(
+      FATAL_ERROR
+        "Prebuilt DuckDB static library does not exist: ${PREBUILT_BINARY_PATH}"
+    )
+  endif()
+
+  message(
+    STATUS "Using pre-built static library from file ${PREBUILT_BINARY_PATH}")
   add_library(duckdb_static STATIC IMPORTED GLOBAL)
-  get_filename_component(PREBUILT_BASENAME "${PREBUILT_BINARY}" NAME)
-  file(COPY ${PREBUILT_BINARY} DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
-  file(RENAME ${CMAKE_CURRENT_BINARY_DIR}/${PREBUILT_BASENAME}
-       ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
-  set_property(
-    TARGET duckdb_static
-    PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_BINARY_DIR}/libduckdb_static.a)
+  set_property(TARGET duckdb_static PROPERTY IMPORTED_LOCATION
+                                             "${PREBUILT_BINARY_PATH}")
+  target_link_libraries(duckdb_static INTERFACE ${DUCKDB_SYSTEM_LIBS})
+  link_threads(duckdb_static INTERFACE)
+
+  if(BUILD_SHELL AND NOT SUN)
+    get_filename_component(_DUCKDB_PREBUILT_LIBRARY_DIRECTORY
+                           "${PREBUILT_BINARY_PATH}" DIRECTORY)
+    if(MSVC)
+      set(_DUCKDB_PREBUILT_SHELL_PATH
+          "${_DUCKDB_PREBUILT_LIBRARY_DIRECTORY}/duckdb_shell.lib")
+    else()
+      set(_DUCKDB_PREBUILT_SHELL_PATH
+          "${_DUCKDB_PREBUILT_LIBRARY_DIRECTORY}/libduckdb_shell.a")
+    endif()
+    if(NOT EXISTS "${_DUCKDB_PREBUILT_SHELL_PATH}")
+      message(
+        FATAL_ERROR
+          "Prebuilt DuckDB shell library does not exist: ${_DUCKDB_PREBUILT_SHELL_PATH}"
+      )
+    endif()
+    message(
+      STATUS
+        "Using pre-built shell library from file ${_DUCKDB_PREBUILT_SHELL_PATH}"
+    )
+  endif()
+
+  foreach(
+    DUCKDB_PREBUILT_LINK_LIBRARY
+    duckdb_fastpforlib
+    duckdb_fmt
+    duckdb_fsst
+    duckdb_hyperloglog
+    duckdb_mbedtls
+    duckdb_miniz
+    duckdb_re2
+    duckdb_skiplistlib
+    duckdb_utf8proc
+    duckdb_yyjson
+    duckdb_zstd)
+    if(NOT TARGET ${DUCKDB_PREBUILT_LINK_LIBRARY})
+      add_library(${DUCKDB_PREBUILT_LINK_LIBRARY} INTERFACE IMPORTED GLOBAL)
+      target_link_libraries(${DUCKDB_PREBUILT_LINK_LIBRARY}
+                            INTERFACE duckdb_static)
+    endif()
+  endforeach()
 
   add_subdirectory(tools)
   add_subdirectory(extension)
@@ -1265,17 +1328,21 @@ elseif(BUILD_MAIN_DUCKDB_LIBRARY)
 endif()
 
 if(NOT EXTENSION_CONFIG_BUILD)
-  add_third_party(fastpforlib)
-  add_third_party(fmt)
-  add_third_party(fsst)
-  add_third_party(hyperloglog)
-  add_third_party(mbedtls)
-  add_third_party(miniz)
-  add_third_party(re2)
-  add_third_party(skiplist)
-  add_third_party(utf8proc)
-  add_third_party(yyjson)
-  add_third_party(zstd)
+  if(PREBUILT_BINARY)
+    message(STATUS "Skipping third_party/ because PREBUILT_BINARY is set")
+  else()
+    add_third_party(fastpforlib)
+    add_third_party(fmt)
+    add_third_party(fsst)
+    add_third_party(hyperloglog)
+    add_third_party(mbedtls)
+    add_third_party(miniz)
+    add_third_party(re2)
+    add_third_party(skiplist)
+    add_third_party(utf8proc)
+    add_third_party(yyjson)
+    add_third_party(zstd)
+  endif()
   if(NOT DUCKDB_EXPLICIT_PLATFORM)
     set(VERSION_SOURCES tools/utils/test_platform.cpp)
 
