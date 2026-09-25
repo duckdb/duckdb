@@ -64,12 +64,12 @@ void Node7Leaf::InsertByte(ART &art, NodePtr &node_ptr, const uint8_t byte) {
 		}
 	}
 	// The node is full. Grow to Node15.
-	auto node7_ptr = node_ptr;
-	Node15Leaf::GrowNode7Leaf(art, node_ptr, node7_ptr);
+	auto node7_leaf_ptr = node_ptr;
+	Node15Leaf::GrowNode7Leaf(art, node_ptr, node7_leaf_ptr);
 	Node15Leaf::InsertByte(art, node_ptr, byte);
 }
 
-void Node7Leaf::DeleteByte(ART &art, NodePtr &node_ptr, NodePtr &prefix_ptr, const uint8_t byte, const ARTKey &row_id) {
+void Node7Leaf::DeleteByte(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const uint8_t byte, const ARTKey &row_id) {
 	idx_t remainder;
 	{
 		auto n7_handle = DeleteByteInternal(art, node_ptr, byte);
@@ -87,9 +87,9 @@ void Node7Leaf::DeleteByte(ART &art, NodePtr &node_ptr, NodePtr &prefix_ptr, con
 		remainder |= UnsafeNumericCast<idx_t>(n7.key[0]);
 	}
 	// Free the prefix (nodes) and inline the remainder.
-	if (prefix_ptr.GetType() == NType::PREFIX) {
-		NodePtr::FreeTree(art, prefix_ptr);
-		Leaf::New(prefix_ptr, UnsafeNumericCast<row_t>(remainder));
+	if (parent_ptr.GetType() == NType::PREFIX) {
+		NodePtr::FreeTree(art, parent_ptr);
+		Leaf::New(parent_ptr, UnsafeNumericCast<row_t>(remainder));
 		return;
 	}
 	// Free the Node7Leaf and inline the remainder.
@@ -128,8 +128,8 @@ void Node15Leaf::InsertByte(ART &art, NodePtr &node_ptr, const uint8_t byte) {
 			return;
 		}
 	}
-	auto node15_ptr = node_ptr;
-	Node256Leaf::GrowNode15Leaf(art, node_ptr, node15_ptr);
+	auto node15_leaf_ptr = node_ptr;
+	Node256Leaf::GrowNode15Leaf(art, node_ptr, node15_leaf_ptr);
 	Node256Leaf::InsertByte(art, node_ptr, byte);
 }
 
@@ -141,8 +141,8 @@ void Node15Leaf::DeleteByte(ART &art, NodePtr &node_ptr, const uint8_t byte) {
 			return;
 		}
 	}
-	auto node15_ptr = node_ptr;
-	Node7Leaf::ShrinkNode15Leaf(art, node_ptr, node15_ptr);
+	auto node15_leaf_ptr = node_ptr;
+	Node7Leaf::ShrinkNode15Leaf(art, node_ptr, node15_leaf_ptr);
 }
 
 void Node15Leaf::GrowNode7Leaf(ART &art, NodePtr &node15_leaf_ptr, NodePtr &node7_leaf_ptr) {

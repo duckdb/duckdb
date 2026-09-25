@@ -177,14 +177,14 @@ void NodePtr::InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const
 // Delete
 //===--------------------------------------------------------------------===//
 
-void NodePtr::DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &prefix_ptr, const uint8_t byte, const GateStatus status,
+void NodePtr::DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const uint8_t byte, const GateStatus status,
                           const ARTKey &row_id) {
 	D_ASSERT(node_ptr.HasMetadata());
 
 	auto type = node_ptr.GetType();
 	switch (type) {
 	case NType::NODE_4:
-		return Node4::DeleteChild(art, node_ptr, prefix_ptr, byte, status);
+		return Node4::DeleteChild(art, node_ptr, parent_ptr, byte, status);
 	case NType::NODE_16:
 		return Node16::DeleteChild(art, node_ptr, byte);
 	case NType::NODE_48:
@@ -192,7 +192,7 @@ void NodePtr::DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &prefix_ptr, cons
 	case NType::NODE_256:
 		return Node256::DeleteChild(art, node_ptr, byte);
 	case NType::NODE_7_LEAF:
-		return Node7Leaf::DeleteByte(art, node_ptr, prefix_ptr, byte, row_id);
+		return Node7Leaf::DeleteByte(art, node_ptr, parent_ptr, byte, row_id);
 	case NType::NODE_15_LEAF:
 		return Node15Leaf::DeleteByte(art, node_ptr, byte);
 	case NType::NODE_256_LEAF:

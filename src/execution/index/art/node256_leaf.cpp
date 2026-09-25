@@ -42,8 +42,8 @@ void Node256Leaf::DeleteByte(ART &art, NodePtr &node_ptr, const uint8_t byte) {
 		}
 	}
 	// Shrink node to Node15.
-	auto node256_ptr = node_ptr;
-	Node15Leaf::ShrinkNode256Leaf(art, node_ptr, node256_ptr);
+	auto node256_leaf_ptr = node_ptr;
+	Node15Leaf::ShrinkNode256Leaf(art, node_ptr, node256_leaf_ptr);
 }
 
 bool Node256Leaf::HasByte(const uint8_t byte) const {

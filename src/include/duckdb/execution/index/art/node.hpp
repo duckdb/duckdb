@@ -144,7 +144,7 @@ public:
 	//! Insert the child at byte.
 	static void InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const NodePtr child_ptr = NodePtr());
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &prefix_ptr, const uint8_t byte,
+	static void DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const uint8_t byte,
 	                        const GateStatus status, const ARTKey &row_id);
 
 	//! Get the child node at byte, if it exists.
