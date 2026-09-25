@@ -66,7 +66,7 @@ string FunctionExpression::ToString() const {
 				return "((" + arguments[0].ToString() + ")" +
 				       StringUtil::Replace(qualified_name.Name().GetIdentifierName(), "__postfix", "") + ")";
 			}
-			return qualified_name.Name().GetIdentifierName() + "(" + arguments[0].ToString() + ")";
+			return "(" + qualified_name.Name().GetIdentifierName() + "(" + arguments[0].ToString() + "))";
 		}
 		if (arguments.size() == 2) {
 			return StringUtil::Format("(%s %s %s)", arguments[0].ToString(), qualified_name.Name().GetIdentifierName(),

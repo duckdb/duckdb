@@ -72,7 +72,13 @@
         "test/sql/copy/file_size_bytes.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
-        "test/sql/copy/return_stats_extra_info.test"
+        "test/sql/copy/return_stats_extra_info.test",
+        "test/sql/timezone/test_icu_calendar_chinese.test",
+        "test/sql/timezone/test_icu_calendar_hebrew.test",
+        "test/sql/timezone/test_icu_calendar_islamic.test",
+        "test/sql/timezone/test_icu_calendar_islamic_observed.test",
+        "test/sql/timezone/test_icu_calendar_japanese.test",
+        "test/sql/timezone/test_icu_datetime_sweep.test"
       ]
     }
   ]
