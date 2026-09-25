@@ -225,6 +225,7 @@ AlterTableInfo:
   by_value: true
   rules:
     - AlterTableOptions
+    - AlterSchemaOptions
     - AddColumn
     - DropConstraint
     - DropColumn
@@ -1568,6 +1569,7 @@ RelOptionMap:
   by_value: true
   rules:
     - WithList
+    - WithOptionList
     - RelOptionOrOids
     - RelOptionList
     - Oids

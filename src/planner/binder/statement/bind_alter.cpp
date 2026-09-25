@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -109,6 +110,18 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		auto &properties = GetStatementProperties();
 		properties.return_type = StatementReturnType::NOTHING;
 		properties.RegisterDBModify(Catalog::GetSystemCatalog(context), context, DatabaseModificationType::ALTER_TABLE);
+		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
+		return result;
+	}
+
+	if (stmt.info->type == AlterType::ALTER_SCHEMA) {
+		// resolve the schema path the same way as CREATE SCHEMA does
+		auto &info = stmt.info->Cast<AlterSchemaInfo>();
+		info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
+		auto &catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
+		auto &properties = GetStatementProperties();
+		properties.return_type = StatementReturnType::NOTHING;
+		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
 		return result;
 	}

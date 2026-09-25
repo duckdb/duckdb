@@ -33,6 +33,7 @@ struct CreateSchemaInfo;
 struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
+struct AlterSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
 struct CreatePragmaFunctionInfo;
@@ -395,6 +396,9 @@ public:
 		return string();
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
+	virtual ErrorData SupportsCreateSchema(CreateSchemaInfo &info);
+	//! Alter a schema of this catalog (e.g. ALTER SCHEMA ... SET/RESET (<options>))
+	virtual void AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema, AlterSchemaInfo &info);
 
 	virtual bool Supports(RemoteCapability capability) const {
 		return false;

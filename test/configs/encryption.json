@@ -129,6 +129,12 @@
         "test/sql/optimizer/secure_view_pushdown.test",
         "test/sql/optimizer/secure_view_statistics.test"
       ]
+    },
+    {
+      "reason": "Nested schemas require storage version v2.0.0 but encrypted databases use an older default storage version",
+      "paths": [
+        "test/sql/alter/alter_schema_set_schema_options.test"
+      ]
     }
   ]
 }

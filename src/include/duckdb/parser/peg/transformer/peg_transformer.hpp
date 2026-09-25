@@ -711,6 +711,9 @@ public:
 	static void InitializeAlterSchemaStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAlterSchemaStmtTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeAlterSchemaOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeAlterSchemaOptionsTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeAlterTableOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAlterTableOptionsTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -1480,6 +1483,9 @@ public:
 	static void InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeWithOptionListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeWithOptionListTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
 	static void InitializeCreateSecretStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateSecretStmtTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -4071,7 +4077,7 @@ public:
 	                                                     vector<unique_ptr<AlterTableInfo>> alter_table_options);
 	static unique_ptr<AlterInfo> TransformAlterSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                      const QualifiedName &qualified_name,
-	                                                      unique_ptr<AlterTableInfo> rename_alter);
+	                                                      unique_ptr<AlterTableInfo> alter_schema_options);
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer,
 	                                                         unique_ptr<Constraint> top_level_constraint);
 	static unique_ptr<AlterTableInfo> TransformDropConstraint(PEGTransformer &transformer,
@@ -4442,9 +4448,13 @@ public:
 	                                                                unique_ptr<ParsedExpression> expression);
 	static unique_ptr<MacroFunction>
 	TransformTableMacroDefinition(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
-	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer,
-	                                                             const optional<bool> &if_not_exists,
-	                                                             const QualifiedName &qualified_name);
+	static unique_ptr<CreateStatement>
+	TransformCreateSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
+	                          const QualifiedName &qualified_name,
+	                          optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_option_list);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformWithOptionList(PEGTransformer &transformer,
+	                        case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_list);
 	static unique_ptr<CreateStatement>
 	TransformCreateSecretStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
 	                          const optional<Identifier> &secret_name,
