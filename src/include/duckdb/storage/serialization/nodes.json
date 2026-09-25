@@ -712,6 +712,12 @@
         "name": "sampled_schema_is_union",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 110,
+        "name": "hive_sample_size",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "pointer_type": "none"
