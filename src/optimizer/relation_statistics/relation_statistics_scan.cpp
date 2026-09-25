@@ -143,6 +143,11 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto &column_index = get.GetColumnIndex(entry.GetIndex());
 			auto column_statistics = GetColumnStatistics(get, context, column_index);
 			if (column_statistics) {
+				auto &filter = ExpressionFilter::GetExpressionFilter(entry.Filter(), "ExtractGetStats");
+				if (filter.column_indexes.size() <= 1 &&
+				    filter.CheckStatistics(context, *column_statistics) == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+					continue;
+				}
 				cardinality_after_filters =
 				    MinValue(cardinality_after_filters,
 				             InspectTableFilter(base_table_cardinality, entry.Filter(), *column_statistics));
