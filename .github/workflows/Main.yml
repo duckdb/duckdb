@@ -34,6 +34,9 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # Override extension CI matrix reduction with "enabled" or "disabled".
+  # Use "disabled" on risky PRs to run the full extension matrix.
+  OVERRIDE_REDUCED_CI_MODE: disabled
   # Run only specific jobs in CI (separated by whitespace) and skip the rest.
   #
   # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
@@ -71,6 +74,7 @@ jobs:
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
       enabled_jobs: ${{ steps.selection.outputs.enabled_jobs }}
       save_cache: ${{ steps.selection.outputs.save_cache }}
+      reduced_ci_mode: ${{ steps.selection.outputs.reduced_ci_mode }}
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       duckdb_version: ${{ steps.version.outputs.duckdb_version }}
@@ -172,6 +176,7 @@ jobs:
             --repository "${{ github.repository }}" \
             --skip-tests "$skip_tests" \
             --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
+            --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
             --runners '${{ steps.runners.outputs.runners }}'
 
       - name: Configure CI
@@ -444,7 +449,7 @@ jobs:
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
-      reduced_ci_mode: disabled # ${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}
+      reduced_ci_mode: ${{ needs.prepare.outputs.reduced_ci_mode }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
       runners: ${{ needs.prepare.outputs.runners }}
