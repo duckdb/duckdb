@@ -307,8 +307,9 @@ static unique_ptr<NodeStatistics> ReadSingleJSONFileCardinality(ClientContext &c
 
 TableFunction JSONFunctions::GetReadSingleJSONFileTableFunction(shared_ptr<JSONScanInfo> function_info) {
 	const auto scan_type = function_info->type;
-	TableFunction table_function("read_single_json_file", {LogicalType::VARCHAR}, ReadSingleJSONFileFunction,
-	                             ReadSingleJSONFileBind, ReadSingleJSONFileInitGlobal, ReadSingleJSONFileInitLocal);
+	TableFunction table_function(
+	    "read_single_json_file", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	    ReadSingleJSONFileFunction, ReadSingleJSONFileBind, ReadSingleJSONFileInitGlobal, ReadSingleJSONFileInitLocal);
 	JSONScan::TableFunctionDefaults(table_function);
 	if (scan_type != JSONScanType::READ_JSON_OBJECTS) {
 		// read_json_objects always emits a single JSON column - it has no schema options

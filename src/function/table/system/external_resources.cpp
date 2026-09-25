@@ -211,7 +211,8 @@ static void ExternalResourcesFunction(ClientContext &context, TableFunctionInput
 void DuckDBExternalResourcesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("duckdb_external_resources", {}, ExternalResourcesFunction, ExternalResourcesBind,
 	                 ExternalResourcesInit);
-	fn.GetSignature().AddNamedParameter("discover", LogicalType::BOOLEAN, Value::BOOLEAN(false));
+	fn.GetSignature().WithTypedKwargs("options",
+	                                  [](TypedKwargs &options) { options.Add("discover", LogicalType::BOOLEAN); });
 	set.AddFunction(fn);
 }
 
@@ -285,14 +286,17 @@ static void RegisterExternalResourceFunction(ClientContext &context, TableFuncti
 }
 
 void RegisterExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction fn(
-	    "register_external_resource",
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
-	    RegisterExternalResourceFunction, RegisterExternalResourceBind, RegisterExternalResourceInit);
-	fn.GetSignature()
-	    .AddOptionalNamedParameter("uri", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("attached_db_type", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("deleter_function", LogicalType::VARCHAR);
+	TableFunction fn("register_external_resource",
+	                 FunctionSignature()
+	                     .AddPositionalOnly("type", LogicalType::VARCHAR)
+	                     .AddPositionalOnly("name", LogicalType::VARCHAR)
+	                     .AddPositionalOnly("handle", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)),
+	                 RegisterExternalResourceFunction, RegisterExternalResourceBind, RegisterExternalResourceInit);
+	fn.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("uri", LogicalType::VARCHAR)
+		    .Add("attached_db_type", LogicalType::VARCHAR)
+		    .Add("deleter_function", LogicalType::VARCHAR);
+	});
 	set.AddFunction(fn);
 }
 
@@ -344,9 +348,9 @@ static void DeregisterExternalResourceFunction(ClientContext &context, TableFunc
 }
 
 void DeregisterExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("deregister_external_resource", {LogicalType::VARCHAR},
-	                              DeregisterExternalResourceFunction, DeregisterExternalResourceBind,
-	                              DeregisterExternalResourceInit));
+	set.AddFunction(TableFunction(
+	    "deregister_external_resource", FunctionSignature().AddPositionalOnly("name", LogicalType::VARCHAR),
+	    DeregisterExternalResourceFunction, DeregisterExternalResourceBind, DeregisterExternalResourceInit));
 }
 
 } // namespace duckdb

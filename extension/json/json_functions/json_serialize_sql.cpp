@@ -269,8 +269,9 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 }
 
 PragmaFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
-	return PragmaFunctionSet(PragmaFunction::PragmaCall(
-	    "json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction, {LogicalType::VARCHAR}));
+	return PragmaFunctionSet(
+	    PragmaFunction::PragmaCall("json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction,
+	                               FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR)));
 }
 
 //----------------------------------------------------------------------
@@ -322,8 +323,9 @@ struct ExecuteSqlTableFunction {
 };
 
 TableFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
-	TableFunction func("json_execute_serialized_sql", {LogicalType::VARCHAR}, ExecuteSqlTableFunction::Function,
-	                   ExecuteSqlTableFunction::Bind);
+	TableFunction func("json_execute_serialized_sql",
+	                   FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR),
+	                   ExecuteSqlTableFunction::Function, ExecuteSqlTableFunction::Bind);
 	return TableFunctionSet(func);
 }
 

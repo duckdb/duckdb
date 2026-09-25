@@ -51,7 +51,7 @@ public:
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 	//! Whether the source invocation requested an ordinality column
 	OrdinalityType source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 	//! The set of named input table types for the table-in table-out function

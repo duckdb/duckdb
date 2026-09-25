@@ -6,7 +6,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
@@ -87,7 +86,7 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 }
 
 void MultiFileReader::AddParameters(TableFunction &table_function, MultiFileParameters which) {
-	table_function.GetSignature().WithOptionSchema([&](FunctionOptionSchema &options) {
+	auto add_options = [&](TypedKwargs &options) {
 		if (which == MultiFileParameters::ALL) {
 			// "filename" is a boolean, or the name of the column to hold the file name
 			options.Add("filename", LogicalType::ANY)
@@ -97,7 +96,14 @@ void MultiFileReader::AddParameters(TableFunction &table_function, MultiFilePara
 			    .Add("hive_types_autocast", LogicalType::BOOLEAN);
 		}
 		options.Add("allow_empty", LogicalType::BOOLEAN);
-	});
+	};
+	// a reader can declare its own options before or after these
+	auto &signature = table_function.GetSignature();
+	if (signature.GetTypedKwargs()) {
+		signature.ExtendTypedKwargs(add_options);
+	} else {
+		signature.WithTypedKwargs("options", add_options);
+	}
 }
 
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
@@ -222,8 +228,7 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		}
 	} else if (key == "hive_partitioning") {
 		if (val.IsNull()) {
-			// detected
-			return true;
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
@@ -246,8 +251,7 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (key == "hive_types" || key == "hive_type") {
 		if (val.IsNull()) {
-			// not set
-			return true;
+			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
@@ -620,7 +624,11 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	// the list variant takes ANY as its child type: a file is either a path (VARCHAR) or a STRUCT/VARIANT
 	// holding the path together with the options to open the file with
 	auto list_function = table_function;
-	list_function.GetSignature().GetParameter(0).SetType(LogicalType::LIST(LogicalType::ANY));
+	auto &list_parameter = list_function.GetSignature().GetParameter(0);
+	list_parameter.SetType(LogicalType::LIST(LogicalType::ANY));
+	if (list_parameter.GetName() == "path") {
+		list_parameter.SetName("paths");
+	}
 	function_set.AddFunction(std::move(list_function));
 	// a single file can also be passed as a VARIANT - without this overload it would implicitly cast to VARCHAR
 	// and the stringified variant would be read as a path

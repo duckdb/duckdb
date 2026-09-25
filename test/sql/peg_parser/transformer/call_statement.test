@@ -17,7 +17,7 @@ CALL enable_logging(['QueryLog', 'FileSystem']);
 statement error
 CALL dbgen(sf=0.01, children=-1);
 ----
-<REGEX>:.*No function matches.*dbgen.*
+Invalid named parameter "children" for function dbgen: expected UINTEGER, but got INTEGER
 
 statement ok
 CALL dbgen(sf=0.1);

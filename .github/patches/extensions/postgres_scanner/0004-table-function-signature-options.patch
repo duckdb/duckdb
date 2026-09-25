@@ -1,8 +1,8 @@
 diff --git a/src/postgres_attach.cpp b/src/postgres_attach.cpp
-index 36d04a2..49be02a 100644
+index 36d04a2..fe63438 100644
 --- a/src/postgres_attach.cpp
 +++ b/src/postgres_attach.cpp
-@@ -94,14 +94,19 @@ ORDER BY relname;
+@@ -94,14 +94,20 @@ ORDER BY relname;
  	data.finished = true;
  }
  
@@ -12,12 +12,13 @@ index 36d04a2..49be02a 100644
 -	named_parameters["filter_pushdown"] = LogicalType::BOOLEAN;
 +static FunctionSignature PostgresAttachSignature() {
 +	FunctionSignature signature;
-+	signature.AddParameter("dsn", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("overwrite", LogicalType::BOOLEAN)
-+	    .AddOptionalNamedParameter("filter_pushdown", LogicalType::BOOLEAN)
-+	    .AddOptionalNamedParameter("source_schema", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("sink_schema", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("suffix", LogicalType::VARCHAR);
++	signature.AddParameter("dsn", LogicalType::VARCHAR).WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("overwrite", LogicalType::BOOLEAN)
++		    .Add("filter_pushdown", LogicalType::BOOLEAN)
++		    .Add("source_schema", LogicalType::VARCHAR)
++		    .Add("sink_schema", LogicalType::VARCHAR)
++		    .Add("suffix", LogicalType::VARCHAR);
++	});
 +	return signature;
 +}
  
@@ -30,9 +31,27 @@ index 36d04a2..49be02a 100644
  
  } // namespace duckdb
 diff --git a/src/postgres_binary_copy.cpp b/src/postgres_binary_copy.cpp
-index 8f25e18..02cc629 100644
+index 8f25e18..9387cb9 100644
 --- a/src/postgres_binary_copy.cpp
 +++ b/src/postgres_binary_copy.cpp
+@@ -162,7 +162,7 @@ static unique_ptr<FunctionData> ReadPostgresBinaryBind(ClientContext &context, T
+ 	auto result = make_uniq<PostgresBinaryReadBindData>();
+ 	result->file_path = input.inputs[0].GetValue<string>();
+ 
+-	if (!input.named_parameters.count("columns")) {
++	if (!input.named_parameters.contains("columns")) {
+ 		throw BinderException("read_postgres_binary requires a 'columns' parameter, "
+ 		                      "e.g. columns={col1: 'INTEGER', col2: 'VARCHAR'}");
+ 	}
+@@ -182,7 +182,7 @@ static unique_ptr<FunctionData> ReadPostgresBinaryBind(ClientContext &context, T
+ 	result->names = names;
+ 	result->types = return_types;
+ 
+-	if (input.named_parameters.count("buffer_size")) {
++	if (input.named_parameters.contains("buffer_size")) {
+ 		result->buffer_size = input.named_parameters.at("buffer_size").GetValue<uint64_t>();
+ 	}
+ 
 @@ -190,7 +190,7 @@ static unique_ptr<FunctionData> ReadPostgresBinaryBind(ClientContext &context, T
  }
  
@@ -58,9 +77,9 @@ index 8f25e18..02cc629 100644
  
 +static FunctionSignature ReadPostgresBinarySignature() {
 +	FunctionSignature signature;
-+	signature.AddParameter("file_path", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("columns", LogicalType::ANY)
-+	    .AddOptionalNamedParameter("buffer_size", LogicalType::UBIGINT);
++	signature.AddParameter("file_path", LogicalType::VARCHAR).WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("columns", LogicalType::ANY).Add("buffer_size", LogicalType::UBIGINT);
++	});
 +	return signature;
 +}
 +
@@ -75,10 +94,10 @@ index 8f25e18..02cc629 100644
  	deserialize = PostgresBinaryReadDeserialize;
  }
 diff --git a/src/postgres_query.cpp b/src/postgres_query.cpp
-index 77a2cfa..9d2fcc5 100644
+index 77a2cfa..68cca46 100644
 --- a/src/postgres_query.cpp
 +++ b/src/postgres_query.cpp
-@@ -163,12 +163,21 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunctio
+@@ -163,12 +163,22 @@ static unique_ptr<FunctionData> PGQueryBind(ClientContext &context, TableFunctio
  	return std::move(result);
  }
  
@@ -86,12 +105,13 @@ index 77a2cfa..9d2fcc5 100644
 +	FunctionSignature signature;
 +	signature.AddParameter("database", LogicalType::VARCHAR)
 +	    .AddParameter("sql", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("use_transaction", LogicalType::BOOLEAN)
-+	    .AddOptionalNamedParameter("params", LogicalType::ANY);
-+	if (suppress_dml_output) {
-+		signature.AddOptionalNamedParameter("suppress_dml_output", LogicalType::BOOLEAN);
-+	}
-+	signature.AddOptionalNamedParameter("prepare", LogicalType::BOOLEAN);
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) {
++		    options.Add("use_transaction", LogicalType::BOOLEAN).Add("params", LogicalType::ANY);
++		    if (suppress_dml_output) {
++			    options.Add("suppress_dml_output", LogicalType::BOOLEAN);
++		    }
++		    options.Add("prepare", LogicalType::BOOLEAN);
++	    });
 +	return signature;
 +}
 +
@@ -105,7 +125,7 @@ index 77a2cfa..9d2fcc5 100644
  	PostgresScanFunction scan_function;
  	init_global = scan_function.init_global;
  	init_local = scan_function.init_local;
-@@ -178,10 +187,7 @@ PostgresQueryFunction::PostgresQueryFunction()
+@@ -178,10 +188,7 @@ PostgresQueryFunction::PostgresQueryFunction()
  }
  
  PostgresExecuteFunction::PostgresExecuteFunction()
@@ -118,7 +138,7 @@ index 77a2cfa..9d2fcc5 100644
  	init_global = scan_function.init_global;
  	init_local = scan_function.init_local;
 diff --git a/src/postgres_scanner.cpp b/src/postgres_scanner.cpp
-index 49d8225..4ced300 100644
+index 49d8225..38b142b 100644
 --- a/src/postgres_scanner.cpp
 +++ b/src/postgres_scanner.cpp
 @@ -596,11 +596,12 @@ double PostgresScanProgress(ClientContext &context, const FunctionData *bind_dat
@@ -136,19 +156,53 @@ index 49d8225..4ced300 100644
  	throw NotImplementedException("PostgresScanDeserialize");
  }
  
-diff --git a/src/storage/postgres_connection_pool.cpp b/src/storage/postgres_connection_pool.cpp
-index 1397379..657d87e 100644
---- a/src/storage/postgres_connection_pool.cpp
-+++ b/src/storage/postgres_connection_pool.cpp
-@@ -132,7 +132,7 @@ PostgresConfigurePoolFunction::PostgresConfigurePoolFunction()
-                     ConfigurePool::Function<PostgresConnection, GetConnnectionPoolFromCatalog>, ConfigurePool::Bind,
-                     ConfigurePool::InitGlobalState, ConfigurePool::InitLocalState) {
- 	for (auto &en : ConfigurePool::NamedParameters()) {
--		named_parameters[en.first] = en.second;
-+		GetSignature().AddOptionalNamedParameter(en.first, en.second);
- 	}
+@@ -613,8 +614,12 @@ static BindInfo PostgresGetBindInfo(const optional_ptr<FunctionData> bind_data_p
  }
  
+ PostgresScanFunction::PostgresScanFunction()
+-    : TableFunction("postgres_scan", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, PostgresScan,
+-                    PostgresBind, PostgresInitGlobalState, PostgresInitLocalState) {
++    : TableFunction("postgres_scan",
++                    FunctionSignature()
++                        .AddPositionalOnly("dsn", LogicalType::VARCHAR)
++                        .AddPositionalOnly("schema_name", LogicalType::VARCHAR)
++                        .AddPositionalOnly("table_name", LogicalType::VARCHAR),
++                    PostgresScan, PostgresBind, PostgresInitGlobalState, PostgresInitLocalState) {
+ 	to_string = PostgresScanToString;
+ 	serialize = PostgresScanSerialize;
+ 	deserialize = PostgresScanDeserialize;
+@@ -627,7 +632,11 @@ PostgresScanFunction::PostgresScanFunction()
+ }
+ 
+ PostgresScanFunctionFilterPushdown::PostgresScanFunctionFilterPushdown()
+-    : TableFunction("postgres_scan_pushdown", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
++    : TableFunction("postgres_scan_pushdown",
++                    FunctionSignature()
++                        .AddPositionalOnly("dsn", LogicalType::VARCHAR)
++                        .AddPositionalOnly("schema_name", LogicalType::VARCHAR)
++                        .AddPositionalOnly("table_name", LogicalType::VARCHAR),
+                     PostgresScan, PostgresBind, PostgresInitGlobalState, PostgresInitLocalState) {
+ 	to_string = PostgresScanToString;
+ 	serialize = PostgresScanSerialize;
+diff --git a/src/storage/postgres_connection_pool.cpp b/src/storage/postgres_connection_pool.cpp
+index 1397379..ea6ca9e 100644
+--- a/src/storage/postgres_connection_pool.cpp
++++ b/src/storage/postgres_connection_pool.cpp
+@@ -131,9 +131,11 @@ PostgresConfigurePoolFunction::PostgresConfigurePoolFunction()
+     : TableFunction("postgres_configure_pool", std::vector<LogicalType>(),
+                     ConfigurePool::Function<PostgresConnection, GetConnnectionPoolFromCatalog>, ConfigurePool::Bind,
+                     ConfigurePool::InitGlobalState, ConfigurePool::InitLocalState) {
+-	for (auto &en : ConfigurePool::NamedParameters()) {
+-		named_parameters[en.first] = en.second;
+-	}
++	GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
++		for (auto &en : ConfigurePool::NamedParameters()) {
++			options.Add(en.first, en.second);
++		}
++	});
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
 index 156678c..7e60342 100644
 --- a/src/storage/postgres_insert.cpp
@@ -201,3 +255,74 @@ index bf9b87f..1a8f16d 100644
  			return;
  		}
  		switch (limit.limit_val.Type()) {
+diff --git a/database-connector/src/functions/configure_pool.cpp b/database-connector/src/functions/configure_pool.cpp
+index 0ac9a34..e69b563 100644
+--- a/database-connector/src/functions/configure_pool.cpp
++++ b/database-connector/src/functions/configure_pool.cpp
+@@ -5,7 +5,7 @@ namespace functions {
+ 
+ using namespace duckdb;
+ 
+-static Value Lookup(const named_parameter_map_t &map, const std::string &key) {
++static Value Lookup(const named_argument_map_t &map, const std::string &key) {
+ 	auto it = map.find(Identifier(key));
+ 	if (it == map.end()) {
+ 		return Value();
+@@ -13,7 +13,7 @@ static Value Lookup(const named_parameter_map_t &map, const std::string &key) {
+ 	return it->second;
+ }
+ 
+-static std::pair<std::string, bool> LookupString(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<std::string, bool> LookupString(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair("", true);
+@@ -22,7 +22,7 @@ static std::pair<std::string, bool> LookupString(const named_parameter_map_t &ma
+ 	return std::make_pair(std::move(str), false);
+ }
+ 
+-static std::pair<uint64_t, bool> LookupUBigInt(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<uint64_t, bool> LookupUBigInt(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair(0, true);
+@@ -31,7 +31,7 @@ static std::pair<uint64_t, bool> LookupUBigInt(const named_parameter_map_t &map,
+ 	return std::make_pair(num, false);
+ }
+ 
+-static std::pair<bool, bool> LookupBool(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<bool, bool> LookupBool(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair(false, true);
+@@ -40,7 +40,7 @@ static std::pair<bool, bool> LookupBool(const named_parameter_map_t &map, const
+ 	return std::make_pair(flag, false);
+ }
+ 
+-static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const named_parameter_map_t &map,
++static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const named_argument_map_t &map,
+                                                                          const std::string &key) {
+ 	std::pair<std::string, bool> st_pair = LookupString(map, key);
+ 	if (st_pair.second) {
+@@ -54,7 +54,7 @@ static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const n
+ 	}
+ }
+ 
+-ConfigurePool::BindData::BindData(const named_parameter_map_t &map)
++ConfigurePool::BindData::BindData(const named_argument_map_t &map)
+     : catalog_name(LookupString(map, "catalog_name")), acquire_mode(LookupAcquireMode(map, "acquire_mode")),
+       max_connections(LookupUBigInt(map, "max_connections")),
+       wait_timeout_millis(LookupUBigInt(map, "wait_timeout_millis")),
+diff --git a/database-connector/src/include/dbconnector/functions/configure_pool.hpp b/database-connector/src/include/dbconnector/functions/configure_pool.hpp
+index abfdbcb..66eb3f5 100644
+--- a/database-connector/src/include/dbconnector/functions/configure_pool.hpp
++++ b/database-connector/src/include/dbconnector/functions/configure_pool.hpp
+@@ -28,7 +28,7 @@ struct ConfigurePool {
+ 		std::pair<bool, bool> enable_reaper_thread;
+ 		std::pair<std::string, bool> health_check_query;
+ 
+-		BindData(const duckdb::named_parameter_map_t &map);
++		BindData(const duckdb::named_argument_map_t &map);
+ 	};
+ 
+ 	struct GlobalState : public duckdb::GlobalTableFunctionState {};

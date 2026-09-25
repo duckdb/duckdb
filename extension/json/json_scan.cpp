@@ -121,11 +121,12 @@ unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, Bound
 }
 
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
-	table_function.GetSignature()
-	    .AddNamedParameter("maximum_object_size", LogicalType::UINTEGER, Value::UINTEGER(16777216))
-	    .AddNamedParameter("ignore_errors", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddOptionalNamedParameter("format", LogicalType::VARCHAR)
-	    .AddNamedParameter("compression", LogicalType::VARCHAR, Value("auto_detect"));
+	table_function.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("maximum_object_size", LogicalType::UINTEGER)
+		    .Add("ignore_errors", LogicalType::BOOLEAN)
+		    .Add("format", LogicalType::VARCHAR)
+		    .Add("compression", LogicalType::VARCHAR);
+	});
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
@@ -136,37 +137,34 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 }
 
 void JSONScan::AddReadJSONParameters(TableFunction &table_function) {
-	table_function.GetSignature()
-	    .AddOptionalNamedParameter("columns", LogicalType::ANY)
-	    .AddOptionalNamedParameter("auto_detect", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("geojson", LogicalType::BOOLEAN)
-	    .AddNamedParameter("sample_size", LogicalType::BIGINT, Value::BIGINT(STANDARD_VECTOR_SIZE * 10))
-	    .AddOptionalNamedParameter("dateformat", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("date_format", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("timestampformat", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("timestamp_format", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("records", LogicalType::ANY)
-	    .AddOptionalNamedParameter("array", LogicalType::BOOLEAN)
-	    .AddNamedParameter("maximum_sample_files", LogicalType::BIGINT, Value::BIGINT(32));
+	// extends the options TableFunctionDefaults declares
+	table_function.GetSignature().ExtendTypedKwargs([](TypedKwargs &options) {
+		options.Add("columns", LogicalType::ANY)
+		    .Add("auto_detect", LogicalType::BOOLEAN)
+		    .Add("geojson", LogicalType::BOOLEAN)
+		    .Add("sample_size", LogicalType::BIGINT)
+		    .Add("dateformat", LogicalType::VARCHAR)
+		    .Add("date_format", LogicalType::VARCHAR)
+		    .Add("timestampformat", LogicalType::VARCHAR)
+		    .Add("timestamp_format", LogicalType::VARCHAR)
+		    .Add("records", LogicalType::ANY)
+		    .Add("array", LogicalType::BOOLEAN)
+		    .Add("maximum_sample_files", LogicalType::BIGINT);
+	});
 }
 
 void JSONScan::AddAutoDetectParameters(TableFunction &table_function) {
-	table_function.GetSignature()
-	    .AddNamedParameter("maximum_depth", LogicalType::BIGINT, Value::BIGINT(-1))
-	    .AddNamedParameter("field_appearance_threshold", LogicalType::DOUBLE, Value::DOUBLE(0.1))
-	    .AddNamedParameter("convert_strings_to_integers", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddNamedParameter("map_inference_threshold", LogicalType::BIGINT, Value::BIGINT(200));
+	table_function.GetSignature().ExtendTypedKwargs([](TypedKwargs &options) {
+		options.Add("maximum_depth", LogicalType::BIGINT)
+		    .Add("field_appearance_threshold", LogicalType::DOUBLE)
+		    .Add("convert_strings_to_integers", LogicalType::BOOLEAN)
+		    .Add("map_inference_threshold", LogicalType::BIGINT);
+	});
 }
 
 bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const Value &value,
                            JSONReaderOptions &options) {
 	if (value.IsNull()) {
-		if (key == "format" || key == "columns" || key == "auto_detect" || key == "geojson" || key == "dateformat" ||
-		    key == "date_format" || key == "timestampformat" || key == "timestamp_format" || key == "records" ||
-		    key == "array") {
-			// not set
-			return true;
-		}
 		throw BinderException("Cannot use NULL as argument to key %s", key);
 	}
 	if (key == "ignore_errors") {

@@ -183,19 +183,19 @@ SELECT parameters, parameter_types, varargs FROM duckdb_functions() WHERE functi
 ----
 [a, b]	[INTEGER, INTEGER]	INTEGER
 
-# Functions declared with SetVarArgs still accept any trailing argument, named or not
+# Functions declared with an *args and a **kwargs of the same type still accept any trailing argument, named or not
 query I
 SELECT test_named_varargs(1, 2, 3, x := 4);
 ----
 <2>|1|2|3|4|
 
-# A function declared with SetVarArgs receives its named trailing arguments as kwargs
+# A function declared with an *args and a **kwargs of the same type receives its named trailing arguments as kwargs
 query I
 SELECT test_varargs_bind(1, 2, x := 3, y := 4);
 ----
 <22>|args=1|kwargs=2@2|a=1|*=2|**x=3|**y=4|
 
-# A function declared with SetVarArgs receives its named trailing arguments as kwargs
+# A function declared with an *args and a **kwargs of the same type receives its named trailing arguments as kwargs
 query I
 SELECT test_varargs_bind(1, 2, x := 3, y := 4);
 ----
@@ -232,13 +232,13 @@ SELECT test_args_agg(i, 2, kw := 3) FROM (SELECT i::INTEGER AS i FROM range(1) t
 ----
 <7>|0|2|3|
 
-# ... also for a function declared with SetVarArgs
+# ... also for a function declared with an *args and a **kwargs of the same type
 query I
 SELECT test_varargs_bind(i, 2, x := 3, y := 4) FROM (SELECT i::INTEGER AS i FROM range(1) t(i));
 ----
 <22>|args=1|kwargs=2@2|a=0|*=2|**x=3|**y=4|
 
-# ... also for a function declared with SetVarArgs
+# ... also for a function declared with an *args and a **kwargs of the same type
 query I
 SELECT test_varargs_bind(i, 2, x := 3, y := 4) FROM (SELECT i::INTEGER AS i FROM range(1) t(i));
 ----

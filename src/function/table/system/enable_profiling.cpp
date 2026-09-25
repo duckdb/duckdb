@@ -67,10 +67,6 @@ static unique_ptr<FunctionData> BindEnableProfiling(ClientContext &context, Tabl
 	auto bind_data = make_uniq<EnableProfilingBindData>();
 
 	for (const auto &named_param : input.named_parameters) {
-		if (named_param.second.IsNull()) {
-			// not set - the setting keeps its current value
-			continue;
-		}
 		const auto key = EnumUtil::FromString<ProfilingParameterNames>(named_param.first.GetIdentifierName());
 		switch (key) {
 		case ProfilingParameterNames::FORMAT:
@@ -116,22 +112,23 @@ void EnableProfilingFun::RegisterFunction(BuiltinFunctions &set) {
 	// The metrics are either a single pattern or a list of names
 	TableFunctionSet enable_set("enable_profiling");
 
-	FunctionSignature pattern;
-	pattern.AddParameter("metrics", LogicalType::VARCHAR, Value(LogicalType::VARCHAR))
-	    .AddOptionalNamedParameter("format", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("coverage", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("save_location", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("mode", LogicalType::VARCHAR);
-	enable_set.AddFunction(TableFunction("enable_profiling", std::move(pattern), EnableProfiling, BindEnableProfiling));
+	enable_set.AddFunction(TableFunction(FunctionSignature()
+	                                         .AddParameter("metrics", LogicalType::VARCHAR, Value(LogicalType::VARCHAR))
+	                                         .AddTypedKwargs("options", TypedKwargs()
+	                                                                        .Add("format", LogicalType::VARCHAR)
+	                                                                        .Add("coverage", LogicalType::VARCHAR)
+	                                                                        .Add("save_location", LogicalType::VARCHAR)
+	                                                                        .Add("mode", LogicalType::VARCHAR)),
+	                                     EnableProfiling, BindEnableProfiling));
 
-	FunctionSignature metric_names;
-	metric_names.AddParameter("metrics", LogicalType::LIST(LogicalType::VARCHAR))
-	    .AddOptionalNamedParameter("format", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("coverage", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("save_location", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("mode", LogicalType::VARCHAR);
-	enable_set.AddFunction(
-	    TableFunction("enable_profiling", std::move(metric_names), EnableProfiling, BindEnableProfiling));
+	enable_set.AddFunction(TableFunction(FunctionSignature()
+	                                         .AddParameter("metrics", LogicalType::LIST(LogicalType::VARCHAR))
+	                                         .AddTypedKwargs("options", TypedKwargs()
+	                                                                        .Add("format", LogicalType::VARCHAR)
+	                                                                        .Add("coverage", LogicalType::VARCHAR)
+	                                                                        .Add("save_location", LogicalType::VARCHAR)
+	                                                                        .Add("mode", LogicalType::VARCHAR)),
+	                                     EnableProfiling, BindEnableProfiling));
 
 	set.AddFunction(std::move(enable_set));
 

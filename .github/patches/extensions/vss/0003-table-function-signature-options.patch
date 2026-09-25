@@ -1,3 +1,17 @@
+diff --git a/src/hnsw/hnsw_index_pragmas.cpp b/src/hnsw/hnsw_index_pragmas.cpp
+index e46d075..c66f7ab 100644
+--- a/src/hnsw/hnsw_index_pragmas.cpp
++++ b/src/hnsw/hnsw_index_pragmas.cpp
+@@ -222,7 +222,8 @@ static void CompactIndexPragma(ClientContext &context, const FunctionParameters
+ //-------------------------------------------------------------------------
+ void HNSWModule::RegisterIndexPragmas(ExtensionLoader &loader) {
+ 	loader.RegisterFunction(
+-	    PragmaFunction::PragmaCall("hnsw_compact_index", CompactIndexPragma, {LogicalType::VARCHAR}));
++	    PragmaFunction::PragmaCall("hnsw_compact_index", CompactIndexPragma,
++	                               FunctionSignature().AddPositionalOnly("index_name", LogicalType::VARCHAR)));
+ 
+ 	// TODO: This is kind of ugly and maybe should just take a parameter instead...
+ 	TableFunction info_function("pragma_hnsw_index_info", {}, HNSWIndexInfoExecute, HNSWindexInfoBind,
 diff --git a/src/hnsw/hnsw_optimize_join.cpp b/src/hnsw/hnsw_optimize_join.cpp
 index 9b90e97..eff7fe4 100644
 --- a/src/hnsw/hnsw_optimize_join.cpp

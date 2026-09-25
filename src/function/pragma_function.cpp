@@ -11,7 +11,7 @@ static FunctionSignature PragmaSignature(vector<LogicalType> arguments, LogicalT
 		signature.AddParameter(std::move(argument));
 	}
 	if (varargs.id() != LogicalTypeId::INVALID) {
-		signature.AddArgsParameter("args", std::move(varargs));
+		signature.AddArgs("args", std::move(varargs));
 	}
 	return signature;
 }

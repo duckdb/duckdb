@@ -919,7 +919,7 @@ static unique_ptr<FunctionData> ArgsKwargsBind(BindScalarFunctionInput &input) {
 		case FunctionParameterKind::VAR_POSITIONAL:
 			result->labels.push_back("*");
 			break;
-		case FunctionParameterKind::POSITIONAL:
+		case FunctionParameterKind::POSITIONAL_ONLY:
 			result->labels.push_back("/" + names[i].GetIdentifierName());
 			break;
 		case FunctionParameterKind::VAR_KEYWORD:
@@ -1086,7 +1086,7 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		FunctionSignature sig;
 		sig.AddParameter("a", LogicalType::INTEGER);
 		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100));
-		sig.SetVarArgs(LogicalType::INTEGER);
+		sig.AddArgs("args", LogicalType::INTEGER).AddKwargs("kwargs", LogicalType::INTEGER);
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_named_varargs", std::move(sig), TestFunctionArgs<2>);
 		fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1172,10 +1172,10 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	{
 		FunctionSignature sig;
 		sig.AddParameter("a", LogicalType::INTEGER);
-		sig.AddArgsParameter("args", LogicalType::INTEGER);
-		sig.AddParameter("kw", LogicalType::INTEGER);
-		sig.AddParameter("kw2", LogicalType::INTEGER, Value::INTEGER(7));
-		sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+		sig.AddArgs("args", LogicalType::INTEGER);
+		sig.AddKeywordOnly("kw", LogicalType::INTEGER);
+		sig.AddKeywordOnly("kw2", LogicalType::INTEGER, Value::INTEGER(7));
+		sig.AddKwargs("kwargs", LogicalType::ANY);
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_args_kwargs", sig, TestFunctionArgs<20>);
 		fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1192,9 +1192,9 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	// "a" can only be passed by position, so "a := ..." does not match it and is received by "**kwargs" instead.
 	{
 		FunctionSignature sig;
-		sig.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+		sig.AddPositionalOnly("a", LogicalType::INTEGER);
 		sig.AddParameter("b", LogicalType::INTEGER, Value::INTEGER(9));
-		sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+		sig.AddKwargs("kwargs", LogicalType::ANY);
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_positional_only", std::move(sig), ArgsKwargsBindFunction);
 		fn.SetBindCallback(ArgsKwargsBind);
@@ -1203,11 +1203,12 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	}
 
 	// test_varargs_bind(a INTEGER, ... INTEGER) -> VARCHAR
-	// Declared with SetVarArgs: named trailing arguments are received by an unnamed "**kwargs".
+	// Declared with an "*args" and a "**kwargs" of the same type: named trailing arguments are received by an unnamed
+	// "**kwargs".
 	{
 		FunctionSignature sig;
 		sig.AddParameter("a", LogicalType::INTEGER);
-		sig.SetVarArgs(LogicalType::INTEGER);
+		sig.AddArgs("args", LogicalType::INTEGER).AddKwargs("kwargs", LogicalType::INTEGER);
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_varargs_bind", std::move(sig), ArgsKwargsBindFunction);
 		fn.SetBindCallback(ArgsKwargsBind);
@@ -1216,11 +1217,11 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	}
 
 	// test_varargs_bind(a INTEGER, ... INTEGER) -> VARCHAR
-	// Declared with SetVarArgs: named trailing arguments are received by "**kwargs".
+	// Declared with an "*args" and a "**kwargs" of the same type: named trailing arguments are received by "**kwargs".
 	{
 		FunctionSignature sig;
 		sig.AddParameter("a", LogicalType::INTEGER);
-		sig.SetVarArgs(LogicalType::INTEGER);
+		sig.AddArgs("args", LogicalType::INTEGER).AddKwargs("kwargs", LogicalType::INTEGER);
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_varargs_bind", std::move(sig), ArgsKwargsBindFunction);
 		fn.SetBindCallback(ArgsKwargsBind);
@@ -1233,7 +1234,7 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	{
 		FunctionSignature sig;
 		sig.AddParameter("a", LogicalType::INTEGER);
-		sig.AddArgsParameter("args", LogicalType::INTEGER);
+		sig.AddArgs("args", LogicalType::INTEGER);
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_args_only", std::move(sig), TestFunctionArgs<21>);
 		fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1244,8 +1245,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 	// All variadic arguments are unified to a single type.
 	{
 		FunctionSignature sig;
-		sig.AddArgsParameter("args", LogicalType::TEMPLATE("T"));
-		sig.AddKwargsParameter("kwargs", LogicalType::TEMPLATE("T"));
+		sig.AddArgs("args", LogicalType::TEMPLATE("T"));
+		sig.AddKwargs("kwargs", LogicalType::TEMPLATE("T"));
 		sig.SetReturnType(LogicalType::VARCHAR);
 		ScalarFunction fn("test_args_template", std::move(sig), TestFunctionArgs<23>);
 		fn.SetNullHandling(NH::SPECIAL_HANDLING);
@@ -1282,8 +1283,8 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		                      NH::DEFAULT_NULL_HANDLING);
 		auto &sig = agg.GetSignature();
 		sig.GetParameter(0).SetName("a");
-		sig.AddArgsParameter("args", LogicalType::INTEGER);
-		sig.AddParameter("kw", LogicalType::INTEGER, Value::INTEGER(9));
+		sig.AddArgs("args", LogicalType::INTEGER);
+		sig.AddKeywordOnly("kw", LogicalType::INTEGER, Value::INTEGER(9));
 		loader.RegisterFunction(std::move(agg));
 	}
 }

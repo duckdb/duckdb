@@ -1,7 +1,16 @@
 diff --git a/src/common/parquet_file_scanner.cpp b/src/common/parquet_file_scanner.cpp
-index 7dc26751..0b9d3481 100644
+index 7dc26751..d7e15707 100644
 --- a/src/common/parquet_file_scanner.cpp
 +++ b/src/common/parquet_file_scanner.cpp
+@@ -21,7 +21,7 @@ ParquetFileScanner::ParquetFileScanner(ClientContext &context, const DuckLakeFil
+ 	// Prepare the inputs for the bind
+ 	vector<Value> children;
+ 	children.push_back(Value(file.path));
+-	named_parameter_map_t named_params;
++	named_argument_map_t named_params;
+ 	vector<LogicalType> input_types;
+ 	vector<Identifier> input_names;
+ 
 @@ -45,8 +45,10 @@ ParquetFileScanner::ParquetFileScanner(ClientContext &context, const DuckLakeFil
  		}
  	}
@@ -14,76 +23,114 @@ index 7dc26751..0b9d3481 100644
  
  	bind_data = parquet_scan.bind(context, bind_input, return_types, return_names);
  }
+diff --git a/src/functions/base_metadata_function.cpp b/src/functions/base_metadata_function.cpp
+index 93fe5f2f..8c62e911 100644
+--- a/src/functions/base_metadata_function.cpp
++++ b/src/functions/base_metadata_function.cpp
+@@ -62,7 +62,8 @@ static void MetadataFunctionExecute(ClientContext &context, TableFunctionInput &
+ }
+ 
+ DuckLakeBaseMetadataFunction::DuckLakeBaseMetadataFunction(Identifier name_p, table_function_bind_t bind)
+-    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MetadataFunctionExecute, bind, MetadataFunctionInit) {
++    : TableFunction(std::move(name_p), FunctionSignature().AddPositionalOnly("catalog", LogicalType::VARCHAR),
++                    MetadataFunctionExecute, bind, MetadataFunctionInit) {
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/functions/ducklake_add_data_files.cpp b/src/functions/ducklake_add_data_files.cpp
-index ec7186b7..85b74fd0 100644
+index ec7186b7..02248242 100644
 --- a/src/functions/ducklake_add_data_files.cpp
 +++ b/src/functions/ducklake_add_data_files.cpp
-@@ -1414,10 +1414,11 @@ TableFunctionSet DuckLakeAddDataFilesFunction::GetFunctions() {
+@@ -1412,12 +1412,18 @@ TableFunctionSet DuckLakeAddDataFilesFunction::GetFunctions() {
+ 	TableFunctionSet set("ducklake_add_data_files");
+ 	vector<LogicalType> at_types {LogicalType::VARCHAR, LogicalType::LIST(LogicalType::VARCHAR)};
  	for (auto &type : at_types) {
- 		TableFunction function("ducklake_add_data_files", {LogicalType::VARCHAR, LogicalType::VARCHAR, type},
+-		TableFunction function("ducklake_add_data_files", {LogicalType::VARCHAR, LogicalType::VARCHAR, type},
++		TableFunction function("ducklake_add_data_files",
++		                       FunctionSignature()
++		                           .AddPositionalOnly("catalog", LogicalType::VARCHAR)
++		                           .AddPositionalOnly("table_name", LogicalType::VARCHAR)
++		                           .AddPositionalOnly(type.id() == LogicalTypeId::LIST ? "paths" : "path", type),
  		                       DuckLakeAddDataFilesExecute, DuckLakeAddDataFilesBind, DuckLakeAddDataFilesInit);
 -		function.named_parameters["allow_missing"] = LogicalType::BOOLEAN;
 -		function.named_parameters["ignore_extra_columns"] = LogicalType::BOOLEAN;
 -		function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 -		function.named_parameters["schema"] = LogicalType::VARCHAR;
-+		function.GetSignature()
-+		    .AddOptionalNamedParameter("allow_missing", LogicalType::BOOLEAN)
-+		    .AddOptionalNamedParameter("ignore_extra_columns", LogicalType::BOOLEAN)
-+		    .AddOptionalNamedParameter("hive_partitioning", LogicalType::BOOLEAN)
-+		    .AddOptionalNamedParameter("schema", LogicalType::VARCHAR);
++		function.GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++			options.Add("allow_missing", LogicalType::BOOLEAN)
++			    .Add("ignore_extra_columns", LogicalType::BOOLEAN)
++			    .Add("hive_partitioning", LogicalType::BOOLEAN)
++			    .Add("schema", LogicalType::VARCHAR);
++		});
  		set.AddFunction(function);
  	}
  	return set;
 diff --git a/src/functions/ducklake_cleanup_files.cpp b/src/functions/ducklake_cleanup_files.cpp
-index 50b2c9f6..283292ad 100644
+index 50b2c9f6..433f38f5 100644
 --- a/src/functions/ducklake_cleanup_files.cpp
 +++ b/src/functions/ducklake_cleanup_files.cpp
-@@ -165,17 +165,19 @@ void DuckLakeCleanupExecute(ClientContext &context, TableFunctionInput &data_p,
+@@ -163,19 +163,25 @@ void DuckLakeCleanupExecute(ClientContext &context, TableFunctionInput &data_p,
+ }
+ 
  DuckLakeCleanupOldFilesFunction::DuckLakeCleanupOldFilesFunction()
-     : TableFunction("ducklake_cleanup_old_files", {LogicalType::VARCHAR}, DuckLakeCleanupExecute,
+-    : TableFunction("ducklake_cleanup_old_files", {LogicalType::VARCHAR}, DuckLakeCleanupExecute,
++    : TableFunction("ducklake_cleanup_old_files",
++                    FunctionSignature().AddPositionalOnly("catalog", LogicalType::VARCHAR), DuckLakeCleanupExecute,
                      DuckLakeCleanupOldFilesBind, DuckLakeCleanupInit) {
 -	named_parameters["older_than"] = LogicalType::TIMESTAMP_TZ;
 -	named_parameters["cleanup_all"] = LogicalType::BOOLEAN;
 -	named_parameters["dry_run"] = LogicalType::BOOLEAN;
-+	GetSignature()
-+	    .AddOptionalNamedParameter("older_than", LogicalType::TIMESTAMP_TZ)
-+	    .AddOptionalNamedParameter("cleanup_all", LogicalType::BOOLEAN)
-+	    .AddOptionalNamedParameter("dry_run", LogicalType::BOOLEAN);
++	GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("older_than", LogicalType::TIMESTAMP_TZ)
++		    .Add("cleanup_all", LogicalType::BOOLEAN)
++		    .Add("dry_run", LogicalType::BOOLEAN);
++	});
  }
  
  DuckLakeCleanupOrphanedFilesFunction::DuckLakeCleanupOrphanedFilesFunction()
-     : TableFunction("ducklake_delete_orphaned_files", {LogicalType::VARCHAR}, DuckLakeCleanupExecute,
+-    : TableFunction("ducklake_delete_orphaned_files", {LogicalType::VARCHAR}, DuckLakeCleanupExecute,
++    : TableFunction("ducklake_delete_orphaned_files",
++                    FunctionSignature().AddPositionalOnly("catalog", LogicalType::VARCHAR), DuckLakeCleanupExecute,
                      DuckLakeCleanupOrphanedFilesBind, DuckLakeCleanupInit) {
 -	named_parameters["older_than"] = LogicalType::TIMESTAMP_TZ;
 -	named_parameters["cleanup_all"] = LogicalType::BOOLEAN;
 -	named_parameters["dry_run"] = LogicalType::BOOLEAN;
-+	GetSignature()
-+	    .AddOptionalNamedParameter("older_than", LogicalType::TIMESTAMP_TZ)
-+	    .AddOptionalNamedParameter("cleanup_all", LogicalType::BOOLEAN)
-+	    .AddOptionalNamedParameter("dry_run", LogicalType::BOOLEAN);
++	GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("older_than", LogicalType::TIMESTAMP_TZ)
++		    .Add("cleanup_all", LogicalType::BOOLEAN)
++		    .Add("dry_run", LogicalType::BOOLEAN);
++	});
  }
  
  } // namespace duckdb
 diff --git a/src/functions/ducklake_commit.cpp b/src/functions/ducklake_commit.cpp
-index e28acc10..af01efd9 100644
+index e28acc10..57d2e929 100644
 --- a/src/functions/ducklake_commit.cpp
 +++ b/src/functions/ducklake_commit.cpp
-@@ -70,9 +70,10 @@ static void DuckLakeCommitExecute(ClientContext &context, TableFunctionInput &da
+@@ -68,11 +68,16 @@ static void DuckLakeCommitExecute(ClientContext &context, TableFunctionInput &da
+ }
+ 
  DuckLakeCommitFunction::DuckLakeCommitFunction()
-     : TableFunction("ducklake_commit", {LogicalType::VARCHAR, LogicalType::BIGINT}, DuckLakeCommitExecute,
-                     DuckLakeCommitBind, DuckLakeCommitInit) {
+-    : TableFunction("ducklake_commit", {LogicalType::VARCHAR, LogicalType::BIGINT}, DuckLakeCommitExecute,
+-                    DuckLakeCommitBind, DuckLakeCommitInit) {
 -	named_parameters["max_retry_count"] = LogicalType::BIGINT;
 -	named_parameters["retry_wait_ms"] = LogicalType::BIGINT;
 -	named_parameters["retry_backoff"] = LogicalType::DOUBLE;
-+	GetSignature()
-+	    .AddOptionalNamedParameter("max_retry_count", LogicalType::BIGINT)
-+	    .AddOptionalNamedParameter("retry_wait_ms", LogicalType::BIGINT)
-+	    .AddOptionalNamedParameter("retry_backoff", LogicalType::DOUBLE);
++    : TableFunction("ducklake_commit",
++                    FunctionSignature()
++                        .AddPositionalOnly("metadata_schema", LogicalType::VARCHAR)
++                        .AddPositionalOnly("schema_version", LogicalType::BIGINT),
++                    DuckLakeCommitExecute, DuckLakeCommitBind, DuckLakeCommitInit) {
++	GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("max_retry_count", LogicalType::BIGINT)
++		    .Add("retry_wait_ms", LogicalType::BIGINT)
++		    .Add("retry_backoff", LogicalType::DOUBLE);
++	});
  }
  
  } // namespace duckdb
 diff --git a/src/functions/ducklake_compaction_functions.cpp b/src/functions/ducklake_compaction_functions.cpp
-index c5323a07..b8ad7c04 100644
+index c5323a07..72414fae 100644
 --- a/src/functions/ducklake_compaction_functions.cpp
 +++ b/src/functions/ducklake_compaction_functions.cpp
 @@ -656,7 +656,8 @@ DuckLakeCompactor::GenerateCompactionCommand(vector<DuckLakeCompactionFileEntry>
@@ -137,44 +184,71 @@ index c5323a07..b8ad7c04 100644
  	}
  
  	// Validate that min_file_size < max_file_size if both are set
-@@ -951,12 +958,15 @@ TableFunctionSet DuckLakeMergeAdjacentFilesFunction::GetFunctions() {
- 	for (auto &type : at_types) {
- 		TableFunction function("ducklake_merge_adjacent_files", type, nullptr, nullptr, nullptr);
+@@ -947,16 +954,26 @@ static unique_ptr<LogicalOperator> MergeAdjacentFilesBind(ClientContext &context
+ 
+ TableFunctionSet DuckLakeMergeAdjacentFilesFunction::GetFunctions() {
+ 	TableFunctionSet set("ducklake_merge_adjacent_files");
+-	const vector<vector<LogicalType>> at_types {{LogicalType::VARCHAR, LogicalType::VARCHAR}, {LogicalType::VARCHAR}};
+-	for (auto &type : at_types) {
+-		TableFunction function("ducklake_merge_adjacent_files", type, nullptr, nullptr, nullptr);
++	for (bool with_table : {true, false}) {
++		auto signature = FunctionSignature().AddPositionalOnly("catalog", LogicalType::VARCHAR);
++		if (with_table) {
++			signature.AddPositionalOnly("table_name", LogicalType::VARCHAR);
++		}
++		TableFunction function("ducklake_merge_adjacent_files", std::move(signature), nullptr, nullptr, nullptr);
  		function.bind_operator = MergeAdjacentFilesBind;
 -		function.named_parameters["min_file_size"] = LogicalType::UBIGINT;
 -		function.named_parameters["max_file_size"] = LogicalType::UBIGINT;
 -		function.named_parameters["max_compacted_files"] = LogicalType::UBIGINT;
 -		function.named_parameters["newer_than"] = LogicalType::TIMESTAMP_TZ;
-+		function.GetSignature()
+-		if (type.size() == 2) {
+-			function.named_parameters["schema"] = LogicalType::VARCHAR;
++		function
++		    .GetSignature()
 +		    // BIGINT rather than UBIGINT: a caller writes a plain integer literal, which has no implicit cast to
 +		    // an unsigned parameter. The range is checked where the option is read instead.
-+		    .AddOptionalNamedParameter("min_file_size", LogicalType::BIGINT)
-+		    .AddOptionalNamedParameter("max_file_size", LogicalType::BIGINT)
-+		    .AddOptionalNamedParameter("max_compacted_files", LogicalType::BIGINT)
-+		    .AddOptionalNamedParameter("newer_than", LogicalType::TIMESTAMP_TZ);
- 		if (type.size() == 2) {
--			function.named_parameters["schema"] = LogicalType::VARCHAR;
-+			function.GetSignature().AddOptionalNamedParameter("schema", LogicalType::VARCHAR);
++		    .WithTypedKwargs("options", [&](TypedKwargs &options) {
++			    options.Add("min_file_size", LogicalType::BIGINT)
++			        .Add("max_file_size", LogicalType::BIGINT)
++			        .Add("max_compacted_files", LogicalType::BIGINT)
++			        .Add("newer_than", LogicalType::TIMESTAMP_TZ);
++		    });
++		if (with_table) {
++			function.GetSignature().ExtendTypedKwargs(
++			    [&](TypedKwargs &options) { options.Add("schema", LogicalType::VARCHAR); });
  		}
  		set.AddFunction(function);
  	}
-@@ -978,10 +988,11 @@ TableFunctionSet DuckLakeRewriteDataFilesFunction::GetFunctions() {
- 	for (auto &type : at_types) {
- 		TableFunction function("ducklake_rewrite_data_files", type, nullptr, nullptr, nullptr);
+@@ -974,14 +991,19 @@ static unique_ptr<LogicalOperator> RewriteFilesBind(ClientContext &context, Tabl
+ 
+ TableFunctionSet DuckLakeRewriteDataFilesFunction::GetFunctions() {
+ 	TableFunctionSet set("ducklake_rewrite_data_files");
+-	vector<vector<LogicalType>> at_types {{LogicalType::VARCHAR, LogicalType::VARCHAR}, {LogicalType::VARCHAR}};
+-	for (auto &type : at_types) {
+-		TableFunction function("ducklake_rewrite_data_files", type, nullptr, nullptr, nullptr);
++	for (bool with_table : {true, false}) {
++		auto signature = FunctionSignature().AddPositionalOnly("catalog", LogicalType::VARCHAR);
++		if (with_table) {
++			signature.AddPositionalOnly("table_name", LogicalType::VARCHAR);
++		}
++		TableFunction function("ducklake_rewrite_data_files", std::move(signature), nullptr, nullptr, nullptr);
  		function.bind_operator = RewriteFilesBind;
 -		function.named_parameters["delete_threshold"] = LogicalType::DOUBLE;
 -		function.named_parameters["max_compacted_files"] = LogicalType::UBIGINT;
-+		function.GetSignature()
-+		    .AddOptionalNamedParameter("delete_threshold", LogicalType::DOUBLE)
-+		    .AddOptionalNamedParameter("max_compacted_files", LogicalType::BIGINT);
- 		if (type.size() == 2) {
+-		if (type.size() == 2) {
 -			function.named_parameters["schema"] = LogicalType::VARCHAR;
-+			function.GetSignature().AddOptionalNamedParameter("schema", LogicalType::VARCHAR);
++		function.GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++			options.Add("delete_threshold", LogicalType::DOUBLE).Add("max_compacted_files", LogicalType::BIGINT);
++		});
++		if (with_table) {
++			function.GetSignature().ExtendTypedKwargs(
++			    [&](TypedKwargs &options) { options.Add("schema", LogicalType::VARCHAR); });
  		}
  		set.AddFunction(function);
  	}
 diff --git a/src/functions/ducklake_expire_snapshots.cpp b/src/functions/ducklake_expire_snapshots.cpp
-index 2a531aff..61f84421 100644
+index 2a531aff..cfc73488 100644
 --- a/src/functions/ducklake_expire_snapshots.cpp
 +++ b/src/functions/ducklake_expire_snapshots.cpp
 @@ -47,6 +47,9 @@ static unique_ptr<FunctionData> DuckLakeExpireSnapshotsBind(ClientContext &conte
@@ -187,24 +261,30 @@ index 2a531aff..61f84421 100644
  				if (!snapshot_list.empty()) {
  					snapshot_list += ", ";
  				}
-@@ -151,9 +154,12 @@ void DuckLakeExpireSnapshotsExecute(ClientContext &context, TableFunctionInput &
+@@ -149,11 +152,16 @@ void DuckLakeExpireSnapshotsExecute(ClientContext &context, TableFunctionInput &
+ }
+ 
  DuckLakeExpireSnapshotsFunction::DuckLakeExpireSnapshotsFunction()
-     : TableFunction("ducklake_expire_snapshots", {LogicalType::VARCHAR}, DuckLakeExpireSnapshotsExecute,
-                     DuckLakeExpireSnapshotsBind, DuckLakeExpireSnapshotsInit) {
+-    : TableFunction("ducklake_expire_snapshots", {LogicalType::VARCHAR}, DuckLakeExpireSnapshotsExecute,
+-                    DuckLakeExpireSnapshotsBind, DuckLakeExpireSnapshotsInit) {
 -	named_parameters["older_than"] = LogicalType::TIMESTAMP_TZ;
 -	named_parameters["versions"] = LogicalType::LIST(LogicalType::UBIGINT);
 -	named_parameters["dry_run"] = LogicalType::BOOLEAN;
-+	GetSignature()
-+	    .AddOptionalNamedParameter("older_than", LogicalType::TIMESTAMP_TZ)
-+	    // BIGINT rather than UBIGINT: a caller writes "versions => [2]", which is a list of signed literals, and
-+	    // an unsigned parameter has no implicit cast from one. The range is checked below instead.
-+	    .AddOptionalNamedParameter("versions", LogicalType::LIST(LogicalType::BIGINT))
-+	    .AddOptionalNamedParameter("dry_run", LogicalType::BOOLEAN);
++    : TableFunction("ducklake_expire_snapshots", FunctionSignature().AddPositionalOnly("catalog", LogicalType::VARCHAR),
++                    DuckLakeExpireSnapshotsExecute, DuckLakeExpireSnapshotsBind, DuckLakeExpireSnapshotsInit) {
++	GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options
++		    .Add("older_than", LogicalType::TIMESTAMP_TZ)
++		    // BIGINT rather than UBIGINT: a caller writes "versions => [2]", which is a list of signed literals, and
++		    // an unsigned parameter has no implicit cast from one. The range is checked below instead.
++		    .Add("versions", LogicalType::LIST(LogicalType::BIGINT))
++		    .Add("dry_run", LogicalType::BOOLEAN);
++	});
  }
  
  } // namespace duckdb
 diff --git a/src/functions/ducklake_flush_inlined_data.cpp b/src/functions/ducklake_flush_inlined_data.cpp
-index 659539f0..cdf090e1 100644
+index 659539f0..eeb4e138 100644
 --- a/src/functions/ducklake_flush_inlined_data.cpp
 +++ b/src/functions/ducklake_flush_inlined_data.cpp
 @@ -333,9 +333,9 @@ unique_ptr<LogicalOperator> DuckLakeDataFlusher::GenerateFlushCommand() {
@@ -220,23 +300,26 @@ index 659539f0..cdf090e1 100644
  	auto &column_ids = ducklake_scan->GetMutableColumnIds();
  	for (idx_t i = 0; i < columns.PhysicalColumnCount(); i++) {
  		column_ids.emplace_back(i);
-@@ -785,8 +785,9 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+@@ -784,9 +784,11 @@ static unique_ptr<LogicalOperator> FlushInlinedDataBind(ClientContext &context,
+ }
  
  DuckLakeFlushInlinedDataFunction::DuckLakeFlushInlinedDataFunction()
-     : TableFunction("ducklake_flush_inlined_data", {LogicalType::VARCHAR}, nullptr, nullptr, nullptr) {
+-    : TableFunction("ducklake_flush_inlined_data", {LogicalType::VARCHAR}, nullptr, nullptr, nullptr) {
 -	named_parameters["schema_name"] = LogicalType::VARCHAR;
 -	named_parameters["table_name"] = LogicalType::VARCHAR;
-+	GetSignature()
-+	    .AddOptionalNamedParameter("schema_name", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("table_name", LogicalType::VARCHAR);
++    : TableFunction("ducklake_flush_inlined_data",
++                    FunctionSignature().AddPositionalOnly("catalog", LogicalType::VARCHAR), nullptr, nullptr, nullptr) {
++	GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("schema_name", LogicalType::VARCHAR).Add("table_name", LogicalType::VARCHAR);
++	});
  	bind_operator = FlushInlinedDataBind;
  }
  
 diff --git a/src/functions/ducklake_list_files.cpp b/src/functions/ducklake_list_files.cpp
-index 6efe4c12..08b4a5f1 100644
+index 6efe4c12..daa82071 100644
 --- a/src/functions/ducklake_list_files.cpp
 +++ b/src/functions/ducklake_list_files.cpp
-@@ -107,10 +107,11 @@ static unique_ptr<FunctionData> DuckLakeListFilesBind(ClientContext &context, Ta
+@@ -107,10 +107,13 @@ static unique_ptr<FunctionData> DuckLakeListFilesBind(ClientContext &context, Ta
  
  DuckLakeListFilesFunction::DuckLakeListFilesFunction()
      : DuckLakeBaseMetadataFunction("ducklake_list_files", DuckLakeListFilesBind) {
@@ -245,43 +328,60 @@ index 6efe4c12..08b4a5f1 100644
 -	named_parameters["snapshot_version"] = LogicalType::BIGINT;
 -	named_parameters["snapshot_time"] = LogicalType::TIMESTAMP_TZ;
 +	GetSignature()
-+	    .AddParameter("catalog", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("schema", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("snapshot_version", LogicalType::BIGINT)
-+	    .AddOptionalNamedParameter("snapshot_time", LogicalType::TIMESTAMP_TZ);
++	    .AddPositionalOnly("table_name", LogicalType::VARCHAR)
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) {
++		    options.Add("schema", LogicalType::VARCHAR)
++		        .Add("snapshot_version", LogicalType::BIGINT)
++		        .Add("snapshot_time", LogicalType::TIMESTAMP_TZ);
++	    });
  }
  
  } // namespace duckdb
 diff --git a/src/functions/ducklake_set_commit_message.cpp b/src/functions/ducklake_set_commit_message.cpp
-index e1702951..7e38cac1 100644
+index e1702951..e1ab55a7 100644
 --- a/src/functions/ducklake_set_commit_message.cpp
 +++ b/src/functions/ducklake_set_commit_message.cpp
-@@ -55,6 +55,6 @@ void DuckLakeSetCommitMessageExecute(ClientContext &context, TableFunctionInput
+@@ -53,8 +53,13 @@ void DuckLakeSetCommitMessageExecute(ClientContext &context, TableFunctionInput
+ }
+ 
  DuckLakeSetCommitMessage::DuckLakeSetCommitMessage()
-     : TableFunction("ducklake_set_commit_message", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
+-    : TableFunction("ducklake_set_commit_message", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
++    : TableFunction("ducklake_set_commit_message",
++                    FunctionSignature()
++                        .AddPositionalOnly("catalog", LogicalType::VARCHAR)
++                        .AddPositionalOnly("author", LogicalType::VARCHAR)
++                        .AddPositionalOnly("commit_message", LogicalType::VARCHAR),
                      DuckLakeSetCommitMessageExecute, DuckLakeSetCommitMessageBind, DuckLakeSetCommitMessageInit) {
 -	named_parameters["extra_info"] = LogicalType::VARCHAR;
-+	GetSignature().AddOptionalNamedParameter("extra_info", LogicalType::VARCHAR);
++	GetSignature().WithTypedKwargs("options",
++	                               [&](TypedKwargs &options) { options.Add("extra_info", LogicalType::VARCHAR); });
  }
  } // namespace duckdb
 diff --git a/src/functions/ducklake_set_option.cpp b/src/functions/ducklake_set_option.cpp
-index 6df9cf4f..013907a6 100644
+index 6df9cf4f..c130d5e0 100644
 --- a/src/functions/ducklake_set_option.cpp
 +++ b/src/functions/ducklake_set_option.cpp
-@@ -234,8 +234,9 @@ void DuckLakeSetOptionExecute(ClientContext &context, TableFunctionInput &data_p
+@@ -232,10 +232,15 @@ void DuckLakeSetOptionExecute(ClientContext &context, TableFunctionInput &data_p
+ }
+ 
  DuckLakeSetOptionFunction::DuckLakeSetOptionFunction()
-     : TableFunction("ducklake_set_option", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
+-    : TableFunction("ducklake_set_option", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
++    : TableFunction("ducklake_set_option",
++                    FunctionSignature()
++                        .AddPositionalOnly("catalog", LogicalType::VARCHAR)
++                        .AddPositionalOnly("option", LogicalType::VARCHAR)
++                        .AddPositionalOnly("value", LogicalType::ANY),
                      DuckLakeSetOptionExecute, DuckLakeSetOptionBind, DuckLakeSetOptionInit) {
 -	named_parameters["table_name"] = LogicalType::VARCHAR;
 -	named_parameters["schema"] = LogicalType::VARCHAR;
-+	GetSignature()
-+	    .AddOptionalNamedParameter("table_name", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("schema", LogicalType::VARCHAR);
++	GetSignature().WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("table_name", LogicalType::VARCHAR).Add("schema", LogicalType::VARCHAR);
++	});
  }
  
  } // namespace duckdb
 diff --git a/src/functions/ducklake_table_insertions.cpp b/src/functions/ducklake_table_insertions.cpp
-index 8d94e903..19a0440d 100644
+index 8d94e903..8c3ddfda 100644
 --- a/src/functions/ducklake_table_insertions.cpp
 +++ b/src/functions/ducklake_table_insertions.cpp
 @@ -57,7 +57,7 @@ static unique_ptr<FunctionData> DuckLakeTableChangesBind(ClientContext &context,
@@ -293,6 +393,34 @@ index 8d94e903..19a0440d 100644
  
  	auto &function_info = input.table_function.function_info->Cast<DuckLakeFunctionInfo>();
  	names = StringsToIdentifiers(function_info.column_names);
+@@ -92,7 +92,12 @@ TableFunctionSet DuckLakeTableInsertionsFunction::GetFunctions() {
+ 	TableFunctionSet set("ducklake_table_insertions");
+ 	vector<LogicalType> at_types {LogicalType::BIGINT, LogicalType::TIMESTAMP_TZ};
+ 	for (auto &type : at_types) {
+-		set.AddFunction(TableFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, type, type},
++		set.AddFunction(TableFunction(FunctionSignature()
++		                                  .AddPositionalOnly("catalog", LogicalType::VARCHAR)
++		                                  .AddPositionalOnly("schema_name", LogicalType::VARCHAR)
++		                                  .AddPositionalOnly("table_name", LogicalType::VARCHAR)
++		                                  .AddPositionalOnly("start_snapshot", type)
++		                                  .AddPositionalOnly("end_snapshot", type),
+ 		                              DuckLakeChangesExecute, DuckLakeTableInsertionsBind, DuckLakeChangesInit));
+ 	}
+ 	return set;
+@@ -102,7 +107,12 @@ TableFunctionSet DuckLakeTableDeletionsFunction::GetFunctions() {
+ 	TableFunctionSet set("ducklake_table_deletions");
+ 	vector<LogicalType> at_types {LogicalType::BIGINT, LogicalType::TIMESTAMP_TZ};
+ 	for (auto &type : at_types) {
+-		set.AddFunction(TableFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR, type, type},
++		set.AddFunction(TableFunction(FunctionSignature()
++		                                  .AddPositionalOnly("catalog", LogicalType::VARCHAR)
++		                                  .AddPositionalOnly("schema_name", LogicalType::VARCHAR)
++		                                  .AddPositionalOnly("table_name", LogicalType::VARCHAR)
++		                                  .AddPositionalOnly("start_snapshot", type)
++		                                  .AddPositionalOnly("end_snapshot", type),
+ 		                              DuckLakeChangesExecute, DuckLakeTableDeletionsBind, DuckLakeChangesInit));
+ 	}
+ 	return set;
 diff --git a/src/include/storage/ducklake_multi_file_reader.hpp b/src/include/storage/ducklake_multi_file_reader.hpp
 index 355ef605..2b0e08fe 100644
 --- a/src/include/storage/ducklake_multi_file_reader.hpp
@@ -388,10 +516,10 @@ index 534ecc1c..b08416c7 100644
  			throw InvalidInputException("ducklake_scan requires the parquet extension to be loaded");
  		}
 diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
-index c923ebd8..6a709b37 100644
+index c923ebd8..32de8e5a 100644
 --- a/src/storage/ducklake_table_entry.cpp
 +++ b/src/storage/ducklake_table_entry.cpp
-@@ -349,7 +349,8 @@ TableFunction DuckLakeTableEntry::GetScanFunction(ClientContext &context, unique
+@@ -349,9 +349,10 @@ TableFunction DuckLakeTableEntry::GetScanFunction(ClientContext &context, unique
  	throw InternalException("DuckLakeTableEntry::GetScanFunction called without entry lookup info");
  }
  
@@ -399,8 +527,11 @@ index c923ebd8..6a709b37 100644
 +unique_ptr<FunctionData> DuckLakeFunctions::BindDuckLakeScan(ClientContext &context,
 +                                                             BoundTableFunction &function) {
  	vector<Value> inputs {Value("")};
- 	named_parameter_map_t param_map;
+-	named_parameter_map_t param_map;
++	named_argument_map_t param_map;
  	vector<LogicalType> return_types;
+ 	vector<Identifier> input_table_names;
+ 	TableFunctionRef empty_ref;
 @@ -363,6 +364,13 @@ unique_ptr<FunctionData> DuckLakeFunctions::BindDuckLakeScan(ClientContext &cont
  	return function.bind(context, bind_input, return_types, bind_names);
  }

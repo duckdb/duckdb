@@ -188,9 +188,9 @@ void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction settings_fun("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit);
-	settings_fun.GetSignature()
-	    .AddNamedParameter("debug", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddNamedParameter("deprecated", LogicalType::BOOLEAN, Value::BOOLEAN(false));
+	settings_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("debug", LogicalType::BOOLEAN).Add("deprecated", LogicalType::BOOLEAN);
+	});
 	set.AddFunction(settings_fun);
 }
 

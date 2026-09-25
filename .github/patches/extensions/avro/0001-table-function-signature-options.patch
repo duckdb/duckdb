@@ -1,0 +1,15 @@
+diff --git a/src/avro_metadata.cpp b/src/avro_metadata.cpp
+index bea7ffd..a9ee27a 100644
+--- a/src/avro_metadata.cpp
++++ b/src/avro_metadata.cpp
+@@ -76,8 +76,8 @@ static void AvroMetadataFunction(ClientContext &context, TableFunctionInput &dat
+ }
+ 
+ TableFunction AvroMetadata::GetFunction() {
+-	TableFunction func("avro_metadata", {LogicalType::VARCHAR}, AvroMetadataFunction, AvroMetadataBind,
+-	                   AvroMetadataInit);
++	TableFunction func("avro_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
++	                   AvroMetadataFunction, AvroMetadataBind, AvroMetadataInit);
+ 	return func;
+ }
+ 

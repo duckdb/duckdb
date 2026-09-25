@@ -93,8 +93,8 @@ class MultiFileFunction : public TableFunction {
 public:
 	explicit MultiFileFunction(
 	    Identifier name_p, MultiFileReader::MultiFileParameters parameters = MultiFileReader::MultiFileParameters::ALL)
-	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
-	                    MultiFileInitLocal) {
+	    : TableFunction(std::move(name_p), FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	                    MultiFileScan, MultiFileBind, MultiFileInitGlobal, MultiFileInitLocal) {
 		cardinality = MultiFileCardinality;
 		table_scan_progress = MultiFileProgress;
 		get_partition_data = MultiFileGetPartitionData;

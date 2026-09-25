@@ -650,7 +650,7 @@ string CSVReaderOptions::GetUserDefinedParameters() const {
 	return result;
 }
 
-void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
+void CSVReaderOptions::FromNamedParameters(const named_argument_map_t &in, ClientContext &context,
                                            MultiFileOptions &file_options) {
 	for (auto &kv : in) {
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
@@ -661,10 +661,6 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 }
 
 void CSVReaderOptions::ParseOption(ClientContext &context, const Identifier &key, const Value &val) {
-	if (val.IsNull() && key != "auto_detect") {
-		// not set - a dialect option is detected, and every other one keeps its default
-		return;
-	}
 	// skip variables that are specific to auto-detection
 	if (StoreUserDefinedParameter(key)) {
 		// the parameter list is rendered back into a SQL prompt by GetUserDefinedParameters, so it is stored

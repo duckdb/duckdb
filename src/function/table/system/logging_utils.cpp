@@ -73,9 +73,6 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 				throw InvalidInputException("EnableLogging: level cannot be NULL");
 			}
 			result->config.level = EnumUtil::FromString<LogLevel>(param.second.ToString());
-		} else if (param.second.IsNull()) {
-			// a storage option that is not set
-			continue;
 		} else if (key == "storage") {
 			storage_isset = true;
 			result->config.storage = param.second.ToString();
@@ -180,19 +177,17 @@ static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFu
 void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	auto enable_fun = TableFunction("enable_logging", {}, EnableLogging, BindEnableLogging, nullptr, nullptr);
 
-	// Base config
-	// a positional list, so it declares "*args" and no "**kwargs" - an argument named after no parameter is an error
-	enable_fun.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	enable_fun.GetSignature()
-	    .AddNamedParameter("level", LogicalType::VARCHAR, Value("INFO"))
-	    .AddOptionalNamedParameter("storage", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("storage_config", LogicalType::ANY);
-
-	// Config that is forwarded to the storage_config struct as syntactic sugar
-	enable_fun.GetSignature()
-	    .AddOptionalNamedParameter("storage_path", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("storage_normalize", LogicalType::BOOLEAN)
-	    .AddOptionalNamedParameter("storage_buffer_size", LogicalType::UBIGINT);
+	    .AddArgs("args", LogicalType::ANY)
+	    .AddKeywordOnly("level", LogicalType::VARCHAR, Value("INFO"))
+	    .WithTypedKwargs("options", [](TypedKwargs &options) {
+		    options.Add("storage", LogicalType::VARCHAR)
+		        .Add("storage_config", LogicalType::ANY)
+		        // forwarded to the storage_config struct as syntactic sugar
+		        .Add("storage_path", LogicalType::VARCHAR)
+		        .Add("storage_normalize", LogicalType::BOOLEAN)
+		        .Add("storage_buffer_size", LogicalType::UBIGINT);
+	    });
 
 	set.AddFunction(enable_fun);
 

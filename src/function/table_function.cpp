@@ -55,6 +55,11 @@ TableFunction::TableFunction(Identifier name, FunctionSignature signature, table
       SimpleFunction(std::move(name), std::move(signature)) {
 }
 
+TableFunction::TableFunction(FunctionSignature signature, table_function_t function_, table_function_bind_t bind,
+                             table_function_init_global_t init_global, table_function_init_local_t init_local)
+    : BaseTableFunction(function_, bind, init_global, init_local), SimpleFunction("", std::move(signature)) {
+}
+
 TableFunction::TableFunction(Identifier name, FunctionSignature signature, std::nullptr_t, table_function_bind_t bind,
                              table_function_init_global_t init_global, table_function_init_local_t init_local)
     : BaseTableFunction(nullptr, bind, init_global, init_local), SimpleFunction(std::move(name), std::move(signature)) {
@@ -137,36 +142,36 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 }
 
 void BoundTableFunction::SetCallArguments(const vector<Value> &parameters,
-                                          const named_parameter_map_t &named_parameters) {
+                                          const named_argument_map_t &named_parameters) {
 	auto &signature = GetSignature();
 	const auto positional_count = signature.GetPositionalParameterCount();
 	arguments.clear();
 	for (idx_t i = 0; i < positional_count; i++) {
 		arguments.push_back(signature.GetParameter(i).GetType());
 	}
-	auto &varargs = signature.GetVarArgs();
+	auto args = signature.GetArgs();
 	for (idx_t i = positional_count; i < parameters.size(); i++) {
-		auto is_typed = varargs.id() != LogicalTypeId::INVALID && varargs.id() != LogicalTypeId::ANY;
-		arguments.push_back(is_typed ? varargs : parameters[i].type());
+		auto is_typed = args && args->GetType().id() != LogicalTypeId::ANY;
+		arguments.push_back(is_typed ? args->GetType() : parameters[i].type());
 	}
 	const auto positional_argument_count = arguments.size();
 
-	// only the options the signature receives by name - sorted, as the map has no order of its own
+	// only the options the signature receives by name, in the order they were passed
 	vector<Identifier> names;
 	for (auto &entry : named_parameters) {
 		auto param_idx = signature.GetParameterIndexByName(entry.first);
-		auto is_keyword_only = param_idx.IsValid() && !signature.GetParameter(param_idx.GetIndex()).AcceptsPosition();
-		if (is_keyword_only || (!param_idx.IsValid() && signature.GetKwargsParameter())) {
-			names.push_back(entry.first);
+		if (!param_idx.IsValid()) {
+			if (signature.GetKwargs()) {
+				names.push_back(entry.first);
+				arguments.push_back(entry.second.type());
+			}
+			continue;
 		}
-	}
-	std::sort(names.begin(), names.end(), [](const Identifier &lhs, const Identifier &rhs) {
-		return StringUtil::CILessThan(lhs.GetIdentifierName(), rhs.GetIdentifierName());
-	});
-	for (auto &name : names) {
-		auto param_idx = signature.GetParameterIndexByName(name);
-		arguments.push_back(param_idx.IsValid() ? signature.GetParameter(param_idx.GetIndex()).GetType()
-		                                        : named_parameters.at(name).type());
+		auto &param = signature.GetParameter(param_idx.GetIndex());
+		if (!param.AcceptsPosition()) {
+			names.push_back(entry.first);
+			arguments.push_back(param.GetType());
+		}
 	}
 	SetNamedArguments(positional_argument_count, std::move(names));
 }

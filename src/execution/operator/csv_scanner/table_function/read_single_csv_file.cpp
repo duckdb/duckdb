@@ -468,8 +468,9 @@ static unique_ptr<NodeStatistics> ReadSingleCSVFileCardinality(ClientContext &co
 }
 
 TableFunction ReadCSVTableFunction::GetSingleFileFunction() {
-	TableFunction read_csv("read_single_csv_file", {LogicalType::VARCHAR}, ReadSingleCSVFileFunction,
-	                       ReadSingleCSVFileBind, ReadSingleCSVFileInitGlobal, ReadSingleCSVFileInitLocal);
+	TableFunction read_csv("read_single_csv_file", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	                       ReadSingleCSVFileFunction, ReadSingleCSVFileBind, ReadSingleCSVFileInitGlobal,
+	                       ReadSingleCSVFileInitLocal);
 	read_csv.combine_schema = ReadSingleCSVFileCombineSchema;
 	read_csv.claim_batch = ReadSingleCSVFileClaimBatch;
 	read_csv.finish_batch = ReadSingleCSVFileFinishBatch;

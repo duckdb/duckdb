@@ -514,18 +514,20 @@ static vector<PartitionStatistics> ParquetGetPartitionStats(ClientContext &conte
 
 TableFunctionSet ParquetScanFunction::GetFunctionSet() {
 	MultiFileFunction<ParquetMultiFileInfo> table_function("parquet_scan");
-	table_function.GetSignature()
-	    .AddOptionalNamedParameter("binary_as_string", LogicalType::BOOLEAN)
-	    .AddNamedParameter("file_row_number", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddNamedParameter("debug_use_openssl", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddNamedParameter("compression", LogicalType::VARCHAR, Value("auto"))
-	    .AddNamedParameter("explicit_cardinality", LogicalType::UBIGINT, Value::UBIGINT(0))
-	    .AddOptionalNamedParameter("schema", LogicalTypeId::ANY)
-	    .AddOptionalNamedParameter("encryption_config", LogicalTypeId::ANY)
-	    .AddOptionalNamedParameter("parquet_version", LogicalType::VARCHAR)
-	    .AddNamedParameter("can_have_nan", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddNamedParameter("prefetch_strategy", LogicalType::VARCHAR, Value("auto"))
-	    .AddNamedParameter("utf8_validation", LogicalType::VARCHAR, Value("strict"));
+	// extends the options MultiFileFunction declares
+	table_function.GetSignature().ExtendTypedKwargs([](TypedKwargs &options) {
+		options.Add("binary_as_string", LogicalType::BOOLEAN)
+		    .Add("file_row_number", LogicalType::BOOLEAN)
+		    .Add("debug_use_openssl", LogicalType::BOOLEAN)
+		    .Add("compression", LogicalType::VARCHAR)
+		    .Add("explicit_cardinality", LogicalType::UBIGINT)
+		    .Add("schema", LogicalTypeId::ANY)
+		    .Add("encryption_config", LogicalTypeId::ANY)
+		    .Add("parquet_version", LogicalType::VARCHAR)
+		    .Add("can_have_nan", LogicalType::BOOLEAN)
+		    .Add("prefetch_strategy", LogicalType::VARCHAR)
+		    .Add("utf8_validation", LogicalType::VARCHAR);
+	});
 	table_function.statistics_extended = MultiFileFunction<ParquetMultiFileInfo>::MultiFileScanStatsExtended;
 	table_function.get_metrics = ParquetScanGetMetrics;
 	table_function.projection_expression_pushdown = ParquetProjectionExpressionPushdown;
@@ -604,10 +606,6 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const Identifier 
 	auto &parquet_options = base_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
 	if (val.IsNull()) {
-		if (key == "binary_as_string" || key == "schema" || key == "encryption_config" || key == "parquet_version") {
-			// not set
-			return true;
-		}
 		throw BinderException("Cannot use NULL as argument to %s", key);
 	}
 	if (key == "compression") {

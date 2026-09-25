@@ -30,8 +30,9 @@ public:
 	vector<shared_ptr<const T>> functions;
 
 public:
-	void AddFunction(T function) {
+	auto AddFunction(T function) & -> FunctionSet<T> & {
 		functions.push_back(make_shared_ptr<T>(std::move(function)));
+		return *this;
 	}
 	void AddFunction(shared_ptr<const T> function) {
 		functions.push_back(std::move(function));

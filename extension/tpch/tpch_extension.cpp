@@ -58,10 +58,6 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionB
 
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
-			if (kv.first == "catalog" || kv.first == "schema" || kv.first == "step") {
-				// not set - the current database and schema, and no step
-				continue;
-			}
 			throw BinderException("Cannot use NULL as function argument");
 		}
 		if (kv.first == "sf") {
@@ -251,20 +247,22 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind, DbgenInit);
-	dbgen_func.GetSignature()
-	    .AddNamedParameter("sf", LogicalType::DOUBLE, Value::DOUBLE(0))
-	    .AddNamedParameter("overwrite", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddOptionalNamedParameter("catalog", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("schema", LogicalType::VARCHAR)
-	    .AddNamedParameter("suffix", LogicalType::VARCHAR, Value(""))
-	    .AddNamedParameter("children", LogicalType::UINTEGER, Value::UINTEGER(1))
-	    .AddOptionalNamedParameter("step", LogicalType::UINTEGER);
+	dbgen_func.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("sf", LogicalType::DOUBLE)
+		    .Add("overwrite", LogicalType::BOOLEAN)
+		    .Add("catalog", LogicalType::VARCHAR)
+		    .Add("schema", LogicalType::VARCHAR)
+		    .Add("suffix", LogicalType::VARCHAR)
+		    .Add("children", LogicalType::UINTEGER)
+		    .Add("step", LogicalType::UINTEGER);
+	});
 	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	dbgen_func.table_scan_progress = DbgenProgress;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
-	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery, {LogicalType::BIGINT});
+	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery,
+	                                            FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
 	loader.RegisterFunction(tpch_func);
 
 	// create the TPCH_QUERIES function that returns the query

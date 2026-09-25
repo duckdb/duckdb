@@ -57,10 +57,6 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
-			if (kv.first == "catalog" || kv.first == "schema") {
-				// not set - the current database and schema
-				continue;
-			}
 			throw BinderException("Cannot use NULL as function argument");
 		}
 		if (kv.first == "sf") {
@@ -252,13 +248,14 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind, DsdgenInit);
-	dsdgen_func.GetSignature()
-	    .AddNamedParameter("sf", LogicalType::DOUBLE, Value::DOUBLE(0))
-	    .AddNamedParameter("overwrite", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddNamedParameter("keys", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddOptionalNamedParameter("catalog", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("schema", LogicalType::VARCHAR)
-	    .AddNamedParameter("suffix", LogicalType::VARCHAR, Value(""));
+	dsdgen_func.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("sf", LogicalType::DOUBLE)
+		    .Add("overwrite", LogicalType::BOOLEAN)
+		    .Add("keys", LogicalType::BOOLEAN)
+		    .Add("catalog", LogicalType::VARCHAR)
+		    .Add("schema", LogicalType::VARCHAR)
+		    .Add("suffix", LogicalType::VARCHAR);
+	});
 	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
 	dsdgen_func.table_scan_progress = DsdgenProgress;
 	dsdgen_func.cardinality = DsdgenCardinality;
@@ -266,7 +263,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(dsdgen_func);
 
 	// create the TPCDS pragma that allows us to run the query
-	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, {LogicalType::BIGINT});
+	auto tpcds_func = PragmaFunction::PragmaCall(
+	    "tpcds", PragmaTpcdsQuery, FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
 	loader.RegisterFunction(tpcds_func);
 
 	// create the TPCDS_QUERIES function that returns the query

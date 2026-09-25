@@ -4,7 +4,7 @@
 statement error
 select * FROM test_all_types(use_large_bignum := -32768, use_large_enum := NULL);
 ----
-<REGEX>:.*No function matches.*test_all_types.*
+Invalid named parameter "use_large_bignum" for function test_all_types: expected BOOLEAN, but got INTEGER
 
 statement error
 select * FROM test_all_types(use_large_bignum := NULL);

@@ -1,5 +1,26 @@
+diff --git a/src/functions/uc_checkpoint.cpp b/src/functions/uc_checkpoint.cpp
+index 7191266..a27696e 100644
+--- a/src/functions/uc_checkpoint.cpp
++++ b/src/functions/uc_checkpoint.cpp
+@@ -83,12 +83,14 @@ static void CheckpointTableFunction(ClientContext &context, TableFunctionInput &
+ }
+ 
+ UCCheckpointTableFunction::UCCheckpointTableFunction()
+-    : TableFunction("unity_catalog_checkpoint_table", {LogicalType::VARCHAR}, CheckpointTableFunction,
++    : TableFunction("unity_catalog_checkpoint_table",
++                    FunctionSignature().AddPositionalOnly("table_name", LogicalType::VARCHAR), CheckpointTableFunction,
+                     CheckpointTableBind<false>) {
+ }
+ 
+ UCForceCheckpointTableFunction::UCForceCheckpointTableFunction()
+-    : TableFunction("unity_catalog_force_checkpoint_table", {LogicalType::VARCHAR}, CheckpointTableFunction,
++    : TableFunction("unity_catalog_force_checkpoint_table",
++                    FunctionSignature().AddPositionalOnly("table_name", LogicalType::VARCHAR), CheckpointTableFunction,
+                     CheckpointTableBind<true>) {
+ }
+ 
 diff --git a/src/functions/uc_deletion_vector.cpp b/src/functions/uc_deletion_vector.cpp
-index ffab32e..5d9530e 100644
+index ffab32e..e327ad0 100644
 --- a/src/functions/uc_deletion_vector.cpp
 +++ b/src/functions/uc_deletion_vector.cpp
 @@ -92,10 +92,16 @@ static void ReadDVFunction(ClientContext &, TableFunctionInput &data_p, DataChun
@@ -8,9 +29,9 @@ index ffab32e..5d9530e 100644
  
 +static FunctionSignature ReadDeletionVectorSignature() {
 +	FunctionSignature signature;
-+	signature.AddParameter("path", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("content_offset", LogicalType::BIGINT)
-+	    .AddOptionalNamedParameter("content_size", LogicalType::BIGINT);
++	signature.AddParameter("path", LogicalType::VARCHAR).WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("content_offset", LogicalType::BIGINT).Add("content_size", LogicalType::BIGINT);
++	});
 +	return signature;
 +}
 +
@@ -23,7 +44,7 @@ index ffab32e..5d9530e 100644
  
  } // namespace duckdb
 diff --git a/src/functions/uc_plan_table_scan.cpp b/src/functions/uc_plan_table_scan.cpp
-index 8a41c20..fcee062 100644
+index 8a41c20..9574fd5 100644
 --- a/src/functions/uc_plan_table_scan.cpp
 +++ b/src/functions/uc_plan_table_scan.cpp
 @@ -68,12 +68,20 @@ static void PlanScanFunction(ClientContext &, TableFunctionInput &data_p, DataCh
@@ -37,7 +58,7 @@ index 8a41c20..fcee062 100644
 +	    .AddParameter("schema", LogicalType::VARCHAR)
 +	    .AddParameter("table", LogicalType::VARCHAR)
 +	    .AddParameter("token", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("filter", LogicalType::VARCHAR);
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) { options.Add("filter", LogicalType::VARCHAR); });
 +	return signature;
 +}
 +
@@ -52,6 +73,20 @@ index 8a41c20..fcee062 100644
  }
  
  } // namespace duckdb
+diff --git a/src/functions/uc_table_data_path.cpp b/src/functions/uc_table_data_path.cpp
+index 9e53691..2584798 100644
+--- a/src/functions/uc_table_data_path.cpp
++++ b/src/functions/uc_table_data_path.cpp
+@@ -60,7 +60,8 @@ static void UCTableDataPathExecute(ClientContext &context, TableFunctionInput &d
+ }
+ 
+ UCTableDataPath::UCTableDataPath(UCSchemaEntry &schema)
+-    : TableFunction("table_data_path", {LogicalType::VARCHAR}, UCTableDataPathExecute, UCTableDataPathBind) {
++    : TableFunction("table_data_path", FunctionSignature().AddPositionalOnly("table_name", LogicalType::VARCHAR),
++                    UCTableDataPathExecute, UCTableDataPathBind) {
+ 	function_info = make_shared_ptr<UCTableDataPathInfo>(schema);
+ }
+ 
 diff --git a/src/include/uc_multi_file_list.hpp b/src/include/uc_multi_file_list.hpp
 index 9b547a6..ff89d30 100644
 --- a/src/include/uc_multi_file_list.hpp
@@ -66,10 +101,17 @@ index 9b547a6..ff89d30 100644
  // The DeleteFilter for one data file, or nullptr if it has no deletes. Positional deletes are
  // supported in both physical forms (parquet (file_path, pos) files and deletion-vector puffin
 diff --git a/src/storage/uc_table_entry.cpp b/src/storage/uc_table_entry.cpp
-index 715a9c3..3ea099f 100644
+index 715a9c3..58daac9 100644
 --- a/src/storage/uc_table_entry.cpp
 +++ b/src/storage/uc_table_entry.cpp
-@@ -234,8 +234,10 @@ static unique_ptr<GlobalTableFunctionState> UCScanPlanInitGlobal(ClientContext &
+@@ -228,14 +228,16 @@ static unique_ptr<GlobalTableFunctionState> UCScanPlanInitGlobal(ClientContext &
+ 
+ 	string scan_path = bd.storage_location.empty() ? "uc://scan_plan" : bd.storage_location;
+ 	vector<Value> inputs = {Value(scan_path)};
+-	named_parameter_map_t named_params;
++	named_argument_map_t named_params;
+ 	vector<LogicalType> input_table_types;
+ 	vector<Identifier> input_table_names;
  	TableFunctionRef dummy_ref;
  	vector<LogicalType> return_types;
  	vector<Identifier> return_names;
@@ -82,7 +124,7 @@ index 715a9c3..3ea099f 100644
  		gstate->inner_bind_data = parquet_fn.bind(context, bind_input, return_types, return_names);
  	} catch (...) {
 diff --git a/src/uc_multi_file_list.cpp b/src/uc_multi_file_list.cpp
-index 47ca2d3..f9af5ba 100644
+index 47ca2d3..1141663 100644
 --- a/src/uc_multi_file_list.cpp
 +++ b/src/uc_multi_file_list.cpp
 @@ -96,7 +96,7 @@ bool UCMultiFileList::ExpandNextPath() const {
@@ -94,7 +136,14 @@ index 47ca2d3..f9af5ba 100644
  	D_ASSERT(tl_uc_file_list);
  	return make_uniq<UCMultiFileReader>(std::move(tl_uc_file_list));
  }
-@@ -124,8 +124,10 @@ static void ScanParquetFile(ClientContext &context, const string &path,
+@@ -118,14 +118,16 @@ static void ScanParquetFile(ClientContext &context, const string &path,
+ 	auto parquet_fn = GetParquetScanFunction(context);
+ 
+ 	vector<Value> inputs = {Value(path)};
+-	named_parameter_map_t named_params;
++	named_argument_map_t named_params;
+ 	vector<LogicalType> input_table_types;
+ 	vector<Identifier> input_table_names;
  	TableFunctionRef dummy_ref;
  	vector<LogicalType> return_types;
  	vector<Identifier> return_names;

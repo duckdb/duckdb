@@ -1,5 +1,4 @@
 #include "duckdb/function/table/system_functions.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/common/atomic.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
@@ -143,9 +142,9 @@ Value FunctionStabilityToValue(FunctionStability stability) {
 
 //! The legacy "varargs" column cannot tell "*args" and "**kwargs" apart - report whichever the function has
 Value VariadicTypeValue(const FunctionSignature &signature) {
-	auto variadic = signature.GetArgsParameter();
+	auto variadic = signature.GetArgs();
 	if (!variadic) {
-		variadic = signature.GetKwargsParameter();
+		variadic = signature.GetKwargs();
 	}
 	return variadic ? Value(variadic->GetType().ToString()) : Value();
 }
@@ -468,7 +467,7 @@ struct TableMacroExtractor {
 
 //! The options a "**kwargs" parameter declares are listed after the parameters, as they are passed by name like them
 static void AddOptions(const FunctionSignature &signature, vector<Value> &results, bool types) {
-	auto option_schema = signature.GetOptionSchema();
+	auto option_schema = signature.GetTypedKwargs();
 	if (!option_schema) {
 		return;
 	}
@@ -527,7 +526,8 @@ struct TableFunctionExtractor {
 
 	static Value GetVarArgs(TableFunctionCatalogEntry &entry, idx_t offset) {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		auto args = fun.GetSignature().GetArgs();
+		return args ? Value(args->GetType().ToString()) : Value();
 	}
 
 	static Value GetMacroDefinition(TableFunctionCatalogEntry &entry, idx_t offset) {
@@ -594,7 +594,8 @@ struct PragmaFunctionExtractor {
 
 	static Value GetVarArgs(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		const auto &fun = *entry.functions.GetFunctionByOffset(offset);
-		return !fun.HasVarArgs() ? Value() : Value(fun.GetVarArgs().ToString());
+		auto args = fun.GetSignature().GetArgs();
+		return args ? Value(args->GetType().ToString()) : Value();
 	}
 
 	static Value GetMacroDefinition(PragmaFunctionCatalogEntry &entry, idx_t offset) {

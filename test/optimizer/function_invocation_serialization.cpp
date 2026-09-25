@@ -19,7 +19,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/planner.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_secure_view.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
@@ -469,7 +468,7 @@ static unique_ptr<FunctionData> KeywordScanBind(ClientContext &, TableFunctionBi
 	// "opt" is a keyword-only parameter, or an option of the overload's "**kwargs"
 	auto &signature = input.table_function.GetSignature();
 	auto param_idx = signature.GetParameterIndexByName("opt");
-	auto option = signature.GetOptionSchema() ? signature.GetOptionSchema()->Find("opt") : nullptr;
+	auto option = signature.GetTypedKwargs() ? signature.GetTypedKwargs()->Find("opt") : nullptr;
 	REQUIRE((param_idx.IsValid() || option));
 	auto &type = param_idx.IsValid() ? signature.GetParameter(param_idx.GetIndex()).GetType() : option->type;
 	auto entry = input.named_parameters.find("opt");
@@ -521,16 +520,15 @@ TEST_CASE("Table function overloads selected by named arguments survive serializ
 	// one overload requires an INTEGER option, the other two take a positional argument and differ only in the type
 	// of an optional one
 	TableFunctionSet set("keyword_scan");
-	set.AddFunction(
-	    KeywordScan(FunctionSignature().AddNamedParameter("opt", LogicalType::INTEGER), serialize_bind_data));
+	set.AddFunction(KeywordScan(FunctionSignature().AddKeywordOnly("opt", LogicalType::INTEGER), serialize_bind_data));
 	// keyword-only parameters take part in overload selection - options would not
 	set.AddFunction(KeywordScan(FunctionSignature()
 	                                .AddParameter(LogicalType::VARCHAR)
-	                                .AddNamedParameter("opt", LogicalType::DOUBLE, Value(LogicalType::DOUBLE)),
+	                                .AddKeywordOnly("opt", LogicalType::DOUBLE, Value(LogicalType::DOUBLE)),
 	                            serialize_bind_data));
 	set.AddFunction(KeywordScan(FunctionSignature()
 	                                .AddParameter(LogicalType::VARCHAR)
-	                                .AddNamedParameter("opt", LogicalType::DATE, Value(LogicalType::DATE)),
+	                                .AddKeywordOnly("opt", LogicalType::DATE, Value(LogicalType::DATE)),
 	                            serialize_bind_data));
 	CreateTableFunctionInfo info(set);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
@@ -592,7 +590,9 @@ TEST_CASE("Table function options survive plans written for older versions", "[s
 	}
 	TableFunctionSet set("keyword_scan");
 	set.AddFunction(KeywordScan(
-	    FunctionSignature().AddParameter(LogicalType::VARCHAR).AddOptionalNamedParameter("opt", LogicalType::DOUBLE),
+	    FunctionSignature()
+	        .AddParameter(LogicalType::VARCHAR)
+	        .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("opt", LogicalType::DOUBLE); }),
 	    serialize_bind_data));
 	CreateTableFunctionInfo info(set);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
@@ -632,7 +632,7 @@ TEST_CASE("Table function defaults survive serialization", "[serialization][func
 	TableFunctionSet set("keyword_scan");
 	set.AddFunction(KeywordScan(FunctionSignature()
 	                                .AddParameter(LogicalType::VARCHAR)
-	                                .AddNamedParameter("opt", LogicalType::DOUBLE, Value::DOUBLE(7)),
+	                                .AddKeywordOnly("opt", LogicalType::DOUBLE, Value::DOUBLE(7)),
 	                            false));
 	CreateTableFunctionInfo info(set);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);

@@ -121,7 +121,7 @@ public:
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const TableFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &positional_arguments,
 	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-	                                     vector<Value> &parameters, named_parameter_map_t &named_parameters,
+	                                     vector<Value> &parameters, named_argument_map_t &named_parameters,
 	                                     ErrorData &error);
 
 	//! Bind a table in-out function. Its arguments are the columns of an input table, so there is nothing to place
@@ -133,7 +133,7 @@ public:
 	DUCKDB_API optional_idx BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
 	                                     vector<unique_ptr<Expression>> &positional_arguments,
 	                                     vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-	                                     vector<Value> &parameters, named_parameter_map_t &named_parameters,
+	                                     vector<Value> &parameters, named_argument_map_t &named_parameters,
 	                                     ErrorData &error);
 
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,

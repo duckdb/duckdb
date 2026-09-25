@@ -265,13 +265,14 @@ static OperatorPartitionData PragmaStorageInfoGetPartitionData(ClientContext &co
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction storage_info("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
-	                           PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
+	TableFunction storage_info(
+	    "pragma_storage_info", FunctionSignature().AddPositionalOnly("table_name", LogicalType::VARCHAR),
+	    PragmaStorageInfoFunction, PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
 	storage_info.get_partition_data = PragmaStorageInfoGetPartitionData;
 	storage_info.table_scan_progress = PragmaStorageInfoProgress;
-	storage_info.GetSignature()
-	    .AddNamedParameter("include_segment_info", LogicalType::BOOLEAN, Value::BOOLEAN(false))
-	    .AddNamedParameter("loaded_segments_only", LogicalType::BOOLEAN, Value::BOOLEAN(false));
+	storage_info.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("include_segment_info", LogicalType::BOOLEAN).Add("loaded_segments_only", LogicalType::BOOLEAN);
+	});
 	set.AddFunction(std::move(storage_info));
 }
 

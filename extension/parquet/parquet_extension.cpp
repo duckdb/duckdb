@@ -1072,7 +1072,9 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	// parquet_key
 	auto parquet_key_fun = PragmaFunction::PragmaCall("add_parquet_key", ParquetCrypto::AddKey,
-	                                                  {LogicalType::VARCHAR, LogicalType::VARCHAR});
+	                                                  FunctionSignature()
+	                                                      .AddPositionalOnly("key_name", LogicalType::VARCHAR)
+	                                                      .AddPositionalOnly("key", LogicalType::VARCHAR));
 	loader.RegisterFunction(parquet_key_fun);
 
 	auto &config = DBConfig::GetConfig(db_instance);

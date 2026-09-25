@@ -20,6 +20,22 @@ index aa7d836..eb29cda 100644
  		const auto cardinality = get.function.cardinality(context, bind_data.get());
  		get.has_estimated_cardinality = cardinality->has_estimated_cardinality;
  		get.estimated_cardinality = cardinality->estimated_cardinality;
+diff --git a/src/spatial/index/rtree/rtree_index_pragmas.cpp b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+index 1989047..00f43fc 100644
+--- a/src/spatial/index/rtree/rtree_index_pragmas.cpp
++++ b/src/spatial/index/rtree/rtree_index_pragmas.cpp
+@@ -251,8 +251,9 @@ void RTreeModule::RegisterIndexPragmas(ExtensionLoader &loader) {
+ 
+ 	loader.RegisterFunction(info_function);
+ 
+-	TableFunction dump_function("rtree_index_dump", {LogicalType::VARCHAR}, RTreeIndexDumpExecute, RTreeIndexDumpBind,
+-	                            RTreeIndexDumpInit);
++	TableFunction dump_function("rtree_index_dump",
++	                            FunctionSignature().AddPositionalOnly("index_name", LogicalType::VARCHAR),
++	                            RTreeIndexDumpExecute, RTreeIndexDumpBind, RTreeIndexDumpInit);
+ 
+ 	loader.RegisterFunction(dump_function);
+ }
 diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
 index cae80e2..48cbb50 100644
 --- a/src/spatial/index/rtree/rtree_index_scan.cpp
@@ -44,22 +60,23 @@ index cae80e2..48cbb50 100644
  
  	const auto catalog = deserializer.ReadProperty<string>(100, "catalog");
 diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
-index cc873fb..7e469b2 100644
+index cc873fb..c3bb886 100644
 --- a/src/spatial/modules/gdal/gdal_module.cpp
 +++ b/src/spatial/modules/gdal/gdal_module.cpp
-@@ -1328,19 +1328,21 @@ static constexpr auto EXAMPLE = R"(
+@@ -1328,19 +1328,22 @@ static constexpr auto EXAMPLE = R"(
  	)";
  
  void Register(ExtensionLoader &loader) {
 -	TableFunction read_func("ST_Read", {LogicalType::VARCHAR}, Scan, Bind, InitGlobal);
 +	FunctionSignature signature;
-+	signature.AddParameter("file_name", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("open_options", LogicalType::LIST(LogicalType::VARCHAR))
-+	    .AddOptionalNamedParameter("allowed_drivers", LogicalType::LIST(LogicalType::VARCHAR))
-+	    .AddOptionalNamedParameter("sibling_files", LogicalType::LIST(LogicalType::VARCHAR))
-+	    .AddOptionalNamedParameter("layer", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("max_batch_size", LogicalType::INTEGER)
-+	    .AddOptionalNamedParameter("keep_wkb", LogicalType::BOOLEAN);
++	signature.AddParameter("file_name", LogicalType::VARCHAR).WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("open_options", LogicalType::LIST(LogicalType::VARCHAR))
++		    .Add("allowed_drivers", LogicalType::LIST(LogicalType::VARCHAR))
++		    .Add("sibling_files", LogicalType::LIST(LogicalType::VARCHAR))
++		    .Add("layer", LogicalType::VARCHAR)
++		    .Add("max_batch_size", LogicalType::INTEGER)
++		    .Add("keep_wkb", LogicalType::BOOLEAN);
++	});
 +
 +	TableFunction read_func("ST_Read", std::move(signature), Scan, Bind, InitGlobal);
  	read_func.cardinality = Cardinality;
@@ -77,6 +94,16 @@ index cc873fb..7e469b2 100644
  	read_func.parallelism = TableFunctionParallelism::SEQUENTIAL;
  
  	loader.RegisterFunction(read_func);
+@@ -2185,7 +2188,8 @@ static constexpr auto EXAMPLE = R"(
+ 	)";
+ 
+ static void Register(ExtensionLoader &loader) {
+-	const TableFunction func("ST_Read_Meta", {LogicalType::VARCHAR}, Scan, Bind, InitGlobal);
++	const TableFunction func("ST_Read_Meta", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR), Scan,
++	                         Bind, InitGlobal);
+ 	loader.RegisterFunction(MultiFileReader::CreateFunctionSet(func));
+ 
+ 	InsertionOrderPreservingMap<string> tags;
 diff --git a/src/spatial/modules/main/spatial_functions_table.cpp b/src/spatial/modules/main/spatial_functions_table.cpp
 index a9376a0..a33ca7e 100644
 --- a/src/spatial/modules/main/spatial_functions_table.cpp
@@ -109,21 +136,46 @@ index a9376a0..a33ca7e 100644
  		loader.RegisterFunction(set);
  
  		InsertionOrderPreservingMap<string> tags;
+diff --git a/src/spatial/modules/osm/osm_module.cpp b/src/spatial/modules/osm/osm_module.cpp
+index 4dc7804..abbc202 100644
+--- a/src/spatial/modules/osm/osm_module.cpp
++++ b/src/spatial/modules/osm/osm_module.cpp
+@@ -904,7 +904,8 @@ constexpr const char *DOC_EXAMPLE = R"(
+ //  Register
+ //------------------------------------------------------------------------------
+ void RegisterOSMModule(ExtensionLoader &loader) {
+-	TableFunction read("ST_ReadOSM", {LogicalType::VARCHAR}, Execute, Bind, InitGlobal, InitLocal);
++	TableFunction read("ST_ReadOSM", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR), Execute, Bind,
++	                   InitGlobal, InitLocal);
+ 
+ 	read.get_partition_data = GetPartitionData;
+ 	read.table_scan_progress = Progress;
 diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
-index eae2676..559cba7 100644
+index eae2676..e3354aa 100644
 --- a/src/spatial/modules/shapefile/shapefile_module.cpp
 +++ b/src/spatial/modules/shapefile/shapefile_module.cpp
-@@ -890,9 +890,11 @@ struct ST_ReadSHP {
+@@ -890,9 +890,12 @@ struct ST_ReadSHP {
  	// Register
  	//------------------------------------------------------------------------------------------------------------------
  	static void Register(ExtensionLoader &loader) {
 -		TableFunction read_func("ST_ReadSHP", {LogicalType::VARCHAR}, Execute, Bind, InitGlobal);
 +		FunctionSignature signature;
-+		signature.AddParameter("file_name", LogicalType::VARCHAR)
-+		    .AddOptionalNamedParameter("encoding", LogicalType::VARCHAR);
++		signature.AddParameter("file_name", LogicalType::VARCHAR).WithTypedKwargs("options", [&](TypedKwargs &options) {
++			options.Add("encoding", LogicalType::VARCHAR);
++		});
  
 -		read_func.named_parameters["encoding"] = LogicalType::VARCHAR;
 +		TableFunction read_func("ST_ReadSHP", std::move(signature), Execute, Bind, InitGlobal);
  		read_func.table_scan_progress = GetProgress;
  		read_func.cardinality = GetCardinality;
  		read_func.projection_pushdown = true;
+@@ -1069,7 +1072,8 @@ struct Shapefile_Meta {
+ 	}
+ 
+ 	static void Register(ExtensionLoader &loader) {
+-		TableFunction meta_func("shapefile_meta", {LogicalType::VARCHAR}, Execute, Bind, InitGlobal);
++		TableFunction meta_func("shapefile_meta", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
++		                        Execute, Bind, InitGlobal);
+ 		meta_func.table_scan_progress = GetProgress;
+ 		meta_func.cardinality = GetCardinality;
+ 		loader.RegisterFunction(MultiFileReader::CreateFunctionSet(meta_func));

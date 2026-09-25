@@ -6,9 +6,103 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/function/function_options.hpp"
 
 namespace duckdb {
+
+TypedKwarg::TypedKwarg(Identifier name_p, LogicalType type_p) : name(std::move(name_p)), type(std::move(type_p)) {
+}
+
+bool TypedKwarg::operator==(const TypedKwarg &other) const {
+	return name == other.name && aliases == other.aliases && type == other.type;
+}
+
+bool TypedKwarg::operator!=(const TypedKwarg &other) const {
+	return !(*this == other);
+}
+
+string TypedKwarg::ToString() const {
+	return StringUtil::Format("%s %s", SQLIdentifier(name), type.ToString());
+}
+
+TypedKwargs &TypedKwargs::Add(Identifier name, LogicalType type) {
+	options.emplace_back(std::move(name), std::move(type));
+	return *this;
+}
+
+TypedKwargs &TypedKwargs::Alias(Identifier alias) {
+	if (options.empty()) {
+		throw InternalException("TypedKwargs::Alias called before any option was added");
+	}
+	options.back().aliases.push_back(std::move(alias));
+	return *this;
+}
+
+TypedKwargs TypedKwargs::Merge(const TypedKwargs &other) const {
+	auto result = *this;
+	result.options.insert(result.options.end(), other.options.begin(), other.options.end());
+	return result;
+}
+
+optional_ptr<const TypedKwarg> TypedKwargs::Find(const Identifier &name) const {
+	// names are matched case-insensitively, like parameter names
+	for (auto &option : options) {
+		if (option.name == name) {
+			return option;
+		}
+		for (auto &alias : option.aliases) {
+			if (alias == name) {
+				return option;
+			}
+		}
+	}
+	return nullptr;
+}
+
+const vector<TypedKwarg> &TypedKwargs::GetOptions() const {
+	return options;
+}
+
+void TypedKwargs::Verify() const {
+	identifier_set_t names;
+	for (auto &option : options) {
+		if (!names.insert(option.name).second) {
+			throw InvalidInputException("Duplicate option name: %s", option.name);
+		}
+		for (auto &alias : option.aliases) {
+			if (!names.insert(alias).second) {
+				throw InvalidInputException("Duplicate option name: %s", alias);
+			}
+		}
+	}
+}
+
+vector<Identifier> TypedKwargs::GetNames() const {
+	vector<Identifier> result;
+	for (auto &option : options) {
+		result.push_back(option.name);
+		for (auto &alias : option.aliases) {
+			result.push_back(alias);
+		}
+	}
+	return result;
+}
+
+bool TypedKwargs::operator==(const TypedKwargs &other) const {
+	return options == other.options;
+}
+
+bool TypedKwargs::operator!=(const TypedKwargs &other) const {
+	return !(*this == other);
+}
+
+hash_t TypedKwargs::Hash() const {
+	hash_t hash = duckdb::Hash(options.size());
+	for (auto &option : options) {
+		hash = CombineHash(hash, IdentifierHashFunction()(option.name));
+		hash = CombineHash(hash, option.type.Hash());
+	}
+	return hash;
+}
 
 bool FunctionProperties::operator==(const FunctionProperties &rhs) const {
 	return stability == rhs.stability && null_handling == rhs.null_handling && errors == rhs.errors &&
@@ -60,7 +154,10 @@ SimpleFunction::SimpleFunction(Identifier name_p, FunctionSignature signature_p)
 
 SimpleFunction::SimpleFunction(Identifier name_p, vector<LogicalType> arguments_p, LogicalType return_type,
                                LogicalType varargs_p)
-    : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(varargs_p), std::move(return_type)) {
+    : Function(std::move(name_p)), signature(std::move(arguments_p), std::move(return_type)) {
+	if (varargs_p.id() != LogicalTypeId::INVALID) {
+		signature.AddArgs("args", varargs_p).AddKwargs("kwargs", varargs_p);
+	}
 }
 
 SimpleFunction::~SimpleFunction() {
@@ -88,27 +185,28 @@ string FunctionParameter::ToString() const {
 static_assert(std::is_nothrow_move_constructible<FunctionSignature>::value, "FunctionSignature must stay movable");
 static_assert(std::is_nothrow_move_assignable<FunctionSignature>::value, "FunctionSignature must stay movable");
 
-auto FunctionSignature::SetOptionSchema(FunctionOptionSchema schema) -> FunctionSignature & {
-	option_schema = make_shared_ptr<FunctionOptionSchema>(std::move(schema));
-	return *this;
+auto FunctionSignature::AddTypedKwargs(Identifier name, TypedKwargs schema) -> FunctionSignature & {
+	typed_kwargs = make_shared_ptr<TypedKwargs>(std::move(schema));
+	return AddKwargs(std::move(name), LogicalType::ANY);
 }
 
-auto FunctionSignature::WithOptionSchema(std::function<void(FunctionOptionSchema &)> callback) -> FunctionSignature & {
-	if (!option_schema) {
-		option_schema = make_shared_ptr<FunctionOptionSchema>();
-	} else if (option_schema.use_count() > 1) {
-		// other signatures copied from this one share its options - extend a copy of them
-		option_schema = make_shared_ptr<FunctionOptionSchema>(*option_schema);
-	}
-	callback(*option_schema);
-	if (!GetKwargsParameter()) {
-		AddKwargsParameter("options", LogicalType::ANY);
-	}
-	return *this;
+auto FunctionSignature::WithTypedKwargs(Identifier name, const std::function<void(TypedKwargs &)> &configure)
+    -> FunctionSignature & {
+	TypedKwargs schema;
+	configure(schema);
+	return AddTypedKwargs(std::move(name), std::move(schema));
 }
 
-auto FunctionSignature::AddOptionalNamedParameter(Identifier name, LogicalType type) -> FunctionSignature & {
-	return WithOptionSchema([&](FunctionOptionSchema &options) { options.Add(std::move(name), std::move(type)); });
+auto FunctionSignature::ExtendTypedKwargs(const std::function<void(TypedKwargs &)> &configure) -> FunctionSignature & {
+	if (!typed_kwargs) {
+		throw InternalException("ExtendTypedKwargs called on a signature without typed \"**kwargs\"");
+	}
+	if (typed_kwargs.use_count() > 1) {
+		// other signatures copied from this one share its schema - extend a copy of it
+		typed_kwargs = make_shared_ptr<TypedKwargs>(*typed_kwargs);
+	}
+	configure(*typed_kwargs);
+	return *this;
 }
 
 string FunctionSignature::ToString() const {
@@ -117,7 +215,7 @@ string FunctionSignature::ToString() const {
 	// A keyword-only parameter that no "*args" precedes closes the positional parameters by itself, which Python
 	// spells as a bare "*" in that position; a "/" likewise closes the positional-only parameters
 	const auto positional_only_count = GetPositionalOnlyParameterCount();
-	auto needs_separator = !HasVarArgs();
+	auto needs_separator = !GetArgs();
 	for (idx_t i = 0; i < parameters.size(); i++) {
 		auto &param = parameters[i];
 		if (i == positional_only_count && positional_only_count > 0) {
@@ -173,40 +271,36 @@ hash_t FunctionSignature::Hash() const {
 		hash = duckdb::CombineHash(hash, param.GetType().Hash());
 		hash = duckdb::CombineHash(hash, duckdb::Hash(static_cast<uint8_t>(param.GetKind())));
 	}
-	if (option_schema) {
-		hash = duckdb::CombineHash(hash, option_schema->Hash());
+	if (typed_kwargs) {
+		hash = duckdb::CombineHash(hash, typed_kwargs->Hash());
 	}
 	return hash;
 }
 
-const LogicalType &FunctionSignature::GetVarArgs() const {
-	static const LogicalType INVALID_TYPE(LogicalTypeId::INVALID);
-	auto args = GetArgsParameter();
-	return args ? args->GetType() : INVALID_TYPE;
-}
-
-void FunctionSignature::SetVarArgs(LogicalType varargs_p) {
-	for (idx_t i = parameters.size(); i > 0; i--) {
-		if (parameters[i - 1].IsVariadic()) {
-			parameters.erase_at(i - 1);
-		}
-	}
-	if (varargs_p.id() == LogicalTypeId::INVALID) {
-		return;
-	}
-	AddArgsParameter("args", varargs_p);
-	AddKwargsParameter("kwargs", std::move(varargs_p));
-}
-
-void FunctionSignature::FillNamedDefaults(named_parameter_map_t &named_parameters) const {
+void FunctionSignature::FillNamedDefaults(named_argument_map_t &named_parameters) const {
+	// keyword-only parameters are slots, bound in the order they are declared - the arguments "**kwargs" receives
+	// follow them in the order they were passed
+	named_argument_map_t result;
 	for (auto &param : parameters) {
-		if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY || !param.HasDefaultValue()) {
+		if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY) {
 			continue;
 		}
-		if (named_parameters.find(param.GetName()) == named_parameters.end()) {
-			named_parameters.insert(make_pair(param.GetName(), *param.GetDefaultValue()));
+		auto entry = named_parameters.find(param.GetName());
+		if (entry != named_parameters.end()) {
+			result.insert(param.GetName(), std::move(entry->second));
+		} else if (param.HasDefaultValue()) {
+			result.insert(param.GetName(), *param.GetDefaultValue());
 		}
 	}
+	if (result.empty()) {
+		return;
+	}
+	for (auto &entry : named_parameters) {
+		if (!result.contains(entry.first)) {
+			result.insert(entry.first, std::move(entry.second));
+		}
+	}
+	named_parameters = std::move(result);
 }
 
 void FunctionSignature::Verify() const {
@@ -250,7 +344,7 @@ void FunctionSignature::Verify() const {
 			throw InvalidInputException("Variadic parameter '%s' cannot have a default value", param.ToString());
 		}
 		switch (param.GetKind()) {
-		case FunctionParameterKind::POSITIONAL:
+		case FunctionParameterKind::POSITIONAL_ONLY:
 			if (found_standard || found_args || found_keyword_only) {
 				throw InvalidInputException(
 				    "Positional-only parameter '%s' must be declared before every parameter that can be passed by name",
@@ -282,14 +376,14 @@ void FunctionSignature::Verify() const {
 		}
 	}
 
-	if (option_schema) {
+	if (typed_kwargs) {
 		if (!found_kwargs) {
 			throw InvalidInputException("A function signature with options must have a '**kwargs' parameter");
 		}
-		option_schema->Verify();
+		typed_kwargs->Verify();
 		// a named argument binds to a parameter of its name first, so an option of the same name is never reached
 		for (auto &param : parameters) {
-			if (param.AcceptsName() && option_schema->Find(param.GetName())) {
+			if (param.AcceptsName() && typed_kwargs->Find(param.GetName())) {
 				throw InvalidInputException("Option '%s' has the same name as a parameter", param.GetName());
 			}
 		}
@@ -387,8 +481,7 @@ bool FunctionParameter::operator!=(const FunctionParameter &other) const {
 }
 
 //! Whether two signatures declare the same options - compared by content, as each registration builds its own
-static bool OptionSchemasEqual(optional_ptr<const FunctionOptionSchema> lhs,
-                               optional_ptr<const FunctionOptionSchema> rhs) {
+static bool OptionSchemasEqual(optional_ptr<const TypedKwargs> lhs, optional_ptr<const TypedKwargs> rhs) {
 	if (!lhs || !rhs) {
 		return !lhs && !rhs;
 	}
@@ -397,7 +490,7 @@ static bool OptionSchemasEqual(optional_ptr<const FunctionOptionSchema> lhs,
 
 bool FunctionSignature::operator==(const FunctionSignature &other) const {
 	return parameters == other.parameters && return_type == other.return_type &&
-	       OptionSchemasEqual(GetOptionSchema(), other.GetOptionSchema());
+	       OptionSchemasEqual(GetTypedKwargs(), other.GetTypedKwargs());
 }
 
 bool FunctionSignature::operator!=(const FunctionSignature &other) const {
@@ -465,7 +558,7 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 	if (return_type != other.return_type) {
 		return false;
 	}
-	return OptionSchemasEqual(GetOptionSchema(), other.GetOptionSchema());
+	return OptionSchemasEqual(GetTypedKwargs(), other.GetTypedKwargs());
 }
 
 //----------------------------------------------------------------------------------------------------------------------

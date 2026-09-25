@@ -201,7 +201,7 @@ static void AddPostgresSetofColumnAlias(BindContext &bind_context, TableIndex bi
 }
 
 BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
-                                                 vector<Value> parameters, named_parameter_map_t named_parameters,
+                                                 vector<Value> parameters, named_argument_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
                                                  vector<Identifier> input_table_names,
                                                  optional_ptr<unique_ptr<LogicalOperator>> input_plan) {
@@ -374,7 +374,7 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 }
 
 BoundStatement Binder::BindTableFunction(TableFunction &function, vector<Value> parameters) {
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
 
@@ -452,7 +452,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 	// selection, named-argument checking, folding and casting all happen in the function binder
 	FunctionBinder function_binder(*this);
 	vector<Value> parameters;
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 	auto best_function_idx =
 	    table_in_out ? function_binder.BindTableInOutFunction(function.name, function.functions, subquery.types, error)
 	                 : function_binder.BindFunction(function.name, function.functions, positional_arguments,
@@ -480,9 +480,13 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 		// the arguments are the columns of a subquery, so the declared types apply to those instead - the function
 		// binder casts the folded constants of every other call shape
 		const auto &signature = table_function.GetSignature();
+		auto args = signature.GetArgs();
 		for (idx_t i = 0; i < input_table_types.size(); i++) {
-			auto target_type = i < signature.GetPositionalParameterCount() ? signature.GetParameter(i).GetType()
-			                                                               : signature.GetVarArgs();
+			if (i >= signature.GetPositionalParameterCount() && !args) {
+				break;
+			}
+			auto target_type =
+			    i < signature.GetPositionalParameterCount() ? signature.GetParameter(i).GetType() : args->GetType();
 			if (target_type != LogicalType::ANY && target_type != LogicalType::POINTER &&
 			    target_type.id() != LogicalTypeId::LIST) {
 				input_table_types[i] = target_type;

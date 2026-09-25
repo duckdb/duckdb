@@ -96,23 +96,26 @@ static unique_ptr<TableRef> TableBindReplace(ClientContext &context, TableFuncti
 }
 
 void QueryTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction query("query", {LogicalType::VARCHAR}, nullptr, nullptr);
+	TableFunction query("query", FunctionSignature().AddPositionalOnly("query", LogicalType::VARCHAR), nullptr,
+	                    nullptr);
 	query.bind_replace = QueryBindReplace;
 	set.AddFunction(query);
 
 	TableFunctionSet query_table("query_table");
-	TableFunction query_table_function({LogicalType::VARCHAR}, nullptr, nullptr);
+	TableFunction query_table_function(FunctionSignature().AddPositionalOnly("table_name", LogicalType::VARCHAR),
+	                                   nullptr, nullptr);
 	query_table_function.bind_replace = TableBindReplace;
 	query_table.AddFunction(query_table_function);
 
 	query_table_function.GetSignature() =
-	    FunctionSignature({LogicalType::LIST(LogicalType::VARCHAR)}, LogicalType(LogicalTypeId::INVALID));
+	    FunctionSignature().AddPositionalOnly("table_names", LogicalType::LIST(LogicalType::VARCHAR));
 	query_table.AddFunction(query_table_function);
 	// add by_name option, for a single table name as well as for a list of them
-	query_table_function.GetSignature().AddParameter(LogicalType::BOOLEAN);
+	query_table_function.GetSignature().AddPositionalOnly("by_name", LogicalType::BOOLEAN);
 	query_table.AddFunction(query_table_function);
-	query_table_function.GetSignature() =
-	    FunctionSignature({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType(LogicalTypeId::INVALID));
+	query_table_function.GetSignature() = FunctionSignature()
+	                                          .AddPositionalOnly("table_name", LogicalType::VARCHAR)
+	                                          .AddPositionalOnly("by_name", LogicalType::BOOLEAN);
 	query_table.AddFunction(query_table_function);
 	set.AddFunction(query_table);
 }

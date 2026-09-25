@@ -1,6 +1,5 @@
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/table/read_duckdb.hpp"
 
@@ -60,7 +59,7 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
 	// the reader keeps the default of every option in CSVReaderOptions - an option the call leaves out is not passed
-	table_function.GetSignature().WithOptionSchema([](FunctionOptionSchema &options) {
+	table_function.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
 		options.Add("sep", LogicalType::VARCHAR)
 		    .Add("delim", LogicalType::VARCHAR)
 		    .Add("separator", LogicalType::VARCHAR)

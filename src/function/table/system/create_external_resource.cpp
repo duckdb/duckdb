@@ -367,16 +367,16 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 }
 
 void CreateExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction fn("create_external_resource", {LogicalType::VARCHAR}, CreateExternalResourceFunction,
-	                 CreateExternalResourceBind, CreateExternalResourceInit);
-	fn.GetSignature()
-	    .AddNamedParameter("params", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR),
-	                       Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, vector<Value>(), vector<Value>()))
-	    .AddOptionalNamedParameter("resource_name", LogicalType::VARCHAR)
-	    .AddOptionalNamedParameter("handle", LogicalType::ANY)
-	    .AddNamedParameter("teardown_on_failure", LogicalType::BOOLEAN, Value::BOOLEAN(true))
-	    .AddNamedParameter("timeout_seconds", LogicalType::BIGINT, Value::BIGINT(DEFAULT_READINESS_TIMEOUT_SECONDS))
-	    .AddNamedParameter("poll_interval_seconds", LogicalType::BIGINT, Value::BIGINT(DEFAULT_POLL_INTERVAL_SECONDS));
+	TableFunction fn("create_external_resource", FunctionSignature().AddPositionalOnly("type", LogicalType::VARCHAR),
+	                 CreateExternalResourceFunction, CreateExternalResourceBind, CreateExternalResourceInit);
+	fn.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("params", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR))
+		    .Add("resource_name", LogicalType::VARCHAR)
+		    .Add("handle", LogicalType::ANY)
+		    .Add("teardown_on_failure", LogicalType::BOOLEAN)
+		    .Add("timeout_seconds", LogicalType::BIGINT)
+		    .Add("poll_interval_seconds", LogicalType::BIGINT);
+	});
 	set.AddFunction(fn);
 }
 
@@ -444,7 +444,10 @@ static void DestroyExternalResourceFunction(ClientContext &context, TableFunctio
 }
 
 void DestroyExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("destroy_external_resource", {LogicalType::VARCHAR, LogicalType::ANY},
+	set.AddFunction(TableFunction("destroy_external_resource",
+	                              FunctionSignature()
+	                                  .AddPositionalOnly("deleter_function", LogicalType::VARCHAR)
+	                                  .AddPositionalOnly("payload", LogicalType::ANY),
 	                              DestroyExternalResourceFunction, DestroyExternalResourceBind,
 	                              DestroyExternalResourceInit));
 }

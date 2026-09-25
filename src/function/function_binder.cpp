@@ -10,7 +10,6 @@
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast_rules.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/function/type_constructor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -91,8 +90,8 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 
 	// And the maximum number of arguments the function can accept
 	const auto positional_count = sig.GetPositionalParameterCount();
-	const auto args_param = sig.GetArgsParameter();
-	const auto kwargs_param = sig.GetKwargsParameter();
+	const auto args_param = sig.GetArgs();
+	const auto kwargs_param = sig.GetKwargs();
 
 	idx_t maximum_arg_count = NumericLimits<idx_t>::Maximum();
 	if (!args_param && !kwargs_param) {
@@ -432,8 +431,8 @@ static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionS
 		for (idx_t i = 0; i < functions.functions.size() && !accepted; i++) {
 			auto &signature = functions.functions[i]->GetSignature();
 			// the options of a "**kwargs" are checked once the overload is chosen
-			accepted = signature.GetParameterIndexByName(named_argument.first).IsValid() ||
-			           signature.GetKwargsParameter() != nullptr;
+			accepted =
+			    signature.GetParameterIndexByName(named_argument.first).IsValid() || signature.GetKwargs() != nullptr;
 		}
 		if (accepted) {
 			continue;
@@ -512,7 +511,7 @@ template <class T>
 static void PlaceArguments(ClientContext &context, const T &function,
                            vector<unique_ptr<Expression>> &positional_arguments,
                            vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
-                           named_parameter_map_t &named_parameters) {
+                           named_argument_map_t &named_parameters) {
 	auto &signature = function.GetSignature();
 	const auto positional_count = signature.GetPositionalParameterCount();
 	const auto passed_count = positional_arguments.size();
@@ -528,10 +527,10 @@ static void PlaceArguments(ClientContext &context, const T &function,
 		}
 		auto param_idx = signature.GetParameterIndexByName(argument_name);
 		if (!param_idx.IsValid()) {
-			auto option_schema = signature.GetOptionSchema();
+			auto option_schema = signature.GetTypedKwargs();
 			if (!option_schema) {
 				// received by "**kwargs" - cast to its type, as overload selection checked, unless that is ANY
-				auto &kwargs_type = signature.GetKwargsParameter()->GetType();
+				auto &kwargs_type = signature.GetKwargs()->GetType();
 				named_parameters.insert(
 				    make_pair(argument_name, PlaceArgument(context, *named_argument.second, kwargs_type)));
 				continue;
@@ -603,8 +602,12 @@ static void PlaceArguments(ClientContext &context, const T &function,
 			                        function.GetName().GetIdentifierName());
 		}
 	}
-	for (idx_t i = positional_count; i < passed_count; i++) {
-		parameters.push_back(PlaceArgument(context, *positional_arguments[i], signature.GetVarArgs()));
+	if (passed_count > positional_count) {
+		// overload selection only picks an overload with "*args" for surplus positional arguments
+		auto &args_type = signature.GetArgs()->GetType();
+		for (idx_t i = positional_count; i < passed_count; i++) {
+			parameters.push_back(PlaceArgument(context, *positional_arguments[i], args_type));
+		}
 	}
 	signature.FillNamedDefaults(named_parameters);
 }
@@ -612,7 +615,7 @@ static void PlaceArguments(ClientContext &context, const T &function,
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
                                           vector<unique_ptr<Expression>> &positional_arguments,
                                           vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                                          vector<Value> &parameters, named_parameter_map_t &named_parameters,
+                                          vector<Value> &parameters, named_argument_map_t &named_parameters,
                                           ErrorData &error) {
 	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
 	auto entry = BindFunction(name, functions, positional_arguments, named_arguments, error);
@@ -632,7 +635,7 @@ optional_idx FunctionBinder::BindTableInOutFunction(const Identifier &name, cons
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
                                           vector<unique_ptr<Expression>> &positional_arguments,
                                           vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
-                                          vector<Value> &parameters, named_parameter_map_t &named_parameters,
+                                          vector<Value> &parameters, named_argument_map_t &named_parameters,
                                           ErrorData &error) {
 	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
 	auto [args, kwargs] = GetArgumentsFromExpressions(positional_arguments, named_arguments);
@@ -1158,8 +1161,8 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
                                            vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	const auto &sig = function.GetSignature();
 	const auto positional_count = sig.GetPositionalParameterCount();
-	const auto args_param = sig.GetArgsParameter();
-	const auto kwargs_param = sig.GetKwargsParameter();
+	const auto args_param = sig.GetArgs();
+	const auto kwargs_param = sig.GetKwargs();
 
 	// The arguments that were passed by position
 	auto positional_arguments = std::move(arguments);

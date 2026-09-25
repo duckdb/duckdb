@@ -109,7 +109,7 @@ struct LocalTableFunctionState {
 };
 
 struct TableFunctionBindInput {
-	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
+	TableFunctionBindInput(vector<Value> &inputs, named_argument_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<Identifier> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
 	                       BoundTableFunction &table_function, const TableFunctionRef &ref,
@@ -120,7 +120,7 @@ struct TableFunctionBindInput {
 	}
 
 	vector<Value> &inputs;
-	named_parameter_map_t &named_parameters;
+	named_argument_map_t &named_parameters;
 	vector<LogicalType> &input_table_types;
 	vector<Identifier> &input_table_names;
 	optional_ptr<TableFunctionInfo> info;
@@ -651,6 +651,16 @@ public:
 	              table_function_init_local_t init_local = nullptr)
 	    : TableFunction(std::move(name), vector<LogicalType>(arguments), function, bind, init_global, init_local) {
 	}
+	TableFunction(std::initializer_list<LogicalType> arguments, table_function_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr)
+	    : TableFunction(vector<LogicalType>(arguments), function, bind, init_global, init_local) {
+	}
+	TableFunction(std::initializer_list<LogicalType> arguments, std::nullptr_t function,
+	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
+	              table_function_init_local_t init_local = nullptr)
+	    : TableFunction(vector<LogicalType>(arguments), function, bind, init_global, init_local) {
+	}
 	// Overloads taking proper signatures
 	DUCKDB_API
 	TableFunction(Identifier name, FunctionSignature signature, table_function_t function,
@@ -660,6 +670,10 @@ public:
 	TableFunction(Identifier name, FunctionSignature signature, std::nullptr_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_global_t init_global = nullptr,
 	              table_function_init_local_t init_local = nullptr);
+
+	DUCKDB_API
+	TableFunction(FunctionSignature signature, table_function_t function, table_function_bind_t bind = nullptr,
+	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 
 public:
 	DUCKDB_API bool Equal(const TableFunction &rhs) const;
@@ -699,7 +713,7 @@ public:
 	}
 	//! Records the arguments of the call this was bound to, laid out as [standard | *args | keyword-only | **kwargs].
 	//! Plan serialization writes them, so that deserialization selects the same overload the call did
-	DUCKDB_API void SetCallArguments(const vector<Value> &parameters, const named_parameter_map_t &named_parameters);
+	DUCKDB_API void SetCallArguments(const vector<Value> &parameters, const named_argument_map_t &named_parameters);
 
 private:
 	shared_ptr<const TableFunction> definition;

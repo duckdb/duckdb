@@ -4,7 +4,6 @@
 
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function_set.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/parallel/async_result.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
@@ -40,7 +39,7 @@ public:
 // Reader
 //===--------------------------------------------------------------------===//
 TableFunctionFileReader::TableFunctionFileReader(TableFunction function_p, OpenFileInfo file_p,
-                                                 named_parameter_map_t named_parameters_p, string reader_type_p)
+                                                 named_argument_map_t named_parameters_p, string reader_type_p)
     : BaseFileReader(std::move(file_p)), function(std::move(function_p)),
       named_parameters(std::move(named_parameters_p)), reader_type(std::move(reader_type_p)), file_is_assigned(false),
       exhausted(false) {
@@ -285,7 +284,7 @@ optional<pair<Identifier, LogicalType>> TableFunctionMultiFileWrapper::GetDeclar
 		}
 		return make_pair(param.GetName(), param.GetType());
 	}
-	auto option_schema = signature.GetOptionSchema();
+	auto option_schema = signature.GetTypedKwargs();
 	auto option = option_schema ? option_schema->Find(key) : nullptr;
 	if (!option) {
 		return {};
@@ -574,23 +573,11 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	}
 	TableFunctionMultiFileFunction result(std::move(name));
 	result.bind = TableFunctionMultiFileBind;
-	// forward the named parameters and the pushdown capabilities of the wrapped function
+	// forward the options and the pushdown capabilities of the wrapped function
 	auto &signature = result.GetSignature();
-	for (auto &param : single_file_function.GetSignature().GetParameters()) {
-		// the multi-file options the wrapper already declares are not forwarded again
-		if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY ||
-		    signature.GetParameterIndexByName(param.GetName()).IsValid()) {
-			continue;
-		}
-		if (param.HasDefaultValue()) {
-			signature.AddNamedParameter(param.GetName(), param.GetType(), *param.GetDefaultValue());
-		} else {
-			signature.AddNamedParameter(param.GetName(), param.GetType());
-		}
-	}
-	auto wrapped_options = single_file_function.GetSignature().GetOptionSchema();
+	auto wrapped_options = single_file_function.GetSignature().GetTypedKwargs();
 	if (wrapped_options) {
-		signature.WithOptionSchema([&](FunctionOptionSchema &options) { options = options.Merge(*wrapped_options); });
+		signature.ExtendTypedKwargs([&](TypedKwargs &options) { options = options.Merge(*wrapped_options); });
 	}
 	result.projection_pushdown = single_file_function.projection_pushdown;
 	result.filter_pushdown = single_file_function.filter_pushdown;

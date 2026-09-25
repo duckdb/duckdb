@@ -1,8 +1,26 @@
+diff --git a/src/quack_cancel.cpp b/src/quack_cancel.cpp
+index 4a02d1a..9ff587d 100644
+--- a/src/quack_cancel.cpp
++++ b/src/quack_cancel.cpp
+@@ -66,8 +66,11 @@ static void QuackCancelScan(ClientContext &, TableFunctionInput &input, DataChun
+ }
+ 
+ TableFunction QuackCancelFunction::GetFunction() {
+-	return TableFunction("quack_cancel", {LogicalType::VARCHAR, LogicalType::VARCHAR}, QuackCancelScan,
+-	                     QuackCancelBind);
++	return TableFunction("quack_cancel",
++	                     FunctionSignature()
++	                         .AddPositionalOnly("catalog", LogicalType::VARCHAR)
++	                         .AddPositionalOnly("connection_id", LogicalType::VARCHAR),
++	                     QuackCancelScan, QuackCancelBind);
+ }
+ 
+ } // namespace duckdb
 diff --git a/src/quack_extension.cpp b/src/quack_extension.cpp
-index e2c06aa..2ea0d9b 100644
+index e2c06aa..a678df4 100644
 --- a/src/quack_extension.cpp
 +++ b/src/quack_extension.cpp
-@@ -121,12 +121,13 @@ static unique_ptr<FunctionData> QuackIdentifyBind(ClientContext &ctx, TableFunct
+@@ -121,12 +121,15 @@ static unique_ptr<FunctionData> QuackIdentifyBind(ClientContext &ctx, TableFunct
  }
  
  static TableFunction GetQuackIdentifyFunction() {
@@ -13,17 +31,19 @@ index e2c06aa..2ea0d9b 100644
 -	fun.named_parameters["region"] = LogicalType::VARCHAR;
 -	fun.named_parameters["meta"] = LogicalType::VARCHAR; // JSON as string
 +	FunctionSignature signature;
-+	signature.AddOptionalNamedParameter("name", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("provider", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("hostname", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("region", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("meta", LogicalType::VARCHAR); // JSON as string
++	signature.WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("name", LogicalType::VARCHAR)
++		    .Add("provider", LogicalType::VARCHAR)
++		    .Add("hostname", LogicalType::VARCHAR)
++		    .Add("region", LogicalType::VARCHAR)
++		    .Add("meta", LogicalType::VARCHAR);
++	}); // JSON as string
 +	TableFunction fun("quack_identify", std::move(signature), QuackIdentifyFun, QuackIdentifyBind);
  	return fun;
  }
  
 diff --git a/src/quack_scan.cpp b/src/quack_scan.cpp
-index 7366611..61f336e 100644
+index 7366611..c95cbdc 100644
 --- a/src/quack_scan.cpp
 +++ b/src/quack_scan.cpp
 @@ -456,11 +456,11 @@ InsertionOrderPreservingMap<string> QuackScanToString(TableFunctionToStringInput
@@ -40,7 +60,7 @@ index 7366611..61f336e 100644
  	throw NotImplementedException("Quack scans cannot be deserialized (yet?)");
  }
  
-@@ -473,12 +473,15 @@ BindInfo QuackScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+@@ -473,12 +473,17 @@ BindInfo QuackScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
  }
  
  TableFunction QuackScanFunction::GetFunction() {
@@ -53,16 +73,18 @@ index 7366611..61f336e 100644
 +	FunctionSignature signature;
 +	signature.AddParameter("uri", LogicalType::VARCHAR)
 +	    .AddParameter("query", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("disable_ssl", LogicalType::BOOLEAN)
-+	    .AddOptionalNamedParameter("token", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("client_id", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("heartbeat_timeout", LogicalType::UBIGINT);
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) {
++		    options.Add("disable_ssl", LogicalType::BOOLEAN)
++		        .Add("token", LogicalType::VARCHAR)
++		        .Add("client_id", LogicalType::VARCHAR)
++		        .Add("heartbeat_timeout", LogicalType::UBIGINT);
++	    });
 +	auto fun = TableFunction("quack_query", std::move(signature), QuackScan, QuackScanBind, QuackScanInitGlobal,
 +	                         QuackScanInitLocal);
  
  	fun.projection_pushdown = true;
  	fun.get_partition_data = QuackScanGetPartitionData;
-@@ -492,16 +495,19 @@ TableFunction QuackScanFunction::GetFunction() {
+@@ -492,16 +497,20 @@ TableFunction QuackScanFunction::GetFunction() {
  }
  
  TableFunction QuackScanByNameFunction::GetFunction() {
@@ -71,8 +93,9 @@ index 7366611..61f336e 100644
 +	FunctionSignature signature;
 +	signature.AddParameter("catalog", LogicalType::VARCHAR)
 +	    .AddParameter("query", LogicalType::VARCHAR)
-+	    .AddOptionalNamedParameter("use_transaction", LogicalType::BOOLEAN)
-+	    .AddOptionalNamedParameter("refresh_catalog", LogicalType::BOOLEAN);
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) {
++		    options.Add("use_transaction", LogicalType::BOOLEAN).Add("refresh_catalog", LogicalType::BOOLEAN);
++	    });
 +	auto fun = TableFunction("quack_query_by_name", std::move(signature), QuackScan, QuackScanBindCatalogName,
 +	                         QuackScanInitGlobal, QuackScanInitLocal);
  	fun.projection_pushdown = true;
@@ -87,7 +110,7 @@ index 7366611..61f336e 100644
  	// fun.filter_prune = true;
  	return fun;
 diff --git a/src/quack_scan_from_client.cpp b/src/quack_scan_from_client.cpp
-index d5a7310..d7b2e90 100644
+index d5a7310..c58313a 100644
 --- a/src/quack_scan_from_client.cpp
 +++ b/src/quack_scan_from_client.cpp
 @@ -243,10 +243,13 @@ static OperatorPartitionData QuackScanFromClientGetPartitionData(ClientContext &
@@ -98,7 +121,7 @@ index d5a7310..d7b2e90 100644
 +	FunctionSignature signature;
 +	signature.AddParameter("stream_id", LogicalType::VARCHAR)
 +	    .AddParameter("prototype", LogicalType::ANY)
-+	    .AddOptionalNamedParameter("ordered", LogicalType::BOOLEAN);
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) { options.Add("ordered", LogicalType::BOOLEAN); });
 +	TableFunction fun("scan_data_from_quack_client", std::move(signature), QuackScanFromClient,
  	                  QuackScanFromClientBind, QuackScanFromClientInitGlobal, QuackScanFromClientInitLocal);
  	fun.get_partition_data = QuackScanFromClientGetPartitionData;
@@ -107,10 +130,10 @@ index d5a7310..d7b2e90 100644
  }
  
 diff --git a/src/quack_start_stop.cpp b/src/quack_start_stop.cpp
-index 15c4328..74c4481 100644
+index 15c4328..b0e0db9 100644
 --- a/src/quack_start_stop.cpp
 +++ b/src/quack_start_stop.cpp
-@@ -121,15 +121,22 @@ static void QuackServe(ClientContext &context, TableFunctionInput &data_p, DataC
+@@ -121,15 +121,24 @@ static void QuackServe(ClientContext &context, TableFunctionInput &data_p, DataC
  
  TableFunctionSet QuackServeFunction::GetFunction() {
  	TableFunctionSet set("quack_serve");
@@ -124,11 +147,13 @@ index 15c4328..74c4481 100644
 -	fun.arguments.clear();
 -	set.AddFunction(fun);
 +	auto add_options = [](FunctionSignature &signature) -> FunctionSignature & {
-+		return signature.AddOptionalNamedParameter("disable_ssl", LogicalType::BOOLEAN)
-+		    .AddOptionalNamedParameter("allow_other_hostname", LogicalType::BOOLEAN)
-+		    .AddOptionalNamedParameter("token", LogicalType::VARCHAR)
-+		    .AddOptionalNamedParameter("secret", LogicalType::VARCHAR)
-+		    .AddOptionalNamedParameter("create_secret_if_not_exists", LogicalType::BOOLEAN);
++		return signature.WithTypedKwargs("options", [&](TypedKwargs &options) {
++			options.Add("disable_ssl", LogicalType::BOOLEAN)
++			    .Add("allow_other_hostname", LogicalType::BOOLEAN)
++			    .Add("token", LogicalType::VARCHAR)
++			    .Add("secret", LogicalType::VARCHAR)
++			    .Add("create_secret_if_not_exists", LogicalType::BOOLEAN);
++		});
 +	};
 +
 +	// the listening URI is optional - QuackServeBind defaults it when the overload without it is chosen
@@ -142,7 +167,7 @@ index 15c4328..74c4481 100644
  
  	return set;
  }
-@@ -165,7 +172,9 @@ static void QuackStop(ClientContext &context, TableFunctionInput &data_p, DataCh
+@@ -165,7 +174,9 @@ static void QuackStop(ClientContext &context, TableFunctionInput &data_p, DataCh
  }
  
  TableFunction QuackStopFunction::GetFunction() {

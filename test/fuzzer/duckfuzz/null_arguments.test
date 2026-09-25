@@ -38,9 +38,10 @@ FROM read_ndjson(NULL, filename := NULL) AS t14(c11, c12, c13)
 statement ok
 COPY (VALUES (NULL), (NULL)) TO '{TEST_DIR}/test_null_args.csv' (FORMAT CSV);
 
-# a NULL names is the same as not passing it
-statement ok
+statement error
 SELECT NULL FROM read_csv('{TEST_DIR}/test_null_args.csv', names=NULL);
+----
+<REGEX>:.*read_csv "names" cannot be NULL.*
 
 statement ok
 call dbgen(sf=0.01);

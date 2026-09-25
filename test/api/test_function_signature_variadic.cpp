@@ -5,7 +5,6 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/function/function_set.hpp"
 
 using namespace duckdb;
@@ -14,12 +13,12 @@ static void CountArgumentsExec(DataChunk &args, ExpressionState &state, Vector &
 	result.Reference(Value::BIGINT(NumericCast<int64_t>(args.ColumnCount())), count_t(args.size()));
 }
 
-TEST_CASE("Parameters declared after *args are keyword-only", "[api][scalar_function]") {
+TEST_CASE("Keyword-only parameters follow *args", "[api][scalar_function]") {
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddArgsParameter("args", LogicalType::INTEGER);
-	sig.AddParameter("kw", LogicalType::INTEGER);
-	sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+	sig.AddArgs("args", LogicalType::INTEGER);
+	sig.AddKeywordOnly("kw", LogicalType::INTEGER);
+	sig.AddKwargs("kwargs", LogicalType::ANY);
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
 
@@ -36,7 +35,7 @@ TEST_CASE("Parameters declared after *args are keyword-only", "[api][scalar_func
 TEST_CASE("A keyword-only parameter closes the positional parameters", "[api][scalar_function]") {
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddKeywordOnly("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
 
@@ -44,8 +43,8 @@ TEST_CASE("A keyword-only parameter closes the positional parameters", "[api][sc
 	REQUIRE(sig.GetParameter(1).GetKind() == FunctionParameterKind::KEYWORD_ONLY);
 	// no "*args" pack is declared, so the closure occupies no parameter slot of its own
 	REQUIRE(sig.GetParameterCount() == 2);
-	REQUIRE(!sig.HasVarArgs());
-	REQUIRE(sig.GetArgsParameter() == nullptr);
+	REQUIRE(!sig.GetArgs());
+	REQUIRE(sig.GetArgs() == nullptr);
 	REQUIRE(sig.GetPositionalParameterCount() == 1);
 	REQUIRE(sig.GetRequiredParameterCount() == 1);
 	REQUIRE(sig.GetParameterIndexByName("kw").GetIndex() == 1);
@@ -57,29 +56,29 @@ TEST_CASE("A *args pack takes the place of the bare * separator", "[api][scalar_
 	// the keyword-only parameter is closed off by the pack, so no "*" is spelled out on top of it
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddArgsParameter("args", LogicalType::INTEGER);
-	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddArgs("args", LogicalType::INTEGER);
+	sig.AddKeywordOnly("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
-	REQUIRE(sig.HasVarArgs());
+	REQUIRE(sig.GetArgs());
 	REQUIRE(sig.ToString() == "(a INTEGER, *args INTEGER, kw INTEGER := NULL) -> BIGINT");
 }
 
 TEST_CASE("Keyword-only parameters still accept a **kwargs after them", "[api][scalar_function]") {
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
-	sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+	sig.AddKeywordOnly("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddKwargs("kwargs", LogicalType::ANY);
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
-	REQUIRE(!sig.HasVarArgs());
-	REQUIRE(sig.GetKwargsParameter()->GetType() == LogicalType::ANY);
+	REQUIRE(!sig.GetArgs());
+	REQUIRE(sig.GetKwargs()->GetType() == LogicalType::ANY);
 	REQUIRE(sig.ToString() == "(a INTEGER, *, kw INTEGER := NULL, **kwargs ANY) -> BIGINT");
 }
 
 TEST_CASE("A function with only keyword-only parameters takes no positional argument", "[api][scalar_function]") {
 	FunctionSignature sig;
-	sig.AddNamedParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddKeywordOnly("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
 	REQUIRE(sig.GetPositionalParameterCount() == 0);
@@ -88,13 +87,13 @@ TEST_CASE("A function with only keyword-only parameters takes no positional argu
 
 TEST_CASE("A positional-only parameter cannot be passed by name", "[api][scalar_function]") {
 	FunctionSignature sig;
-	sig.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+	sig.AddPositionalOnly("a", LogicalType::INTEGER);
 	sig.AddParameter("b", LogicalType::INTEGER);
-	sig.AddKwargsParameter("kwargs", LogicalType::ANY);
+	sig.AddKwargs("kwargs", LogicalType::ANY);
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
 
-	REQUIRE(sig.GetParameter(0).GetKind() == FunctionParameterKind::POSITIONAL);
+	REQUIRE(sig.GetParameter(0).GetKind() == FunctionParameterKind::POSITIONAL_ONLY);
 	REQUIRE(sig.GetParameter(1).GetKind() == FunctionParameterKind::STANDARD);
 	// it takes a position like a standard parameter, but its name is invisible to a caller
 	REQUIRE(sig.GetPositionalParameterCount() == 2);
@@ -106,29 +105,29 @@ TEST_CASE("A positional-only parameter cannot be passed by name", "[api][scalar_
 
 TEST_CASE("Positional-only parameters combine with the other kinds", "[api][scalar_function]") {
 	FunctionSignature sig;
-	sig.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
+	sig.AddPositionalOnly("a", LogicalType::INTEGER);
 	sig.AddParameter("b", LogicalType::INTEGER);
-	sig.AddArgsParameter("args", LogicalType::INTEGER);
-	sig.AddParameter("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
+	sig.AddArgs("args", LogicalType::INTEGER);
+	sig.AddKeywordOnly("kw", LogicalType::INTEGER, Value(LogicalType::INTEGER));
 	sig.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(sig.Verify());
 	REQUIRE(sig.ToString() == "(a INTEGER, /, b INTEGER, *args INTEGER, kw INTEGER := NULL) -> BIGINT");
 
 	// a signature of nothing but positional-only parameters still closes them
 	FunctionSignature only;
-	only.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
-	only.AddPositionalOnlyParameter("b", LogicalType::INTEGER);
+	only.AddPositionalOnly("a", LogicalType::INTEGER);
+	only.AddPositionalOnly("b", LogicalType::INTEGER);
 	only.SetReturnType(LogicalType::BIGINT);
 	REQUIRE_NOTHROW(only.Verify());
 	REQUIRE(only.GetPositionalOnlyParameterCount() == 2);
 	REQUIRE(only.ToString() == "(a INTEGER, b INTEGER, /) -> BIGINT");
 
-	// the builder keeps them ahead of the parameters that can be passed by name
+	// parameters are kept in the order they are added, which must put them ahead of the ones passed by name
 	FunctionSignature ordered;
 	ordered.AddParameter("b", LogicalType::INTEGER);
-	ordered.AddPositionalOnlyParameter("a", LogicalType::INTEGER);
-	REQUIRE(ordered.GetParameter(0).GetName() == "a");
-	REQUIRE_NOTHROW(ordered.Verify());
+	ordered.AddPositionalOnly("a", LogicalType::INTEGER);
+	REQUIRE(ordered.GetParameter(0).GetName() == "b");
+	REQUIRE_THROWS(ordered.Verify());
 }
 
 TEST_CASE("Positional-only parameters must come first", "[api][scalar_function]") {
@@ -138,34 +137,10 @@ TEST_CASE("Positional-only parameters must come first", "[api][scalar_function]"
 		FunctionSignature(std::move(params), LogicalType::BIGINT).Verify();
 	};
 
-	REQUIRE_NOTHROW(verify({{"a", i32, Kind::POSITIONAL}, {"b", i32}}));
-	REQUIRE_THROWS(verify({{"b", i32}, {"a", i32, Kind::POSITIONAL}}));
-	REQUIRE_THROWS(verify({{"args", i32, Kind::VAR_POSITIONAL}, {"a", i32, Kind::POSITIONAL}}));
-	REQUIRE_THROWS(verify({{"kw", i32, Kind::KEYWORD_ONLY}, {"a", i32, Kind::POSITIONAL}}));
-}
-
-TEST_CASE("SetVarArgs declares *args and **kwargs of the same type", "[api][scalar_function]") {
-	FunctionSignature sig;
-	sig.AddParameter("a", LogicalType::INTEGER);
-	sig.AddParameter(LogicalType::INTEGER);
-	sig.SetVarArgs(LogicalType::VARCHAR);
-	sig.SetReturnType(LogicalType::BIGINT);
-	REQUIRE_NOTHROW(sig.Verify());
-
-	REQUIRE(sig.HasVarArgs());
-	REQUIRE(sig.GetVarArgs() == LogicalType::VARCHAR);
-	REQUIRE(sig.GetPositionalParameterCount() == 2);
-	REQUIRE(sig.GetParameter(1).GetName() == Identifier("col1"));
-	REQUIRE(sig.GetKwargsParameter()->GetType() == LogicalType::VARCHAR);
-	REQUIRE(sig.ToString() == "(a INTEGER, col1 INTEGER, *args VARCHAR, **kwargs VARCHAR) -> BIGINT");
-
-	// the type can be replaced, and the varargs can be removed again
-	sig.SetVarArgs(LogicalType::BIGINT);
-	REQUIRE(sig.GetVarArgs() == LogicalType::BIGINT);
-	REQUIRE(sig.GetParameterCount() == 4);
-	sig.SetVarArgs(LogicalType(LogicalTypeId::INVALID));
-	REQUIRE(!sig.HasVarArgs());
-	REQUIRE(sig.GetParameterCount() == 2);
+	REQUIRE_NOTHROW(verify({{"a", i32, {}, Kind::POSITIONAL_ONLY}, {"b", i32}}));
+	REQUIRE_THROWS(verify({{"b", i32}, {"a", i32, {}, Kind::POSITIONAL_ONLY}}));
+	REQUIRE_THROWS(verify({{"args", i32, {}, Kind::VAR_POSITIONAL}, {"a", i32, {}, Kind::POSITIONAL_ONLY}}));
+	REQUIRE_THROWS(verify({{"kw", i32, {}, Kind::KEYWORD_ONLY}, {"a", i32, {}, Kind::POSITIONAL_ONLY}}));
 }
 
 TEST_CASE("The order of the parameter kinds is verified", "[api][scalar_function]") {
@@ -175,32 +150,32 @@ TEST_CASE("The order of the parameter kinds is verified", "[api][scalar_function
 		FunctionSignature(std::move(params), LogicalType::BIGINT).Verify();
 	};
 
-	REQUIRE_NOTHROW(verify({{"a", i32}, {"args", i32, Kind::VAR_POSITIONAL}, {"kw", i32, Kind::KEYWORD_ONLY}}));
+	REQUIRE_NOTHROW(verify({{"a", i32}, {"args", i32, {}, Kind::VAR_POSITIONAL}, {"kw", i32, {}, Kind::KEYWORD_ONLY}}));
 	// only one of each variadic parameter
-	REQUIRE_THROWS(verify({{"x", i32, Kind::VAR_POSITIONAL}, {"y", i32, Kind::VAR_POSITIONAL}}));
-	REQUIRE_THROWS(verify({{"x", i32, Kind::VAR_KEYWORD}, {"y", i32, Kind::VAR_KEYWORD}}));
+	REQUIRE_THROWS(verify({{"x", i32, {}, Kind::VAR_POSITIONAL}, {"y", i32, {}, Kind::VAR_POSITIONAL}}));
+	REQUIRE_THROWS(verify({{"x", i32, {}, Kind::VAR_KEYWORD}, {"y", i32, {}, Kind::VAR_KEYWORD}}));
 	// **kwargs is last
-	REQUIRE_THROWS(verify({{"x", i32, Kind::VAR_KEYWORD}, {"kw", i32, Kind::KEYWORD_ONLY}}));
-	REQUIRE_THROWS(verify({{"x", i32, Kind::VAR_KEYWORD}, {"y", i32, Kind::VAR_POSITIONAL}}));
+	REQUIRE_THROWS(verify({{"x", i32, {}, Kind::VAR_KEYWORD}, {"kw", i32, {}, Kind::KEYWORD_ONLY}}));
+	REQUIRE_THROWS(verify({{"x", i32, {}, Kind::VAR_KEYWORD}, {"y", i32, {}, Kind::VAR_POSITIONAL}}));
 	// a standard parameter cannot follow *args or a keyword-only parameter
-	REQUIRE_THROWS(verify({{"x", i32, Kind::VAR_POSITIONAL}, {"a", i32}}));
-	REQUIRE_THROWS(verify({{"kw", i32, Kind::KEYWORD_ONLY}, {"a", i32}}));
-	REQUIRE_THROWS(verify({{"kw", i32, Kind::KEYWORD_ONLY}, {"x", i32, Kind::VAR_POSITIONAL}}));
+	REQUIRE_THROWS(verify({{"x", i32, {}, Kind::VAR_POSITIONAL}, {"a", i32}}));
+	REQUIRE_THROWS(verify({{"kw", i32, {}, Kind::KEYWORD_ONLY}, {"a", i32}}));
+	REQUIRE_THROWS(verify({{"kw", i32, {}, Kind::KEYWORD_ONLY}, {"x", i32, {}, Kind::VAR_POSITIONAL}}));
 	// variadic parameters have no default value
 	REQUIRE_THROWS(verify({{"x", i32, Value::INTEGER(1), Kind::VAR_POSITIONAL}}));
 
 	// keyword-only parameters can mix required and optional parameters, standard parameters cannot
 	FunctionSignature sig;
 	sig.AddParameter("a", i32, Value::INTEGER(1));
-	sig.AddArgsParameter("args", i32);
-	sig.AddParameter("kw", i32, Value::INTEGER(1));
-	sig.AddParameter("kw2", i32);
+	sig.AddArgs("args", i32);
+	sig.AddKeywordOnly("kw", i32, Value::INTEGER(1));
+	sig.AddKeywordOnly("kw2", i32);
 	REQUIRE_NOTHROW(sig.Verify());
 
 	// the kinds are verified when the function is registered
 	DuckDB db(nullptr);
 	Connection con(db);
-	ScalarFunction fn("bad_kinds", {{"x", i32, Kind::VAR_POSITIONAL}, {"a", i32}}, LogicalType::BIGINT,
+	ScalarFunction fn("bad_kinds", {{"x", i32, {}, Kind::VAR_POSITIONAL}, {"a", i32}}, LogicalType::BIGINT,
 	                  CountArgumentsExec);
 	REQUIRE_THROWS(CreateScalarFunctionInfo(fn));
 }
@@ -212,8 +187,8 @@ TEST_CASE("Argument names cannot be serialized to older storage versions", "[api
 	Connection con(db);
 
 	FunctionSignature sig;
-	sig.AddArgsParameter("args", LogicalType::INTEGER);
-	sig.AddParameter("kw", LogicalType::INTEGER);
+	sig.AddArgs("args", LogicalType::INTEGER);
+	sig.AddKeywordOnly("kw", LogicalType::INTEGER);
 	sig.SetReturnType(LogicalType::BIGINT);
 	CreateScalarFunctionInfo info(ScalarFunction("count_arguments", std::move(sig), CountArgumentsExec));
 	con.context->RunFunctionInTransaction(
@@ -230,7 +205,7 @@ namespace {
 //! The arguments the last bind of "defaults_probe" received
 struct DefaultsProbe {
 	vector<Value> inputs;
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 };
 DefaultsProbe defaults_probe;
 
@@ -257,10 +232,10 @@ TEST_CASE("A table function receives the declared default of every parameter", "
 
 	FunctionSignature sig;
 	sig.AddParameter("a", LogicalType::INTEGER, Value::INTEGER(42));
-	sig.AddNamedParameter("k", LogicalType::INTEGER, Value::INTEGER(7));
-	sig.AddOptionalNamedParameter("o", LogicalType::INTEGER);
-	// a type like ANY describes no value, so the option defaults to an untyped NULL
-	sig.AddOptionalNamedParameter("untyped", LogicalType::ANY);
+	sig.AddKeywordOnly("k", LogicalType::INTEGER, Value::INTEGER(7));
+	sig.WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("o", LogicalType::INTEGER).Add("untyped", LogicalType::ANY);
+	});
 	TableFunction function("defaults_probe", std::move(sig), DefaultsProbeScan, DefaultsProbeBind);
 	CreateTableFunctionInfo info(function);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
@@ -290,7 +265,7 @@ TEST_CASE("A table function receives the declared default of every parameter", "
 namespace {
 
 //! The named arguments the last bind of "options_probe" received
-named_parameter_map_t options_probe;
+named_argument_map_t options_probe;
 
 unique_ptr<FunctionData> OptionsProbeBind(ClientContext &, TableFunctionBindInput &input, vector<LogicalType> &types,
                                           vector<Identifier> &names) {
@@ -308,7 +283,7 @@ TEST_CASE("A table function receives the options its **kwargs declares", "[api][
 	con.BeginTransaction();
 	auto &context = *con.context;
 
-	FunctionOptionSchema options;
+	TypedKwargs options;
 	options.Add("header", LogicalType::BOOLEAN)
 	    .Add("delim", LogicalType::VARCHAR)
 	    .Alias("sep")
@@ -316,8 +291,7 @@ TEST_CASE("A table function receives the options its **kwargs declares", "[api][
 	    .Add("columns", LogicalType::ANY);
 	FunctionSignature sig;
 	sig.AddParameter("path", LogicalType::VARCHAR);
-	sig.AddKwargsParameter("options", LogicalType::ANY);
-	sig.SetOptionSchema(std::move(options));
+	sig.AddTypedKwargs("options", std::move(options));
 	sig.Verify();
 	TableFunction function("options_probe", std::move(sig), DefaultsProbeScan, OptionsProbeBind);
 	CreateTableFunctionInfo info(function);
@@ -334,6 +308,8 @@ TEST_CASE("A table function receives the options its **kwargs declares", "[api][
 	REQUIRE(options_probe.at("header") == Value::BOOLEAN(true));
 	REQUIRE(options_probe.at("delim") == Value("|"));
 	REQUIRE(options_probe.at("sample_size") == Value::BIGINT(10));
+	// in the order they were passed, each under its canonical name
+	REQUIRE(options_probe.Keys() == vector<Identifier> {"header", "delim", "sample_size"});
 
 	// an ANY option is passed through as it is
 	REQUIRE_NO_FAIL(con.Query("SELECT * FROM options_probe('x', columns := {'a': 'INTEGER'})"));
@@ -362,23 +338,52 @@ TEST_CASE("A table function receives the options its **kwargs declares", "[api][
 	con.Rollback();
 }
 
-TEST_CASE("A signature with options requires a **kwargs parameter that no option shadows", "[api][table_function]") {
-	FunctionSignature without_kwargs;
-	without_kwargs.AddParameter("path", LogicalType::VARCHAR);
-	without_kwargs.SetOptionSchema(FunctionOptionSchema().Add("header", LogicalType::BOOLEAN));
-	REQUIRE_THROWS_WITH(without_kwargs.Verify(), Catch::Matchers::Contains("'**kwargs' parameter"));
+TEST_CASE("Named arguments arrive in binding order", "[api][table_function]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.BeginTransaction();
+	auto &context = *con.context;
+
+	FunctionSignature sig;
+	sig.AddParameter("path", LogicalType::VARCHAR);
+	sig.AddKeywordOnly("k1", LogicalType::INTEGER, Value::INTEGER(1));
+	sig.AddKeywordOnly("k2", LogicalType::INTEGER, Value::INTEGER(2));
+	sig.AddTypedKwargs("options", TypedKwargs().Add("o1", LogicalType::INTEGER).Add("o2", LogicalType::INTEGER));
+	TableFunction function("order_probe", std::move(sig), DefaultsProbeScan, OptionsProbeBind);
+	CreateTableFunctionInfo info(function);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	// keyword-only parameters in declaration order, passed or defaulted, then the options in the order they were passed
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM order_probe('x', o2 := 3, k2 := 5, o1 := 4)"));
+	REQUIRE(options_probe.Keys() == vector<Identifier> {"k1", "k2", "o2", "o1"});
+	REQUIRE(options_probe.at("k1") == Value::INTEGER(1));
+	REQUIRE(options_probe.at("k2") == Value::INTEGER(5));
+
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM order_probe('x', o1 := 4, K2 := 5)"));
+	REQUIRE(options_probe.Keys() == vector<Identifier> {"k1", "k2", "o1"});
+	con.Rollback();
+}
+
+TEST_CASE("A signature with options has a **kwargs parameter that no option shadows", "[api][table_function]") {
+	FunctionSignature typed;
+	typed.AddParameter("path", LogicalType::VARCHAR);
+	typed.AddTypedKwargs("options", TypedKwargs().Add("header", LogicalType::BOOLEAN));
+	REQUIRE(typed.GetKwargs()->GetName() == "options");
+	typed.Verify();
+	// a second "**kwargs" follows the first, which must be the last parameter
+	typed.AddTypedKwargs("more", TypedKwargs());
+	REQUIRE_THROWS_WITH(typed.Verify(), Catch::Matchers::Contains("must be the last parameter"));
 
 	FunctionSignature shadowed;
 	shadowed.AddParameter("path", LogicalType::VARCHAR);
-	shadowed.AddKwargsParameter("options", LogicalType::ANY);
-	shadowed.SetOptionSchema(FunctionOptionSchema().Add("x", LogicalType::BOOLEAN).Alias("path"));
+	shadowed.AddTypedKwargs("options", TypedKwargs().Add("x", LogicalType::BOOLEAN).Alias("path"));
 	REQUIRE_THROWS_WITH(shadowed.Verify(), Catch::Matchers::Contains("same name as a parameter"));
 
 	// names are checked once the schema is complete, case-insensitively and across merged schemas
-	REQUIRE_THROWS_WITH(FunctionOptionSchema().Add("a", LogicalType::BOOLEAN).Alias("A").Verify(),
+	REQUIRE_THROWS_WITH(TypedKwargs().Add("a", LogicalType::BOOLEAN).Alias("A").Verify(),
 	                    Catch::Matchers::Contains("Duplicate option name"));
-	auto left = FunctionOptionSchema().Add("a", LogicalType::BOOLEAN);
-	auto right = FunctionOptionSchema().Add("b", LogicalType::BOOLEAN).Alias("a");
+	auto left = TypedKwargs().Add("a", LogicalType::BOOLEAN);
+	auto right = TypedKwargs().Add("b", LogicalType::BOOLEAN).Alias("a");
 	REQUIRE_THROWS_WITH(left.Merge(right).Verify(), Catch::Matchers::Contains("Duplicate option name"));
 }
 
@@ -389,7 +394,7 @@ TEST_CASE("A typed **kwargs receives its arguments cast to its type", "[api][tab
 	auto &context = *con.context;
 
 	FunctionSignature sig;
-	sig.AddKwargsParameter("rest", LogicalType::BIGINT);
+	sig.AddKwargs("rest", LogicalType::BIGINT);
 	TableFunction function("kwargs_probe", std::move(sig), DefaultsProbeScan, OptionsProbeBind);
 	CreateTableFunctionInfo info(function);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
@@ -405,7 +410,7 @@ TEST_CASE("A typed **kwargs receives its arguments cast to its type", "[api][tab
 
 TEST_CASE("Two overloads are the same when they accept the same minimal call", "[api][table_function]") {
 	auto keyword = [](const char *name) {
-		return FunctionSignature().AddNamedParameter(name, LogicalType::INTEGER);
+		return FunctionSignature().AddKeywordOnly(name, LogicalType::INTEGER);
 	};
 	// distinct required keyword names accept distinct calls
 	REQUIRE(!keyword("a").IsSameOverload(keyword("b")));
@@ -414,10 +419,11 @@ TEST_CASE("Two overloads are the same when they accept the same minimal call", "
 	auto path = FunctionSignature().AddParameter("path", LogicalType::VARCHAR);
 	auto with_default = FunctionSignature()
 	                        .AddParameter("path", LogicalType::VARCHAR)
-	                        .AddNamedParameter("opt", LogicalType::INTEGER, Value::INTEGER(1));
-	auto with_option = FunctionSignature()
-	                       .AddParameter("path", LogicalType::VARCHAR)
-	                       .AddOptionalNamedParameter("opt", LogicalType::INTEGER);
+	                        .AddKeywordOnly("opt", LogicalType::INTEGER, Value::INTEGER(1));
+	auto with_option =
+	    FunctionSignature()
+	        .AddParameter("path", LogicalType::VARCHAR)
+	        .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("opt", LogicalType::INTEGER); });
 	auto with_required =
 	    FunctionSignature().AddParameter("path", LogicalType::VARCHAR).AddParameter("count", LogicalType::INTEGER);
 	// what a call may leave out does not change the overload

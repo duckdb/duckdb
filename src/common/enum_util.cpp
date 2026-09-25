@@ -2762,11 +2762,11 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 const StringUtil::EnumStringLiteral *GetFunctionParameterKindValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(FunctionParameterKind::POSITIONAL_ONLY), "POSITIONAL_ONLY" },
 		{ static_cast<uint32_t>(FunctionParameterKind::STANDARD), "STANDARD" },
 		{ static_cast<uint32_t>(FunctionParameterKind::VAR_POSITIONAL), "VAR_POSITIONAL" },
-		{ static_cast<uint32_t>(FunctionParameterKind::VAR_KEYWORD), "VAR_KEYWORD" },
 		{ static_cast<uint32_t>(FunctionParameterKind::KEYWORD_ONLY), "KEYWORD_ONLY" },
-		{ static_cast<uint32_t>(FunctionParameterKind::POSITIONAL), "POSITIONAL" }
+		{ static_cast<uint32_t>(FunctionParameterKind::VAR_KEYWORD), "VAR_KEYWORD" }
 	};
 	return values;
 }

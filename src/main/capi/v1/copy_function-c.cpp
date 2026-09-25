@@ -2,7 +2,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/function/copy_function.hpp"
-#include "duckdb/function/function_options.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/capi/capi_internal_table.hpp"
@@ -651,11 +650,11 @@ unique_ptr<FunctionData> CCopyFromBind(ClientContext &context, CopyFromFunctionB
 	auto &tf_info = info.tf.function_info->Cast<CTableFunctionInfo>();
 	auto result = make_uniq<CTableBindData>(tf_info);
 
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 
 	// Turn all options into named parameters
 	for (auto opt : info.info.options) {
-		auto option_schema = info.tf.GetSignature().GetOptionSchema();
+		auto option_schema = info.tf.GetSignature().GetTypedKwargs();
 		if (!option_schema || !option_schema->Find(Identifier(opt.first))) {
 			// Option not found in the table function's named parameters
 			throw BinderException("'%s' is not a supported option for copy function '%s'", opt.first.c_str(),
@@ -734,7 +733,7 @@ void duckdb_copy_function_set_copy_from_function(duckdb_copy_function copy_funct
 			return;
 		}
 	}
-	auto option_schema = tf.GetSignature().GetOptionSchema();
+	auto option_schema = tf.GetSignature().GetTypedKwargs();
 	if (option_schema) {
 		for (auto &option : option_schema->GetOptions()) {
 			if (duckdb::TypeVisitor::Contains(option.type, duckdb::LogicalTypeId::INVALID)) {
