@@ -43,7 +43,9 @@ void AggregateInputLayout::Initialize(const vector<LogicalType> &types, const ve
 		if (count > types.size() - column) {
 			throw InternalException("Aggregate arguments exceed payload column count");
 		}
-		vector<LogicalType> argument_types(types.begin() + column, types.begin() + column + count);
+		auto argument_begin = types.begin() + NumericCast<vector<LogicalType>::difference_type>(column);
+		auto argument_end = types.begin() + NumericCast<vector<LogicalType>::difference_type>(column + count);
+		vector<LogicalType> argument_types(argument_begin, argument_end);
 		arguments.push_back(builder.AddColumns(argument_types));
 		column += count;
 	}
@@ -64,7 +66,8 @@ void AggregateInputLayout::Initialize(const vector<LogicalType> &types, const ve
 	if (!argument_counts.empty() && column != types.size()) {
 		throw InternalException("Aggregate layout does not cover the payload");
 	}
-	builder.AddColumns(vector<LogicalType>(types.begin() + column, types.end()));
+	auto remaining_begin = types.begin() + NumericCast<vector<LogicalType>::difference_type>(column);
+	builder.AddColumns(vector<LogicalType>(remaining_begin, types.end()));
 	layout = make_uniq<ChunkLayout>(builder.Build());
 }
 

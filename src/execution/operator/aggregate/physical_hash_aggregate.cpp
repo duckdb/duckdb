@@ -638,7 +638,6 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::ExecuteTask(TaskExecution
 
 TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping(const idx_t grouping_idx) {
 	D_ASSERT(op.distinct_collection_info);
-	auto &info = *op.distinct_collection_info;
 
 	auto &grouping_data = op.groupings[grouping_idx];
 	auto &grouping_state = gstate.grouping_states[grouping_idx];
