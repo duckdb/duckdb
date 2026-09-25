@@ -255,8 +255,8 @@ private:
 	void InitializeChunkFormatState();
 	//! Takes the rows only: the handle already holds the format and state its buffer settled at submission
 	void AdoptCollected(QueryResult &produced);
-	void PrepareCollected(const char *expected);
-	const ResultFormatGlobalState &CheckedFormatState(const char *expected) const;
+	DUCKDB_API void PrepareCollected(const char *expected);
+	DUCKDB_API const ResultFormatGlobalState &CheckedFormatState(const char *expected) const;
 	[[noreturn]] void ThrowFormatMismatch(const char *expected) const;
 
 private:
