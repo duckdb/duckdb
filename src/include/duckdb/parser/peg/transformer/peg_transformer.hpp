@@ -273,6 +273,10 @@ struct TransformInput {
 	}
 
 	optional_ptr<const CompiledGrammarRule> GetRule() const {
+		// A collapsed result stands in for a rule that would have returned it unchanged; transform it as itself
+		if (parse_result.collapsed) {
+			return parse_result.GetRule();
+		}
 		return rule ? rule : parse_result.GetRule();
 	}
 
