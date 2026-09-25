@@ -262,6 +262,32 @@ TEST_CASE("A table function receives the declared default of every parameter", "
 	con.Rollback();
 }
 
+TEST_CASE("A table function receives its defaults cast to the parameter types", "[api][table_function]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.BeginTransaction();
+	auto &context = *con.context;
+
+	// defaults of another type than their parameter, as for a scalar function they are cast - unless the
+	// parameter is ANY
+	auto sig = FunctionSignature()
+	               .AddParameter("a", LogicalType::BIGINT, Value::INTEGER(42))
+	               .AddParameter("any", LogicalType::ANY, Value::INTEGER(1))
+	               .AddKeywordOnly("k", LogicalType::VARCHAR, Value::INTEGER(7));
+	TableFunction function("defaults_cast_probe", std::move(sig), DefaultsProbeScan, DefaultsProbeBind);
+	CreateTableFunctionInfo info(function);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM defaults_cast_probe()"));
+	REQUIRE(defaults_probe.inputs.size() == 2);
+	REQUIRE(defaults_probe.inputs[0].type() == LogicalType::BIGINT);
+	REQUIRE(defaults_probe.inputs[0] == Value::BIGINT(42));
+	REQUIRE(defaults_probe.inputs[1].type() == LogicalType::INTEGER);
+	REQUIRE(defaults_probe.named_parameters.at("k").type() == LogicalType::VARCHAR);
+	REQUIRE(defaults_probe.named_parameters.at("k") == Value("7"));
+	con.Rollback();
+}
+
 namespace {
 
 //! The named arguments the last bind of "options_probe" received
@@ -408,39 +434,63 @@ TEST_CASE("A typed **kwargs receives its arguments cast to its type", "[api][tab
 	con.Rollback();
 }
 
-TEST_CASE("Two overloads are the same when they accept the same minimal call", "[api][table_function]") {
-	auto keyword = [](const char *name) {
-		return FunctionSignature().AddKeywordOnly(name, LogicalType::INTEGER);
+TEST_CASE("Two overloads are the same when no call tells them apart", "[api][table_function]") {
+	auto path = [](const LogicalType &type) {
+		return FunctionSignature().AddParameter("path", type);
 	};
-	// distinct required keyword names accept distinct calls
-	REQUIRE(!keyword("a").IsSameOverload(keyword("b")));
-	REQUIRE(keyword("a").IsSameOverload(keyword("A")));
+	auto keywords = [](vector<const char *> names) {
+		FunctionSignature result;
+		for (auto name : names) {
+			result.AddKeywordOnly(name, LogicalType::INTEGER);
+		}
+		return result;
+	};
+	auto args = [](const LogicalType &type) {
+		return FunctionSignature().AddArgs("args", type);
+	};
 
-	auto path = FunctionSignature().AddParameter("path", LogicalType::VARCHAR);
-	auto with_default = FunctionSignature()
-	                        .AddParameter("path", LogicalType::VARCHAR)
-	                        .AddKeywordOnly("opt", LogicalType::INTEGER, Value::INTEGER(1));
-	auto with_option =
-	    FunctionSignature()
-	        .AddParameter("path", LogicalType::VARCHAR)
-	        .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("opt", LogicalType::INTEGER); });
-	auto with_required =
-	    FunctionSignature().AddParameter("path", LogicalType::VARCHAR).AddParameter("count", LogicalType::INTEGER);
-	// what a call may leave out does not change the overload
-	REQUIRE(path.IsSameOverload(with_default));
-	REQUIRE(path.IsSameOverload(with_option));
-	REQUIRE(!path.IsSameOverload(with_required));
-	REQUIRE(!path.IsSameOverload(FunctionSignature().AddParameter("path", LogicalType::BIGINT)));
+	// parameters that take a position match in order, by type
+	REQUIRE(path(LogicalType::VARCHAR).IsSameOverload(path(LogicalType::VARCHAR)));
+	REQUIRE(!path(LogicalType::VARCHAR).IsSameOverload(path(LogicalType::BIGINT)));
+	// "*args" of different types accept different calls
+	REQUIRE(!args(LogicalType::INTEGER).IsSameOverload(args(LogicalType::VARCHAR)));
+	REQUIRE(!path(LogicalType::VARCHAR).IsSameOverload(path(LogicalType::VARCHAR).AddArgs("args", LogicalType::ANY)));
 
-	// so an overload gaining an optional parameter replaces the one it evolved from
-	TableFunctionSet set("evolving");
-	set.AddFunction(TableFunction("evolving", path, DefaultsProbeScan, OptionsProbeBind));
-	TableFunctionSet next("evolving");
-	next.AddFunction(TableFunction("evolving", with_default, DefaultsProbeScan, OptionsProbeBind));
-	REQUIRE(!set.MergeFunctionSet(next));
-	REQUIRE(set.MergeFunctionSet(next, true));
-	REQUIRE(set.Size() == 1);
-	REQUIRE(set.GetFunctionByOffset(0)->GetSignature().GetParameterCount() == 2);
+	// whatever their names, and whether they are positional-only
+	REQUIRE(path(LogicalType::VARCHAR).IsSameOverload(FunctionSignature().AddParameter("file", LogicalType::VARCHAR)));
+	REQUIRE(
+	    path(LogicalType::VARCHAR).IsSameOverload(FunctionSignature().AddPositionalOnly("file", LogicalType::VARCHAR)));
+
+	// keyword-only parameters match by name, in any order
+	REQUIRE(!keywords({"a"}).IsSameOverload(keywords({"b"})));
+	REQUIRE(keywords({"a"}).IsSameOverload(keywords({"A"})));
+	REQUIRE(keywords({"a", "b"}).IsSameOverload(keywords({"b", "a"})));
+
+	// defaults and options take no part
+	auto with_default = FunctionSignature().AddParameter("path", LogicalType::VARCHAR, Value("x"));
+	auto with_option = path(LogicalType::VARCHAR).WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("opt", LogicalType::INTEGER);
+	});
+	auto with_other_option = path(LogicalType::VARCHAR).WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("other", LogicalType::VARCHAR);
+	});
+	REQUIRE(path(LogicalType::VARCHAR).IsSameOverload(with_default));
+	REQUIRE(with_option.IsSameOverload(with_other_option));
+	// an optional parameter is a parameter all the same
+	REQUIRE(!path(LogicalType::VARCHAR)
+	             .IsSameOverload(
+	                 path(LogicalType::VARCHAR).AddKeywordOnly("opt", LogicalType::INTEGER, Value::INTEGER(1))));
+
+	// merging keeps overloads that some call tells apart, and rejects one that is already there
+	TableFunctionSet set("overloaded");
+	set.AddFunction(TableFunction("overloaded", args(LogicalType::INTEGER), DefaultsProbeScan, OptionsProbeBind));
+	TableFunctionSet other_args("overloaded");
+	other_args.AddFunction(
+	    TableFunction("overloaded", args(LogicalType::VARCHAR), DefaultsProbeScan, OptionsProbeBind));
+	REQUIRE(set.MergeFunctionSet(other_args));
+	REQUIRE(set.Size() == 2);
+	REQUIRE(!set.MergeFunctionSet(other_args));
+	REQUIRE(set.Size() == 2);
 }
 
 TEST_CASE("An option is checked once the overload is chosen", "[api][table_function]") {
@@ -454,10 +504,11 @@ TEST_CASE("An option is checked once the overload is chosen", "[api][table_funct
 	REQUIRE(StringUtil::Contains(result->GetError(), "header"));
 	REQUIRE(!StringUtil::Contains(result->GetError(), "Candidate functions"));
 
-	// a value of the wrong type names the option and the type it expects
+	// a value of the wrong type is cast to the option's type like an explicit cast, and a failure names the option
 	result = con.Query("FROM read_csv('x.csv', header := ['a'])");
 	REQUIRE(result->HasError());
 	REQUIRE(StringUtil::Contains(result->GetError(),
-	                             "Invalid named parameter \"header\" for function read_csv: expected BOOLEAN"));
+	                             "Could not cast value ['a'] to named parameter \"header\" of type BOOLEAN: "
+	                             "Unimplemented type for cast (VARCHAR[] -> BOOLEAN)"));
 	REQUIRE(!StringUtil::Contains(result->GetError(), "No function matches"));
 }

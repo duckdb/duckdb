@@ -4,6 +4,7 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
@@ -277,7 +278,7 @@ hash_t FunctionSignature::Hash() const {
 	return hash;
 }
 
-void FunctionSignature::FillNamedDefaults(named_argument_map_t &named_parameters) const {
+void FunctionSignature::FillNamedDefaults(ClientContext &context, named_argument_map_t &named_parameters) const {
 	// keyword-only parameters are slots, bound in the order they are declared - the arguments "**kwargs" receives
 	// follow them in the order they were passed
 	named_argument_map_t result;
@@ -289,7 +290,8 @@ void FunctionSignature::FillNamedDefaults(named_argument_map_t &named_parameters
 		if (entry != named_parameters.end()) {
 			result.insert(param.GetName(), std::move(entry->second));
 		} else if (param.HasDefaultValue()) {
-			result.insert(param.GetName(), *param.GetDefaultValue());
+			result.insert(param.GetName(),
+			              FunctionBinder::CastToParameterType(context, *param.GetDefaultValue(), param.GetType()));
 		}
 	}
 	if (result.empty()) {
@@ -498,41 +500,45 @@ bool FunctionSignature::operator!=(const FunctionSignature &other) const {
 }
 
 bool FunctionSignature::IsSameOverload(const FunctionSignature &other) const {
-	// the required positional parameters, in order
-	auto required_positional = [](const FunctionSignature &signature) {
+	// the parameters a caller can pass by position, "*args" and "**kwargs", in declaration order
+	auto ordered = [](const FunctionSignature &signature) {
 		vector<reference<const FunctionParameter>> result;
-		for (idx_t i = 0; i < signature.GetPositionalParameterCount(); i++) {
-			auto &param = signature.GetParameter(i);
-			if (!param.HasDefaultValue()) {
+		for (auto &param : signature.GetParameters()) {
+			if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY) {
 				result.push_back(param);
 			}
 		}
 		return result;
 	};
-	auto lhs_positional = required_positional(*this);
-	auto rhs_positional = required_positional(other);
-	if (lhs_positional.size() != rhs_positional.size()) {
+	auto lhs_ordered = ordered(*this);
+	auto rhs_ordered = ordered(other);
+	if (lhs_ordered.size() != rhs_ordered.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < lhs_positional.size(); i++) {
-		auto &lhs = lhs_positional[i].get();
-		auto &rhs = rhs_positional[i].get();
-		if (lhs.GetType() != rhs.GetType() || lhs.GetKind() != rhs.GetKind()) {
+	for (idx_t i = 0; i < lhs_ordered.size(); i++) {
+		auto &lhs = lhs_ordered[i].get();
+		auto &rhs = rhs_ordered[i].get();
+		// a positional-only and a standard parameter both take a position, which is all a call can tell apart
+		auto takes_position = lhs.AcceptsPosition();
+		if (takes_position != rhs.AcceptsPosition() || (!takes_position && lhs.GetKind() != rhs.GetKind())) {
+			return false;
+		}
+		if (lhs.GetType() != rhs.GetType()) {
 			return false;
 		}
 	}
-	// the required keyword-only parameters, by name
-	auto required_keywords = [](const FunctionSignature &signature) {
+	// the keyword-only parameters, by name
+	auto keywords = [](const FunctionSignature &signature) {
 		identifier_map_t<LogicalType> result;
 		for (auto &param : signature.GetParameters()) {
-			if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY && !param.HasDefaultValue()) {
+			if (param.GetKind() == FunctionParameterKind::KEYWORD_ONLY) {
 				result.emplace(param.GetName(), param.GetType());
 			}
 		}
 		return result;
 	};
-	auto lhs_keywords = required_keywords(*this);
-	auto rhs_keywords = required_keywords(other);
+	auto lhs_keywords = keywords(*this);
+	auto rhs_keywords = keywords(other);
 	if (lhs_keywords.size() != rhs_keywords.size()) {
 		return false;
 	}

@@ -124,6 +124,10 @@ public:
 	                                     vector<Value> &parameters, named_argument_map_t &named_parameters,
 	                                     ErrorData &error);
 
+	//! Casts a constant to the type of the parameter it fills, as an argument of any function is cast - a parameter
+	//! whose type is not concrete, such as ANY, takes it as it is
+	DUCKDB_API static Value CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type);
+
 	//! Bind a table in-out function. Its arguments are the columns of an input table, so there is nothing to place
 	//! or fold - only the overload is chosen
 	DUCKDB_API optional_idx BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,

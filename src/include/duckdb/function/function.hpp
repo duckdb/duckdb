@@ -267,9 +267,14 @@ public:
 	bool operator!=(const FunctionSignature &other) const;
 
 	bool Equal(const FunctionSignature &other) const;
-	//! Whether both accept the same minimal call: the same required positional parameters, in order, and the same
-	//! required keyword-only parameters, by name. Parameters with a default, "*args", "**kwargs" and its options do
-	//! not change which minimal call a function accepts, so adding one keeps it the same overload
+	//! Whether both declare the same overload. As in C++ and Postgres, the types identify an overload, and a call that
+	//! matches two distinct ones is reported as ambiguous when it is made. They are the same when:
+	//! - the parameters a caller can pass by position match in order, by type - whatever their names, and whether
+	//!   they are positional-only or not
+	//! - "*args" and "**kwargs" match, by type
+	//! - the keyword-only parameters match by name and type, in any order - a caller can only pass them by name
+	//! Defaults and the options of "**kwargs" are ignored: every call the overload without a default accepts, both
+	//! accept at the same cost, and options take no part in overload selection
 	DUCKDB_API bool IsSameOverload(const FunctionSignature &other) const;
 
 public:
@@ -329,10 +334,11 @@ public:
 		parameters.emplace_back(std::move(name), std::move(type), std::move(default_value), kind);
 		return *this;
 	}
-	//! Adds a parameter named "col<N>", after its position
+	//! Adds a positional-only parameter named "col<N>", after its position - a caller cannot pass it by a name that
+	//! was never declared
 	auto AddParameter(LogicalType type) -> FunctionSignature & {
 		auto name = Identifier(StringUtil::Format("col%d", parameters.size()));
-		return AddParameter(std::move(name), std::move(type));
+		return AddPositionalOnly(std::move(name), std::move(type));
 	}
 	auto AddKeywordOnly(Identifier name, LogicalType type, optional<Value> default_value = {}) -> FunctionSignature & {
 		return AddParameter(std::move(name), std::move(type), std::move(default_value),
@@ -399,7 +405,8 @@ public:
 
 	//! Puts the named arguments in binding order: every keyword-only parameter in declaration order, with its default
 	//! if the call left it out, then the arguments "**kwargs" receives in the order they were passed
-	DUCKDB_API void FillNamedDefaults(named_argument_map_t &named_parameters) const;
+	//! A default is cast to its parameter's type, as FunctionBinder::CastToParameterType casts an argument
+	DUCKDB_API void FillNamedDefaults(ClientContext &context, named_argument_map_t &named_parameters) const;
 
 	DUCKDB_API void Verify() const;
 

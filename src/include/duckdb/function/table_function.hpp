@@ -676,7 +676,6 @@ public:
 	              table_function_init_global_t init_global = nullptr, table_function_init_local_t init_local = nullptr);
 
 public:
-	DUCKDB_API bool Equal(const TableFunction &rhs) const;
 	DUCKDB_API bool operator==(const TableFunction &rhs) const;
 	DUCKDB_API bool operator!=(const TableFunction &rhs) const;
 };

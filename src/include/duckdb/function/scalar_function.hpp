@@ -460,8 +460,6 @@ public:
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
 
-	DUCKDB_API bool Equal(const ScalarFunction &rhs) const;
-
 public:
 	unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments,
 	                                         optional_ptr<Binder> binder = nullptr) const;

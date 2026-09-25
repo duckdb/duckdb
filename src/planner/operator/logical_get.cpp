@@ -385,7 +385,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(206, "parameters", result->parameters);
 	deserializer.ReadPropertyWithDefault(207, "named_parameters", result->named_parameters);
 	// a plan written by an older version holds only the arguments the call passed
-	function.GetSignature().FillNamedDefaults(result->named_parameters);
+	function.GetSignature().FillNamedDefaults(deserializer.Get<ClientContext &>(), result->named_parameters);
 	deserializer.ReadPropertyWithDefault(208, "input_table_types", result->input_table_types);
 	deserializer.ReadPropertyWithDefault(209, "input_table_names", result->input_table_names);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);

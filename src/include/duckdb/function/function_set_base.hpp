@@ -62,7 +62,8 @@ public:
 		for (auto &new_func : new_functions.functions) {
 			bool overwritten = false;
 			for (auto &func : functions) {
-				if (new_func->Equal(*func)) {
+				// the same rule for every kind of function - see FunctionSignature::IsSameOverload
+				if (new_func->GetSignature().IsSameOverload(func->GetSignature())) {
 					// function overload already exists
 					if (override) {
 						// override it

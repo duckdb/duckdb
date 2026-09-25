@@ -107,10 +107,6 @@ bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 	return !(*this == rhs);
 }
 
-bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
-	return signature.Equal(rhs.signature);
-}
-
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 1);
 	result.Reference(input.data[0]);

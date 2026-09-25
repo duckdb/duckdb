@@ -66,7 +66,7 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	vector<Value> inputs;
 	inputs.emplace_back(file.path);
 	auto parameters = named_parameters;
-	function.GetSignature().FillNamedDefaults(parameters);
+	function.GetSignature().FillNamedDefaults(context, parameters);
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
 	TableFunctionRef empty_ref;

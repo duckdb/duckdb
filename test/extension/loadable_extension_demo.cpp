@@ -1255,8 +1255,9 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 
 	// test_named_agg_inspect(a INTEGER, b INTEGER = 100, c INTEGER = 200) -> VARCHAR
 	// Aggregate counterpart of test_named_inspect. AggregateFunction has no FunctionSignature
-	// constructor, so we build it from positional types and then set parameter names + defaults on
-	// the signature. Exercises named-argument binding for aggregates (shared resolution path).
+	// constructor, and the parameters its type list declares are positional-only, so the signature
+	// is replaced by one declaring the names and defaults. Exercises named-argument binding for
+	// aggregates (shared resolution path).
 	{
 		AggregateFunction agg(
 		    "test_named_agg_inspect", {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER},
@@ -1264,12 +1265,12 @@ static void RegisterNamedArgumentFunction(ExtensionLoader &loader) {
 		    AggregateFunction::StateInitialize<InspectAggState, InspectAggOp>, InspectAggUpdate,
 		    AggregateFunction::StateCombine<InspectAggState, InspectAggOp>,
 		    AggregateFunction::StateFinalize<InspectAggState, string_t, InspectAggOp>, NH::DEFAULT_NULL_HANDLING);
-		auto &sig = agg.GetSignature();
-		sig.GetParameter(0).SetName("a");
-		sig.GetParameter(1).SetName("b");
-		sig.GetParameter(1).SetDefaultValue(Value::INTEGER(100));
-		sig.GetParameter(2).SetName("c");
-		sig.GetParameter(2).SetDefaultValue(Value::INTEGER(200));
+		auto signature = FunctionSignature()
+		                     .AddParameter("a", LogicalType::INTEGER)
+		                     .AddParameter("b", LogicalType::INTEGER, Value::INTEGER(100))
+		                     .AddParameter("c", LogicalType::INTEGER, Value::INTEGER(200));
+		signature.SetReturnType(LogicalType::VARCHAR);
+		agg.GetSignature() = std::move(signature);
 		loader.RegisterFunction(std::move(agg));
 	}
 

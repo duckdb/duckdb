@@ -216,7 +216,7 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 	string ordinality_column_name = ordinality_name;
 	optional_idx ordinality_column_id;
 	// the function binder has placed them already, but not for a table in-out call or a direct bind
-	table_function.GetSignature().FillNamedDefaults(named_parameters);
+	table_function.GetSignature().FillNamedDefaults(context, named_parameters);
 	table_function.SetCallArguments(parameters, named_parameters);
 	if (table_function.bind || table_function.bind_replace || table_function.bind_operator) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,

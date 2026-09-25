@@ -475,6 +475,13 @@ static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, 
 	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
+Value FunctionBinder::CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type) {
+	if (RequiresCast(value.type(), parameter_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+		return value.CastAs(context, parameter_type);
+	}
+	return value;
+}
+
 //! Fold an argument to the constant it was bound to. A constant expression carries its value directly - evaluating
 //! one is both wasteful and impossible for the types that have no vector representation, such as TABLE
 static Value FoldArgument(ClientContext &context, Expression &expr) {
@@ -492,11 +499,23 @@ static Value PlaceArgument(ClientContext &context, Expression &expr, const Logic
 		// back when the plan is deserialized.
 		return Value();
 	}
+	return FunctionBinder::CastToParameterType(context, FoldArgument(context, expr), target_type);
+}
+
+//! Fold an option to a constant and cast it to its type like an explicit cast - overload selection never checked it.
+//! A failed cast names the option, as the cast alone cannot tell which one it was
+static Value PlaceOption(ClientContext &context, Expression &expr, const TypedKwarg &option) {
 	auto value = FoldArgument(context, expr);
-	if (RequiresCast(value.type(), target_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-		value = value.CastAs(context, target_type);
+	if (RequiresCast(value.type(), option.type) != LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+		return value;
 	}
-	return value;
+	string error_message;
+	auto result = value.TryCastAs(context, option.type, &error_message);
+	if (!result) {
+		throw InvalidInputException(expr, "Could not cast value %s to named parameter %s of type %s: %s",
+		                            value.ToSQLString(), option.name, option.type.ToString(), error_message);
+	}
+	return std::move(*result);
 }
 
 //! Place the arguments of a call onto the parameters of the chosen overload: fold each to a constant and cast it to
@@ -559,9 +578,7 @@ static void PlaceArguments(ClientContext &context, const T &function,
 				                      "Named parameter %s was passed more than once in function call to %s",
 				                      option.name, function.GetName().GetIdentifierName());
 			}
-			// an option is cast to its type like an explicit cast - overload selection never checked it
-			named_parameters.insert(
-			    make_pair(option.name, PlaceArgument(context, *named_argument.second, option.type)));
+			named_parameters.insert(make_pair(option.name, PlaceOption(context, *named_argument.second, option)));
 			continue;
 		}
 		auto &param = signature.GetParameter(param_idx.GetIndex());
@@ -587,7 +604,8 @@ static void PlaceArguments(ClientContext &context, const T &function,
 		} else if (named_slots[i]) {
 			parameters.push_back(PlaceArgument(context, *named_slots[i], param.GetType()));
 		} else if (param.HasDefaultValue()) {
-			parameters.push_back(*param.GetDefaultValue());
+			parameters.push_back(
+			    FunctionBinder::CastToParameterType(context, *param.GetDefaultValue(), param.GetType()));
 		} else {
 			// overload selection only picks an overload whose required parameters the call fills
 			throw InternalException("Missing value for parameter %s in function call to %s", param.GetName(),
@@ -601,7 +619,7 @@ static void PlaceArguments(ClientContext &context, const T &function,
 			parameters.push_back(PlaceArgument(context, *positional_arguments[i], args_type));
 		}
 	}
-	signature.FillNamedDefaults(named_parameters);
+	signature.FillNamedDefaults(context, named_parameters);
 }
 
 optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
