@@ -25,11 +25,8 @@ class ResultSinkLocalState;
 //! The root operator of every chunk-producing plan.
 class PhysicalResultSink : public PhysicalResultCollector {
 public:
-	PhysicalResultSink(PhysicalPlan &physical_plan, PreparedStatementData &data, ResultLifetime lifetime,
-	                   ResultOrdering ordering);
+	PhysicalResultSink(PhysicalPlan &physical_plan, PreparedStatementData &data, ResultOrdering ordering);
 
-	//! The retention fixed by the plan. UNDECIDED leaves it to the consumer's first call
-	ResultLifetime lifetime;
 	ResultOrdering ordering;
 
 public:
@@ -50,7 +47,7 @@ public:
 	bool ParallelSink() const override;
 	bool SinkOrderDependent() const override;
 	PipelineExternalInputSupport GetExternalInputSupport() const override;
-	//! The plan-time answer: a deferred sink may stream, whatever the consumer decides later
+	//! Always true: the buffer's lifetime, not the plan, decides whether producers drain or retain
 	bool IsStreaming() const override;
 	bool BuildsOwnResult() const override {
 		return false;
@@ -60,7 +57,7 @@ private:
 	bool BatchOrdered() const {
 		return ordering == ResultOrdering::BATCH_INDEX_ORDERED;
 	}
-	//! The retention in effect: the consumer's decision for a deferred sink, the plan's otherwise
+	//! The retention in effect: the buffer's own lifetime, settled by the consumer's first call
 	ResultLifetime CurrentLifetime(ResultSinkGlobalState &gstate) const;
 	bool DrainsByBatchIndex(ResultSinkGlobalState &gstate) const;
 	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;

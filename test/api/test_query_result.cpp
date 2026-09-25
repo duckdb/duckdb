@@ -233,14 +233,14 @@ TEST_CASE("TakeCollection hands the collection over exactly once", "[api][query_
 	REQUIRE(collection->Count() == 1000);
 }
 
-TEST_CASE("RowCount reports zero for a result closed before it was ever collected", "[api][query_result]") {
+TEST_CASE("RowCount throws for a result closed before it was ever collected", "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
 	auto handle = Submit(con, "SELECT i FROM range(1000) t(i)");
 	// Closed without ever calling Collection, TakeCollection, Fetch or RowCount
 	handle->Close();
-	REQUIRE(handle->RowCount() == 0);
+	REQUIRE_THROWS_AS(handle->RowCount(), InvalidInputException);
 }
 
 TEST_CASE("Fetch resumes where it left off across a Collection call, and stays null after exhaustion",

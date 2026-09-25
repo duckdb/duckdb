@@ -51,7 +51,7 @@ ResultFormatContext MakeFormatContext(ClientProperties client_properties, Result
 
 vector<int64_t> DrainBigints(ChunkRetainedCollection &collection) {
 	vector<int64_t> result;
-	while (auto chunk = collection.Fetch()) {
+	while (auto chunk = collection.FetchRaw()) {
 		for (idx_t i = 0; i < chunk->size(); i++) {
 			result.push_back(chunk->GetValue(0, i).GetValue<int64_t>());
 		}
@@ -121,10 +121,13 @@ TEST_CASE("A batch index change flushes the partial unit under the old batch", "
 		auto chunk2 = MakeChunk(base + 100, 100);
 		local.Append(*chunk2, NumericCast<idx_t>(batch));
 	}
-	local.Finalize();
 
-	REQUIRE(local.Count() == 600);
-	auto &payloads = local.Get();
+	DefaultRetainedCollection<TestFormat> global(format, *gstate);
+	global.Combine(local);
+	global.Finalize();
+
+	REQUIRE(global.Count() == 600);
+	auto &payloads = global.Get();
 	REQUIRE(payloads.size() == 3);
 	for (idx_t batch = 0; batch < 3; batch++) {
 		auto base = batch * 1000;
@@ -201,28 +204,31 @@ TEST_CASE("Fetch copies payloads that outlive the collection; Get is unaffected 
 	auto format_context = MakeFormatContext(con.context->GetClientProperties(), ResultOrdering::BATCH_INDEX_ORDERED);
 	auto gstate = format.InitGlobal(format_context);
 
-	auto local = make_uniq<DefaultRetainedCollection<TestFormat>>(format, *gstate);
+	DefaultRetainedCollection<TestFormat> local(format, *gstate);
 	for (auto batch : {0, 1, 2}) {
 		auto chunk = MakeChunk(NumericCast<idx_t>(batch) * 100, 10);
-		local->Append(*chunk, NumericCast<idx_t>(batch));
+		local.Append(*chunk, NumericCast<idx_t>(batch));
 	}
-	local->Finalize();
-	REQUIRE(local->Get().size() == 3);
 
-	auto fetched_0 = local->Fetch();
-	auto fetched_1 = local->Fetch();
-	auto fetched_2 = local->Fetch();
-	REQUIRE(local->Fetch() == nullptr);
-	REQUIRE(local->Fetch() == nullptr); // forever after, not just once
+	auto global = make_uniq<DefaultRetainedCollection<TestFormat>>(format, *gstate);
+	global->Combine(local);
+	global->Finalize();
+	REQUIRE(global->Get().size() == 3);
+
+	auto fetched_0 = global->Fetch();
+	auto fetched_1 = global->Fetch();
+	auto fetched_2 = global->Fetch();
+	REQUIRE(global->Fetch() == nullptr);
+	REQUIRE(global->Fetch() == nullptr); // forever after, not just once
 
 	REQUIRE(PayloadValues(*fetched_0) == Ascending(0, 10));
 	REQUIRE(PayloadValues(*fetched_1) == Ascending(100, 10));
 	REQUIRE(PayloadValues(*fetched_2) == Ascending(200, 10));
 	// Fetch copies: the stored payloads are untouched
-	REQUIRE(local->Get().size() == 3);
-	REQUIRE(PayloadValues(*local->Get()[0]) == Ascending(0, 10));
+	REQUIRE(global->Get().size() == 3);
+	REQUIRE(PayloadValues(*global->Get()[0]) == Ascending(0, 10));
 
-	local.reset();
+	global.reset();
 	// The copy has no dependency on the collection's storage, including its string heap
 	REQUIRE(fetched_1->chunks[0]->GetValue(1, 0).ToString() == "payload-100-not-inlined");
 }
@@ -291,7 +297,7 @@ TEST_CASE("ChunkRetainedCollection materializes rows for every memory type and o
 
 	REQUIRE(global.Get().Count() == expected.size());
 	auto rows = DrainBigints(global);
-	REQUIRE(global.Fetch() == nullptr); // forever after
+	REQUIRE(global.FetchRaw() == nullptr); // forever after
 	if (batch_ordered) {
 		REQUIRE(rows == expected);
 	} else {

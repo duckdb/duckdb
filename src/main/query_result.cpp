@@ -383,12 +383,8 @@ idx_t QueryResult::RowCount() {
 	if (HasError()) {
 		return 0;
 	}
-	if (collection_taken) {
+	if (!IsCollected()) {
 		ThrowNoCollection();
-	}
-	if (!collection) {
-		// Closed before it was ever collected: no rows were ever adopted, and no collection was taken
-		return 0;
 	}
 	return collection->Count();
 }

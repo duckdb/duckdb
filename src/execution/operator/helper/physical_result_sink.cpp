@@ -14,8 +14,8 @@
 namespace duckdb {
 
 PhysicalResultSink::PhysicalResultSink(PhysicalPlan &physical_plan, PreparedStatementData &data,
-                                       ResultLifetime lifetime, ResultOrdering ordering)
-    : PhysicalResultCollector(physical_plan, data), lifetime(lifetime), ordering(ordering) {
+                                       ResultOrdering ordering)
+    : PhysicalResultCollector(physical_plan, data), ordering(ordering) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -34,9 +34,8 @@ public:
 
 class ResultSinkLocalState : public LocalSinkState {
 public:
-	//! Set when a park deposited the chunk, so the re-delivery is not appended again. Parks deposit
-	//! so that a parked producer always implies a poppable unit
-	bool chunk_deposited = false;
+	//! Set once the chunk is appended, so a re-invocation after BLOCKED resumes the drain, not the append
+	bool chunk_appended = false;
 	//! The batch this producer is currently sinking
 	idx_t current_batch = 0;
 	//! Created at the first Append, because the lifetime is not settled yet when the local sink state is
@@ -157,9 +156,9 @@ bool PhysicalResultSink::HandOver(ResultSinkGlobalState &gstate, ResultSinkLocal
 
 SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
                                                 DataChunk &chunk, OperatorSinkInput &input) const {
-	if (lstate.chunk_deposited) {
+	if (lstate.chunk_appended) {
 		// The chunk was appended before the park; the units it still owes come out of the drain below
-		lstate.chunk_deposited = false;
+		lstate.chunk_appended = false;
 	} else {
 		if (BatchOrdered()) {
 			lstate.current_batch = lstate.partition_info.batch_index.GetIndex();
@@ -169,7 +168,7 @@ SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, R
 		AppendChunk(gstate, lstate, chunk);
 	}
 	if (DrainFinishedUnits(gstate, lstate, input.interrupt_state)) {
-		lstate.chunk_deposited = true;
+		lstate.chunk_appended = true;
 		return SinkResultType::BLOCKED;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
@@ -288,7 +287,8 @@ bool PhysicalResultSink::SinkOrderDependent() const {
 }
 
 bool PhysicalResultSink::IsStreaming() const {
-	return lifetime != ResultLifetime::RETAINED;
+	// Producers may park: the buffer's lifetime decides whether they drain or retain
+	return true;
 }
 
 PipelineExternalInputSupport PhysicalResultSink::GetExternalInputSupport() const {

@@ -183,9 +183,8 @@ TEST_CASE("A retained result sink rejects results after the connection closes", 
 		auto &root = data.physical_plan->Make<PhysicalDummyScan>(data.types, 0);
 		data.physical_plan->SetRoot(root);
 
-		// Every sink, plan-retained or not, gets its buffer from submission; here it is hand-built
-		// the way SubmitPreparedStatementInternal builds one, with the sink's own fixed lifetime
-		auto sink = make_uniq<PhysicalResultSink>(*data.physical_plan, data, ResultLifetime::RETAINED, ordering);
+		// The sink carries no lifetime of its own; the buffer built below is what fixes it to RETAINED
+		auto sink = make_uniq<PhysicalResultSink>(*data.physical_plan, data, ordering);
 		ResultFormatContext format_context {data.types, data.names, connection->context->GetClientProperties(),
 		                                    ordering};
 		shared_ptr<BufferedData> buffer;

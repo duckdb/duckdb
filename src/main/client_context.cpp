@@ -685,11 +685,11 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 		ResultFormatContext format_context {statement_data.types, statement_data.names, client_properties,
 		                                    sink.ordering};
 		if (sink.ordering == ResultOrdering::BATCH_INDEX_ORDERED) {
-			buffer = make_shared_ptr<BatchedBufferedData>(*this, sink.lifetime, std::move(format_context),
+			buffer = make_shared_ptr<BatchedBufferedData>(*this, ResultLifetime::UNDECIDED, std::move(format_context),
 			                                              parameters.format);
 		} else {
-			buffer =
-			    make_shared_ptr<SimpleBufferedData>(*this, sink.lifetime, std::move(format_context), parameters.format);
+			buffer = make_shared_ptr<SimpleBufferedData>(*this, ResultLifetime::UNDECIDED, std::move(format_context),
+			                                             parameters.format);
 		}
 		if (parameters.result_eagerness == ResultEagerness::FORCED ||
 		    statement_data.properties.result_eagerness == ResultEagerness::FORCED) {

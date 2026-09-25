@@ -3,7 +3,7 @@
 //
 // test_result_format.hpp
 //
-// A deterministic result format for the format tests: it concatenates chunks into units of a fixed
+// A deterministic result format for the format tests: it slices chunks into units capped at a fixed
 // row count and records, per unit, the producer that built it.
 //
 //===----------------------------------------------------------------------===//
@@ -72,7 +72,7 @@ public:
 	atomic<idx_t> local_states {0};
 	//! Units finished short of the row cap: one per batch boundary and one per producer at its end
 	atomic<idx_t> partial_units {0};
-	//! Slicing mode: the most finished units one producer ever held undelivered after an append
+	//! The most finished units one producer ever held undelivered after an append
 	atomic<idx_t> max_pending_units {0};
 	//! How many times AppendToUnit ran: one per chunk the pipeline handed to the format
 	atomic<idx_t> append_calls {0};
@@ -86,13 +86,12 @@ public:
 	bool producer_set = false;
 	idx_t rows = 0;
 	idx_t bytes = 0;
-	//! Slicing mode only: units already sliced off at exactly the cap, waiting to be taken in order
+	//! Units already sliced off at exactly the cap, waiting to be taken in order
 	deque<unique_ptr<TestUnit>> sealed;
 };
 
-//! Deterministic: whole chunks are concatenated until max_unit_rows is reached, so a unit may exceed
-//! the cap. With slice_at_cap, AppendToUnit instead slices the incoming chunk at the cap, so one
-//! append can finish several units of exactly max_unit_rows rows
+//! Deterministic: AppendToUnit slices the incoming chunk at the cap, so a unit never exceeds
+//! max_unit_rows and one append can finish several units
 class TestFormat : public ResultFormatBase<TestFormat> {
 public:
 	using T = TestPayload;
@@ -100,8 +99,7 @@ public:
 	static constexpr const char *NAME = "test";
 
 public:
-	explicit TestFormat(idx_t max_unit_rows_p, bool slice_at_cap_p = false)
-	    : max_unit_rows(max_unit_rows_p), slice_at_cap(slice_at_cap_p) {
+	explicit TestFormat(idx_t max_unit_rows_p) : max_unit_rows(max_unit_rows_p) {
 	}
 
 public:
@@ -130,13 +128,6 @@ public:
 		if (!lstate.producer_set) {
 			lstate.producer = std::this_thread::get_id();
 			lstate.producer_set = true;
-		}
-		if (!slice_at_cap) {
-			auto copy = BufferedData::CopyForBuffering(chunk);
-			lstate.rows += copy->size();
-			lstate.bytes += copy->GetDataSize();
-			lstate.chunks.push_back(std::move(copy));
-			return;
 		}
 		idx_t offset = 0;
 		while (offset < chunk.size()) {
@@ -170,10 +161,7 @@ public:
 			throw InvalidInputException("TestFormat::IsUnitFinished");
 		}
 		auto &lstate = lstate_p.Cast<TestFormatLocalState>();
-		if (slice_at_cap) {
-			return !lstate.sealed.empty();
-		}
-		return !lstate.chunks.empty() && lstate.rows >= max_unit_rows;
+		return !lstate.sealed.empty();
 	}
 
 	unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p) override {
@@ -211,8 +199,6 @@ public:
 
 public:
 	idx_t max_unit_rows;
-	//! AppendToUnit slices the incoming chunk at the cap instead of concatenating whole chunks
-	bool slice_at_cap;
 	atomic<bool> throw_in_init_global {false};
 	atomic<bool> throw_in_append {false};
 	atomic<bool> throw_in_is_finished {false};
@@ -289,9 +275,8 @@ inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
 	return UnitValues(*unit.Cast<TestUnit>().payload, column);
 }
 
-inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t max_unit_rows,
-                                               bool slice_at_cap = false) {
-	auto handle = con.Submit(query, make_shared_ptr<TestFormat>(max_unit_rows, slice_at_cap));
+inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t max_unit_rows) {
+	auto handle = con.Submit(query, make_shared_ptr<TestFormat>(max_unit_rows));
 	REQUIRE(!handle->HasError());
 	return handle;
 }

@@ -97,7 +97,7 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='2KB'"));
 
 	SECTION("the simple store") {
-		auto handle = SubmitFormatted(con, "SELECT i FROM range(20000) t(i)", 300, true);
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(20000) t(i)", 300);
 		DrainWatchdog watchdog(con);
 		QueryResultStream<TestFormat> stream(std::move(handle));
 		auto report = Drain(stream);
@@ -112,7 +112,7 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 	}
 	SECTION("the batched store, with several producers") {
 		REQUIRE_NO_FAIL(con.Query("SET threads=4"));
-		auto handle = SubmitFormatted(con, "SELECT i FROM t", 300, true);
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 300);
 		DrainWatchdog watchdog(con);
 		QueryResultStream<TestFormat> stream(std::move(handle));
 		auto report = Drain(stream);

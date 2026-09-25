@@ -31,7 +31,7 @@ public:
 	virtual void Combine(RetainedResultCollection &local) = 0;
 	//! Once, after the last Combine
 	virtual void Finalize() = 0;
-	//! Rows stored so far; a format's unfinished partial unit counts once it is flushed (by Combine or Finalize)
+	//! Rows stored so far; a format's unfinished partial unit counts once Combine flushes it
 	virtual idx_t Count() const = 0;
 
 	template <class TARGET>
@@ -70,8 +70,6 @@ public:
 	//! The next chunk, scanned with DISALLOW_ZERO_COPY; null at the end and forever after. Never changes
 	//! the stored data
 	DUCKDB_API unique_ptr<DataChunk> FetchRaw();
-	//! FetchRaw, flattened
-	DUCKDB_API unique_ptr<DataChunk> Fetch();
 
 private:
 	bool batch_ordered;
@@ -146,7 +144,8 @@ public:
 	}
 
 	void Finalize() override {
-		FlushPartial();
+		// The global instance never receives an append; only a local ever builds a format local state
+		D_ASSERT(!local_state);
 		std::stable_sort(entries.begin(), entries.end(),
 		                 [](const Entry &lhs, const Entry &rhs) { return lhs.batch < rhs.batch; });
 		for (auto &entry : entries) {

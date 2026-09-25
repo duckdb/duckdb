@@ -115,13 +115,4 @@ unique_ptr<DataChunk> ChunkRetainedCollection::FetchRaw() {
 	return result;
 }
 
-unique_ptr<DataChunk> ChunkRetainedCollection::Fetch() {
-	auto chunk = FetchRaw();
-	if (!chunk) {
-		return nullptr;
-	}
-	chunk->Flatten();
-	return chunk;
-}
-
 } // namespace duckdb

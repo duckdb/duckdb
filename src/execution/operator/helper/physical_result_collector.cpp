@@ -23,16 +23,13 @@ unique_ptr<PhysicalOperator> PhysicalResultCollector::GetResultCollector(ClientC
 	auto &physical_plan = *data.physical_plan;
 	auto &root = physical_plan.Root();
 
-	// The plan always leaves the retention open; the consumer's first call settles it, and the
-	// submission pre-decides it for a query that must not park
-	const auto lifetime = ResultLifetime::UNDECIDED;
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
-		return make_uniq<PhysicalResultSink>(physical_plan, data, lifetime, ResultOrdering::UNORDERED);
+		return make_uniq<PhysicalResultSink>(physical_plan, data, ResultOrdering::UNORDERED);
 	}
 	if (!PhysicalPlanGenerator::UseBatchIndex(context, root)) {
-		return make_uniq<PhysicalResultSink>(physical_plan, data, lifetime, ResultOrdering::SOURCE_ORDERED);
+		return make_uniq<PhysicalResultSink>(physical_plan, data, ResultOrdering::SOURCE_ORDERED);
 	}
-	return make_uniq<PhysicalResultSink>(physical_plan, data, lifetime, ResultOrdering::BATCH_INDEX_ORDERED);
+	return make_uniq<PhysicalResultSink>(physical_plan, data, ResultOrdering::BATCH_INDEX_ORDERED);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalResultCollector::GetChildren() const {

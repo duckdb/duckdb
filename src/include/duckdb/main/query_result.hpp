@@ -165,7 +165,6 @@ public:
 		PrepareCollected(FORMAT::NAME);
 		auto taken = collection->Cast<RetainedCollectionOf<FORMAT>>().Take();
 		collection.reset();
-		collection_taken = true;
 		return taken;
 	}
 	//! Throws when FORMAT is not the result's format
@@ -272,8 +271,6 @@ private:
 	shared_ptr<ResultFormatGlobalState> format_state;
 	//! In the format's own storage, which also holds the fetch cursor
 	unique_ptr<RetainedResultCollection> collection;
-	//! RowCount throws once the collection was taken, but reports zero for a result closed before it was collected
-	bool collection_taken = false;
 
 private:
 	class QueryResultIterator;

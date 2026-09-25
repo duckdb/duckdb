@@ -202,7 +202,7 @@ TEST_CASE("Slicing at the cap finishes several units from one append", "[api][qu
 
 	// A cap below one chunk, so a single append seals several units at once
 	SECTION("drained") {
-		auto handle = SubmitFormatted(con, "SELECT i FROM range(50000) t(i)", cap, true);
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(50000) t(i)", cap);
 		DrainWatchdog watchdog(con);
 		QueryResultStream<TestFormat> stream(std::move(handle));
 		vector<int64_t> rows;
@@ -223,7 +223,7 @@ TEST_CASE("Slicing at the cap finishes several units from one append", "[api][qu
 		REQUIRE(units > 1);
 	}
 	SECTION("retained") {
-		auto handle = SubmitFormatted(con, "SELECT i FROM range(50000) t(i)", cap, true);
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(50000) t(i)", cap);
 		DrainWatchdog watchdog(con);
 		handle->Complete();
 		auto &collection = handle->Collection<TestFormat>();
@@ -801,10 +801,9 @@ TEST_CASE("Retained batch-ordered TestFormat with a cap below a row group", "[ap
 	const idx_t groups = groups_result->Collection().GetValue(0, 0).GetValue<idx_t>();
 	REQUIRE(groups > 1);
 
-	// Sliced at the cap, so a row group's rows do not divide evenly into whole units the way
-	// whole-chunk concatenation can; well below one row group, so several payloads seal before the
-	// batch boundary flushes the remainder
-	auto handle = SubmitFormatted(con, "SELECT i FROM t", 5000, true);
+	// A cap well below one row group, so several payloads seal before the batch boundary flushes
+	// the remainder
+	auto handle = SubmitFormatted(con, "SELECT i FROM t", 5000);
 	DrainWatchdog watchdog(con);
 	REQUIRE(handle->FormatState<TestFormat>().ordering == ResultOrdering::BATCH_INDEX_ORDERED);
 	handle->Complete();
