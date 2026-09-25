@@ -1292,7 +1292,7 @@ static bool TableHasDeleteConstraints(TableCatalogEntry &table) {
 }
 
 void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage, TableDeleteState &state,
-                                        ClientContext &context, DataChunk &chunk) {
+                                        ClientContext &context, DataChunk &chunk, optional_ptr<DataChunk> new_values) {
 	for (auto &constraint : state.constraint_state->bound_constraints) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL:
@@ -1301,7 +1301,23 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 			break;
 		case ConstraintType::FOREIGN_KEY: {
 			auto &bound_foreign_key = constraint->Cast<BoundForeignKeyConstraint>();
-			if (bound_foreign_key.info.IsDeleteConstraint()) {
+			if (!bound_foreign_key.info.IsDeleteConstraint()) {
+				break;
+			}
+			// No referenced key changed: the rows are re-inserted with the same keys, so skip the check.
+			bool keys_changed = false;
+			if (new_values) {
+				for (auto &column : bound_foreign_key.info.pk_keys) {
+					auto changed =
+					    VectorOperations::DistinctFrom(chunk.data[column.index], new_values->data[column.index],
+					                                   nullptr, chunk.size(), nullptr, nullptr);
+					if (changed > 0) {
+						keys_changed = true;
+						break;
+					}
+				}
+			}
+			if (!new_values || keys_changed) {
 				VerifyDeleteForeignKeyConstraint(storage, bound_foreign_key, context, chunk);
 			}
 			break;
@@ -1336,7 +1352,7 @@ unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &tabl
 }
 
 idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTableEntry &table_entry,
-                        Vector &row_identifiers, idx_t count) {
+                        Vector &row_identifiers, idx_t count, optional_ptr<DataChunk> new_values) {
 	D_ASSERT(row_identifiers.GetType().InternalType() == ROW_TYPE);
 	if (count == 0) {
 		return 0;
@@ -1366,6 +1382,15 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 
 		Vector offset_ids(row_identifiers, current_offset, pos);
 
+		// new_values is aligned with all row identifiers: slice out this batch
+		DataChunk batch_new_values;
+		optional_ptr<DataChunk> current_new_values = new_values;
+		if (new_values && (current_offset != 0 || current_count != count)) {
+			SelectionVector new_sel(current_offset, current_count);
+			batch_new_values.Slice(*new_values, new_sel, current_count);
+			current_new_values = &batch_new_values;
+		}
+
 		// This is a transaction-local DELETE.
 		if (is_transaction_delete) {
 			if (state.has_delete_constraints) {
@@ -1373,7 +1398,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 				ColumnFetchState fetch_state;
 				local_storage.FetchChunk(*this, offset_ids, current_count, state.col_ids, state.verify_chunk,
 				                         fetch_state);
-				VerifyDeleteConstraints(storage, state, context, state.verify_chunk);
+				VerifyDeleteConstraints(storage, state, context, state.verify_chunk, current_new_values);
 			}
 			delete_count += local_storage.Delete(*this, table_entry, offset_ids, current_count);
 			continue;
@@ -1384,7 +1409,7 @@ idx_t DataTable::Delete(TableDeleteState &state, ClientContext &context, DuckTab
 			// Verify any delete constraints.
 			ColumnFetchState fetch_state;
 			Fetch(transaction, state.verify_chunk, state.col_ids, offset_ids, current_count, fetch_state);
-			VerifyDeleteConstraints(storage, state, context, state.verify_chunk);
+			VerifyDeleteConstraints(storage, state, context, state.verify_chunk, current_new_values);
 		}
 		delete_count += row_groups->Delete(transaction, table_entry, ids + current_offset, current_count);
 	}
