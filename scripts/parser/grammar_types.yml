@@ -362,6 +362,7 @@ ResultModifier:
     - OffsetLimitClause
     - LimitOffsetClause
     - OffsetFetchClause
+    - FetchOffsetClause
     - FetchOnlyClause
 
 AtClause:
@@ -410,7 +411,10 @@ Expression:
     - LikeClause
     - EscapeClause
     - OtherOperatorExpression
+    - InfixOtherOperatorExpression
+    - CustomPrefixExpression
     - BitwiseExpression
+    - TildeExpression
     - AdditiveExpression
     - MultiplicativeExpression
     - ExponentiationExpression
@@ -829,6 +833,8 @@ LimitPercentResult:
     - LimitLiteralPercent
     - LimitExpression
     - FetchClause
+    - FetchClauseWithoutValue
+    - FetchClauseWithValue
     - FetchValue
     - OffsetClause
     - OffsetValue

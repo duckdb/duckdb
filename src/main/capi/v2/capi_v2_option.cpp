@@ -84,7 +84,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_name(duckdb_v2_context_handle ct
 	*out_option = nullptr;
 	return WithErrorHandler(err, [&]() {
 		CV2OptionSource source(*Convert(ctx));
-		*out_option = Convert(CV2Option::FromName(source, Convert(name)).release());
+		*out_option = Convert(CV2Option::FromName(source, ConvertIdentifierName(name)).release());
 	});
 }
 

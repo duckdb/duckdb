@@ -212,7 +212,7 @@ void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> new_e
 	category = TableColumnType::GENERATED;
 
 	if (new_expr->HasSubquery()) {
-		throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", name);
+		throw ParserException("Expression of generated column %s contains a subquery, which isn't allowed", name);
 	}
 
 	VerifyColumnRefs(*new_expr);

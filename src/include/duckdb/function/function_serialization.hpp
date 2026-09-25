@@ -177,7 +177,7 @@ public:
 
 	template <class FUNC>
 	static unique_ptr<FunctionData> FunctionDeserialize(Deserializer &deserializer, FUNC &function) {
-		if (!function.HasSerializationCallbacks()) {
+		if (!function.GetDeserializeCallback()) {
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
 			                             function.GetName());
 		}

@@ -81,4 +81,15 @@ TEST_CASE("V2 identifier: buffer protocol and null arguments", "[capi_v2][identi
 	REQUIRE(duckdb_v2_identifier_render_quoted(view, nullptr, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
+TEST_CASE("V2 identifier: names must be valid UTF-8", "[capi_v2][identifier]") {
+	idx_t length = 0;
+	REQUIRE(duckdb_v2_identifier_render_quoted(Convert("\x80"), nullptr, 0, &length, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	const std::string trailing_invalid("ok\0\x80", 4);
+	REQUIRE(duckdb_v2_identifier_render_quoted(Convert(trailing_invalid), nullptr, 0, &length, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_identifier_render_quoted(Convert("caf\xc3\xa9"), nullptr, 0, &length, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+}
+
 } // namespace test_capi_v2

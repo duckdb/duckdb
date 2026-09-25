@@ -34,6 +34,37 @@ static void ConvertLegacyTableFilters(LogicalGet &get) {
 	}
 }
 
+//! Pre-v2.0.0 versions key their table filters by table column index. Map each key to the scanned column it names.
+static void MapLegacyTableFilterKeys(LogicalGet &get) {
+	if (get.table_filters.HasMultiColumnFilters()) {
+		throw SerializationException(
+		    "LogicalGet::Deserialize - unexpected multi-column filters in legacy table filters");
+	}
+	auto &column_ids = get.GetColumnIds();
+	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> filters;
+	for (auto &entry : get.table_filters) {
+		auto table_column = entry.GetIndex().GetIndex();
+		optional_idx projection_index;
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto &column_index = column_ids[i];
+			if (column_index.HasPrimaryIndex() && !column_index.IsPushdownExtract() &&
+			    column_index.GetPrimaryIndex() == table_column) {
+				projection_index = i;
+				break;
+			}
+		}
+		if (!projection_index.IsValid()) {
+			throw SerializationException("LogicalGet::Deserialize - table filter on column %llu that is not scanned",
+			                             table_column);
+		}
+		filters.emplace_back(ProjectionIndex(projection_index.GetIndex()), entry.TakeFilter());
+	}
+	get.table_filters.ClearFilters();
+	for (auto &filter : filters) {
+		get.table_filters.SetFilterByColumnIndex(filter.first, std::move(filter.second));
+	}
+}
+
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
@@ -315,7 +346,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
 	FunctionSerializer::Serialize(serializer, function, bind_data.get());
-	if (!function.serialize || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+	if (!function.HasSerializationCallbacks() || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(206, "parameters", parameters);
 		serializer.WriteProperty(207, "named_parameters", named_parameters);
 		serializer.WriteProperty(208, "input_table_types", input_table_types);
@@ -330,6 +361,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(215, "scan_partition_indices", scan_partition_indices, vector<idx_t>());
 	serializer.WritePropertyWithDefault(216, "source_ordinality", source_ordinality,
 	                                    OrdinalityType::WITHOUT_ORDINALITY);
+	serializer.WriteProperty(217, "table_filters_by_projection", true);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -365,6 +397,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	    deserializer.ReadPropertyWithExplicitDefault<vector<idx_t>>(215, "scan_partition_indices", vector<idx_t>());
 	result->source_ordinality = deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
 	    216, "source_ordinality", OrdinalityType::WITHOUT_ORDINALITY);
+	auto table_filters_by_projection =
+	    deserializer.ReadPropertyWithExplicitDefault<bool>(217, "table_filters_by_projection", false);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -373,6 +407,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		for (auto &col_id : legacy_column_ids) {
 			result->column_ids.emplace_back(col_id);
 		}
+	}
+	if (!table_filters_by_projection) {
+		MapLegacyTableFilterKeys(*result);
 	}
 	auto &context = deserializer.Get<ClientContext &>();
 	virtual_column_map_t virtual_columns;

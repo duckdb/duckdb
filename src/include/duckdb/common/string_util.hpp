@@ -152,6 +152,21 @@ public:
 	DUCKDB_API static string Join(const vector<Identifier> &input, const string &separator);
 	DUCKDB_API static string Join(const set<string> &input, const string &separator);
 
+	//! Join container elements transformed to strings using the given separator
+	template <class CONTAINER, class FUNC>
+	static string Join(const CONTAINER &input, const string &separator, const FUNC &f) {
+		string result;
+		bool first = true;
+		for (const auto &entry : input) {
+			if (!first) {
+				result += separator;
+			}
+			result += f(entry);
+			first = false;
+		}
+		return result;
+	}
+
 	//! Encode special URL characters in a string
 	DUCKDB_API static string URLEncode(const string &str, bool encode_slash = true);
 	DUCKDB_API static idx_t URLEncodeSize(const char *input, idx_t input_size, bool encode_slash = true);
