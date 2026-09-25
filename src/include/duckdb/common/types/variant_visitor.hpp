@@ -95,10 +95,14 @@ public:
 			return VisitString(type_id, variant, row, values_idx, std::forward<Args>(args)...);
 		case VariantLogicalType::DECIMAL:
 			return VisitDecimal(variant, row, values_idx, std::forward<Args>(args)...);
-		case VariantLogicalType::ARRAY:
-			return VisitArray(variant, row, values_idx, depth, std::forward<Args>(args)...);
-		case VariantLogicalType::OBJECT:
-			return VisitObject(variant, row, values_idx, depth, std::forward<Args>(args)...);
+		case VariantLogicalType::ARRAY: {
+			auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
+			return Visitor::VisitArray(variant, row, nested_data, depth, std::forward<Args>(args)...);
+		}
+		case VariantLogicalType::OBJECT: {
+			auto nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
+			return Visitor::VisitObject(variant, row, nested_data, depth, std::forward<Args>(args)...);
+		}
 		case VariantLogicalType::TIME_MICROS:
 			return Visitor::VisitTime(Load<dtime_t>(ptr), std::forward<Args>(args)...);
 		case VariantLogicalType::TIME_NANOS:
@@ -296,19 +300,6 @@ private:
 		// do nothing
 	}
 
-	template <typename... Args>
-	static ReturnType VisitArray(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx, idx_t depth,
-	                             Args &&...args) {
-		auto decoded_nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
-		return Visitor::VisitArray(variant, row, decoded_nested_data, depth, std::forward<Args>(args)...);
-	}
-
-	template <typename... Args>
-	static ReturnType VisitObject(const UnifiedVariantVectorData &variant, idx_t row, uint32_t values_idx, idx_t depth,
-	                              Args &&...args) {
-		auto decoded_nested_data = VariantUtils::DecodeNestedData(variant, row, values_idx);
-		return Visitor::VisitObject(variant, row, decoded_nested_data, depth, std::forward<Args>(args)...);
-	}
 
 	template <typename... Args>
 	static ReturnType VisitString(VariantLogicalType type_id, const UnifiedVariantVectorData &variant, idx_t row,
