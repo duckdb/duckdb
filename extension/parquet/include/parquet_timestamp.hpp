@@ -23,6 +23,8 @@ struct Int96 {
 
 timestamp_t ImpalaTimestampToTimestamp(const Int96 &raw_ts);
 timestamp_ns_t ImpalaTimestampToTimestampNS(const Int96 &raw_ts);
+date_t ImpalaTimestampToDate(const Int96 &raw_ts);
+dtime_ns_t ImpalaTimestampToTimeNs(const Int96 &raw_ts);
 Int96 TimestampToImpalaTimestamp(timestamp_t &ts);
 
 timestamp_t ParquetTimestampMicrosToTimestamp(const int64_t &raw_ts);

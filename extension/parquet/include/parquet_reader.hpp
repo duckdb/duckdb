@@ -123,6 +123,21 @@ const char *EnumUtil::ToChars<ParquetPrefetchStrategyOption>(ParquetPrefetchStra
 template <>
 ParquetPrefetchStrategyOption EnumUtil::FromString<ParquetPrefetchStrategyOption>(const char *value);
 
+//! How INT96 (deprecated Impala timestamp) columns are exposed by the Parquet reader
+enum class ParquetInt96AsOption : uint8_t {
+	TIMESTAMP,    //! Read as TIMESTAMP (microsecond precision) - the default
+	TIMESTAMP_NS, //! Read as TIMESTAMP_NS, preserving the nanosecond part (out-of-range values saturate)
+	STRUCT        //! Read as STRUCT(date DATE, time TIME_NS), preserving the full range and precision
+};
+
+ParquetInt96AsOption ParquetInt96AsOptionFromString(const string &value);
+
+template <>
+const char *EnumUtil::ToChars<ParquetInt96AsOption>(ParquetInt96AsOption value);
+
+template <>
+ParquetInt96AsOption EnumUtil::FromString<ParquetInt96AsOption>(const char *value);
+
 template <>
 const char *EnumUtil::ToChars<StringColumnReader::Utf8ValidationOption>(StringColumnReader::Utf8ValidationOption value);
 
@@ -286,6 +301,7 @@ struct ParquetOptions {
 	ParquetPrefetchStrategyOption prefetch_strategy = ParquetPrefetchStrategyOption::AUTO;
 	StringColumnReader::Utf8ValidationOption utf8_validation_option =
 	    StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
+	ParquetInt96AsOption int96_as = ParquetInt96AsOption::TIMESTAMP;
 };
 
 struct ParquetOptionsSerialization {

@@ -1,5 +1,7 @@
 #include "parquet_timestamp.hpp"
 
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -30,7 +32,17 @@ static int64_t ImpalaTimestampToMicroseconds(const Int96 &impala_timestamp) {
 static int64_t ImpalaTimestampToNanoseconds(const Int96 &impala_timestamp) {
 	int64_t days_since_epoch = ImpalaTimestampToDays(impala_timestamp);
 	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
-	return days_since_epoch * NANOSECONDS_PER_DAY + nanoseconds;
+	int64_t day_nanoseconds;
+	if (!TryMultiplyOperator::Operation(days_since_epoch, NANOSECONDS_PER_DAY, day_nanoseconds)) {
+		// out of range for TIMESTAMP_NS - saturate to +/- infinity
+		return days_since_epoch < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
+	}
+	int64_t result;
+	if (!TryAddOperator::Operation(day_nanoseconds, nanoseconds, result)) {
+		// out of range for TIMESTAMP_NS - saturate to +/- infinity
+		return day_nanoseconds < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
+	}
+	return result;
 }
 
 timestamp_ns_t ImpalaTimestampToTimestampNS(const Int96 &raw_ts) {
@@ -42,6 +54,14 @@ timestamp_ns_t ImpalaTimestampToTimestampNS(const Int96 &raw_ts) {
 timestamp_t ImpalaTimestampToTimestamp(const Int96 &raw_ts) {
 	auto impala_us = ImpalaTimestampToMicroseconds(raw_ts);
 	return Timestamp::FromEpochMicroSeconds(impala_us);
+}
+
+date_t ImpalaTimestampToDate(const Int96 &raw_ts) {
+	return date_t(ImpalaTimestampToDays(raw_ts));
+}
+
+dtime_ns_t ImpalaTimestampToTimeNs(const Int96 &raw_ts) {
+	return dtime_ns_t(Load<int64_t>(const_data_ptr_cast(raw_ts.value)));
 }
 
 Int96 TimestampToImpalaTimestamp(timestamp_t &ts) {

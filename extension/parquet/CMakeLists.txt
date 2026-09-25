@@ -33,6 +33,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_shredding.cpp
     parquet_column_schema.cpp
     parquet_geometry.cpp
+    parquet_int96.cpp
     serialize_parquet.cpp
     zstd_file_system.cpp)
 
