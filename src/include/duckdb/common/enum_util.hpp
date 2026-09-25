@@ -480,6 +480,8 @@ enum class RemoveUnusedColumnsMode : uint8_t;
 
 enum class RenderMode : uint8_t;
 
+enum class RequestSizing : uint8_t;
+
 enum class RequestType : uint8_t;
 
 enum class ResultEagerness : uint8_t;
@@ -1326,6 +1328,9 @@ const char* EnumUtil::ToChars<RemoveUnusedColumnsMode>(RemoveUnusedColumnsMode v
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
+
+template<>
+const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
@@ -2260,6 +2265,9 @@ RemoveUnusedColumnsMode EnumUtil::FromString<RemoveUnusedColumnsMode>(const char
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
+
+template<>
+RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
