@@ -1,0 +1,22 @@
+# name: test/sql/storage/types/variant/variant_multicolumn_filter_missing_stats.test
+# description: Multi-column filters on unshredded VARIANT paths without statistics
+# group: [variant]
+
+statement ok
+CREATE TABLE t (v VARIANT);
+
+statement ok
+INSERT INTO t SELECT {'a': 'x', 'b': i % 3}::VARIANT FROM range(10) r(i);
+
+query I
+SELECT count(*) FROM t WHERE v.a::VARCHAR <> 'x' OR v.b::INTEGER < 2;
+----
+7
+
+statement ok
+DELETE FROM t WHERE v.a::VARCHAR <> 'x' OR v.b::INTEGER < 2;
+
+query I
+SELECT count(*) FROM t;
+----
+3
