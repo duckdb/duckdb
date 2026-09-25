@@ -1,0 +1,37 @@
+# name: test/sql/optimizer/expression/test_constant_order_overflow.test
+# description: Constant order normalization must not introduce integer overflow
+# group: [expression]
+
+statement ok
+CREATE TABLE t(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t VALUES (2147483645, -2);
+
+query I
+SELECT (a + 1) + (b + 2) FROM t;
+----
+2147483646
+
+statement ok
+SET disabled_optimizers = 'expression_rewriter';
+
+query I
+SELECT (a + 1) + (b + 2) FROM t;
+----
+2147483646
+
+statement ok
+SET disabled_optimizers = '';
+
+# mixed-sign constants: written order overflows, folding them first would not
+statement error
+SELECT x + 2147483647 + (-1) FROM (VALUES (1)) v(x);
+----
+Overflow
+
+# same-sign constants next to a single column are still folded
+query I
+SELECT x + 1 + 2 FROM (VALUES (10)) v(x);
+----
+13
