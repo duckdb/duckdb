@@ -609,6 +609,145 @@ void RunArrowProbe(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_destroy(&r);
 }
 
+struct TopLevelValidityObserved {
+	std::vector<int64_t> values;
+	std::vector<bool> valid;
+	std::vector<bool> dict_valid;
+	DUCKDB_V2_ERROR append_rc = DUCKDB_V2_ERROR_NONE;
+	DUCKDB_V2_ERROR missing_bitmap_rc = DUCKDB_V2_ERROR_NONE;
+};
+TopLevelValidityObserved arrow_toplevel_validity_observed;
+
+void ArrowTopLevelValidityReleaseArray(ArrowArray *array) {
+	array->release = nullptr; // children are borrowed from the exporter's own array
+}
+
+// Exports a BIGINT column and a dictionary-encoded ENUM column of 16 rows, then hands the importer a
+// wrapper around the exporter's own top-level array carrying a validity bitmap that marks rows 1, 2
+// and 9 null. The exporter never sets buffers[0] on the top-level array, but the Arrow C Data
+// Interface spec allows a producer of the top-level struct array to do so.
+void ArrowTopLevelValidityExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
+                               duckdb_v2_error_info_handle *err) {
+	arrow_toplevel_validity_observed = {};
+	duckdb_v2_vector_handle result = nullptr;
+	if (duckdb_v2_scalar_function_exec_get_result(info, &result, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto bigint = ArrowTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
+	duckdb_v2_logical_type_handle mood = nullptr;
+	if (!bigint ||
+	    duckdb_v2_context_create_type_from_text(context, Convert("mood"), &mood, err) != DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_logical_type_destroy(&bigint);
+		return;
+	}
+	duckdb_v2_logical_type_handle types[2] = {bigint, mood};
+	duckdb_v2_str names[2] = {Convert("i"), Convert("v")};
+	auto *rt = ArrowMakeRoundtrip(context, types, names, 2, 0, 0, err);
+	if (!rt) {
+		duckdb_v2_logical_type_destroy(&bigint);
+		duckdb_v2_logical_type_destroy(&mood);
+		return;
+	}
+
+	constexpr idx_t rows = 16;
+	duckdb_v2_data_chunk_handle input = nullptr;
+	auto rc = duckdb_v2_data_chunk_create(types, 2, &input, err);
+	duckdb_v2_logical_type_destroy(&bigint);
+	duckdb_v2_logical_type_destroy(&mood);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		ArrowRoundtripDestroy(rt);
+		return;
+	}
+	duckdb_v2_vector_handle in_v = nullptr;
+	duckdb_v2_vector_handle in_m = nullptr;
+	void *data = nullptr;
+	void *dict = nullptr;
+	if (duckdb_v2_data_chunk_get_vector(input, 0, &in_v, err) == DUCKDB_V2_ERROR_NONE &&
+	    duckdb_v2_data_chunk_get_vector(input, 1, &in_m, err) == DUCKDB_V2_ERROR_NONE &&
+	    duckdb_v2_vector_get_data_mutable(in_v, &data, err) == DUCKDB_V2_ERROR_NONE &&
+	    duckdb_v2_vector_get_data_mutable(in_m, &dict, err) == DUCKDB_V2_ERROR_NONE) {
+		for (idx_t i = 0; i < rows; i++) {
+			static_cast<int64_t *>(data)[i] = static_cast<int64_t>(i);
+			static_cast<uint8_t *>(dict)[i] = static_cast<uint8_t>(i % 3); // a 3-member enum is UINT8
+		}
+		duckdb_v2_vector_set_size(in_v, rows, err);
+		duckdb_v2_vector_set_size(in_m, rows, err);
+	}
+
+	auto borrowed = input;
+	if (duckdb_v2_arrow_exporter_append(rt->exporter, &borrowed, false, true, err) != DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_data_chunk_destroy(&input);
+		ArrowRoundtripDestroy(rt);
+		return;
+	}
+	ArrowArray real_array {};
+	if (duckdb_v2_arrow_exporter_next_array(rt->exporter, &real_array, err) != DUCKDB_V2_ERROR_NONE ||
+	    !real_array.release) {
+		duckdb_v2_data_chunk_destroy(&input);
+		ArrowRoundtripDestroy(rt);
+		return;
+	}
+
+	// Rows 1, 2 and 9 null (bit clear == null); the rest valid.
+	uint8_t mask[2] = {0xF9, 0xFD};
+	const void *wrapped_buffers[1] = {mask};
+	ArrowArray wrapped_array {};
+	wrapped_array.length = real_array.length;
+	wrapped_array.null_count = 3;
+	wrapped_array.offset = 0;
+	wrapped_array.n_buffers = 1;
+	wrapped_array.n_children = real_array.n_children;
+	wrapped_array.buffers = wrapped_buffers;
+	wrapped_array.children = real_array.children;
+	wrapped_array.release = ArrowTopLevelValidityReleaseArray;
+
+	arrow_toplevel_validity_observed.append_rc =
+	    duckdb_v2_arrow_importer_append(rt->importer, &wrapped_array, false, true, err);
+	if (arrow_toplevel_validity_observed.append_rc == DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_data_chunk_handle imported = nullptr;
+		if (duckdb_v2_arrow_importer_next_chunk(rt->importer, &imported, err) == DUCKDB_V2_ERROR_NONE && imported) {
+			duckdb_v2_vector_handle out_v = nullptr;
+			duckdb_v2_vector_handle out_m = nullptr;
+			duckdb_v2_vector_view view {};
+			duckdb_v2_vector_view dict_view {};
+			if (duckdb_v2_data_chunk_get_vector(imported, 0, &out_v, err) == DUCKDB_V2_ERROR_NONE &&
+			    duckdb_v2_data_chunk_get_vector(imported, 1, &out_m, err) == DUCKDB_V2_ERROR_NONE &&
+			    duckdb_v2_vector_get_view(out_v, &view, err) == DUCKDB_V2_ERROR_NONE &&
+			    duckdb_v2_vector_get_view(out_m, &dict_view, err) == DUCKDB_V2_ERROR_NONE) {
+				for (idx_t i = 0; i < rows; i++) {
+					auto idx = SelAt(view.sel, i);
+					arrow_toplevel_validity_observed.values.push_back(
+					    reinterpret_cast<const int64_t *>(view.data)[idx]);
+					arrow_toplevel_validity_observed.valid.push_back(RowValid(view, idx));
+					arrow_toplevel_validity_observed.dict_valid.push_back(RowValid(dict_view, SelAt(dict_view.sel, i)));
+				}
+			}
+			duckdb_v2_data_chunk_destroy(&imported);
+		}
+	}
+	// A record batch that reports nulls but carries no validity bitmap is malformed: the append must
+	// refuse it rather than import wrong data. The error goes to a scratch slot: this expected failure
+	// must not poison the callback's own error slot, which the engine reads after exec returns.
+	ArrowArray no_bitmap {};
+	no_bitmap.length = real_array.length;
+	no_bitmap.null_count = 1;
+	no_bitmap.n_children = real_array.n_children;
+	no_bitmap.children = real_array.children;
+	no_bitmap.release = ArrowTopLevelValidityReleaseArray;
+	arrow_toplevel_validity_observed.missing_bitmap_rc =
+	    duckdb_v2_arrow_importer_append(rt->importer, &no_bitmap, false, true, nullptr);
+
+	real_array.release(&real_array);
+
+	duckdb_v2_data_chunk_destroy(&input);
+	ArrowRoundtripDestroy(rt);
+	int32_t one = 1;
+	void *out = nullptr;
+	if (duckdb_v2_vector_get_data_mutable(result, &out, err) == DUCKDB_V2_ERROR_NONE) {
+		std::memcpy(out, &one, sizeof(one));
+	}
+}
+
 } // namespace
 
 // ===========================================================================
@@ -850,6 +989,25 @@ TEST_CASE("V2 arrow: a batch size caps the output in both directions", "[capi_v2
 		REQUIRE(arrow_split_observed.array_rows == std::vector<int64_t> {5});
 		REQUIRE(arrow_split_observed.chunk_rows == std::vector<idx_t> {5});
 	}
+}
+
+TEST_CASE("V2 arrow: a top-level struct array's own validity bitmap is honored", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')");
+	RegisterArrowProbe(fx.conn, "arrow_toplevel_validity_probe", ArrowTopLevelValidityExec);
+	RunArrowProbe(fx.conn, "SELECT arrow_toplevel_validity_probe(1)");
+
+	REQUIRE(arrow_toplevel_validity_observed.append_rc == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(arrow_toplevel_validity_observed.valid.size() == 16);
+	REQUIRE(arrow_toplevel_validity_observed.dict_valid.size() == 16);
+	// Rows 1, 2 and 9 were marked null in the wrapper's own validity buffer; the rest were not.
+	for (idx_t i = 0; i < 16; i++) {
+		bool expect_null = (i == 1 || i == 2 || i == 9);
+		INFO("row " << i << " value " << arrow_toplevel_validity_observed.values[i]);
+		REQUIRE(arrow_toplevel_validity_observed.valid[i] == !expect_null);
+		REQUIRE(arrow_toplevel_validity_observed.dict_valid[i] == !expect_null);
+	}
+	REQUIRE(arrow_toplevel_validity_observed.missing_bitmap_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 TEST_CASE("V2 arrow: the exporter accepts input without draining first", "[capi_v2][arrow]") {
