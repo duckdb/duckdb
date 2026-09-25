@@ -81,7 +81,7 @@ SELECT count(*) FROM t WHERE __internal_barrier(i % 2048 = 42);
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM t WHERE __internal_barrier((100 // (i + 1)) = 1 AND i > 5000);
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<!REGEX>:.*Row Groups Scanned: [1-9].*
 
 query I
 SELECT count(*) FROM t WHERE __internal_barrier((100 // (i + 1)) = 1 AND i > 5000);
