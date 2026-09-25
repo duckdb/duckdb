@@ -622,12 +622,16 @@ option(FORCE_QUERY_LOG
        "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
-option(ENABLE_EXTENSION_LOAD
-       "Support installing and loading external extensions" TRUE)
+option(
+  ENABLE_EXTENSION_LOAD
+  "Build libduckdb_loadable_extensions.a and link it into the DuckDB targets, so they can install and load external extensions"
+  TRUE)
 option(DISABLE_EXTENSION_LOAD
        "Deprecated, use ENABLE_EXTENSION_LOAD=OFF instead" FALSE)
-option(ENABLE_BUILTIN_HTTPLIB
-       "Use the built-in http-only httplib as the default HTTP client" TRUE)
+option(
+  ENABLE_BUILTIN_HTTPLIB
+  "Build libduckdb_httplib.a and link it into the DuckDB targets as their default HTTP client"
+  TRUE)
 option(DISABLE_BUILTIN_HTTPLIB
        "Deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF instead" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
