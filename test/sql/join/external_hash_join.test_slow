@@ -1,0 +1,48 @@
+# name: test/sql/join/external_hash_join.test_slow
+# description: Test external hash join repartitioning at the temporary memory reservation boundary
+# group: [join]
+
+require noforcestorage
+
+require skip_reload
+
+require 64bit
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory')
+
+statement ok
+SET debug_force_external=true
+
+statement ok
+SET temp_directory='{TEST_DIR}/external_hash_join'
+
+statement ok
+SET threads=1
+
+statement ok
+SET memory_limit='18MB'
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side'
+
+# The RHS is the build side. Its payload makes the active build partition retain
+# enough row blocks during finalize that the join needs repartition headroom beyond
+# the minimum reservation used by the temporary memory manager.
+query I
+SELECT sum(length(payload))::BIGINT
+FROM (SELECT i AS k FROM range(100000) t(i)) l
+JOIN (
+	SELECT i AS k, rpad(i::VARCHAR, 128, 'x') AS payload
+	FROM range(500000) t(i)
+) r USING(k)
+----
+12800000
+
+query I
+SELECT count(*)::INTEGER
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalHashJoin'
+  AND event = 'Repartition'
+----
+1

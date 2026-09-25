@@ -59,6 +59,11 @@ idx_t TemporaryMemoryState::GetReservation() const {
 	return reservation;
 }
 
+idx_t TemporaryMemoryState::GetReservationForMemoryLimit() const {
+	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
+	return temporary_memory_manager.GetReservationForMemoryLimit(*this);
+}
+
 void TemporaryMemoryState::SetMaterializationPenalty(idx_t new_materialization_penalty) {
 	const annotated_lock_guard<annotated_mutex> guard(temporary_memory_manager.lock);
 	materialization_penalty = new_materialization_penalty;
@@ -179,6 +184,17 @@ void TemporaryMemoryManager::SetReservation(TemporaryMemoryState &temporary_memo
 	this->reservation -= temporary_memory_state.GetReservation();
 	temporary_memory_state.reservation = new_reservation;
 	this->reservation += temporary_memory_state.GetReservation();
+}
+
+idx_t TemporaryMemoryManager::GetReservationForMemoryLimit(const TemporaryMemoryState &temporary_memory_state) const {
+	const auto state_reservation = temporary_memory_state.GetReservation();
+	if (state_reservation == 0 || !has_temporary_directory || reservation <= memory_limit) {
+		return state_reservation;
+	}
+
+	const auto ratio = static_cast<double>(state_reservation) / static_cast<double>(reservation);
+	const auto result = LossyNumericCast<idx_t>(ratio * static_cast<double>(memory_limit));
+	return MinValue(state_reservation, MaxValue<idx_t>(result, 1));
 }
 
 idx_t TemporaryMemoryManager::ComputeInitialReservation(const TemporaryMemoryState &temporary_memory_state) const {
