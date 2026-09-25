@@ -70,7 +70,7 @@ read_csv column_names/names can only be supplied once
 statement error
 select l_orderkey, l_partkey, column02, column03 from read_csv_auto('{DATA_DIR}/csv/real/lineitem_sample.csv', names=42) LIMIT 1;
 ----
-Invalid named parameter "names" for function read_csv_auto: expected VARCHAR[], but got INTEGER
+Failed to cast value: Unimplemented type for cast (INTEGER -> VARCHAR[])
 
 # specify options delim and sep
 statement error

@@ -8,7 +8,7 @@ require tpch
 statement error
 CALL dbgen(sf=0.01, children=-1);
 ----
-Invalid named parameter "children" for function dbgen: expected UINTEGER, but got INTEGER
+Invalid Input Error: Failed to cast value: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT32
 
 statement error
 CALL dbgen(sf=0.01, children=2);

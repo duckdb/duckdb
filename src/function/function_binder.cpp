@@ -505,8 +505,8 @@ static Value PlaceArgument(ClientContext &context, Expression &expr, const Logic
 //! "range(1, 5)" does. Only keyword-only and "**kwargs" arguments are handed back in "named_parameters", keyed by the
 //! name the caller wrote - or, for an option "**kwargs" declares, by the name of the option, cast to its type. A
 //! parameter the call leaves out receives its default; an option the call leaves out is not passed. Overload selection
-//! has already established that every cast here is one the implicit rules allow, so this converts rather than forces -
-//! an argument no implicit cast reaches never selects the overload in the first place.
+//! has already established that every parameter's cast is one the implicit rules allow. An option takes no part in
+//! selection, so it is cast to its type like an explicit cast.
 template <class T>
 static void PlaceArguments(ClientContext &context, const T &function,
                            vector<unique_ptr<Expression>> &positional_arguments,
@@ -554,20 +554,12 @@ static void PlaceArguments(ClientContext &context, const T &function,
 				                      StringUtil::CandidatesMessage(similar, "Did you mean"));
 			}
 			auto &option = *option_ptr;
-			// as for a parameter, the argument reaches the option's type only by an implicit cast
-			auto argument_type = ExpressionBinder::GetExpressionReturnType(expr);
-			if (option.type.id() != LogicalTypeId::ANY && argument_type.id() != LogicalTypeId::UNKNOWN &&
-			    CastFunctionSet::ImplicitCastCost(context, argument_type, option.type) < 0) {
-				throw BinderException(expr.GetQueryLocation(),
-				                      "Invalid named parameter %s for function %s: expected %s, but got %s",
-				                      argument_name, function.GetName().GetIdentifierName(), option.type.ToString(),
-				                      expr.GetReturnType().ToString());
-			}
 			if (named_parameters.find(option.name) != named_parameters.end()) {
 				throw BinderException(named_argument.second->GetQueryLocation(),
 				                      "Named parameter %s was passed more than once in function call to %s",
 				                      option.name, function.GetName().GetIdentifierName());
 			}
+			// an option is cast to its type like an explicit cast - overload selection never checked it
 			named_parameters.insert(
 			    make_pair(option.name, PlaceArgument(context, *named_argument.second, option.type)));
 			continue;

@@ -1816,24 +1816,13 @@ bool IntegerLiteral::FitsInType(const LogicalType &type, const LogicalType &targ
 	if (target.id() == LogicalTypeId::FLOAT || target.id() == LogicalTypeId::DOUBLE) {
 		return true;
 	}
-	auto info = type.AuxInfo();
-	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
-	auto &literal_info = info->Cast<IntegerLiteralTypeInfo>();
-	if (target.id() == LogicalTypeId::BOOLEAN) {
-		// 0 and 1 are exactly the integers that fit in a boolean - any other value would not round-trip.
-		// Deliberately value-based, like the integral case below: an INTEGER *column* still does not
-		// implicitly cast to BOOLEAN.
-		auto as_bigint = literal_info.constant_value.DefaultTryCastAs(LogicalType::BIGINT);
-		if (!as_bigint) {
-			return false;
-		}
-		auto constant = BigIntValue::Get(*as_bigint);
-		return constant == 0 || constant == 1;
-	}
 	if (!target.IsIntegral()) {
 		return false;
 	}
 	// we can cast to integral types if the constant value fits within that type
+	auto info = type.AuxInfo();
+	D_ASSERT(info->type == ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO);
+	auto &literal_info = info->Cast<IntegerLiteralTypeInfo>();
 	return literal_info.constant_value.DefaultTryCastAs(target).has_value();
 }
 
