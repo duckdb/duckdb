@@ -9,6 +9,12 @@
 				"test/sql/storage/types/variant/variant_object_key_order_shredded.test",
 				"test/sql/storage/types/variant/variant_object_key_order_shredded_json.test"
 			]
+		},
+		{
+			"reason": "Asserts that a non-shreddable VARIANT overlay is scanned as a FLAT_VECTOR; this config forces all vectors to be shredded",
+			"paths": [
+				"test/issues/general/test_24298.test"
+			]
 		}
 	]
 }
