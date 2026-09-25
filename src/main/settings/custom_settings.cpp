@@ -906,6 +906,23 @@ void DisabledLogTypes::ResetGlobal(DatabaseInstance *db_p, DBConfig &config) {
 }
 
 //===----------------------------------------------------------------------===//
+// Explain Format
+//===----------------------------------------------------------------------===//
+void ExplainFormatSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("explain_format setting cannot be NULL");
+	}
+	auto format = StringUtil::Lower(StringValue::Get(input));
+	//! Build the renderer on set, to verify that it references a valid registered renderer (extension)
+	if (info.context) {
+		TreeRenderer::CreateRenderer(*info.context, format);
+	} else {
+		TreeRenderer::CreateRenderer(format);
+	}
+	input = Value(format);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Profiling
 //===----------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
