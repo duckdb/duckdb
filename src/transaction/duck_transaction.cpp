@@ -227,20 +227,45 @@ ErrorData DuckTransaction::PreFlushOptimisticBlocks(AttachedDatabase &db) noexce
 	return error;
 }
 
-ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
-                                      unique_ptr<StorageCommitState> &commit_state) noexcept {
+static void RevertCommitState(unique_ptr<StorageCommitState> &commit_state) noexcept {
+	try {
+		commit_state->RevertCommit();
+		commit_state.reset();
+	} catch (std::exception &) {
+		// Ignore this error. If we fail to RevertCommit(), just return the original exception
+	}
+}
+
+ErrorData DuckTransaction::AppendLocalStorage(ClientContext &context, AttachedDatabase &db,
+                                              unique_ptr<StorageCommitState> &commit_state) noexcept {
 	ErrorData error_data;
 	try {
-		D_ASSERT(ShouldWriteToWAL(db));
-		auto &storage_manager = db.GetStorageManager();
-		auto wal = storage_manager.GetWAL();
-		commit_state = storage_manager.GenStorageCommitState(*wal);
-
+		if (ShouldWriteToWAL(db)) {
+			auto &storage_manager = db.GetStorageManager();
+			commit_state = storage_manager.GenStorageCommitState(*storage_manager.GetWAL());
+		}
 		auto &profiler = *context.client_data->profiler;
 		auto commit_timer = profiler.StartTimer<MetricStorageCommitLocalStorageLatency>();
 		storage->Commit(commit_state.get());
 		commit_timer.EndTimer();
+	} catch (std::exception &ex) {
+		// Call RevertCommit() outside this try-catch as it itself may throw
+		error_data = ErrorData(ex);
+	}
+	if (commit_state && error_data.HasError()) {
+		RevertCommitState(commit_state);
+	}
+	return error_data;
+}
 
+ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
+                                      unique_ptr<StorageCommitState> &commit_state) noexcept {
+	ErrorData error_data;
+	try {
+		// the append may have consumed the last local change: do not ask ShouldWriteToWAL again here
+		D_ASSERT(commit_state);
+		auto wal = db.GetStorageManager().GetWAL();
+		auto &profiler = *context.client_data->profiler;
 		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
 		wal_timer.EndTimer();
@@ -248,21 +273,13 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 		// no FileSync is required here: any optimistically written blocks that the WAL references
 		// have already been synced by FlushBulkAppendBlocksAndSync, before the commit locks were taken
 		D_ASSERT(!commit_state->HasRowGroupData() || storage->SyncedFlushedBlocks());
-
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
 		error_data = ErrorData(ex);
 	}
-
 	if (commit_state && error_data.HasError()) {
-		try {
-			commit_state->RevertCommit();
-			commit_state.reset();
-		} catch (std::exception &) {
-			// Ignore this error. If we fail to RevertCommit(), just return the original exception
-		}
+		RevertCommitState(commit_state);
 	}
-
 	return error_data;
 }
 
@@ -379,28 +396,6 @@ unique_ptr<StorageLockKey> DuckTransaction::TryGetCheckpointLock() {
 	} else {
 		return GetTransactionManager().TryUpgradeCheckpointLock(*checkpoint_lock);
 	}
-}
-
-shared_ptr<CheckpointLock> DuckTransaction::SharedLockTable(DataTableInfo &info) {
-	unique_lock<mutex> transaction_lock(active_locks_lock);
-	auto entry = active_locks.find(info);
-	if (entry == active_locks.end()) {
-		entry = active_locks.insert(entry, make_pair(std::ref(info), make_uniq<ActiveTableLock>()));
-	}
-	auto &active_table_lock = *entry->second;
-	transaction_lock.unlock(); // release transaction-level lock before acquiring table-level lock
-	lock_guard<mutex> table_lock(active_table_lock.checkpoint_lock_mutex);
-	auto checkpoint_lock = active_table_lock.checkpoint_lock.lock();
-	// check if it is expired (or has never been acquired yet)
-	if (checkpoint_lock) {
-		// not expired - return it
-		return checkpoint_lock;
-	}
-	// no existing lock - obtain it
-	checkpoint_lock = make_shared_ptr<CheckpointLock>(info.GetSharedLock());
-	// store it for future reference
-	active_table_lock.checkpoint_lock = checkpoint_lock;
-	return checkpoint_lock;
 }
 
 } // namespace duckdb

@@ -198,6 +198,9 @@ public:
 
 public:
 	void ExecuteInternal(ExecuteContext &context) const override;
+	bool SupportsConcurrent() const override {
+		return true;
+	}
 
 	static SleepUnit ParseUnit(const string &unit);
 
