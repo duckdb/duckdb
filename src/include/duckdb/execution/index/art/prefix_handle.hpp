@@ -38,16 +38,16 @@ public:
 	//! Create a non-empty prefix chain and return its root pointer and pinned final child location.
 	static PrefixChain New(ART &art, const ARTKey &key, const idx_t depth, const idx_t count);
 
-	//! Splits the prefix at pos. branching_node4 must identify an already allocated, ungated node.
-	//! If pos > 0, prefix_ptr retains the bytes before pos and points to branching_node4; its gate status is unchanged.
-	//! If pos == 0, the prefix is freed and prefix_ptr is set to branching_node4, which inherits the prefix's gate
+	//! Splits the prefix at pos. branching_node4_ptr must identify an already allocated, ungated node.
+	//! If pos > 0, prefix_ptr keeps the bytes before pos and points to branching_node4_ptr; its gate is unchanged.
+	//! If pos == 0, the prefix is freed and prefix_ptr is set to branching_node4_ptr, which inherits the prefix's gate
 	//! status. Returns the child containing the remaining bytes and subtree after the split byte. The caller must save
-	//! the split byte before calling and attach the returned child to branching_node4 under that byte. Gate status is
-	//! handled internally; the caller does not need to set it after splitting.
-	static NodePtr Split(ART &art, NodePtr &prefix_ptr, NodePtr &branching_node4, const uint8_t pos);
+	//! the split byte before calling and attach the returned child to branching_node4_ptr under that byte. Gate status
+	//! is handled internally; the caller does not need to set it after splitting.
+	static NodePtr Split(ART &art, NodePtr &prefix_ptr, NodePtr &branching_node4_ptr, const uint8_t pos);
 
 	//! Create a new deprecated prefix node and return a handle to it.
-	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node);
+	static NodeHandle NewDeprecated(FixedSizeAllocator &allocator, NodePtr &node_ptr);
 
 public:
 	data_ptr_t Data() {
@@ -94,13 +94,13 @@ public:
 	//! Returns an empty OptionalNodePtr if the prefix was not loaded from storage (early out) or if the endpoint
 	//! was a gated node (handled internally). Otherwise, returns a copy of the child pointer at the tail of
 	//! the prefix chain for further traversal.
-	static OptionalNodePtr TransformToDeprecated(ART &art, NodePtr &node, TransformToDeprecatedState &state);
+	static OptionalNodePtr TransformToDeprecated(ART &art, NodePtr &node_ptr, TransformToDeprecatedState &state);
 
 private:
-	static PrefixHandle NewInternal(ART &art, NodePtr &node, const_data_ptr_t data, const uint8_t count,
+	static PrefixHandle NewInternal(ART &art, NodePtr &node_ptr, const_data_ptr_t data, const uint8_t count,
 	                                const idx_t offset);
 	static PrefixHandle AppendByte(ART &art, PrefixHandle prefix, const uint8_t byte);
-	static void Append(ART &art, PrefixHandle prefix, NodePtr other);
+	static void Append(ART &art, PrefixHandle prefix, NodePtr other_ptr);
 
 	static NodeHandle TransformToDeprecatedAppend(NodeHandle tail_handle, ART &art, FixedSizeAllocator &allocator,
 	                                              const uint8_t byte);
@@ -112,7 +112,7 @@ private:
 //! A newly allocated prefix chain with a pinned final child location.
 struct PrefixChain {
 	//! Pointer value identifying the first prefix.
-	NodePtr root;
+	NodePtr root_ptr;
 	//! Pins the final prefix containing the child pointer to fill.
 	PrefixHandle tail;
 };

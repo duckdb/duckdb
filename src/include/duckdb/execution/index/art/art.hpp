@@ -67,7 +67,7 @@ public:
 	static IndexType GetARTIndexType();
 
 	//! Root of the tree.
-	NodePtr tree = NodePtr();
+	NodePtr root_ptr = NodePtr();
 	//! Fixed-size allocators holding the ART nodes.
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
@@ -196,15 +196,15 @@ private:
 
 	string GenerateErrorKeyName(DataChunk &input, idx_t row) const;
 	string GenerateConstraintErrorMessage(VerifyExistenceType verify_type, const string &key_name) const;
-	void VerifyLeaf(const NodePtr &leaf, const ARTKey &key, DeleteIndexInfo delete_index_info, ConflictManager &manager,
-	                optional_idx &conflict_idx, idx_t i) const;
+	void VerifyLeaf(const NodePtr &leaf_ptr, const ARTKey &key, DeleteIndexInfo delete_index_info,
+	                ConflictManager &manager, optional_idx &conflict_idx, idx_t i) const;
 	void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) override
 	    DUCKDB_EXCLUDES(lock);
 	string GetConstraintViolationMessage(VerifyExistenceType verify_type, idx_t failed_index,
 	                                     DataChunk &input) const override DUCKDB_EXCLUDES(lock);
 
 	void InitializeMergeUpperBounds(unsafe_vector<idx_t> &upper_bounds);
-	void InitializeMerge(NodePtr &other_tree, unsafe_vector<idx_t> &upper_bounds);
+	void InitializeMerge(NodePtr &other_root_ptr, unsafe_vector<idx_t> &upper_bounds);
 
 	void InitializeVacuum(unordered_set<uint8_t> &indexes);
 	void FinalizeVacuum(const unordered_set<uint8_t> &indexes);
