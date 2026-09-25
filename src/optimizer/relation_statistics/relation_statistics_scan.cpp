@@ -7,6 +7,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
@@ -134,6 +135,9 @@ DistinctCount RelationStatisticsHelper::GetDistinctCount(LogicalGet &get, Client
 RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientContext &context) {
 	RelationStats result;
 	auto base_table_cardinality = get.EstimateCardinality(context);
+	if (get.children.empty() && ExpressionBinder::IsUnnestFunction(get.function.name)) {
+		base_table_cardinality = EstimateUnnestCardinality(get);
+	}
 	auto cardinality_after_filters = base_table_cardinality;
 	result.table_name = get.GetTable() ? get.GetTable()->name : Identifier(get.GetName());
 
