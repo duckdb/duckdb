@@ -338,6 +338,12 @@ enum class LogicalOperatorRepeatability : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
 
+enum class LogicalPlanVerificationIssueCode : int32_t;
+
+enum class LogicalPlanVerificationPathComponentType : int32_t;
+
+enum class LogicalPlanVerificationPhase : int32_t;
+
 enum class LogicalTypeId : uint8_t;
 
 enum class LookupResultType : uint8_t;
@@ -1113,6 +1119,15 @@ const char* EnumUtil::ToChars<LogicalOperatorRepeatability>(LogicalOperatorRepea
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationIssueCode>(LogicalPlanVerificationIssueCode value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPathComponentType>(LogicalPlanVerificationPathComponentType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPhase>(LogicalPlanVerificationPhase value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
@@ -2047,6 +2062,15 @@ LogicalOperatorRepeatability EnumUtil::FromString<LogicalOperatorRepeatability>(
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
+
+template<>
+LogicalPlanVerificationIssueCode EnumUtil::FromString<LogicalPlanVerificationIssueCode>(const char *value);
+
+template<>
+LogicalPlanVerificationPathComponentType EnumUtil::FromString<LogicalPlanVerificationPathComponentType>(const char *value);
+
+template<>
+LogicalPlanVerificationPhase EnumUtil::FromString<LogicalPlanVerificationPhase>(const char *value);
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value);

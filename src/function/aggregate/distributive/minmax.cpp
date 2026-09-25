@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/function/aggregate_state_layout.hpp"
@@ -408,11 +409,25 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	return std::move(expr->BindInfoMutable());
 }
 
+//! BindMinMax replaces a collated min/max with arg_min/arg_max over the collation key, so the bound call has one
+//! more argument than the definition and must be rendered under the replacement's own name
+static unique_ptr<FunctionExpression> MinMaxUnbind(AggregateFunctionUnbindInput &input) {
+	auto &function = input.expression.Function();
+	auto name = function.GetDefinition()->GetQualifiedName();
+	if (input.children.size() == function.GetLogicalArguments().size() + 1) {
+		name = function.GetQualifiedName();
+	} else if (input.children.size() != function.GetLogicalArguments().size()) {
+		return nullptr;
+	}
+	return make_uniq<FunctionExpression>(name, std::move(input.children));
+}
+
 template <class OP, class OP_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(const string &name) {
 	AggregateFunction fun(Identifier(name), {}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      BindMinMax<OP, OP_STRING, OP_VECTOR>);
 	fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
+	fun.SetUnbindCallback(MinMaxUnbind);
 	return fun;
 }
 
@@ -583,6 +598,7 @@ AggregateFunction GetMinMaxNFunction() {
 	AggregateFunction fun({}, LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
 	fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY).AddParameter("n", LogicalType::BIGINT);
+	fun.SetUnbindCallback(MinMaxUnbind);
 	return fun;
 }
 

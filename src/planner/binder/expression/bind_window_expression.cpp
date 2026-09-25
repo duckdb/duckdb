@@ -47,7 +47,8 @@ static bool IsRangeType(const LogicalType &type) {
 }
 
 static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<Expression> &bound,
-                                       unique_ptr<Expression> &bound_order) {
+                                       unique_ptr<Expression> &bound_order,
+                                       optional_ptr<unique_ptr<WindowRangeBoundary>> origin = nullptr) {
 	vector<unique_ptr<Expression>> children;
 
 	D_ASSERT(bound_order);
@@ -59,6 +60,8 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
 	children.emplace_back(std::move(bound));
+	optional_ptr<const Expression> order_input = children[0].get();
+	optional_ptr<const Expression> offset_input = children[1].get();
 
 	ErrorData error;
 	FunctionBinder function_binder(context);
@@ -71,6 +74,9 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	// so we can't rely on function binding to catch all problems.
 	if (!IsRangeType(function->GetReturnType())) {
 		throw BinderException(error_context, "Invalid type for Window RANGE expression");
+	}
+	if (origin) {
+		*origin = WindowRangeBoundary::Capture(*function, order_input, offset_input);
 	}
 	bound = std::move(function);
 	return bound->GetReturnType();
@@ -315,13 +321,15 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		D_ASSERT(window.OrderBy().size() == 1);
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
-		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0]);
+		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0],
+		                                 &result->SQLRangeStartBoundaryMutable());
 
 	} else if (window.WindowStart() == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
-		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0]);
+		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0],
+		                                 &result->SQLRangeStartBoundaryMutable());
 	}
 
 	LogicalType end_type = LogicalType::BIGINT;
@@ -329,13 +337,24 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		D_ASSERT(window.OrderBy().size() == 1);
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
-		end_type = BindRangeExpression(context, range_name, bound_end, bound_orders[0]);
+		end_type =
+		    BindRangeExpression(context, range_name, bound_end, bound_orders[0], &result->SQLRangeEndBoundaryMutable());
 
 	} else if (window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
-		end_type = BindRangeExpression(context, range_name, bound_end, bound_orders[0]);
+		end_type =
+		    BindRangeExpression(context, range_name, bound_end, bound_orders[0], &result->SQLRangeEndBoundaryMutable());
+	}
+
+	if (result->SQLRangeStartBoundary()) {
+		result->SQLRangeStartBoundaryMutable()->boundary = window.WindowStart();
+		result->SQLRangeStartBoundaryMutable()->direction = range_sense;
+	}
+	if (result->SQLRangeEndBoundary()) {
+		result->SQLRangeEndBoundaryMutable()->boundary = window.WindowEnd();
+		result->SQLRangeEndBoundaryMutable()->direction = range_sense;
 	}
 
 	// Cast ORDER and boundary expressions to the same type
@@ -353,7 +372,12 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// Cast all three to match
+		optional_ptr<const Expression> original_order = bound_order.get();
 		bound_order = BoundCastExpression::AddCastToType(context, std::move(bound_order), order_type);
+		if (!WindowRangeCast::Capture(*bound_order, original_order, result->SQLRangeOrderCastsMutable())) {
+			result->SQLRangeStartBoundaryMutable().reset();
+			result->SQLRangeEndBoundaryMutable().reset();
+		}
 		start_type = end_type = order_type;
 	}
 
@@ -373,8 +397,20 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	}
 
 	result->FilterMutable() = CastWindowExpression(std::move(bound_filter), LogicalType::BOOLEAN);
+	optional_ptr<const Expression> original_start = bound_start.get();
+	optional_ptr<const Expression> original_end = bound_end.get();
 	result->StartExprMutable() = CastWindowExpression(std::move(bound_start), start_type);
 	result->EndExprMutable() = CastWindowExpression(std::move(bound_end), end_type);
+	if (result->SQLRangeStartBoundary() &&
+	    !WindowRangeCast::Capture(*result->StartExpr(), original_start,
+	                              result->SQLRangeStartBoundaryMutable()->result_casts)) {
+		result->SQLRangeStartBoundaryMutable().reset();
+	}
+	if (result->SQLRangeEndBoundary() &&
+	    !WindowRangeCast::Capture(*result->EndExpr(), original_end,
+	                              result->SQLRangeEndBoundaryMutable()->result_casts)) {
+		result->SQLRangeEndBoundaryMutable().reset();
+	}
 	result->WindowStartMutable() = window.WindowStart();
 	result->WindowEndMutable() = window.WindowEnd();
 	result->WindowExcludeMutable() = window.WindowExclude();

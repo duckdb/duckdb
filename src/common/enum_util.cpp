@@ -224,6 +224,7 @@
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
+#include "duckdb/planner/logical_plan_verification_result.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool_reservation.hpp"
@@ -1747,19 +1748,21 @@ const StringUtil::EnumStringLiteral *GetDebugStatementVerificationValues() {
 		{ static_cast<uint32_t>(DebugStatementVerification::REPARSE_STATEMENT), "REPARSE_STATEMENT" },
 		{ static_cast<uint32_t>(DebugStatementVerification::SERIALIZE_STATEMENT), "SERIALIZE_STATEMENT" },
 		{ static_cast<uint32_t>(DebugStatementVerification::PREPARED_STATEMENT), "PREPARED_STATEMENT" },
-		{ static_cast<uint32_t>(DebugStatementVerification::EXPLAIN_STATEMENT), "EXPLAIN_STATEMENT" }
+		{ static_cast<uint32_t>(DebugStatementVerification::EXPLAIN_STATEMENT), "EXPLAIN_STATEMENT" },
+		{ static_cast<uint32_t>(DebugStatementVerification::EXPLAIN_SQL), "EXPLAIN_SQL" },
+		{ static_cast<uint32_t>(DebugStatementVerification::EXPLAIN_SQL_STRICT), "EXPLAIN_SQL_STRICT" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value) {
-	return StringUtil::EnumToString(GetDebugStatementVerificationValues(), 6, "DebugStatementVerification", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetDebugStatementVerificationValues(), 8, "DebugStatementVerification", static_cast<uint32_t>(value));
 }
 
 template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value) {
-	return static_cast<DebugStatementVerification>(StringUtil::StringToEnum(GetDebugStatementVerificationValues(), 6, "DebugStatementVerification", value));
+	return static_cast<DebugStatementVerification>(StringUtil::StringToEnum(GetDebugStatementVerificationValues(), 8, "DebugStatementVerification", value));
 }
 
 const StringUtil::EnumStringLiteral *GetDebugVectorVerificationValues() {
@@ -2121,19 +2124,20 @@ ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetExplainTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExplainType::EXPLAIN_STANDARD), "EXPLAIN_STANDARD" },
-		{ static_cast<uint32_t>(ExplainType::EXPLAIN_ANALYZE), "EXPLAIN_ANALYZE" }
+		{ static_cast<uint32_t>(ExplainType::EXPLAIN_ANALYZE), "EXPLAIN_ANALYZE" },
+		{ static_cast<uint32_t>(ExplainType::EXPLAIN_SQL), "EXPLAIN_SQL" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<ExplainType>(ExplainType value) {
-	return StringUtil::EnumToString(GetExplainTypeValues(), 2, "ExplainType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExplainTypeValues(), 3, "ExplainType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExplainType EnumUtil::FromString<ExplainType>(const char *value) {
-	return static_cast<ExplainType>(StringUtil::StringToEnum(GetExplainTypeValues(), 2, "ExplainType", value));
+	return static_cast<ExplainType>(StringUtil::StringToEnum(GetExplainTypeValues(), 3, "ExplainType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExponentTypeValues() {
@@ -3632,6 +3636,70 @@ const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value) {
 	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 68, "LogicalOperatorType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanVerificationIssueCodeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::INVALID_BINDING), "INVALID_BINDING" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::TYPE_MISMATCH), "TYPE_MISMATCH" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::UNSUPPORTED_OPERATOR), "UNSUPPORTED_OPERATOR" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPRESSION), "UNSUPPORTED_EXPRESSION" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::UNSUPPORTED_FUNCTION), "UNSUPPORTED_FUNCTION" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE), "UNSUPPORTED_SOURCE" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXTENSION), "UNSUPPORTED_EXTENSION" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::MALFORMED_EXTENSION_RESULT), "MALFORMED_EXTENSION_RESULT" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE), "UNSUPPORTED_EXPORT_FEATURE" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT), "INTERNAL_INVARIANT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationIssueCode>(LogicalPlanVerificationIssueCode value) {
+	return StringUtil::EnumToString(GetLogicalPlanVerificationIssueCodeValues(), 10, "LogicalPlanVerificationIssueCode", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanVerificationIssueCode EnumUtil::FromString<LogicalPlanVerificationIssueCode>(const char *value) {
+	return static_cast<LogicalPlanVerificationIssueCode>(StringUtil::StringToEnum(GetLogicalPlanVerificationIssueCodeValues(), 10, "LogicalPlanVerificationIssueCode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanVerificationPathComponentTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanVerificationPathComponentType::OPERATOR_CHILD), "OPERATOR_CHILD" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION), "OPERATOR_EXPRESSION" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationPathComponentType::EXPRESSION_CHILD), "EXPRESSION_CHILD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPathComponentType>(LogicalPlanVerificationPathComponentType value) {
+	return StringUtil::EnumToString(GetLogicalPlanVerificationPathComponentTypeValues(), 3, "LogicalPlanVerificationPathComponentType", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanVerificationPathComponentType EnumUtil::FromString<LogicalPlanVerificationPathComponentType>(const char *value) {
+	return static_cast<LogicalPlanVerificationPathComponentType>(StringUtil::StringToEnum(GetLogicalPlanVerificationPathComponentTypeValues(), 3, "LogicalPlanVerificationPathComponentType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalPlanVerificationPhaseValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalPlanVerificationPhase::VERIFY), "VERIFY" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationPhase::EXPRESSION_EXPORT), "EXPRESSION_EXPORT" },
+		{ static_cast<uint32_t>(LogicalPlanVerificationPhase::PLAN_EXPORT), "PLAN_EXPORT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPhase>(LogicalPlanVerificationPhase value) {
+	return StringUtil::EnumToString(GetLogicalPlanVerificationPhaseValues(), 3, "LogicalPlanVerificationPhase", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalPlanVerificationPhase EnumUtil::FromString<LogicalPlanVerificationPhase>(const char *value) {
+	return static_cast<LogicalPlanVerificationPhase>(StringUtil::StringToEnum(GetLogicalPlanVerificationPhaseValues(), 3, "LogicalPlanVerificationPhase", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {

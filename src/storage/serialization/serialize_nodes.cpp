@@ -9,6 +9,7 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/operator/logical_external_resource.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -87,6 +88,18 @@ unique_ptr<BaseReservoirSampling> BaseReservoirSampling::Deserialize(Deserialize
 	deserializer.ReadPropertyWithDefault<idx_t>(103, "num_entries_to_skip_b4_next_sample", result->num_entries_to_skip_b4_next_sample);
 	deserializer.ReadPropertyWithDefault<idx_t>(104, "num_entries_seen_total", result->num_entries_seen_total);
 	deserializer.ReadPropertyWithDefault<std::priority_queue<std::pair<double, idx_t>>>(105, "reservoir_weights", result->reservoir_weights);
+	return result;
+}
+
+void BoundAtClause::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<Identifier>(100, "unit", unit);
+	serializer.WriteProperty<Value>(101, "value", val);
+}
+
+unique_ptr<BoundAtClause> BoundAtClause::Deserialize(Deserializer &deserializer) {
+	auto unit = deserializer.ReadPropertyWithDefault<Identifier>(100, "unit");
+	auto val = deserializer.ReadProperty<Value>(101, "value");
+	auto result = duckdb::unique_ptr<BoundAtClause>(new BoundAtClause(std::move(unit), val));
 	return result;
 }
 

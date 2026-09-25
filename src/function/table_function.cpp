@@ -72,7 +72,7 @@ bool TableFunction::operator==(const TableFunction &rhs) const {
 	       in_out_function_final == rhs.in_out_function_final && statistics == rhs.statistics &&
 	       dependency == rhs.dependency && cardinality == rhs.cardinality &&
 	       pushdown_complex_filter == rhs.pushdown_complex_filter && pushdown_expression == rhs.pushdown_expression &&
-	       to_string == rhs.to_string && table_scan_progress == rhs.table_scan_progress &&
+	       to_string == rhs.to_string && to_sql == rhs.to_sql && table_scan_progress == rhs.table_scan_progress &&
 	       get_partition_data == rhs.get_partition_data && get_bind_info == rhs.get_bind_info &&
 	       projection_expression_pushdown == rhs.projection_expression_pushdown &&
 	       get_multi_file_reader == rhs.get_multi_file_reader && supports_pushdown_type == rhs.supports_pushdown_type &&
