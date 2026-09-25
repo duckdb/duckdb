@@ -12,13 +12,15 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/result_format.hpp"
 #include "duckdb/main/result_unit.hpp"
+#include "duckdb/main/retained_result_collection.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 class BoxRendererContext;
@@ -28,19 +30,6 @@ class ClientContext;
 class ClientContextLock;
 class PreparedStatementData;
 class QueryResult;
-
-//! A format declares its unit, never its store, so the store is derived here
-template <class FORMAT>
-struct ResultCollectionOf {
-	using type = ResultUnitCollection;
-};
-template <>
-struct ResultCollectionOf<ChunkFormat> {
-	using type = ColumnDataCollection;
-};
-
-template <class FORMAT>
-struct ResultAccess;
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, ARROW_RESULT };
 
@@ -100,19 +89,18 @@ class QueryResult : public BaseQueryResult {
 	friend class BufferedData;
 	friend class ClientContext;
 	friend class ResultStreamBase;
-	template <class FORMAT>
-	friend struct ResultAccess;
 
 public:
 	//! Creates the handle of a freshly submitted query
 	DUCKDB_API QueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
 	                       vector<LogicalType> types, ClientProperties client_properties,
 	                       shared_ptr<BufferedData> buffer);
-	//! Creates a detached result over an existing collection
+	//! Creates a detached result over an existing, finalized collection
 	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names,
 	                       unique_ptr<ColumnDataCollection> collection, ClientProperties client_properties);
+	//! Creates a detached result over an existing, finalized retained collection of any format
 	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<LogicalType> types,
-	                       vector<Identifier> names, unique_ptr<ResultUnitCollection> units,
+	                       vector<Identifier> names, unique_ptr<RetainedResultCollection> collection,
 	                       shared_ptr<ResultFormat> format, shared_ptr<ResultFormatGlobalState> format_state,
 	                       ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
@@ -167,13 +155,18 @@ public:
 	//! Blocking. Tells the engine to fully materialize the result. Participates in execution of the query.
 	DUCKDB_API void Complete();
 	template <class FORMAT = ChunkFormat>
-	typename ResultCollectionOf<FORMAT>::type &Collection() {
-		return ResultAccess<FORMAT>::Collection(*this);
+	RetainedPayloadsOf<FORMAT> &Collection() {
+		PrepareCollected(FORMAT::NAME);
+		return collection->Cast<RetainedCollectionOf<FORMAT>>().Get();
 	}
 	//! Blocking. Same as Collection() but takes ownership of the collection. The QueryResult is empty afterward.
 	template <class FORMAT = ChunkFormat>
-	unique_ptr<typename ResultCollectionOf<FORMAT>::type> TakeCollection() {
-		return ResultAccess<FORMAT>::TakeCollection(*this);
+	unique_ptr<RetainedPayloadsOf<FORMAT>> TakeCollection() {
+		PrepareCollected(FORMAT::NAME);
+		auto taken = collection->Cast<RetainedCollectionOf<FORMAT>>().Take();
+		collection.reset();
+		collection_taken = true;
+		return taken;
 	}
 	//! Throws when FORMAT is not the result's format
 	template <class FORMAT>
@@ -192,7 +185,18 @@ public:
 	//! Copies the next unit, leaving the collection intact, and materializes the result first if needed
 	template <class FORMAT = ChunkFormat>
 	unique_ptr<typename FORMAT::T> Fetch() {
-		return ResultAccess<FORMAT>::Fetch(*this);
+		// Through the virtual FetchInternal, which ArrowQueryResult overrides
+		if constexpr (std::is_same<FORMAT, ChunkFormat>::value) {
+			auto chunk = FetchRaw();
+			if (!chunk) {
+				return nullptr;
+			}
+			chunk->Flatten();
+			return chunk;
+		} else {
+			PrepareCollected(FORMAT::NAME);
+			return collection->Cast<RetainedCollectionOf<FORMAT>>().Fetch();
+		}
 	}
 	//! Fetches a DataChunk from the query result. The vectors are not normalized and hence any vector types can be
 	//! returned. Will materialize the full result into a CDC if it hadn't yet. Chunk format only
@@ -246,7 +250,7 @@ private:
 	void EndQuery(ClientContextLock &lock, bool invalidate_transaction = false);
 	[[noreturn]] void ThrowNoCollection() const;
 	bool IsCollected() const {
-		return collection != nullptr || unit_collection != nullptr;
+		return collection != nullptr;
 	}
 	//! A result without a buffer is in the chunk format, with a state built from its own metadata
 	void InitializeChunkFormatState();
@@ -267,14 +271,10 @@ private:
 	shared_ptr<ResultFormat> format;
 	//! Set at construction; never null for a non-error result
 	shared_ptr<ResultFormatGlobalState> format_state;
-	//! The retained storage of a chunk-format result (may be null)
-	unique_ptr<ColumnDataCollection> collection;
-	//! The retained storage of a result in any other format (may be null)
-	unique_ptr<ResultUnitCollection> unit_collection;
-	//! Scan state for Fetch calls
-	ColumnDataScanState scan_state;
-	bool scan_initialized = false;
-	idx_t unit_scan_index = 0;
+	//! In the format's own storage, which also holds the fetch cursor
+	unique_ptr<RetainedResultCollection> collection;
+	//! RowCount throws once the collection was taken, but reports zero for a result closed before it was collected
+	bool collection_taken = false;
 
 private:
 	class QueryResultIterator;
@@ -371,47 +371,6 @@ protected:
 
 private:
 	QueryResult(const QueryResult &) = delete;
-};
-
-template <class FORMAT>
-struct ResultAccess {
-	static unique_ptr<typename FORMAT::T> Fetch(QueryResult &result) {
-		result.PrepareCollected(FORMAT::NAME);
-		auto &units = result.unit_collection->Units();
-		if (result.unit_scan_index >= units.size()) {
-			return nullptr;
-		}
-		auto unit = units[result.unit_scan_index++]->Copy();
-		return FORMAT::UnpackUnit(std::move(unit));
-	}
-	static ResultUnitCollection &Collection(QueryResult &result) {
-		result.PrepareCollected(FORMAT::NAME);
-		return *result.unit_collection;
-	}
-	static unique_ptr<ResultUnitCollection> TakeCollection(QueryResult &result) {
-		result.PrepareCollected(FORMAT::NAME);
-		return std::move(result.unit_collection);
-	}
-};
-
-template <>
-struct ResultAccess<ChunkFormat> {
-	static unique_ptr<DataChunk> Fetch(QueryResult &result) {
-		auto chunk = result.FetchRaw();
-		if (!chunk) {
-			return nullptr;
-		}
-		chunk->Flatten();
-		return chunk;
-	}
-	static ColumnDataCollection &Collection(QueryResult &result) {
-		result.PrepareCollected(ChunkFormat::NAME);
-		return *result.collection;
-	}
-	static unique_ptr<ColumnDataCollection> TakeCollection(QueryResult &result) {
-		result.PrepareCollected(ChunkFormat::NAME);
-		return std::move(result.collection);
-	}
 };
 
 } // namespace duckdb

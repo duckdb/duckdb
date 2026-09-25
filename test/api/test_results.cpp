@@ -6,7 +6,10 @@
 #include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 #include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/main/buffered_data/batched_buffered_data.hpp"
+#include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/result_format.hpp"
 
 using namespace duckdb;
 
@@ -180,10 +183,21 @@ TEST_CASE("A retained result sink rejects results after the connection closes", 
 		auto &root = data.physical_plan->Make<PhysicalDummyScan>(data.types, 0);
 		data.physical_plan->SetRoot(root);
 
-		// A sink whose retention is still open takes its store from the submission; a hand-built one
-		// is retained
-		unique_ptr<PhysicalResultCollector> collector =
-		    make_uniq<PhysicalResultSink>(*data.physical_plan, data, ResultLifetime::RETAINED, ordering);
+		// Every sink, plan-retained or not, gets its buffer from submission; here it is hand-built
+		// the way SubmitPreparedStatementInternal builds one, with the sink's own fixed lifetime
+		auto sink = make_uniq<PhysicalResultSink>(*data.physical_plan, data, ResultLifetime::RETAINED, ordering);
+		ResultFormatContext format_context {data.types, data.names, connection->context->GetClientProperties(),
+		                                    ordering};
+		shared_ptr<BufferedData> buffer;
+		if (ordering == ResultOrdering::BATCH_INDEX_ORDERED) {
+			buffer = make_shared_ptr<BatchedBufferedData>(*connection->context, ResultLifetime::RETAINED,
+			                                              std::move(format_context), nullptr);
+		} else {
+			buffer = make_shared_ptr<SimpleBufferedData>(*connection->context, ResultLifetime::RETAINED,
+			                                             std::move(format_context), nullptr);
+		}
+		sink->SetResultBuffer(buffer);
+		unique_ptr<PhysicalResultCollector> collector = std::move(sink);
 		auto sink_state = collector->GetGlobalSinkState(*connection->context);
 
 		connection.reset();

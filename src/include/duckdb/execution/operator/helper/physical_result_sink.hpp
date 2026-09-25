@@ -15,9 +15,9 @@
 namespace duckdb {
 
 class BufferedData;
-class ChunkFormat;
 class ResultFormatLocalState;
 class ResultUnit;
+class RetainedResultCollection;
 
 class ResultSinkGlobalState;
 class ResultSinkLocalState;
@@ -63,20 +63,12 @@ private:
 	//! The retention in effect: the consumer's decision for a deferred sink, the plan's otherwise
 	ResultLifetime CurrentLifetime(ResultSinkGlobalState &gstate) const;
 	bool DrainsByBatchIndex(ResultSinkGlobalState &gstate) const;
-	//! True for a sink the plan retained, which has no buffer to settle a format
-	bool UsesChunkFormat(ResultSinkGlobalState &gstate) const;
-	//! In-memory for a sink the plan retained
-	const ChunkFormat &ChunkFormatOf(ResultSinkGlobalState &gstate) const;
 	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	//! Feeds the chunk into the format's unit under construction
 	void AppendChunk(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk) const;
 	//! True when the producer parked holding the unit
 	bool HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
 	              const InterruptState &interrupt) const;
-	//! Hand a finished unit to the buffer when draining, list it for Combine when retained. True when
-	//! the producer parked holding it
-	bool DeliverUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
-	                 const InterruptState &interrupt) const;
 	//! Deliver every unit that has reached the format's cap. One append can finish several, so a
 	//! re-invocation after a blocked hand-over continues from whatever the format still holds
 	bool DrainFinishedUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
@@ -87,12 +79,8 @@ private:
 	                            OperatorSinkInput &input) const;
 	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                            DataChunk &chunk) const;
-	SinkResultType SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
-	                                     const InterruptState &interrupt) const;
 	SinkCombineResultType CombineDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	SinkCombineResultType CombineRetained(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
-	unique_ptr<QueryResult> GetMaterializedResult(ResultSinkGlobalState &gstate) const;
-	unique_ptr<QueryResult> GetFormattedResult(ResultSinkGlobalState &gstate, ClientContext &context) const;
 
 private:
 	//! The buffer created at submission, which also holds the retention decision

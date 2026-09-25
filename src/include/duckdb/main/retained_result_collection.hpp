@@ -47,12 +47,13 @@ public:
 };
 
 //! The chunk format's retained deposit: a ColumnDataCollection (unordered or source ordered) or a
-//! BatchedDataCollection (batch ordered), created the way ChunkFormat::CreateCollection and
-//! CreateBatchedCollection do today for the given memory type
+//! BatchedDataCollection (batch ordered), built for the given memory type
 class ChunkRetainedCollection : public RetainedResultCollection {
 public:
 	DUCKDB_API ChunkRetainedCollection(ClientContext &context, const vector<LogicalType> &types,
 	                                   QueryResultMemoryType memory_type, bool batch_ordered);
+	//! Adopts an already finalized collection, for a detached result built directly over one
+	DUCKDB_API explicit ChunkRetainedCollection(unique_ptr<ColumnDataCollection> collection);
 	DUCKDB_API ~ChunkRetainedCollection() override;
 
 public:
@@ -211,6 +212,25 @@ private:
 	idx_t fetch_index = 0;
 	bool finalized = false;
 };
+
+namespace result_format_detail {
+
+//! Defaults to DefaultRetainedCollection<FORMAT> unless the format declares its own concrete Collection
+template <class FORMAT, class = void>
+struct CollectionOf {
+	using type = DefaultRetainedCollection<FORMAT>;
+};
+template <class FORMAT>
+struct CollectionOf<FORMAT, void_t_helper<typename FORMAT::Collection>> {
+	using type = typename FORMAT::Collection;
+};
+
+} // namespace result_format_detail
+
+//! The concrete RetainedResultCollection a format's retained data is stored in, reached from the
+//! handle by RetainedResultCollection::Cast<RetainedCollectionOf<FORMAT>>()
+template <class FORMAT>
+using RetainedCollectionOf = typename result_format_detail::CollectionOf<FORMAT>::type;
 
 //! Supplies CreateCollection for a format with no custom retained store: derive from ResultFormatBase<F>
 //! instead of ResultFormat directly to get a DefaultRetainedCollection<F>

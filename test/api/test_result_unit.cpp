@@ -34,20 +34,3 @@ TEST_CASE("A chunk unit takes its rows and bytes from the chunk it holds", "[api
 	REQUIRE(empty->row_count == 0);
 	REQUIRE(empty->Cast<ChunkUnit>().chunk->size() == 0);
 }
-
-TEST_CASE("A chunk unit copies into an independent unit", "[api][result_unit]") {
-	unique_ptr<ResultUnit> unit = make_uniq<ChunkUnit>(MakeChunk(100));
-	auto copy = unit->Copy();
-	REQUIRE(copy->row_count == 100);
-	unit.reset();
-	auto &chunk = *copy->Cast<ChunkUnit>().chunk;
-	REQUIRE(chunk.size() == 100);
-	for (idx_t i = 0; i < 100; i++) {
-		REQUIRE(chunk.GetValue(0, i) == Value::BIGINT(NumericCast<int64_t>(i)));
-		REQUIRE(chunk.GetValue(1, i) == Value(string(i, 'x')));
-	}
-
-	auto empty = make_uniq<ChunkUnit>(MakeChunk(0))->Copy();
-	REQUIRE(empty->row_count == 0);
-	REQUIRE(empty->Cast<ChunkUnit>().chunk->size() == 0);
-}

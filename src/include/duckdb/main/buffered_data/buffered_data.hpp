@@ -75,6 +75,10 @@ public:
 	const shared_ptr<ResultFormatGlobalState> &SharedFormatState() const {
 		return format_state;
 	}
+	//! Fixed at construction; safe to read without synchronization
+	const ResultFormatContext &FormatContext() const {
+		return format_context;
+	}
 	//! Choose draining, as every fetch-shaped call does. Throws when the result is being materialized
 	void DecideDraining();
 	//! Park a producer until the retention is decided. False when it already is

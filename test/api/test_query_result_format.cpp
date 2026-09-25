@@ -7,6 +7,8 @@ using namespace duckdb;
 
 #ifndef DUCKDB_NO_THREADS
 
+#include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/box_renderer_context.hpp"
 #include "duckdb/main/buffered_data/batched_buffered_data.hpp"
 #include "duckdb/main/buffered_data/simple_buffered_data.hpp"
 #include "duckdb/storage/storage_info.hpp"
@@ -225,14 +227,13 @@ TEST_CASE("Slicing at the cap finishes several units from one append", "[api][qu
 		DrainWatchdog watchdog(con);
 		handle->Complete();
 		auto &collection = handle->Collection<TestFormat>();
-		auto &units = collection.Units();
-		REQUIRE(units.size() > 1);
+		REQUIRE(collection.size() > 1);
 		vector<int64_t> rows;
-		for (idx_t i = 0; i < units.size(); i++) {
-			if (i + 1 < units.size()) {
-				REQUIRE(units[i]->row_count == cap);
+		for (idx_t i = 0; i < collection.size(); i++) {
+			if (i + 1 < collection.size()) {
+				REQUIRE(collection[i]->row_count == cap);
 			}
-			for (auto &value : UnitValues(*units[i], 0)) {
+			for (auto &value : UnitValues(*collection[i], 0)) {
 				rows.push_back(value.GetValue<int64_t>());
 			}
 		}
@@ -345,9 +346,9 @@ TEST_CASE("A retained result in a format keeps its units in order", "[api][query
 
 	auto check_units = [](QueryResult &handle) {
 		auto &collection = handle.Collection<TestFormat>();
-		REQUIRE(collection.Count() == 200000);
+		REQUIRE(handle.RowCount() == 200000);
 		int64_t expected = 0;
-		for (auto &unit : collection.Units()) {
+		for (auto &unit : collection) {
 			for (auto &value : UnitValues(*unit, 0)) {
 				REQUIRE(value.GetValue<int64_t>() == expected);
 				expected++;
@@ -392,7 +393,7 @@ TEST_CASE("Fetching from a retained format collection copies units out of an unc
 		handle->Complete();
 
 		auto &collection = handle->Collection<TestFormat>();
-		const auto total_units = collection.UnitCount();
+		const auto total_units = collection.size();
 		REQUIRE(total_units > 1);
 
 		vector<unique_ptr<TestPayload>> fetched;
@@ -403,10 +404,9 @@ TEST_CASE("Fetching from a retained format collection copies units out of an unc
 		REQUIRE(!handle->Fetch<TestFormat>());
 
 		REQUIRE(handle->RowCount() == 10000);
-		REQUIRE(collection.Count() == 10000);
-		REQUIRE(collection.Units().size() == total_units);
+		REQUIRE(collection.size() == total_units);
 		for (idx_t i = 0; i < total_units; i++) {
-			REQUIRE(UnitValues(*fetched[i], 0) == UnitValues(*collection.Units()[i], 0));
+			REQUIRE(UnitValues(*fetched[i], 0) == UnitValues(*collection[i], 0));
 		}
 
 		// A fetched unit is a copy, so it outlives the result
@@ -422,7 +422,7 @@ TEST_CASE("Fetching from a retained format collection copies units out of an unc
 		DrainWatchdog watchdog(con);
 		handle->Complete();
 		REQUIRE(!handle->Fetch<TestFormat>());
-		REQUIRE(handle->Collection<TestFormat>().Units().empty());
+		REQUIRE(handle->Collection<TestFormat>().empty());
 		REQUIRE(handle->RowCount() == 0);
 	}
 }
@@ -433,20 +433,29 @@ TEST_CASE("TakeCollection hands over the whole format store, fetched units inclu
 	auto handle = SubmitFormatted(con, "SELECT i FROM range(10000) t(i)", 4096);
 	DrainWatchdog watchdog(con);
 	handle->Complete();
-	const auto total_units = handle->Collection<TestFormat>().UnitCount();
+	const auto total_units = handle->Collection<TestFormat>().size();
 	REQUIRE(total_units > 1);
 	REQUIRE(handle->Fetch<TestFormat>());
 
 	auto collection = handle->TakeCollection<TestFormat>();
 	REQUIRE(collection);
-	REQUIRE(collection->Count() == 10000);
-	REQUIRE(collection->Units().size() == total_units);
+	REQUIRE(collection->size() == total_units);
+	idx_t total_rows = 0;
+	for (auto &payload : *collection) {
+		total_rows += payload->row_count;
+	}
+	REQUIRE(total_rows == 10000);
 
 	REQUIRE_THROWS_AS(handle->TakeCollection<TestFormat>(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Collection<TestFormat>(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Fetch<TestFormat>(), InvalidInputException);
 	handle.reset();
-	REQUIRE(collection->Count() == 10000);
+	// The taken collection outlives the handle it came from
+	idx_t total_rows_after_reset = 0;
+	for (auto &payload : *collection) {
+		total_rows_after_reset += payload->row_count;
+	}
+	REQUIRE(total_rows_after_reset == 10000);
 }
 
 TEST_CASE("A format given at submission reaches every completed result", "[api][query_result_format]") {
@@ -457,20 +466,20 @@ TEST_CASE("A format given at submission reaches every completed result", "[api][
 	SECTION("a single statement") {
 		auto result = con.context->Query("SELECT i FROM range(20000) t(i)", format);
 		REQUIRE_NO_FAIL(*result);
-		REQUIRE(result->Collection<TestFormat>().Count() == 20000);
+		REQUIRE(result->RowCount() == 20000);
 	}
 	SECTION("a statement that completes at submission") {
 		auto result = con.context->Query("CREATE TABLE t AS SELECT range i FROM range(20000)", format);
 		REQUIRE_NO_FAIL(*result);
 		// The planner marks it FORCED, so the buffer settled the format before execution started
-		REQUIRE(result->Collection<TestFormat>().Count() == 1);
+		REQUIRE(result->RowCount() == 1);
 	}
 	SECTION("every row-returning statement of a multi-statement query") {
 		auto result = con.context->Query("SELECT 1 AS a; SELECT i FROM range(5000) t(i);", format);
 		REQUIRE_NO_FAIL(*result);
-		REQUIRE(result->Collection<TestFormat>().Count() == 1);
+		REQUIRE(result->RowCount() == 1);
 		REQUIRE(result->next);
-		REQUIRE(result->next->Collection<TestFormat>().Count() == 5000);
+		REQUIRE(result->next->RowCount() == 5000);
 	}
 }
 
@@ -482,33 +491,33 @@ TEST_CASE("The Connection Query and Submit format overloads reach the format", "
 	SECTION("Query with a query string, given a shared_ptr<TestFormat>") {
 		auto result = con.Query("SELECT i FROM range(1000) t(i)", make_shared_ptr<TestFormat>(4096));
 		REQUIRE_NO_FAIL(*result);
-		REQUIRE(result->Collection<TestFormat>().Count() == 1000);
+		REQUIRE(result->RowCount() == 1000);
 	}
 	SECTION("Query with a statement, given a shared_ptr<TestFormat>") {
 		auto statements = con.ExtractStatements("SELECT i FROM range(1000) t(i)");
 		auto result = con.Query(std::move(statements[0]), make_shared_ptr<TestFormat>(4096));
 		REQUIRE_NO_FAIL(*result);
-		REQUIRE(result->Collection<TestFormat>().Count() == 1000);
+		REQUIRE(result->RowCount() == 1000);
 	}
 	SECTION("Submit with a query string, given a shared_ptr<TestFormat>") {
 		auto handle = con.Submit("SELECT i FROM range(1000) t(i)", make_shared_ptr<TestFormat>(4096));
 		REQUIRE(!handle->HasError());
 		handle->Complete();
-		REQUIRE(handle->Collection<TestFormat>().Count() == 1000);
+		REQUIRE(handle->RowCount() == 1000);
 	}
 	SECTION("Submit with a statement, given a shared_ptr<TestFormat>") {
 		auto statements = con.ExtractStatements("SELECT i FROM range(1000) t(i)");
 		auto handle = con.Submit(std::move(statements[0]), make_shared_ptr<TestFormat>(4096));
 		REQUIRE(!handle->HasError());
 		handle->Complete();
-		REQUIRE(handle->Collection<TestFormat>().Count() == 1000);
+		REQUIRE(handle->RowCount() == 1000);
 	}
 	SECTION("Submit with a query string, given a plain shared_ptr<ResultFormat>") {
 		shared_ptr<ResultFormat> format = make_shared_ptr<TestFormat>(4096);
 		auto handle = con.Submit("SELECT i FROM range(1000) t(i)", format);
 		REQUIRE(!handle->HasError());
 		handle->Complete();
-		REQUIRE(handle->Collection<TestFormat>().Count() == 1000);
+		REQUIRE(handle->RowCount() == 1000);
 	}
 }
 
@@ -635,6 +644,164 @@ TEST_CASE("TryFetch returns the same payload rows, in order, as Fetch", "[api][q
 
 	RequireAscending(fetched_rows, 200000);
 	REQUIRE(fetched_rows == polled_rows);
+}
+
+TEST_CASE("RowCount throws after TakeCollection for a format", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto handle = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 4096);
+	DrainWatchdog watchdog(con);
+	handle->Complete();
+	auto collection = handle->TakeCollection<TestFormat>();
+	REQUIRE(collection);
+	// RowCount used to report 0 once the collection was taken, same as a result closed before it was
+	// ever collected; it now throws so a taken result is distinguishable from an empty one
+	REQUIRE_THROWS_AS(handle->RowCount(), InvalidInputException);
+}
+
+TEST_CASE("Fetch resumes where it left off across a Collection call, and stays null after exhaustion, for a format",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto handle = SubmitFormatted(con, "SELECT i FROM range(10000) t(i)", 4096);
+	DrainWatchdog watchdog(con);
+	handle->Complete();
+
+	auto first = handle->Fetch<TestFormat>();
+	REQUIRE(first);
+	auto first_rows = first->row_count;
+
+	// Collection() does not disturb the Fetch cursor
+	auto &collection = handle->Collection<TestFormat>();
+	REQUIRE(collection.size() > 0);
+
+	idx_t remaining_rows = 0;
+	while (auto payload = handle->Fetch<TestFormat>()) {
+		remaining_rows += payload->row_count;
+	}
+	REQUIRE(handle->RowCount() == first_rows + remaining_rows);
+	REQUIRE(!handle->Fetch<TestFormat>());
+	REQUIRE(!handle->Fetch<TestFormat>());
+}
+
+TEST_CASE("ToString, ToBox, Equals and FetchRaw on a retained TestFormat result pin today's behavior",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto handle = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 4096);
+	DrainWatchdog watchdog(con);
+	handle->Complete();
+	REQUIRE(!handle->HasError());
+
+	auto str = handle->ToString();
+	REQUIRE(StringUtil::Contains(str, "Rows: 1000"));
+
+	BoxRendererConfig config;
+	ClientBoxRendererContext render_context(*con.context);
+	auto box = handle->ToBox(render_context, config);
+	REQUIRE(StringUtil::Contains(box, "Rows: 1000"));
+
+	auto other = SubmitFormatted(con, "SELECT i FROM range(1000) t(i)", 4096);
+	other->Complete();
+	REQUIRE_THROWS_AS(handle->Equals(*other), InvalidInputException);
+
+	REQUIRE_THROWS_AS(handle->FetchRaw(), InvalidInputException);
+}
+
+TEST_CASE("Retained unordered and source-ordered TestFormat plans complete with every row",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(400000)"));
+
+	SECTION("unordered") {
+		REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+		REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 4096);
+		DrainWatchdog watchdog(con);
+		REQUIRE(handle->FormatState<TestFormat>().ordering == ResultOrdering::UNORDERED);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		vector<int64_t> rows;
+		for (auto &payload : handle->Collection<TestFormat>()) {
+			for (auto &value : UnitValues(*payload, 0)) {
+				rows.push_back(value.GetValue<int64_t>());
+			}
+		}
+		RequireSameMultiset(rows, 400000);
+	}
+	SECTION("source ordered") {
+		// A single-threaded scheduler cannot use a batch index, so preserve_insertion_order (the
+		// default) falls back to SOURCE_ORDERED rather than BATCH_INDEX_ORDERED
+		REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 4096);
+		DrainWatchdog watchdog(con);
+		REQUIRE(handle->FormatState<TestFormat>().ordering == ResultOrdering::SOURCE_ORDERED);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		vector<int64_t> rows;
+		for (auto &payload : handle->Collection<TestFormat>()) {
+			for (auto &value : UnitValues(*payload, 0)) {
+				rows.push_back(value.GetValue<int64_t>());
+			}
+		}
+		RequireAscending(rows, 400000);
+	}
+}
+
+TEST_CASE("Retained batch-ordered TestFormat with a cap below a row group", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(400000)"));
+	// The actual row group count, not assumed: a parallel CTAS can leave row groups short of
+	// DEFAULT_ROW_GROUP_SIZE, so a row-count-based ceiling division would not match
+	auto groups_result = con.Query("SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('t')");
+	REQUIRE_NO_FAIL(*groups_result);
+	const idx_t groups = groups_result->Collection().GetValue(0, 0).GetValue<idx_t>();
+	REQUIRE(groups > 1);
+
+	// Sliced at the cap, so a row group's rows do not divide evenly into whole units the way
+	// whole-chunk concatenation can; well below one row group, so several payloads seal before the
+	// batch boundary flushes the remainder
+	auto handle = SubmitFormatted(con, "SELECT i FROM t", 5000, true);
+	DrainWatchdog watchdog(con);
+	REQUIRE(handle->FormatState<TestFormat>().ordering == ResultOrdering::BATCH_INDEX_ORDERED);
+	handle->Complete();
+	REQUIRE(!handle->HasError());
+
+	auto &collection = handle->Collection<TestFormat>();
+	REQUIRE(collection.size() > 1);
+	REQUIRE(handle->RowCount() == 400000);
+
+	int64_t expected = 0;
+	for (auto &payload : collection) {
+		for (auto &value : UnitValues(*payload, 0)) {
+			REQUIRE(value.GetValue<int64_t>() == expected);
+			expected++;
+		}
+	}
+	REQUIRE(expected == 400000);
+
+	// A batch boundary flushes one partial payload per row group, whether or not the cap was reached
+	REQUIRE(handle->FormatState<TestFormat>().partial_units == groups);
+}
+
+TEST_CASE("Empty partitions under a parallel retained sink in a format", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(2000000)"));
+
+	// Only the first row group yields rows, so most producers combine without ever having sunk a chunk
+	for (auto preserve : {"true", "false"}) {
+		REQUIRE_NO_FAIL(con.Query(string("SET preserve_insertion_order=") + preserve));
+		auto handle = SubmitFormatted(con, "SELECT i FROM t WHERE i < 10", 4096);
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->RowCount() == 10);
+	}
 }
 
 #endif

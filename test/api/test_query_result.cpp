@@ -225,9 +225,83 @@ TEST_CASE("TakeCollection hands the collection over exactly once", "[api][query_
 	REQUIRE_THROWS_AS(handle->TakeCollection(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Collection(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Fetch(), InvalidInputException);
+	// RowCount used to report 0 once the collection was taken, same as a result closed before it was
+	// ever collected; it now throws so a taken result is distinguishable from an empty one
+	REQUIRE_THROWS_AS(handle->RowCount(), InvalidInputException);
 	// The collection outlives the handle it came from
 	handle.reset();
 	REQUIRE(collection->Count() == 1000);
+}
+
+TEST_CASE("RowCount reports zero for a result closed before it was ever collected", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto handle = Submit(con, "SELECT i FROM range(1000) t(i)");
+	// Closed without ever calling Collection, TakeCollection, Fetch or RowCount
+	handle->Close();
+	REQUIRE(handle->RowCount() == 0);
+}
+
+TEST_CASE("Fetch resumes where it left off across a Collection call, and stays null after exhaustion",
+          "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto handle = Submit(con, "SELECT i FROM range(5000) t(i)");
+	DrainWatchdog watchdog(con);
+	auto first = handle->Fetch();
+	REQUIRE(first);
+	auto first_rows = first->size();
+
+	// Collection() does not disturb the Fetch cursor
+	auto &collection = handle->Collection();
+	REQUIRE(collection.Count() == 5000);
+
+	idx_t remaining_rows = 0;
+	while (auto chunk = handle->Fetch()) {
+		remaining_rows += chunk->size();
+	}
+	REQUIRE(remaining_rows == 5000 - first_rows);
+	REQUIRE(!handle->Fetch());
+	REQUIRE(!handle->Fetch());
+}
+
+TEST_CASE("A retained chunk result completes with every row for unordered and batch-ordered plans",
+          "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(400000)"));
+
+	SECTION("unordered") {
+		REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+		auto handle = Submit(con, "SELECT i FROM t");
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->Collection().Count() == 400000);
+		vector<int64_t> rows;
+		for (auto &row : handle->Collection().Rows()) {
+			rows.push_back(row.GetValue(0).GetValue<int64_t>());
+		}
+		std::sort(rows.begin(), rows.end());
+		for (idx_t i = 0; i < rows.size(); i++) {
+			REQUIRE(rows[i] == NumericCast<int64_t>(i));
+		}
+	}
+	SECTION("batch ordered") {
+		auto handle = Submit(con, "SELECT i FROM t");
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->Collection().Count() == 400000);
+		idx_t i = 0;
+		for (auto &row : handle->Collection().Rows()) {
+			REQUIRE(row.GetValue(0).GetValue<int64_t>() == NumericCast<int64_t>(i));
+			i++;
+		}
+	}
 }
 
 TEST_CASE("An execution error surfaces on every retained-side call", "[api][query_result]") {
@@ -389,6 +463,31 @@ TEST_CASE("A custom collector refuses a submission that asks for a format", "[ap
 		refuse(ChunkFormat::BufferManaged(),
 		       "A buffer-managed result cannot be combined with a custom result collector");
 	}
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A collector hook that hands back the default sink accepts a format", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = ClientConfig::GetConfig(*con.context);
+	DrainWatchdog watchdog(con);
+
+	ScopedConfigSetting setting(
+	    config, [](ClientConfig &config) { config.get_result_collector = PhysicalResultCollector::GetResultCollector; },
+	    [](ClientConfig &config) { config.get_result_collector = nullptr; });
+
+	QueryParameters parameters;
+	parameters.format = make_shared_ptr<TestFormat>(4096);
+	auto formatted = con.context->Query("SELECT i FROM range(20000) t(i)", parameters);
+	REQUIRE_NO_FAIL(*formatted);
+	REQUIRE(formatted->RowCount() == 20000);
+
+	parameters.format = ChunkFormat::BufferManaged();
+	auto buffered = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+	REQUIRE(!buffered->HasError());
+	REQUIRE(buffered->RowCount() == 1000);
+
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }

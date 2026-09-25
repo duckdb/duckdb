@@ -52,11 +52,6 @@ public:
 	}
 
 public:
-	unique_ptr<ResultUnit> Copy() const override {
-		return make_uniq<TestUnit>(CopyTestPayload(*payload));
-	}
-
-public:
 	unique_ptr<TestPayload> payload;
 };
 

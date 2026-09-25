@@ -1,13 +1,8 @@
 #include "duckdb/main/result_format.hpp"
 
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types/batched_data_collection.hpp"
-#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/retained_result_collection.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -51,34 +46,6 @@ const shared_ptr<ResultFormat> &ChunkFormat::BufferManaged() {
 
 QueryResultMemoryType ChunkFormat::MemoryType() const {
 	return memory_type;
-}
-
-unique_ptr<ColumnDataCollection> ChunkFormat::CreateCollection(ClientContext &context,
-                                                               const vector<LogicalType> &types) const {
-	switch (memory_type) {
-	case QueryResultMemoryType::IN_MEMORY:
-		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
-	case QueryResultMemoryType::BUFFER_MANAGED:
-		// The database's buffer manager, because the result can outlive the ClientContext
-		return make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context.db), types,
-		                                       ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
-	default:
-		throw NotImplementedException("ChunkFormat::CreateCollection for %s", EnumUtil::ToString(memory_type));
-	}
-}
-
-unique_ptr<BatchedDataCollection> ChunkFormat::CreateBatchedCollection(ClientContext &context,
-                                                                       vector<LogicalType> types) const {
-	switch (memory_type) {
-	case QueryResultMemoryType::IN_MEMORY:
-		return make_uniq<BatchedDataCollection>(context, std::move(types));
-	case QueryResultMemoryType::BUFFER_MANAGED:
-		return make_uniq<BatchedDataCollection>(context, std::move(types),
-		                                        ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
-		                                        ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
-	default:
-		throw NotImplementedException("ChunkFormat::CreateBatchedCollection for %s", EnumUtil::ToString(memory_type));
-	}
 }
 
 const char *ChunkFormat::Name() const {

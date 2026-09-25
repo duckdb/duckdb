@@ -1,7 +1,10 @@
 #include "duckdb/main/retained_result_collection.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -14,12 +17,33 @@ RetainedResultCollection::~RetainedResultCollection() {
 ChunkRetainedCollection::ChunkRetainedCollection(ClientContext &context, const vector<LogicalType> &types,
                                                  QueryResultMemoryType memory_type, bool batch_ordered_p)
     : batch_ordered(batch_ordered_p) {
-	ChunkFormat format(memory_type);
-	if (batch_ordered) {
-		batched = format.CreateBatchedCollection(context, types);
-	} else {
-		collection = format.CreateCollection(context, types);
+	switch (memory_type) {
+	case QueryResultMemoryType::IN_MEMORY:
+		if (batch_ordered) {
+			batched = make_uniq<BatchedDataCollection>(context, types);
+		} else {
+			collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		}
+		break;
+	case QueryResultMemoryType::BUFFER_MANAGED:
+		// The database's buffer manager, because the result can outlive the ClientContext
+		if (batch_ordered) {
+			batched =
+			    make_uniq<BatchedDataCollection>(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR,
+			                                     ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
+		} else {
+			collection =
+			    make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(*context.db), types,
+			                                    ColumnDataCollectionLifetime::THROW_ERROR_AFTER_DATABASE_CLOSES);
+		}
+		break;
+	default:
+		throw NotImplementedException("ChunkRetainedCollection for %s", EnumUtil::ToString(memory_type));
 	}
+}
+
+ChunkRetainedCollection::ChunkRetainedCollection(unique_ptr<ColumnDataCollection> collection_p)
+    : batch_ordered(false), collection(std::move(collection_p)) {
 }
 
 ChunkRetainedCollection::~ChunkRetainedCollection() {
@@ -51,7 +75,11 @@ void ChunkRetainedCollection::Finalize() {
 	if (batch_ordered) {
 		collection = batched->FetchCollection();
 		batched.reset();
+		return;
 	}
+	// The first producer's instance becomes the result, whose append pins must not outlive the database
+	append_state = ColumnDataAppendState();
+	append_initialized = false;
 }
 
 idx_t ChunkRetainedCollection::Count() const {

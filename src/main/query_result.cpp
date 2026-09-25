@@ -12,6 +12,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/main/retained_result_collection.hpp"
 
 namespace duckdb {
 
@@ -124,19 +125,19 @@ QueryResult::QueryResult(StatementType statement_type, StatementProperties prope
     : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties),
                       collection_p->Types(), std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(ResultFormat::Chunk()),
-      collection(std::move(collection_p)) {
+      collection(make_uniq<ChunkRetainedCollection>(std::move(collection_p))) {
 	InitializeChunkFormatState();
 }
 
 QueryResult::QueryResult(StatementType statement_type, StatementProperties properties, vector<LogicalType> types_p,
-                         vector<Identifier> names_p, unique_ptr<ResultUnitCollection> units_p,
+                         vector<Identifier> names_p, unique_ptr<RetainedResultCollection> collection_p,
                          shared_ptr<ResultFormat> format_p, shared_ptr<ResultFormatGlobalState> format_state_p,
                          ClientProperties client_properties_p)
     : BaseQueryResult(QueryResultType::MATERIALIZED_RESULT, statement_type, std::move(properties), std::move(types_p),
                       std::move(names_p)),
       client_properties(std::move(client_properties_p)), format(std::move(format_p)),
-      format_state(std::move(format_state_p)), unit_collection(std::move(units_p)) {
-	D_ASSERT(format && format_state && unit_collection);
+      format_state(std::move(format_state_p)), collection(std::move(collection_p)) {
+	D_ASSERT(format && format_state && collection);
 }
 
 QueryResult::QueryResult(ErrorData error) : QueryResult(QueryResultType::MATERIALIZED_RESULT, std::move(error)) {
@@ -288,7 +289,6 @@ const ResultFormat &QueryResult::Format() const {
 
 void QueryResult::AdoptCollected(QueryResult &produced) {
 	collection = std::move(produced.collection);
-	unit_collection = std::move(produced.unit_collection);
 }
 
 void QueryResult::ThrowFormatMismatch(const char *expected) const {
@@ -384,13 +384,17 @@ void QueryResult::ThrowNoCollection() const {
 
 idx_t QueryResult::RowCount() {
 	Complete();
-	if (collection) {
-		return collection->Count();
+	if (HasError()) {
+		return 0;
 	}
-	if (unit_collection) {
-		return unit_collection->Count();
+	if (collection_taken) {
+		ThrowNoCollection();
 	}
-	return 0;
+	if (!collection) {
+		// Closed before it was ever collected: no rows were ever adopted, and no collection was taken
+		return 0;
+	}
+	return collection->Count();
 }
 
 //===--------------------------------------------------------------------===//
@@ -426,18 +430,7 @@ unique_ptr<DataChunk> QueryResult::FetchInternal() {
 	if (!collection) {
 		ThrowNoCollection();
 	}
-	auto result = make_uniq<DataChunk>();
-	collection->InitializeScanChunk(*result);
-	if (!scan_initialized) {
-		// we disallow zero copy so the chunk is independently usable even after the result is destroyed
-		collection->InitializeScan(scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
-		scan_initialized = true;
-	}
-	collection->Scan(scan_state, *result);
-	if (result->size() == 0) {
-		return nullptr;
-	}
-	return result;
+	return collection->Cast<ChunkRetainedCollection>().FetchRaw();
 }
 
 unique_ptr<DataChunk> QueryResult::FetchRaw() {

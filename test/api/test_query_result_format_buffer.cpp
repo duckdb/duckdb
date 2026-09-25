@@ -103,7 +103,11 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 		auto report = Drain(stream);
 		RequireAscending(report.rows, 20000);
 		REQUIRE(report.saw_blocked_sink);
+		REQUIRE(report.unit_count >= 20000 / 300);
 		// A re-delivered chunk resumes the drain, so a producer never carries one append's units into the next
+		if (STANDARD_VECTOR_SIZE >= 2 * 300) {
+			REQUIRE(stream.FormatState().max_pending_units > 1);
+		}
 		REQUIRE(stream.FormatState().max_pending_units <= STANDARD_VECTOR_SIZE / 300 + 1);
 	}
 	SECTION("the batched store, with several producers") {

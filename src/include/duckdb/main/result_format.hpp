@@ -125,10 +125,6 @@ public:
 	DUCKDB_API static const shared_ptr<ResultFormat> &BufferManaged();
 
 	DUCKDB_API QueryResultMemoryType MemoryType() const;
-	DUCKDB_API unique_ptr<ColumnDataCollection> CreateCollection(ClientContext &context,
-	                                                             const vector<LogicalType> &types) const;
-	DUCKDB_API unique_ptr<BatchedDataCollection> CreateBatchedCollection(ClientContext &context,
-	                                                                     vector<LogicalType> types) const;
 
 public:
 	DUCKDB_API const char *Name() const override;

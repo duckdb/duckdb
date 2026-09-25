@@ -25,9 +25,6 @@ public:
 	DUCKDB_API virtual ~ResultUnit();
 
 public:
-	//! Deep: the copy outlives this unit and its collection
-	virtual unique_ptr<ResultUnit> Copy() const = 0;
-
 	template <class TARGET>
 	TARGET &Cast() {
 		DynamicCastCheck<TARGET>(this);
@@ -57,38 +54,7 @@ public:
 	DUCKDB_API explicit ChunkUnit(unique_ptr<DataChunk> chunk);
 
 public:
-	DUCKDB_API unique_ptr<ResultUnit> Copy() const override;
-
-public:
 	unique_ptr<DataChunk> chunk;
-};
-
-//! Format-specific per-query data lives in the format's global state, never here
-class ResultUnitCollection {
-public:
-	DUCKDB_API ResultUnitCollection();
-	DUCKDB_API explicit ResultUnitCollection(vector<unique_ptr<ResultUnit>> units);
-	DUCKDB_API ~ResultUnitCollection();
-
-public:
-	idx_t Count() const {
-		return total_rows;
-	}
-	idx_t UnitCount() const {
-		return units.size();
-	}
-	//! In consumption order
-	const vector<unique_ptr<ResultUnit>> &Units() const {
-		return units;
-	}
-
-private:
-	vector<unique_ptr<ResultUnit>> units;
-	const idx_t total_rows = 0;
-
-private:
-	ResultUnitCollection(const ResultUnitCollection &) = delete;
-	ResultUnitCollection &operator=(const ResultUnitCollection &) = delete;
 };
 
 } // namespace duckdb
