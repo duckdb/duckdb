@@ -775,6 +775,9 @@ string ShellState::EscapeCString(const string &str) {
 }
 
 void ShellState::Exit(int exit_code) {
+	if (GetReference()) {
+		GetReference()->PrintExitHint(exit_code);
+	}
 	if (exit_code == 0) {
 		// clean-up shell state if this is a successful exit
 		auto shell_state = GetReference();
@@ -3537,8 +3540,10 @@ void ShellState::DetectAgentMode() {
 		agent_mode_active = false;
 		break;
 	default:
-		// auto-detect: an agent reads our output through a pipe, never from a terminal
-		agent_mode_active = !stdout_is_console && DetectAgentEnvironment(agent_name, agent_marker);
+		// auto-detect: an agent reads our output through a pipe, never from a terminal. An output mode on the command
+		// line (-csv, -json, ...) is a deliberate choice of format that the agent rendering would fight with, so it
+		// leaves the mode off; -agent still forces it
+		agent_mode_active = !output_mode_flag && !stdout_is_console && DetectAgentEnvironment(agent_name, agent_marker);
 		break;
 	}
 	if (!agent_mode_active) {
@@ -3575,6 +3580,23 @@ void ShellState::PrintAgentHelp(PrintOutput output) {
 	PrintF(output,
 	       "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
 	       "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples\n");
+}
+
+void ShellState::PrintExitHint(int rc) {
+	// a failed run through a pipe may well be a coding agent that does not know the mode exists - but only when
+	// nothing identified one (the environment, -agent) and nothing declined (-no-agent)
+	if (rc == 0 || stdout_is_console || agent_mode_active || agent_mode != OptionType::DEFAULT || exit_hint_printed) {
+		return;
+	}
+	exit_hint_printed = true;
+	string name, marker;
+	if (DetectAgentEnvironment(name, marker)) {
+		// an agent that chose its output format itself (-csv, ...) needs no hint
+		return;
+	}
+	PrintF(PrintOutput::STDERR,
+	       "hint: -agent renders errors as JSON and results compactly for AI coding agents (duckdb -help lists all "
+	       "options)\n");
 }
 
 struct ScanEstimate {
@@ -3889,6 +3911,8 @@ int RunShell(int argc, const char **argv) {
 #else
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
 #endif
+	// before ResetOutput, which forgets that stdout was not a console
+	data.PrintExitHint(rc);
 	data.SetTableName(0);
 	data.last_result.reset();
 	data.db.reset();

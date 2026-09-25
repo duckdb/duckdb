@@ -87,12 +87,33 @@ def test_agent_flag(shell):
     result.check_stdout("| 49 |\n50 rows")
     result.check_not_exist("shown")
 
-def test_explicit_mode_wins(shell):
-    # an explicit output mode overrides the agent default
-    test = agent_shell(shell).add_argument("-csv").statement("SELECT 42 AS a")
+def test_output_mode_flag_turns_agent_mode_off(shell):
+    # an output mode on the command line is a deliberate choice of format: detected agent mode stays off entirely,
+    # so no preamble, no JSON errors, no estimate lines
+    test = agent_shell(shell).add_argument("-csv").statement("SELECT 42 AS a").statement(".show")
     result = test.run()
     result.check_stdout("a\n42")
+    result.check_stdout("agent: off")
     result.check_not_exist("|")
+    assert "agent mode" not in result.stderr
+    assert "estimate:" not in result.stderr
+
+def test_output_mode_flag_plain_errors(shell):
+    test = agent_shell(shell).add_argument("-csv").statement("SELECT foo FROM (SELECT 1 AS bar)")
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr("LINE 1:")
+    assert "exception_type" not in result.stderr
+    # the agent chose its format itself - no exit hint either
+    assert "hint:" not in result.stderr
+
+def test_agent_flag_with_output_mode(shell):
+    # -agent is explicit too: it keeps the mode on, only the format changes
+    test = ShellTest(shell).add_argument("-agent", "-csv").statement("SELECT 42 AS a").statement(".show")
+    result = test.run()
+    result.check_stdout("a\n42")
+    result.check_stdout("agent: on")
+    result.check_stderr("duckdb agent mode on (-agent)")
 
 def test_duckbox_all_rows(shell):
     # switching back to duckbox keeps the agent-mode row cap (1000), so all 50 rows show
@@ -385,6 +406,34 @@ def test_streamed_error_is_reported(shell):
     assert result.status_code == 1
     result.check_stderr('"exception_type":"Conversion"')
     assert "rows" not in result.stdout
+
+def test_exit_hint_after_failure(shell):
+    # a failed run through a pipe, with no agent detected and neither flag given, may be an agent that does not know
+    # the mode exists
+    test = ShellTest(shell).statement("SELEC 1")
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr(
+        "\nhint: -agent renders errors as JSON and results compactly for AI coding agents (duckdb -help lists all options)"
+    )
+
+def test_no_exit_hint_on_success(shell):
+    test = ShellTest(shell).statement("SELECT 1")
+    result = test.run()
+    assert "hint:" not in result.stderr
+
+def test_no_exit_hint_when_declined(shell):
+    test = ShellTest(shell).add_argument("-no-agent").statement("SELEC 1")
+    result = test.run()
+    assert result.status_code == 1
+    assert "hint:" not in result.stderr
+
+def test_no_exit_hint_in_agent_mode(shell):
+    test = agent_shell(shell).statement("SELEC 1")
+    result = test.run()
+    assert result.status_code == 1
+    result.check_stderr('"exception_type":"Parser"')
+    assert "hint:" not in result.stderr
 
 def test_streamed_error_without_agent(shell):
     test = ShellTest(shell).add_argument("-csv").statement("SELECT (1 / (r - 5))::INTEGER AS x FROM range(10) t(r)")

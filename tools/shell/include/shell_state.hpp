@@ -254,6 +254,10 @@ public:
 	string agent_name;
 	//! The environment variable that switched agent mode on (e.g. "CLAUDECODE"), empty when forced with -agent
 	string agent_marker;
+	//! Whether an output mode was given on the command line (-csv, -json, ...): detected agent mode then stays off
+	bool output_mode_flag = false;
+	//! Whether the exit hint (see PrintExitHint) went out already
+	bool exit_hint_printed = false;
 
 	//! True if an interrupt (Control-C) has been received.
 	atomic<idx_t> seenInterrupt;
@@ -447,8 +451,10 @@ public:
 	void DetectAgentMode();
 	//! Whether the environment marks the shell as being run by an AI coding agent, which one, and by which variable
 	static bool DetectAgentEnvironment(string &agent_name, string &marker);
-	//! Print the two-line summary of how agent mode renders, and the engine features an agent should know about
+	//! Print the summary of how agent mode renders, and the engine features an agent should know about
 	void PrintAgentHelp(PrintOutput output);
+	//! On a failed run through a pipe with no agent detected and no -agent/-no-agent given: point at -agent
+	void PrintExitHint(int rc);
 	//! Print the planner's estimate of what a statement will read and return to stderr (agent mode)
 	void PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement);
 #if defined(_WIN32) || defined(WIN32)
