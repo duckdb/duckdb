@@ -69,8 +69,8 @@ static void CheckTableFunctionQualification(Connection &connection, const string
 		REQUIRE_NO_FAIL(result);
 		REQUIRE(result.GetTypes() == vector<LogicalType> {LogicalType::BIGINT});
 		REQUIRE(result.RowCount() == 2);
-		REQUIRE(result.GetValue(0, 0) == Value::BIGINT(first_value));
-		REQUIRE(result.GetValue(0, 1) == Value::BIGINT(first_value + 1));
+		REQUIRE(result.Collection().GetValue(0, 0) == Value::BIGINT(first_value));
+		REQUIRE(result.Collection().GetValue(0, 1) == Value::BIGINT(first_value + 1));
 	}
 }
 
@@ -91,7 +91,7 @@ TEST_CASE("Table function registration retains canonical qualification", "[api][
 	REQUIRE_NO_FAIL(connection.Query("SET search_path='shadow,main'"));
 	auto shadow = connection.Query("SELECT * FROM qualified_range(2)");
 	REQUIRE_NO_FAIL(*shadow);
-	REQUIRE(shadow->GetValue(0, 0) == Value::INTEGER(99));
+	REQUIRE(shadow->Collection().GetValue(0, 0) == Value::INTEGER(99));
 	connection.BeginTransaction();
 	auto &range =
 	    Catalog::GetEntry<TableFunctionCatalogEntry>(*connection.context, QualifiedName("system", "main", "range"));

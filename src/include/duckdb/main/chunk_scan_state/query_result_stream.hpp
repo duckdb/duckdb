@@ -13,11 +13,13 @@
 
 namespace duckdb {
 
+class ChunkFormat;
+template <class FORMAT>
 class QueryResultStream;
 
 class QueryResultStreamChunkScanState : public ChunkScanState {
 public:
-	explicit QueryResultStreamChunkScanState(QueryResultStream &stream);
+	explicit QueryResultStreamChunkScanState(QueryResultStream<ChunkFormat> &stream);
 	~QueryResultStreamChunkScanState() override;
 
 public:
@@ -28,7 +30,7 @@ public:
 	const vector<Identifier> &Names() const override;
 
 private:
-	QueryResultStream &stream;
+	QueryResultStream<ChunkFormat> &stream;
 	ErrorData error;
 	bool has_error = false;
 };

@@ -206,7 +206,7 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				throw InvalidInputException("create_external_resource: create function \"%s\" returned no rows",
 				                            type->create_function);
 			}
-			handle = RequireResourceMap(result->GetValue(0, 0), type->create_function, "handle");
+			handle = RequireResourceMap(result->Collection().GetRows().GetValue(0, 0), type->create_function, "handle");
 			LogExternalResourceOperation(context, bind_data.type_name, bind_data.resource_name, "create", string(),
 			                             NoExtraInfo());
 		} catch (std::exception &ex) {
@@ -286,14 +286,15 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				throw InvalidInputException("create_external_resource: status function \"%s\" returned no rows",
 				                            type->status_function);
 			}
-			auto state_val = sres->GetValue(0, 0);
+			auto status_rows = sres->Collection().GetRows();
+			auto state_val = status_rows.GetValue(0, 0);
 			auto status_state = state_val.IsNull() ? string() : state_val.ToString();
 			if (status_state == "failed") {
 				throw IOException("create_external_resource: resource \"%s\" reported state 'failed'",
 				                  bind_data.type_name);
 			}
 			if (status_state == "ready") {
-				status_result = RequireResourceMap(sres->GetValue(1, 0), type->status_function, "result");
+				status_result = RequireResourceMap(status_rows.GetValue(1, 0), type->status_function, "result");
 				ready = true;
 			} else if (has_deadline && std::chrono::steady_clock::now() >= deadline) {
 				throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",

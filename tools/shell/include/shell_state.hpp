@@ -453,7 +453,7 @@ public:
 	SuccessState RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite);
 	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result,
 	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
-	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResultStream &stream,
+	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResultStream<> &stream,
 	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
 	SuccessState RenderPreparedResult(ShellRenderer &renderer, RenderingQueryResult &render_result,
 	                                  PagerMode pager_overwrite);

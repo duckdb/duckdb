@@ -64,6 +64,7 @@
 #include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/result_format.hpp"
 #include "duckdb/main/result_set_manager.hpp"
 #include "duckdb/parser/statement/transaction_statement.hpp"
 #include "duckdb/main/prepared_statement.hpp"
@@ -420,7 +421,7 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 		// Read before CancelTasks clears the slot, and while the profiler is still running
 		auto buffer = active_query->executor->GetResultBuffer();
 		if (buffer) {
-			QueryProfiler::Get(*this).SetStreamingPeakBufferSize(buffer->PeakBufferedBytes());
+			QueryProfiler::Get(*this).SetStreamingPeakBufferSize(buffer->PeakStreamingBytes());
 		}
 		active_query->executor->CancelTasks();
 	}
@@ -649,8 +650,6 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 		query_progress.Restart();
 	}
 
-	statement_data.memory_type = parameters.memory_type;
-
 	// Decide how to get the result collector.
 	get_result_collector_t get_collector = PhysicalResultCollector::GetResultCollector;
 	auto &client_config = ClientConfig::GetConfig(*this);
@@ -663,16 +662,34 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
 	// A custom hook can hand back the default sink, which is then served like any other query
 	const bool delegating = collector->Cast<PhysicalResultCollector>().BuildsOwnResult();
+	if (delegating && parameters.format) {
+		if (!parameters.format->Is<ChunkFormat>()) {
+			// The collector builds its own result, which the format would never reach
+			throw InvalidInputException("A result format cannot be combined with a custom result collector");
+		}
+		if (parameters.format->Cast<ChunkFormat>().MemoryType() == QueryResultMemoryType::BUFFER_MANAGED) {
+			// The collector chooses its own store, so the request would be silently downgraded
+			throw InvalidInputException("A buffer-managed result cannot be combined with a custom result collector");
+		}
+	}
+
+	// Read before Initialize starts the workers: a SET statement writes the settings from a task
+	auto client_properties = GetClientProperties();
+	auto types = statement_data.types;
 
 	// The buffer is created here, on the client thread, and handed to the sink, the executor and the
-	// handle. It carries the retention decision, so it exists for every query the sink serves
+	// handle. It runs the format's InitGlobal before any worker starts, so workers only read the format state
 	shared_ptr<BufferedData> buffer;
 	if (!delegating) {
 		auto &sink = collector->Cast<PhysicalResultSink>();
+		ResultFormatContext format_context {statement_data.types, statement_data.names, client_properties,
+		                                    sink.ordering};
 		if (sink.ordering == ResultOrdering::BATCH_INDEX_ORDERED) {
-			buffer = make_shared_ptr<BatchedBufferedData>(*this, sink.lifetime);
+			buffer = make_shared_ptr<BatchedBufferedData>(*this, ResultLifetime::UNDECIDED, std::move(format_context),
+			                                              parameters.format);
 		} else {
-			buffer = make_shared_ptr<SimpleBufferedData>(*this, sink.lifetime);
+			buffer = make_shared_ptr<SimpleBufferedData>(*this, ResultLifetime::UNDECIDED, std::move(format_context),
+			                                             parameters.format);
 		}
 		if (parameters.result_eagerness == ResultEagerness::FORCED ||
 		    statement_data.properties.result_eagerness == ResultEagerness::FORCED) {
@@ -683,9 +700,6 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	}
 	executor.SetResultBuffer(buffer);
 
-	// Read before Initialize starts the workers: a SET statement writes the settings from a task
-	auto client_properties = GetClientProperties();
-	auto types = statement_data.types;
 	executor.Initialize(std::move(collector));
 
 	D_ASSERT(executor.GetTypes() == statement_data.types);
@@ -1290,6 +1304,14 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameter
 	return result;
 }
 
+unique_ptr<QueryResult> ClientContext::Query(const string &query, shared_ptr<ResultFormat> format) {
+	return Query(query, QueryParameters(std::move(format)));
+}
+
+unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return Query(std::move(statement), QueryParameters(std::move(format)));
+}
+
 unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
@@ -1320,6 +1342,14 @@ unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement
 	} catch (std::exception &ex) {
 		return make_uniq<QueryResult>(ErrorData(ex));
 	}
+}
+
+unique_ptr<QueryResult> ClientContext::Submit(const string &query, shared_ptr<ResultFormat> format) {
+	return Submit(query, QueryParameters(std::move(format)));
+}
+
+unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return Submit(std::move(statement), QueryParameters(std::move(format)));
 }
 
 unique_ptr<QueryResult> ClientContext::Submit(const string &query, identifier_map_t<BoundParameterData> &values,

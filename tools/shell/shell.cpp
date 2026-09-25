@@ -954,11 +954,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto &con = *conn;
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	unique_ptr<duckdb::QueryResultStream> stream;
+	unique_ptr<duckdb::QueryResultStream<>> stream;
 	const bool render_materialized = renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
-		result = con.Query(std::move(statement), duckdb::QueryResultMemoryType::BUFFER_MANAGED);
+		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
 	} else {
 		result = con.Submit(std::move(statement));
 	}
@@ -999,7 +999,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::SUCCESS;
 	}
 	if (render_streaming) {
-		stream = duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result));
+		stream = duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result));
 	} else {
 		last_result = std::move(result);
 	}

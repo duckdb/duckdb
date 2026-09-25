@@ -12,6 +12,7 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/main/query_result_stream.hpp"
 #include "result_wait_helpers.hpp"
+#include "test_result_format.hpp"
 
 #include <chrono>
 #include <thread>
@@ -115,8 +116,8 @@ TEST_CASE("Query returns a completed retained handle", "[api][query_result]") {
 	auto result = con.Query("SELECT i FROM range(2000) t(i)");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->RowCount() == 2000);
-	REQUIRE(result->GetValue(0, 0).GetValue<int64_t>() == 0);
-	REQUIRE(result->GetValue(0, 1999).GetValue<int64_t>() == 1999);
+	REQUIRE(result->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
+	REQUIRE(result->Collection().GetValue(0, 1999).GetValue<int64_t>() == 1999);
 	REQUIRE(result->Collection().Count() == 2000);
 	REQUIRE(!result->ToString().empty());
 	// The cursor walks the collection the handle already holds
@@ -202,8 +203,8 @@ TEST_CASE("Collecting a fresh submission takes the retained path", "[api][query_
 	DrainWatchdog watchdog(con);
 	auto &collection = handle->Collection();
 	REQUIRE(collection.Count() == 500000);
-	REQUIRE(handle->GetValue(0, 0).GetValue<int64_t>() == 0);
-	REQUIRE(handle->GetValue(0, 499999).GetValue<int64_t>() == 499999);
+	REQUIRE(handle->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
+	REQUIRE(handle->Collection().GetValue(0, 499999).GetValue<int64_t>() == 499999);
 	// Producers appended into the collection: nothing was ever staged in the streaming buffer
 	REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
 	REQUIRE(handle->GetBufferedData().PeakBufferedBytes() == 0);
@@ -224,9 +225,83 @@ TEST_CASE("TakeCollection hands the collection over exactly once", "[api][query_
 	REQUIRE_THROWS_AS(handle->TakeCollection(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Collection(), InvalidInputException);
 	REQUIRE_THROWS_AS(handle->Fetch(), InvalidInputException);
+	// RowCount used to report 0 once the collection was taken, same as a result closed before it was
+	// ever collected; it now throws so a taken result is distinguishable from an empty one
+	REQUIRE_THROWS_AS(handle->RowCount(), InvalidInputException);
 	// The collection outlives the handle it came from
 	handle.reset();
 	REQUIRE(collection->Count() == 1000);
+}
+
+TEST_CASE("RowCount throws for a result closed before it was ever collected", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto handle = Submit(con, "SELECT i FROM range(1000) t(i)");
+	// Closed without ever calling Collection, TakeCollection, Fetch or RowCount
+	handle->Close();
+	REQUIRE_THROWS_AS(handle->RowCount(), InvalidInputException);
+}
+
+TEST_CASE("Fetch resumes where it left off across a Collection call, and stays null after exhaustion",
+          "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto handle = Submit(con, "SELECT i FROM range(5000) t(i)");
+	DrainWatchdog watchdog(con);
+	auto first = handle->Fetch();
+	REQUIRE(first);
+	auto first_rows = first->size();
+
+	// Collection() does not disturb the Fetch cursor
+	auto &collection = handle->Collection();
+	REQUIRE(collection.Count() == 5000);
+
+	idx_t remaining_rows = 0;
+	while (auto chunk = handle->Fetch()) {
+		remaining_rows += chunk->size();
+	}
+	REQUIRE(remaining_rows == 5000 - first_rows);
+	REQUIRE(!handle->Fetch());
+	REQUIRE(!handle->Fetch());
+}
+
+TEST_CASE("A retained chunk result completes with every row for unordered and batch-ordered plans",
+          "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(400000)"));
+
+	SECTION("unordered") {
+		REQUIRE_NO_FAIL(con.Query("SET preserve_insertion_order=false"));
+		auto handle = Submit(con, "SELECT i FROM t");
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->Collection().Count() == 400000);
+		vector<int64_t> rows;
+		for (auto &row : handle->Collection().Rows()) {
+			rows.push_back(row.GetValue(0).GetValue<int64_t>());
+		}
+		std::sort(rows.begin(), rows.end());
+		for (idx_t i = 0; i < rows.size(); i++) {
+			REQUIRE(rows[i] == NumericCast<int64_t>(i));
+		}
+	}
+	SECTION("batch ordered") {
+		auto handle = Submit(con, "SELECT i FROM t");
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(!handle->HasError());
+		REQUIRE(handle->Collection().Count() == 400000);
+		idx_t i = 0;
+		for (auto &row : handle->Collection().Rows()) {
+			REQUIRE(row.GetValue(0).GetValue<int64_t>() == NumericCast<int64_t>(i));
+			i++;
+		}
+	}
 }
 
 TEST_CASE("An execution error surfaces on every retained-side call", "[api][query_result]") {
@@ -250,7 +325,7 @@ TEST_CASE("An execution error surfaces on every retained-side call", "[api][quer
 	// GetValue throws the query's own error, not an internal one
 	bool threw_query_error = false;
 	try {
-		handle->GetValue(0, 0);
+		handle->Collection().GetValue(0, 0);
 	} catch (const std::exception &ex) {
 		threw_query_error = StringUtil::Contains(ErrorData(ex).Message(), "boom");
 	}
@@ -293,7 +368,7 @@ TEST_CASE("A statement that completes on return is retained and refuses a stream
 		REQUIRE(handle->GetStatementProperties().result_eagerness == ResultEagerness::FORCED);
 		// The store is settled before execution starts, so no producer parks for a decision
 		REQUIRE(handle->GetBufferedData().Lifetime() == ResultLifetime::RETAINED);
-		REQUIRE_THROWS_AS(QueryResultStream(std::move(handle)), InvalidInputException);
+		REQUIRE_THROWS_AS(QueryResultStream<>(std::move(handle)), InvalidInputException);
 	}
 	// The refused streams released their queries, so the connection is free again
 	auto inserted = con.Query("INSERT INTO t VALUES (1), (2) RETURNING i");
@@ -364,7 +439,80 @@ TEST_CASE("A custom collector hands out its own result object", "[api][query_res
 		REQUIRE(!result->HasError());
 		REQUIRE(result->RowCount() == 3000);
 	}
-	// The connection is usable once the collector is gone
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A custom collector refuses a submission that asks for a format", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = ClientConfig::GetConfig(*con.context);
+	DrainWatchdog watchdog(con);
+
+	auto refuse = [&](shared_ptr<ResultFormat> format, const char *expected) {
+		auto setting = UseTestStreamingCollector(config);
+		auto refused = con.Submit("SELECT i FROM range(1000) t(i)", std::move(format));
+		REQUIRE(refused->HasError());
+		REQUIRE(refused->GetErrorType() == ExceptionType::INVALID_INPUT);
+		REQUIRE(StringUtil::Contains(refused->GetError(), expected));
+	};
+	SECTION("a format that is not the chunk format") {
+		refuse(make_shared_ptr<TestFormat>(1024), "A result format cannot be combined with a custom result collector");
+	}
+	SECTION("the buffer-managed chunk format") {
+		refuse(ChunkFormat::BufferManaged(),
+		       "A buffer-managed result cannot be combined with a custom result collector");
+	}
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A collector hook that hands back the default sink accepts a format", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = ClientConfig::GetConfig(*con.context);
+	DrainWatchdog watchdog(con);
+
+	ScopedConfigSetting setting(
+	    config, [](ClientConfig &config) { config.get_result_collector = PhysicalResultCollector::GetResultCollector; },
+	    [](ClientConfig &config) { config.get_result_collector = nullptr; });
+
+	QueryParameters parameters;
+	parameters.format = make_shared_ptr<TestFormat>(4096);
+	auto formatted = con.context->Query("SELECT i FROM range(20000) t(i)", parameters);
+	REQUIRE_NO_FAIL(*formatted);
+	REQUIRE(formatted->RowCount() == 20000);
+
+	parameters.format = ChunkFormat::BufferManaged();
+	auto buffered = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+	REQUIRE(!buffered->HasError());
+	REQUIRE(buffered->RowCount() == 1000);
+
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A custom collector refuses a submission that asks for a buffer-managed result", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &config = ClientConfig::GetConfig(*con.context);
+	DrainWatchdog watchdog(con);
+
+	QueryParameters parameters;
+	{
+		auto setting = UseTestStreamingCollector(config);
+		parameters.format = ChunkFormat::BufferManaged();
+		auto refused = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+		REQUIRE(refused->HasError());
+		REQUIRE(refused->GetErrorType() == ExceptionType::INVALID_INPUT);
+		REQUIRE(StringUtil::Contains(refused->GetError(), "buffer-managed result cannot be combined"));
+
+		// The in-memory chunk format is the store the collector builds anyway
+		parameters.format = ChunkFormat::InMemory();
+		auto accepted = con.Submit("SELECT i FROM range(1000) t(i)", parameters);
+		REQUIRE(!accepted->HasError());
+		REQUIRE(accepted->RowCount() == 1000);
+	}
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
