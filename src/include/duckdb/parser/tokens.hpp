@@ -111,6 +111,7 @@ class ExpressionListRef;
 class ColumnDataRef;
 class PivotRef;
 class ShowRef;
+class DiffRef;
 
 //===--------------------------------------------------------------------===//
 // Other

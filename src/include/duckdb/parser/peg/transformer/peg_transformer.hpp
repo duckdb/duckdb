@@ -1992,6 +1992,24 @@ public:
 	static void InitializeDetachStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeDetachStatementTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeDiffStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDiffStatementTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeDiffSideTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDiffSideTrampoline(PEGTransformer &transformer,
+	                                                                   GeneratedTransformProcess &process);
+	static void InitializeDiffSubqueryTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDiffSubqueryTrampoline(PEGTransformer &transformer,
+	                                                                       GeneratedTransformProcess &process);
+	static void InitializeDiffTableTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDiffTableTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeDiffKeyTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDiffKeyTrampoline(PEGTransformer &transformer,
+	                                                                  GeneratedTransformProcess &process);
+	static void InitializeDiffCellsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDiffCellsTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
 	static void InitializeDropStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeDropStatementTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
@@ -5703,6 +5721,28 @@ public:
 	static unique_ptr<SQLStatement> TransformDetachStatement(PEGTransformer &transformer, const bool &has_result,
 	                                                         const optional<bool> &if_exists,
 	                                                         const Identifier &catalog_name);
+	static unique_ptr<TransformResultValue> TransformDiffStatementInternal(PEGTransformer &transformer,
+	                                                                       ParseResult &parse_result);
+	static unique_ptr<SelectStatement> TransformDiffStatement(PEGTransformer &transformer,
+	                                                          unique_ptr<TableRef> diff_side,
+	                                                          unique_ptr<TableRef> diff_side_1,
+	                                                          const optional<vector<string>> &diff_key,
+	                                                          const optional<bool> &diff_cells);
+	static unique_ptr<TransformResultValue> TransformDiffSideInternal(PEGTransformer &transformer,
+	                                                                  ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDiffSubqueryInternal(PEGTransformer &transformer,
+	                                                                      ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformDiffSubquery(PEGTransformer &transformer,
+	                                                  unique_ptr<SelectStatement> select_parens);
+	static unique_ptr<TransformResultValue> TransformDiffTableInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static unique_ptr<TableRef> TransformDiffTable(PEGTransformer &transformer,
+	                                               unique_ptr<BaseTableRef> base_table_name);
+	static unique_ptr<TransformResultValue> TransformDiffKeyInternal(PEGTransformer &transformer,
+	                                                                 ParseResult &parse_result);
+	static unique_ptr<TransformResultValue> TransformDiffCellsInternal(PEGTransformer &transformer,
+	                                                                   ParseResult &parse_result);
+	static bool TransformDiffCells(PEGTransformer &transformer);
 	static unique_ptr<TransformResultValue> TransformDropStatementInternal(PEGTransformer &transformer,
 	                                                                       ParseResult &parse_result);
 	static unique_ptr<SQLStatement> TransformDropStatement(PEGTransformer &transformer,

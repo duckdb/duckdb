@@ -1,0 +1,250 @@
+# name: test/sql/diff/diff.test
+# description: DIFF old, new [KEY (columns)] [CELLS] - a semantic diff of two relations
+# group: [diff]
+
+# The fixtures mirror the demos of Hadley Wickham's data-diff (https://github.com/hadley/data-diff), and the
+# expected lines are its documented output.
+
+# a guessed key, and an edited row
+statement ok
+CREATE TABLE basic_old AS SELECT * FROM (VALUES (1, 'Ada', 10), (2, 'Ben', 20), (3, 'Cy', 30)) t(id, name, score)
+
+statement ok
+CREATE TABLE basic_new AS SELECT * FROM (VALUES (1, 'Ada', 10), (2, 'Bea', 25), (3, 'Cy', 30)) t(id, name, score)
+
+query I
+SELECT summary FROM (DIFF basic_old, basic_new)
+----
+table_key([id], basis: guessed, overlap: 1.00)
+row_edit(rows: 1, changes: 2, columns: [name, score])
+
+# the structured change behind the summary: a union with one struct member per operation
+query II
+SELECT op, change FROM (DIFF basic_old, basic_new)
+----
+table_key	{'columns': [id], 'basis': guessed, 'overlap': 1.0}
+row_edit	{'columns': [name, score], 'rows': 1, 'changes': 2}
+
+query IIII
+SELECT union_tag(change), change.row_edit.columns, change.row_edit.rows, change.table_key.basis FROM (DIFF basic_old, basic_new)
+----
+table_key	NULL	NULL	guessed
+row_edit	[name, score]	1	NULL
+
+# a declared key
+query I
+SELECT summary FROM (DIFF basic_old, basic_new KEY (id))
+----
+table_key([id], basis: declared)
+row_edit(rows: 1, changes: 2, columns: [name, score])
+
+# DIFF is a statement of its own too
+query III
+DIFF basic_old, basic_new
+----
+table_key	{'columns': [id], 'basis': guessed, 'overlap': 1.0}	table_key([id], basis: guessed, overlap: 1.00)
+row_edit	{'columns': [name, score], 'rows': 1, 'changes': 2}	row_edit(rows: 1, changes: 2, columns: [name, score])
+
+# the changed cells
+query IIIII
+DIFF basic_old, basic_new KEY (id) CELLS
+----
+row_edit	[2]	name	Ben	Bea
+row_edit	[2]	score	20	25
+
+# subqueries on either side
+query I
+SELECT summary FROM (DIFF (SELECT * FROM basic_old WHERE id < 3), (SELECT id, name, score FROM basic_new))
+----
+table_key([id], basis: guessed, overlap: 1.00)
+row_add(rows: 1)
+row_edit(rows: 1, changes: 2, columns: [name, score])
+
+# no changes at all
+query I
+SELECT summary FROM (DIFF basic_old, basic_old)
+----
+table_key([id], basis: guessed, overlap: 1.00)
+
+# a compound key: no single column identifies every row
+statement ok
+CREATE TABLE compound_old AS SELECT * FROM (VALUES ('north', 'q1', 1200), ('north', 'q2', 1350), ('south', 'q1', 900), ('south', 'q2', 1100)) t(region, quarter, revenue)
+
+statement ok
+CREATE TABLE compound_new AS SELECT * FROM (VALUES ('north', 'q1', 1200), ('north', 'q2', 1350), ('south', 'q1', 950), ('south', 'q2', 1100)) t(region, quarter, revenue)
+
+query I
+SELECT summary FROM (DIFF compound_old, compound_new)
+----
+table_key([region, quarter], basis: guessed, overlap: 1.00)
+row_edit(rows: 1, changes: 1, columns: [revenue])
+
+# nothing identifies a row: rows are matched by position
+statement ok
+CREATE TABLE nokey_old AS SELECT * FROM (VALUES ('north', 11.4), ('north', 11.4), ('south', 9.8)) t(region, reading)
+
+statement ok
+CREATE TABLE nokey_new AS SELECT * FROM (VALUES ('north', 11.4), ('north', 12.5), ('south', 9.8)) t(region, reading)
+
+query I
+SELECT summary FROM (DIFF nokey_old, nokey_new)
+----
+table_key([:row], basis: fallback)
+row_edit(rows: 1, changes: 1, columns: [reading])
+
+# when more than half of the cells change under a key the tool chose itself, the relation was regenerated
+query I
+SELECT summary FROM (DIFF (SELECT range AS a, range AS b FROM range(5)), (SELECT range + 10 AS a, range + 10 AS b FROM range(5)))
+----
+table_key([:row], basis: fallback)
+table_regenerate()
+
+# a declared key is never second-guessed
+query I
+SELECT summary FROM (DIFF (SELECT range AS id, range AS b FROM range(5)), (SELECT range AS id, range + 10 AS b FROM range(5)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(b, changes: 5)
+
+# scattered edits: the cheapest description mixes a column edit and a row edit
+statement ok
+CREATE TABLE scatter_old AS SELECT * FROM (VALUES (1, 10, 40, 70), (2, 20, 50, 80), (3, 30, 60, 90)) t(id, a, b, c)
+
+statement ok
+CREATE TABLE scatter_new AS SELECT * FROM (VALUES (1, 11, 41, 70), (2, 20, 50, 81), (3, 30, 60, 91)) t(id, a, b, c)
+
+query I
+SELECT summary FROM (DIFF scatter_old, scatter_new)
+----
+table_key([id], basis: guessed, overlap: 1.00)
+col_edit(c, changes: 2)
+row_edit(rows: 1, changes: 2, columns: [a, b])
+
+# columns that changed in the same rows are one line
+query I
+SELECT summary FROM (DIFF (SELECT range AS id, 1 AS x, 2 AS y FROM range(4)), (SELECT range AS id, 5 AS x, 6 AS y FROM range(4)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(x, y, rows: 4, changes: 8)
+
+# a dropped and an added column holding the same values are one renamed column
+statement ok
+CREATE TABLE rename_old AS SELECT * FROM (VALUES (1, 10, 'ok'), (2, 20, 'ok'), (3, 30, 'ok')) t(id, amount, note)
+
+statement ok
+CREATE TABLE rename_new AS SELECT * FROM (VALUES (1, 'ok', 10), (2, 'checked', 20), (3, 'ok', 30)) t(id, note, total)
+
+query I
+SELECT summary FROM (DIFF rename_old, rename_new)
+----
+table_key([id], basis: guessed, overlap: 1.00)
+col_rename(amount -> total, basis: exact)
+row_edit(rows: 1, changes: 1, columns: [note])
+
+# ... or nearly the same values
+query I
+SELECT summary FROM (DIFF (SELECT range AS id, range AS amount FROM range(20)), (SELECT range AS id, CASE WHEN range = 7 THEN 99 ELSE range END AS total FROM range(20)))
+----
+table_key([id], basis: guessed, overlap: 1.00)
+col_rename(amount -> total, basis: approximate)
+row_edit(rows: 1, changes: 1, columns: [total])
+
+# otherwise they are a drop and an add
+query I
+SELECT summary FROM (DIFF (SELECT range AS id, range AS amount FROM range(5)), (SELECT range AS id, range * 10 AS total FROM range(5)))
+----
+table_key([id], basis: guessed, overlap: 1.00)
+col_drop(amount)
+col_add(total)
+
+# type changes: compared across the change when the types have a common type, otherwise the type change is the whole story
+query I
+SELECT summary FROM (DIFF (SELECT range::INTEGER AS id, range::INTEGER AS amount, {'x': range} AS s FROM range(3)), (SELECT range::BIGINT AS id, range::DOUBLE AS amount, range AS s FROM range(3)))
+----
+table_key([id], basis: guessed, overlap: 1.00)
+col_edit(id, type: INTEGER -> BIGINT)
+col_edit(amount, type: INTEGER -> DOUBLE)
+col_edit(s, type: STRUCT(x BIGINT) -> BIGINT)
+
+# a column that moved
+query I
+SELECT summary FROM (DIFF (SELECT range AS id, 'n' AS name, 1 AS price FROM range(3)), (SELECT range AS id, 1 AS price, 'n' AS name FROM range(3)))
+----
+table_key([id], basis: guessed, overlap: 1.00)
+col_order(price, 3 -> 2)
+
+# a key duplicated in new is a fanout - a join gone wrong, typically
+query I
+SELECT summary FROM (DIFF (SELECT range AS id, range AS v FROM range(10)), (SELECT * FROM (SELECT range AS id, range AS v FROM range(10)) UNION ALL SELECT 4, 41) KEY (id))
+----
+table_key([id], basis: declared)
+row_fanout(rows: 1)
+
+# added and dropped rows
+query I
+SELECT summary FROM (DIFF (SELECT range AS id FROM range(5)), (SELECT range AS id FROM range(2, 7)))
+----
+table_key([id], basis: guessed, overlap: 0.60)
+row_drop(rows: 2)
+row_add(rows: 2)
+
+# names that need quoting are quoted the way data-diff quotes them
+query I
+SELECT summary FROM (DIFF (SELECT range AS id, 1 AS "my col" FROM range(3)), (SELECT range AS id, 2 AS "my col" FROM range(3)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit("my col", changes: 3)
+
+# no key candidate when the two relations share no column
+query I
+SELECT summary FROM (DIFF (SELECT 1 AS a), (SELECT 2 AS b))
+----
+table_key([:row], basis: fallback)
+col_drop(a)
+col_add(b)
+
+# ... and under positional matching a rename is still recognized
+query I
+SELECT summary FROM (DIFF (SELECT 1 AS a), (SELECT 1 AS b))
+----
+table_key([:row], basis: fallback)
+col_rename(a -> b, basis: exact)
+
+# an empty side
+query I
+SELECT summary FROM (DIFF (SELECT 1::BIGINT AS id WHERE false), (SELECT range AS id FROM range(3)))
+----
+table_key([:row], basis: fallback)
+row_add(rows: 3)
+
+# a declared key must exist on both sides and identify each old row
+statement error
+DIFF basic_old, basic_new KEY (nope)
+----
+key column "nope" must exist in both relations
+
+statement error
+DIFF (SELECT unnest([1, 1]) AS id), (SELECT 1 AS id) KEY (id)
+----
+does not identify each row of the old relation
+
+# DIFF in a view round-trips
+statement ok
+CREATE VIEW basic_diff AS DIFF basic_old, basic_new KEY (id)
+
+query I
+SELECT summary FROM basic_diff
+----
+table_key([id], basis: declared)
+row_edit(rows: 1, changes: 2, columns: [name, score])
+
+query I
+SELECT sql FROM duckdb_views() WHERE view_name = 'basic_diff'
+----
+CREATE VIEW basic_diff AS SELECT * FROM (DIFF basic_old, basic_new KEY (id));
+
+# and can be ordered and filtered like any relation
+query I
+SELECT op FROM (DIFF basic_old, basic_new) WHERE op <> 'table_key' ORDER BY op
+----
+row_edit

@@ -34,6 +34,9 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	case TableReferenceType::COLUMN_DATA:
 		result = ColumnDataRef::Deserialize(deserializer);
 		break;
+	case TableReferenceType::DIFF_REF:
+		result = DiffRef::Deserialize(deserializer);
+		break;
 	case TableReferenceType::EMPTY_FROM:
 		result = EmptyTableRef::Deserialize(deserializer);
 		break;
@@ -117,6 +120,23 @@ unique_ptr<TableRef> ColumnDataRef::Deserialize(Deserializer &deserializer) {
 	auto expected_names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(200, "expected_names");
 	auto collection = deserializer.ReadPropertyWithDefault<optionally_owned_ptr<ColumnDataCollection>>(202, "collection");
 	auto result = duckdb::unique_ptr<ColumnDataRef>(new ColumnDataRef(std::move(collection), std::move(expected_names)));
+	return std::move(result);
+}
+
+void DiffRef::Serialize(Serializer &serializer) const {
+	TableRef::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(200, "old_side", old_side);
+	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(201, "new_side", new_side);
+	serializer.WritePropertyWithDefault<vector<string>>(202, "key", key);
+	serializer.WritePropertyWithDefault<bool>(203, "cells", cells);
+}
+
+unique_ptr<TableRef> DiffRef::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<DiffRef>(new DiffRef());
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(200, "old_side", result->old_side);
+	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(201, "new_side", result->new_side);
+	deserializer.ReadPropertyWithDefault<vector<string>>(202, "key", result->key);
+	deserializer.ReadPropertyWithDefault<bool>(203, "cells", result->cells);
 	return std::move(result);
 }
 

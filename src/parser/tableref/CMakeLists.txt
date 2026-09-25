@@ -5,6 +5,7 @@ add_library_unity(
   basetableref.cpp
   bound_ref_wrapper.cpp
   delimgetref.cpp
+  diffref.cpp
   emptytableref.cpp
   expressionlistref.cpp
   column_data_ref.cpp

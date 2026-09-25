@@ -1,0 +1,8 @@
+# "DIFF old, new [KEY (columns)] [CELLS]" compares two relations and returns a summary of the changes between them -
+# or, with CELLS, the changed cells. Each side is a table name or a parenthesized query (see bind_diffref.cpp).
+DiffStatement <- 'DIFF' DiffSide ',' DiffSide DiffKey? DiffCells?
+DiffSide <- DiffSubquery / DiffTable
+DiffSubquery <- SelectParens
+DiffTable <- BaseTableName
+DiffKey <- 'KEY' InsertColumnList
+DiffCells <- 'CELLS'
