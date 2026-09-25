@@ -130,6 +130,11 @@ idx_t GroupedAggregateHashTable::GetDataSizeInBytes() const {
 	return partitioned_data->SizeInBytes() + (unpartitioned_data ? unpartitioned_data->SizeInBytes() : 0);
 }
 
+idx_t GroupedAggregateHashTable::GetAllocatedDataSizeInBytes() const {
+	return partitioned_data->GetAllocatedSizeInBytes() +
+	       (unpartitioned_data ? unpartitioned_data->GetAllocatedSizeInBytes() : 0);
+}
+
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 		// Flush/unpin unpartitioned data and append to partitioned data
@@ -313,7 +318,7 @@ bool GroupedAggregateHashTable::HLLEnabled() const {
 
 idx_t GroupedAggregateHashTable::GetHLLUpperBound() const {
 	D_ASSERT(enable_hll);
-	return LossyNumericCast<idx_t>((1 + HyperLogLog::GetErrorRate()) * static_cast<double>(hll.Count()));
+	return LossyNumericCast<idx_t>((1 + HyperLogLogP<8>::GetErrorRate()) * static_cast<double>(hll.Count()));
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
@@ -1290,7 +1295,7 @@ void GroupedAggregateHashTable::ResetForNewIteration(idx_t radix_bits_p) {
 	sink_count = 0;
 	skip_lookups = false;
 	enable_hll = false;
-	hll = HyperLogLog();
+	hll = HyperLogLogP<8>();
 	state.dict_state.dictionary_id = string();
 
 	// Compute effective capacity based on the previous iteration's actual group count.

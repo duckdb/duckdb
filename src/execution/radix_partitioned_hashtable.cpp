@@ -421,7 +421,7 @@ idx_t RadixHTConfig::SinkCapacity() const {
 		// Grow strategy, start off a bit bigger
 		return 262144;
 	}
-	// Start off tiny, we can adapt with DecideAdaptation later
+	// Start with a small local table and grow when repeated groups justify it
 	return 32768;
 }
 
@@ -475,8 +475,8 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 		return;
 	}
 
-	local_sink_capacity = MaxValue(gstate.config.sink_capacity, ht->Capacity());
 	ht->ResetForNewIteration(gstate.config.GetRadixBits());
+	local_sink_capacity = MaxValue(gstate.config.sink_capacity, ht->Capacity());
 	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD) {
 		ht->EnableHLL(true);
 		adapted = false;
@@ -545,11 +545,9 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	group_chunk.Verify();
 }
 
-void DecideAdaptation(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
+void DecideLookupStrategy(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
 	//! If the number of unique values is greater than this percentage, we skip lookups altogether
 	static constexpr double SKIP_LOOKUP_UNIQUE_PERCENTAGE_THRESHOLD = 0.95;
-	//! If the deduplication rate could be increased by this number, we increase our sink capacity
-	static constexpr double CAPACITY_INCREASE_DEDUPLICATION_RATE_THRESHOLD = 2.0;
 
 	if (gstate.external) {
 		return; // Shouldn't adapt after this flag has been set
@@ -559,30 +557,11 @@ void DecideAdaptation(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lst
 	const auto sink_count = ht.GetSinkCount();
 	D_ASSERT(sink_count >= RadixHTLocalSinkState::ADAPTIVITY_THRESHOLD);
 
-	// Deduplicated count (affected by HT size)
-	const auto deduplicated_count = ht.GetMaterializedCount();
-	// Estimated unique count (unaffected by HT size)
-	const auto hll_count = MinValue(ht.GetHLLUpperBound(), deduplicated_count);
-
-	// Compute actual deduplicated percentage and potential deduplicated count (estimated by hll)
-	const auto deduplicated_percentage = static_cast<double>(deduplicated_count) / static_cast<double>(sink_count);
+	const auto hll_count = MinValue(ht.GetHLLUpperBound(), ht.GetMaterializedCount());
 	const auto hll_percentage = static_cast<double>(hll_count) / static_cast<double>(sink_count);
 	if (hll_percentage > SKIP_LOOKUP_UNIQUE_PERCENTAGE_THRESHOLD) {
 		// Almost everything is unique, skip lookups, just append, defer deduplication to GetData phase
 		ht.SkipLookups();
-		return;
-	}
-
-	const auto potential_increase_rate = deduplicated_percentage / hll_percentage;
-	if (potential_increase_rate > CAPACITY_INCREASE_DEDUPLICATION_RATE_THRESHOLD) {
-		// We could be deduplicating a lot better, increase HT capacity
-		D_ASSERT(IsPowerOfTwo(RadixHTLocalSinkState::ADAPTIVITY_THRESHOLD));
-		const auto new_capacity = MinValue(GroupedAggregateHashTable::GetCapacityForCount(hll_count),
-		                                   RadixHTLocalSinkState::ADAPTIVITY_THRESHOLD);
-		lstate.local_sink_capacity = MaxValue(gstate.config.sink_capacity, new_capacity);
-		gstate.any_abandoned = true;
-		ht.Abandon();
-		ht.Resize(lstate.local_sink_capacity);
 	}
 }
 
@@ -723,26 +702,60 @@ bool TryGrowSinkHashTable(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState 
 		return false;
 	}
 	auto &ht = *lstate.ht;
-	if (ht.LookupsSkipped() || ht.Count() != ht.GetMaterializedCount() ||
+	const auto materialized_count = ht.GetMaterializedCount();
+	if (!ht.HLLEnabled() || ht.LookupsSkipped() || ht.Count() == materialized_count ||
 	    (gstate.spill_plan && StatePressureExceeded(gstate, ht))) {
 		return false;
 	}
 
-	const auto next_capacity = ht.Capacity() * 2;
-	const auto thread_limit = gstate.GetThreadLimit();
-	if (next_capacity > thread_limit / sizeof(ht_entry_t)) {
-		return false;
-	}
-	const auto remaining_after_new_table = thread_limit - next_capacity * sizeof(ht_entry_t);
-	if (ht.Capacity() > remaining_after_new_table / sizeof(ht_entry_t)) {
-		return false;
-	}
-	const auto remaining_after_tables = remaining_after_new_table - ht.Capacity() * sizeof(ht_entry_t);
-	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
-	if (arena_size > remaining_after_tables || ht.GetDataSizeInBytes() > remaining_after_tables - arena_size) {
+	const auto hll_count = MinValue(ht.GetHLLUpperBound(), materialized_count);
+	// The margin protects against HLL underestimation on nearly unique input.
+	static constexpr double MINIMUM_MISSED_DEDUPLICATION = 1.25;
+	if (hll_count == 0 ||
+	    static_cast<double>(materialized_count) / static_cast<double>(hll_count) <= MINIMUM_MISSED_DEDUPLICATION) {
 		return false;
 	}
 
+	if (ht.Capacity() > NumericLimits<idx_t>::Maximum() / (3 * sizeof(ht_entry_t))) {
+		return false;
+	}
+	const auto minimum_capacity = ht.Capacity() * 2;
+	auto next_capacity = MaxValue(GroupedAggregateHashTable::GetCapacityForCount(hll_count), minimum_capacity);
+	const auto data_size = ht.GetAllocatedDataSizeInBytes();
+	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
+	const auto table_size = (ht.Capacity() + minimum_capacity) * sizeof(ht_entry_t);
+	if (data_size > NumericLimits<idx_t>::Maximum() - arena_size ||
+	    table_size > NumericLimits<idx_t>::Maximum() - data_size - arena_size) {
+		return false;
+	}
+	const auto desired_size = data_size + arena_size + table_size;
+	if (desired_size > gstate.GetThreadLimit() && desired_size <= gstate.memory_limit / gstate.number_of_threads) {
+		const annotated_lock_guard<annotated_mutex> guard {gstate.lock};
+		auto &memory_state = *gstate.temporary_memory_state;
+		const auto request = desired_size * gstate.number_of_threads;
+		const auto doubled_request = request <= NumericLimits<idx_t>::Maximum() / 2 ? request * 2 : request;
+		memory_state.SetRemainingSizeAndUpdateReservation(gstate.context,
+		                                                  MaxValue(memory_state.GetRemainingSize(), doubled_request));
+	}
+	const auto thread_limit = gstate.GetThreadLimit();
+	while (next_capacity >= minimum_capacity) {
+		if (next_capacity <= thread_limit / sizeof(ht_entry_t)) {
+			const auto remaining_after_new_table = thread_limit - next_capacity * sizeof(ht_entry_t);
+			if (ht.Capacity() <= remaining_after_new_table / sizeof(ht_entry_t)) {
+				const auto remaining_after_tables = remaining_after_new_table - ht.Capacity() * sizeof(ht_entry_t);
+				if (arena_size <= remaining_after_tables && data_size <= remaining_after_tables - arena_size) {
+					break;
+				}
+			}
+		}
+		next_capacity /= 2;
+	}
+	if (next_capacity < minimum_capacity) {
+		return false;
+	}
+
+	gstate.any_abandoned = true;
+	ht.Abandon();
 	ht.Resize(next_capacity);
 	lstate.local_sink_capacity = next_capacity;
 	return true;
@@ -841,7 +854,6 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		lstate.local_sink_capacity = gstate.config.sink_capacity;
 		lstate.ht = CreateHT(context.client, lstate.local_sink_capacity, gstate.config.GetRadixBits());
 		if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD) {
-			// Not using grow strategy, so we enable the HLL to potentially adapt later
 			lstate.ht->EnableHLL(true);
 		} else {
 			// Using grow strategy, so won't ever adapt
@@ -859,10 +871,12 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	auto &ht = *lstate.ht;
 	ht.AddChunk(group_chunk, payload_input, filter);
 
-	// Decide whether we should adapt our strategy to the data
+	// Decide whether to skip lookups for nearly unique input
 	if (!lstate.adapted && lstate.ht->GetSinkCount() >= RadixHTLocalSinkState::ADAPTIVITY_THRESHOLD) {
-		DecideAdaptation(gstate, lstate);
-		ht.EnableHLL(false); // Can be disabled now (costs 5-10% performance in worst case, single column distinct)
+		DecideLookupStrategy(gstate, lstate);
+		if (ht.LookupsSkipped() || ht.Count() == ht.GetMaterializedCount() || gstate.external) {
+			ht.EnableHLL(false);
+		}
 		lstate.adapted = true;
 	}
 
@@ -879,8 +893,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	}
 
 	if (gstate.number_of_threads > RadixHTConfig::GROW_STRATEGY_THREAD_THRESHOLD || gstate.external) {
-		// 'Reset' the HT without taking its data, we can just keep appending to the same collection
-		// This only works because we never resize the HT
+		// Keep the materialized rows and clear only the local pointer table
 		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
 		gstate.any_abandoned = true;
 		ht.Abandon();
