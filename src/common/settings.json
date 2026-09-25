@@ -300,6 +300,14 @@
         ]
     },
     {
+        "name": "debug_abort_on_wal_failure",
+        "description": "Whether or not to abort if a serialization exception is thrown during WAL playback.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "internal_setting": "abort_on_wal_failure",
+        "is_debug": true
+    },
+    {
         "name": "debug_asof_iejoin",
         "description": "Force the use of an IEJoin to implement ASOF joins.",
         "type": "BOOLEAN",
