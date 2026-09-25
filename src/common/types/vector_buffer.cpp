@@ -1,9 +1,11 @@
 #include "duckdb/common/vector/array_vector.hpp"
 #include "duckdb/common/vector/constant_vector.hpp"
+#include "duckdb/common/vector/dictionary_vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/fsst_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
+#include "duckdb/common/vector/sequence_vector.hpp"
 #include "duckdb/common/vector/shredded_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
@@ -143,6 +145,24 @@ string VectorBuffer::ToString(const LogicalType &type) const {
 
 void VectorBuffer::ToUnifiedFormat(UnifiedVectorFormat &format) const {
 	throw InternalException("ToUnifiedFormat not supported for this buffer type - flatten first");
+}
+
+bool VectorBuffer::TrySerialize(Serializer &serializer, const LogicalType &type, bool compressed_serialization) const {
+	return false;
+}
+
+buffer_ptr<VectorBuffer> VectorBuffer::Deserialize(Deserializer &deserializer, VectorType vector_type,
+                                                   const LogicalType &type, idx_t count) {
+	switch (vector_type) {
+	case VectorType::DICTIONARY_VECTOR:
+		return DictionaryBuffer::Deserialize(deserializer, type, count);
+	case VectorType::SEQUENCE_VECTOR:
+		return SequenceBuffer::Deserialize(deserializer, type, count);
+	case VectorType::SHREDDED_VECTOR:
+		return ShreddedVectorBuffer::Deserialize(deserializer, type, count);
+	default:
+		throw SerializationException("Unsupported vector type %s for deserialization", EnumUtil::ToString(vector_type));
+	}
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::Flatten(const LogicalType &type) const {
