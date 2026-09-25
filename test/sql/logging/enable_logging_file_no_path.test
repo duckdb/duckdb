@@ -88,7 +88,7 @@ SELECT 42
 statement error
 SET logging_storage='file';
 ----
-Cannot select 'file' log storage
+Cannot select 'file' log sink
 
 query I
 SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
@@ -99,7 +99,7 @@ memory
 statement error
 SET logging_storage='FILE';
 ----
-Cannot select 'file' log storage
+Cannot select 'file' log sink
 
 query I
 SELECT value FROM duckdb_settings() WHERE name = 'logging_storage';
