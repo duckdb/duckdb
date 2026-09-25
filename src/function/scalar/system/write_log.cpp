@@ -155,7 +155,7 @@ ScalarFunctionSet WriteLogFun::GetFunctions() {
 
 	ScalarFunction fun({{"string", LogicalType::VARCHAR}}, LogicalType::ANY, WriteLogFunction, WriteLogBind, nullptr,
 	                   nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
-	fun.GetSignature().AddKwargsParameter("kwargs", LogicalType::ANY);
+	fun.GetSignature().AddKwargs("kwargs", LogicalType::ANY);
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	set.AddFunction(std::move(fun));
 

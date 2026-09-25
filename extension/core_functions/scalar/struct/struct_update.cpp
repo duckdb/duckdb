@@ -143,7 +143,7 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 ScalarFunction StructUpdateFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, StructUpdateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.GetSignature().AddParameter("struct", LogicalType::ANY).AddKwargsParameter("kwargs", LogicalType::ANY);
+	fun.GetSignature().AddParameter("struct", LogicalType::ANY).AddKwargs("kwargs", LogicalType::ANY);
 	fun.GetProperties().SetRequiresExpressionNames(true);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);

@@ -17,7 +17,7 @@ namespace duckdb {
 //! The options of a wrapped single-file table function - the named parameters that are forwarded to it as-is
 class TableFunctionFileReaderOptions : public BaseFileReaderOptions {
 public:
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 	//! The schema the files are expected to produce - set by COPY, which takes its columns from the target table
 	vector<Identifier> expected_names;
 	vector<LogicalType> expected_types;
@@ -83,7 +83,7 @@ public:
 //! Reads a single file by binding and executing the wrapped table function over that file
 class TableFunctionFileReader : public BaseFileReader {
 public:
-	TableFunctionFileReader(TableFunction function, OpenFileInfo file, named_parameter_map_t named_parameters,
+	TableFunctionFileReader(TableFunction function, OpenFileInfo file, named_argument_map_t named_parameters,
 	                        string reader_type);
 	~TableFunctionFileReader() override;
 
@@ -139,7 +139,7 @@ private:
 
 private:
 	//! The named parameters that are passed on to the wrapped function
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 	//! How the files are referred to in error messages
 	string reader_type;
 	//! Guards the initialization of the global state below
@@ -221,6 +221,9 @@ public:
 private:
 	//! Parse a named parameter of the wrapped function - returns false if the function has no such parameter
 	bool ParseNamedParameter(const Identifier &key, const Value &val, TableFunctionFileReaderOptions &options) const;
+	//! The name and type of the wrapped function's option of that name or alias - a keyword-only parameter or an
+	//! option its "**kwargs" declares - or empty if it declares none
+	optional<pair<Identifier, LogicalType>> GetDeclaredOption(const Identifier &key) const;
 	//! Release the per-file bind data that is only needed while combining schemas
 	static void ReleaseBindData(const vector<shared_ptr<BaseUnionData>> &union_data);
 

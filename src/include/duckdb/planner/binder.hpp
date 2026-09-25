@@ -60,7 +60,9 @@ class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
+class FunctionSignature;
 class TableFunction;
+class BoundTableFunction;
 class TableStorageInfo;
 class BoundConstraint;
 class AtClause;
@@ -308,9 +310,6 @@ public:
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
-	//! Check usage, and cast named parameters to their types
-	void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
-	                         QueryErrorContext &error_context, const Identifier &func_name);
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
 	BoundStatement Bind(TableRef &ref);
@@ -594,13 +593,14 @@ private:
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                                 BoundStatement &subquery, ErrorData &error);
+	                                 vector<unique_ptr<ParsedExpression>> &expressions,
+	                                 vector<unique_ptr<Expression>> &positional_arguments,
+	                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                 BoundStatement &subquery, bool &table_in_out, ErrorData &error);
 	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions, BoundStatement &subquery);
 	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
-	BoundStatement BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
-	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
+	BoundStatement BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
+	                                         vector<Value> parameters, named_argument_map_t named_parameters,
 	                                         vector<LogicalType> input_table_types,
 	                                         vector<Identifier> input_table_names,
 	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);

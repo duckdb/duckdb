@@ -293,50 +293,16 @@ public:
 	bool projection_pushdown = false;
 
 	Identifier name;
-
-	// The signature's slot plan, captured at registration: every parameter name in signature order, how many of them
-	// lead the positional prefix (the ones without a default), and the default of each remaining parameter. The bind
-	// wrapper assembles the argument list from it, injecting the default for a parameter the call site omitted, so
-	// the bind callback observes a value for every parameter.
-	vector<Identifier> parameter_names;
-	idx_t positional_count = 0;
-	identifier_map_t<Value> named_parameter_defaults;
 };
-
-//! Assembles the call's arguments in signature-slot order: first the parameters without a default, taken from the
-//! positional arguments, then the parameters with one, taken from the named arguments or the declared default when
-//! the call site omitted them, then the variadic tail.
-static auto CV2TableCollectArguments(const CV2TableFunctionInfo &info, TableFunctionBindInput &input) -> vector<Value> {
-	vector<Value> arguments;
-	const auto positional_count = MinValue<idx_t>(info.positional_count, input.inputs.size());
-
-	for (idx_t i = 0; i < positional_count; i++) {
-		arguments.push_back(input.inputs[i]);
-	}
-	for (idx_t i = info.positional_count; i < info.parameter_names.size(); i++) {
-		const auto &name = info.parameter_names[i];
-		auto provided = input.named_parameters.find(name);
-		if (provided != input.named_parameters.end()) {
-			arguments.push_back(provided->second);
-		} else {
-			arguments.push_back(info.named_parameter_defaults.at(name));
-		}
-	}
-	for (idx_t i = positional_count; i < input.inputs.size(); i++) {
-		arguments.push_back(input.inputs[i]);
-	}
-	return arguments;
-}
 
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
                          vector<Identifier> &names) -> unique_ptr<FunctionData> {
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
 
-	auto arguments = CV2TableCollectArguments(info, input);
-
 	CV2TableBindInfo args = {};
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
-	args.in_args = &arguments;
+	// the binder places every argument in its signature slot, defaults included, so the call reads them as-is
+	args.in_args = &input.inputs;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -359,7 +325,7 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 
 	if (args.out_column_types.empty()) {
 		throw InvalidInputException("The bind callback of table function \"%s\" did not declare any result columns.",
-		                            input.table_function.name);
+		                            input.table_function.GetName());
 	}
 
 	result->column_types = args.out_column_types;
@@ -658,20 +624,9 @@ public:
 
 		signature.Verify();
 
-		// Route the signature onto the two ways SQL passes arguments to a table function: a parameter without a
-		// default value is a required positional argument, a parameter with one is an optional named argument.
-		vector<LogicalType> positional;
-		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
-			const auto &param = signature.GetParameter(i);
-			if (!param.IsVariadic() && !param.HasDefaultValue()) {
-				positional.push_back(param.GetType());
-			}
-		}
-
-		TableFunction function(name, positional, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
-		if (signature.HasVarArgs()) {
-			function.SetVarArgs(signature.GetVarArgs());
-		}
+		// A table function holds a signature of its own, so the declared one is handed over as-is
+		TableFunction function(name, {}, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
+		function.GetSignature() = signature;
 
 		// Always wired: it serves the estimate a bind callback may set, which is not known at registration. It
 		// reports no estimate when the bind callback sets none.
@@ -691,20 +646,7 @@ public:
 		function.projection_pushdown = info.projection_pushdown;
 
 		info.name = name;
-		auto function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
-		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
-			const auto &param = signature.GetParameter(i);
-			if (param.IsVariadic()) {
-				continue;
-			}
-			if (param.HasDefaultValue()) {
-				function.named_parameters[param.GetName()] = param.GetType();
-				function_info->named_parameter_defaults[param.GetName()] = *param.GetDefaultValue();
-			}
-			function_info->parameter_names.push_back(param.GetName());
-		}
-		function_info->positional_count = positional.size();
-		function.function_info = std::move(function_info);
+		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 
 		// Call the implementation to register
 		RegisterToCatalog(std::move(function));

@@ -1,0 +1,146 @@
+diff --git a/src/sqlite_scanner.cpp b/src/sqlite_scanner.cpp
+index 0ff7852..e32316c 100644
+--- a/src/sqlite_scanner.cpp
++++ b/src/sqlite_scanner.cpp
+@@ -417,17 +417,20 @@ SqliteStatistics(ClientContext &context, const FunctionData *bind_data_p,
+ */
+ 
+ static void SqliteScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+-                               const TableFunction &function) {
++                               const BoundTableFunction &function) {
+ 	throw NotImplementedException("SqliteScanSerialize");
+ }
+ 
+-static unique_ptr<FunctionData> SqliteScanDeserialize(Deserializer &deserializer, TableFunction &function) {
++static unique_ptr<FunctionData> SqliteScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
+ 	throw NotImplementedException("SqliteScanDeserialize");
+ }
+ 
+ SqliteScanFunction::SqliteScanFunction()
+-    : TableFunction("sqlite_scan", {LogicalType::VARCHAR, LogicalType::VARCHAR}, SqliteScan, SqliteBind,
+-                    SqliteInitGlobalState, SqliteInitLocalState) {
++    : TableFunction("sqlite_scan",
++                    FunctionSignature()
++                        .AddPositionalOnly("path", LogicalType::VARCHAR)
++                        .AddPositionalOnly("table_name", LogicalType::VARCHAR),
++                    SqliteScan, SqliteBind, SqliteInitGlobalState, SqliteInitLocalState) {
+ 	cardinality = SqliteCardinality;
+ 	to_string = SqliteToString;
+ 	serialize = SqliteScanSerialize;
+@@ -489,9 +492,16 @@ static void AttachFunction(ClientContext &context, TableFunctionInput &data_p, D
+ 	data.finished = true;
+ }
+ 
++static FunctionSignature SqliteAttachSignature() {
++	FunctionSignature signature;
++	signature.AddParameter("file_name", LogicalType::VARCHAR).WithTypedKwargs("options", [&](TypedKwargs &options) {
++		options.Add("overwrite", LogicalType::BOOLEAN);
++	});
++	return signature;
++}
++
+ SqliteAttachFunction::SqliteAttachFunction()
+-    : TableFunction("sqlite_attach", {LogicalType::VARCHAR}, AttachFunction, AttachBind) {
+-	named_parameters["overwrite"] = LogicalType::BOOLEAN;
++    : TableFunction("sqlite_attach", SqliteAttachSignature(), AttachFunction, AttachBind) {
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/sqlite_query.cpp b/src/storage/sqlite_query.cpp
+index d2857d2..e4012b3 100644
+--- a/src/storage/sqlite_query.cpp
++++ b/src/storage/sqlite_query.cpp
+@@ -93,13 +93,20 @@ static unique_ptr<FunctionData> SQLiteQueryBind(ClientContext &context, TableFun
+ 	return std::move(result);
+ }
+ 
++static FunctionSignature SQLiteQuerySignature() {
++	FunctionSignature signature;
++	signature.AddParameter("database", LogicalType::VARCHAR)
++	    .AddParameter("sql", LogicalType::VARCHAR)
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) { options.Add("params", LogicalType::ANY); });
++	return signature;
++}
++
+ SQLiteQueryFunction::SQLiteQueryFunction()
+-    : TableFunction("sqlite_query", {LogicalType::VARCHAR, LogicalType::VARCHAR}, nullptr, SQLiteQueryBind) {
++    : TableFunction("sqlite_query", SQLiteQuerySignature(), nullptr, SQLiteQueryBind) {
+ 	SqliteScanFunction scan_function;
+ 	init_global = scan_function.init_global;
+ 	init_local = scan_function.init_local;
+ 	function = scan_function.function;
+ 	global_initialization = TableFunctionInitialization::INITIALIZE_ON_SCHEDULE;
+-	named_parameters["params"] = LogicalType::ANY;
+ }
+ } // namespace duckdb
+diff --git a/database-connector/src/functions/configure_pool.cpp b/database-connector/src/functions/configure_pool.cpp
+index 0ac9a34..e69b563 100644
+--- a/database-connector/src/functions/configure_pool.cpp
++++ b/database-connector/src/functions/configure_pool.cpp
+@@ -5,7 +5,7 @@ namespace functions {
+ 
+ using namespace duckdb;
+ 
+-static Value Lookup(const named_parameter_map_t &map, const std::string &key) {
++static Value Lookup(const named_argument_map_t &map, const std::string &key) {
+ 	auto it = map.find(Identifier(key));
+ 	if (it == map.end()) {
+ 		return Value();
+@@ -13,7 +13,7 @@ static Value Lookup(const named_parameter_map_t &map, const std::string &key) {
+ 	return it->second;
+ }
+ 
+-static std::pair<std::string, bool> LookupString(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<std::string, bool> LookupString(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair("", true);
+@@ -22,7 +22,7 @@ static std::pair<std::string, bool> LookupString(const named_parameter_map_t &ma
+ 	return std::make_pair(std::move(str), false);
+ }
+ 
+-static std::pair<uint64_t, bool> LookupUBigInt(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<uint64_t, bool> LookupUBigInt(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair(0, true);
+@@ -31,7 +31,7 @@ static std::pair<uint64_t, bool> LookupUBigInt(const named_parameter_map_t &map,
+ 	return std::make_pair(num, false);
+ }
+ 
+-static std::pair<bool, bool> LookupBool(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<bool, bool> LookupBool(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair(false, true);
+@@ -40,7 +40,7 @@ static std::pair<bool, bool> LookupBool(const named_parameter_map_t &map, const
+ 	return std::make_pair(flag, false);
+ }
+ 
+-static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const named_parameter_map_t &map,
++static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const named_argument_map_t &map,
+                                                                          const std::string &key) {
+ 	std::pair<std::string, bool> st_pair = LookupString(map, key);
+ 	if (st_pair.second) {
+@@ -54,7 +54,7 @@ static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const n
+ 	}
+ }
+ 
+-ConfigurePool::BindData::BindData(const named_parameter_map_t &map)
++ConfigurePool::BindData::BindData(const named_argument_map_t &map)
+     : catalog_name(LookupString(map, "catalog_name")), acquire_mode(LookupAcquireMode(map, "acquire_mode")),
+       max_connections(LookupUBigInt(map, "max_connections")),
+       wait_timeout_millis(LookupUBigInt(map, "wait_timeout_millis")),
+diff --git a/database-connector/src/include/dbconnector/functions/configure_pool.hpp b/database-connector/src/include/dbconnector/functions/configure_pool.hpp
+index abfdbcb..66eb3f5 100644
+--- a/database-connector/src/include/dbconnector/functions/configure_pool.hpp
++++ b/database-connector/src/include/dbconnector/functions/configure_pool.hpp
+@@ -28,7 +28,7 @@ struct ConfigurePool {
+ 		std::pair<bool, bool> enable_reaper_thread;
+ 		std::pair<std::string, bool> health_check_query;
+ 
+-		BindData(const duckdb::named_parameter_map_t &map);
++		BindData(const duckdb::named_argument_map_t &map);
+ 	};
+ 
+ 	struct GlobalState : public duckdb::GlobalTableFunctionState {};

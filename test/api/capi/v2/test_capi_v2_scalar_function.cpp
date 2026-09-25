@@ -379,6 +379,10 @@ TEST_CASE("V2 scalar: variadic tail", "[capi_v2][scalar_function]") {
 
 	REQUIRE(QueryI32(fx.conn, "SELECT vsum(1, 2, 3)") == 6);
 	REQUIRE(QueryI32(fx.conn, "SELECT vsum(42)") == 42);
+	// the callback receives no argument names, so a named argument is rejected rather than passed as a value
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT vsum(1, x := 2)", &result) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_result_destroy(&result);
 }
 
 TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2][scalar_function]") {

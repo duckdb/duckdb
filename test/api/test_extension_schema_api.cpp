@@ -55,7 +55,7 @@ static void CheckTableFunctionQualification(Connection &connection, const string
 	REQUIRE(get->function.GetSchemaName() == name.Schema());
 	auto definition = get->function;
 	REQUIRE(definition.GetQualifiedName() == name);
-	definition.name = Identifier("renamed_function");
+	definition.SetName(Identifier("renamed_function"));
 	REQUIRE(definition.GetQualifiedName() == name.WithName("renamed_function"));
 	auto copy = planner.plan->Copy(*connection.context);
 	copy->ResolveOperatorTypes();

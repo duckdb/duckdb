@@ -1,0 +1,211 @@
+diff --git a/src/mysql_scanner.cpp b/src/mysql_scanner.cpp
+index fb62257..37e2264 100644
+--- a/src/mysql_scanner.cpp
++++ b/src/mysql_scanner.cpp
+@@ -170,11 +170,11 @@ static InsertionOrderPreservingMap<string> MySQLScanToString(TableFunctionToStri
+ }
+ 
+ static void MySQLScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+-                               const TableFunction &function) {
++                               const BoundTableFunction &function) {
+ 	throw NotImplementedException("MySQLScanSerialize");
+ }
+ 
+-static unique_ptr<FunctionData> MySQLScanDeserialize(Deserializer &deserializer, TableFunction &function) {
++static unique_ptr<FunctionData> MySQLScanDeserialize(Deserializer &deserializer, BoundTableFunction &function) {
+ 	throw NotImplementedException("MySQLScanDeserialize");
+ }
+ 
+@@ -190,8 +190,12 @@ static BindInfo MySQLGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+ }
+ 
+ MySQLScanFunction::MySQLScanFunction()
+-    : TableFunction("mysql_scan", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}, MySQLScan,
+-                    MySQLBind, MySQLInitGlobalState, MySQLInitLocalState) {
++    : TableFunction("mysql_scan",
++                    FunctionSignature()
++                        .AddPositionalOnly("database", LogicalType::VARCHAR)
++                        .AddPositionalOnly("schema_name", LogicalType::VARCHAR)
++                        .AddPositionalOnly("table_name", LogicalType::VARCHAR),
++                    MySQLScan, MySQLBind, MySQLInitGlobalState, MySQLInitLocalState) {
+ 	to_string = MySQLScanToString;
+ 	serialize = MySQLScanSerialize;
+ 	deserialize = MySQLScanDeserialize;
+@@ -496,28 +500,35 @@ static void MySQLQueryScan(ClientContext &context, TableFunctionInput &data, Dat
+ 	MySQLScan(context, data, output);
+ }
+ 
++static FunctionSignature MySQLQuerySignature(bool stream_results, bool suppress_dml_output) {
++	FunctionSignature signature;
++	signature.AddParameter("database", LogicalType::VARCHAR)
++	    .AddParameter("sql", LogicalType::VARCHAR)
++	    .WithTypedKwargs("options", [&](TypedKwargs &options) {
++		    options.Add("params", LogicalType::ANY).Add("params_handle", LogicalType::BIGINT);
++		    if (stream_results) {
++			    options.Add("stream_results", LogicalType::BOOLEAN);
++		    }
++		    options.Add("connection", LogicalType::UBIGINT).Add("prepare", LogicalType::BOOLEAN);
++		    if (suppress_dml_output) {
++			    options.Add("suppress_dml_output", LogicalType::BOOLEAN);
++		    }
++	    });
++	return signature;
++}
++
+ MySQLQueryFunction::MySQLQueryFunction()
+-    : TableFunction("mysql_query", {LogicalType::VARCHAR, LogicalType::VARCHAR}, MySQLQueryScan, MySQLQueryBind,
++    : TableFunction("mysql_query", MySQLQuerySignature(true, true), MySQLQueryScan, MySQLQueryBind,
+                     MySQLQueryInitGlobalState, MySQLInitLocalState) {
+ 	serialize = MySQLScanSerialize;
+ 	deserialize = MySQLScanDeserialize;
+-	named_parameters["params"] = LogicalType::ANY;
+-	named_parameters["params_handle"] = LogicalType::BIGINT;
+-	named_parameters["stream_results"] = LogicalType::BOOLEAN;
+-	named_parameters["connection"] = LogicalType::UBIGINT;
+-	named_parameters["prepare"] = LogicalType::BOOLEAN;
+-	named_parameters["suppress_dml_output"] = LogicalType::BOOLEAN;
+ }
+ 
+ MySQLExecuteFunction::MySQLExecuteFunction()
+-    : TableFunction("mysql_execute", {LogicalType::VARCHAR, LogicalType::VARCHAR}, MySQLQueryScan, MySQLQueryBind,
++    : TableFunction("mysql_execute", MySQLQuerySignature(false, false), MySQLQueryScan, MySQLQueryBind,
+                     MySQLQueryInitGlobalState, MySQLInitLocalState) {
+ 	serialize = MySQLScanSerialize;
+ 	deserialize = MySQLScanDeserialize;
+-	named_parameters["params"] = LogicalType::ANY;
+-	named_parameters["params_handle"] = LogicalType::BIGINT;
+-	named_parameters["connection"] = LogicalType::UBIGINT;
+-	named_parameters["prepare"] = LogicalType::BOOLEAN;
+ }
+ 
+ static void MySQLPinConnection(DataChunk &args, ExpressionState &state, Vector &result) {
+diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
+index c544aec..14eeef9 100644
+--- a/src/storage/mysql_catalog.cpp
++++ b/src/storage/mysql_catalog.cpp
+@@ -513,7 +513,7 @@ string MySQLCatalog::GetDBPath() {
+ void MySQLCatalog::MaterializeMySQLScans(PhysicalOperator &op) {
+ 	if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+ 		auto &table_scan = op.Cast<PhysicalTableScan>();
+-		auto &function_name = table_scan.function.name.GetIdentifierName();
++		auto &function_name = table_scan.function.GetName().GetIdentifierName();
+ 		if (MySQLCatalog::IsMySQLScan(function_name)) {
+ 			auto &bind_data = table_scan.bind_data->Cast<MySQLBindData>();
+ 			bind_data.optimizer_streaming = MySQLResultStreaming::FORCE_MATERIALIZATION;
+diff --git a/src/storage/mysql_connection_pool.cpp b/src/storage/mysql_connection_pool.cpp
+index 80189fa..d056a9d 100644
+--- a/src/storage/mysql_connection_pool.cpp
++++ b/src/storage/mysql_connection_pool.cpp
+@@ -123,9 +123,11 @@ MySQLConfigurePoolFunction::MySQLConfigurePoolFunction()
+     : TableFunction("mysql_configure_pool", std::vector<LogicalType>(),
+                     ConfigurePool::Function<MySQLConnection, GetConnnectionPoolFromCatalog>, ConfigurePool::Bind,
+                     ConfigurePool::InitGlobalState, ConfigurePool::InitLocalState) {
+-	for (auto &en : ConfigurePool::NamedParameters()) {
+-		named_parameters[en.first] = en.second;
+-	}
++	GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
++		for (auto &en : ConfigurePool::NamedParameters()) {
++			options.Add(en.first, en.second);
++		}
++	});
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/mysql_optimizer.cpp b/src/storage/mysql_optimizer.cpp
+index 3d654ba..d091426 100644
+--- a/src/storage/mysql_optimizer.cpp
++++ b/src/storage/mysql_optimizer.cpp
+@@ -19,11 +19,11 @@ void GatherMySQLScans(ClientContext &ctx, LogicalOperator &op, MySQLOperators &r
+ 	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+ 		auto &get = op.Cast<LogicalGet>();
+ 		auto &table_scan = get.function;
+-		if (MySQLCatalog::IsMySQLScan(table_scan.name.GetIdentifierName())) {
++		if (MySQLCatalog::IsMySQLScan(table_scan.GetName().GetIdentifierName())) {
+ 			auto &bdata = get.bind_data->Cast<MySQLBindData>();
+ 			result.scans[bdata.table_name.Catalog().GetIdentifierName()].push_back(get);
+ 		}
+-		if (MySQLCatalog::IsMySQLQuery(table_scan.name.GetIdentifierName())) {
++		if (MySQLCatalog::IsMySQLQuery(table_scan.GetName().GetIdentifierName())) {
+ 			auto &bdata = get.bind_data->Cast<MySQLQueryBindData>();
+ 			result.scans[bdata.catalog_name.GetIdentifierName()].push_back(get);
+ 		}
+@@ -43,7 +43,7 @@ void MySQLOptimizer::Optimize(OptimizerExtensionInput &input, unique_ptr<Logical
+ 		}
+ 		for (auto &logical_get : entry.second) {
+ 			auto &get = logical_get.get();
+-			auto &function_name = get.function.name.GetIdentifierName();
++			auto &function_name = get.function.GetName().GetIdentifierName();
+ 			if (MySQLCatalog::IsMySQLScan(function_name)) {
+ 				auto &bind_data = get.bind_data->Cast<MySQLBindData>();
+ 				if (bind_data.optimizer_streaming == MySQLResultStreaming::UNINITIALIZED ||
+diff --git a/database-connector/src/functions/configure_pool.cpp b/database-connector/src/functions/configure_pool.cpp
+index 0ac9a34..e69b563 100644
+--- a/database-connector/src/functions/configure_pool.cpp
++++ b/database-connector/src/functions/configure_pool.cpp
+@@ -5,7 +5,7 @@ namespace functions {
+ 
+ using namespace duckdb;
+ 
+-static Value Lookup(const named_parameter_map_t &map, const std::string &key) {
++static Value Lookup(const named_argument_map_t &map, const std::string &key) {
+ 	auto it = map.find(Identifier(key));
+ 	if (it == map.end()) {
+ 		return Value();
+@@ -13,7 +13,7 @@ static Value Lookup(const named_parameter_map_t &map, const std::string &key) {
+ 	return it->second;
+ }
+ 
+-static std::pair<std::string, bool> LookupString(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<std::string, bool> LookupString(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair("", true);
+@@ -22,7 +22,7 @@ static std::pair<std::string, bool> LookupString(const named_parameter_map_t &ma
+ 	return std::make_pair(std::move(str), false);
+ }
+ 
+-static std::pair<uint64_t, bool> LookupUBigInt(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<uint64_t, bool> LookupUBigInt(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair(0, true);
+@@ -31,7 +31,7 @@ static std::pair<uint64_t, bool> LookupUBigInt(const named_parameter_map_t &map,
+ 	return std::make_pair(num, false);
+ }
+ 
+-static std::pair<bool, bool> LookupBool(const named_parameter_map_t &map, const std::string &key) {
++static std::pair<bool, bool> LookupBool(const named_argument_map_t &map, const std::string &key) {
+ 	Value val = Lookup(map, key);
+ 	if (val.IsNull()) {
+ 		return std::make_pair(false, true);
+@@ -40,7 +40,7 @@ static std::pair<bool, bool> LookupBool(const named_parameter_map_t &map, const
+ 	return std::make_pair(flag, false);
+ }
+ 
+-static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const named_parameter_map_t &map,
++static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const named_argument_map_t &map,
+                                                                          const std::string &key) {
+ 	std::pair<std::string, bool> st_pair = LookupString(map, key);
+ 	if (st_pair.second) {
+@@ -54,7 +54,7 @@ static std::pair<dbconnector::pool::AcquireMode, bool> LookupAcquireMode(const n
+ 	}
+ }
+ 
+-ConfigurePool::BindData::BindData(const named_parameter_map_t &map)
++ConfigurePool::BindData::BindData(const named_argument_map_t &map)
+     : catalog_name(LookupString(map, "catalog_name")), acquire_mode(LookupAcquireMode(map, "acquire_mode")),
+       max_connections(LookupUBigInt(map, "max_connections")),
+       wait_timeout_millis(LookupUBigInt(map, "wait_timeout_millis")),
+diff --git a/database-connector/src/include/dbconnector/functions/configure_pool.hpp b/database-connector/src/include/dbconnector/functions/configure_pool.hpp
+index abfdbcb..66eb3f5 100644
+--- a/database-connector/src/include/dbconnector/functions/configure_pool.hpp
++++ b/database-connector/src/include/dbconnector/functions/configure_pool.hpp
+@@ -28,7 +28,7 @@ struct ConfigurePool {
+ 		std::pair<bool, bool> enable_reaper_thread;
+ 		std::pair<std::string, bool> health_check_query;
+ 
+-		BindData(const duckdb::named_parameter_map_t &map);
++		BindData(const duckdb::named_argument_map_t &map);
+ 	};
+ 
+ 	struct GlobalState : public duckdb::GlobalTableFunctionState {};

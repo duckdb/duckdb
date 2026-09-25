@@ -26,14 +26,14 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+	LogicalGet(TableIndex table_index, BoundTableFunction function, unique_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<Identifier> returned_names,
 	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 
 	//! The table index in the current bind context
 	TableIndex table_index;
-	//! The function that is called
-	TableFunction function;
+	//! The function that is called, together with the argument types this call was bound with
+	BoundTableFunction function;
 	//! The bind data of the function
 	unique_ptr<FunctionData> bind_data;
 	//! Process-local input that cannot be reconstructed from SQL parameters
@@ -51,7 +51,7 @@ public:
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
-	named_parameter_map_t named_parameters;
+	named_argument_map_t named_parameters;
 	//! Whether the source invocation requested an ordinality column
 	OrdinalityType source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 	//! The set of named input table types for the table-in table-out function
