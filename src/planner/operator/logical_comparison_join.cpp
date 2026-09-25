@@ -104,6 +104,7 @@ bool LogicalComparisonJoin::TryGetMarkJoinGroupTypes(vector<LogicalType> &group_
 	vector<LogicalType> result;
 	for (idx_t i = 0; i < conditions.size(); i++) {
 		auto &condition = conditions[i];
+		// Reconstruct matching bound types only; SQL binding may first insert casts.
 		if (!condition.IsComparison() || condition.GetLHS().GetReturnType() != condition.GetRHS().GetReturnType()) {
 			return false;
 		}
@@ -116,6 +117,7 @@ bool LogicalComparisonJoin::TryGetMarkJoinGroupTypes(vector<LogicalType> &group_
 			continue;
 		}
 		auto type_id = condition.GetLHS().GetReturnType().id();
+		// Native UNION quantifiers are supported, but grouped SQL reconstruction is not yet supported.
 		if (type_id == LogicalTypeId::TUPLE || type_id == LogicalTypeId::UNION) {
 			return false;
 		}
