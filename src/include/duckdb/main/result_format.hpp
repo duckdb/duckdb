@@ -66,22 +66,21 @@ struct ResultFormatContext {
 };
 
 //! Subclasses declare Unit, GlobalState and NAME. Formats are identified by NAME, never by type
-//! Workers call Append and Finish concurrently and share the format and global state, so only local state is mutable
+//! Workers call AppendToUnit, IsUnitFinished and FinishUnit concurrently and share the format and global
+//! state, so only local state is mutable
 class ResultFormat {
 public:
 	DUCKDB_API virtual ~ResultFormat();
 
 public:
 	virtual const char *Name() const = 0;
-	virtual unique_ptr<ResultFormatGlobalState> InitGlobal(const vector<LogicalType> &types,
-	                                                       const vector<Identifier> &names,
-	                                                       const ClientProperties &properties,
-	                                                       ResultOrdering ordering) = 0;
+	virtual unique_ptr<ResultFormatGlobalState> InitGlobal(const ResultFormatContext &context) = 0;
 	virtual unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) = 0;
-	virtual void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) = 0;
-	//! flush_partial hands over the unit under construction short of its cap, so no unit spans two batch indexes
-	virtual unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
-	                                      bool flush_partial) = 0;
+	virtual void AppendToUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) = 0;
+	//! True while a unit that reached the cap is ready to be taken
+	virtual bool IsUnitFinished(ResultFormatLocalState &lstate) = 0;
+	//! The next finished unit; with none ready, the partial unit under construction; null when empty
+	virtual unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) = 0;
 
 public:
 	DUCKDB_API bool IsChunk() const;
@@ -123,14 +122,13 @@ public:
 
 public:
 	DUCKDB_API const char *Name() const override;
-	DUCKDB_API unique_ptr<ResultFormatGlobalState> InitGlobal(const vector<LogicalType> &types,
-	                                                          const vector<Identifier> &names,
-	                                                          const ClientProperties &properties,
-	                                                          ResultOrdering ordering) override;
+	DUCKDB_API unique_ptr<ResultFormatGlobalState> InitGlobal(const ResultFormatContext &context) override;
 	DUCKDB_API unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) override;
-	DUCKDB_API void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) override;
-	DUCKDB_API unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
-	                                         bool flush_partial) override;
+	DUCKDB_API void AppendToUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
+	                             DataChunk &chunk) override;
+	DUCKDB_API bool IsUnitFinished(ResultFormatLocalState &lstate) override;
+	DUCKDB_API unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate,
+	                                             ResultFormatLocalState &lstate) override;
 
 private:
 	QueryResultMemoryType memory_type;

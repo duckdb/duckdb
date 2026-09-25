@@ -30,8 +30,7 @@ ResultLifetime BufferedData::Decide(ResultLifetime decision, shared_ptr<ResultFo
 		decided_format = ResultFormat::Chunk();
 	}
 	// Built before the lifetime is published, so a throw here leaves the buffer undecided
-	auto chosen_state = decided_format->InitGlobal(format_context.types, format_context.names,
-	                                               format_context.client_properties, format_context.ordering);
+	auto chosen_state = decided_format->InitGlobal(format_context);
 	vector<InterruptState> to_wake;
 	{
 		annotated_lock_guard<annotated_mutex> lock(glock);

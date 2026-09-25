@@ -88,6 +88,39 @@ TEST_CASE("Queued bytes stay under the cap plus one unit", "[api][query_result_f
 	}
 }
 
+TEST_CASE("A producer parks while several sliced units are still pending in its local state",
+          "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(400000)"));
+	// Below one 300-row unit, so every hand-over after the first parks while the append still owes units
+	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='2KB'"));
+
+	SECTION("the simple store") {
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(20000) t(i)", 300, true);
+		DrainWatchdog watchdog(con);
+		FormattedResultStream<TestFormat> stream(std::move(handle));
+		auto report = Drain(stream);
+		RequireAscending(report.rows, 20000);
+		REQUIRE(report.saw_blocked_sink);
+		// A re-delivered chunk resumes the drain, so a producer never carries one append's units into the next
+		REQUIRE(stream.FormatState().max_pending_units <= STANDARD_VECTOR_SIZE / 300 + 1);
+	}
+	SECTION("the batched store, with several producers") {
+		REQUIRE_NO_FAIL(con.Query("SET threads=4"));
+		auto handle = SubmitFormatted(con, "SELECT i FROM t", 300, true);
+		DrainWatchdog watchdog(con);
+		FormattedResultStream<TestFormat> stream(std::move(handle));
+		auto report = Drain(stream);
+		RequireAscending(report.rows, 400000);
+		REQUIRE(report.saw_blocked_sink);
+		REQUIRE(stream.FormatState().local_states > 1);
+		// No row group is a multiple of 300 rows, so each batch boundary flushes exactly one partial unit
+		REQUIRE(stream.FormatState().partial_units == 4);
+		REQUIRE(stream.FormatState().max_pending_units <= STANDARD_VECTOR_SIZE / 300 + 1);
+	}
+}
+
 TEST_CASE("Several producers build units while the others park holding theirs", "[api][query_result_format]") {
 	DuckDB db(nullptr);
 	Connection con(db);

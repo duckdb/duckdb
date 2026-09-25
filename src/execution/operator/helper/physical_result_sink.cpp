@@ -130,7 +130,7 @@ SinkResultType PhysicalResultSink::Sink(ExecutionContext &context, DataChunk &ch
 		if (UsesChunkFormat(gstate)) {
 			return SinkRetained(context, gstate, lstate, chunk);
 		}
-		return SinkRetainedFormatted(gstate, lstate, chunk);
+		return SinkRetainedFormatted(gstate, lstate, chunk, input.interrupt_state);
 	}
 	return SinkDraining(gstate, lstate, chunk, input);
 }
@@ -152,32 +152,59 @@ SinkResultType PhysicalResultSink::SinkRetained(ExecutionContext &context, Resul
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-unique_ptr<ResultUnit> PhysicalResultSink::AppendToUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-                                                        DataChunk &chunk) const {
+void PhysicalResultSink::AppendChunk(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                     DataChunk &chunk) const {
 	auto &format = gstate.buffered_data->Format();
-	auto &format_gstate = gstate.buffered_data->FormatState();
-	auto &format_lstate = LocalFormatState(gstate, lstate);
-	format.Append(format_gstate, format_lstate, chunk);
-	return FinishUnit(gstate, lstate, false);
+	format.AppendToUnit(gstate.buffered_data->FormatState(), LocalFormatState(gstate, lstate), chunk);
 }
 
-unique_ptr<ResultUnit> PhysicalResultSink::FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-                                                      bool flush_partial) const {
+bool PhysicalResultSink::DeliverUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                     unique_ptr<ResultUnit> unit, const InterruptState &interrupt) const {
+	if (CurrentLifetime(gstate) == ResultLifetime::RETAINED) {
+		lstate.units.push_back({lstate.current_batch, std::move(unit)});
+		return false;
+	}
+	return HandOver(gstate, lstate, std::move(unit), interrupt);
+}
+
+bool PhysicalResultSink::DrainFinishedUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                            const InterruptState &interrupt) const {
 	if (!lstate.format_state) {
-		return nullptr;
+		return false;
 	}
 	auto &format = gstate.buffered_data->Format();
-	return format.Finish(gstate.buffered_data->FormatState(), *lstate.format_state, flush_partial);
+	// A re-invocation after BLOCKED continues here: the delivered unit is already out of the format's state
+	while (format.IsUnitFinished(*lstate.format_state)) {
+		auto unit = format.FinishUnit(gstate.buffered_data->FormatState(), *lstate.format_state);
+		if (DeliverUnit(gstate, lstate, std::move(unit), interrupt)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool PhysicalResultSink::FlushUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+                                    const InterruptState &interrupt) const {
+	if (!lstate.format_state) {
+		return false;
+	}
+	auto &format = gstate.buffered_data->Format();
+	while (auto unit = format.FinishUnit(gstate.buffered_data->FormatState(), *lstate.format_state)) {
+		if (DeliverUnit(gstate, lstate, std::move(unit), interrupt)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 SinkResultType PhysicalResultSink::SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-                                                         DataChunk &chunk) const {
+                                                         DataChunk &chunk, const InterruptState &interrupt) const {
 	if (BatchOrdered()) {
 		lstate.current_batch = lstate.partition_info.batch_index.GetIndex();
 	}
-	if (auto unit = AppendToUnit(gstate, lstate, chunk)) {
-		lstate.units.push_back({lstate.current_batch, std::move(unit)});
-	}
+	AppendChunk(gstate, lstate, chunk);
+	// A retained producer lists its units locally, so the drain never parks it
+	DrainFinishedUnits(gstate, lstate, interrupt);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -193,43 +220,27 @@ bool PhysicalResultSink::HandOver(ResultSinkGlobalState &gstate, ResultSinkLocal
 SinkResultType PhysicalResultSink::SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
                                                 DataChunk &chunk, OperatorSinkInput &input) const {
 	if (lstate.chunk_deposited) {
+		// The chunk was appended before the park; the units it still owes come out of the drain below
 		lstate.chunk_deposited = false;
-		return SinkResultType::NEED_MORE_INPUT;
+	} else {
+		if (BatchOrdered()) {
+			lstate.current_batch = lstate.partition_info.batch_index.GetIndex();
+			gstate.buffered_data->Cast<BatchedBufferedData>().UpdateMinBatchIndex(
+			    lstate.partition_info.min_batch_index.GetIndex());
+		}
+		AppendChunk(gstate, lstate, chunk);
 	}
-	if (BatchOrdered()) {
-		lstate.current_batch = lstate.partition_info.batch_index.GetIndex();
-		gstate.buffered_data->Cast<BatchedBufferedData>().UpdateMinBatchIndex(
-		    lstate.partition_info.min_batch_index.GetIndex());
-	}
-	auto unit = AppendToUnit(gstate, lstate, chunk);
-	if (!unit) {
-		return SinkResultType::NEED_MORE_INPUT;
-	}
-	if (HandOver(gstate, lstate, std::move(unit), input.interrupt_state)) {
+	if (DrainFinishedUnits(gstate, lstate, input.interrupt_state)) {
 		lstate.chunk_deposited = true;
 		return SinkResultType::BLOCKED;
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-bool PhysicalResultSink::FlushPartialUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-                                          const InterruptState &interrupt) const {
-	// A re-invocation after BLOCKED finds no unit under construction: the first call moved it out
-	auto unit = FinishUnit(gstate, lstate, true);
-	if (!unit) {
-		return false;
-	}
-	if (CurrentLifetime(gstate) == ResultLifetime::RETAINED) {
-		lstate.units.push_back({lstate.current_batch, std::move(unit)});
-		return false;
-	}
-	return HandOver(gstate, lstate, std::move(unit), interrupt);
-}
-
 SinkCombineResultType PhysicalResultSink::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
 	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
-	if (FlushPartialUnit(gstate, lstate, input.interrupt_state)) {
+	if (FlushUnits(gstate, lstate, input.interrupt_state)) {
 		return SinkCombineResultType::BLOCKED;
 	}
 	if (CurrentLifetime(gstate) == ResultLifetime::RETAINED) {
@@ -288,7 +299,7 @@ SinkNextBatchType PhysicalResultSink::NextBatch(ExecutionContext &context, Opera
 	auto &gstate = input.global_state.Cast<ResultSinkGlobalState>();
 	auto &lstate = input.local_state.Cast<ResultSinkLocalState>();
 	// Flushed at the batch boundary, so no unit spans two batch indexes
-	if (FlushPartialUnit(gstate, lstate, input.interrupt_state)) {
+	if (FlushUnits(gstate, lstate, input.interrupt_state)) {
 		return SinkNextBatchType::BLOCKED;
 	}
 	if (!DrainsByBatchIndex(gstate)) {

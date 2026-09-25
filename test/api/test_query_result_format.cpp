@@ -113,6 +113,54 @@ TEST_CASE("No unit spans two batch indexes", "[api][query_result_format]") {
 	REQUIRE(stream.FormatState().partial_units == units);
 }
 
+TEST_CASE("Slicing at the cap finishes several units from one append", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	const idx_t row_count = 50000;
+	const idx_t cap = 300;
+
+	// A cap below one chunk, so a single append seals several units at once
+	SECTION("drained") {
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(50000) t(i)", cap, true);
+		DrainWatchdog watchdog(con);
+		FormattedResultStream<TestFormat> stream(std::move(handle));
+		vector<int64_t> rows;
+		idx_t units = 0;
+		unique_ptr<TestUnit> previous;
+		while (auto unit = stream.Fetch()) {
+			if (previous) {
+				REQUIRE(previous->row_count == cap);
+			}
+			for (auto &value : UnitValues(*unit, 0)) {
+				rows.push_back(value.GetValue<int64_t>());
+			}
+			units++;
+			previous = std::move(unit);
+		}
+		REQUIRE(!stream.HasError());
+		RequireAscending(rows, row_count);
+		REQUIRE(units > 1);
+	}
+	SECTION("retained") {
+		auto handle = SubmitFormatted(con, "SELECT i FROM range(50000) t(i)", cap, true);
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		auto &collection = handle->Collection<TestFormat>();
+		auto &units = collection.Units();
+		REQUIRE(units.size() > 1);
+		vector<int64_t> rows;
+		for (idx_t i = 0; i < units.size(); i++) {
+			if (i + 1 < units.size()) {
+				REQUIRE(units[i]->row_count == cap);
+			}
+			for (auto &value : UnitValues(*units[i], 0)) {
+				rows.push_back(value.GetValue<int64_t>());
+			}
+		}
+		RequireAscending(rows, row_count);
+	}
+}
+
 TEST_CASE("Combine finishes the partial unit of every producer", "[api][query_result_format]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -142,12 +190,20 @@ TEST_CASE("A throw from the format surfaces as the stream's error", "[api][query
 	DuckDB db(nullptr);
 	Connection con(db);
 
-	auto drain_with = [&](bool in_append) {
+	enum class ThrowIn { APPEND, IS_FINISHED, FINISH };
+
+	auto drain_with = [&](ThrowIn where) {
 		auto format = make_shared_ptr<TestFormat>(1024);
-		if (in_append) {
+		switch (where) {
+		case ThrowIn::APPEND:
 			format->throw_in_append = true;
-		} else {
+			break;
+		case ThrowIn::IS_FINISHED:
+			format->throw_in_is_finished = true;
+			break;
+		case ThrowIn::FINISH:
 			format->throw_in_finish = true;
+			break;
 		}
 		auto handle = con.Submit("SELECT i FROM range(100000) t(i)");
 		REQUIRE(!handle->HasError());
@@ -157,14 +213,49 @@ TEST_CASE("A throw from the format surfaces as the stream's error", "[api][query
 		while (stream.Fetch()) {
 		}
 		REQUIRE(stream.HasError());
-		REQUIRE(StringUtil::Contains(stream.GetError(), in_append ? "TestFormat::Append" : "TestFormat::Finish"));
+		const char *expected = where == ThrowIn::APPEND ? "TestFormat::AppendToUnit"
+		                                                : (where == ThrowIn::IS_FINISHED ? "TestFormat::IsUnitFinished"
+		                                                                                 : "TestFormat::FinishUnit");
+		REQUIRE(StringUtil::Contains(stream.GetError(), expected));
 	};
 
-	SECTION("a throw in Append") {
-		drain_with(true);
+	SECTION("a throw in AppendToUnit") {
+		drain_with(ThrowIn::APPEND);
 	}
-	SECTION("a throw in Finish") {
-		drain_with(false);
+	SECTION("a throw in IsUnitFinished") {
+		drain_with(ThrowIn::IS_FINISHED);
+	}
+	SECTION("a throw in FinishUnit") {
+		drain_with(ThrowIn::FINISH);
+	}
+	auto next = con.Query("SELECT 42");
+	REQUIRE(CHECK_COLUMN(next, 0, {42}));
+}
+
+TEST_CASE("A throw from the format on the retained path surfaces as the result's error", "[api][query_result_format]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto retain_with = [&](const char *expected, const std::function<void(TestFormat &)> &arm) {
+		auto format = make_shared_ptr<TestFormat>(1024);
+		arm(*format);
+		auto handle = con.Submit("SELECT i FROM range(100000) t(i)");
+		REQUIRE(!handle->HasError());
+		handle->SetFormat(std::move(format));
+		DrainWatchdog watchdog(con);
+		handle->Complete();
+		REQUIRE(handle->HasError());
+		REQUIRE(StringUtil::Contains(handle->GetError(), expected));
+	};
+
+	SECTION("a throw in AppendToUnit") {
+		retain_with("TestFormat::AppendToUnit", [](TestFormat &format) { format.throw_in_append = true; });
+	}
+	SECTION("a throw in IsUnitFinished") {
+		retain_with("TestFormat::IsUnitFinished", [](TestFormat &format) { format.throw_in_is_finished = true; });
+	}
+	SECTION("a throw in FinishUnit") {
+		retain_with("TestFormat::FinishUnit", [](TestFormat &format) { format.throw_in_finish = true; });
 	}
 	auto next = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));

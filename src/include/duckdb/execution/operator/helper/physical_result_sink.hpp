@@ -68,23 +68,27 @@ private:
 	//! In-memory for a sink the plan retained
 	const ChunkFormat &ChunkFormatOf(ResultSinkGlobalState &gstate) const;
 	ResultFormatLocalState &LocalFormatState(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
-	//! Null until the unit reaches the format's cap
-	unique_ptr<ResultUnit> AppendToUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-	                                    DataChunk &chunk) const;
-	unique_ptr<ResultUnit> FinishUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-	                                  bool flush_partial) const;
+	//! Feeds the chunk into the format's unit under construction
+	void AppendChunk(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk) const;
 	//! True when the producer parked holding the unit
 	bool HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
 	              const InterruptState &interrupt) const;
-	//! Keeps a unit from spanning two batch indexes. True when the producer parked holding it
-	bool FlushPartialUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-	                      const InterruptState &interrupt) const;
+	//! Hand a finished unit to the buffer when draining, list it for Combine when retained. True when
+	//! the producer parked holding it
+	bool DeliverUnit(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, unique_ptr<ResultUnit> unit,
+	                 const InterruptState &interrupt) const;
+	//! Deliver every unit that has reached the format's cap. One append can finish several, so a
+	//! re-invocation after a blocked hand-over continues from whatever the format still holds
+	bool DrainFinishedUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
+	                        const InterruptState &interrupt) const;
+	//! Deliver the finished units and the one under construction, so no unit spans two batch indexes
+	bool FlushUnits(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, const InterruptState &interrupt) const;
 	SinkResultType SinkDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
 	                            OperatorSinkInput &input) const;
 	SinkResultType SinkRetained(ExecutionContext &context, ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
 	                            DataChunk &chunk) const;
-	SinkResultType SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
-	                                     DataChunk &chunk) const;
+	SinkResultType SinkRetainedFormatted(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate, DataChunk &chunk,
+	                                     const InterruptState &interrupt) const;
 	SinkCombineResultType CombineDraining(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	SinkCombineResultType CombineRetained(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate) const;
 	unique_ptr<QueryResult> GetMaterializedResult(ResultSinkGlobalState &gstate) const;

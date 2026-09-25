@@ -84,10 +84,7 @@ const char *ChunkFormat::Name() const {
 	return NAME;
 }
 
-unique_ptr<ResultFormatGlobalState> ChunkFormat::InitGlobal(const vector<LogicalType> &types,
-                                                            const vector<Identifier> &names,
-                                                            const ClientProperties &properties,
-                                                            ResultOrdering ordering) {
+unique_ptr<ResultFormatGlobalState> ChunkFormat::InitGlobal(const ResultFormatContext &context) {
 	return make_uniq<ResultFormatGlobalState>();
 }
 
@@ -95,15 +92,19 @@ unique_ptr<ResultFormatLocalState> ChunkFormat::InitLocal(ResultFormatGlobalStat
 	return make_uniq<ChunkFormatLocalState>();
 }
 
-void ChunkFormat::Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p, DataChunk &chunk) {
+void ChunkFormat::AppendToUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p, DataChunk &chunk) {
 	auto &lstate = lstate_p.Cast<ChunkFormatLocalState>();
 	D_ASSERT(!lstate.unit);
 	// Copied outside the buffer's lock, so parallel producers copy concurrently
 	lstate.unit = make_uniq<ChunkUnit>(BufferedData::CopyForBuffering(chunk));
 }
 
-unique_ptr<ResultUnit> ChunkFormat::Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p,
-                                           bool flush_partial) {
+bool ChunkFormat::IsUnitFinished(ResultFormatLocalState &lstate_p) {
+	auto &lstate = lstate_p.Cast<ChunkFormatLocalState>();
+	return lstate.unit != nullptr;
+}
+
+unique_ptr<ResultUnit> ChunkFormat::FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p) {
 	auto &lstate = lstate_p.Cast<ChunkFormatLocalState>();
 	return std::move(lstate.unit);
 }

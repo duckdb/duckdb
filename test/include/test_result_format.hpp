@@ -13,6 +13,8 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/deque.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/main/buffered_data/buffered_data.hpp"
 #include "duckdb/main/result_format.hpp"
 #include "duckdb/main/result_unit.hpp"
@@ -57,16 +59,25 @@ public:
 	atomic<idx_t> local_states {0};
 	//! Units finished short of the row cap: one per batch boundary and one per producer at its end
 	atomic<idx_t> partial_units {0};
+	//! Slicing mode: the most finished units one producer ever held undelivered after an append
+	atomic<idx_t> max_pending_units {0};
 };
 
 class TestFormatLocalState : public ResultFormatLocalState {
 public:
+	//! The partial unit under construction
 	vector<unique_ptr<DataChunk>> chunks;
 	std::thread::id producer;
+	bool producer_set = false;
 	idx_t rows = 0;
 	idx_t bytes = 0;
+	//! Slicing mode only: units already sliced off at exactly the cap, waiting to be taken in order
+	deque<unique_ptr<TestUnit>> sealed;
 };
 
+//! Deterministic: whole chunks are concatenated until max_unit_rows is reached, so a unit may exceed
+//! the cap. With slice_at_cap, AppendToUnit instead slices the incoming chunk at the cap, so one
+//! append can finish several units of exactly max_unit_rows rows
 class TestFormat : public ResultFormat {
 public:
 	using Unit = TestUnit;
@@ -74,7 +85,8 @@ public:
 	static constexpr const char *NAME = "test";
 
 public:
-	explicit TestFormat(idx_t max_unit_rows_p) : max_unit_rows(max_unit_rows_p) {
+	explicit TestFormat(idx_t max_unit_rows_p, bool slice_at_cap_p = false)
+	    : max_unit_rows(max_unit_rows_p), slice_at_cap(slice_at_cap_p) {
 	}
 
 public:
@@ -82,10 +94,8 @@ public:
 		return NAME;
 	}
 
-	unique_ptr<ResultFormatGlobalState> InitGlobal(const vector<LogicalType> &types, const vector<Identifier> &names,
-	                                               const ClientProperties &properties,
-	                                               ResultOrdering ordering) override {
-		return make_uniq<TestFormatGlobalState>(types, names, ordering);
+	unique_ptr<ResultFormatGlobalState> InitGlobal(const ResultFormatContext &context) override {
+		return make_uniq<TestFormatGlobalState>(context.types, context.names, context.ordering);
 	}
 
 	unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) override {
@@ -93,43 +103,96 @@ public:
 		return make_uniq<TestFormatLocalState>();
 	}
 
-	void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p, DataChunk &chunk) override {
+	void AppendToUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p, DataChunk &chunk) override {
 		if (throw_in_append) {
-			throw InvalidInputException("TestFormat::Append");
+			throw InvalidInputException("TestFormat::AppendToUnit");
 		}
 		auto &lstate = lstate_p.Cast<TestFormatLocalState>();
-		if (lstate.chunks.empty()) {
+		if (!lstate.producer_set) {
 			lstate.producer = std::this_thread::get_id();
+			lstate.producer_set = true;
 		}
-		auto copy = BufferedData::CopyForBuffering(chunk);
-		lstate.rows += copy->size();
-		lstate.bytes += copy->GetDataSize();
-		lstate.chunks.push_back(std::move(copy));
+		if (!slice_at_cap) {
+			auto copy = BufferedData::CopyForBuffering(chunk);
+			lstate.rows += copy->size();
+			lstate.bytes += copy->GetDataSize();
+			lstate.chunks.push_back(std::move(copy));
+			return;
+		}
+		idx_t offset = 0;
+		while (offset < chunk.size()) {
+			auto to_take = MinValue<idx_t>(max_unit_rows - lstate.rows, chunk.size() - offset);
+			SelectionVector sel(to_take);
+			for (idx_t i = 0; i < to_take; i++) {
+				sel.set_index(i, offset + i);
+			}
+			// A view into chunk, materialized into an owned copy below: the pipeline reuses chunk
+			DataChunk sliced;
+			sliced.InitializeEmpty(chunk.GetTypes());
+			sliced.Slice(chunk, sel, to_take);
+			auto copy = BufferedData::CopyForBuffering(sliced);
+			lstate.rows += copy->size();
+			lstate.bytes += copy->GetDataSize();
+			lstate.chunks.push_back(std::move(copy));
+			offset += to_take;
+			if (lstate.rows >= max_unit_rows) {
+				lstate.sealed.push_back(Seal(lstate));
+			}
+		}
+		auto &global = gstate.Cast<TestFormatGlobalState>();
+		auto pending = lstate.sealed.size();
+		auto seen = global.max_pending_units.load();
+		while (pending > seen && !global.max_pending_units.compare_exchange_weak(seen, pending)) {
+		}
 	}
 
-	unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p,
-	                              bool flush_partial) override {
+	bool IsUnitFinished(ResultFormatLocalState &lstate_p) override {
+		if (throw_in_is_finished) {
+			throw InvalidInputException("TestFormat::IsUnitFinished");
+		}
 		auto &lstate = lstate_p.Cast<TestFormatLocalState>();
-		if (lstate.chunks.empty() || (lstate.rows < max_unit_rows && !flush_partial)) {
+		if (slice_at_cap) {
+			return !lstate.sealed.empty();
+		}
+		return !lstate.chunks.empty() && lstate.rows >= max_unit_rows;
+	}
+
+	unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate_p) override {
+		auto &lstate = lstate_p.Cast<TestFormatLocalState>();
+		if (lstate.sealed.empty() && lstate.chunks.empty()) {
 			return nullptr;
 		}
 		if (throw_in_finish) {
-			throw InvalidInputException("TestFormat::Finish");
+			throw InvalidInputException("TestFormat::FinishUnit");
 		}
-		auto unit = make_uniq<TestUnit>(std::move(lstate.chunks), lstate.producer, lstate.rows, lstate.bytes);
+		if (!lstate.sealed.empty()) {
+			auto unit = std::move(lstate.sealed.front());
+			lstate.sealed.pop_front();
+			return std::move(unit);
+		}
 		if (lstate.rows < max_unit_rows) {
 			gstate.Cast<TestFormatGlobalState>().partial_units++;
 		}
-		lstate.chunks.clear();
-		lstate.rows = 0;
-		lstate.bytes = 0;
-		return std::move(unit);
+		return Seal(lstate);
 	}
 
 public:
 	idx_t max_unit_rows;
+	//! AppendToUnit slices the incoming chunk at the cap instead of concatenating whole chunks
+	bool slice_at_cap;
 	atomic<bool> throw_in_append {false};
+	atomic<bool> throw_in_is_finished {false};
 	atomic<bool> throw_in_finish {false};
+
+private:
+	//! Takes whatever is currently accumulated, whether it reached the cap or not
+	unique_ptr<TestUnit> Seal(TestFormatLocalState &lstate) const {
+		auto unit = make_uniq<TestUnit>(std::move(lstate.chunks), lstate.producer, lstate.rows, lstate.bytes);
+		lstate.chunks.clear();
+		lstate.rows = 0;
+		lstate.bytes = 0;
+		return unit;
+	}
 };
 
 //! Declares the same unit type as TestFormat, so only the name check can refuse the mismatch
@@ -144,21 +207,22 @@ public:
 		return NAME;
 	}
 
-	unique_ptr<ResultFormatGlobalState> InitGlobal(const vector<LogicalType> &types, const vector<Identifier> &names,
-	                                               const ClientProperties &properties,
-	                                               ResultOrdering ordering) override {
-		return make_uniq<TestFormatGlobalState>(types, names, ordering);
+	unique_ptr<ResultFormatGlobalState> InitGlobal(const ResultFormatContext &context) override {
+		return make_uniq<TestFormatGlobalState>(context.types, context.names, context.ordering);
 	}
 
 	unique_ptr<ResultFormatLocalState> InitLocal(ResultFormatGlobalState &gstate) override {
 		return make_uniq<TestFormatLocalState>();
 	}
 
-	void Append(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) override {
+	void AppendToUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate, DataChunk &chunk) override {
 	}
 
-	unique_ptr<ResultUnit> Finish(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate,
-	                              bool flush_partial) override {
+	bool IsUnitFinished(ResultFormatLocalState &lstate) override {
+		return false;
+	}
+
+	unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate, ResultFormatLocalState &lstate) override {
 		return nullptr;
 	}
 };
@@ -173,10 +237,11 @@ inline vector<Value> UnitValues(const ResultUnit &unit, idx_t column) {
 	return values;
 }
 
-inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t max_unit_rows) {
+inline unique_ptr<QueryResult> SubmitFormatted(Connection &con, const string &query, idx_t max_unit_rows,
+                                               bool slice_at_cap = false) {
 	auto handle = con.Submit(query);
 	REQUIRE(!handle->HasError());
-	handle->SetFormat(make_shared_ptr<TestFormat>(max_unit_rows));
+	handle->SetFormat(make_shared_ptr<TestFormat>(max_unit_rows, slice_at_cap));
 	return handle;
 }
 
