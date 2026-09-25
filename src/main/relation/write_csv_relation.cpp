@@ -1,3 +1,4 @@
+#include "duckdb/common/sql_identifier.hpp"
 #include "duckdb/main/relation/write_csv_relation.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -30,7 +31,11 @@ unique_ptr<QueryNode> WriteCSVRelation::GetQueryNode() {
 }
 
 string WriteCSVRelation::GetQuery() {
-	return string();
+	CopyInfo info;
+	info.format = "csv";
+	info.is_format_auto_detected = false;
+	info.options = options;
+	return "COPY (" + child->GetQuery() + ") TO " + SQLString(csv_file) + info.CopyOptionsToString();
 }
 
 const vector<ColumnDefinition> &WriteCSVRelation::Columns() {
