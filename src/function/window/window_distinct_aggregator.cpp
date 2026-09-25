@@ -1,5 +1,6 @@
 #include "duckdb/function/window/window_distinct_aggregator.hpp"
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/sorting/sort.hpp"
 #include "duckdb/execution/merge_sort_tree.hpp"
 #include "duckdb/function/window/window_aggregate_states.hpp"
@@ -75,12 +76,17 @@ public:
 
 	bool TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate);
 
+	//! Record the first error thrown by a sort stage task
+	void SetStageError(ErrorData error);
+
 	//! The tree allocators.
 	//! We need to hold onto them for the tree lifetime,
 	//! not the lifetime of the local state that constructed part of the tree
 	mutable vector<unique_ptr<ArenaAllocator>> tree_allocators;
 	//! Finalize guard
 	mutable mutex lock;
+	//! The first error thrown by a sort stage task, if any
+	ErrorData stage_error;
 	//! Finalize stage
 	atomic<WindowDistinctSortStage> stage;
 	//! Tasks launched
@@ -163,6 +169,13 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 		WindowDistinctSortTree::Offsets cascades;
 		level.resize(zipped_level.size());
 		merge_sort_tree.tree.emplace_back(std::move(level), std::move(cascades));
+	}
+}
+
+void WindowDistinctAggregatorGlobalState::SetStageError(ErrorData error) {
+	lock_guard<mutex> stage_guard(lock);
+	if (!stage_error.HasError()) {
+		stage_error = std::move(error);
 	}
 }
 
@@ -296,37 +309,47 @@ void WindowDistinctAggregatorLocalState::ExecuteTask(ExecutionContext &context,
                                                      WindowDistinctAggregatorGlobalState &gdstate) {
 	PostIncrement<atomic<idx_t>> on_done(gdstate.tasks_completed);
 
-	switch (stage) {
-	case WindowDistinctSortStage::COMBINE: {
-		auto &local_sink = *gdstate.local_sinks[block_idx];
-		InterruptState interrupt_state;
-		OperatorSinkCombineInput combine {*gdstate.global_sink, local_sink, interrupt_state};
-		gdstate.sort->Combine(context, combine);
-		break;
-	}
-	case WindowDistinctSortStage::FINALIZE: {
-		//	5: Sort sorted lexicographically increasing
-		auto &sort = *gdstate.sort;
-		InterruptState interrupt;
-		OperatorSinkFinalizeInput finalize {*gdstate.global_sink, interrupt};
-		sort.Finalize(context.client, finalize);
-		auto sort_global = sort.GetGlobalSourceState(context.client, *gdstate.global_sink);
-		auto sort_local = sort.GetLocalSourceState(context, *sort_global);
-		OperatorSourceInput source {*sort_global, *sort_local, interrupt};
-		sort.MaterializeColumnData(context, source);
-		gdstate.sorted = sort.GetColumnData(source);
-		break;
-	}
-	case WindowDistinctSortStage::SORTED:
-		Sorted();
-		break;
-	default:
-		break;
+	try {
+		switch (stage) {
+		case WindowDistinctSortStage::COMBINE: {
+			auto &local_sink = *gdstate.local_sinks[block_idx];
+			InterruptState interrupt_state;
+			OperatorSinkCombineInput combine {*gdstate.global_sink, local_sink, interrupt_state};
+			gdstate.sort->Combine(context, combine);
+			break;
+		}
+		case WindowDistinctSortStage::FINALIZE: {
+			// 5:	Sort sorted lexicographically increasing
+			auto &sort = *gdstate.sort;
+			InterruptState interrupt;
+			OperatorSinkFinalizeInput finalize {*gdstate.global_sink, interrupt};
+			sort.Finalize(context.client, finalize);
+			auto sort_global = sort.GetGlobalSourceState(context.client, *gdstate.global_sink);
+			auto sort_local = sort.GetLocalSourceState(context, *sort_global);
+			OperatorSourceInput source {*sort_global, *sort_local, interrupt};
+			sort.MaterializeColumnData(context, source);
+			gdstate.sorted = sort.GetColumnData(source);
+			break;
+		}
+		case WindowDistinctSortStage::SORTED:
+			Sorted();
+			break;
+		default:
+			break;
+		}
+	} catch (std::exception &ex) {
+		gdstate.SetStageError(ErrorData(ex));
+		throw;
 	}
 }
 
 bool WindowDistinctAggregatorGlobalState::TryPrepareNextStage(WindowDistinctAggregatorLocalState &lstate) {
 	lock_guard<mutex> stage_guard(lock);
+
+	if (stage_error.HasError()) {
+		// The sorted data is missing or incomplete, so stop rather than build a tree from it.
+		stage_error.Throw();
+	}
 
 	switch (stage.load()) {
 	case WindowDistinctSortStage::INIT:
