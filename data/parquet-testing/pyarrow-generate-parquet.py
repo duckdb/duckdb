@@ -9,6 +9,7 @@ from pathlib import Path
 def generate_parquet(data_dir: Path):
     generate_silly_names(data_dir / 'silly-names.parquet')
     generate_byte_stream_split(data_dir / 'byte_stream_split.parquet')
+    generate_time_millis(data_dir / 'time-millis.parquet')
 
 
 def generate_silly_names(path: Path):
@@ -17,6 +18,11 @@ def generate_silly_names(path: Path):
                        '🦆': [True, False, True]})
     table = pa.Table.from_pandas(df)
     pq.write_table(table, path)
+
+
+def generate_time_millis(path: Path):
+    times = pa.array([0, 45296789, 86399999, None], type=pa.time32('ms'))
+    pq.write_table(pa.Table.from_arrays([times], ['t']), path)
 
 
 def generate_byte_stream_split(path: Path):

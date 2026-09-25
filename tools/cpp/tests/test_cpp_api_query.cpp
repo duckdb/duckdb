@@ -375,6 +375,20 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 		REQUIRE(summary[0].second == 30); // last value
 	}
 }
+TEST_CASE("Stable C++API: Connection Execute binds named parameters", "[cpp_api][prepared_statement]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	auto statement = conn.ParseSQL("SELECT $left::BIGINT - $right::BIGINT").Next();
+
+	std::vector<NamedParam> params;
+	params.push_back({"right", Value::Create(conn, int64_t(4))});
+	params.push_back({"left", Value::Create(conn, int64_t(10))});
+	auto result = conn.Execute(statement, params);
+	REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 6);
+}
 TEST_CASE("Stable C++API: RenderBox renders glyphs, the type row, and NULL cells", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
