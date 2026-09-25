@@ -260,7 +260,6 @@ TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[extern
 	auto &db_instance = *db.instance;
 	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
 
-	// cached ranges smaller than an eighth of the block size are fetched with the gaps around them
 	const idx_t BLOCK_SIZE = 8192;
 	const idx_t ABSORB_SIZE = BLOCK_SIZE / 8;
 	Connection con(db);

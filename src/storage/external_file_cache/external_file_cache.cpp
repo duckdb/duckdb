@@ -96,7 +96,6 @@ static bool IsLoadedBlock(CacheBlock &block) {
 	return block.state == CacheBlockState::LOADED;
 }
 
-//! Number of blocks, and so requests, that a gap of nr_bytes is fetched with
 static idx_t GapBlockCount(idx_t nr_bytes, idx_t max_block_size) {
 	return (nr_bytes + max_block_size - 1) / max_block_size;
 }
@@ -106,8 +105,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 	D_ASSERT(nr_bytes > 0);
 	D_ASSERT(max_block_size > 0);
 	const idx_t end = location + nr_bytes;
-	// smaller cached blocks between two gaps are re-fetched with them when that saves a request, so
-	// scattered cached pieces do not split a read into many small requests
+	// smaller cached blocks between two gaps are re-fetched with them when that saves a request
 	const idx_t absorb_size = max_block_size / 8;
 
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
