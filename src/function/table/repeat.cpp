@@ -28,9 +28,9 @@ static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunction
 		throw BinderException("Repeat second parameter cannot be NULL");
 	}
 	auto repeat_count = inputs[1].GetValue<int64_t>();
-	if (repeat_count < 0) {
-		throw BinderException("Repeat second parameter cannot be be less than 0");
-	}
+	// if (repeat_count < 0) {
+	// 	throw BinderException("Repeat second parameter cannot be be less than 0");
+	// }
 	return make_uniq<RepeatFunctionData>(inputs[0], NumericCast<idx_t>(repeat_count));
 }
 
@@ -65,7 +65,7 @@ static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, cons
 }
 
 void RepeatTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::BIGINT}, RepeatFunction, RepeatBind, RepeatInit);
+	TableFunction repeat("repeat", {LogicalType::ANY, LogicalType::UBIGINT}, RepeatFunction, RepeatBind, RepeatInit);
 	repeat.cardinality = RepeatCardinality;
 	repeat.table_scan_progress = RepeatProgress;
 	set.AddFunction(repeat);
