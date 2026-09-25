@@ -1,0 +1,17 @@
+# name: test/sql/storage/checkpoint/checkpoint_prepared_detach.test
+# description: Checkpointing a detached database through a prepared statement
+# group: [checkpoint]
+
+statement ok
+ATTACH '{TEST_DIR}/checkpoint_prepared_detach.db' AS checkpoint_db
+
+statement ok
+PREPARE checkpoint_stmt AS SELECT * FROM checkpoint('checkpoint_db')
+
+statement ok
+DETACH checkpoint_db
+
+statement error
+EXECUTE checkpoint_stmt
+----
+Database "checkpoint_db" not found
