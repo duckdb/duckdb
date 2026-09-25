@@ -204,7 +204,7 @@ private:
 	ResumeScanState resume_state;
 
 private:
-	//! Goes to the next leaf in the ART and sets it as last_leaf,
+	//! Goes to the next leaf in the ART and sets it as last_leaf_ptr,
 	//! returns false if there is no next leaf.
 	bool Next();
 	//! Pop the top node from the stack of iterator entries and adjust the current key.

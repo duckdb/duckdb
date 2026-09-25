@@ -120,7 +120,7 @@ NodePtr PrefixHandle::Split(ART &art, NodePtr &prefix_ptr, NodePtr &branching_no
 			prefix.Child(art) = branching_node4_ptr;
 			return child_ptr;
 		}
-		// No bytes left before the split, so branching_node4 inherits the prefix's gate before we free it.
+		// No bytes left before the split, so branching_node4_ptr inherits the prefix's gate before we free it.
 		branching_node4_ptr.SetGateStatus(prefix_ptr.GetGateStatus());
 	}
 

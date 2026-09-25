@@ -169,7 +169,7 @@ public:
 	//! Insert a child at byte.
 	static void InsertChild(ART &art, NodePtr &node_ptr, const uint8_t byte, const NodePtr child_ptr);
 	//! Delete the child at byte.
-	static void DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &prefix_ptr, const uint8_t byte,
+	static void DeleteChild(ART &art, NodePtr &node_ptr, NodePtr &parent_ptr, const uint8_t byte,
 	                        const GateStatus status);
 
 private:
