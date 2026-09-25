@@ -62,8 +62,7 @@ struct FSSTStorage {
 
 	static char *FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset);
 	static bp_delta_offsets_t CalculateBpDeltaOffsets(int64_t last_known_row, idx_t start, idx_t scan_count);
-	static bp_delta_offsets_t StartScan(FSSTScanState &scan_state, const_data_ptr_t base_data, idx_t start,
-	                                    idx_t vector_count);
+	static bp_delta_offsets_t StartScan(FSSTScanState &scan_state, idx_t start, idx_t vector_count);
 	static void EndScan(FSSTScanState &scan_state, bp_delta_offsets_t &offsets, idx_t start, idx_t scan_count);
 };
 
@@ -603,16 +602,30 @@ void DeltaDecodeIndices(uint32_t *buffer_in, uint32_t *buffer_out, idx_t decode_
 	}
 }
 
-void BitUnpackRange(const_data_ptr_t src_ptr, data_ptr_t dst_ptr, idx_t count, idx_t row, bitpacking_width_t width) {
-	auto bitunpack_src_ptr = &src_ptr[(row * width) / 8];
-	BitpackingPrimitives::UnPackBuffer<uint32_t>(dst_ptr, bitunpack_src_ptr, count, width);
+void BitUnpackRange(const CompressionSegmentReader &lengths, data_ptr_t dst_ptr, idx_t count, idx_t row,
+                    bitpacking_width_t width) {
+	constexpr auto group_size = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	D_ASSERT(row % group_size == 0);
+	D_ASSERT(width <= sizeof(uint32_t) * 8);
+	auto start_group = row / group_size;
+	// Include the final partial group because UnPackBuffer reads a full group even for fewer values.
+	auto group_count = count / group_size + (count % group_size != 0);
+	auto bytes_per_group = (group_size * static_cast<idx_t>(width)) / 8;
+	// Unpacking reads complete groups. Check their range before multiplying by the group byte size.
+	if (DUCKDB_LIKELY(bytes_per_group)) {
+		auto available_groups = lengths.Size() / bytes_per_group;
+		if (start_group > available_groups || group_count > available_groups - start_group) {
+			ThrowInvalidFSSTSegment("bitpacking buffer was out of range");
+		}
+	}
+	auto source = lengths.GetBytes(start_group * bytes_per_group, group_count * bytes_per_group);
+	BitpackingPrimitives::UnPackBuffer<uint32_t>(dst_ptr, source.data(), count, width);
 }
 
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-bp_delta_offsets_t FSSTStorage::StartScan(FSSTScanState &scan_state, const_data_ptr_t base_data, idx_t start,
-                                          idx_t scan_count) {
+bp_delta_offsets_t FSSTStorage::StartScan(FSSTScanState &scan_state, idx_t start, idx_t scan_count) {
 	if (start == 0 || scan_state.last_known_row >= (int64_t)start) {
 		scan_state.ResetStoredDelta();
 	}
@@ -623,8 +636,8 @@ bp_delta_offsets_t FSSTStorage::StartScan(FSSTScanState &scan_state, const_data_
 		scan_state.bitunpack_buffer = make_unsafe_uniq_array<uint32_t>(offsets.total_bitunpack_count);
 		scan_state.bitunpack_buffer_capacity = offsets.total_bitunpack_count;
 	}
-	BitUnpackRange(base_data, data_ptr_cast(scan_state.bitunpack_buffer.get()), offsets.total_bitunpack_count,
-	               offsets.bitunpack_start_row, scan_state.layout.width);
+	BitUnpackRange(scan_state.layout.lengths, data_ptr_cast(scan_state.bitunpack_buffer.get()),
+	               offsets.total_bitunpack_count, offsets.bitunpack_start_row, scan_state.layout.width);
 	if (scan_state.delta_decode_capacity < offsets.total_delta_decode_count) {
 		scan_state.delta_decode_buffer = make_unsafe_uniq_array<uint32_t>(offsets.total_delta_decode_count);
 		scan_state.delta_decode_capacity = offsets.total_delta_decode_count;
@@ -655,8 +668,6 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 
 	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	auto &dict = scan_state.layout.dict;
-	auto &lengths = scan_state.layout.lengths;
-	auto base_data = lengths.GetBytes(0, lengths.Size()).data();
 	string_t *result_data;
 
 	if (scan_count == 0) {
@@ -679,7 +690,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		result_data = FlatVector::GetDataMutable<string_t>(result);
 	}
 
-	auto offsets = StartScan(scan_state, base_data, start, scan_count);
+	auto offsets = StartScan(scan_state, start, scan_count);
 	auto &bitunpack_buffer = scan_state.bitunpack_buffer;
 	auto &delta_decode_buffer = scan_state.delta_decode_buffer;
 	if (enable_fsst_vectors) {
@@ -716,13 +727,11 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 
 	auto baseptr = scan_state.handle.GetDataMutable() + segment.GetBlockOffset();
 	auto &dict = scan_state.layout.dict;
-	auto &lengths = scan_state.layout.lengths;
-	auto base_data = lengths.GetBytes(0, lengths.Size()).data();
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	auto &str_allocator = StringVector::GetStringAllocator(result);
-	auto offsets = StartScan(scan_state, base_data, start, vector_count);
+	auto offsets = StartScan(scan_state, start, vector_count);
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
 
 	for (idx_t i = 0; i < sel_count; i++) {
@@ -743,7 +752,6 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	duckdb_fsst_decoder_t decoder;
 	auto layout = FSSTScanState::ParseFSSTSegmentHeader(reader, &decoder, segment.count.load());
 	auto base_ptr = handle.GetDataMutable() + segment.GetBlockOffset();
-	auto base_data = layout.lengths.GetBytes(0, layout.lengths.Size()).data();
 	auto &dict = layout.dict;
 
 	auto result_data = FlatVector::GetDataMutable<string_t>(result);
@@ -758,7 +766,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	auto offsets = CalculateBpDeltaOffsets(-1, UnsafeNumericCast<idx_t>(row_id), 1);
 
 	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
-	BitUnpackRange(base_data, data_ptr_cast(bitunpack_buffer.get()), offsets.total_bitunpack_count,
+	BitUnpackRange(layout.lengths, data_ptr_cast(bitunpack_buffer.get()), offsets.total_bitunpack_count,
 	               offsets.bitunpack_start_row, layout.width);
 	auto delta_decode_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_delta_decode_count]);
 	DeltaDecodeIndices(bitunpack_buffer.get() + offsets.bitunpack_alignment_offset, delta_decode_buffer.get(),
