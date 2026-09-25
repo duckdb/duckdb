@@ -1231,4 +1231,34 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 	TestDeleteDirectory(extension_directory);
 }
 
+class NoClientHTTPUtil : public HTTPUtil {
+public:
+	string GetName() const override {
+		return "none";
+	}
+	unique_ptr<HTTPClient> InitializeClient(HTTPParams &, const string &) override {
+		return nullptr;
+	}
+};
+
+TEST_CASE("Extension downloads without an HTTP client", "[http_transport_manager]") {
+	auto extension_directory = TestCreatePath("http_transport_manager_no_client");
+	TestDeleteDirectory(extension_directory);
+	DBConfig config;
+	config.SetOptionByName("extension_directory", extension_directory);
+	DuckDB db(nullptr, &config);
+	Connection connection(db);
+	db.instance->config.SetHTTPUtil(make_shared_ptr<NoClientHTTPUtil>());
+
+	ExtensionInstallOptions options;
+	options.force_install = true;
+	const string extension_url = "http://mock.test/no_client.duckdb_extension";
+	auto error = CaptureExceptionMessage(
+	    [&]() { ExtensionHelper::InstallExtension(*connection.context, extension_url, options); });
+	CHECK(StringUtil::Contains(error, "HTTP provider 'none' has no HTTP client"));
+	CHECK(StringUtil::Contains(error, extension_url));
+	CHECK(StringUtil::Contains(error, "ENABLE_BUILTIN_HTTPLIB=ON"));
+	TestDeleteDirectory(extension_directory);
+}
+
 } // namespace duckdb

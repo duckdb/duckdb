@@ -624,8 +624,10 @@ option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_EXTENSION_LOAD
        "Disable support for loading and installing extensions" FALSE)
-option(DISABLE_BUILTIN_HTTPLIB "Disable support for built-in http-only httplib"
-       FALSE)
+option(ENABLE_BUILTIN_HTTPLIB
+       "Use the built-in http-only httplib as the default HTTP client" TRUE)
+option(DISABLE_BUILTIN_HTTPLIB
+       "Deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF instead" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY
        "Debug setting: disable memory access checks at runtime" FALSE)
@@ -737,7 +739,13 @@ if(DISABLE_EXTENSION_LOAD)
 endif()
 
 if(DISABLE_BUILTIN_HTTPLIB)
-  add_definitions(-DDUCKDB_DISABLE_BUILTIN_HTTPLIB)
+  message(
+    WARNING
+      "DISABLE_BUILTIN_HTTPLIB is deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF")
+  set(ENABLE_BUILTIN_HTTPLIB FALSE)
+endif()
+if(DISABLE_EXTENSION_LOAD)
+  set(ENABLE_BUILTIN_HTTPLIB FALSE)
 endif()
 
 if(${BUILD_RDTSC})

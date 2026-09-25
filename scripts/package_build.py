@@ -7,6 +7,11 @@ import re
 import tempfile
 
 excluded_objects = ['utf8proc_data.cpp']
+# default HTTP client implementations, exactly one of them is compiled
+http_client_sources = {
+    True: os.path.join('src', 'main', 'http', 'http_client_httplib.cpp'),
+    False: os.path.join('src', 'main', 'http', 'http_client_none.cpp'),
+}
 
 
 def third_party_includes():
@@ -238,6 +243,7 @@ def build_package(
     folder_name='duckdb',
     short_paths=False,
     default_linked_extensions=None,
+    builtin_httplib=True,
 ):
     if not os.path.isdir(target_dir):
         os.mkdir(target_dir)
@@ -267,6 +273,7 @@ def build_package(
 
     # obtain the list of source files from the amalgamation
     source_list = amalgamation.list_sources()
+    source_list = [x for x in source_list if x != http_client_sources[not builtin_httplib]]
     include_list = amalgamation.list_include_dirs()
     include_files = amalgamation.list_includes()
 
