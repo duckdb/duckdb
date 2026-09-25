@@ -646,8 +646,6 @@ TaskExecutionResult HashAggregateDistinctFinalizeTask::AggregateDistinctGrouping
 	auto &distinct_state = *grouping_state.distinct_state;
 	auto &distinct_data = *grouping_data.distinct_data;
 
-	auto &aggregates = info.aggregates;
-
 	// Thread-local contexts
 	ThreadContext thread_context(executor.context);
 	ExecutionContext execution_context(executor.context, thread_context, &pipeline);
