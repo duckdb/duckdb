@@ -1,6 +1,6 @@
 # name: test/sql/aggregate/external/budgeted_local_growth.test_slow
 # description: Parallel aggregation remains correct when local hash tables grow or fall back to external aggregation
-# group: [aggregate]
+# group: [external]
 
 statement ok
 CREATE TABLE growth_input AS SELECT i FROM range(2000000) t(i);
