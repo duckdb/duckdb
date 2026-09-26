@@ -1,6 +1,6 @@
 # name: test/sql/aggregate/external/adaptive_sink_capacity.test_slow
 # description: Aggregation remains correct when locally unique prefixes later repeat
-# group: [aggregate]
+# group: [external]
 
 statement ok
 SET threads=3;
