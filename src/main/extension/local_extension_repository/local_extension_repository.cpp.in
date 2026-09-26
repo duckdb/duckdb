@@ -1,4 +1,4 @@
-// Generated from src/main/extension/local_extension_repository.cpp.in. Do not edit.
+// Generated from src/main/extension/local_extension_repository/local_extension_repository.cpp.in. Do not edit.
 // The local_extension_repository capability: automatic installs default to the extension repository of the build
 // that produced it, instead of the core repository.
 
