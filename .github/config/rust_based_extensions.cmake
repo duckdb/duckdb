@@ -8,6 +8,4 @@
 
 ################## DELTA
 include("${EXTENSION_CONFIG_BASE_DIR}/delta.cmake")
-duckdb_extension_statically_link(delta)
 include("${EXTENSION_CONFIG_BASE_DIR}/unity_catalog.cmake")
-duckdb_extension_statically_link(unity_catalog)
