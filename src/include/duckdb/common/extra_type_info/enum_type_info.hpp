@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/string_map_set.hpp"
@@ -34,12 +35,17 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		Vector values_insert_order(LogicalType::VARCHAR, size);
 		auto strings = FlatVector::ScatterWriter<string_t>(values_insert_order);
 
+		idx_t read_count = 0;
 		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
 			if (i >= size) {
-				throw SerializationException("Failed to deserialize enum: string value out of range");
+				throw DataCorruptionException("Corrupted enum: string value index %llu exceeds enum size %u", i, size);
 			}
 			strings[i] = list.ReadElement<string>();
+			read_count++;
 		});
+		if (read_count != size) {
+			throw DataCorruptionException("Corrupted enum: expected %u values, but found %llu", size, read_count);
+		}
 		return make_shared_ptr<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 

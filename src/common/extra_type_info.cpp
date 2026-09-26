@@ -416,6 +416,10 @@ string_t EnumType::GetString(const LogicalType &type, idx_t pos) {
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto values_count = deserializer.ReadProperty<idx_t>(200, "values_count");
+	if (values_count > NumericLimits<uint32_t>::Maximum()) {
+		throw DataCorruptionException("Corrupted enum: enum size %llu exceeds maximum %llu", values_count,
+		                              static_cast<idx_t>(NumericLimits<uint32_t>::Maximum()));
+	}
 	auto enum_internal_type = EnumTypeInfo::DictType(values_count);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
