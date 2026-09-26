@@ -80,7 +80,8 @@ endfunction()
 # Resolves what the DuckDB targets link statically. DUCKDB_CAPABILITIES picks among the capabilities this
 # build makes: httplib, loadable_extensions and local_extension_repository (automatic installs come from this build's
 # repository instead of the core one), all of them by default. STATICALLY_LINK_EXTENSIONS picks the extensions, by
-# default the built ones the extension configs list with duckdb_extension_statically_link(). Either can be 'none', and takes names separated by spaces or ';'.
+# default the built ones the extension configs list with duckdb_extension_statically_link(), plus the prebuilt ones.
+# Either can be 'none', and takes names separated by spaces or ';'.
 function(duckdb_resolve_static_link OUT_CAPABILITIES OUT_EXTENSIONS)
     set(KNOWN_CAPABILITIES httplib loadable_extensions local_extension_repository)
     set(BUILT_CAPABILITIES "")
@@ -115,6 +116,13 @@ function(duckdb_resolve_static_link OUT_CAPABILITIES OUT_EXTENSIONS)
         foreach(EXT_NAME IN LISTS REQUESTED)
             string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
             if(EXT_NAME IN_LIST KNOWN_CAPABILITIES OR DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD)
+                list(APPEND EXTENSIONS ${EXT_NAME})
+            endif()
+        endforeach()
+        # a prebuilt extension only exists as an archive, so linking is the only way to make it available
+        foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+            string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+            if(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD AND NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PREBUILT_PATH}" STREQUAL "")
                 list(APPEND EXTENSIONS ${EXT_NAME})
             endif()
         endforeach()
