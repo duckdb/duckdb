@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "test_helpers.hpp"
 
@@ -8,12 +9,16 @@ using namespace duckdb;
 
 TEST_CASE("A linked loadable_extensions library is the default external extension provider", "[api]") {
 	DuckDB db(nullptr);
-	auto &provider = DBConfig::GetConfig(*db.instance).GetExternalExtensionProvider();
-	if (provider.GetName() == "none") {
-		// this binary does not link duckdb_loadable_extensions
+	auto &config = DBConfig::GetConfig(*db.instance);
+	auto &provider = config.GetExternalExtensionProvider();
+	bool linked = false;
+	for (auto &entry : config.linked_extensions) {
+		linked = linked || entry.name == "loadable_extensions";
+	}
+	CHECK(provider.GetName() == (linked ? "dynamic" : "none"));
+	if (!linked) {
 		return;
 	}
-	CHECK(provider.GetName() == "dynamic");
 	CHECK(provider.SupportsExternalExtensions());
 
 	Connection con(db);
