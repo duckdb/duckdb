@@ -198,20 +198,14 @@
         "description": "Whether known extensions are allowed to be automatically installed when a query depends on them.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false",
-        "conditional_defaults": {
-            "#if defined(DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT) && DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT": "true"
-        }
+        "default_value": "true"
     },
     {
         "name": "autoload_known_extensions",
         "description": "Whether known extensions are allowed to be automatically loaded when a query depends on them.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false",
-        "conditional_defaults": {
-            "#if defined(DUCKDB_EXTENSION_AUTOLOAD_DEFAULT) && DUCKDB_EXTENSION_AUTOLOAD_DEFAULT": "true"
-        }
+        "default_value": "true"
     },
     {
         "name": "block_allocator_memory",

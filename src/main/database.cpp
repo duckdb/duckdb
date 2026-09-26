@@ -7,6 +7,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/http/http_util.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/execution/index/index_type_set.hpp"
@@ -63,6 +64,7 @@ DBConfig::DBConfig() {
 	error_manager = make_uniq<ErrorManager>();
 	secret_manager = make_uniq<SecretManager>();
 	http_transport_manager = HTTPTransportManager::Create(make_shared_ptr<HTTPUtil>());
+	external_extension_provider = make_shared_ptr<ExternalExtensionProvider>();
 	callback_manager = make_uniq<ExtensionCallbackManager>();
 }
 
@@ -339,6 +341,11 @@ void DatabaseInstance::InitializeInstance(const char *database_path, DBConfig *u
 	Configure(*config_ptr, database_path);
 	// publish what this binary links, unless the config already carries a set handed to us
 	ExtensionHelper::RegisterLinkedExtensions(config);
+	for (auto &linked : config.linked_extensions) {
+		if (linked.database_callback) {
+			linked.database_callback(*this);
+		}
+	}
 
 	create_api_v1 = CreateAPIv1Wrapper;
 	invoke_capi_v2 = InvokeCAPIV2Entrypoint;
