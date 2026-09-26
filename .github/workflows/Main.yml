@@ -283,6 +283,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        LINK_CORE_EXTENSIONS: 1
       with:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
@@ -1134,6 +1135,7 @@ jobs:
           REDUCE_SYMBOLS: 1
           EXTENSION_STATIC_BUILD: 0
           CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          LINK_CORE_EXTENSIONS: 1
           DISABLE_STRING_INLINE: 1
           DESTROY_UNPINNED_BLOCKS: 1
           ALTERNATIVE_VERIFY: 1

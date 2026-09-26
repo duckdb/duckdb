@@ -86,7 +86,8 @@ duckdb_extension_load(parquet
 # Building versus linking
 `duckdb_extension_load` only decides what is built. What the DuckDB targets (the shell, unittest, the library) link
 statically is decided separately: by default the built extensions that the configs list with
-`duckdb_extension_statically_link(<extension_name>)`, or exactly `STATICALLY_LINK_EXTENSIONS` when that is set
+`duckdb_extension_statically_link(<extension_name>)` (plus the ones named in `BUILD_EXTENSIONS` when building with
+`LINK_CORE_EXTENSIONS=1`), or exactly `STATICALLY_LINK_EXTENSIONS` when that is set
 (e.g. `STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpch' make`). An extension that is built but not
 linked is still available: automatic installs come from the build's own extension repository, so it is installed and
 loaded the first time a query needs it.
