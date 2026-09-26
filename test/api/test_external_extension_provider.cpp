@@ -9,7 +9,10 @@
 using namespace duckdb;
 
 TEST_CASE("A linked loadable_extensions library is the default external extension provider", "[api]") {
-	DuckDB db(nullptr);
+	// statically linked extensions could replace the provider when they load
+	DBConfig db_config;
+	db_config.options.load_extensions = false;
+	DuckDB db(nullptr, &db_config);
 	auto &config = DBConfig::GetConfig(*db.instance);
 	auto &provider = config.GetExternalExtensionProvider();
 	bool linked = false;

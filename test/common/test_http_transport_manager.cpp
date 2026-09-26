@@ -1233,7 +1233,10 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 }
 
 TEST_CASE("A linked httplib client is the default HTTP provider", "[http_transport_manager]") {
-	DuckDB db(nullptr);
+	// statically linked extensions, such as httpfs, may replace the provider when they load
+	DBConfig config;
+	config.options.load_extensions = false;
+	DuckDB db(nullptr, &config);
 	Connection connection(db);
 	auto &http_util = HTTPUtil::Get(*db.instance);
 	bool linked = false;
