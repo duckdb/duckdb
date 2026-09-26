@@ -13,17 +13,6 @@
 #include "duckdb/main/http/http_retry_budget.hpp"
 #include "duckdb/main/settings.hpp"
 
-#ifdef DISABLE_DUCKDB_REMOTE_INSTALL
-#define DUCKDB_DISABLE_BUILTIN_HTTPLIB
-#endif
-#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
-#define DUCKDB_DISABLE_BUILTIN_HTTPLIB
-#endif
-
-#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
-#include "httplib.hpp"
-#endif
-
 namespace duckdb {
 
 HTTPParams::~HTTPParams() {
@@ -81,24 +70,6 @@ HTTPHeaders::header_values_t HTTPHeaders::GetHeaderValues(const string &key) con
 	return {GetHeaderValue(key)};
 }
 
-#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
-unique_ptr<HTTPResponse> TransformResponse(duckdb_httplib::Result &res) {
-	auto status_code = HTTPUtil::ToStatusCode(res ? res->status : 0);
-	auto result = make_uniq<HTTPResponse>(status_code);
-	if (res.error() == duckdb_httplib::Error::Success) {
-		auto &response = res.value();
-		result->body = response.body;
-		result->reason = response.reason;
-		for (auto &entry : response.headers) {
-			result->headers.Append(entry.first, entry.second);
-		}
-	} else {
-		result->request_error = to_string(res.error());
-	}
-	return result;
-}
-#endif
-
 HTTPResponse::HTTPResponse(HTTPStatusCode code) : status(code) {
 }
 
@@ -136,7 +107,7 @@ HTTPUtil &HTTPUtil::Get(DatabaseInstance &db) {
 }
 
 string HTTPUtil::GetName() const {
-	return "Built-In";
+	return "none";
 }
 
 HTTPTransportReusePolicy HTTPUtil::GetTransportReusePolicy() const {
@@ -198,108 +169,8 @@ HeadRequestInfo::~HeadRequestInfo() = default;
 DeleteRequestInfo::~DeleteRequestInfo() = default;
 PostRequestInfo::~PostRequestInfo() = default;
 
-#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
-class HTTPLibClient : public HTTPClient {
-public:
-	HTTPLibClient(HTTPParams &http_params, const string &proto_host_port) : HTTPClient(proto_host_port) {
-		client = make_uniq<duckdb_httplib::Client>(proto_host_port);
-		Initialize(http_params);
-	}
-	void Initialize(HTTPParams &http_params) override {
-		auto sec = static_cast<time_t>(http_params.timeout);
-		auto usec = static_cast<time_t>(http_params.timeout_usec);
-		client->set_follow_location(http_params.follow_location);
-		client->set_keep_alive(http_params.keep_alive);
-		client->set_write_timeout(sec, usec);
-		client->set_read_timeout(sec, usec);
-		client->set_connection_timeout(sec, usec);
-		client->set_decompress(false);
-
-		if (!http_params.http_proxy.empty()) {
-			client->set_proxy(http_params.http_proxy, static_cast<int>(http_params.http_proxy_port));
-
-			if (!http_params.http_proxy_username.empty()) {
-				client->set_proxy_basic_auth(http_params.http_proxy_username, http_params.http_proxy_password);
-			}
-		}
-	}
-	unique_ptr<HTTPResponse> Get(GetRequestInfo &info) override {
-		auto headers = TransformHeaders(info.headers, info.params);
-		if (!info.response_handler && !info.content_handler) {
-			return TransformResult(client->Get(info.path, headers));
-		} else {
-			return TransformResult(client->Get(
-			    info.path, headers,
-			    [&](const duckdb_httplib::Response &response) {
-				    auto http_response = TransformResponse(response);
-				    return info.response_handler(*http_response);
-			    },
-			    [&](const char *data, size_t data_length) {
-				    return info.content_handler(const_data_ptr_cast(data), data_length);
-			    }));
-		}
-	}
-	unique_ptr<HTTPResponse> Put(PutRequestInfo &info) override {
-		throw NotImplementedException("PUT request not implemented");
-	}
-
-	unique_ptr<HTTPResponse> Head(HeadRequestInfo &info) override {
-		throw NotImplementedException("HEAD request not implemented");
-	}
-
-	unique_ptr<HTTPResponse> Delete(DeleteRequestInfo &info) override {
-		throw NotImplementedException("DELETE request not implemented");
-	}
-
-	unique_ptr<HTTPResponse> Post(PostRequestInfo &info) override {
-		throw NotImplementedException("POST request not implemented");
-	}
-
-	unique_ptr<HTTPResponse> Options(OptionsRequestInfo &info) override {
-		throw NotImplementedException("OPTIONS request not implemented");
-	}
-
-	unique_ptr<duckdb_httplib::Client> client;
-
-private:
-	duckdb_httplib::Headers TransformHeaders(const HTTPHeaders &header_map, const HTTPParams &params) {
-		duckdb_httplib::Headers headers;
-		for (auto &entry : header_map) {
-			headers.insert(entry);
-		}
-		return headers;
-	}
-
-	unique_ptr<HTTPResponse> TransformResponse(const duckdb_httplib::Response &response) {
-		auto status_code = HTTPUtil::ToStatusCode(response.status);
-		auto result = make_uniq<HTTPResponse>(status_code);
-		result->body = response.body;
-		result->reason = response.reason;
-		for (auto &entry : response.headers) {
-			result->headers.Append(entry.first, entry.second);
-		}
-		return result;
-	}
-
-	unique_ptr<HTTPResponse> TransformResult(const duckdb_httplib::Result &res) {
-		if (res.error() == duckdb_httplib::Error::Success) {
-			auto &response = res.value();
-			return TransformResponse(response);
-		} else {
-			auto result = make_uniq<HTTPResponse>(HTTPStatusCode::INVALID);
-			result->request_error = to_string(res.error());
-			return result;
-		}
-	}
-};
-#endif
-
 unique_ptr<HTTPClient> HTTPUtil::InitializeClient(HTTPParams &http_params, const string &proto_host_port) {
-#ifndef DUCKDB_DISABLE_BUILTIN_HTTPLIB
-	return make_uniq<HTTPLibClient>(http_params, proto_host_port);
-#else
 	return nullptr;
-#endif
 }
 
 unique_ptr<HTTPClient> HTTPUtil::InitializeClientExtended(HTTPParams &http_params, const string &proto_host_port,
@@ -357,7 +228,9 @@ unique_ptr<HTTPResponse> HTTPUtil::SendRequest(BaseRequest &request, unique_ptr<
 		}
 		if (!client) {
 			throw InvalidConfigurationException(
-			    "HTTPClient is not been setup yet (possibly due to configuration), no HTTP request can be performed");
+			    "HTTP provider '%s' has no HTTP client for '%s', no HTTP request can be performed. Load an extension "
+			    "that provides one (such as httpfs), or build with ENABLE_BUILTIN_HTTPLIB=ON",
+			    GetName(), request.url);
 		}
 	}
 

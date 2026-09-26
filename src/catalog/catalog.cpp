@@ -659,31 +659,27 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (!Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 	try {
-		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (ExtensionHelper::CanAutoloadExtension(*context.db, extension_name)) {
 			return ExtensionHelper::TryAutoLoadExtension(context, extension_name);
 		}
 	} catch (...) {
 		return false;
 	}
-#endif
 	return false;
 }
 
 String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name) {
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
-		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (ExtensionHelper::CanAutoloadExtension(*context.db, extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
 			return extension_name;
 		}
 	}
-#endif
 
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
@@ -730,7 +726,6 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 }
 
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name) {
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 		string extension_name;
 		if (IsAutoloadableFunction(type)) {
@@ -754,12 +749,11 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COLLATIONS);
 		}
 
-		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 			ExtensionHelper::AutoLoadExtension(db, extension_name);
 			return true;
 		}
 	}
-#endif
 
 	return false;
 }

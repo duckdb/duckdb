@@ -337,10 +337,6 @@ endfunction()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
-option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default."
-       FALSE)
-option(ENABLE_EXTENSION_AUTOINSTALL
-       "Enable extension auto-installing by default." FALSE)
 option(
   EXTENSION_TESTS_ONLY
   "Only load the tests for extensions, don't actually build them; useful for testing loadable extensions"
@@ -448,12 +444,16 @@ set(VERSIONING_TAG_MATCH "v*.*.*")
 if(UNSAFE_NUMERIC_CAST)
   add_definitions(-DUNSAFE_NUMERIC_CAST=1)
 endif()
-if(ENABLE_EXTENSION_AUTOLOADING)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
-endif()
-if(ENABLE_EXTENSION_AUTOINSTALL)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1)
-endif()
+foreach(REMOVED_OPTION ENABLE_EXTENSION_AUTOLOADING
+                       ENABLE_EXTENSION_AUTOINSTALL)
+  if(DEFINED ${REMOVED_OPTION})
+    message(
+      WARNING
+        "${REMOVED_OPTION} has no effect: autoload_known_extensions and autoinstall_known_extensions default to true, change them at runtime instead"
+    )
+    unset(${REMOVED_OPTION} CACHE)
+  endif()
+endforeach()
 
 option(
   OSX_BUILD_UNIVERSAL
@@ -615,17 +615,36 @@ option(
   "Build all extension as linkable, overriding DONT_LINK, and don't build core."
   FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
-option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp"
        FALSE)
 option(FORCE_QUERY_LOG
        "If enabled, all queries will be logged to the specified path" OFF)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
+option(
+  ENABLE_EXTENSION_LOAD
+  "Build libduckdb_loadable_extensions.a and link it into the DuckDB targets, so they can install and load external extensions"
+  TRUE)
 option(DISABLE_EXTENSION_LOAD
-       "Disable support for loading and installing extensions" FALSE)
-option(DISABLE_BUILTIN_HTTPLIB "Disable support for built-in http-only httplib"
-       FALSE)
+       "Deprecated, use ENABLE_EXTENSION_LOAD=OFF instead" FALSE)
+option(
+  ENABLE_BUILTIN_HTTPLIB
+  "Build libduckdb_httplib.a and link it into the DuckDB targets as their default HTTP client"
+  TRUE)
+option(DISABLE_BUILTIN_HTTPLIB
+       "Deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF instead" FALSE)
+set(STATICALLY_LINK_EXTENSIONS
+    ""
+    CACHE
+      STRING
+      "Extensions the DuckDB targets link, e.g. 'json parquet' or 'none' (empty: every built extension without DONT_LINK)"
+)
+set(STATICALLY_LINK_CAPABILITIES
+    ""
+    CACHE
+      STRING
+      "Capabilities the DuckDB targets link: 'httplib', 'loadable_extensions', 'local_extension_repository' or 'none' (empty: all of them)"
+)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY
        "Debug setting: disable memory access checks at runtime" FALSE)
@@ -733,11 +752,20 @@ if(PREBUILT_EXTENSIONS AND NOT PREBUILT_BINARY)
 endif()
 
 if(DISABLE_EXTENSION_LOAD)
-  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+  message(
+    WARNING
+      "DISABLE_EXTENSION_LOAD is deprecated, use ENABLE_EXTENSION_LOAD=OFF")
+  set(ENABLE_EXTENSION_LOAD FALSE)
 endif()
 
 if(DISABLE_BUILTIN_HTTPLIB)
-  add_definitions(-DDUCKDB_DISABLE_BUILTIN_HTTPLIB)
+  message(
+    WARNING
+      "DISABLE_BUILTIN_HTTPLIB is deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF")
+  set(ENABLE_BUILTIN_HTTPLIB FALSE)
+endif()
+if(NOT ENABLE_EXTENSION_LOAD)
+  set(ENABLE_BUILTIN_HTTPLIB FALSE)
 endif()
 
 if(${BUILD_RDTSC})
@@ -759,11 +787,22 @@ endif()
 if(NOT BUILD_MAIN_DUCKDB_LIBRARY)
   set(BUILD_UNITTESTS FALSE)
   set(BUILD_SHELL FALSE)
-  set(DISABLE_BUILTIN_EXTENSIONS TRUE)
+  set(STATICALLY_LINK_EXTENSIONS core_functions)
+endif()
+
+if(DISABLE_BUILTIN_EXTENSIONS)
+  message(
+    WARNING
+      "DISABLE_BUILTIN_EXTENSIONS is deprecated, use STATICALLY_LINK_EXTENSIONS=core_functions"
+  )
+  unset(DISABLE_BUILTIN_EXTENSIONS CACHE)
+  if("${STATICALLY_LINK_EXTENSIONS}" STREQUAL "")
+    set(STATICALLY_LINK_EXTENSIONS core_functions)
+  endif()
 endif()
 
 if(GENERATE_EXTENSION_ENTRIES)
-  set(DISABLE_BUILTIN_EXTENSIONS TRUE)
+  set(STATICALLY_LINK_EXTENSIONS none)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
@@ -1297,6 +1336,37 @@ if(PREBUILT_BINARY)
         "Using pre-built shell library from file ${_DUCKDB_PREBUILT_SHELL_PATH}"
     )
   endif()
+
+  # capabilities shipped next to the prebuilt library become their archive
+  # targets
+  get_filename_component(_DUCKDB_PREBUILT_DIRECTORY "${PREBUILT_BINARY_PATH}"
+                         DIRECTORY)
+  foreach(DUCKDB_PREBUILT_CAPABILITY duckdb_httplib duckdb_loadable_extensions)
+    if(MSVC)
+      set(_DUCKDB_PREBUILT_CAPABILITY_PATH
+          "${_DUCKDB_PREBUILT_DIRECTORY}/${DUCKDB_PREBUILT_CAPABILITY}.lib")
+    else()
+      set(_DUCKDB_PREBUILT_CAPABILITY_PATH
+          "${_DUCKDB_PREBUILT_DIRECTORY}/lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+    endif()
+    if(EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}"
+       AND NOT TARGET ${DUCKDB_PREBUILT_CAPABILITY})
+      add_library(${DUCKDB_PREBUILT_CAPABILITY} STATIC IMPORTED GLOBAL)
+      set_property(
+        TARGET ${DUCKDB_PREBUILT_CAPABILITY}
+        PROPERTY IMPORTED_LOCATION "${_DUCKDB_PREBUILT_CAPABILITY_PATH}")
+      target_link_libraries(${DUCKDB_PREBUILT_CAPABILITY}
+                            INTERFACE duckdb_static)
+      message(
+        STATUS
+          "Using pre-built capability from file ${_DUCKDB_PREBUILT_CAPABILITY_PATH}"
+      )
+    endif()
+  endforeach()
+  # local_extension_repository names this build's repository, so it is built
+  # here rather than shipped
+  add_subdirectory(src/main/extension/local_extension_repository
+                   src/main/extension/local_extension_repository)
 
   foreach(
     DUCKDB_PREBUILT_LINK_LIBRARY
