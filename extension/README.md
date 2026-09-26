@@ -69,24 +69,27 @@ to config files stored anywhere on the machine.
 
 DuckDB will load these config files in reverse order and ignore subsequent calls to load an extension with the 
 same name. This allows overriding the base configuration of an extension by providing a different configuration
-in the local config. For example, currently the parquet extension is always statically linked into DuckDB, because of this 
-line in `extension/extension_config.cmake`:
+in the local config. For example, the parquet extension is built and statically linked into DuckDB because of these
+lines in `extension/extension_config.cmake`:
 ```cmake
 duckdb_extension_load(parquet)
+duckdb_extension_statically_link(parquet)
 ```
-Now say we want to build DuckDB with our custom parquet extension, and we also don't want to link this statically in DuckDB, 
-but only produce the loadable binary. We can achieve this creating the `extension/extension_config_local.cmake` file and adding:
+Now say we want to build DuckDB with our custom parquet extension. We can achieve this creating the
+`extension/extension_config_local.cmake` file and adding:
 ```cmake
 duckdb_extension_load(parquet
-    DONT_LINK
     SOURCE_DIR /path/to/my/custom/parquet
 )
 ```
-Now when we run `make` cmake will output:
-```shell
--- Building extension 'parquet' from 'path/to/my/custom/parquet'
--- Extensions built but not linked: parquet
-```
+
+# Building versus linking
+`duckdb_extension_load` only decides what is built. What the DuckDB targets (the shell, unittest, the library) link
+statically is decided separately: by default the built extensions that the configs list with
+`duckdb_extension_statically_link(<extension_name>)`, or exactly `STATICALLY_LINK_EXTENSIONS` when that is set
+(e.g. `STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpch' make`). An extension that is built but not
+linked is still available: automatic installs come from the build's own extension repository, so it is installed and
+loaded the first time a query needs it.
 
 # Using extension config files
 The `duckdb_extension_load` function is used in the configuration files to specify how an extension should
@@ -95,9 +98,8 @@ the configurations used in DuckDBs CI to select which extensions are built.
 
 ## Automatic loading
 The simplest way to load an extension is just passing the extension name. This will automatically try to load the extension.
-Optionally, the DONT_LINK parameter can be passed to disable linking the extension into DuckDB.
 ```cmake
-duckdb_extension_load(<extension_name> (DONT_LINK))
+duckdb_extension_load(<extension_name>)
 ```
 This configuration of `duckdb_extension_load` will search the `./extension` and `./extension_external` directories for
 extensions and attempt to load them if possible. Note that the `extension_external` directory does not exist but should
@@ -111,7 +113,6 @@ When extensions are located in a  path or their project structure is different f
 be used to tell DuckDB how to load the extension:
 ```cmake
 duckdb_extension_load(<extension_name>
-    (DONT_LINK)
     SOURCE_DIR <absolute_path_to_extension_root>
     (INCLUDE_DIR <absolute_path_to_extension_header>)
 )
@@ -122,7 +123,6 @@ Directly installing extensions from GitHub repositories is also supported. This 
 cmake build directory and build it from there: 
 ```cmake
 duckdb_extension_load(postgres_scanner
-    (DONT_LINK)
     GIT_URL https://github.com/duckdb/postgres_scanner
     GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
 )
