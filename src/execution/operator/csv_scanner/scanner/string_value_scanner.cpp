@@ -34,7 +34,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
-								: state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
+                                : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
       error_handler(error_handler_p), iterator(iterator_p), csv_file_scan(std::move(csv_file_scan_p)),
       lines_read(lines_read_p), used_unstrictness(used_unstrictness),
       current_errors(scan_id, state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(path_p) {
@@ -383,7 +383,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	case LogicalTypeId::DOUBLE:
 		success =
 		    TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
-			                      false, state_machine.options.decimal_separator[0]);
+		                          false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::FLOAT:
 		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[chunk_col_id])[number_of_rows],
@@ -1031,8 +1031,8 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
       scanner_idx(scanner_idx_p),
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-	         iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
-	         buffer_manager->GetFilePath(), scanner_idx_p, used_unstrictness),
+             iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
+             buffer_manager->GetFilePath(), scanner_idx_p, used_unstrictness),
       start_pos(0), can_suspend(can_suspend_p) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
@@ -1047,8 +1047,8 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
                                        const CSVIterator &boundary)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
-	         iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
-	         buffer_manager->GetFilePath(), 0, used_unstrictness),
+             iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
+             buffer_manager->GetFilePath(), 0, used_unstrictness),
       start_pos(0), can_suspend(false) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
@@ -1212,7 +1212,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 							auto csv_error = CSVError::CastError(
 							    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch,
 							    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
-								                                                                  first_nl),
+							                                                                      first_nl),
 							    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 							error_handler->Error(csv_error);
 						}
@@ -1563,10 +1563,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 					}
 					value =
 					    RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-						             state_machine->dialect_options.state_machine_options.escape.GetValue(),
-						             state_machine->dialect_options.state_machine_options.quote.GetValue(),
-						             result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-						             result.parse_chunk.data[result.chunk_col_id]);
+					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                 state_machine->dialect_options.state_machine_options.strict_mode.GetValue(),
+					                 result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		} else {
@@ -1595,10 +1595,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 					}
 					value =
 					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-						             state_machine->dialect_options.state_machine_options.escape.GetValue(),
-						             state_machine->dialect_options.state_machine_options.quote.GetValue(),
-						             result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-						             result.parse_chunk.data[result.chunk_col_id]);
+					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                 state_machine->dialect_options.state_machine_options.strict_mode.GetValue(),
+					                 result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}

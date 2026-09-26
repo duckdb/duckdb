@@ -1,12 +1,13 @@
 # name: test/sql/copy/csv/test_buffer_size_final_row.test
 # description: Regression test for duckdb/duckdb#25825: read_csv with an explicit buffer_size silently
+# group: [csv]
+
 #              dropped the final row of the file when that row exceeded buffer_size, instead of raising
 #              the proper Maximum line size error. Setting buffer_size also lowers max_line_size to the
 #              same value, so every buffer size below the oversized row's length must raise an error -
 #              never return a short result. The buffer sizes below exercise both shapes of the bug: the
 #              oversized row starting exactly at a scanner boundary, and the row spanning three or more
 #              buffers (which the two-buffer over-buffer protocol cannot represent).
-# group: [csv]
 
 statement ok
 COPY (SELECT * FROM (VALUES (1, '2'), (3, '4'), (5, '666666666666666666')) t(a, b)) TO '{TEST_DIR}/bs_final_row.csv' (HEADER);
