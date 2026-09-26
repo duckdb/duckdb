@@ -615,7 +615,6 @@ option(
   "Build all extension as linkable, overriding DONT_LINK, and don't build core."
   FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
-option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp"
        FALSE)
 option(FORCE_QUERY_LOG
@@ -788,11 +787,22 @@ endif()
 if(NOT BUILD_MAIN_DUCKDB_LIBRARY)
   set(BUILD_UNITTESTS FALSE)
   set(BUILD_SHELL FALSE)
-  set(DISABLE_BUILTIN_EXTENSIONS TRUE)
+  set(STATICALLY_LINK_EXTENSIONS core_functions)
+endif()
+
+if(DISABLE_BUILTIN_EXTENSIONS)
+  message(
+    WARNING
+      "DISABLE_BUILTIN_EXTENSIONS is deprecated, use STATICALLY_LINK_EXTENSIONS=core_functions"
+  )
+  unset(DISABLE_BUILTIN_EXTENSIONS CACHE)
+  if("${STATICALLY_LINK_EXTENSIONS}" STREQUAL "")
+    set(STATICALLY_LINK_EXTENSIONS core_functions)
+  endif()
 endif()
 
 if(GENERATE_EXTENSION_ENTRIES)
-  set(DISABLE_BUILTIN_EXTENSIONS TRUE)
+  set(STATICALLY_LINK_EXTENSIONS none)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
