@@ -34,7 +34,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
       null_padding(state_machine.options.null_padding), ignore_errors(state_machine.options.ignore_errors.GetValue()),
       extra_delimiter_bytes(state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()
                                 ? 0
-                                : state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
+								: state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1),
       error_handler(error_handler_p), iterator(iterator_p), csv_file_scan(std::move(csv_file_scan_p)),
       lines_read(lines_read_p), used_unstrictness(used_unstrictness),
       current_errors(scan_id, state_machine.options.IgnoreErrors()), sniffing(sniffing_p), path(path_p) {
@@ -383,7 +383,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 	case LogicalTypeId::DOUBLE:
 		success =
 		    TryDoubleCast<double>(value_ptr, size, static_cast<double *>(vector_ptr[chunk_col_id])[number_of_rows],
-		                          false, state_machine.options.decimal_separator[0]);
+			                      false, state_machine.options.decimal_separator[0]);
 		break;
 	case LogicalTypeId::FLOAT:
 		success = TryDoubleCast<float>(value_ptr, size, static_cast<float *>(vector_ptr[chunk_col_id])[number_of_rows],
@@ -1031,8 +1031,8 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
     : BaseScanner(buffer_manager, state_machine, error_handler, sniffing, csv_file_scan, boundary),
       scanner_idx(scanner_idx_p),
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
-             iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), scanner_idx_p, used_unstrictness),
+	         iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
+	         buffer_manager->GetFilePath(), scanner_idx_p, used_unstrictness),
       start_pos(0), can_suspend(can_suspend_p) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
@@ -1047,8 +1047,8 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
                                        const CSVIterator &boundary)
     : BaseScanner(buffer_manager, state_machine, error_handler, false, nullptr, boundary), scanner_idx(0),
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
-             iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), 0, used_unstrictness),
+	         iterator.pos.buffer_pos, *error_handler, iterator, csv_file_scan, lines_read, sniffing,
+	         buffer_manager->GetFilePath(), 0, used_unstrictness),
       start_pos(0), can_suspend(false) {
 	if (scanner_idx == 0 && csv_file_scan) {
 		lines_read += csv_file_scan->skipped_rows;
@@ -1212,7 +1212,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 							auto csv_error = CSVError::CastError(
 							    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch,
 							    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
-							                                                                      first_nl),
+								                                                                  first_nl),
 							    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 							error_handler->Error(csv_error);
 						}
@@ -1287,7 +1287,7 @@ void StringValueScanner::ProcessExtraRow() {
 			} else if (states.states[0] != CSVState::CARRIAGE_RETURN) {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
-				} else {
+				} else if (!TryInsertOversizePendingRowError(iterator.pos.buffer_pos)) {
 					result.AddRow(result, iterator.pos.buffer_pos);
 				}
 				iterator.pos.buffer_pos++;
@@ -1301,7 +1301,7 @@ void StringValueScanner::ProcessExtraRow() {
 			if (states.states[0] != CSVState::RECORD_SEPARATOR) {
 				if (result.IsCommentSet(result)) {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
-				} else {
+				} else if (!TryInsertOversizePendingRowError(iterator.pos.buffer_pos)) {
 					result.AddRow(result, iterator.pos.buffer_pos);
 				}
 				iterator.pos.buffer_pos++;
@@ -1563,10 +1563,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 					}
 					value =
 					    RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
+						             state_machine->dialect_options.state_machine_options.escape.GetValue(),
+						             state_machine->dialect_options.state_machine_options.quote.GetValue(),
+						             result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+						             result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		} else {
@@ -1595,10 +1595,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 					}
 					value =
 					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
+						             state_machine->dialect_options.state_machine_options.escape.GetValue(),
+						             state_machine->dialect_options.state_machine_options.quote.GetValue(),
+						             result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+						             result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}
@@ -1627,7 +1627,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 	if (states.NewRow() && !states.IsNotSet()) {
 		if (result.IsCommentSet(result)) {
 			result.UnsetComment(result, iterator.pos.buffer_pos);
-		} else {
+		} else if (!TryInsertOversizePendingRowError(iterator.pos.buffer_pos)) {
 			result.AddRowInternal();
 		}
 		lines_read++;
@@ -1879,6 +1879,56 @@ ValidRowInfo StringValueScanner::TryRow(CSVState state, idx_t start_pos, idx_t e
 	        quoted};
 }
 
+bool StringValueScanner::TryInsertOversizePendingRowError(const idx_t terminator_pos) {
+	// Only the parallel (boundary-set) path can orphan or mangle a row that spans more than two buffers; the
+	// sequential scanner reads across buffers as one continuous range and already handles this correctly.
+	if (!iterator.IsBoundarySet()) {
+		return false;
+	}
+	const idx_t row_start_buffer = result.current_line_position.end.buffer_idx;
+	const idx_t current_buffer = iterator.pos.buffer_idx;
+	if (current_buffer < row_start_buffer + 2) {
+		return false;
+	}
+	// The pending row started at least two buffer boundaries ago: it spans three or more buffers, which the
+	// over-buffer protocol (a value spans at most two buffers) cannot represent. Because the options
+	// validation guarantees max_line_size <= buffer_size, such a row is always over max_line_size. Compute
+	// its true size from global positions and raise the proper error instead of silently emitting a mangled
+	// row or dropping it (duckdb/duckdb#25825).
+	const idx_t buffer_size = state_machine->options.buffer_size_option.GetValue();
+	const idx_t row_start_global = row_start_buffer * buffer_size + result.current_line_position.end.buffer_pos;
+	const idx_t row_end_global = current_buffer * buffer_size + terminator_pos;
+	const idx_t actual_size = row_end_global > row_start_global ? row_end_global - row_start_global : 0;
+	if (actual_size <= state_machine->options.maximum_line_size.GetValue()) {
+		return false;
+	}
+	result.current_errors.Insert(MAXIMUM_LINE_SIZE, 1, result.chunk_col_id, result.last_position, actual_size);
+	return true;
+}
+
+bool StringValueScanner::AtRowStart() const {
+	if (iterator.pos.buffer_idx == 0 && iterator.pos.buffer_pos == 0) {
+		return true;
+	}
+	char prev_byte;
+	if (iterator.pos.buffer_pos > 0) {
+		prev_byte = buffer_handle_ptr[iterator.pos.buffer_pos - 1];
+	} else {
+		// Only the known-ranges (parallel) buffer manager supports random access to previous buffers; the
+		// sequential manager may have evicted them and GetBuffer would throw. Sequential mode never uses the
+		// ownership claim anyway (it requires IsBoundarySet).
+		if (!buffer_manager->HasKnownBufferRanges()) {
+			return false;
+		}
+		auto prev_buffer = buffer_manager->GetBuffer(iterator.pos.buffer_idx - 1);
+		if (!prev_buffer || prev_buffer->actual_size == 0) {
+			return false;
+		}
+		prev_byte = prev_buffer->Ptr()[prev_buffer->actual_size - 1];
+	}
+	return prev_byte == '\n' || prev_byte == '\r';
+}
+
 void StringValueScanner::SetStart() {
 	start_pos = iterator.GetGlobalCurrentPos();
 	if (iterator.first_one) {
@@ -1931,6 +1981,28 @@ void StringValueScanner::SetStart() {
 		}
 	}
 	if (!best_row.is_valid) {
+		// A row that starts exactly where our boundary starts (the previous byte is a row terminator), has
+		// content at that position, and has no terminator anywhere in this buffer extends beyond it: no
+		// scanner would own that row and it would be silently dropped (duckdb/duckdb#25825). Rewind to the
+		// row start and let the boundary-completion machinery scan it across buffers, raising the proper
+		// max_line_size error if it is over the limit. If a terminator exists inside this buffer, the row
+		// completes within our range and the regular machinery handles it, so we must not claim it.
+		bool row_extends_beyond_buffer = true;
+		for (idx_t i = iterator.pos.buffer_pos; i < cur_buffer_handle->actual_size; i++) {
+			const char candidate_byte = buffer_handle_ptr[i];
+			if (candidate_byte == '\n' || candidate_byte == '\r') {
+				row_extends_beyond_buffer = false;
+				break;
+			}
+		}
+		if (iterator.IsBoundarySet() && AtRowStart() && row_extends_beyond_buffer) {
+			iterator.pos.buffer_pos = best_row.start_pos;
+			result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
+			result.current_line_position.begin = result.last_position;
+			result.current_line_position.end = result.last_position;
+			start_pos = iterator.GetGlobalCurrentPos();
+			return;
+		}
 		bool is_this_the_end =
 		    best_row.start_pos >= cur_buffer_handle->actual_size && cur_buffer_handle->is_last_buffer;
 		if (is_this_the_end) {
@@ -2003,6 +2075,25 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 		if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 			// the last buffer has no next buffer to wait for
 			TryMoveToNextBuffer();
+		}
+	}
+
+	// A value may legitimately span more than two buffers (e.g., a final row longer than buffer_size), which
+	// the over-buffer protocol (a value spans at most two buffers) cannot complete. While a value is still
+	// pending and this buffer has been fully consumed, keep moving to the next buffer:
+	// ProcessOverBufferValue runs on every move and completes the row when its terminator is finally found
+	// (raising the proper max-line-size error via TryInsertOversizePendingRowError), instead of the row being
+	// silently abandoned (duckdb/duckdb#25825). Rows completed within the buffer reset cur_col_id, so this
+	// loop never extends rows that follow the regular protocol.
+	while (cur_buffer_handle && !cur_buffer_handle->is_last_buffer && result.cur_col_id > 0 &&
+	       !result.current_errors.HasError() && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
+		const auto move_result = TryMoveToNextBuffer();
+		if (move_result == MoveBufferResult::NOT_IN_MEMORY) {
+			suspended = true;
+			return;
+		}
+		if (move_result == MoveBufferResult::NOT_MOVED) {
+			break;
 		}
 	}
 	const bool found_error =
