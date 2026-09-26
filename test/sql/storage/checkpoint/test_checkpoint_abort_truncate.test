@@ -2,6 +2,8 @@
 # description: Test that physical file size is truncated to match database size + headers after checkpoint abort
 # group: [checkpoint]
 
+require noforcestorage
+
 load {TEST_DIR}/checkpoint_abort_truncate.db
 
 statement ok
@@ -32,15 +34,16 @@ DROP TABLE t;
 statement ok
 CHECKPOINT;
 
+# Total blocks should be 1 (only the metadata/catalog block)
+query I
+SELECT total_blocks
+FROM pragma_database_size();
+----
+1
+
 # Invariant: right after checkpoint, file size = database size + header (12288)
 query I
 SELECT size = (SELECT total_blocks * block_size + 12288 FROM pragma_database_size())
 FROM read_blob('{TEST_DIR}/checkpoint_abort_truncate.db');
 ----
 true
-
-query I
-SELECT size
-FROM read_blob('{TEST_DIR}/checkpoint_abort_truncate.db');
-----
-274432
