@@ -62,22 +62,22 @@ Unknown TimeZone
 foreach datatype TIMESTAMP TIMESTAMPTZ
 
 query I
-SELECT 'infinity'::${datatype} AT TIME ZONE 'America/Denver';
+SELECT 'infinity'::{datatype} AT TIME ZONE 'America/Denver';
 ----
 infinity
 
 query I
-SELECT '-infinity'::${datatype} AT TIME ZONE 'America/Denver';
+SELECT '-infinity'::{datatype} AT TIME ZONE 'America/Denver';
 ----
 -infinity
 
 statement error
-SELECT 'infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
+SELECT 'infinity'::{datatype} AT TIME ZONE 'Europe/Duck';
 ----
 Unknown TimeZone
 
 statement error
-SELECT '-infinity'::${datatype} AT TIME ZONE 'Europe/Duck';
+SELECT '-infinity'::{datatype} AT TIME ZONE 'Europe/Duck';
 ----
 Unknown TimeZone
 
@@ -203,7 +203,7 @@ NULL	NULL	NULL
 foreach utc UTC-0800 UTC-08 UTC-8 UTC-08:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -211,12 +211,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT+8
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40-08
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40-08
 
@@ -225,7 +225,7 @@ endloop
 foreach utc UTC+0500 UTC+05 UTC+5 UTC+05:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -233,12 +233,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT-5
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+05
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+05
 
@@ -247,7 +247,7 @@ endloop
 foreach utc UTC+1400 UTC+14 UTC+14:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -255,12 +255,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT-14
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+14
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+14
 
@@ -269,7 +269,7 @@ endloop
 foreach utc UTC+1000 UTC+10 UTC+10:00
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -277,12 +277,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT-10
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+10
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+10
 
@@ -291,7 +291,7 @@ endloop
 foreach utc UTC-0 UTC-00 UTC-000 UTC-0000 UTC+0 UTC+00 UTC+000 UTC+0000
 
 statement ok
-set TimeZone = '${utc}';
+set TimeZone = '{utc}';
 
 query I
 select value from duckdb_settings() where name = 'TimeZone';
@@ -299,12 +299,12 @@ select value from duckdb_settings() where name = 'TimeZone';
 Etc/GMT+0
 
 query I
-SELECT '2026-04-23 19:26:40 ${utc}'::TIMESTAMPTZ;
+SELECT '2026-04-23 19:26:40 {utc}'::TIMESTAMPTZ;
 ----
 2026-04-23 19:26:40+00
 
 query I
-SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '${utc}'
+SELECT TIMESTAMP '2026-04-23 19:26:40' AT TIME ZONE '{utc}'
 ----
 2026-04-23 19:26:40+00
 
@@ -506,7 +506,7 @@ America/Montevideo	America/Montevideo
 America/Montreal	America/Montreal
 America/Montserrat	PRT
 America/Nassau	America/Nassau
-America/New_York	EST5EDT
+America/New_York	America/New_York
 America/Nipigon	America/Nipigon
 America/Nome	America/Nome
 America/Noronha	America/Noronha
@@ -716,7 +716,7 @@ CAT	CAT
 CET	CET
 CNT	CNT
 CST	CST
-CST6CDT	CST
+CST6CDT	CST6CDT
 CTT	CTT
 Canada/Atlantic	Canada/Atlantic
 Canada/Central	Canada/Central
@@ -870,7 +870,7 @@ Libya	Libya
 MET	CET
 MIT	MIT
 MST	MST
-MST7MDT	Navajo
+MST7MDT	MST7MDT
 Mexico/BajaNorte	Mexico/BajaNorte
 Mexico/BajaSur	Mexico/BajaSur
 Mexico/General	Mexico/General
@@ -884,7 +884,7 @@ PNT	MST
 PRC	CTT
 PRT	PRT
 PST	PST
-PST8PDT	PST
+PST8PDT	PST8PDT
 Pacific/Apia	MIT
 Pacific/Auckland	NZ
 Pacific/Bougainville	Pacific/Bougainville
@@ -955,7 +955,7 @@ US/Aleutian	US/Aleutian
 US/Arizona	MST
 US/Central	CST
 US/East-Indiana	IET
-US/Eastern	EST5EDT
+US/Eastern	US/Eastern
 US/Hawaii	HST
 US/Indiana-Starke	US/Indiana-Starke
 US/Michigan	US/Michigan
@@ -1141,3 +1141,33 @@ select
 	'2022-10-30 04:00:00+03'::timestamptz,
 ----
 2022-03-27 02:00:00+02	2022-03-27 04:00:00+03	2022-10-30 03:00:00+03	2022-10-30 03:00:00+02
+
+# 2026b
+# British Columbia moved to permanent -07 on 2026-03-09.
+statement ok
+set timezone='America/Vancouver';
+
+query I
+select '2026-11-10'::timestamptz
+----
+2026-11-10 00:00:00-07
+
+# 2026c
+# Alberta moved to permanent -07 on 2026-03-09.
+statement ok
+set TimeZone = 'America/Edmonton';
+
+query I
+select '2026-12-01'::TIMESTAMPTZ;
+----
+2026-12-01 00:00:00-06
+
+# 2026d
+# Canada’s Northwest Territories moved to permanent -06 on 2026-08-21.
+statement ok
+set timezone='America/Yellowknife';
+
+query I
+select '2026-11-02'::TIMESTAMPTZ;
+----
+2026-11-02 00:00:00-06

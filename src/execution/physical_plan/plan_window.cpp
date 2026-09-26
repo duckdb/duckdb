@@ -29,10 +29,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 
 	// Identify streaming windows
 	const bool enable_optimizer = ClientConfig::GetConfig(context).enable_optimizer;
+	const bool can_stream = enable_optimizer && (plan.get().GetSources().size() == 1);
 	vector<idx_t> blocking_windows;
 	vector<idx_t> streaming_windows;
 	for (idx_t expr_idx = 0; expr_idx < op.expressions.size(); expr_idx++) {
-		if (enable_optimizer && PhysicalStreamingWindow::IsStreamingFunction(context, op.expressions[expr_idx])) {
+		if (can_stream && PhysicalStreamingWindow::IsStreamingFunction(context, op.expressions[expr_idx])) {
 			streaming_windows.push_back(expr_idx);
 		} else {
 			blocking_windows.push_back(expr_idx);
