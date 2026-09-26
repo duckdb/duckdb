@@ -1561,12 +1561,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 						}
 						return;
 					}
-					value =
-					    RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
+					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                     state_machine->dialect_options.state_machine_options.strict_mode.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		} else {
@@ -1593,12 +1592,11 @@ void StringValueScanner::ProcessOverBufferValue() {
 						}
 						return;
 					}
-					value =
-					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                 state_machine->dialect_options.state_machine_options.strict_mode.GetValue(),
-					                 result.parse_chunk.data[result.chunk_col_id]);
+					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                     state_machine->dialect_options.state_machine_options.strict_mode.GetValue(),
+					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}
