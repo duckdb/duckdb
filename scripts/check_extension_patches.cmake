@@ -32,7 +32,7 @@ set(EXTENSION_CONFIG_BASE_DIR "${CONFIG_DIR}/extensions")
 # Record the extensions that ask for their patches to be applied.
 set(APPLYING "")
 macro(duckdb_extension_load NAME)
-    cmake_parse_arguments(EXT "APPLY_PATCHES;DONT_LINK;DONT_BUILD;LOAD_TESTS" "GIT_URL;GIT_TAG" "" ${ARGN})
+    cmake_parse_arguments(EXT "APPLY_PATCHES;DONT_BUILD;LOAD_TESTS" "GIT_URL;GIT_TAG" "" ${ARGN})
     if(EXT_APPLY_PATCHES)
         list(APPEND APPLYING "${NAME}")
     endif()

@@ -610,10 +610,8 @@ message(
 
 option(BUILD_MAIN_DUCKDB_LIBRARY
        "Build the main duckdb library and executable." TRUE)
-option(
-  BUILD_EXTENSIONS_ONLY
-  "Build all extension as linkable, overriding DONT_LINK, and don't build core."
-  FALSE)
+option(BUILD_EXTENSIONS_ONLY
+       "Build all extension as linkable, and don't build core." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp"
        FALSE)
@@ -637,7 +635,7 @@ set(STATICALLY_LINK_EXTENSIONS
     ""
     CACHE
       STRING
-      "Extensions the DuckDB targets link, e.g. 'json parquet' or 'none' (empty: every built extension without DONT_LINK)"
+      "Extensions the DuckDB targets link, e.g. 'json parquet' or 'none' (empty: the built ones the extension configs list with duckdb_extension_statically_link)"
 )
 set(STATICALLY_LINK_CAPABILITIES
     ""

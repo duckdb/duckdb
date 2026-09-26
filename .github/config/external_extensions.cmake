@@ -5,3 +5,4 @@
 
 include("${EXTENSION_CONFIG_BASE_DIR}/vortex.cmake")
 include("${EXTENSION_CONFIG_BASE_DIR}/lance.cmake")
+duckdb_extension_statically_link(lance)
