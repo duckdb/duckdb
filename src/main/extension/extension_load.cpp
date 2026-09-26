@@ -804,8 +804,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C++ ABI
 	if (extension_init_result.abi_type == ExtensionABIType::CPP) {
 		auto init_fun_name = extension_init_result.filebase + "_duckdb_cpp_init";
-		ext_init_fun_t init_fun = (ext_init_fun_t)db.config.GetExternalExtensionProvider().TryLoadFunction(
-		    extension_init_result.lib_hdl, init_fun_name);
+		ext_init_fun_t init_fun = reinterpret_cast<ext_init_fun_t>(
+		    db.config.GetExternalExtensionProvider().TryLoadFunction(extension_init_result.lib_hdl, init_fun_name));
 		if (!init_fun) {
 			throw IOException("Extension '%s' did not contain the expected entrypoint function '%s'", extension,
 			                  init_fun_name);
@@ -830,8 +830,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C ABI, V2
 	if (UsesCAPIV2(extension_init_result)) {
 		auto init_fun_name = extension_init_result.filebase + "_init_c_api_v2";
-		auto init_fun_capi_v2 = (ext_init_c_api_v2_fun_t)db.config.GetExternalExtensionProvider().TryLoadFunction(
-		    extension_init_result.lib_hdl, init_fun_name);
+		auto init_fun_capi_v2 = reinterpret_cast<ext_init_c_api_v2_fun_t>(
+		    db.config.GetExternalExtensionProvider().TryLoadFunction(extension_init_result.lib_hdl, init_fun_name));
 
 		if (!init_fun_capi_v2) {
 			throw IOException(
@@ -854,9 +854,8 @@ void ExtensionHelper::LoadExternalExtensionInternal(DatabaseInstance &db, FileSy
 	// C ABI, V1
 	if (extension_init_result.abi_type == ExtensionABIType::C_STRUCT) {
 		auto init_fun_name = extension_init_result.filebase + "_init_c_api";
-		ext_init_c_api_fun_t init_fun_capi =
-		    (ext_init_c_api_fun_t)db.config.GetExternalExtensionProvider().TryLoadFunction(
-		        extension_init_result.lib_hdl, init_fun_name);
+		ext_init_c_api_fun_t init_fun_capi = reinterpret_cast<ext_init_c_api_fun_t>(
+		    db.config.GetExternalExtensionProvider().TryLoadFunction(extension_init_result.lib_hdl, init_fun_name));
 
 		if (!init_fun_capi) {
 			throw IOException("File \"%s\" did not contain function \"%s\": %s", extension_init_result.filename,

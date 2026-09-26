@@ -64,9 +64,9 @@ public:
 			    FS.writeFile(UTF8ToString($1), new Uint8Array(uInt8Array));
 		    },
 		    filename.c_str(), filebase.c_str());
-		auto dopen_from = filebase;
+		const auto &dopen_from = filebase;
 #else
-		auto dopen_from = filename;
+		const auto &dopen_from = filename;
 #endif
 
 		auto lib_hdl = dlopen(dopen_from.c_str(), RTLD_NOW | RTLD_LOCAL);
