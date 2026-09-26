@@ -729,11 +729,12 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 		// the extension load failed - try installing the extension, from the requested repository if one was given
 		ExtensionInstallOptions options;
 		ExtensionRepository repository;
-		if (!repository_name.empty() &&
-		    (ExtensionRepositoryManager::TryGetRepository(db, fs, repository_name, repository) ||
-		     ExtensionRepository::TryGetKnownRepository(repository_name, repository))) {
-			options.repository = repository;
+		if (repository_name.empty() ||
+		    !(ExtensionRepositoryManager::TryGetRepository(db, fs, repository_name, repository) ||
+		      ExtensionRepository::TryGetKnownRepository(repository_name, repository))) {
+			repository = GetAutoinstallRepository(db);
 		}
+		options.repository = repository;
 		ExtensionHelper::InstallExtension(db, fs, extension, options);
 		// try loading again
 		if (!TryInitialLoad(db, fs, extension, repository_name, core_only, result, error)) {

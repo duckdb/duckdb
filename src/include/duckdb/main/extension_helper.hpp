@@ -121,6 +121,9 @@ public:
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
 	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+	//! Where automatic installs go: autoinstall_extension_repository, else custom_extension_repository, else
+	//! DBConfigOptions::default_autoinstall_repository, else the core repository
+	DUCKDB_API static ExtensionRepository GetAutoinstallRepository(DatabaseInstance &db);
 
 	//! Autoload an extension, only if available locally
 	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,

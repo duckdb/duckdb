@@ -75,10 +75,11 @@ function(duckdb_link_extensions TARGET)
 endfunction()
 
 # Resolves what the DuckDB targets link statically. STATICALLY_LINK_CAPABILITIES picks among the capabilities this
-# build makes (httplib, loadable_extensions), all of them by default; STATICALLY_LINK_EXTENSIONS picks the extensions,
-# by default every built extension without DONT_LINK. Either can be 'none', and takes names separated by spaces or ';'.
+# build makes: httplib, loadable_extensions and local_extension_repository (automatic installs come from this build's
+# repository instead of the core one), all of them by default. STATICALLY_LINK_EXTENSIONS picks the extensions, by
+# default every built extension without DONT_LINK. Either can be 'none', and takes names separated by spaces or ';'.
 function(duckdb_resolve_static_link OUT_CAPABILITIES OUT_EXTENSIONS)
-    set(KNOWN_CAPABILITIES httplib loadable_extensions)
+    set(KNOWN_CAPABILITIES httplib loadable_extensions local_extension_repository)
     set(BUILT_CAPABILITIES "")
     if(ENABLE_BUILTIN_HTTPLIB)
         list(APPEND BUILT_CAPABILITIES httplib)
@@ -86,11 +87,13 @@ function(duckdb_resolve_static_link OUT_CAPABILITIES OUT_EXTENSIONS)
     if(ENABLE_EXTENSION_LOAD)
         list(APPEND BUILT_CAPABILITIES loadable_extensions)
     endif()
+    list(APPEND BUILT_CAPABILITIES local_extension_repository)
+    set(DEFAULT_CAPABILITIES ${BUILT_CAPABILITIES})
 
     string(REPLACE " " ";" CAPABILITIES "${STATICALLY_LINK_CAPABILITIES}")
     list(REMOVE_ITEM CAPABILITIES "")
     if("${CAPABILITIES}" STREQUAL "")
-        set(CAPABILITIES ${BUILT_CAPABILITIES})
+        set(CAPABILITIES ${DEFAULT_CAPABILITIES})
     elseif("${CAPABILITIES}" STREQUAL "none")
         set(CAPABILITIES "")
     endif()
