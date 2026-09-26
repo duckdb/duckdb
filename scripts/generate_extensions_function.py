@@ -313,16 +313,12 @@ class ParsedEntries:
 def check_prerequisites():
     if not os.path.isfile(DUCKDB_PATH):
         log(f"{DUCKDB_PATH} not found")
-        log(
-            "please run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'"
-        )
+        log("please run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'")
         exit(1)
     if len(args.extensions) == 0 and not os.path.isfile(EXTENSIONS_PATH):
         log(f"{EXTENSIONS_PATH} not found and --extensions it not set")
         log("Either:")
-        log(
-            "* run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'"
-        )
+        log("* run 'GENERATE_EXTENSION_ENTRIES=1 BUILD_ALL_EXT=1 make release'")
         log("* Specify a comma separated list of extensions using --extensions")
         exit(1)
     if not os.path.isdir(args.extension_repository):
