@@ -65,8 +65,9 @@ struct duckdb_extension_descriptor {
 	void (*entry_capi_v2)(void);
 
 	// Layout 2, set by the describe function
-	//! Set instead of an entry point by something that is not an extension: DuckDB calls it for every database it
-	//! opens, before loading extensions, and neither lists nor loads it as an extension.
+	//! Set instead of an entry point by a capability, something linked like an extension that is not one (such as
+	//! httplib): DuckDB calls it for every database it opens, before loading extensions, and neither lists nor loads
+	//! it as an extension.
 	//! void (duckdb::DatabaseInstance &)
 	void (*database_callback)(void);
 };

@@ -634,6 +634,18 @@ option(
   TRUE)
 option(DISABLE_BUILTIN_HTTPLIB
        "Deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF instead" FALSE)
+set(STATICALLY_LINK_EXTENSIONS
+    ""
+    CACHE
+      STRING
+      "Extensions the DuckDB targets link, e.g. 'json parquet' or 'none' (empty: every built extension without DONT_LINK)"
+)
+set(STATICALLY_LINK_CAPABILITIES
+    ""
+    CACHE
+      STRING
+      "Capabilities the DuckDB targets link: 'httplib', 'loadable_extensions' or 'none' (empty: every built capability)"
+)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY
        "Debug setting: disable memory access checks at runtime" FALSE)

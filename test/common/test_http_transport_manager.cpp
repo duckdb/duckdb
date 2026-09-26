@@ -5,6 +5,7 @@
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -1235,11 +1236,14 @@ TEST_CASE("A linked httplib client is the default HTTP provider", "[http_transpo
 	DuckDB db(nullptr);
 	Connection connection(db);
 	auto &http_util = HTTPUtil::Get(*db.instance);
-	if (http_util.GetName() == "none") {
-		// this binary does not link duckdb_httplib
+	bool linked = false;
+	for (auto &entry : db.instance->config.linked_extensions) {
+		linked = linked || entry.name == "httplib";
+	}
+	CHECK(http_util.GetName() == (linked ? "Built-In" : "none"));
+	if (!linked) {
 		return;
 	}
-	CHECK(http_util.GetName() == "Built-In");
 	auto result = connection.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'httplib'");
 	REQUIRE_NO_FAIL(*result);
 	CHECK(CHECK_COLUMN(result, 0, {0}));
