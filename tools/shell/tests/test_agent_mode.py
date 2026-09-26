@@ -5,9 +5,9 @@ import pytest
 from conftest import ShellTest
 
 # Agent mode renders output for an AI coding agent that reads it through a pipe: a compact markdown table (no
-# padding, the type in the header cell) capped loudly at 1000 rows / 10000 bytes / 500 chars per cell, a footer with
-# the row count and a hash of the whole result, JSON errors, compact plans, and a preamble plus estimate/progress
-# lines on stderr. It is detected from the environment variables coding agents set for the
+# padding, the type in the header cell) rendered whole up to 1000 rows / 10000 bytes and as a first-and-last-rows
+# sample beyond that, cells cut at 500 chars, a footer with the row count and a hash of the whole result, JSON
+# errors, compact plans, a one-line startup note and estimate/progress lines on stderr. It is detected from the environment variables coding agents set for the
 # commands they run, and can be forced with -agent / -no-agent.
 
 FIFTY_ROWS = "SELECT range AS r FROM range(50)"
@@ -179,8 +179,19 @@ def test_compact_explain(shell):
 def test_compact_explain_analyze(shell):
     test = agent_shell(shell).statement("EXPLAIN ANALYZE SELECT count(*) FROM range(10)")
     result = test.run()
+    result.check_stdout("QUERY (time=")
     result.check_stdout("UNGROUPED_AGGREGATE (est=")
     result.check_stdout(", rows=1, time=")
+
+def test_compact_explain_analyze_without_operators(shell):
+    # a count(*) over a table is answered from metadata: no operator tree, but still a summary line
+    test = (
+        agent_shell(shell)
+        .statement("CREATE TABLE t AS SELECT range AS i FROM range(10)")
+        .statement("EXPLAIN ANALYZE SELECT count(*) FROM t")
+    )
+    result = test.run()
+    result.check_stdout("QUERY (time=")
 
 def test_explicit_explain_format_wins(shell):
     test = agent_shell(shell).statement("EXPLAIN (FORMAT json) SELECT 42")
@@ -212,17 +223,24 @@ def test_no_progress_without_agent(shell):
     assert "progress:" not in result.stderr
 
 def test_estimate_on_stderr(shell):
-    # before a query runs, the planner's estimate of what it reads and returns goes to stderr
+    # before a query that reads a lot runs, the planner's estimate of what it reads and returns goes to stderr
     test = (
         agent_shell(shell)
-        .statement("CREATE TABLE t AS SELECT range AS i FROM range(1000)")
+        .statement("CREATE TABLE t AS SELECT range AS i FROM range(2000000)")
         .statement("SELECT count(*) FROM t JOIN range(10) r ON t.i = r.range")
     )
     result = test.run()
     result.check_stdout("| count_star():BIGINT |\n|---|\n| 10 |")
     # no "rows returned" for a statement that does not return rows
-    result.check_stderr("estimate: ~1000 rows read (range ~1000)\n")
-    result.check_stderr("estimate: ~1010 rows read (t ~1000, range ~10), ~1 rows returned")
+    result.check_stderr("estimate: ~2000000 rows read (range ~2000000)\n")
+    result.check_stderr("estimate: ~2000010 rows read (t ~2000000, range ~10), ~1 rows returned")
+
+def test_no_estimate_for_small_reads(shell):
+    # the line is there to decide whether to wait; a small read is noise
+    test = agent_shell(shell).statement("SELECT count(*) FROM range(100000)")
+    result = test.run()
+    result.check_stdout("100000")
+    assert "estimate:" not in result.stderr
 
 def test_no_estimate_without_scans(shell):
     test = (
@@ -267,12 +285,28 @@ def test_preamble_on_stderr(shell):
     result = test.run()
     result.check_stderr(
         "duckdb agent mode on: AI_AGENT is set and stdout is not a terminal; -no-agent turns it off, "
-        ".startup_text none in ~/.duckdbrc hides this note\n"
+        ".help agent explains the output"
     )
-    result.check_stderr("output: markdown tables show the first 1000 rows or 10000 bytes")
-    result.check_stderr("tips: SET max_execution_time=<ms>")
+    # one line only - the explanation is behind .help agent
+    assert "output:" not in result.stderr
+    assert "tips:" not in result.stderr
     result.check_stdout("| a:INTEGER |\n|---|\n| 1 |")
     assert "agent mode" not in result.stdout
+
+def test_help_agent(shell):
+    test = agent_shell(shell).statement(".help agent")
+    result = test.run()
+    result.check_stdout("agent mode: test-agent")
+    result.check_stdout("output: markdown tables; a result of up to 1000 rows and 10000 bytes is rendered whole")
+    result.check_stdout("tips: SET max_execution_time=<ms>")
+    result.check_stdout("switches: -agent / -no-agent")
+
+def test_help_agent_without_agent(shell):
+    # the defaults, even though they are not in effect
+    test = ShellTest(shell).statement(".help agent")
+    result = test.run()
+    result.check_stdout("agent mode: off")
+    result.check_stdout("up to 1000 rows and 10000 bytes")
 
 def test_preamble_names_the_marker(shell):
     test = agent_shell(shell, "CLAUDECODE", "1").statement("SELECT 1 AS a")
@@ -283,7 +317,7 @@ def test_preamble_when_forced(shell):
     # nothing to undo when the flag asked for it
     test = ShellTest(shell).add_argument("-agent").statement("SELECT 1 AS a")
     result = test.run()
-    result.check_stderr("duckdb agent mode on (-agent); .startup_text none in ~/.duckdbrc hides this note\n")
+    result.check_stderr("duckdb agent mode on (-agent); .help agent explains the output")
     assert "-no-agent" not in result.stderr
 
 def test_no_preamble_without_agent(shell):
@@ -298,18 +332,30 @@ def test_preamble_off_via_init_file(shell, tmp_path):
     test = ShellTest(shell, ["-init", str(init)]).env_var("AI_AGENT", "test-agent").statement("SELECT range AS r FROM range(20)")
     result = test.run()
     assert "agent mode" not in result.stderr
-    result.check_stdout("| 4 |\nfirst 5 of 20 rows (.maxrows -1 for all), hash ")
+    result.check_stdout(
+        "| 2 |\n| … 15 rows omitted … |\n| 18 |\n| 19 |\nfirst 3 and last 2 of 20 rows (.maxrows -1 for all), hash "
+    )
 
 def test_row_cap_is_loud(shell):
+    # a result beyond the cap is a sample of its first and last rows, with an explicit marker row in between
     test = agent_shell(shell).statement("SELECT range AS r FROM range(2500)")
     result = test.run()
-    result.check_stdout("| 999 |\nfirst 1000 of 2500 rows (.maxrows -1 for all), hash ")
-    assert "| 1000 |" not in result.stdout
+    result.check_stdout("| 19 |\n| … 2460 rows omitted … |\n| 2480 |")
+    result.check_stdout("| 2499 |\nfirst 20 and last 20 of 2500 rows (.maxrows -1 for all), hash ")
+    assert "| 20 |" not in result.stdout
 
 def test_byte_cap_is_loud(shell):
-    test = agent_shell(shell).statement("SELECT repeat('x', 400) AS s FROM range(2500)")
+    # wide rows: each side of the sample gets half the byte budget
+    test = agent_shell(shell).statement("SELECT repeat('x', 400) AS s, range AS r FROM range(2500)")
     result = test.run()
-    result.check_stdout("first 25 of 2500 rows (.maxbytes 0 for all), hash ")
+    result.check_stdout("| … 2476 rows omitted … |")
+    result.check_stdout("first 12 and last 12 of 2500 rows (.maxbytes 0 for all), hash ")
+
+def test_result_within_cap_is_whole(shell):
+    test = agent_shell(shell).statement("SELECT range AS r FROM range(1000)")
+    result = test.run()
+    result.check_stdout("| 999 |\n1000 rows, hash ")
+    assert "omitted" not in result.stdout
 
 def test_first_row_always_renders(shell):
     # a budget below one row is no reason to show nothing
@@ -332,9 +378,10 @@ def test_huge_result_stops_early(shell):
     # lower bound and there is no hash of a result that was not read to the end
     test = agent_shell(shell).statement("SELECT range AS r FROM range(1000000000)")
     result = test.run()
-    result.check_stdout("| 999 |\nfirst 1000 of at least ")
+    result.check_stdout("| 19 |\nfirst 20 of at least ")
     result.check_stdout(" rows (query stopped early; .maxrows -1 for all)")
     assert "hash" not in result.stdout
+    assert "omitted" not in result.stdout
 
 def test_hash_is_order_independent(shell):
     test = (
@@ -359,7 +406,7 @@ def test_hash_covers_rows_beyond_cap(shell):
         .statement("SELECT range AS r FROM range(20) ORDER BY r DESC")
     )
     result = test.run()
-    hashes = re.findall(r"first 5 of 20 rows \(\.maxrows -1 for all\), hash ([0-9a-f]{16})", result.stdout)
+    hashes = re.findall(r"first 3 and last 2 of 20 rows \(\.maxrows -1 for all\), hash ([0-9a-f]{16})", result.stdout)
     assert len(hashes) == 2
     assert hashes[0] == hashes[1]
 

@@ -3498,6 +3498,13 @@ void ShellState::Initialize() {
 
 //! Environment variables that AI coding agents set for the commands they run. The generic AGENT/AI_AGENT convention
 //! carries the agent's name as its value, the others are tool-specific markers.
+//! Agent-mode defaults (see DetectAgentMode)
+static constexpr size_t AGENT_MAX_ROWS = 1000;
+static constexpr size_t AGENT_MAX_BYTES = 10000;
+static constexpr size_t AGENT_MAX_CELL_WIDTH = 500;
+//! The planner's read estimate from which the estimate line is printed
+static constexpr idx_t ESTIMATE_MIN_ROWS = 1000000;
+
 struct AgentEnvironmentMarker {
 	const char *variable;
 	//! The agent name when the variable does not carry one itself
@@ -3557,29 +3564,41 @@ void ShellState::DetectAgentMode() {
 	// rendered and the footer says how many there are in total and how to get the rest. A silent cut (the duckbox's
 	// dotted middle) is what a reader that cannot ask for more acts on as if it were the whole result.
 	normalMode = cMode = mode = RenderMode::MARKDOWN;
-	max_rows = 1000;
-	max_bytes = 10000;
-	max_cell_width = 500;
+	max_rows = AGENT_MAX_ROWS;
+	max_bytes = AGENT_MAX_BYTES;
+	max_cell_width = AGENT_MAX_CELL_WIDTH;
 }
 
-void ShellState::PrintAgentHelp(PrintOutput output) {
-	// first: that the shell switched modes on its own, why, and how to undo it
-	if (agent_marker.empty()) {
-		PrintF(output, "duckdb agent mode on (-agent); .startup_text none in ~/.duckdbrc hides this note\n");
-	} else {
-		PrintF(output,
-		       "duckdb agent mode on: %s is set and stdout is not a terminal; -no-agent turns it off, .startup_text "
-		       "none in ~/.duckdbrc hides this note\n",
-		       agent_marker);
+void ShellState::PrintAgentHelp(PrintOutput output, bool startup) {
+	if (startup) {
+		// one line, on every run: that the shell switched modes on its own, why, how to undo it, where the rest is.
+		// A model keeps its context between runs, so the explanation is paid for once through .help agent
+		if (agent_marker.empty()) {
+			PrintF(output, "duckdb agent mode on (-agent); .help agent explains the output\n");
+		} else {
+			PrintF(output,
+			       "duckdb agent mode on: %s is set and stdout is not a terminal; -no-agent turns it off, .help agent "
+			       "explains the output\n",
+			       agent_marker);
+		}
+		return;
 	}
+	auto rows = agent_mode_active ? max_rows : AGENT_MAX_ROWS;
+	auto bytes = agent_mode_active ? max_bytes : AGENT_MAX_BYTES;
+	auto cell = agent_mode_active ? max_cell_width : AGENT_MAX_CELL_WIDTH;
+	PrintF(output, "agent mode: %s\n", agent_mode_active ? (agent_name.empty() ? "on" : agent_name.c_str()) : "off");
 	PrintF(output,
-	       "output: markdown tables show the first %zu rows or %zu bytes (.maxrows N, .maxbytes N; -1 / 0 = all) and "
-	       "cut cells at %zu chars (.maxcellwidth N); the footer has the row count and, when the whole result was "
-	       "read, an order-independent hash of it; errors are JSON, estimate/progress lines go to stderr\n",
-	       max_rows, max_bytes, max_cell_width);
+	       "output: markdown tables; a result of up to %zu rows and %zu bytes is rendered whole, a larger one as its "
+	       "first and last rows with the count (.maxrows N, .maxbytes N; -1 / 0 = all); cells are cut at %zu chars "
+	       "(.maxcellwidth N); the footer has the row count and, when the whole result was read, an "
+	       "order-independent hash of it; errors are JSON on stderr; a query that reads over %zu rows gets an "
+	       "estimate line and progress lines on stderr\n",
+	       rows, bytes, cell, (size_t)ESTIMATE_MIN_ROWS);
 	PrintF(output,
 	       "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
 	       "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples\n");
+	PrintF(output, "switches: -agent / -no-agent force the mode; an output mode flag (-csv, -json, ...) leaves it off; "
+	               ".startup_text none in ~/.duckdbrc hides the startup line\n");
 }
 
 void ShellState::PrintExitHint(int rc) {
@@ -3639,6 +3658,14 @@ void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatemen
 		CollectScanEstimates(context, *plan, scans);
 		if (scans.empty()) {
 			// e.g. a plain CREATE TABLE - not worth a line
+			return;
+		}
+		idx_t rows_read = 0;
+		for (auto &scan : scans) {
+			rows_read += scan.rows;
+		}
+		if (rows_read < ESTIMATE_MIN_ROWS) {
+			// the line exists so that a reader can decide whether to wait; a small read is not worth it
 			return;
 		}
 		std::sort(scans.begin(), scans.end(),
@@ -3818,9 +3845,8 @@ int RunShell(int argc, const char **argv) {
 	}
 
 	if (data.agent_mode_active && data.startup_text != StartupText::NONE) {
-		// before anything runs (after the init file, so that .startup_text none and .maxrows in ~/.duckdbrc apply):
-		// what the output means, and the knobs the reader would otherwise not know about
-		data.PrintAgentHelp(PrintOutput::STDERR);
+		// before anything runs (after the init file, so that .startup_text none in ~/.duckdbrc applies)
+		data.PrintAgentHelp(PrintOutput::STDERR, true);
 	}
 
 	data.DetectDarkLightMode();

@@ -3,6 +3,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
@@ -50,6 +51,22 @@ void CompactTreeRenderer::Render(const ProfilingNode &op, BaseTreeRenderer &ss) 
 void CompactTreeRenderer::Render(const Pipeline &op, BaseTreeRenderer &ss) {
 	auto tree = RenderTree::CreateRenderTree(op);
 	ToStream(*tree, ss);
+}
+
+void CompactTreeRenderer::RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) {
+	auto &metrics = profiler.GetQueryMetrics();
+	vector<string> stats;
+	stats.push_back(StringUtil::Format("time=%.4fs", metrics.GetStringMetricInSeconds("query.total_time")));
+	auto bytes_read = metrics.GetBytesRead();
+	if (bytes_read > 0) {
+		stats.push_back("read=" + StringUtil::BytesToHumanReadableString(bytes_read, 1000));
+	}
+	auto bytes_written = metrics.GetBytesWritten();
+	if (bytes_written > 0) {
+		stats.push_back("written=" + StringUtil::BytesToHumanReadableString(bytes_written, 1000));
+	}
+	ss << "QUERY (" << StringUtil::Join(stats, ", ") << ")\n";
+	profiler.RenderProfilingNodeTree(*this, ss);
 }
 
 void CompactTreeRenderer::ToStreamInternal(RenderTree &root, BaseTreeRenderer &ss) {

@@ -620,29 +620,47 @@ public:
 			return ColumnRenderer::RenderQueryResult(out, state, result);
 		}
 		RenderHeader(out, result.metadata);
-		idx_t rendered_bytes = 0;
+		// the rows are buffered up to the cap (at most max_rows / max_bytes, which is small) so that a result that
+		// fits is rendered whole, and one that does not is rendered as a sample of its first and last rows
+		vector<string> head_lines;
+		idx_t head_bytes = 0;
+		vector<string> tail_ring;
+		idx_t tail_next = 0;
+		const idx_t tail_max = duckdb::MinValue<idx_t>(SAMPLE_ROWS, max_rows / 2);
+		auto push_tail = [&](string line) {
+			if (tail_max == 0) {
+				return;
+			}
+			if (tail_ring.size() < tail_max) {
+				tail_ring.push_back(std::move(line));
+			} else {
+				tail_ring[tail_next] = std::move(line);
+			}
+			tail_next = (tail_next + 1) % tail_max;
+		};
+		bool capped = false;
 		for (auto &row_data : result) {
 			if (state.seenInterrupt) {
 				state.PrintF("Interrupt\n");
 				return SuccessState::FAILURE;
 			}
-			// the first row always renders: a budget below one row is no reason to show nothing
-			bool within_rows = rendered_rows < max_rows;
-			bool within_bytes = max_bytes == 0 || rendered_bytes < max_bytes || rendered_rows == 0;
-			if (within_rows && within_bytes) {
-				auto line = FormatRow(row_data);
-				out.Print(line);
-				rendered_bytes += line.size();
-				rendered_rows++;
-				continue;
+			auto line = FormatRow(row_data);
+			if (!capped) {
+				// the first row always counts: a budget below one row is no reason to show nothing
+				bool within_rows = head_lines.size() < max_rows;
+				bool within_bytes = max_bytes == 0 || head_bytes < max_bytes || head_lines.empty();
+				if (within_rows && within_bytes) {
+					head_bytes += line.size();
+					head_lines.push_back(line);
+					push_tail(std::move(line));
+					continue;
+				}
+				capped = true;
+				cap_hint = within_rows ? ".maxbytes 0 for all" : ".maxrows -1 for all";
 			}
-			if (!within_rows) {
-				cap_hint = ".maxrows -1 for all";
-			} else {
-				cap_hint = ".maxbytes 0 for all";
-			}
+			push_tail(std::move(line));
 			// beyond the cap the rows are only counted and hashed - up to a point: the count is then a lower bound
-			if (row_data.row_index >= rendered_rows + LOOKAHEAD_ROWS) {
+			if (row_data.row_index >= head_lines.size() + LOOKAHEAD_ROWS) {
 				break;
 			}
 		}
@@ -651,6 +669,52 @@ public:
 		}
 		row_count = result.loaded_row_count;
 		complete = result.exhausted_result;
+		if (!capped) {
+			for (auto &line : head_lines) {
+				out.Print(line);
+			}
+			head_rows = head_lines.size();
+			RenderFooter(out, result.metadata);
+			return SuccessState::SUCCESS;
+		}
+		// a sample: the first rows within half the byte budget, then the last rows within the other half
+		const idx_t head_max = duckdb::MinValue<idx_t>(SAMPLE_ROWS, max_rows - tail_max);
+		const idx_t half_bytes = max_bytes / 2;
+		idx_t bytes = 0;
+		for (auto &line : head_lines) {
+			if (head_rows >= head_max || (max_bytes > 0 && head_rows > 0 && bytes + line.size() > half_bytes)) {
+				break;
+			}
+			out.Print(line);
+			bytes += line.size();
+			head_rows++;
+		}
+		if (complete && !tail_ring.empty()) {
+			// the ring holds the last rows in arrival order starting at tail_next; take from the end, but never a row
+			// that is part of the head
+			vector<string> tail_lines;
+			bytes = 0;
+			for (idx_t i = 0; i < tail_ring.size() && head_rows + tail_lines.size() < row_count; i++) {
+				auto &line = tail_ring[(tail_next + tail_ring.size() - 1 - i) % tail_ring.size()];
+				if (max_bytes > 0 && bytes + line.size() > half_bytes) {
+					break;
+				}
+				bytes += line.size();
+				tail_lines.push_back(line);
+			}
+			tail_rows = tail_lines.size();
+			if (tail_rows > 0) {
+				auto omitted = row_count - head_rows - tail_rows;
+				if (omitted > 0) {
+					// a one-cell row is a valid table row (the missing cells read as empty) and stands out
+					out.Print(
+					    StringUtil::Format("%s… %llu rows omitted …%s", GetRowStart(), omitted, GetRowSeparator()));
+				}
+				for (idx_t i = tail_rows; i > 0; i--) {
+					out.Print(tail_lines[i - 1]);
+				}
+			}
+		}
 		RenderFooter(out, result.metadata);
 		return SuccessState::SUCCESS;
 	}
@@ -660,11 +724,16 @@ public:
 			return;
 		}
 		if (!complete) {
-			out.Print(StringUtil::Format("first %llu of at least %llu rows (query stopped early; %s)\n", rendered_rows,
+			out.Print(StringUtil::Format("first %llu of at least %llu rows (query stopped early; %s)\n", head_rows,
 			                             row_count, cap_hint));
-		} else if (rendered_rows < row_count) {
-			out.Print(StringUtil::Format("first %llu of %llu rows (%s), hash %016llx\n", rendered_rows, row_count,
-			                             cap_hint, result_hash));
+		} else if (head_rows + tail_rows < row_count) {
+			if (tail_rows > 0) {
+				out.Print(StringUtil::Format("first %llu and last %llu of %llu rows (%s), hash %016llx\n", head_rows,
+				                             tail_rows, row_count, cap_hint, result_hash));
+			} else {
+				out.Print(StringUtil::Format("first %llu of %llu rows (%s), hash %016llx\n", head_rows, row_count,
+				                             cap_hint, result_hash));
+			}
 		} else if (row_count == 0 || row_count >= 10) {
 			out.Print(StringUtil::Format("%llu rows, hash %016llx\n", row_count, result_hash));
 		}
@@ -827,13 +896,16 @@ private:
 	static constexpr duckdb::hash_t NULL_HASH = 0x9E3779B97F4A7C15ULL;
 	//! How many rows past the cap are still read (counted and hashed) before the query is stopped
 	static constexpr idx_t LOOKAHEAD_ROWS = 100000;
+	//! How many first and last rows a result that exceeds the cap is sampled to (each side)
+	static constexpr idx_t SAMPLE_ROWS = 20;
 
 	bool compact;
 	idx_t max_rows;
 	idx_t max_bytes;
 	idx_t max_cell_width;
 	idx_t row_count = 0;
-	idx_t rendered_rows = 0;
+	idx_t head_rows = 0;
+	idx_t tail_rows = 0;
 	bool complete = true;
 	const char *cap_hint = "";
 	duckdb::hash_t result_hash = 0;

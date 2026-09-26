@@ -451,8 +451,9 @@ public:
 	void DetectAgentMode();
 	//! Whether the environment marks the shell as being run by an AI coding agent, which one, and by which variable
 	static bool DetectAgentEnvironment(string &agent_name, string &marker);
-	//! Print the summary of how agent mode renders, and the engine features an agent should know about
-	void PrintAgentHelp(PrintOutput output);
+	//! Print how agent mode renders and the engine features an agent should know about; `startup` is the one-line
+	//! form printed before anything runs
+	void PrintAgentHelp(PrintOutput output, bool startup);
 	//! On a failed run through a pipe with no agent detected and no -agent/-no-agent given: point at -agent
 	void PrintExitHint(int rc);
 	//! Print the planner's estimate of what a statement will read and return to stderr (agent mode)

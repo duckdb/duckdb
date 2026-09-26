@@ -32,6 +32,10 @@ public:
 	string ToString(const ProfilingNode &op);
 	string ToString(const Pipeline &op);
 
+	//! A summary line (total time, bytes read/written) before the tree - also when there is no tree, e.g. a
+	//! count(*) answered from metadata
+	void RenderProfiler(const QueryProfiler &profiler, BaseTreeRenderer &ss) override;
+
 	void Render(const LogicalOperator &op, BaseTreeRenderer &ss);
 	void Render(const PhysicalOperator &op, BaseTreeRenderer &ss);
 	void Render(const ProfilingNode &op, BaseTreeRenderer &ss) override;
