@@ -114,9 +114,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 					auto connections = ConnectionManager::Get(*live_instance).GetConnectionCount();
 					live_instance.reset();
 					if (connections > 0) {
-						throw ConnectionException(
-						    "Database \"%s\" is still in use: %llu connection(s) are open on it", database,
-						    (unsigned long long)connections);
+						throw ConnectionException("Database \"%s\" is still in use: %llu connection(s) are open on it",
+						                          database, (unsigned long long)connections);
 					}
 					throw ConnectionException("Database \"%s\" is still in use: no connections are open, but "
 					                          "something still holds it, such as an unfinished query result",
@@ -125,8 +124,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, 
 				grace = now + std::chrono::milliseconds(IN_USE_GRACE_MILLIS);
 			}
 			if (now > deadline) {
-				throw ConnectionException("Database \"%s\" did not finish shutting down within %lld seconds",
-				                          database, (long long)SHUTDOWN_WAIT_SECONDS);
+				throw ConnectionException("Database \"%s\" did not finish shutting down within %lld seconds", database,
+				                          (long long)SHUTDOWN_WAIT_SECONDS);
 			}
 		}
 		D_ASSERT(!cache_entry);
