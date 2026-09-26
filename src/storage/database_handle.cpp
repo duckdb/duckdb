@@ -169,6 +169,13 @@ void DatabaseHandle::Trim(idx_t offset, idx_t length) {
 	}
 }
 
+idx_t DatabaseHandle::GetFileSize() {
+	if (mmap_handle) {
+		return 0;
+	}
+	return handle->GetFileSize();
+}
+
 FileHandle &DatabaseHandle::GetFileHandle() {
 	return *handle;
 }
