@@ -16,7 +16,7 @@ namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
 class FileSystem;
-struct ExtensionInstallInfo;
+class ExtensionInstallInfo;
 struct ExtensionInstallOptions;
 
 //! Installs external extensions and opens their libraries. The base class is the "none" provider, which refuses both;
