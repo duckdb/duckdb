@@ -57,6 +57,8 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include "shell_progress_bar.hpp"
 #include "shell_prompt.hpp"
@@ -66,6 +68,7 @@
 #endif
 #include "shell_extension.hpp"
 #include <ctype.h>
+#include <algorithm>
 
 #if !defined(_WIN32) && !defined(WIN32)
 #include <signal.h>
@@ -772,6 +775,9 @@ string ShellState::EscapeCString(const string &str) {
 }
 
 void ShellState::Exit(int exit_code) {
+	if (GetReference()) {
+		GetReference()->PrintExitHint(exit_code);
+	}
 	if (exit_code == 0) {
 		// clean-up shell state if this is a successful exit
 		auto shell_state = GetReference();
@@ -1012,6 +1018,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	// analyze the query result so we know how long/wide the result will be
 	auto render_state = stream ? RenderQueryResult(*renderer, *stream) : RenderQueryResult(*renderer, res);
+	if (stream && stream->HasError()) {
+		// the query failed after it started streaming rows (e.g. a division by zero, or max_execution_time)
+		PrintDatabaseError(stream->GetError());
+		return SuccessState::FAILURE;
+	}
 	return render_state;
 }
 
@@ -1032,6 +1043,11 @@ void ShellState::SetupPrettyExplain(duckdb::SQLStatement &statement) {
 			// a custom profiler output format is configured - respect it
 			return;
 		}
+	}
+	if (agent_mode_active) {
+		// one operator per line - cheaper to read than the box-drawing tree, and easier to parse than JSON/YAML
+		explain.format = duckdb::ProfilerPrintFormat("compact");
+		return;
 	}
 	// default to the full plan; only fold low-impact operators in an interactive console session, where the user
 	// can type ".last" to expand the tree again (batch/redirected output has no such affordance)
@@ -1056,13 +1072,14 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			if (!statement) {
 				continue; // a peel that preprocessing swallowed
 			}
+			auto &statement_query = statement->query.empty() ? zSql : statement->query;
 			idx_t start_pos = statement->stmt_location.offset;
 			idx_t len = statement->stmt_location.length;
-			while (len > 0 && IsSpace(zSql[start_pos])) {
+			while (len > 0 && IsSpace(statement_query[start_pos])) {
 				start_pos++;
 				len--;
 			}
-			auto zStmtSql = zSql.substr(start_pos, len);
+			auto zStmtSql = statement_query.substr(start_pos, len);
 
 			/* echo the sql statement if echo on */
 			if (ShellHasFlag(ShellFlags::SHFLG_Echo)) {
@@ -1078,17 +1095,23 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
+			if (agent_mode_active) {
+				PrintQueryEstimate(zStmtSql, *statement);
+			}
+
 			// Reset before bind; the `_` replacement scan sets it to true if it fires.
 			last_result_referenced = false;
 			auto rc = ExecuteStatement(std::move(statement));
+			if (agent_mode_active) {
+				// keep stdout in step with the stderr progress/estimate lines when both go to the same pipe
+				fflush(out);
+			}
 			if (rc != SuccessState::SUCCESS) {
 				return rc;
 			}
 		} /* end while */
 	} catch (std::exception &ex) {
-		duckdb::ErrorData error(ex);
-		error.AddErrorLocation(zSql);
-		PrintDatabaseError(error.Message());
+		PrintDatabaseError(duckdb::ErrorData(ex), zSql);
 		return SuccessState::FAILURE;
 	}
 	return SuccessState::SUCCESS;
@@ -1228,6 +1251,10 @@ unique_ptr<duckdb::ProgressBarDisplay> CreateProgressBar() {
 	return make_uniq<ShellProgressBarDisplay>();
 }
 
+unique_ptr<duckdb::ProgressBarDisplay> CreateAgentProgressBar() {
+	return make_uniq<AgentProgressBarDisplay>();
+}
+
 static void RegisterShellLogger(duckdb::DuckDB &db, duckdb::shared_ptr<duckdb::LogStorage> storage_ptr) {
 	auto *db_instance = db.instance.get();
 	auto &log_manager = db_instance->GetLogManager();
@@ -1248,8 +1275,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 			RegisterShellLogger(*db, storage_ptr);
 			conn = make_uniq<duckdb::Connection>(*db);
 		} catch (std::exception &ex) {
-			duckdb::ErrorData error(ex);
-			PrintDatabaseError(error.Message());
+			PrintDatabaseError(duckdb::ErrorData(ex));
 			if (flags == ShellOpenFlags::KEEP_ALIVE_ON_FAILURE) {
 				db = make_uniq<duckdb::DuckDB>(":memory:", &config);
 				RegisterShellLogger(*db, storage_ptr);
@@ -1261,6 +1287,9 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		auto &client_config = duckdb::ClientConfig::GetConfig(*conn->context);
 		if (stdout_is_console) {
 			client_config.display_create_func = CreateProgressBar;
+		} else if (agent_mode_active) {
+			// no terminal to draw a progress bar on - print periodic progress lines to stderr instead
+			client_config.display_create_func = CreateAgentProgressBar;
 		}
 #ifdef SHELL_INLINE_AUTOCOMPLETE
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
@@ -1270,9 +1299,13 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 			ExecuteQuery("SET enable_external_access=false");
 			ExecuteQuery("SET lock_configuration=true");
 		}
-		if (stdout_is_console) {
+		if (stdout_is_console || agent_mode_active) {
 			ExecuteQuery("PRAGMA enable_progress_bar");
 			ExecuteQuery("PRAGMA enable_print_progress_bar");
+		}
+		if (agent_mode_active) {
+			// structured errors: the engine renders them as JSON instead of a LINE/caret block
+			ExecuteQuery("SET errors_as_json = true");
 		}
 	}
 }
@@ -1575,7 +1608,52 @@ void ShellState::ResetOutput() {
 	stdout_is_console = true;
 }
 
+//! Render an error message as the JSON object the engine produces under errors_as_json
+static string ErrorToJSON(const string &message) {
+	if (!message.empty() && message[0] == '{') {
+		// already JSON - drop the candidates field, the message already lists them
+		auto fields = StringUtil::ParseJSONMap(message, true);
+		if (fields.find("candidates") == fields.end()) {
+			return message;
+		}
+		fields.erase("candidates");
+		auto type = duckdb::Exception::StringToExceptionType(fields["exception_type"]);
+		auto text = fields["exception_message"];
+		fields.erase("exception_type");
+		fields.erase("exception_message");
+		return StringUtil::ExceptionToJSONMap(type, text, fields);
+	}
+	// preserve the exception type when the message starts with e.g. "Binder Error: "
+	auto type = duckdb::ExceptionType::INVALID_INPUT;
+	auto text = message;
+	auto prefix_pos = message.find(" Error: ");
+	if (prefix_pos != string::npos) {
+		auto prefix_type = duckdb::Exception::StringToExceptionType(message.substr(0, prefix_pos));
+		if (prefix_type != duckdb::ExceptionType::INVALID) {
+			type = prefix_type;
+			text = message.substr(prefix_pos + 8);
+		}
+	}
+	StringUtil::RTrim(text);
+	ErrorData error(type, text);
+	error.ConvertErrorToJSON();
+	return error.Message();
+}
+
+void ShellState::PrintDatabaseError(ErrorData error, const string &query) {
+	if (agent_mode_active) {
+		error.ConvertErrorToJSON();
+	} else {
+		error.AddErrorLocation(query);
+	}
+	PrintDatabaseError(error.Message());
+}
+
 void ShellState::PrintDatabaseError(const string &zErr) {
+	if (agent_mode_active) {
+		PrintF(PrintOutput::STDERR, "%s\n", ErrorToJSON(zErr).c_str());
+		return;
+	}
 	if (!HighlightErrors()) {
 		PrintF(PrintOutput::STDERR, "%s\n", zErr.c_str());
 		return;
@@ -2237,6 +2315,7 @@ void ShellState::ShowConfiguration() {
 	}
 	PrintF("\n");
 	PrintF("%12.12s: %s\n", "filename", zDbFilename.c_str());
+	PrintF("%12.12s: %s\n", "agent", agent_mode_active ? (agent_name.empty() ? "on" : agent_name.c_str()) : "off");
 }
 
 MetadataResult ShellState::DisplayTables(const vector<string> &args) {
@@ -2746,8 +2825,7 @@ int ShellState::DoMetaCommand(const string &zLine) {
 				result = MetadataResult::FAIL;
 			}
 		} catch (std::exception &ex) {
-			ErrorData error(ex);
-			PrintDatabaseError(error.Message());
+			PrintDatabaseError(ErrorData(ex));
 			result = MetadataResult::FAIL;
 		}
 		rc = int(result);
@@ -3418,6 +3496,202 @@ void ShellState::Initialize() {
 #endif
 }
 
+//! Environment variables that AI coding agents set for the commands they run. The generic AGENT/AI_AGENT convention
+//! carries the agent's name as its value, the others are tool-specific markers.
+//! Agent-mode defaults (see DetectAgentMode)
+static constexpr size_t AGENT_MAX_ROWS = 1000;
+static constexpr size_t AGENT_MAX_BYTES = 10000;
+static constexpr size_t AGENT_MAX_CELL_WIDTH = 500;
+//! The planner's read estimate from which the estimate line is printed
+static constexpr idx_t ESTIMATE_MIN_ROWS = 1000000;
+
+struct AgentEnvironmentMarker {
+	const char *variable;
+	//! The agent name when the variable does not carry one itself
+	const char *agent_name;
+};
+
+static const AgentEnvironmentMarker AGENT_ENVIRONMENT_MARKERS[] = {{"AI_AGENT", nullptr},
+                                                                   {"AGENT", nullptr},
+                                                                   {"CLAUDECODE", "claude-code"},
+                                                                   {"CODEX_CI", "codex"},
+                                                                   {"CODEX_SANDBOX", "codex"},
+                                                                   {"CODEX_THREAD_ID", "codex"},
+                                                                   {"CURSOR_AGENT", "cursor"},
+                                                                   {"GEMINI_CLI", "gemini-cli"},
+                                                                   {"COPILOT_AGENT", "github-copilot"},
+                                                                   {"COPILOT_CLI", "github-copilot"},
+                                                                   {"COPILOT_AGENT_SESSION_ID", "github-copilot"},
+                                                                   {nullptr, nullptr}};
+
+bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
+	for (idx_t i = 0; AGENT_ENVIRONMENT_MARKERS[i].variable; i++) {
+		auto &entry = AGENT_ENVIRONMENT_MARKERS[i];
+		auto value = getenv(entry.variable);
+		if (!value || !value[0]) {
+			continue;
+		}
+		agent_name = entry.agent_name ? entry.agent_name : value;
+		marker = entry.variable;
+		return true;
+	}
+	return false;
+}
+
+void ShellState::DetectAgentMode() {
+	switch (agent_mode) {
+	case OptionType::ON:
+		agent_mode_active = true;
+		break;
+	case OptionType::OFF:
+		agent_mode_active = false;
+		break;
+	default:
+		// auto-detect: an agent reads our output through a pipe, never from a terminal. An output mode on the command
+		// line (-csv, -json, ...) is a deliberate choice of format that the agent rendering would fight with, so it
+		// leaves the mode off; -agent still forces it
+		agent_mode_active = !output_mode_flag && !stdout_is_console && DetectAgentEnvironment(agent_name, agent_marker);
+		break;
+	}
+	if (!agent_mode_active) {
+		return;
+	}
+	if (agent_name.empty()) {
+		string marker;
+		DetectAgentEnvironment(agent_name, marker);
+	}
+	// a compact markdown table (see ModeMarkdownRenderer). The result is capped, but loudly: the first rows are
+	// rendered and the footer says how many there are in total and how to get the rest. A silent cut (the duckbox's
+	// dotted middle) is what a reader that cannot ask for more acts on as if it were the whole result.
+	normalMode = cMode = mode = RenderMode::MARKDOWN;
+	max_rows = AGENT_MAX_ROWS;
+	max_bytes = AGENT_MAX_BYTES;
+	max_cell_width = AGENT_MAX_CELL_WIDTH;
+}
+
+void ShellState::PrintAgentHelp(PrintOutput output, bool startup) {
+	if (startup) {
+		// one line, on every run: that the shell switched modes on its own, why, how to undo it, where the rest is.
+		// A model keeps its context between runs, so the explanation is paid for once through .help agent
+		if (agent_marker.empty()) {
+			PrintF(output, "duckdb agent mode on (-agent); .help agent explains the output\n");
+		} else {
+			PrintF(output,
+			       "duckdb agent mode on: %s is set and stdout is not a terminal; -no-agent turns it off, .help agent "
+			       "explains the output\n",
+			       agent_marker);
+		}
+		return;
+	}
+	auto rows = agent_mode_active ? max_rows : AGENT_MAX_ROWS;
+	auto bytes = agent_mode_active ? max_bytes : AGENT_MAX_BYTES;
+	auto cell = agent_mode_active ? max_cell_width : AGENT_MAX_CELL_WIDTH;
+	PrintF(output, "agent mode: %s\n", agent_mode_active ? (agent_name.empty() ? "on" : agent_name.c_str()) : "off");
+	PrintF(output,
+	       "output: markdown tables; a result of up to %zu rows and %zu bytes is rendered whole, a larger one as its "
+	       "first and last rows with the count (.maxrows N, .maxbytes N; -1 / 0 = all); cells are cut at %zu chars "
+	       "(.maxcellwidth N); the footer has the row count and, when the whole result was read, an "
+	       "order-independent hash of it; errors are JSON on stderr; a query that reads over %zu rows gets an "
+	       "estimate line and progress lines on stderr\n",
+	       rows, bytes, cell, (size_t)ESTIMATE_MIN_ROWS);
+	PrintF(output,
+	       "tips: SET max_execution_time=<ms> bounds a query; DESCRIBE <query> gives the result columns "
+	       "without running it; SUMMARIZE <table>; .tables; duckdb_functions() has descriptions and examples\n");
+	PrintF(output, "switches: -agent / -no-agent force the mode; an output mode flag (-csv, -json, ...) leaves it off; "
+	               ".startup_text none in ~/.duckdbrc hides the startup line\n");
+}
+
+void ShellState::PrintExitHint(int rc) {
+	// a failed run through a pipe may well be a coding agent that does not know the mode exists - but only when
+	// nothing identified one (the environment, -agent) and nothing declined (-no-agent)
+	if (rc == 0 || stdout_is_console || agent_mode_active || agent_mode != OptionType::DEFAULT || exit_hint_printed) {
+		return;
+	}
+	exit_hint_printed = true;
+	string name, marker;
+	if (DetectAgentEnvironment(name, marker)) {
+		// an agent that chose its output format itself (-csv, ...) needs no hint
+		return;
+	}
+	PrintF(PrintOutput::STDERR,
+	       "hint: -agent renders errors as JSON and results compactly for AI coding agents (duckdb -help lists all "
+	       "options)\n");
+}
+
+struct ScanEstimate {
+	string name;
+	idx_t rows;
+};
+
+static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::LogicalOperator &op,
+                                 vector<ScanEstimate> &scans) {
+	if (op.type == duckdb::LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<duckdb::LogicalGet>();
+		ScanEstimate scan;
+		auto table = get.GetTable();
+		scan.name = table ? table->name.GetIdentifierName() : StringUtil::Lower(get.function.name.GetIdentifierName());
+		scan.rows = get.EstimateCardinality(context);
+		scans.push_back(std::move(scan));
+	}
+	for (auto &child : op.children) {
+		CollectScanEstimates(context, *child, scans);
+	}
+}
+
+void ShellState::PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement) {
+	switch (statement.type) {
+	case duckdb::StatementType::SELECT_STATEMENT:
+	case duckdb::StatementType::INSERT_STATEMENT:
+	case duckdb::StatementType::UPDATE_STATEMENT:
+	case duckdb::StatementType::DELETE_STATEMENT:
+	case duckdb::StatementType::CREATE_STATEMENT:
+	case duckdb::StatementType::COPY_STATEMENT:
+		break;
+	default:
+		// nothing to estimate
+		return;
+	}
+	try {
+		auto &context = *conn->context;
+		auto plan = context.ExtractPlan(sql);
+		vector<ScanEstimate> scans;
+		CollectScanEstimates(context, *plan, scans);
+		if (scans.empty()) {
+			// e.g. a plain CREATE TABLE - not worth a line
+			return;
+		}
+		idx_t rows_read = 0;
+		for (auto &scan : scans) {
+			rows_read += scan.rows;
+		}
+		if (rows_read < ESTIMATE_MIN_ROWS) {
+			// the line exists so that a reader can decide whether to wait; a small read is not worth it
+			return;
+		}
+		std::sort(scans.begin(), scans.end(),
+		          [](const ScanEstimate &a, const ScanEstimate &b) { return a.rows > b.rows; });
+		idx_t total_rows = 0;
+		vector<string> scan_texts;
+		for (idx_t i = 0; i < scans.size(); i++) {
+			total_rows += scans[i].rows;
+			if (i < 5) {
+				scan_texts.push_back(StringUtil::Format("%s ~%llu", scans[i].name, scans[i].rows));
+			}
+		}
+		if (scans.size() > 5) {
+			scan_texts.push_back(StringUtil::Format("%llu more", scans.size() - 5));
+		}
+		string line =
+		    StringUtil::Format("estimate: ~%llu rows read (%s)", total_rows, StringUtil::Join(scan_texts, ", "));
+		if (statement.type == duckdb::StatementType::SELECT_STATEMENT) {
+			line += StringUtil::Format(", ~%llu rows returned", plan->EstimateCardinality(context));
+		}
+		PrintF(PrintOutput::STDERR, "%s\n", line);
+	} catch (std::exception &) {
+		// planning failed - the real execution reports the error
+	}
+}
+
 void ShellState::DetectDarkLightMode() {
 #ifdef HAVE_LINENOISE
 	ShellHighlight highlight(*this);
@@ -3549,6 +3823,7 @@ int RunShell(int argc, const char **argv) {
 		data.zDbFilename = ":memory:";
 	}
 	data.out = stdout;
+	data.DetectAgentMode();
 
 	// Open the database file
 	data.OpenDB();
@@ -3567,6 +3842,11 @@ int RunShell(int argc, const char **argv) {
 			}
 			return 1;
 		}
+	}
+
+	if (data.agent_mode_active && data.startup_text != StartupText::NONE) {
+		// before anything runs (after the init file, so that .startup_text none in ~/.duckdbrc applies)
+		data.PrintAgentHelp(PrintOutput::STDERR, true);
 	}
 
 	data.DetectDarkLightMode();
@@ -3657,6 +3937,8 @@ int RunShell(int argc, const char **argv) {
 #else
 	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
 #endif
+	// before ResetOutput, which forgets that stdout was not a console
+	data.PrintExitHint(rc);
 	data.SetTableName(0);
 	data.last_result.reset();
 	data.db.reset();

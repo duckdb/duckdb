@@ -243,6 +243,10 @@ MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &ar
 
 MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
+		if (duckdb::StringUtil::CIEquals(args[1], "agent")) {
+			state.PrintAgentHelp(PrintOutput::STDOUT, false);
+			return MetadataResult::SUCCESS;
+		}
 #ifdef HAVE_LINENOISE
 		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
 			auto shortcuts = duckdb::GetShellShortcuts();
@@ -336,6 +340,30 @@ MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 	const char *zFile = args[1].c_str();
 	state.CloseOutputFile(state.pLog);
 	state.pLog = state.OpenOutputFile(zFile, 0);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxBytes(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 1) {
+		state.PrintF("current max bytes: %zu\n", state.max_bytes);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_bytes = (size_t)ShellState::StringToInt(args[1]);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxCellWidth(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 1) {
+		state.PrintF("current max cell width: %zu\n", state.max_cell_width);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_cell_width = (size_t)ShellState::StringToInt(args[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -944,7 +972,7 @@ static const MetadataCommand metadata_commands[] = {
      "--bom\tPut a UTF8 byte-order mark on intermediate file"},
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0, ""},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0, ""},
-    {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
+    {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN (.help agent: the agent mode)", 0, ""},
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlightErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
@@ -973,8 +1001,14 @@ static const MetadataCommand metadata_commands[] = {
     {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
      "Displays the signatures, descriptions and examples of all overloads of FUNCTION.\n"
      "FUNCTION may be qualified: [database.][schema.]function."},
+    {"maxbytes", 0, SetMaxBytes, "COUNT",
+     "Sets the maximum number of bytes of rows for display (0 = all). Only for markdown mode in -agent mode.", 0, ""},
+    {"maxcellwidth", 0, SetMaxCellWidth, "COUNT",
+     "Sets the maximum number of characters per cell (0 = all). Only for markdown mode in -agent mode.", 0, ""},
     {"maxrows", 0, SetMaxRows, "COUNT",
-     "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
+     "Sets the maximum number of rows for display (default: 40, -1 = all). Only for duckbox mode and for markdown "
+     "mode in -agent mode.",
+     0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
      "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0, ""},
     {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0,
