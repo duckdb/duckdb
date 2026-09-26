@@ -15,11 +15,8 @@
 ## Extensions that are linked
 #
 duckdb_extension_load(icu)
-duckdb_extension_statically_link(icu)
 duckdb_extension_load(json)
-duckdb_extension_statically_link(json)
 duckdb_extension_load(parquet)
-duckdb_extension_statically_link(parquet)
 duckdb_extension_load(autocomplete)
 duckdb_extension_statically_link(autocomplete)
 

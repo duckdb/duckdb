@@ -7,6 +7,5 @@ duckdb_extension_load(test_utils
   # For local dev:
   # SOURCE_DIR "${EXTENSION_CONFIG_BASE_DIR}/../../../../test-utils"
 )
-duckdb_extension_statically_link(test_utils)
 
 include("${EXTENSION_CONFIG_BASE_DIR}/../in_tree_extensions.cmake")
