@@ -404,6 +404,14 @@ private:
 	                    bool &quoted) const;
 	//! If the current row we found is valid
 	bool IsRowValid(CSVIterator &current_iterator) const;
+	//! Whether the current iterator position sits exactly at the start of a row (previous byte is a row
+	//! terminator, or this is the very start of the file)
+	bool AtRowStart() const;
+	//! A row spanning three or more buffers cannot be represented by the over-buffer protocol (which assumes a
+	//! value spans at most two buffers). Since max_line_size <= buffer_size is guaranteed, such a row is always
+	//! over the limit: compute its true size from global positions and insert the proper MAXIMUM_LINE_SIZE
+	//! error instead of silently emitting a mangled row. Returns true when the error was inserted.
+	bool TryInsertOversizePendingRowError(const idx_t terminator_pos);
 	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
 	bool FirstValueEndsOnQuote(CSVIterator iterator) const;
 
