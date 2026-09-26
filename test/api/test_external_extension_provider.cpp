@@ -3,6 +3,7 @@
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -44,4 +45,26 @@ TEST_CASE("The none external extension provider refuses installing and loading",
 
 	CHECK(!ExtensionHelper::CanAutoloadExtension(*db.instance, "json"));
 	REQUIRE_THROWS(db.instance->config.SetExternalExtensionProvider(nullptr));
+}
+
+TEST_CASE("Automatic installs go to the linked local extension repository unless a setting says otherwise", "[api]") {
+	DuckDB db(nullptr);
+	auto &config = DBConfig::GetConfig(*db.instance);
+	bool linked = false;
+	for (auto &entry : config.linked_extensions) {
+		linked = linked || entry.name == "local_extension_repository";
+	}
+	auto core = ExtensionRepository::GetCoreRepository();
+	auto repository = ExtensionHelper::GetAutoinstallRepository(*db.instance);
+	CHECK(linked == !config.options.default_autoinstall_repository.empty());
+	CHECK(repository.path == (linked ? config.options.default_autoinstall_repository : core.path));
+
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET custom_extension_repository = 'http://custom.test'"));
+	CHECK(ExtensionHelper::GetAutoinstallRepository(*db.instance).path == "http://custom.test");
+	REQUIRE_NO_FAIL(con.Query("SET autoinstall_extension_repository = 'http://autoinstall.test'"));
+	CHECK(ExtensionHelper::GetAutoinstallRepository(*db.instance).path == "http://autoinstall.test");
+	REQUIRE_NO_FAIL(con.Query("RESET autoinstall_extension_repository"));
+	REQUIRE_NO_FAIL(con.Query("RESET custom_extension_repository"));
+	CHECK(ExtensionHelper::GetAutoinstallRepository(*db.instance).path == repository.path);
 }

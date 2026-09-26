@@ -90,6 +90,10 @@ struct DBConfigOptions {
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+	//! Where automatic installs go when neither autoinstall_extension_repository nor custom_extension_repository is
+	//! set; empty means the core repository. The local_extension_repository capability sets it to its build's
+	//! repository
+	string default_autoinstall_repository;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = DConstants::INVALID_INDEX;
 	//! The maximum size of the 'temp_directory' folder when set (in bytes). Default: 90% of available disk space.

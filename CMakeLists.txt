@@ -643,7 +643,7 @@ set(STATICALLY_LINK_CAPABILITIES
     ""
     CACHE
       STRING
-      "Capabilities the DuckDB targets link: 'httplib', 'loadable_extensions' or 'none' (empty: every built capability)"
+      "Capabilities the DuckDB targets link: 'httplib', 'loadable_extensions', 'local_extension_repository' or 'none' (empty: all of them)"
 )
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY
