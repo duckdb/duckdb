@@ -1337,6 +1337,37 @@ if(PREBUILT_BINARY)
     )
   endif()
 
+  # capabilities shipped next to the prebuilt library become their archive
+  # targets
+  get_filename_component(_DUCKDB_PREBUILT_DIRECTORY "${PREBUILT_BINARY_PATH}"
+                         DIRECTORY)
+  foreach(DUCKDB_PREBUILT_CAPABILITY duckdb_httplib duckdb_loadable_extensions)
+    if(MSVC)
+      set(_DUCKDB_PREBUILT_CAPABILITY_PATH
+          "${_DUCKDB_PREBUILT_DIRECTORY}/${DUCKDB_PREBUILT_CAPABILITY}.lib")
+    else()
+      set(_DUCKDB_PREBUILT_CAPABILITY_PATH
+          "${_DUCKDB_PREBUILT_DIRECTORY}/lib${DUCKDB_PREBUILT_CAPABILITY}.a")
+    endif()
+    if(EXISTS "${_DUCKDB_PREBUILT_CAPABILITY_PATH}"
+       AND NOT TARGET ${DUCKDB_PREBUILT_CAPABILITY})
+      add_library(${DUCKDB_PREBUILT_CAPABILITY} STATIC IMPORTED GLOBAL)
+      set_property(
+        TARGET ${DUCKDB_PREBUILT_CAPABILITY}
+        PROPERTY IMPORTED_LOCATION "${_DUCKDB_PREBUILT_CAPABILITY_PATH}")
+      target_link_libraries(${DUCKDB_PREBUILT_CAPABILITY}
+                            INTERFACE duckdb_static)
+      message(
+        STATUS
+          "Using pre-built capability from file ${_DUCKDB_PREBUILT_CAPABILITY_PATH}"
+      )
+    endif()
+  endforeach()
+  # local_extension_repository names this build's repository, so it is built
+  # here rather than shipped
+  add_subdirectory(src/main/extension/local_extension_repository
+                   src/main/extension/local_extension_repository)
+
   foreach(
     DUCKDB_PREBUILT_LINK_LIBRARY
     duckdb_fastpforlib
