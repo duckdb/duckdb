@@ -631,6 +631,8 @@ option(
   TRUE)
 option(DISABLE_BUILTIN_HTTPLIB
        "Deprecated, use ENABLE_BUILTIN_HTTPLIB=OFF instead" FALSE)
+option(LINK_CORE_EXTENSIONS
+       "Also statically link the extensions named in BUILD_EXTENSIONS" FALSE)
 set(STATICALLY_LINK_EXTENSIONS
     ""
     CACHE

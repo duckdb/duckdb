@@ -883,6 +883,9 @@ foreach(EXT IN LISTS BUILD_EXTENSIONS)
             # in-tree or non-existent extension: load it
             duckdb_extension_load(${EXT})
         endif()
+        if(LINK_CORE_EXTENSIONS)
+            duckdb_extension_statically_link(${EXT})
+        endif()
     endif()
 endforeach()
 

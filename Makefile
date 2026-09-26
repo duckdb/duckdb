@@ -257,6 +257,9 @@ endif
 ifneq ($(SKIP_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_EXTENSIONS="$(SKIP_EXTENSIONS)"
 endif
+# LINK_CORE_EXTENSIONS=1 also links the extensions named in BUILD_EXTENSIONS / CORE_EXTENSIONS, which otherwise are only
+# built; always passed, so leaving it out turns it off again
+CMAKE_VARS:=${CMAKE_VARS} -DLINK_CORE_EXTENSIONS=$(if $(filter 1 ON on TRUE true,$(LINK_CORE_EXTENSIONS)),ON,OFF)
 # what the DuckDB targets link (space or semicolon separated, or none); always passed, so leaving them out restores the
 # defaults
 CMAKE_VARS:=${CMAKE_VARS} -DSTATICALLY_LINK_EXTENSIONS="$(STATICALLY_LINK_EXTENSIONS)"
