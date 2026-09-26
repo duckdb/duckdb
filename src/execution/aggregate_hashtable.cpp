@@ -126,6 +126,15 @@ const PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() cons
 	return *partitioned_data;
 }
 
+idx_t GroupedAggregateHashTable::GetDataSizeInBytes() const {
+	return partitioned_data->SizeInBytes() + (unpartitioned_data ? unpartitioned_data->SizeInBytes() : 0);
+}
+
+idx_t GroupedAggregateHashTable::GetAllocatedDataSizeInBytes() const {
+	return partitioned_data->GetAllocatedSizeInBytes() +
+	       (unpartitioned_data ? unpartitioned_data->GetAllocatedSizeInBytes() : 0);
+}
+
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
 	if (radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD) {
 		// Flush/unpin unpartitioned data and append to partitioned data
@@ -295,6 +304,10 @@ void GroupedAggregateHashTable::SkipLookups() {
 	skip_lookups = true;
 }
 
+bool GroupedAggregateHashTable::LookupsSkipped() const {
+	return skip_lookups;
+}
+
 void GroupedAggregateHashTable::EnableHLL(bool enable) {
 	enable_hll = enable;
 }
@@ -305,7 +318,7 @@ bool GroupedAggregateHashTable::HLLEnabled() const {
 
 idx_t GroupedAggregateHashTable::GetHLLUpperBound() const {
 	D_ASSERT(enable_hll);
-	return LossyNumericCast<idx_t>((1 + HyperLogLog::GetErrorRate()) * static_cast<double>(hll.Count()));
+	return LossyNumericCast<idx_t>((1 + HyperLogLogP<8>::GetErrorRate()) * static_cast<double>(hll.Count()));
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
@@ -315,8 +328,9 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	}
 	D_ASSERT(Count() == 0 || Count() == GetMaterializedCount());
 
+	auto new_hash_map = buffer_manager.GetBufferAllocator().Allocate(size * sizeof(ht_entry_t));
 	capacity = size;
-	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
+	hash_map = std::move(new_hash_map);
 	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
 	ClearPointerTable();
 	bitmask = capacity - 1;
@@ -1281,7 +1295,7 @@ void GroupedAggregateHashTable::ResetForNewIteration(idx_t radix_bits_p) {
 	sink_count = 0;
 	skip_lookups = false;
 	enable_hll = false;
-	hll = HyperLogLog();
+	hll = HyperLogLogP<8>();
 	state.dict_state.dictionary_id = string();
 
 	// Compute effective capacity based on the previous iteration's actual group count.
