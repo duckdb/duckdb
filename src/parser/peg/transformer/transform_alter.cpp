@@ -212,8 +212,8 @@ unique_ptr<MultiStatement> PEGTransformerFactory::TransformAndMaterializeAlter(
 
 	// 3. `ALTER TABLE t ALTER u SET DEFAULT <expression>;`
 	// Reinstate the original default expression.
-	AddToMultiStatement(
-	    multi_statement, make_uniq<SetDefaultInfo>(data, vector<Identifier> {Identifier(column_name)}, std::move(expression)));
+	AddToMultiStatement(multi_statement, make_uniq<SetDefaultInfo>(data, vector<Identifier> {Identifier(column_name)},
+	                                                               std::move(expression)));
 
 	return multi_statement;
 }

@@ -315,7 +315,8 @@ private:
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
 struct SetDefaultInfo : public AlterTableInfo {
-	SetDefaultInfo(const AlterEntryData &data, vector<Identifier> column_path, unique_ptr<ParsedExpression> new_default);
+	SetDefaultInfo(const AlterEntryData &data, vector<Identifier> column_path,
+	               unique_ptr<ParsedExpression> new_default);
 	~SetDefaultInfo() override;
 
 	//! Path to the column to alter, e.g. ["s", "a"] for "s.a"
