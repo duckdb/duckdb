@@ -422,10 +422,14 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &cache = parameters.local_state->Cast<CalendarCacheState>();
 		CalendarPtr cal(info.calendar->Copy());
 
+		// Every nullopt below is a conversion failure: report it to try-cast callers such as the CSV reader
+		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, timestamp_tz_t>(source, result, count, [&](string_t input) {
-			return VarcharToTimestampTZUS(cal, cache, input, parameters);
+			auto converted = VarcharToTimestampTZUS(cal, cache, input, parameters);
+			all_converted = all_converted && converted;
+			return converted;
 		});
-		return true;
+		return all_converted;
 	}
 
 	static bool VarcharToTimestampTZNS(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -434,11 +438,13 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &cache = parameters.local_state->Cast<CalendarCacheState>();
 		CalendarPtr cal(info.calendar->Copy());
 
+		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, timestamp_tz_ns_t>(
 		    source, result, count, [&](string_t input) -> optional<timestamp_tz_ns_t> {
 			    int32_t nanos = 0;
 			    auto ts_us = VarcharToTimestampTZUS(cal, cache, input, parameters, &nanos);
 			    if (!ts_us) {
+				    all_converted = false;
 				    return nullopt;
 			    }
 
@@ -446,12 +452,13 @@ struct ICUStrptime : public ICUDateFunc {
 			    timestamp_ns_t result;
 			    if (!Timestamp::TryFromTimestampNanos(us, nanos, result)) {
 				    HandleCastError::AssignError(Timestamp::RangeError(input), parameters);
+				    all_converted = false;
 				    return nullopt;
 			    }
 
 			    return timestamp_tz_ns_t(result);
 		    });
-		return true;
+		return all_converted;
 	}
 
 	static bool VarcharToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -459,6 +466,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->Copy());
 
+		bool all_converted = true;
 		UnaryExecutor::Execute<string_t, dtime_tz_t>(
 		    source, result, count, [&](string_t input) -> optional<dtime_tz_t> {
 			    dtime_tz_t result;
@@ -469,6 +477,7 @@ struct ICUStrptime : public ICUDateFunc {
 			    if (!Time::TryConvertTimeTZ(str, len, pos, result, has_offset, false)) {
 				    auto msg = Time::ConversionError(string(str, len));
 				    HandleCastError::AssignError(msg, parameters);
+				    all_converted = false;
 				    return nullopt;
 			    } else if (!has_offset) {
 				    // Convert parts to a TZ (default or parsed) if no offset was provided
@@ -485,7 +494,7 @@ struct ICUStrptime : public ICUDateFunc {
 
 			    return result;
 		    });
-		return true;
+		return all_converted;
 	}
 
 	static BoundCastInfo BindCastFromVarchar(BindCastInput &input, const LogicalType &source,
