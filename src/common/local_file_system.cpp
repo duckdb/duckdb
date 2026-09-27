@@ -1697,7 +1697,7 @@ optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &fil
 	if (raw_handle == INVALID_HANDLE_VALUE) {
 		auto error_code = GetLastError();
 		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND ||
-			// Keep the same behavior with unix platform, for glob chars in filepath, treat as not found instead of throwing.
+		    // Keep the same behavior with unix, for glob chars in filepath, treat as not found instead of throwing.
 		    (error_code == ERROR_INVALID_NAME && HasGlob(path_p))) {
 			return nullopt;
 		}
