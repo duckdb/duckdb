@@ -442,40 +442,55 @@ idx_t arrow_split_import_batch = 0;
 idx_t arrow_split_rows = 0;
 idx_t arrow_split_appends = 1;
 bool arrow_split_flush = true;
+// When nonzero, the probe column is the ENUM `arrow_split_enum`
+idx_t arrow_split_dict_size = 0;
 
-// Builds a BIGINT chunk of arrow_split_rows rows, pushes it through an exporter and importer with
-// the configured batch sizes, and records the shapes that came out.
+// Builds a chunk of arrow_split_rows rows, pushes it through an exporter and importer with the
+// configured batch sizes, and records the shapes that came out.
 void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
                     duckdb_v2_error_info_handle *err) {
 	duckdb_v2_vector_handle result = nullptr;
 	if (duckdb_v2_scalar_function_exec_get_result(info, &result, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	auto bigint = ArrowTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
-	if (!bigint) {
-		return;
+	duckdb_v2_logical_type_handle column_type = nullptr;
+	if (arrow_split_dict_size) {
+		if (duckdb_v2_context_create_type_from_text(context, Convert("arrow_split_enum"), &column_type, err) !=
+		    DUCKDB_V2_ERROR_NONE) {
+			return;
+		}
+	} else {
+		column_type = ArrowTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
+		if (!column_type) {
+			return;
+		}
 	}
 	auto column = Convert("v");
 	auto *rt =
-	    ArrowMakeRoundtrip(context, &bigint, &column, 1, arrow_split_export_batch, arrow_split_import_batch, err);
+	    ArrowMakeRoundtrip(context, &column_type, &column, 1, arrow_split_export_batch, arrow_split_import_batch, err);
 	if (!rt) {
-		duckdb_v2_logical_type_destroy(&bigint);
+		duckdb_v2_logical_type_destroy(&column_type);
 		return;
 	}
 
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(&bigint, 1, &input, err);
-	duckdb_v2_logical_type_destroy(&bigint);
+	auto rc = duckdb_v2_data_chunk_create(&column_type, 1, &input, err);
+	duckdb_v2_logical_type_destroy(&column_type);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		ArrowRoundtripDestroy(rt);
 		return;
 	}
 	duckdb_v2_vector_handle in_v = nullptr;
-	int64_t *data = nullptr;
+	void *data = nullptr;
 	if (duckdb_v2_data_chunk_get_vector(input, 0, &in_v, err) == DUCKDB_V2_ERROR_NONE &&
-	    duckdb_v2_vector_get_data_mutable(in_v, reinterpret_cast<void **>(&data), err) == DUCKDB_V2_ERROR_NONE) {
+	    duckdb_v2_vector_get_data_mutable(in_v, &data, err) == DUCKDB_V2_ERROR_NONE) {
 		for (idx_t i = 0; i < arrow_split_rows; i++) {
-			data[i] = static_cast<int64_t>(i);
+			if (arrow_split_dict_size) {
+				// An ENUM of at most 255 entries is physically UINT8 (EnumTypeInfo::DictType).
+				static_cast<uint8_t *>(data)[i] = static_cast<uint8_t>(i % arrow_split_dict_size);
+			} else {
+				static_cast<int64_t *>(data)[i] = static_cast<int64_t>(i);
+			}
 		}
 		duckdb_v2_vector_set_size(in_v, arrow_split_rows, err);
 	}
@@ -522,8 +537,18 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 			if (duckdb_v2_data_chunk_get_vector(imported, 0, &out_v, err) == DUCKDB_V2_ERROR_NONE &&
 			    duckdb_v2_vector_get_view(out_v, &view, err) == DUCKDB_V2_ERROR_NONE) {
 				for (idx_t k = 0; k < size; k++) {
-					arrow_split_observed.values.push_back(
-					    reinterpret_cast<const int64_t *>(view.data)[SelAt(view.sel, k)]);
+					auto idx = SelAt(view.sel, k);
+					if (!arrow_split_dict_size) {
+						arrow_split_observed.values.push_back(reinterpret_cast<const int64_t *>(view.data)[idx]);
+						continue;
+					}
+
+					const auto &str = reinterpret_cast<const duckdb::string_t *>(view.data)[idx];
+					auto code = str.GetSize() == 1 ? static_cast<int64_t>(str.GetData()[0] - 'a') : -1;
+					if (code < 0 || code >= static_cast<int64_t>(arrow_split_dict_size)) {
+						code = -1;
+					}
+					arrow_split_observed.values.push_back(code);
 				}
 			}
 			duckdb_v2_data_chunk_destroy(&imported);
@@ -840,6 +865,50 @@ TEST_CASE("V2 arrow: the exporter accepts input without draining first", "[capi_
 	REQUIRE(arrow_split_observed.second_append_rc == DUCKDB_V2_ERROR_NONE);
 	// And a chunk whose types disagree with the exporter never reaches the conversion.
 	REQUIRE(arrow_split_observed.type_mismatch_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
+TEST_CASE("V2 arrow: a dictionary column survives an importer split", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	RegisterArrowProbe(fx.conn, "arrow_split_probe", ArrowSplitExec);
+	arrow_split_export_batch = 0;
+	arrow_split_appends = 1;
+
+	SECTION("a dictionary smaller than the import batch") {
+		ExecSQL(fx.conn, "CREATE TYPE arrow_split_enum AS ENUM ('a', 'b', 'c')");
+		arrow_split_dict_size = 3;
+		arrow_split_observed = {};
+		arrow_split_rows = 7;
+		arrow_split_import_batch = 2;
+		RunArrowProbe(fx.conn, "SELECT arrow_split_probe(1)");
+		arrow_split_dict_size = 0;
+		REQUIRE(arrow_split_observed.array_rows == std::vector<int64_t> {7});
+		REQUIRE(arrow_split_observed.chunk_rows == std::vector<idx_t> {2, 2, 2, 1});
+		REQUIRE(arrow_split_observed.values == std::vector<int64_t> {0, 1, 2, 0, 1, 2, 0});
+	}
+
+	SECTION("a dictionary larger than the import batch") {
+		ExecSQL(fx.conn, "CREATE TYPE arrow_split_enum AS ENUM ('a','b','c','d','e','f','g','h','i','j')");
+		arrow_split_dict_size = 10;
+		arrow_split_observed = {};
+		arrow_split_rows = 7;
+		arrow_split_import_batch = 3;
+		RunArrowProbe(fx.conn, "SELECT arrow_split_probe(1)");
+		arrow_split_dict_size = 0;
+		REQUIRE(arrow_split_observed.chunk_rows == std::vector<idx_t> {3, 3, 1});
+		REQUIRE(arrow_split_observed.values == std::vector<int64_t> {0, 1, 2, 3, 4, 5, 6});
+	}
+
+	SECTION("an exact multiple of the import batch") {
+		ExecSQL(fx.conn, "CREATE TYPE arrow_split_enum AS ENUM ('a', 'b', 'c')");
+		arrow_split_dict_size = 3;
+		arrow_split_observed = {};
+		arrow_split_rows = 6;
+		arrow_split_import_batch = 2;
+		RunArrowProbe(fx.conn, "SELECT arrow_split_probe(1)");
+		arrow_split_dict_size = 0;
+		REQUIRE(arrow_split_observed.chunk_rows == std::vector<idx_t> {2, 2, 2});
+		REQUIRE(arrow_split_observed.values == std::vector<int64_t> {0, 1, 2, 0, 1, 2});
+	}
 }
 #endif
 

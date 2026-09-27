@@ -12,6 +12,12 @@
   "skip_compiled": "true",
   "skip_tests": [
     {
+      "reason": "Keyword-only arguments cannot be serialized to v1.x storage.",
+      "paths": [
+        "test/extension/test_function_args_kwargs.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/extension/autoloading_types.test",

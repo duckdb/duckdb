@@ -315,7 +315,7 @@ functions:
         type: copy_function
         description: The function to set the name of.
       name:
-        type: str
+        type: identifier
         indirection: 1
         description: The name to set. Borrowed and copied.
       err:
@@ -379,7 +379,7 @@ functions:
       Sets the optional batch size callback of the `COPY ... TO` side.
 
       The batch size callback is invoked during query planning, after the bind callback, for each `COPY ... TO`
-      statement that does not set `BATCH_SIZE` itself. It must report how many rows a batch should carry via
+      statement that does not set `BATCH_SIZE` itself. It should report how many rows a batch should carry via
       `[[copy_to_batch_size_set_target]]`; the engine then cuts the rows being written into batches of that size and
       hands each to the batch callback. Without a batch size from either the statement or the callback, a batch is
       cut for every chunk of rows sunk, i.e. a vector at a time. A batch may still be smaller than the reported size
@@ -754,7 +754,7 @@ functions:
       - [ "stable", "v2.0.0", "2026-09-03" ]
     description: |
       Sets the number of rows a batch should carry, as the target the engine cuts batches at. The batch size
-      callback must set this to a value greater than 0; the statement fails otherwise.
+      callback must set this to a value greater than 0; the statement fails otherwise. DuckDB defines the `BATCH_SIZE` on omission of calling the function.
     parameters:
       info:
         type: copy_to_batch_size_info

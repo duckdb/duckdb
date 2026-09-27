@@ -43,11 +43,12 @@
         "test/sql/aggregate/aggregates/arg_min_max_nulls_last.test",
         "test/sql/aggregate/aggregates/bitstring_agg_empty.test",
         "test/sql/aggregate/aggregates/bitstring_agg_memory_limit.test",
+        "test/sql/aggregate/aggregates/first_last_alloc_reuse.test",
         "test/sql/aggregate/aggregates/histogram_exact.test",
         "test/sql/aggregate/aggregates/histogram_table_function.test",
         "test/sql/aggregate/aggregates/max_n_all_types_grouped.test",
-        "test/sql/aggregate/aggregates/mode_rewrite_memory.test",
         "test/sql/aggregate/aggregates/mode_rewrite.test",
+        "test/sql/aggregate/aggregates/mode_rewrite_memory.test",
         "test/sql/aggregate/aggregates/test_aggregate_types_scalar.test",
         "test/sql/aggregate/aggregates/test_approx_quantile.test",
         "test/sql/aggregate/aggregates/test_binned_histogram.test",
@@ -68,8 +69,9 @@
       ]
     },
     {
-      "reason": "FIXME: aggregate functions missing state type callback (approx_count_distinct, sum over VARINT, test_named_agg_inspect, test_volatile_aggregate)",
+      "reason": "FIXME: aggregate functions missing state type callback (approx_count_distinct, sum over VARINT, test_named_agg_inspect, test_args_agg, test_volatile_aggregate)",
       "paths": [
+        "test/extension/test_function_args_kwargs.test",
         "test/extension/test_function_named_args.test",
         "test/extension/volatile_aggregate.test",
         "test/issues/general/test_24049.test",

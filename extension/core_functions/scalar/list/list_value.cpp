@@ -316,7 +316,8 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 	auto element_type = LogicalType::TEMPLATE("T");
 	ScalarFunction value_fun({element_type}, LogicalType::LIST(element_type), ListValueFunction, ListValueBind,
 	                         ListValueStats);
-	value_fun.SetVarArgs(element_type);
+	value_fun.GetSignature().GetParameter(0).SetName("value");
+	value_fun.GetSignature().AddArgsParameter("args", element_type);
 	value_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(value_fun);
 
@@ -325,7 +326,7 @@ ScalarFunctionSet ListValueFun::GetFunctions() {
 
 ScalarFunction UnpivotListFun::GetFunction() {
 	ScalarFunction fun("unpivot_list", {}, LogicalTypeId::LIST, ListValueFunction, UnpivotBind, ListValueStats);
-	fun.SetVarArgs(LogicalTypeId::ANY);
+	fun.GetSignature().AddArgsParameter("args", LogicalTypeId::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

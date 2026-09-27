@@ -9,7 +9,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
@@ -32,6 +31,37 @@ static void ConvertLegacyTableFilters(LogicalGet &get) {
 	}
 	for (auto &entry : converted_filters) {
 		get.table_filters.SetFilterByColumnIndex(entry.first, std::move(entry.second));
+	}
+}
+
+//! Pre-v2.0.0 versions key their table filters by table column index. Map each key to the scanned column it names.
+static void MapLegacyTableFilterKeys(LogicalGet &get) {
+	if (get.table_filters.HasMultiColumnFilters()) {
+		throw SerializationException(
+		    "LogicalGet::Deserialize - unexpected multi-column filters in legacy table filters");
+	}
+	auto &column_ids = get.GetColumnIds();
+	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> filters;
+	for (auto &entry : get.table_filters) {
+		auto table_column = entry.GetIndex().GetIndex();
+		optional_idx projection_index;
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto &column_index = column_ids[i];
+			if (column_index.HasPrimaryIndex() && !column_index.IsPushdownExtract() &&
+			    column_index.GetPrimaryIndex() == table_column) {
+				projection_index = i;
+				break;
+			}
+		}
+		if (!projection_index.IsValid()) {
+			throw SerializationException("LogicalGet::Deserialize - table filter on column %llu that is not scanned",
+			                             table_column);
+		}
+		filters.emplace_back(ProjectionIndex(projection_index.GetIndex()), entry.TakeFilter());
+	}
+	get.table_filters.ClearFilters();
+	for (auto &filter : filters) {
+		get.table_filters.SetFilterByColumnIndex(filter.first, std::move(filter.second));
 	}
 }
 
@@ -305,6 +335,9 @@ void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
 }
 
 void LogicalGet::Serialize(Serializer &serializer) const {
+	if (bind_info) {
+		throw NotImplementedException("Cannot serialize a table function with process-local bind input");
+	}
 	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
@@ -313,9 +346,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
 	FunctionSerializer::Serialize(serializer, function, bind_data.get());
-	if (!function.serialize) {
-		D_ASSERT(!function.serialize);
-		// no serialize method: serialize input values and named_parameters for rebinding purposes
+	if (!function.HasSerializationCallbacks() || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(206, "parameters", parameters);
 		serializer.WriteProperty(207, "named_parameters", named_parameters);
 		serializer.WriteProperty(208, "input_table_types", input_table_types);
@@ -328,6 +359,9 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options",
 	                                                                      row_group_order_options);
 	serializer.WritePropertyWithDefault(215, "scan_partition_indices", scan_partition_indices, vector<idx_t>());
+	serializer.WritePropertyWithDefault(216, "source_ordinality", source_ordinality,
+	                                    OrdinalityType::WITHOUT_ORDINALITY);
+	serializer.WriteProperty(217, "table_filters_by_projection", true);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -346,14 +380,13 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	auto &function = result->function;
 	auto has_serialize = entry.second;
 	unique_ptr<FunctionData> bind_data;
-	if (!has_serialize) {
-		deserializer.ReadProperty(206, "parameters", result->parameters);
-		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
-		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
-		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
-	} else {
+	if (has_serialize) {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
+	deserializer.ReadPropertyWithDefault(206, "parameters", result->parameters);
+	deserializer.ReadPropertyWithDefault(207, "named_parameters", result->named_parameters);
+	deserializer.ReadPropertyWithDefault(208, "input_table_types", result->input_table_types);
+	deserializer.ReadPropertyWithDefault(209, "input_table_names", result->input_table_names);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
 	result->extra_info = deserializer.ReadPropertyWithExplicitDefault<ExtraOperatorInfo>(212, "extra_info", {});
@@ -362,6 +395,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	    deserializer.ReadPropertyWithDefault<unique_ptr<RowGroupOrderOptions>>(214, "row_group_order_options");
 	auto scan_partition_indices =
 	    deserializer.ReadPropertyWithExplicitDefault<vector<idx_t>>(215, "scan_partition_indices", vector<idx_t>());
+	result->source_ordinality = deserializer.ReadPropertyWithExplicitDefault<OrdinalityType>(
+	    216, "source_ordinality", OrdinalityType::WITHOUT_ORDINALITY);
+	auto table_filters_by_projection =
+	    deserializer.ReadPropertyWithExplicitDefault<bool>(217, "table_filters_by_projection", false);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -370,6 +407,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		for (auto &col_id : legacy_column_ids) {
 			result->column_ids.emplace_back(col_id);
 		}
+	}
+	if (!table_filters_by_projection) {
+		MapLegacyTableFilterKeys(*result);
 	}
 	auto &context = deserializer.Get<ClientContext &>();
 	virtual_column_map_t virtual_columns;

@@ -75,7 +75,7 @@ GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &
 	}
 	auto &expr = *expression;
 	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expr->Cast<ConstantExpression>().GetValue()));
+		copy_option.children.push_back(expr->Cast<ConstantExpression>().GetLiteral().ToValue());
 	} else if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		copy_option.children.push_back(Value(expr->Cast<ColumnRefExpression>().GetColumnName()));
 	} else {

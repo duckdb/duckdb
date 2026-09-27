@@ -73,6 +73,14 @@
 
 namespace duckdb {
 
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_MS) == LogicalTypeId::TIMESTAMP_TZ);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_MICROS) == LogicalTypeId::TIMESTAMP_TZ);
+static_assert(ParquetTimestampTzLogicalType(ParquetExtraTypeInfo::UNIT_NS) == LogicalTypeId::TIMESTAMP_TZ_NS);
+
+static_assert(ParquetTimeTzLogicalType(ParquetExtraTypeInfo::UNIT_MS) == LogicalTypeId::TIME_TZ);
+static_assert(ParquetTimeTzLogicalType(ParquetExtraTypeInfo::UNIT_MICROS) == LogicalTypeId::TIME_TZ);
+static_assert(ParquetTimeTzLogicalType(ParquetExtraTypeInfo::UNIT_NS) == LogicalTypeId::TIME_TZ);
+
 const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy) {
 	switch (strategy) {
 	case ParquetPrefetchStrategy::WHOLE_GROUP:
@@ -422,14 +430,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw NotImplementedException("Unimplemented TIMESTAMP encoding - missing UNIT");
 			}
 			if (s_ele.logicalType.TIMESTAMP.isAdjustedToUTC) {
-				if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-					return LogicalType::TIMESTAMP_TZ_NS;
-				}
-				return LogicalType::TIMESTAMP_TZ;
-			} else if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-				return LogicalType::TIMESTAMP_NS;
+				return LogicalType(ParquetTimestampTzLogicalType(schema.type_info));
 			}
-			return LogicalType::TIMESTAMP;
+			return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 		} else if (s_ele.logicalType.__isset.TIME) {
 			if (s_ele.logicalType.TIME.unit.__isset.MILLIS) {
 				schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
@@ -441,11 +444,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 				throw NotImplementedException("Unimplemented TIME encoding - missing UNIT");
 			}
 			if (s_ele.logicalType.TIME.isAdjustedToUTC) {
-				return LogicalType::TIME_TZ;
-			} else if (s_ele.logicalType.TIME.unit.__isset.NANOS) {
-				return LogicalType::TIME_NS;
+				return LogicalType(ParquetTimeTzLogicalType(schema.type_info));
 			}
-			return LogicalType::TIME;
+			return LogicalType(ParquetTimeLogicalType(schema.type_info));
 		}
 	}
 	if (s_ele.__isset.converted_type) {
@@ -511,14 +512,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		case ConvertedType::TIMESTAMP_MICROS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
 			if (s_ele.type == Type::INT64) {
-				return LogicalType::TIMESTAMP;
+				return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
 			}
 		case ConvertedType::TIMESTAMP_MILLIS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
 			if (s_ele.type == Type::INT64) {
-				return LogicalType::TIMESTAMP;
+				return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
 			}
@@ -559,14 +560,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 		case ConvertedType::TIME_MILLIS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
 			if (s_ele.type == Type::INT32) {
-				return LogicalType::TIME;
+				return LogicalType(ParquetTimeLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIME_MILLIS converted type can only be set for value of Type::INT32");
 			}
 		case ConvertedType::TIME_MICROS:
 			schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
 			if (s_ele.type == Type::INT64) {
-				return LogicalType::TIME;
+				return LogicalType(ParquetTimeLogicalType(schema.type_info));
 			} else {
 				throw IOException("TIME_MICROS converted type can only be set for value of Type::INT64");
 			}
@@ -593,7 +594,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			return LogicalType::BIGINT;
 		case Type::INT96: // always a timestamp it would seem
 			schema.type_info = ParquetExtraTypeInfo::IMPALA_TIMESTAMP;
-			return LogicalType::TIMESTAMP;
+			return LogicalType(ParquetTimestampLogicalType(schema.type_info));
 		case Type::FLOAT:
 			return LogicalType::FLOAT;
 		case Type::DOUBLE:
@@ -864,7 +865,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		// Create the VariantColumnReader with the column index, so we can perform the extract at Read
 		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 
-		auto scan_type = column_id.GetScanType();
+		const auto &scan_type = column_id.GetScanType();
 		if (scan_type.id() == LogicalTypeId::VARIANT) {
 			return std::move(column_reader);
 		}
@@ -1244,7 +1245,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
 		binary_as_string = lookup_value.GetValue<bool>();
 	}
-	if (context.TryGetCurrentSetting("__delta_only_variant_encoding_enabled", lookup_value)) {
+	if (context.TryGetCurrentSetting("debug_delta_only_variant_encoding_enabled", lookup_value)) {
 		variant_legacy_encoding = lookup_value.GetValue<bool>();
 	}
 }
@@ -1433,7 +1434,7 @@ vector<ParquetColumnDefinition> ParquetColumnDefinition::FromSchemaMap(ClientCon
 MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
 	MultiFileColumnDefinition result(name, type);
 	result.identifier = identifier;
-	result.default_expression = make_uniq<ConstantExpression>(default_value);
+	result.default_expression = ConstantExpression::FromValue(default_value);
 	result.children.reserve(children.size());
 	for (auto &child : children) {
 		result.children.emplace_back(child.ToMultiFileColumnDefinition());
@@ -1456,15 +1457,14 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	// read the extended file open info (if any)
 	optional_idx footer_size;
 	if (file.extended_info) {
-		auto &open_options = file.extended_info->options;
-		auto encryption_entry = file.extended_info->options.find("encryption_key");
-		if (encryption_entry != open_options.end()) {
-			parquet_options.encryption_config =
-			    make_shared_ptr<ParquetEncryptionConfig>(StringValue::Get(encryption_entry->second));
+		auto &extended_info = *file.extended_info;
+		string encryption_key;
+		if (extended_info.TryGetOption("encryption_key", encryption_key)) {
+			parquet_options.encryption_config = make_shared_ptr<ParquetEncryptionConfig>(std::move(encryption_key));
 		}
-		auto footer_entry = file.extended_info->options.find("footer_size");
-		if (footer_entry != open_options.end()) {
-			footer_size = UBigIntValue::Get(footer_entry->second);
+		idx_t footer_size_option;
+		if (extended_info.TryGetOption("footer_size", footer_size_option)) {
+			footer_size = footer_size_option;
 		}
 	}
 
@@ -1910,7 +1910,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				if (!is_expression && !is_generated_column && has_min_max &&
 				    (column_reader.Type().id() == LogicalTypeId::FLOAT ||
 				     column_reader.Type().id() == LogicalTypeId::DOUBLE) &&
-				    parquet_options.can_have_nan) {
+				    ParquetStatisticsUtils::CanHaveNaN(group.columns[schema_column_index].meta_data.statistics,
+				                                       parquet_options.can_have_nan)) {
 					// floating point columns can have NaN values in addition to the min/max bounds defined in the file
 					// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
 					// based on nan
@@ -1952,7 +1953,8 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE ||
 			    prune_result == FilterPropagateResult::FILTER_FALSE_OR_NULL) {
-				// this effectively will skip this chunk
+				// this effectively will skip this chunk - count the skipped rows towards the progress
+				rows_read += row_group_num_rows - state.offset_in_group;
 				state.offset_in_group = group.num_rows;
 				return;
 			}
@@ -2106,8 +2108,10 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 	unique_ptr<BaseStatistics> GetColumnStatistics(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		if (primary_index >= root_schema->children.size()) {
+			return nullptr;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
 		const auto &row_group = metadata.row_groups[row_group_idx];
 		const auto &column_schema = root_schema->children[primary_index];
@@ -2120,8 +2124,10 @@ struct ParquetPartitionRowGroup : public PartitionRowGroup {
 
 	bool MinMaxIsExact(const StorageIndex &storage_index) override {
 		const idx_t primary_index = storage_index.GetPrimaryIndex();
+		if (primary_index >= root_schema->children.size()) {
+			return false;
+		}
 		D_ASSERT(metadata.row_groups.size() > row_group_idx);
-		D_ASSERT(root_schema->children.size() > primary_index);
 
 		// Special handle generated columns.
 		const auto &column_schema = root_schema->children[primary_index];

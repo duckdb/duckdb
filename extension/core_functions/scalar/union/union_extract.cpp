@@ -10,8 +10,8 @@ namespace duckdb {
 namespace {
 
 struct UnionExtractBindData : public FunctionData {
-	UnionExtractBindData(Identifier key, idx_t index, LogicalType type)
-	    : key(std::move(key)), index(index), type(std::move(type)) {
+	UnionExtractBindData(const Identifier &key, idx_t index, LogicalType type)
+	    : key(key), index(index), type(std::move(type)) {
 	}
 
 	string key;
@@ -99,8 +99,9 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 
 ScalarFunction UnionExtractFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	return ScalarFunction({{"union", LogicalTypeId::UNION}, {"tag", LogicalType::VARCHAR}}, LogicalType::ANY,
-	                      UnionExtractFunction, UnionExtractBind, nullptr, nullptr);
+	ScalarFunction fun({}, LogicalType::ANY, UnionExtractFunction, UnionExtractBind, nullptr, nullptr);
+	fun.GetSignature().AddParameter("union", LogicalTypeId::UNION).AddParameter("tag", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

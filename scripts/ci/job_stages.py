@@ -12,7 +12,8 @@ COMMON_JOBS = [
     "linux-relassert",
     "linux-relassert-tests",
     "tidy-check",
-    "extensions",
+    "extensions-build",
+    "extensions-deploy",
     "wasm-eh",
     "linux-release",
     "linux-release-tests",
@@ -48,7 +49,8 @@ MERGE_GROUP_JOBS = [
 
 RELEASE_JOBS = [
     "osx",
-    "staged-extension-install",
+    "codecov",
+    "extensions-install",
 ]
 
 SKIP_TESTS_JOBS = {
@@ -80,6 +82,7 @@ SELECTABLE_JOBS = ALL_JOBS - set(SUMMARY_JOBS)
 class JobSelection:
     enabled_jobs: list[str]
     save_cache: bool
+    reduced_ci_mode: str
     optimized_release: bool = False
     linux_release_matrix: list[dict[str, object]] = field(default_factory=list)
     linux_musl_matrix: list[dict[str, object]] = field(default_factory=list)
@@ -89,9 +92,11 @@ class JobSelection:
 class JobSelectionInput:
     event_name: str
     ref_name: str
+    default_branch: str
     repository: str
     skip_tests: bool
     changed_keys: set[str]
+    reduced_ci_mode: str
     runners: dict[str, str] = field(default_factory=dict)
 
 
@@ -99,10 +104,10 @@ def should_save_cache(selection_input: JobSelectionInput) -> bool:
     return selection_input.repository != "duckdb/duckdb" or selection_input.event_name == "workflow_dispatch"
 
 
-def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
+def enabled_jobs(selection_input: JobSelectionInput, reduced_ci_mode: str) -> list[str]:
     if selection_input.event_name == "merge_group":
         selected_jobs = MERGE_GROUP_JOBS.copy()
-    elif selection_input.ref_name == "main":
+    elif selection_input.ref_name == selection_input.default_branch:
         selected_jobs = NIGHTLY_JOBS.copy()
     else:
         selected_jobs = PULL_REQUEST_JOBS.copy()
@@ -114,11 +119,9 @@ def enabled_jobs(selection_input: JobSelectionInput) -> list[str]:
     if selection_input.skip_tests:
         selected_jobs = [job for job in selected_jobs if job not in SKIP_TESTS_JOBS]
 
-    if (
-        selection_input.event_name in {"push", "pull_request"}
-        and "osx" in selection_input.changed_keys
-        and "osx" not in selected_jobs
-    ):
+    extensions_need_osx = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
+    osx_changed = selection_input.event_name in {"push", "pull_request"} and "osx" in selection_input.changed_keys
+    if (extensions_need_osx or osx_changed) and "osx" not in selected_jobs:
         selected_jobs.append("osx")
 
     override = parse_job_selection_override(os.getenv("OVERRIDE_JOBS"))
@@ -172,8 +175,9 @@ def compatibility_release_config(*, runner: str, arch: str, optimized_release: b
         "extra_cmake_variables": "",
         "is_compatibility_build": True,
         "is_canonical_build": not optimized_release,
-        "publish_static": True,
+        "publish_static": not optimized_release,
         "publish_source": is_amd64,
+        "test_static": not optimized_release,
         "run_smoke": is_amd64,
         "run_arm_tests": not is_amd64 and not optimized_release,
     }
@@ -196,23 +200,28 @@ def optimized_release_config(*, runner: str, arch: str) -> dict[str, object]:
         "save_vcpkg_cache": False,
         "lto": "thin",
         "lto_jobs": "8",
-        "extra_cmake_variables": "-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER=",
+        "extra_cmake_variables": (
+            "-DCMAKE_C_COMPILER_LAUNCHER= -DCMAKE_CXX_COMPILER_LAUNCHER= " "-DNATIVE_LTO_STATIC_LIBRARIES=1"
+        ),
         "is_compatibility_build": False,
         "is_canonical_build": True,
-        "publish_static": False,
+        "publish_static": True,
         "publish_source": False,
+        "test_static": True,
         "run_smoke": True,
         "run_arm_tests": not is_amd64,
     }
 
 
-def linux_release_matrix(selection_input: JobSelectionInput, optimized_release: bool) -> list[dict[str, object]]:
+def linux_release_matrix(
+    selection_input: JobSelectionInput, optimized_release: bool, full_extension_matrix: bool
+) -> list[dict[str, object]]:
     result = [
         compatibility_release_config(
             runner=selection_input.runners.get("linux_x64", ""), arch="amd64", optimized_release=optimized_release
         )
     ]
-    if selection_input.event_name not in {"pull_request", "merge_group"}:
+    if selection_input.event_name not in {"pull_request", "merge_group"} or full_extension_matrix:
         result.append(
             compatibility_release_config(
                 runner=selection_input.runners.get("linux_arm64", ""),
@@ -257,13 +266,16 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
 
 
 def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
-    selected_jobs = enabled_jobs(selection_input)
+    reduced_ci_mode = resolve_reduced_ci_mode(selection_input.reduced_ci_mode)
+    selected_jobs = enabled_jobs(selection_input, reduced_ci_mode)
     optimized_release = selection_input.event_name == "workflow_dispatch" and "linux-release" in selected_jobs
+    full_extension_matrix = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
     return JobSelection(
         enabled_jobs=selected_jobs,
         save_cache=should_save_cache(selection_input),
+        reduced_ci_mode=reduced_ci_mode,
         optimized_release=optimized_release,
-        linux_release_matrix=linux_release_matrix(selection_input, optimized_release),
+        linux_release_matrix=linux_release_matrix(selection_input, optimized_release, full_extension_matrix),
         linux_musl_matrix=linux_musl_matrix(selection_input),
     )
 
@@ -272,6 +284,7 @@ def write_outputs(selection: JobSelection, out: TextIO, *, include_matrices: boo
     out.write(f"enabled_jobs={json.dumps(selection.enabled_jobs, separators=(',', ':'))}\n")
     out.write(f"save_cache={'true' if selection.save_cache else 'false'}\n")
     out.write(f"optimized_release={'true' if selection.optimized_release else 'false'}\n")
+    out.write(f"reduced_ci_mode={selection.reduced_ci_mode}\n")
     if include_matrices:
         out.write(f"linux_release_matrix={json.dumps(selection.linux_release_matrix, separators=(',', ':'))}\n")
         out.write(f"linux_musl_matrix={json.dumps(selection.linux_musl_matrix, separators=(',', ':'))}\n")
@@ -281,9 +294,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compute enabled Main CI jobs and cache save policy.")
     parser.add_argument("--event", dest="event_name", required=True)
     parser.add_argument("--ref_name", required=True)
+    parser.add_argument("--default_branch", required=True)
     parser.add_argument("--repository", default="duckdb/duckdb")
     parser.add_argument("--skip-tests", default="false")
     parser.add_argument("--changed-keys", default="")
+    parser.add_argument("--reduced-ci-mode", required=True)
     parser.add_argument("--runners", required=True)
     return parser.parse_args()
 
@@ -295,6 +310,14 @@ def parse_bool(value: str) -> bool:
     if normalized in {"0", "false", "no", "off", ""}:
         return False
     raise ValueError(f"invalid boolean value: {value!r}")
+
+
+def resolve_reduced_ci_mode(value: str, override: str | None = None) -> str:
+    effective_value = override if override is not None else value
+    normalized = effective_value.strip().lower()
+    if normalized not in {"enabled", "disabled"}:
+        raise ValueError(f"invalid reduced CI mode: {effective_value!r} (must be enabled or disabled)")
+    return normalized
 
 
 def parse_changed_keys(value: str) -> set[str]:
@@ -317,12 +340,15 @@ def parse_runners(value: str) -> dict[str, str]:
 
 def main() -> int:
     args = parse_args()
+    reduced_ci_mode = resolve_reduced_ci_mode(args.reduced_ci_mode, os.getenv("OVERRIDE_REDUCED_CI_MODE"))
     selection_input = JobSelectionInput(
         event_name=args.event_name,
         ref_name=args.ref_name,
+        default_branch=args.default_branch,
         repository=args.repository,
         skip_tests=parse_bool(args.skip_tests),
         changed_keys=parse_changed_keys(args.changed_keys),
+        reduced_ci_mode=reduced_ci_mode,
         runners=parse_runners(args.runners),
     )
     selection = compute_job_selection(selection_input)

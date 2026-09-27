@@ -1,5 +1,7 @@
 #include "interpreted_benchmark.hpp"
 
+#include "duckdb/common/types/column/column_data_collection.hpp"
+
 #include "benchmark_runner.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -47,7 +49,7 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	duckdb::unique_ptr<DBConfig> benchmark_config;
 	DuckDB db;
 	Connection con;
-	duckdb::unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	explicit InterpretedBenchmarkState(string path, const string &version)
 	    : benchmark_config(GetBenchmarkConfig(version)),
@@ -251,7 +253,7 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 					    reader.FormatException("resultmode 'streaming' drain mode must be 'materialize' or 'drop'"));
 				}
 				discard_stream_result = splits.size() == 3 && splits[2] == "drop";
-				result_type = QueryResultType::STREAM_RESULT;
+				result_mode = BenchmarkResultMode::STREAMING;
 			} else if (splits[1] == "arrow") {
 				arrow_batch_size = STANDARD_VECTOR_SIZE;
 				if (splits.size() == 3) {
@@ -262,13 +264,13 @@ void InterpretedBenchmark::ProcessFile(const string &path) {
 					throw std::runtime_error(reader.FormatException(
 					    "resultmode 'arrow' only takes 1 optional extra parameter (batch_size)"));
 				}
-				result_type = QueryResultType::ARROW_RESULT;
+				result_mode = BenchmarkResultMode::ARROW;
 			} else if (splits[1] == "materialized") {
 				if (splits.size() != 2) {
 					throw std::runtime_error(
 					    reader.FormatException("resultmode 'materialized' does not accept a parameter"));
 				}
-				result_type = QueryResultType::MATERIALIZED_RESULT;
+				result_mode = BenchmarkResultMode::RETAINED;
 			} else {
 				ThrowResultModeError(reader);
 			}
@@ -546,7 +548,7 @@ unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkS
 		}
 		result = state.con.Query(load_query);
 	}
-	return unique_ptr_cast<MaterializedQueryResult, QueryResult>(std::move(result));
+	return result;
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
@@ -654,8 +656,7 @@ string InterpretedBenchmark::GetQuery() {
 }
 
 ScopedConfigSetting PrepareResultCollector(ClientConfig &config, InterpretedBenchmark &benchmark) {
-	auto result_type = benchmark.ResultMode();
-	if (result_type == QueryResultType::ARROW_RESULT) {
+	if (benchmark.ResultMode() == BenchmarkResultMode::ARROW) {
 		return ScopedConfigSetting(
 		    config,
 		    [&benchmark](ClientConfig &config) {
@@ -691,33 +692,52 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 
 	auto &config = ClientConfig::GetConfig(*context);
 	auto result_collector_setting = PrepareResultCollector(config, *this);
-	const bool use_streaming = result_type == QueryResultType::STREAM_RESULT;
-	auto temp_result = context->Query(run_query, use_streaming);
-	if (temp_result->GetResultType() != result_type) {
-		throw InternalException("Query did not produce the right result type, expected %s but got %s",
-		                        EnumUtil::ToString(result_type), EnumUtil::ToString(temp_result->GetResultType()));
-	}
-	if (temp_result->GetResultType() == QueryResultType::STREAM_RESULT) {
-		auto &stream_query = temp_result->Cast<StreamQueryResult>();
-		if (discard_stream_result) {
-			// Fetching from a result that already carries an error throws instead of returning nullptr
-			while (!stream_query.HasError()) {
-				auto chunk = stream_query.Fetch();
-				if (!chunk || chunk->size() == 0) {
-					break;
-				}
-			}
-			state.result =
-			    stream_query.HasError() ? make_uniq<MaterializedQueryResult>(stream_query.GetErrorObject()) : nullptr;
-		} else {
-			state.result = stream_query.Materialize();
+	if (result_mode == BenchmarkResultMode::STREAMING) {
+		auto handle = context->Submit(run_query, QueryParameters());
+		if (handle->HasError()) {
+			state.result = std::move(handle);
+			return;
 		}
-	} else if (temp_result->GetResultType() == QueryResultType::ARROW_RESULT) {
+		auto statement_type = handle->GetStatementType();
+		auto properties = handle->GetStatementProperties();
+		auto names = handle->GetNames();
+		auto client_properties = handle->client_properties;
+		QueryResultStream stream(std::move(handle));
+		unique_ptr<ColumnDataCollection> collection;
+		ColumnDataAppendState append_state;
+		if (!discard_stream_result) {
+			collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), stream.GetTypes());
+			collection->InitializeAppend(append_state);
+		}
+		while (auto chunk = stream.Fetch()) {
+			if (chunk->size() == 0) {
+				break;
+			}
+			if (collection) {
+				collection->Append(append_state, *chunk);
+			}
+		}
+		if (stream.HasError()) {
+			state.result = make_uniq<QueryResult>(stream.GetErrorObject());
+		} else if (collection) {
+			state.result =
+			    make_uniq<QueryResult>(statement_type, properties, names, std::move(collection), client_properties);
+		} else {
+			state.result = nullptr;
+		}
+		return;
+	}
+	auto temp_result = context->Query(run_query, QueryParameters());
+	if (result_mode == BenchmarkResultMode::ARROW) {
+		if (temp_result->GetResultType() != QueryResultType::ARROW_RESULT) {
+			throw InternalException("Query did not produce an Arrow result, but %s",
+			                        EnumUtil::ToString(temp_result->GetResultType()));
+		}
 		/* no-op, this is only used to test the overhead of the result collector */
 		state.result = nullptr;
-	} else {
-		state.result = unique_ptr_cast<duckdb::QueryResult, duckdb::MaterializedQueryResult>(std::move(temp_result));
+		return;
 	}
+	state.result = std::move(temp_result);
 }
 
 void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
@@ -748,8 +768,7 @@ string InterpretedBenchmark::GetDatabasePath() {
 	return db_path;
 }
 
-string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const BenchmarkQuery &query,
-                                            MaterializedQueryResult &result) {
+string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const BenchmarkQuery &query, QueryResult &result) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 
 	auto &result_values = query.expected_result;
@@ -797,7 +816,7 @@ string InterpretedBenchmark::VerifyInternal(BenchmarkState *state_p, const Bench
 string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (!state.result) {
-		D_ASSERT(result_type != QueryResultType::MATERIALIZED_RESULT);
+		D_ASSERT(result_mode != BenchmarkResultMode::RETAINED);
 		return string();
 	}
 

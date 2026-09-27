@@ -72,9 +72,10 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
-	ScalarFunction fun("json_merge_patch", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   MergePatchFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::JSON());
+	ScalarFunction fun("json_merge_patch", {}, LogicalType::JSON(), MergePatchFunction, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json1", LogicalType::JSON()).AddParameter("json2", LogicalType::JSON());
+	fun.GetSignature().AddArgsParameter("args", LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return ScalarFunctionSet(fun);

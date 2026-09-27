@@ -97,8 +97,9 @@ static void DamerauLevenshteinFunction(DataChunk &args, ExpressionState &state, 
 }
 
 ScalarFunction DamerauLevenshteinFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                      DamerauLevenshteinFunction);
+	ScalarFunction fun({}, LogicalType::BIGINT, DamerauLevenshteinFunction);
+	fun.GetSignature().AddParameter("s1", LogicalType::VARCHAR).AddParameter("s2", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

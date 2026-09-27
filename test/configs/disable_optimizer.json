@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Checks projection evaluation counts after optimizer filter pushdown.",
+      "paths": [
+        "test/optimizer/pushdown/lateral_projection_evaluation.test"
+      ]
+    },
+    {
       "reason": "Requires the join order optimizer to enforce debug_force_no_cross_product.",
       "paths": [
         "test/optimizer/joins/required_cross_product_activation.test"
@@ -24,7 +30,8 @@
         "test/sql/types/geo/geometry_parquet_pushdown.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
-        "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test"
+        "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test",
+        "test/sql/storage/prefetch/async_native_scan_read_ahead_pruning.test"
       ]
     },
     {
@@ -40,8 +47,11 @@
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/function/generic/test_barrier.test",
         "test/sql/join/asof/test_asof_limit.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
+        "test/optimizer/unused_window_columns.test",
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_shred.test",

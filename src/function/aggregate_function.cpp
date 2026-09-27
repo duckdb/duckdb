@@ -114,9 +114,7 @@ BoundAggregateFunction::BoundAggregateFunction(const AggregateFunction &function
 BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunction> function_p)
     : definition(std::move(function_p)) {
 	auto &function = *definition;
-	name = function.name;
-	schema_name = function.GetSchemaName();
-	catalog_name = function.GetCatalogName();
+	qualified_name = function.GetQualifiedName();
 	extra_info = function.extra_info;
 	return_type = function.GetReturnType();
 	properties = function.GetProperties();
@@ -126,22 +124,38 @@ BoundAggregateFunction::BoundAggregateFunction(shared_ptr<const AggregateFunctio
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)
 	for (auto &param : function.GetSignature().GetParameters()) {
-		arguments.push_back(param.GetType());
+		if (!param.IsVariadic()) {
+			arguments.push_back(param.GetType());
+		}
 	}
+	positional_arguments = arguments.size();
+	logical_arguments = arguments;
+	logical_return_type = return_type;
 }
 
 bool BoundAggregateFunction::operator==(const BoundAggregateFunction &rhs) const {
 	return callbacks == rhs.callbacks && properties == rhs.properties && arguments == rhs.arguments &&
+	       positional_arguments == rhs.positional_arguments && named_arguments == rhs.named_arguments &&
 	       return_type == rhs.return_type;
 }
 bool BoundAggregateFunction::operator!=(const BoundAggregateFunction &rhs) const {
 	return !(*this == rhs);
 }
 
+void BoundAggregateFunction::ReplaceImplementation(const BoundAggregateFunction &function) {
+	BaseAggregateFunction::operator=(function);
+	BoundSimpleFunction::operator=(function);
+	SetDefinition(definition);
+}
+
 void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &function) {
-	this->name = function.name;
-	this->schema_name = function.GetSchemaName();
-	this->catalog_name = function.GetCatalogName();
+	SetName(function.GetName());
+	// The replacement is a specialized implementation of the function we were bound from, and is usually built by
+	// a factory rather than handed out by a catalog entry. Only take its qualification when it has one, so that
+	// specializing an implementation does not drop the catalog and schema name of the definition.
+	if (!function.GetCatalogName().empty() || !function.GetSchemaName().empty()) {
+		qualified_name = function.GetQualifiedName();
+	}
 	this->return_type = function.GetReturnType();
 	this->properties = function.GetProperties();
 	this->callbacks = function.GetCallbacks();
@@ -151,7 +165,9 @@ void BoundAggregateFunction::ReplaceImplementation(const AggregateFunction &func
 	// "bind" callback)
 	arguments.clear();
 	for (auto &param : function.GetSignature().GetParameters()) {
-		arguments.push_back(param.GetType());
+		if (!param.IsVariadic()) {
+			arguments.push_back(param.GetType());
+		}
 	}
 }
 

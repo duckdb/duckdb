@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
+#include "duckdb/parser/peg/matcher/literal_choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 #include "duckdb/parser/peg/matcher/repeat_matcher.hpp"
@@ -21,7 +22,7 @@ optional<MatchInput> MatchStep::GetChild() {
 MatcherResult MatchStep::GetResult() const {
 	D_ASSERT(!child);
 	D_ASSERT(result);
-	return *result;
+	return result.value();
 }
 
 class AtomicMatchProcess : public MatchProcess {
@@ -42,8 +43,8 @@ private:
 	bool completed = false;
 };
 
-unique_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<AtomicMatchProcess>(*this, state);
+arena_ptr<MatchProcess> AtomicMatcher::StartMatch(MatchState &state) const {
+	return state.Make<AtomicMatchProcess>(*this, state);
 }
 
 class ListMatchProcess : public MatchProcess {
@@ -115,13 +116,15 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ListMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
+	return state.Make<ListMatchProcess>(*this, state);
 }
 
+template <bool SINGLE_CHILD>
 class ChoiceMatchProcess : public MatchProcess {
 public:
-	ChoiceMatchProcess(const ChoiceMatcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
+	ChoiceMatchProcess(const ChoiceMatcher &matcher_p, MatchState &state_p, idx_t child_index_p = 0)
+	    : matcher(matcher_p), state(state_p), child_index(child_index_p) {
 		if (auto current = state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -133,12 +136,15 @@ public:
 			awaiting_child = false;
 			D_ASSERT(child_state);
 			if (child_result->IsSuccess()) {
-				state.token_iterator.SetPosition(child_state->token_iterator);
+				state.token_iterator.SetPosition(child_state.value().token_iterator);
 				if (!child_result->HasParseResult()) {
 					return MatchStep::Complete(MatcherResult::Success());
 				}
 				return MatchStep::Complete(state.AllocateParseResult<ChoiceParseResult>(*child_result->GetParseResult(),
 				                                                                        child_index, start_offset));
+			}
+			if (SINGLE_CHILD) {
+				return MatchStep::Complete(MatcherResult::Failure());
 			}
 			child_index++;
 			child_state.reset();
@@ -160,8 +166,15 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<ChoiceMatchProcess>(*this, state);
+arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
+	return state.Make<ChoiceMatchProcess<false>>(*this, state);
+}
+
+arena_ptr<MatchProcess> LiteralChoiceMatcher::StartMatch(MatchState &state) const {
+	auto literal = state.token_iterator.CurrentLiteralInfo(table);
+	auto entry = literal_children.find(literal.LiteralId());
+	auto child_index = entry == literal_children.end() ? matchers.size() : entry->second;
+	return state.Make<ChoiceMatchProcess<true>>(*this, state, child_index);
 }
 
 class OptionalMatchProcess : public MatchProcess {
@@ -199,8 +212,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<OptionalMatchProcess>(*this, state);
+arena_ptr<MatchProcess> OptionalMatcher::StartMatch(MatchState &state) const {
+	return state.Make<OptionalMatchProcess>(*this, state);
 }
 
 class RepeatMatchProcess : public MatchProcess {
@@ -252,8 +265,8 @@ private:
 	bool awaiting_child = false;
 };
 
-unique_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
-	return make_uniq<RepeatMatchProcess>(*this, state);
+arena_ptr<MatchProcess> RepeatMatcher::StartMatch(MatchState &state) const {
+	return state.Make<RepeatMatchProcess>(*this, state);
 }
 
 } // namespace duckdb

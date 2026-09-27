@@ -482,7 +482,7 @@ public:
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
                                                      vector<unique_ptr<Expression>> expressions_p)
-    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(std::move(types)),
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(types),
       expressions(std::move(expressions_p)), executor(context, expressions) {
 	chunk.Initialize(buffer.GetAllocator(), this->types);
 }
@@ -1427,7 +1427,7 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	uint32_t footer_size = writer->GetTotalWritten() - metadata_start_offset;
+	auto footer_size = NumericCast<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
 	writer->Write<uint32_t>(footer_size);
 
 	if (options.encryption_config) {

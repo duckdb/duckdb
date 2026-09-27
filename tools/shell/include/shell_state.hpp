@@ -22,7 +22,7 @@
 
 namespace duckdb_shell {
 using duckdb::make_uniq;
-using duckdb::MaterializedQueryResult;
+using duckdb::QueryResult;
 using duckdb::string;
 using duckdb::StringUtil;
 using duckdb::unique_ptr;
@@ -217,7 +217,7 @@ public:
 	bool readStdin = true;
 	string initFile;
 	bool run_init = true;
-	unique_ptr<duckdb::MaterializedQueryResult> last_result;
+	unique_ptr<duckdb::QueryResult> last_result;
 	bool last_result_referenced = false;
 	//! Whether the last EXPLAIN ANALYZE tree folded any operators (so ".last" has a fuller tree to show)
 	bool last_explain_hid_content = false;
@@ -453,6 +453,10 @@ public:
 	SuccessState RenderQuery(ShellRenderer &renderer, const string &query, PagerMode pager_overwrite);
 	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResult &result,
 	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
+	SuccessState RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResultStream &stream,
+	                               PagerMode pager_overwrite = PagerMode::PAGER_AUTOMATIC);
+	SuccessState RenderPreparedResult(ShellRenderer &renderer, RenderingQueryResult &render_result,
+	                                  PagerMode pager_overwrite);
 	bool HighlightErrors() const;
 	bool HighlightResults() const;
 

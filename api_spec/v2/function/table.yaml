@@ -1,5 +1,27 @@
 module: table
 #-----------------------------------------------------------------------------------------------------------------------
+# Enums
+#-----------------------------------------------------------------------------------------------------------------------
+enums:
+  TABLE_PARTITION_INFO:
+    description: |
+      Whether a table function's scan is partitioned by a given set of columns, and how. Reported by
+      `[[table_function_set_partitioning_callback]]` via `[[table_function_partitioning_set_partition_info]]`.
+    values:
+      TABLE_PARTITION_INFO_NOT_PARTITIONED:
+        value: 0
+        description: The scan is not known to be partitioned by the requested columns.
+      TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS:
+        value: 1
+        description: Each partition the scan produces carries exactly one distinct value for the requested columns.
+      TABLE_PARTITION_INFO_OVERLAPPING_PARTITIONS:
+        value: 2
+        description: The partitions the scan produces overlap only at their boundaries.
+      TABLE_PARTITION_INFO_DISJOINT_PARTITIONS:
+        value: 3
+        description: The partitions the scan produces are disjoint ranges.
+
+#-----------------------------------------------------------------------------------------------------------------------
 # Handles
 #-----------------------------------------------------------------------------------------------------------------------
 handles:
@@ -47,6 +69,19 @@ handles:
       A borrowed opaque handle to the arguments supplied to a table function during the "filter pushdown" phase of
       query optimization. The "filter pushdown" callback receives this handle and can use it to inspect the filter
       predicates the query applies to the function's rows, and to accept the ones it will apply itself.
+
+  table_function_partition_data_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the "partition data" phase.
+      The engine invokes the callback on the worker thread that just produced a batch of rows, once per batch, only
+      when a downstream operator needs to know the batch's ordering position, the values of a set of partitioning
+      columns, or both; the handle reports which of those were actually requested and receives the answer.
+
+  table_function_partitioning_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function during the "partitioning" phase
+      of query optimization. The engine invokes the callback once per candidate `GROUP BY` column set, before
+      execution starts, to decide whether the scan can feed a partitioned aggregate directly instead of hashing.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Callbacks
@@ -136,6 +171,34 @@ callbacks:
         description: Borrowed error info handle to use to report errors that occur during the callback.
     return_type: void
 
+  table_function_partition_data_callback:
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_partitioning_callback:
+    parameters:
+      info:
+        type: table_function_partitioning_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
 #-----------------------------------------------------------------------------------------------------------------------
 # Functions
 #-----------------------------------------------------------------------------------------------------------------------
@@ -212,7 +275,7 @@ functions:
         type: table_function
         description: The function to set the name of.
       name:
-        type: str
+        type: identifier
         indirection: 1
         description: The name to set. Borrowed and copied.
       err:
@@ -431,6 +494,57 @@ functions:
       callback:
         type: table_function_filter_pushdown_callback
         description: The filter pushdown callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_partition_data_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Sets the optional "partition data" callback of the table function.
+
+      The callback reports, for the batch the exec callback just produced, an ordering batch index, the values of
+      a set of partitioning columns, or both, depending on what a downstream operator requires; it runs on the
+      worker thread that produced the batch. Set `[[table_function_set_partitioning_callback]]` too when the
+      function can answer partitioning-column requests, since the engine only asks a scan for those when that
+      callback reports `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS`.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the partition data callback of.
+      callback:
+        type: table_function_partition_data_callback
+        description: The partition data callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_set_partitioning_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Sets the optional "partitioning" callback of the table function.
+
+      The callback tells the query optimizer, for a candidate `GROUP BY` column set, whether every partition the
+      scan produces carries exactly one distinct value for those columns; only
+      `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS` unlocks the partitioned aggregate optimization; any other
+      result, or leaving this callback unset, keeps the regular hash aggregate. It runs on the planning thread,
+      before execution starts, and must be deterministic for a given column set since it may be called on a plan
+      the optimizer later discards. Registration fails unless
+      `[[table_function_set_partition_data_callback]]` is set too, since the engine asks that callback for the
+      partitioning column values once this one claims single-value partitions.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the partitioning callback of.
+      callback:
+        type: table_function_partitioning_callback
+        description: The partitioning callback to set.
       err:
         type: error_info
         indirection: 1
@@ -1305,6 +1419,361 @@ functions:
         indirection: 1
         kind: OUT
         description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Partition Data Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_partition_data_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_get_global_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Retrieves the global state set by the function's global init callback.
+
+      Shared with every other thread scanning the function; access to it must be synchronized by the function.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the global state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_get_local_state:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Retrieves the worker-local local state set by the function's local init callback, for the thread that
+      produced the batch this call reports on. No other thread observes it, so it needs no synchronization.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the local state pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_requires_batch_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns whether a downstream operator needs this batch's ordering position.
+
+      `[[table_function_partition_data_set_batch_index]]` must still be called even when this is false: the
+      engine validates the reported value regardless of whether it is actually used for ordering, so `0` is
+      always a safe answer when this reports false.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      required:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether a batch index is required.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_requires_partition_columns:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns whether a downstream operator needs this batch's values for a set of partitioning columns.
+
+      When true, call `[[table_function_partition_data_set_partition_value]]` once for every index in
+      `[0, count)`, where `count` comes from `[[table_function_partition_data_get_partition_column_count]]`.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      required:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives whether partitioning column values are required.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_get_partition_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns the number of partitioning columns a downstream operator is requesting values for.
+
+      `0` when `[[table_function_partition_data_requires_partition_columns]]` is false. Valid indices for
+      `[[table_function_partition_data_get_partition_column_index]]` and
+      `[[table_function_partition_data_set_partition_value]]` are `0` up to (but excluding) this count.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of requested partitioning columns.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_get_partition_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns which declared column the requested partitioning column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      index:
+        type: idx
+        description: The index of the requested partitioning column.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_set_batch_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Reports the ordering position of the batch the exec callback just produced.
+
+      Required on every call, whether or not `[[table_function_partition_data_requires_batch_index]]` is
+      true: the engine validates the reported value regardless. Not calling this before the callback returns
+      fails the query; `0` is always a safe answer when the batch index is not actually required. Must not
+      decrease across successive calls on the same thread, must be unique across threads for the ordering to be
+      meaningful, must be less than roughly `10^13`, and, when
+      partitioning column values are also being reported, must change whenever those values change: the engine
+      only re-reads them when the batch index changes, so reporting a new value under an unchanged batch index
+      is treated as a caller error rather than applied. Fails with `ERROR_INPUT_INVALID` for an out-of-range
+      value; a decreasing value or an unchanged value paired with changed partitioning columns fails the query
+      once the callback returns.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      batch_index:
+        type: idx
+        description: The batch's ordering position.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partition_data_set_partition_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Reports the single value of the partitioning column at the given index, for the batch the exec callback
+      just produced.
+
+      Every partition reported this way carries exactly one distinct value for the column, so the value serves
+      as both the minimum and maximum of the partition's range. The value is borrowed and copied, and must be
+      of the declared type of the corresponding result column. Required once for every index in `[0,
+      `[[table_function_partition_data_get_partition_column_count]]`)` before the callback returns; calling
+      it again for the same index overwrites the previous value. The reported value only takes effect
+      together with a changed `[[table_function_partition_data_set_batch_index]]`: reporting a different
+      value under an unchanged batch index fails the query once the callback returns. Fails with
+      `ERROR_INPUT_INVALID` when the index is out of bounds or the value's type does not match.
+    parameters:
+      info:
+        type: table_function_partition_data_info
+        description: The partition data info handle.
+      index:
+        type: idx
+        description: The index of the partitioning column being reported.
+      value:
+        type: value
+        description: The single value of the partitioning column. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Partitioning Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  table_function_partitioning_get_user_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
+    parameters:
+      info:
+        type: table_function_partitioning_info
+        description: The partitioning info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partitioning_get_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: Retrieves the bind data set by the function's bind callback.
+    parameters:
+      info:
+        type: table_function_partitioning_info
+        description: The partitioning info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partitioning_get_partition_column_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns the number of columns the optimizer is asking about: the candidate `GROUP BY` column set.
+
+      Valid indices for `[[table_function_partitioning_get_partition_column_index]]` are `0` up to (but
+      excluding) this count.
+    parameters:
+      info:
+        type: table_function_partitioning_info
+        description: The partitioning info handle.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of columns in the candidate set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partitioning_get_partition_column_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Returns which declared column the candidate `GROUP BY` column at the given index stands for.
+
+      The result indexes the columns declared with `[[table_function_bind_add_result_column]]`, in declaration
+      order. Fails if the index is out of bounds.
+    parameters:
+      info:
+        type: table_function_partitioning_info
+        description: The partitioning info handle.
+      index:
+        type: idx
+        description: The index of the candidate column.
+      column_index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the index of the declared column.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_partitioning_set_partition_info:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-15" ]
+    description: |
+      Reports whether every partition the scan produces carries exactly one distinct value for the candidate
+      `GROUP BY` column set.
+
+      Only `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS` unlocks the partitioned aggregate optimization; any
+      other value keeps the regular hash aggregate. A callback that never calls this is treated as reporting
+      `TABLE_PARTITION_INFO_NOT_PARTITIONED`. Fails with `ERROR_INPUT_INVALID` when partition_info is not one of the
+      enum's declared values.
+    parameters:
+      info:
+        type: table_function_partitioning_info
+        description: The partitioning info handle.
+      partition_info:
+        type: TABLE_PARTITION_INFO
+        description: Whether, and how, the scan is partitioned by the candidate column set.
       err:
         type: error_info
         indirection: 1

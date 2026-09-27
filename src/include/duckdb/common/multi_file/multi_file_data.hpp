@@ -111,19 +111,14 @@ public:
 		return identifier.GetValue<string>();
 	}
 
-	Value GetDefaultValue() const {
-		D_ASSERT(default_expression);
-		if (default_expression->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-			throw NotImplementedException("Default expression that isn't constant is not supported yet");
-		}
-		auto &constant_expr = default_expression->Cast<ConstantExpression>();
-		return constant_expr.GetValue();
-	}
-
 public:
 	Identifier name;
 	LogicalType type;
 	vector<MultiFileColumnDefinition> children;
+	//! Fallback when no file column/field matches this definition. A NULL fallback must be an explicit
+	//! ConstantExpression containing a typed NULL, rather than a nullptr.
+	//! With field-id mapping, nullptr requires a matching field; a missing field raises InvalidInputException.
+	//! With name mapping, nullptr rejects missing root columns but fills missing nested fields with NULL.
 	unique_ptr<ParsedExpression> default_expression;
 
 	//! Either the field_id or the name to map on

@@ -361,6 +361,9 @@ void ParquetMetaDataOperator::BindSchema<ParquetMetadataOperatorType::META_DATA>
 	    {"encoding", LogicalType::VARCHAR},
 	    {"count", LogicalType::INTEGER},
 	})));
+
+	names.emplace_back("stats_nan_count");
+	return_types.emplace_back(LogicalType::BIGINT);
 }
 
 static Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
@@ -556,6 +559,8 @@ void ParquetRowGroupMetadataProcessor::ReadRow(vector<reference<Vector>> &output
 
 	// encoding_stats, LogicalType::LIST(LogicalType::STRUCT(...))
 	output[31].get().Append(ConvertParquetEncodingStats(col_meta));
+	// stats_nan_count
+	output[32].get().Append(ParquetElementBigint(stats.nan_count, stats.__isset.nan_count));
 }
 
 //===--------------------------------------------------------------------===//

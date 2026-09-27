@@ -32,7 +32,9 @@ void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &resul
 } // namespace
 
 ScalarFunction NFCNormalizeFun::GetFunction() {
-	return ScalarFunction("nfc_normalize", {LogicalType::VARCHAR}, LogicalType::VARCHAR, NFCNormalizeFunction);
+	ScalarFunction fun("nfc_normalize", {}, LogicalType::VARCHAR, NFCNormalizeFunction);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

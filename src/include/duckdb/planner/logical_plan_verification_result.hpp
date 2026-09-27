@@ -158,12 +158,12 @@ public:
 
 	T &GetValue() {
 		D_ASSERT(IsSuccess());
-		return *value;
+		return value.value();
 	}
 
 	const T &GetValue() const {
 		D_ASSERT(IsSuccess());
-		return *value;
+		return value.value();
 	}
 
 	const vector<LogicalPlanVerificationIssue> &GetIssues() const {

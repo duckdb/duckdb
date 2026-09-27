@@ -341,7 +341,7 @@ ScalarFunction ListConcatFun::GetFunction() {
 	// The arguments and return types are set in the binder function.
 	auto fun =
 	    ScalarFunction({}, LogicalType::LIST(LogicalType::ANY), ConcatFunction, BindConcatFunction, ListConcatStats);
-	fun.SetVarArgs(LogicalType::LIST(LogicalType::ANY));
+	fun.GetSignature().AddArgsParameter("args", LogicalType::LIST(LogicalType::ANY));
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
@@ -355,16 +355,16 @@ ScalarFunction ListConcatFun::GetFunction() {
 // the concat function, however, treats NULL values as an empty string
 // i.e. concat(NULL, 'hello') = 'hello'
 ScalarFunction ConcatFun::GetFunction() {
-	ScalarFunction concat =
-	    ScalarFunction("concat", {LogicalType::ANY}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
-	concat.SetVarArgs(LogicalType::ANY);
+	ScalarFunction concat = ScalarFunction("concat", {}, LogicalType::ANY, ConcatFunction, BindConcatFunction);
+	concat.GetSignature().AddParameter("value", LogicalType::ANY);
+	concat.GetSignature().AddArgsParameter("args", LogicalType::ANY);
 	concat.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return concat;
 }
 
 ScalarFunction ConcatOperatorFun::GetFunction() {
-	ScalarFunction concat_op = ScalarFunction("||", {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
-	                                          ConcatFunction, BindConcatOperator);
+	ScalarFunction concat_op = ScalarFunction("||", {}, LogicalType::ANY, ConcatFunction, BindConcatOperator);
+	concat_op.GetSignature().AddParameter("arg1", LogicalType::ANY).AddParameter("arg2", LogicalType::ANY);
 	return concat_op;
 }
 

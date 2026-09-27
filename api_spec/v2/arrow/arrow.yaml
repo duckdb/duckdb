@@ -338,7 +338,9 @@ functions:
         type: str
         indirection: 1
         const: true
-        description: An array of `count` column names, parallel to `types`. May be NULL only when `count` is 0.
+        description: |
+          An array of `count` column names, parallel to `types`. Each name must be valid UTF-8.
+          May be NULL only when `count` is 0.
       count:
         type: idx
         description: The number of columns, being the length of both `types` and `names`.

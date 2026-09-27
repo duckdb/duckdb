@@ -3,9 +3,13 @@
 #include "duckdb_v2.h"
 #include "test_cpp_api.hpp"
 
+#include "duckdb/common/vector_size.hpp"
+
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <string>
+#include <thread>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -614,4 +618,464 @@ TEST_CASE("Stable C++API: table function registration refusals", "[cpp_api]") {
 		function.GetSignature().SetReturnType(bigint);
 		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Partition callbacks.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Collect one VARCHAR column by index; EXPLAIN puts the rendered plan in column 1.
+std::vector<std::string> CollectStringsAt(QueryResult result, idx_t column) {
+	std::vector<std::string> out;
+	while (auto chunk = result.FetchChunk()) {
+		auto view = chunk.GetVector(column).GetView();
+		for (idx_t i = 0; i < chunk.GetRowCount(); i++) {
+			REQUIRE(view.IsValid(i));
+			out.emplace_back(view.Data<varchar_t>()[view.SelAt(i)].view());
+		}
+	}
+	return out;
+}
+
+bool ExplainContains(Connection &conn, const std::string &sql, const std::string &needle) {
+	for (auto &line : CollectStringsAt(conn.Execute("EXPLAIN " + sql), 1)) {
+		if (line.find(needle) != std::string::npos) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// The error a query fails with; asserts that it does fail.
+std::string QueryError(Connection &conn, const std::string &sql) {
+	try {
+		conn.Execute(sql).Drain();
+	} catch (const Exception &ex) {
+		return ex.what();
+	}
+	FAIL("query succeeded: " + sql);
+	return "";
+}
+
+// Whether a misuse inside a callback was refused with INPUT_INVALID; a REQUIRE there would throw through the callback.
+template <class F>
+bool RefusedAsInvalid(F &&f) {
+	try {
+		f();
+	} catch (const Exception &ex) {
+		return ex.GetCode() == DUCKDB_V2_ERROR_INPUT_INVALID;
+	}
+	return false;
+}
+
+// ---------------------------------------------------------------------------
+// cpp_part(n): BIGINT part_col and val, n groups of three rows, one group per batch, spanning several chunks when the
+// vector size is smaller than a group; part_col carries the group and val group * 10 + row. The partition data callback
+// reports the group as both batch index and partition value.
+// ---------------------------------------------------------------------------
+
+struct PartBind {
+	int64_t groups = 0;
+};
+struct PartGlobal {
+	int64_t position = 0;
+	int64_t last_group = -1;
+};
+
+constexpr int64_t PART_ROWS_PER_GROUP = 3;
+
+bool part_oob_value_refused = false;
+bool part_wrong_type_refused = false;
+bool part_oob_batch_refused = false;
+bool part_oob_info_refused = false;
+
+void PartBind_(TableFunction::BindInput &input) {
+	auto bigint = input.GetContext().ParseType("BIGINT");
+	input.AddResultColumn("part_col", bigint);
+	input.AddResultColumn("val", bigint);
+	input.SetBindData<PartBind>(PartBind {input.GetArgument(0).Get<int64_t>()});
+}
+
+void PartInitGlobal(TableFunction::InitGlobalInput &input) {
+	input.SetGlobalState<PartGlobal>();
+}
+
+void PartExec(TableFunction::ExecInput &input) {
+	const auto &bind = input.GetBindData<PartBind>();
+	auto &global = input.GetGlobalState<PartGlobal>();
+	auto chunk = input.GetOutputChunk();
+	auto part_vec = chunk.GetVector(0);
+	if (global.position >= bind.groups * PART_ROWS_PER_GROUP) {
+		part_vec.SetSize(0);
+		return;
+	}
+	auto group = global.position / PART_ROWS_PER_GROUP;
+	auto offset = global.position % PART_ROWS_PER_GROUP;
+	auto rows = std::min<int64_t>(PART_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
+	global.last_group = group;
+	auto *part = part_vec.GetDataMutable<int64_t>();
+	auto *val = chunk.GetVector(1).GetDataMutable<int64_t>();
+	for (int64_t i = 0; i < rows; i++) {
+		part[i] = group;
+		val[i] = group * 10 + offset + i;
+	}
+	global.position += rows;
+	part_vec.SetSize(static_cast<idx_t>(rows));
+}
+
+void PartData(TableFunction::PartitionDataInput &input) {
+	const auto &global = input.GetGlobalState<PartGlobal>();
+	auto ctx = input.GetContext();
+
+	part_oob_batch_refused = RefusedAsInvalid([&]() { input.SetBatchIndex(static_cast<idx_t>(1) << 62); });
+	input.SetBatchIndex(static_cast<idx_t>(global.last_group));
+	if (!input.RequiresPartitionColumns()) {
+		return;
+	}
+	if (input.GetPartitionColumnCount() != 1 || input.GetPartitionColumnIndex(0) != 0) {
+		return;
+	}
+	auto wrong_type = Value::Create(ctx, static_cast<int32_t>(global.last_group));
+	part_wrong_type_refused = RefusedAsInvalid([&]() { input.SetPartitionValue(0, wrong_type); });
+	auto value = Value::Create(ctx, global.last_group);
+	part_oob_value_refused = RefusedAsInvalid([&]() { input.SetPartitionValue(1, value); });
+	input.SetPartitionValue(0, value);
+}
+
+void PartInfo(TableFunction::PartitioningInput &input) {
+	part_oob_info_refused =
+	    RefusedAsInvalid([&]() { input.SetPartitionInfo(static_cast<TableFunction::PartitionInfo>(99)); });
+	if (input.GetPartitionColumnCount() == 1 && input.GetPartitionColumnIndex(0) == 0) {
+		input.SetPartitionInfo(TableFunction::PartitionInfo::SINGLE_VALUE_PARTITIONS);
+	}
+}
+
+void AlwaysPartitioned(TableFunction::PartitioningInput &input) {
+	input.SetPartitionInfo(TableFunction::PartitionInfo::SINGLE_VALUE_PARTITIONS);
+}
+
+// Batch index 0, 1, 0: decreasing on the third group.
+void DecreasingBatchData(TableFunction::PartitionDataInput &input) {
+	const auto &global = input.GetGlobalState<PartGlobal>();
+	input.SetBatchIndex(global.last_group == 2 ? 0 : static_cast<idx_t>(global.last_group));
+	if (input.RequiresPartitionColumns()) {
+		auto ctx = input.GetContext();
+		input.SetPartitionValue(0, Value::Create(ctx, global.last_group));
+	}
+}
+
+// Batch index 0 for every group while the partition value changes with the group.
+void ConstantBatchData(TableFunction::PartitionDataInput &input) {
+	const auto &global = input.GetGlobalState<PartGlobal>();
+	input.SetBatchIndex(0);
+	if (input.RequiresPartitionColumns()) {
+		auto ctx = input.GetContext();
+		input.SetPartitionValue(0, Value::Create(ctx, global.last_group));
+	}
+}
+
+void NoBatchIndexData(TableFunction::PartitionDataInput &) {
+}
+
+void NoPartitionValueData(TableFunction::PartitionDataInput &input) {
+	input.SetBatchIndex(0);
+}
+
+void ThrowingPartitionData(TableFunction::PartitionDataInput &) {
+	throw InvalidInputException("partition data refused");
+}
+
+void ThrowingPartitioning(TableFunction::PartitioningInput &) {
+	throw InvalidInputException("partition info refused");
+}
+
+void RegisterPart(Connection &conn, const std::string &name, TableFunction::PartitioningCallback partitioning,
+                  TableFunction::PartitionDataCallback partition_data) {
+	auto function = TableFunction::Create(conn);
+	function.SetName(name);
+	function.GetSignature().AddParameter("n", conn.ParseType("BIGINT"));
+	function.SetBindCallback(PartBind_)
+	    .SetInitGlobalCallback(PartInitGlobal)
+	    .SetExecCallback(PartExec)
+	    .SetPartitioningCallback(partitioning)
+	    .SetPartitionDataCallback(partition_data);
+	function.Register();
+}
+
+// ---------------------------------------------------------------------------
+// cpp_proj_part(n): cpp_part's rows behind projection pushdown, with an INTEGER "pad" declared first so part_col
+// (declared index 1) sits at scan position 0 whenever pad is pruned.
+// ---------------------------------------------------------------------------
+
+std::atomic<idx_t> proj_part_reported_column {0};
+
+void ProjPartBind(TableFunction::BindInput &input) {
+	auto bigint = input.GetContext().ParseType("BIGINT");
+	input.AddResultColumn("pad", input.GetContext().ParseType("INTEGER"));
+	input.AddResultColumn("part_col", bigint);
+	input.AddResultColumn("val", bigint);
+	input.SetBindData<PartBind>(PartBind {input.GetArgument(0).Get<int64_t>()});
+}
+
+void ProjPartExec(TableFunction::ExecInput &input) {
+	const auto &bind = input.GetBindData<PartBind>();
+	auto &global = input.GetGlobalState<PartGlobal>();
+	auto chunk = input.GetOutputChunk();
+	if (global.position >= bind.groups * PART_ROWS_PER_GROUP) {
+		chunk.GetVector(0).SetSize(0);
+		return;
+	}
+	auto group = global.position / PART_ROWS_PER_GROUP;
+	auto offset = global.position % PART_ROWS_PER_GROUP;
+	auto rows = std::min<int64_t>(PART_ROWS_PER_GROUP - offset, STANDARD_VECTOR_SIZE);
+	global.last_group = group;
+	global.position += rows;
+	for (idx_t i = 0; i < input.GetColumnCount(); i++) {
+		auto vec = chunk.GetVector(i);
+		for (int64_t row = 0; row < rows; row++) {
+			switch (input.GetColumnIndex(i)) {
+			case 0:
+				vec.GetDataMutable<int32_t>()[row] = -1;
+				break;
+			case 1:
+				vec.GetDataMutable<int64_t>()[row] = group;
+				break;
+			default:
+				vec.GetDataMutable<int64_t>()[row] = group * 10 + offset + row;
+				break;
+			}
+		}
+		if (i == 0) {
+			vec.SetSize(static_cast<idx_t>(rows));
+		}
+	}
+}
+
+void ProjPartData(TableFunction::PartitionDataInput &input) {
+	const auto &global = input.GetGlobalState<PartGlobal>();
+	input.SetBatchIndex(static_cast<idx_t>(global.last_group));
+	if (!input.RequiresPartitionColumns()) {
+		return;
+	}
+	proj_part_reported_column = input.GetPartitionColumnIndex(0);
+	auto ctx = input.GetContext();
+	input.SetPartitionValue(0, Value::Create(ctx, global.last_group));
+}
+
+void ProjPartInfo(TableFunction::PartitioningInput &input) {
+	if (input.GetPartitionColumnCount() == 1 && input.GetPartitionColumnIndex(0) == 1) {
+		input.SetPartitionInfo(TableFunction::PartitionInfo::SINGLE_VALUE_PARTITIONS);
+	}
+}
+
+// ---------------------------------------------------------------------------
+// cpp_batch_order(): one BIGINT column over two batches raced so that batch 1 reaches the sink first; only the
+// partition data callback lets the ordered result sink restore insertion order.
+// ---------------------------------------------------------------------------
+
+struct BatchOrderGlobal {
+	std::atomic<int32_t> claimed {0};
+	std::atomic<int32_t> started {0};
+};
+struct BatchOrderLocal {
+	int32_t id = 0;
+	bool done = false;
+};
+
+std::atomic<bool> batch_order_requires_batch_index_seen {false};
+
+void BatchOrderBind(TableFunction::BindInput &input) {
+	input.AddResultColumn("b", input.GetContext().ParseType("BIGINT"));
+}
+
+void BatchOrderInitGlobal(TableFunction::InitGlobalInput &input) {
+	input.SetGlobalState<BatchOrderGlobal>();
+	input.SetMaxThreads(2);
+}
+
+void BatchOrderInitLocal(TableFunction::InitLocalInput &input) {
+	auto &global = input.GetGlobalState<BatchOrderGlobal>();
+	auto id = global.claimed.fetch_add(1);
+	global.started.fetch_add(1);
+	// Bounded barrier: both local states must exist before either races ahead in exec, or the completion order
+	// below would not be deterministic. Bounded so a scheduler that never launches the second task cannot hang.
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+	while (global.started.load() < 2 && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+	}
+	input.SetLocalState<BatchOrderLocal>(BatchOrderLocal {id, false});
+}
+
+void BatchOrderExec(TableFunction::ExecInput &input) {
+	auto &local = input.GetLocalState<BatchOrderLocal>();
+	auto vec = input.GetOutputChunk().GetVector(0);
+	if (local.done) {
+		vec.SetSize(0);
+		return;
+	}
+	// Batch 0 finishes later than batch 1 despite being claimed first: only batch-index ordering restores order.
+	if (local.id == 0) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	}
+	vec.GetDataMutable<int64_t>()[0] = local.id;
+	local.done = true;
+	vec.SetSize(1);
+}
+
+void BatchOrderData(TableFunction::PartitionDataInput &input) {
+	if (input.RequiresBatchIndex()) {
+		batch_order_requires_batch_index_seen = true;
+	}
+	input.SetBatchIndex(static_cast<idx_t>(input.GetLocalState<BatchOrderLocal>().id));
+}
+
+void RegisterBatchOrder(Connection &conn, const std::string &name, bool with_partition_data) {
+	auto function = TableFunction::Create(conn);
+	function.SetName(name)
+	    .SetBindCallback(BatchOrderBind)
+	    .SetInitGlobalCallback(BatchOrderInitGlobal)
+	    .SetInitLocalCallback(BatchOrderInitLocal)
+	    .SetExecCallback(BatchOrderExec);
+	if (with_partition_data) {
+		function.SetPartitionDataCallback(BatchOrderData);
+	}
+	function.Register();
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: table function partition callbacks feed a partitioned aggregate", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	RegisterPart(conn, "cpp_part", PartInfo, PartData);
+
+	// The partitioning callback claims only part_col: GROUP BY part_col unlocks the partitioned aggregate, val does
+	// not.
+	REQUIRE(
+	    ExplainContains(conn, "SELECT part_col, count(*) FROM cpp_part(3) GROUP BY part_col", "Partitioned Aggregate"));
+	REQUIRE_FALSE(ExplainContains(conn, "SELECT val, count(*) FROM cpp_part(3) GROUP BY val", "Partitioned Aggregate"));
+
+	auto rows = Collect2<int64_t, int64_t>(
+	    conn.Execute("SELECT part_col, count(*) FROM cpp_part(3) GROUP BY part_col ORDER BY part_col"), 0, 1);
+	REQUIRE(rows == std::vector<std::pair<int64_t, int64_t>> {{0, 3}, {1, 3}, {2, 3}});
+
+	// Each misuse along the way was refused synchronously, without derailing the correct call right after it.
+	REQUIRE(part_oob_batch_refused);
+	REQUIRE(part_wrong_type_refused);
+	REQUIRE(part_oob_value_refused);
+	REQUIRE(part_oob_info_refused);
+}
+
+TEST_CASE("Stable C++API: table function partition data reports declared columns under projection pushdown",
+          "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto function = TableFunction::Create(conn);
+	function.SetName("cpp_proj_part");
+	function.GetSignature().AddParameter("n", conn.ParseType("BIGINT"));
+	function.SetBindCallback(ProjPartBind)
+	    .SetInitGlobalCallback(PartInitGlobal)
+	    .SetExecCallback(ProjPartExec)
+	    .SetPartitioningCallback(ProjPartInfo)
+	    .SetPartitionDataCallback(ProjPartData)
+	    .SetProjectionPushdown(true);
+	function.Register();
+
+	// Only part_col is scanned, so declared index 1 sits at scan position 0; the callback must still see 1.
+	REQUIRE(ExplainContains(conn, "SELECT part_col, count(*) FROM cpp_proj_part(3) GROUP BY part_col",
+	                        "Partitioned Aggregate"));
+	proj_part_reported_column = 0;
+	auto rows = Collect2<int64_t, int64_t>(
+	    conn.Execute("SELECT part_col, max(val) FROM cpp_proj_part(3) GROUP BY part_col ORDER BY part_col"), 0, 1);
+	REQUIRE(rows == std::vector<std::pair<int64_t, int64_t>> {{0, 2}, {1, 12}, {2, 22}});
+	REQUIRE(proj_part_reported_column.load() == 1);
+}
+
+TEST_CASE("Stable C++API: table function partition data restores batch order", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	conn.Execute("SET threads=2").Drain();
+	RegisterBatchOrder(conn, "cpp_batch_order", true);
+	RegisterBatchOrder(conn, "cpp_batch_order_nopart", false);
+
+	batch_order_requires_batch_index_seen = false;
+	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_batch_order()")) == std::vector<int64_t> {0, 1});
+	// Otherwise everything ran on one thread and the ordering assertion above passed vacuously.
+	REQUIRE(batch_order_requires_batch_index_seen.load());
+
+	// Without the callback the sink cannot restore order; the rows still all arrive.
+	REQUIRE(CollectBigints(conn.Execute("SELECT sum(b) FROM cpp_batch_order_nopart()")) == std::vector<int64_t> {1});
+}
+
+TEST_CASE("Stable C++API: table function partition data contract violations fail the query", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	RegisterPart(conn, "cpp_decreasing_batch", AlwaysPartitioned, DecreasingBatchData);
+	RegisterPart(conn, "cpp_constant_batch", AlwaysPartitioned, ConstantBatchData);
+	RegisterPart(conn, "cpp_no_batch_index", AlwaysPartitioned, NoBatchIndexData);
+	RegisterPart(conn, "cpp_no_partition_value", AlwaysPartitioned, NoPartitionValueData);
+	RegisterPart(conn, "cpp_throwing_partition_data", AlwaysPartitioned, ThrowingPartitionData);
+
+	auto decreasing = QueryError(conn, "SELECT part_col, count(*) FROM cpp_decreasing_batch(3) GROUP BY part_col");
+	REQUIRE(decreasing.find("cpp_decreasing_batch") != std::string::npos);
+	REQUIRE(decreasing.find("must not decrease") != std::string::npos);
+	// The connection stays usable: the guard fires before the engine-internal error that would invalidate it.
+	REQUIRE(CollectBigints(conn.Execute("SELECT 1::BIGINT")) == std::vector<int64_t> {1});
+
+	auto constant = QueryError(conn, "SELECT part_col, count(*) FROM cpp_constant_batch(3) GROUP BY part_col");
+	REQUIRE(constant.find("without changing the batch index") != std::string::npos);
+
+	auto missing_batch = QueryError(conn, "SELECT part_col, count(*) FROM cpp_no_batch_index(3) GROUP BY part_col");
+	REQUIRE(missing_batch.find("did not set a batch index") != std::string::npos);
+
+	auto missing_value = QueryError(conn, "SELECT part_col, count(*) FROM cpp_no_partition_value(3) GROUP BY part_col");
+	REQUIRE(missing_value.find("index 0") != std::string::npos);
+
+	auto thrown = QueryError(conn, "SELECT part_col, count(*) FROM cpp_throwing_partition_data(3) GROUP BY part_col");
+	REQUIRE(thrown.find("partition data refused") != std::string::npos);
+}
+
+TEST_CASE("Stable C++API: table function partitioning failures only surface for a partitioned aggregate", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	RegisterPart(conn, "cpp_throwing_partitioning", ThrowingPartitioning, NoBatchIndexData);
+
+	// A plain scan never consults the partitioning callback.
+	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_throwing_partitioning(3)")) ==
+	        std::vector<int64_t> {9});
+	auto message = QueryError(conn, "SELECT part_col, count(*) FROM cpp_throwing_partitioning(3) GROUP BY part_col");
+	REQUIRE(message.find("partition info refused") != std::string::npos);
+}
+
+TEST_CASE("Stable C++API: table function partitioning requires partition data", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto function = TableFunction::Create(conn);
+	function.SetName("cpp_info_only");
+	function.GetSignature().AddParameter("n", conn.ParseType("BIGINT"));
+	function.SetBindCallback(PartBind_)
+	    .SetInitGlobalCallback(PartInitGlobal)
+	    .SetExecCallback(PartExec)
+	    .SetPartitioningCallback(AlwaysPartitioned);
+	REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+
+	function.SetPartitionDataCallback(NoBatchIndexData);
+	function.Register();
+	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_info_only(2)")) == std::vector<int64_t> {6});
+
+	// Clearing the callbacks again is accepted and registers a plain function.
+	function.SetName("cpp_info_cleared").SetPartitioningCallback(nullptr).SetPartitionDataCallback(nullptr);
+	function.Register();
+	REQUIRE_FALSE(ExplainContains(conn, "SELECT part_col, count(*) FROM cpp_info_cleared(2) GROUP BY part_col",
+	                              "Partitioned Aggregate"));
 }

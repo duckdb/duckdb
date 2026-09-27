@@ -669,32 +669,41 @@ enum class DeprecatedHighlightColors {
 template <DeprecatedHighlightColors T>
 MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &args) {
 	string literal;
+	string hint;
 	switch (T) {
 	case DeprecatedHighlightColors::COMMENT:
 		literal = "comment";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::CONSTANT:
-		literal = "constant";
-		break;
+		state.PrintF(PrintOutput::STDERR,
+		             ".constant has been split into numeric_constant and string_constant, use .highlight_colors "
+		             "numeric_constant %s and .highlight_colors string_constant %s instead\n",
+		             args[1].c_str(), args[1].c_str());
+		return MetadataResult::FAIL;
 	case DeprecatedHighlightColors::KEYWORD:
 		literal = "keyword";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::ERROR:
 		literal = "error";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::CONT:
 		literal = "cont";
+		hint = "continuation";
 		break;
 	case DeprecatedHighlightColors::CONT_SEL:
 		literal = "cont_sel";
+		hint = "continuation_selected";
 		break;
 	default:
 		throw std::runtime_error("eek");
 	}
 	state.PrintF(PrintOutput::STDERR,
-	             "WARNING: .%s [COLOR] will be removed in a future release, use .render_color %s %s instead\n",
-	             literal.c_str(), literal.c_str(), args[1].c_str());
-	return TrySetHighlightColor(state, literal, args[1]);
+	             "WARNING: .%s [COLOR] will be removed in a future release, use .highlight_colors %s %s instead\n",
+	             literal.c_str(), hint.c_str(), args[1].c_str());
+	return TrySetHighlightColor(state, hint, args[1]);
 }
 
 #endif
@@ -1029,7 +1038,8 @@ static const MetadataCommand metadata_commands[] = {
     {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2, ""},
     {"thousand_sep", 0, SetThousandSep, "SEP",
      "Sets the thousand separator used when rendering numbers. Only for duckbox mode.", 4, ""},
-    {"timer", 2, ShellState::ToggleTimer, "on|off", "Turn SQL timer on or off", 0, ""},
+    {"timer", 0, ShellState::ToggleTimer, "on|off [DIGITS]",
+     "Turn SQL timer on or off, DIGITS decimals for the real time (default 3)", 0, ""},
     {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0, ""},
     {"version", 1, ShowVersion, "", "Show the version", 0, ""},
     {"web", 1, OpenProfileWeb, "", "Open the last query profile (EXPLAIN ANALYZE) in a web browser", 0, ""},

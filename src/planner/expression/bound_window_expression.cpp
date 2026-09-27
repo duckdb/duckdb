@@ -1,6 +1,8 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
 
 #include "duckdb/function/aggregate_function.hpp"
@@ -151,6 +153,17 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other
 	return true;
 }
 
+void BoundWindowExpression::RetainSQLRange(optional_ptr<const Expression> start, optional_ptr<const Expression> end,
+                                           const LogicalType &order_type) {
+	sql_range_start = start && start->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT
+	                      ? ConstantExpression::FromValue(start->Cast<BoundConstantExpression>().GetValue())
+	                      : nullptr;
+	sql_range_end = end && end->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT
+	                    ? ConstantExpression::FromValue(end->Cast<BoundConstantExpression>().GetValue())
+	                    : nullptr;
+	sql_range_order_type = order_type;
+}
+
 unique_ptr<Expression> BoundWindowExpression::Copy() const {
 	unique_ptr<BoundAggregateFunction> agg_copy;
 	if (aggregate) {
@@ -195,6 +208,9 @@ unique_ptr<Expression> BoundWindowExpression::Copy() const {
 	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
+	new_window->sql_range_start = sql_range_start ? sql_range_start->Copy() : nullptr;
+	new_window->sql_range_end = sql_range_end ? sql_range_end->Copy() : nullptr;
+	new_window->sql_range_order_type = sql_range_order_type;
 	new_window->ignore_nulls = ignore_nulls;
 	new_window->distinct = distinct;
 
@@ -273,6 +289,10 @@ void BoundWindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(212, "exclude_clause", exclude_clause);
 	serializer.WriteProperty(213, "distinct", distinct);
 	serializer.WriteProperty(214, "arg_orders", arg_orders);
+	serializer.WritePropertyWithDefault(215, "sql_range_start", sql_range_start, unique_ptr<ParsedExpression>());
+	serializer.WritePropertyWithDefault(216, "sql_range_end", sql_range_end, unique_ptr<ParsedExpression>());
+	serializer.WritePropertyWithDefault<LogicalType>(217, "sql_range_order_type", sql_range_order_type,
+	                                                 LogicalType::INVALID);
 }
 
 unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserializer) {
@@ -318,6 +338,12 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserial
 	deserializer.ReadProperty(212, "exclude_clause", result->exclude_clause);
 	deserializer.ReadProperty(213, "distinct", result->distinct);
 	deserializer.ReadPropertyWithExplicitDefault(214, "arg_orders", result->arg_orders, vector<BoundOrderByNode>());
+	deserializer.ReadPropertyWithExplicitDefault(215, "sql_range_start", result->sql_range_start,
+	                                             unique_ptr<ParsedExpression>());
+	deserializer.ReadPropertyWithExplicitDefault(216, "sql_range_end", result->sql_range_end,
+	                                             unique_ptr<ParsedExpression>());
+	deserializer.ReadPropertyWithExplicitDefault<LogicalType>(217, "sql_range_order_type", result->sql_range_order_type,
+	                                                          LogicalType::INVALID);
 
 	//	Builtin window functions didn't used to be serialized, so we need to look them up in the system catalog
 	if (!result->aggregate && !result->window) {

@@ -392,6 +392,8 @@ void VariantColumnData::Append(ColumnAppendState &state, const Vector &vector, i
 }
 
 void VariantColumnData::FinalizeAppend(ColumnDataFinalizeAppendState &finalize_state, ColumnAppendState &state) {
+	validity->FinalizeAppendLocked(finalize_state, state.child_appends[0]);
+
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		ColumnDataFinalizeAppendState child_finalize_state(finalize_state, LogicalTypeId::VARIANT);
 		sub_columns[i]->FinalizeAppend(child_finalize_state, state.child_appends[i + 1]);

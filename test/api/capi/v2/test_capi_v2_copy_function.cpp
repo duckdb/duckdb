@@ -1,3 +1,4 @@
+#include "duckdb_v2.h"
 #include "test_capi_v2.hpp"
 
 #include <atomic>
@@ -398,6 +399,12 @@ void FailingToBatchSize(duckdb_v2_copy_to_batch_size_info_handle, duckdb_v2_cont
 // Leaves the target unset, which the engine refuses.
 void EmptyToBatchSize(duckdb_v2_copy_to_batch_size_info_handle, duckdb_v2_context_handle,
                       duckdb_v2_error_info_handle *) {
+}
+
+// Sets the target to an invalid (0) value.
+void ZeroToBatchSize(duckdb_v2_copy_to_batch_size_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *) {
+	duckdb_v2_copy_to_batch_size_set_target(info, 0, NULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -908,6 +915,7 @@ TEST_CASE("V2 copy: callback errors propagate to the result", "[capi_v2][copy_fu
 	register_to("to_batch_fails", nullptr, nullptr, FailingToBatch);
 	register_to("to_bind_fails", FailingToBind, nullptr, ToNoopBatch);
 	register_to("to_batch_size_fails", nullptr, FailingToBatchSize, ToNoopBatch);
+	register_to("to_batch_size_zero", nullptr, ZeroToBatchSize, ToNoopBatch);
 	register_to("to_batch_size_empty", nullptr, EmptyToBatchSize, ToNoopBatch);
 
 	// Registers a COPY FROM function with the given bind and exec callbacks.
@@ -929,13 +937,16 @@ TEST_CASE("V2 copy: callback errors propagate to the result", "[capi_v2][copy_fu
 	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_bind_fails")) == DUCKDB_V2_ERROR_IO_GENERAL);
 	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_fails")) ==
 	        DUCKDB_V2_ERROR_IO_GENERAL);
-	// A batch size callback that sets no target fails the statement.
-	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_empty")) ==
+	// A batch size of 0 should fail.
+	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_zero")) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(RunFailingCopy(fx.conn, CopyFromStatement("target", path, "from_bind_fails")) ==
 	        DUCKDB_V2_ERROR_IO_GENERAL);
 	REQUIRE(RunFailingCopy(fx.conn, CopyFromStatement("target", path, "from_exec_fails")) ==
 	        DUCKDB_V2_ERROR_IO_GENERAL);
+
+	// A batch size callback that sets no target does not fail.
+	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_empty")) == DUCKDB_V2_ERROR_NONE);
 }
 
 TEST_CASE("V2 copy: registration refusals", "[capi_v2][copy_function]") {

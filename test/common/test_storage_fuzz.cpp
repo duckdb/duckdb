@@ -4,7 +4,6 @@
 #include "duckdb/common/local_file_system.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 #include "test_config.hpp"
 #include "test_helpers.hpp"
 
@@ -433,8 +432,7 @@ TEST_CASE("fuzzed storage test", "[storage][.]") {
 			if (computed_checksum != expected_checksum) {
 				auto result = con.Query("SELECT * FROM t ORDER BY ALL");
 				string error;
-				ColumnDataCollection::ResultEquals(previous_result->Cast<MaterializedQueryResult>().Collection(),
-				                                   result->Cast<MaterializedQueryResult>().Collection(), error);
+				ColumnDataCollection::ResultEquals(previous_result->Collection(), result->Collection(), error);
 				Printer::PrintF("Checksum failure\nResult comparison:\n%s", error);
 				REQUIRE(computed_checksum == expected_checksum);
 			}

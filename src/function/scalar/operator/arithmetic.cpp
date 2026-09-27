@@ -641,6 +641,25 @@ ScalarFunction AddFunction::GetFunction(const LogicalType &left_type, const Logi
 	// LCOV_EXCL_STOP
 }
 
+// The overloads built up in this file leave their signature's parameter names at the auto-generated "colN"
+// default; name unary/binary numeric operators consistently with the rest of the catalog (x / left,right)
+// without touching overloads (e.g. list_concat, merged into "+") that already have real names.
+static void NameOperatorParameters(ScalarFunction &fun) {
+	auto &sig = fun.GetSignature();
+	if (sig.GetParameterCount() == 1) {
+		if (sig.GetParameter(0).GetName() == "col0") {
+			sig.GetParameter(0).SetName("x");
+		}
+	} else if (sig.GetParameterCount() == 2) {
+		if (sig.GetParameter(0).GetName() == "col0") {
+			sig.GetParameter(0).SetName("left");
+		}
+		if (sig.GetParameter(1).GetName() == "col1") {
+			sig.GetParameter(1).SetName("right");
+		}
+	}
+}
+
 ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	ScalarFunctionSet add("+");
 	for (auto &type : LogicalType::Numeric()) {
@@ -681,6 +700,7 @@ ScalarFunctionSet OperatorAddFun::GetFunctions() {
 	// we can add bignums together
 	add.AddFunction(AddFunction::GetFunction(LogicalType::BIGNUM, LogicalType::BIGNUM));
 
+	add.ApplyToFunctions(NameOperatorParameters);
 	return add;
 }
 
@@ -951,6 +971,7 @@ ScalarFunctionSet OperatorSubtractFun::GetFunctions() {
 	// we can negate intervals
 	subtract.AddFunction(SubtractFunction::GetFunction(LogicalType::INTERVAL));
 
+	subtract.ApplyToFunctions(NameOperatorParameters);
 	return subtract;
 }
 
@@ -1103,6 +1124,7 @@ ScalarFunctionSet OperatorMultiplyFun::GetFunctions() {
 	                   ScalarFunction::BinaryFunction<interval_t, int64_t, interval_t, MultiplyOperator>));
 	multiply.SetFallible();
 
+	multiply.ApplyToFunctions(NameOperatorParameters);
 	return multiply;
 }
 
@@ -1143,7 +1165,7 @@ namespace {
 
 [[noreturn]] void ThrowDivisionByZero(const Expression &expr) {
 	throw InvalidInputException("Division by zero in expression %s. Use TRY(...) to return NULL for this expression, "
-	                            "or SET null_on_division_by_zero=true to return NULL for all divisions by zero.",
+	                            "or SET error_on_division_by_zero=false to return NULL for all divisions by zero.",
 	                            expr.ToString());
 }
 
@@ -1263,7 +1285,7 @@ template <class OP>
 unique_ptr<FunctionData> BindDivisionByZero(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
+	auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
 	bound_function.SetFunctionCallback(
 	    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
 	return nullptr;
@@ -1272,7 +1294,7 @@ unique_ptr<FunctionData> BindDivisionByZero(BindScalarFunctionInput &input) {
 unique_ptr<FunctionData> BindIntervalDivide(BindScalarFunctionInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
-	if (Settings::Get<NullOnDivisionByZeroSetting>(context)) {
+	if (!Settings::Get<ErrorOnDivisionByZeroSetting>(context)) {
 		bound_function.SetFunctionCallback(BinaryScalarFunctionZeroCheck<interval_t, double, interval_t, DivideOperator,
 		                                                                 BinaryZeroCheckWrapper<true>>);
 	} else {
@@ -1290,7 +1312,7 @@ unique_ptr<FunctionData> BindBinaryFloatingPoint(BindScalarFunctionInput &input)
 	if (Settings::Get<IeeeFloatingPointOpsSetting>(context)) {
 		bound_function.SetFunctionCallback(GetScalarBinaryFunction<OP>(bound_function.GetReturnType().InternalType()));
 	} else {
-		auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(context);
+		auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(context);
 		bound_function.SetFunctionCallback(
 		    GetBinaryFunctionZeroCheck<OP>(bound_function.GetReturnType().InternalType(), null_on_zero));
 	}
@@ -1334,7 +1356,7 @@ struct DividePropagateStatistics {
 };
 
 // When propagation fails the divisor range may contain zero, and division by zero either raises or (with
-// null_on_division_by_zero) produces NULLs that the inputs do not have: return no statistics instead of the
+// error_on_division_by_zero=false) produces NULLs that the inputs do not have: return no statistics instead of the
 // validity-only statistics that PropagateNumericStats falls back to.
 unique_ptr<BaseStatistics> PropagateIntegerDivideStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto stats = PropagateNumericStats<TryDivideOperator, DividePropagateStatistics, DivideOperator>(context, input);
@@ -1356,6 +1378,7 @@ ScalarFunctionSet OperatorFloatDivideFun::GetFunctions() {
 	fp_divide.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::DOUBLE}, LogicalType::INTERVAL, nullptr,
 	                                     BindIntervalDivide));
 	fp_divide.SetFallible();
+	fp_divide.ApplyToFunctions(NameOperatorParameters);
 	return fp_divide;
 }
 
@@ -1372,6 +1395,7 @@ ScalarFunctionSet OperatorIntegerDivideFun::GetFunctions() {
 		}
 	}
 	full_divide.SetFallible();
+	full_divide.ApplyToFunctions(NameOperatorParameters);
 	return full_divide;
 }
 
@@ -1391,7 +1415,7 @@ static unique_ptr<FunctionData> BindDecimalModulo(BindScalarFunctionInput &input
 		bound_function.SetReturnType(LogicalType::DOUBLE);
 	}
 	auto &result_type = bound_function.GetReturnType();
-	auto null_on_zero = Settings::Get<NullOnDivisionByZeroSetting>(input.GetClientContext());
+	auto null_on_zero = !Settings::Get<ErrorOnDivisionByZeroSetting>(input.GetClientContext());
 	bound_function.SetFunctionCallback(GetBinaryFunctionZeroCheck<OP>(result_type.InternalType(), null_on_zero));
 	return std::move(bind_data);
 }
@@ -1429,6 +1453,7 @@ ScalarFunctionSet OperatorModuloFun::GetFunctions() {
 	}
 	modulo.SetFallible();
 
+	modulo.ApplyToFunctions(NameOperatorParameters);
 	return modulo;
 }
 

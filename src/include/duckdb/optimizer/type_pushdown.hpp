@@ -88,9 +88,13 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 
 struct GetBinding {
 	GetAnalysis &analysis;
+	// Column index within LogicalGet
 	ProjectionIndex column_index;
 	// If column binding was part of a projection, this is non-nullptr
 	LogicalProjection *projection;
+	// If column binding was part of projection, column index within
+	// LogicalProjection wrapping a LogicalGet
+	ProjectionIndex projection_column_index;
 };
 
 /*

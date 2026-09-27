@@ -153,17 +153,19 @@ def get_patch_files(patch_dir):
 
 def apply_patches_as_commits(ext_dir, patch_dir, patches):
     """
-    Apply each patch file with git-apply and create a commit whose message is
-    the patch filename (e.g. "fix.patch").
+    Apply each patch file and create a commit whose message is the patch filename
+    (e.g. "fix.patch").
     """
     for patch_name in patches:
         patch_file = patch_dir / patch_name
-        # Apply to the working tree (not --index): a patch may touch files inside a checked-out
-        # submodule (e.g. database-connector/...), and "git apply --index" cannot stage paths that
-        # live in a submodule ("does not exist in index"). We stage everything explicitly afterwards.
-        # --whitespace=nowarn: never rewrite patch content; --whitespace=fix corrupts
-        # patches that themselves add patch files containing trailing whitespace.
-        run_cmd(['git', 'apply', '--whitespace=nowarn', str(patch_file)], cwd=ext_dir)
+        # Apply exactly as scripts/apply_extension_patches.py does for the FetchContent build, so a
+        # patch that builds there builds here too: `patch -p1 --forward` tolerates the context drift
+        # (fuzz) an extension bump can introduce, where `git apply` rejects a single changed context
+        # line.  It writes to the working tree, not the index, so a patch may touch files inside a
+        # checked-out submodule (e.g. database-connector/...); everything is staged explicitly below.
+        # --no-backup-if-mismatch: a fuzzy apply otherwise leaves <file>.orig behind, which the
+        # `git add -A` below would commit into the extension.
+        run_cmd(['patch', '-p1', '--forward', '--no-backup-if-mismatch', '-i', str(patch_file)], cwd=ext_dir)
         run_cmd(['git', 'add', '-A'], cwd=ext_dir)
         run_cmd(
             [
@@ -421,7 +423,7 @@ def collect_extensions(repo_root, build_extensions_arg=None, extension_configs_a
     return extensions
 
 
-VCPKG_BUILTIN_BASELINE = '84bab45d415d22042bd0b9081aea57f362da3f35'
+VCPKG_BUILTIN_BASELINE = 'cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3'  # Release 2026.06.24
 VCPKG_REGISTRY_BASELINE = 'd485389ad737bb05a5e8afd1fbde5672b559f19e'
 VCPKG_REGISTRY_PACKAGES = ['avro-c', 'vcpkg-cmake']
 

@@ -1,4 +1,5 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -308,7 +309,7 @@ DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar_function_han
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(Convert(*name)); });
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(*name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_scalar_function_get_signature(duckdb_v2_scalar_function_handle function,

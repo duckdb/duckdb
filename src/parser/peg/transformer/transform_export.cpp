@@ -49,7 +49,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(PEGTran
                                                                          const string &string_literal) {
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "import_database";
-	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(string_literal)));
+	result->info->parameters.emplace_back(ConstantExpression::String(string_literal));
 	return std::move(result);
 }
 

@@ -27,7 +27,7 @@ static bool StringEnumCastLoop(const VectorIterator<string_t> &source_data, Vect
 		auto &source_val = source_entry.GetValue();
 		auto pos = EnumType::GetPos(result_type, source_val);
 		if (pos == -1) {
-			result_data[i] = HandleVectorCastError::Operation<T>(CastExceptionText<string_t, T>(source_val),
+			result_data[i] = HandleVectorCastError::Operation<T>(CastExceptionText<string_t>(source_val, result_type),
 			                                                     result_data, i, vector_cast_data);
 		} else {
 			result_data[i] = UnsafeNumericCast<T>(pos);
@@ -426,7 +426,9 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 		auto &source_mask = ConstantVector::Validity(source);
 		auto &result_mask = FlatVector::ValidityMutable(result);
 		auto ret = T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		// a child may be neither flat nor constant - a VARIANT child is shredded - and setting the type
+		// directly would propagate into a buffer that cannot represent it
+		result.FlattenAndSetConstant();
 		return ret;
 	}
 	default: {

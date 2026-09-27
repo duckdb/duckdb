@@ -180,14 +180,23 @@ private:
 //===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
+
+struct AddColumnConstraints {
+	bool add_not_null = false;
+	bool add_unique = false;
+};
+
 struct AddColumnInfo : public AlterTableInfo {
-	AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists);
+	AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column_p, bool if_column_not_exists_p,
+	              AddColumnConstraints add_column_constraints_p);
 	~AddColumnInfo() override;
 
 	//! New column
 	ColumnDefinition new_column;
 	//! Whether or not an error should be thrown if the column exist
 	bool if_column_not_exists;
+	//! Constraints applied via extra ALTER statements after the column is added
+	AddColumnConstraints add_column_constraints;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

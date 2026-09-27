@@ -13,7 +13,7 @@ TEST_CASE("Test prepared statements API", "[api]") {
 
 	// PrepareAndExecute with no values
 	duckdb::vector<Value> values;
-	REQUIRE_FAIL(con.PendingQuery("", values, false));
+	REQUIRE_FAIL(con.Submit("", values));
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
@@ -64,7 +64,7 @@ TEST_CASE("Test type resolution of function with parameter expressions", "[api]"
 	REQUIRE(CHECK_COLUMN(result, 0, {2}));
 
 	// no prepared statement
-	REQUIRE_FAIL(con.SendQuery("SELECT ?"));
+	REQUIRE_FAIL(con.Query("SELECT ?"));
 }
 
 TEST_CASE("Test prepared statements and dependencies", "[api]") {

@@ -25,16 +25,20 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/arrow/arrow_query_result.hpp"
 
-class ArrowStreamTestFactory {
+class ArrowStreamTestFactory : public duckdb::ArrowScanFactory {
 public:
-	static duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
-	                                                                        duckdb::ArrowStreamParameters &parameters);
+	explicit ArrowStreamTestFactory(ArrowArrayStream &stream_p) : stream(stream_p) {
+	}
+	duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
+	ProduceStream(duckdb::ArrowStreamParameters &parameters) override;
+	void GetSchema(ArrowSchema &schema) override;
 
-	static void GetSchema(ArrowArrayStream *arrow_array_stream, ArrowSchema &schema);
+private:
+	duckdb::reference<ArrowArrayStream> stream;
 };
 
 namespace duckdb {
-class ArrowTestFactory {
+class ArrowTestFactory : public ArrowScanFactory {
 public:
 	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, duckdb::unique_ptr<QueryResult> result_p,
 	                 bool big_result, ClientProperties options, ClientContext &context)
@@ -73,10 +77,8 @@ public:
 
 	static void ArrowArrayStreamRelease(struct ArrowArrayStream *stream);
 
-	static duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
-	                                                                        ArrowStreamParameters &parameters);
-
-	static void GetSchema(ArrowArrayStream *, ArrowSchema &schema);
+	duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ProduceStream(ArrowStreamParameters &parameters) override;
+	void GetSchema(ArrowSchema &schema) override;
 
 	void ToArrowSchema(struct ArrowSchema *out);
 };
@@ -92,8 +94,8 @@ private:
 	static bool CompareResults(Connection &con, shared_ptr<Relation> arrow_tbl, const string &query);
 
 public:
-	static vector<Value> ConstructArrowScan(ArrowTestFactory &factory);
-	static vector<Value> ConstructArrowScan(ArrowArrayStream &stream);
-	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, vector<Value> &params);
+	static shared_ptr<ArrowScanFactory> ConstructArrowScan(ArrowTestFactory &factory);
+	static shared_ptr<ArrowScanFactory> ConstructArrowScan(ArrowArrayStream &stream);
+	static unique_ptr<QueryResult> ScanArrowObject(Connection &con, shared_ptr<ArrowScanFactory> factory);
 };
 } // namespace duckdb

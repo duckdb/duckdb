@@ -108,7 +108,7 @@ TEST_CASE("Test move children", "[arrow]") {
 	// Create a test factory and produce a stream from it
 	auto factory = ArrowTestFactory(std::move(types), std::move(names), std::move(initial_result), false,
 	                                client_properties, *conn.context);
-	auto stream = ArrowTestFactory::CreateStream((uintptr_t)&factory, parameters);
+	auto stream = factory.ProduceStream(parameters);
 
 	// For every array, extract the children and scan them
 	while (true) {

@@ -149,8 +149,7 @@ static void ApplyPipeStage(PEGTransformer &transformer, ParseResult &parse_resul
 	}
 }
 
-static unique_ptr<TransformResultValue> TransformPipeSelectAtom(PEGTransformer &transformer,
-                                                                ParseResult &parse_result) {
+static unique_ptr<TransformResultValue> FinalizePipeSelectAtom(PEGTransformer &transformer, ParseResult &parse_result) {
 	auto &pipe = parse_result.Cast<ListParseResult>();
 	auto statement = TransformPipeSource(transformer, pipe.GetChild(0));
 	auto &stages = pipe.Child<RepeatParseResult>(1);
@@ -158,6 +157,11 @@ static unique_ptr<TransformResultValue> TransformPipeSelectAtom(PEGTransformer &
 		ApplyPipeStage(transformer, stage.get(), *statement);
 	}
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement));
+}
+
+static unique_ptr<TransformProcess> StartPipeSelectAtomTransform(PEGTransformer &transformer,
+                                                                 ParseResult &parse_result) {
+	return make_uniq<FinalizeTransformProcess>(transformer, parse_result, FinalizePipeSelectAtom);
 }
 
 class PipeSQLGrammarChange final : public GrammarExtension {
@@ -171,7 +175,8 @@ public:
 	vector<GrammarChange> GetChanges() const override {
 		vector<GrammarChange> changes;
 		changes.push_back(GrammarChange::AddChoice("ReservedKeyword", "'EXTEND'"));
-		changes.push_back(GrammarChange::AddRule("PipeSelectAtom <- PipeSource PipeStage+", TransformPipeSelectAtom));
+		changes.push_back(
+		    GrammarChange::AddRule("PipeSelectAtom <- PipeSource PipeStage+", StartPipeSelectAtomTransform));
 		changes.push_back(GrammarChange::AddRule("PipeSource <- FromClause / SelectStatementType / SelectParens"));
 		changes.push_back(GrammarChange::AddRule("PipeStage <- '|>' PipeOperator"));
 		changes.push_back(GrammarChange::AddRule(

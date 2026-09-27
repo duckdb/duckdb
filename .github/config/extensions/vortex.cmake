@@ -5,7 +5,7 @@ endif()
 if (VORTEX_ENABLED AND NOT WIN32 AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(vortex
             GIT_URL https://github.com/vortex-data/duckdb-vortex
-            GIT_TAG 6ea8bd77fe8e6e814bde11b6981f934fa82ab961
+            GIT_TAG 2aaba5f07f489f6fa73e74d457faf324cb84dcf5
             SUBMODULES vortex
             APPLY_PATCHES
             LOAD_TESTS

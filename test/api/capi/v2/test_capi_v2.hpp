@@ -46,19 +46,34 @@ namespace test_capi_v2 {
 // Common Fixtures
 //----------------------------------------------------------------------------------------------------------------------
 
+//! Creates an instance handle under `env`, attaches `path` and makes it the default database, destroying the handle
+//! again if that fails.
+inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, duckdb_v2_str path,
+                                    duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err) {
+	auto rc = duckdb_v2_instance_create(env, out_instance, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return rc;
+	}
+	rc = duckdb_v2_instance_attach(*out_instance, path, nullptr, nullptr, true, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_instance_destroy(out_instance);
+	}
+	return rc;
+}
+
 struct EnvFixture {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_database_handle db = nullptr;
+	duckdb_v2_instance_handle instance = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
 	EnvFixture() {
-		duckdb_v2_create_environment(&env, nullptr);
-		duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr);
-		duckdb_v2_connect(db, &conn, nullptr);
+		duckdb_v2_environment_create(&env, nullptr);
+		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
+		duckdb_v2_connection_create(instance, &conn, nullptr);
 	}
 	~EnvFixture() {
-		duckdb_v2_disconnect(&conn);
-		duckdb_v2_close(&db);
-		duckdb_v2_destroy_environment(&env);
+		duckdb_v2_connection_destroy(&conn);
+		duckdb_v2_instance_destroy(&instance);
+		duckdb_v2_environment_destroy(&env);
 	}
 };
 
@@ -410,8 +425,7 @@ inline void ExecSQL(duckdb_v2_connection_handle conn, const char *sql) {
 	duckdb_v2_result_destroy(&r);
 }
 
-// Reads a progress snapshot through the query_progress object: capture,
-// read all three accessors, destroy.
+// Reads one consistent progress snapshot.
 struct QueryProgress {
 	double percentage = 99.0;
 	uint64_t rows_processed = 99;
@@ -421,39 +435,17 @@ struct QueryProgress {
 // success through the flag, so a timing-dependent round count cannot move the
 // suite's assertion total. The caller latches the flag and asserts once.
 inline QueryProgress ReadProgress(duckdb_v2_connection_handle conn, bool *out_ok) {
-	duckdb_v2_query_progress_handle progress = nullptr;
-	auto capture_rc = duckdb_v2_connection_query_progress(conn, &progress, nullptr);
 	QueryProgress out;
-	if (capture_rc != DUCKDB_V2_ERROR_NONE || !progress) {
-		*out_ok = false;
-		return out;
-	}
-	auto pct_rc = duckdb_v2_query_progress_get_percentage(progress, &out.percentage, nullptr);
-	auto rows_rc = duckdb_v2_query_progress_get_rows_processed(progress, &out.rows_processed, nullptr);
-	auto total_rc = duckdb_v2_query_progress_get_total_rows_to_process(progress, &out.total_rows_to_process, nullptr);
-	auto destroy_rc = duckdb_v2_query_progress_destroy(&progress);
-	*out_ok = pct_rc == DUCKDB_V2_ERROR_NONE && rows_rc == DUCKDB_V2_ERROR_NONE && total_rc == DUCKDB_V2_ERROR_NONE &&
-	          destroy_rc == DUCKDB_V2_ERROR_NONE && progress == nullptr;
+	auto rc = duckdb_v2_connection_progress_get(conn, &out.percentage, &out.rows_processed, &out.total_rows_to_process,
+	                                            nullptr);
+	*out_ok = rc == DUCKDB_V2_ERROR_NONE;
 	return out;
 }
 
 inline QueryProgress ReadProgress(duckdb_v2_connection_handle conn) {
-	duckdb_v2_query_progress_handle progress = nullptr;
-	auto capture_rc = duckdb_v2_connection_query_progress(conn, &progress, nullptr);
-	REQUIRE(capture_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(progress != nullptr);
-	// Read all three accessors, destroy, then assert: a failing REQUIRE
-	// between capture and destroy would leak the snapshot.
-	QueryProgress out;
-	auto pct_rc = duckdb_v2_query_progress_get_percentage(progress, &out.percentage, nullptr);
-	auto rows_rc = duckdb_v2_query_progress_get_rows_processed(progress, &out.rows_processed, nullptr);
-	auto total_rc = duckdb_v2_query_progress_get_total_rows_to_process(progress, &out.total_rows_to_process, nullptr);
-	auto destroy_rc = duckdb_v2_query_progress_destroy(&progress);
-	REQUIRE(pct_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(rows_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(total_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(destroy_rc == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(progress == nullptr);
+	bool ok = false;
+	auto out = ReadProgress(conn, &ok);
+	REQUIRE(ok);
 	return out;
 }
 

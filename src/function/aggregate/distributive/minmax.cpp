@@ -156,23 +156,24 @@ using MaxOperation = NumericMinMaxBase<Max>;
 struct BaseMinMaxStringState {
 	string_t value;
 	bool is_set;
-	uint32_t alloc_size;
+	//! Must be wide enough for NextPowerOfTwo(MAX_STRING_SIZE), which does not fit in a uint32_t
+	idx_t alloc_size;
 
 	void Assign(string_t input, AggregateInputData &input_data) {
 		if (input.IsInlined()) {
 			value = input;
 			alloc_size = 0;
 		} else {
-			auto len = UnsafeNumericCast<uint32_t>(input.GetSize());
+			auto len = input.GetSize();
 			char *ptr;
 			if (alloc_size >= len) {
 				ptr = value.GetDataWriteable();
 			} else {
-				alloc_size = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(len));
+				alloc_size = NextPowerOfTwo(len);
 				ptr = char_ptr_cast(input_data.allocator.Allocate(alloc_size));
 			}
 			memcpy(ptr, input.GetData(), len);
-			value = string_t(ptr, len);
+			value = string_t(ptr, UnsafeNumericCast<uint32_t>(len));
 		}
 	}
 };
@@ -403,17 +404,16 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());
 
-	auto definition = function.GetDefinition();
-	function = std::move(expr->FunctionMutable());
-	// the specialized implementation is not the function we were bound from
-	function.SetDefinition(std::move(definition));
+	function.ReplaceImplementation(expr->Function());
 	return std::move(expr->BindInfoMutable());
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(const string &name) {
-	return AggregateFunction(Identifier(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	AggregateFunction fun(Identifier(name), {}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
+	return fun;
 }
 
 } // namespace
@@ -564,10 +564,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 			auto expr =
 			    function_binder.BindAggregateFunction(std::move(collated_function), std::move(collated_arguments));
 			arguments = std::move(expr->GetChildrenMutable());
-			auto definition = function.GetDefinition();
-			function = std::move(expr->FunctionMutable());
-			// the collated implementation is not the function we were bound from
-			function.SetDefinition(std::move(definition));
+			function.ReplaceImplementation(expr->Function());
 			return std::move(expr->BindInfoMutable());
 		}
 	}
@@ -583,9 +580,10 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 
 template <class COMPARATOR>
 AggregateFunction GetMinMaxNFunction() {
-	return AggregateFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
-	                         nullptr, nullptr, nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                         MinMaxNBind<COMPARATOR>, nullptr);
+	AggregateFunction fun({}, LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
+	fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY).AddParameter("n", LogicalType::BIGINT);
+	return fun;
 }
 
 } // namespace

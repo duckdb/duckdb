@@ -276,7 +276,12 @@ void duckdb_scalar_function_add_parameter(duckdb_scalar_function function, duckd
 	}
 	auto &scalar_function = GetCScalarFunction(function);
 	auto logical_type = reinterpret_cast<duckdb::LogicalType *>(type);
-	scalar_function.GetSignature().AddParameter(*logical_type);
+	// the varargs can be set before the parameters, but they come after them in the signature
+	auto &signature = scalar_function.GetSignature();
+	auto varargs = signature.GetVarArgs();
+	signature.SetVarArgs(duckdb::LogicalType(duckdb::LogicalTypeId::INVALID));
+	signature.AddParameter(*logical_type);
+	signature.SetVarArgs(std::move(varargs));
 }
 
 void duckdb_scalar_function_set_return_type(duckdb_scalar_function function, duckdb_logical_type type) {
@@ -527,6 +532,9 @@ duckdb_state duckdb_register_scalar_function_set(duckdb_connection connection, d
 			}
 		}
 	}
+
+	scalar_function_set.ApplyToFunctions(
+	    [](duckdb::ScalarFunction &scalar_function) { scalar_function.SetFallible(); });
 
 	try {
 		auto con = reinterpret_cast<duckdb::Connection *>(connection);

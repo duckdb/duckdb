@@ -1,4 +1,6 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/catalog/entry_lookup_info.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"

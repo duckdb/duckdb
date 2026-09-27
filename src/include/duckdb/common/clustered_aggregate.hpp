@@ -50,17 +50,33 @@ struct ClusteredAggr {
 		idx_t count;      //! number of tuples in this group
 	};
 
-	idx_t n_group_runs = 0;
-	GroupRun group_runs[MAX_RUNS];
+	ClusteredAggr() : group_runs(&single_run) {
+	}
+
+	struct RunRange {
+		const GroupRun *begin_ptr;
+		const GroupRun *end_ptr;
+		const GroupRun *begin() const {
+			return begin_ptr;
+		}
+		const GroupRun *end() const {
+			return end_ptr;
+		}
+		idx_t size() const {
+			return static_cast<idx_t>(end_ptr - begin_ptr);
+		}
+		const GroupRun &operator[](idx_t i) const {
+			return begin_ptr[i];
+		}
+	};
+	RunRange runs() const {
+		return RunRange {group_runs, group_runs + n_group_runs};
+	}
 
 	const ClusteredAggrState *state = nullptr;
 
-	//! Build a clustered permutation of 0..count-1 from raw integer group ids.
-	//! On success fills group_runs[].sel/gid/count.
-	bool TryClustered(const uint64_t *group_ids, sel_t count, sel_t *arena, uint64_t *slots);
-
 	//! Initialize a single run covering 0..count-1 for one aggregate state.
-	void SetSingleRun(data_ptr_t state, idx_t count);
+	void SetSingleRun(data_ptr_t state_ptr, idx_t count);
 
 	//! Advance all run state pointers by payload_size.
 	void AdvanceStates(idx_t payload_size);
@@ -73,10 +89,19 @@ struct ClusteredAggr {
 	}
 
 	//! Returns a composed dict sel for simple dictionary input, or nullptr.
-	const sel_t *ClusterIter(const Vector &input, idx_t count) const;
+	const sel_t *ClusterIter(const Vector &input) const;
 
 private:
-	mutable sel_t composed_sel_data[STANDARD_VECTOR_SIZE];
+	friend struct ClusteredAggrState;
+
+	//! Build a clustered permutation of 0..count-1 from group ids into runs.
+	//! On success fills runs[].sel/gid/count.
+	bool TryClustered(const uint64_t *group_ids, sel_t count, sel_t *arena, uint64_t *slots, GroupRun *runs);
+
+	idx_t n_group_runs = 0;
+	GroupRun single_run;
+	GroupRun *group_runs;
+
 	mutable const sel_t *cached_dict_sel = nullptr;
 };
 
@@ -84,6 +109,8 @@ private:
 struct ClusteredAggrState {
 	unsafe_unique_array<sel_t> arena;
 	unsafe_unique_array<uint64_t> slots;
+	unsafe_unique_array<ClusteredAggr::GroupRun> group_runs;
+	mutable unsafe_unique_array<sel_t> composed_sel_data;
 	bool all_clustered = false;
 	idx_t n_clustered = 0;
 	idx_t skipped_opportunities = 0;

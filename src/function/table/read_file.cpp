@@ -110,10 +110,11 @@ DirectMultiFileInfo<OP>::InitializeGlobalState(ClientContext &context, MultiFile
 	}
 
 	for (const auto &column_id : column_ids) {
-		// For everything except the 'file' name column, we need to open the file
-		if (column_id != ReadFileBindData::FILE_NAME_COLUMN && column_id != COLUMN_IDENTIFIER_ROW_ID) {
+		if (column_id == ReadFileBindData::FILE_CONTENT_COLUMN) {
 			result->requires_file_open = true;
-			break;
+		} else if (column_id == ReadFileBindData::FILE_SIZE_COLUMN ||
+		           column_id == ReadFileBindData::FILE_LAST_MODIFIED_COLUMN) {
+			result->requires_file_metadata = true;
 		}
 	}
 

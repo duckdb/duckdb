@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/expression_barrier.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -1049,6 +1050,11 @@ JoinOrderExtraction RelationManager::ExtractEdges(LogicalOperator &op,
 					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(expression->Copy(), set, filters_and_bindings.size());
 					filter_info->from_logical_filter = true;
+					if (ExpressionBarrier::Contains(*expression)) {
+						// the barrier must not end up below one of the joins we are reordering
+						filter_info->must_remain_filter = true;
+						filter_info->must_remain_at_root = true;
+					}
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}

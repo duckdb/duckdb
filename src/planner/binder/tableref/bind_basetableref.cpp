@@ -213,9 +213,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// Try autoloading an extension, then retry the replacement scan bind
-		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName().Catalog().GetIdentifierName(),
-		                                              ref.GetQualifiedName().Schema().GetIdentifierName(),
-		                                              ref.Table().GetIdentifierName());
+		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName());
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
@@ -344,8 +342,10 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		auto root_index = bound_child.plan->GetRootIndex();
 		if (view_catalog_entry.security_type == ViewSecurityType::SECURE_VIEW) {
 			// wrap the plan of a secure view - this prevents the optimizer from pushing into the view
-			bound_child.plan =
-			    make_uniq<LogicalSecureView>(view_catalog_entry.name.GetIdentifierName(), std::move(bound_child.plan));
+			bound_child.plan = make_uniq<LogicalSecureView>(
+			    view_catalog_entry.name.GetIdentifierName(),
+			    view_catalog_entry.ParentSchema().GetQualifiedName(view_catalog_entry.name), bound_child.types,
+			    entry_at_clause, std::move(bound_child.plan));
 		}
 		bind_context.AddView(root_index, subquery.alias, subquery, bound_child, view_catalog_entry);
 		return bound_child;

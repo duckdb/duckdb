@@ -161,7 +161,11 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
+#ifdef D_ASSERT_IS_ENABLED
+	auto return_type = expr->GetReturnType();
+#endif
 	auto stats = PropagateExpression(*expr, expr);
+	D_ASSERT(expr->GetReturnType() != return_type || expr->GetReturnType().EqualsIncludingCollation(return_type));
 	if (Settings::Get<DebugVerifyStatsSetting>(context) && stats) {
 		expr->SetVerificationStats(stats->ToUnique());
 	}

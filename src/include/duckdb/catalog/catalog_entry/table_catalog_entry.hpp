@@ -156,6 +156,8 @@ public:
 	                          const std::function<void(CatalogEntry &)> &callback) const;
 	//! Get the trigger with the given name on this table
 	virtual optional_ptr<CatalogEntry> GetTrigger(CatalogTransaction transaction, const Identifier &name) const;
+	//! Drop a trigger from this table (throws for table types that don't support triggers)
+	virtual bool DropTrigger(CatalogTransaction transaction, const Identifier &name, bool cascade);
 	//! Collect triggers matching the given event type and for_each granularity, regardless of timing
 	vector<const_reference<TriggerCatalogEntry>>
 	GetTriggersForEvent(CatalogTransaction transaction, TriggerEventType event_type, TriggerForEach for_each) const;

@@ -1504,8 +1504,12 @@ SourceResultType PipelineBroadcastExchange::ReserveScanLocked(
 		auto position = consumer.position++;
 		buffer->ReserveRead(position, scan_state.spool_reader, next_chunk, batch_index, spool_read);
 		if (spool_read.IsSet()) {
+#ifdef D_ASSERT_IS_ENABLED
 			auto inserted = consumer.in_flight_reads.insert(position);
 			D_ASSERT(inserted.second);
+#else
+			consumer.in_flight_reads.insert(position);
+#endif
 		} else {
 			consumer.rows_read += next_chunk->size();
 			RetireChunksLocked();
@@ -1552,8 +1556,12 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 				scan_state.reported_batch_index = batch_range.batch_index;
 				if (spool_read.IsSet()) {
 					spool_read.batch_sequence = batch_sequence;
+#ifdef D_ASSERT_IS_ENABLED
 					auto inserted = consumer.in_flight_reads.insert(position);
 					D_ASSERT(inserted.second);
+#else
+					consumer.in_flight_reads.insert(position);
+#endif
 				} else {
 					position_entry->second++;
 					consumer.rows_read += next_chunk->size();
@@ -1612,8 +1620,12 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 		if (consumer.next_batch_sequence < buffer->NextBatchSequence()) {
 			auto batch_sequence = consumer.next_batch_sequence++;
 			auto &batch_range = buffer->GetBatchRange(batch_sequence);
+#ifdef D_ASSERT_IS_ENABLED
 			auto inserted = consumer.active_batch_positions.emplace(batch_sequence, batch_range.begin_position);
 			D_ASSERT(inserted.second);
+#else
+			consumer.active_batch_positions.emplace(batch_sequence, batch_range.begin_position);
+#endif
 			scan_state.batch_sequence = batch_sequence;
 			continue;
 		}
@@ -1755,24 +1767,23 @@ ProgressData PipelineBroadcastExchange::SinkProgress(const ProgressData &source_
                                                      idx_t estimated_cardinality) const {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	ProgressData progress;
-	auto produced_count = produced_rows.load(std::memory_order_relaxed);
-	auto produced = double(produced_count);
 	if (producer_state != ProducerState::ACTIVE) {
-		auto total = MaxValue<double>(produced, 1.0);
-		progress.done = total;
-		progress.total = total;
+		progress.done = 1.0;
+		progress.total = 1.0;
 		return progress;
 	}
-	progress.done = produced;
 	if (source_progress.IsValid()) {
-		progress.total = produced + MaxValue<double>(source_progress.total - source_progress.done, 1.0);
+		// the producing pipeline is done once its source is exhausted
+		return source_progress;
+	}
+	auto produced_count = produced_rows.load(std::memory_order_relaxed);
+	auto produced = double(produced_count);
+	progress.done = produced;
+	static constexpr const idx_t MAX_PROGRESS_CARDINALITY = 1ULL << 48ULL;
+	if (estimated_cardinality > 0 && estimated_cardinality < MAX_PROGRESS_CARDINALITY) {
+		progress.total = double(MaxValue<idx_t>(estimated_cardinality, produced_count + 1));
 	} else {
-		static constexpr const idx_t MAX_PROGRESS_CARDINALITY = 1ULL << 48ULL;
-		if (estimated_cardinality > 0 && estimated_cardinality < MAX_PROGRESS_CARDINALITY) {
-			progress.total = double(MaxValue<idx_t>(estimated_cardinality, produced_count + 1));
-		} else {
-			progress.total = produced + 1.0;
-		}
+		progress.total = produced + 1.0;
 	}
 	if (progress.done > progress.total) {
 		progress.total = progress.done;

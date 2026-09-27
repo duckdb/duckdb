@@ -46,6 +46,10 @@ public:
 		return removed_expressions;
 	}
 
+	//! Evaluate a function when every argument is known to be constant from its statistics.
+	static unique_ptr<BaseStatistics> PropagateConstantInputs(ClientContext &context,
+	                                                          const BoundFunctionExpression &func,
+	                                                          const vector<BaseStatistics> &child_stats);
 	//! Derive output statistics of a monotone function by evaluating it at the corners of its
 	//! argument ranges (see ArgProperties). Returns nullptr when the bounds cannot be derived.
 	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,

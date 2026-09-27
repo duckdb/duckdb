@@ -11,6 +11,7 @@ add_library_unity(
   binding_alias.cpp
   bound_result_modifier.cpp
   bound_parameter_map.cpp
+  bound_expression_sql_exporter.cpp
   collation_binding.cpp
   column_binding.cpp
   logical_plan_verification_result.cpp

@@ -27,7 +27,8 @@ module: vector
 # from the epoch in their named unit — are the ones DuckDB uses throughout, and
 # the logical type module carries the full table.
 #
-#   - primitives (BOOL, INT*, UINT*, FLOAT, DOUBLE, DATE, TIME*, TIMESTAMP*)
+#   - primitives (BOOL, INT(8/16/32/64), UINT(8/16/32/64), FLOAT, DOUBLE, DATE, TIME,
+#     TIME_TZ, TIMESTAMP(_S/_MS/_NS/_TZ))
 #     → typed leaf array (cast to const T *)
 #   - HUGEINT / UUID / DECIMAL128 → cast to const hugeint_t *
 #     (decimal width and scale via logical_type_get_param; UUID stores the
@@ -298,7 +299,7 @@ functions:
       Sets the number of elements in the vector.
 
       The counterpart of vector_get_size: it declares how many logical elements
-      the vector now holds, and does not allocate or initialize anything.
+      the vector now holds. It reserves enough space for size logical elements.
     role: setter
     belongs_to: vector
     parameters:
@@ -402,6 +403,9 @@ functions:
       Any other representation returns ERROR_INPUT_INVALID. The pointer is
       valid until the owning chunk is destroyed, and the vector's storage shape
       must not change — through a flatten, say — while it is in use.
+
+      When writing VARCHAR values, the caller must ensure that the bytes
+      contain valid UTF-8.
     role: getter
     belongs_to: vector
     parameters:
@@ -449,15 +453,14 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Repoints a vector at another vector's data and type, without copying.
+      Repoints a vector at another vector's data, without copying.
 
-      `vector` takes on the storage and logical type of `source`: no data
-      moves, and the two alias the same buffers until one of them is reset or
-      re-referenced. Works for any type, nested included. The source's data
-      must outlive every read of `vector`. Use it to hand an
-      already-materialized vector — a chunk column produced by
-      arrow_array_to_data_chunk, say — straight to an output vector without a
-      per-row copy.
+      `vector` takes on the storage of `source`: no data moves, and the two alias
+      the same buffers until one of them is reset or re-referenced. Works for any
+      type, including nested types. The source's logical type must equal the
+      vector's; a mismatch returns ERROR_INPUT_INVALID. The source's data must
+      outlive every read of `vector`. Use it to hand an already-materialized
+      vector straight to an output vector without a per-row copy.
     role: method
     belongs_to: vector
     parameters:
@@ -466,7 +469,7 @@ functions:
         description: The vector to repoint at the source's data.
       source:
         type: vector
-        description: The vector whose data and logical type to reference.
+        description: The vector whose data to reference. Its logical type must equal the vector's.
       err:
         type: error_info
         indirection: 1
@@ -755,7 +758,7 @@ functions:
   # as VARCHAR or BLOB, dispatching inline vs pointer on the transparent bytes
   # type, or read a BIGNUM value's storage with value_get_blob, then decode.
   # To write: encode the magnitude, then write the BIGNUM vector exactly like
-  # a VARCHAR or BLOB one — size the buffer, allocate it out of the vector's
+  # a VARCHAR or BLOB one: size the buffer, allocate it out of the vector's
   # arena, encode into it, and assemble the bytes payload.
   # -----------------------------------------------------------------------
   bignum_decode:
@@ -878,6 +881,28 @@ functions:
         indirection: 1
         kind: OUT
         description: Receives the storage size in bytes — written on success and on ERROR_INPUT_OBJECT_SIZE.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  validate_utf8:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-17" ]
+    description: |
+      Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters.
+
+      Returns ERROR_INPUT_INVALID if either:
+      - text.ptr is NULL and text.len is nonzero.
+      - The input contains malformed UTF-8.
+
+      A NULL pointer with zero length is valid.
+    parameters:
+      text:
+        type: str
+        description: The bytes to validate.
       err:
         type: error_info
         indirection: 1

@@ -111,6 +111,13 @@ static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &ty
 	return stats.ToUnique();
 }
 
+bool ParquetStatisticsUtils::CanHaveNaN(const duckdb_parquet::Statistics &parquet_stats, bool can_have_nan) {
+	if (parquet_stats.__isset.nan_count) {
+		return parquet_stats.nan_count != 0;
+	}
+	return can_have_nan;
+}
+
 Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                            const std::string &stats) {
 	string error;
@@ -246,31 +253,19 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
 			return Value::TIME(Time::FromTimeMs(val));
-		case ParquetExtraTypeInfo::UNIT_NS:
-			return Value::TIME(Time::FromTimeNs(val));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 		default:
 			return Value::TIME(dtime_t(val));
 		}
 	}
 	case LogicalTypeId::TIME_NS: {
-		int64_t val;
-		if (stats.size() == sizeof(int32_t)) {
-			val = Load<int32_t>(stats_data);
-		} else if (stats.size() == sizeof(int64_t)) {
-			val = Load<int64_t>(stats_data);
-		} else {
+		if (stats.size() != sizeof(int64_t)) {
 			throw InvalidInputException("Incorrect stats size for type TIME_NS");
 		}
-		switch (schema_ele.type_info) {
-		case ParquetExtraTypeInfo::UNIT_MS:
-			return Value::TIME_NS(ParquetMsIntToTimeNs(NumericCast<int32_t>(val)));
-		case ParquetExtraTypeInfo::UNIT_NS:
-			return Value::TIME_NS(ParquetIntToTimeNs(val));
-		case ParquetExtraTypeInfo::UNIT_MICROS:
-		default:
-			return Value::TIME_NS(dtime_ns_t(val));
+		if (schema_ele.type_info != ParquetExtraTypeInfo::UNIT_NS) {
+			throw InternalException("TIME_NS requires nanosecond type info");
 		}
+		return Value::TIME_NS(ParquetIntToTimeNs(Load<int64_t>(stats_data)));
 	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
@@ -308,9 +303,6 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			case ParquetExtraTypeInfo::UNIT_MS:
 				timestamp_value = ParquetTimestampMsToTimestamp(val);
 				break;
-			case ParquetExtraTypeInfo::UNIT_NS:
-				timestamp_value = ParquetTimestampNsToTimestamp(val);
-				break;
 			case ParquetExtraTypeInfo::UNIT_MICROS:
 			default:
 				timestamp_value = timestamp_t(val);
@@ -324,30 +316,13 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 	}
 	case LogicalTypeId::TIMESTAMP_TZ_NS:
 	case LogicalTypeId::TIMESTAMP_NS: {
-		timestamp_ns_t timestamp_value;
-		if (schema_ele.type_info == ParquetExtraTypeInfo::IMPALA_TIMESTAMP) {
-			if (stats.size() != sizeof(Int96)) {
-				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
-			}
-			timestamp_value = ImpalaTimestampToTimestampNS(Load<Int96>(stats_data));
-		} else {
-			if (stats.size() != sizeof(int64_t)) {
-				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
-			}
-			auto val = Load<int64_t>(stats_data);
-			switch (schema_ele.type_info) {
-			case ParquetExtraTypeInfo::UNIT_MS:
-				timestamp_value = ParquetTimestampMsToTimestampNs(val);
-				break;
-			case ParquetExtraTypeInfo::UNIT_NS:
-				timestamp_value = ParquetTimestampNsToTimestampNs(val);
-				break;
-			case ParquetExtraTypeInfo::UNIT_MICROS:
-			default:
-				timestamp_value = ParquetTimestampUsToTimestampNs(val);
-				break;
-			}
+		if (stats.size() != sizeof(int64_t)) {
+			throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
 		}
+		if (schema_ele.type_info != ParquetExtraTypeInfo::UNIT_NS) {
+			throw InternalException("TIMESTAMP_NS requires nanosecond type info");
+		}
+		auto timestamp_value = ParquetTimestampNsToTimestampNs(Load<int64_t>(stats_data));
 		if (type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
 			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value));
 		}
@@ -506,14 +481,12 @@ ParquetStatisticsUtils::TransformParquetStatistics(const LogicalType &type, cons
 		return CreateNumericStats(type, schema, parquet_stats);
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
-		if (can_have_nan) {
-			// Since parquet doesn't tell us if the column has NaN values, if the user has explicitly declared that it
-			// does, we create stats without an upper max value, as NaN compares larger than anything else.
+		if (CanHaveNaN(parquet_stats, can_have_nan)) {
+			// The column can contain NaN values - create stats without an upper max value, as NaN compares larger than
+			// anything else and is not included in the Parquet min/max
 			return CreateFloatingPointStats(type, schema, parquet_stats);
 		} else {
-			// Otherwise we use the numeric stats as usual, which might lead to "wrong" pruning if the column contains
-			// NaN values. The parquet spec is not clear on how to handle NaN values in statistics, and so this is
-			// probably the best we can do for now.
+			// Otherwise we use the numeric stats as usual
 			return CreateNumericStats(type, schema, parquet_stats);
 		}
 		break;

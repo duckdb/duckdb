@@ -5,7 +5,9 @@
 #include "duckdb/common/path.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -48,15 +50,49 @@ static string local_temp_dir_root_override; // --local-temp-dir-root ("" -> the 
 // set, not one per root: a remote root is env-var passthrough only -- unittest holds no credentials, so
 // it can never mkdir or reap one, and the local tree is the only thing with a lifecycle.
 static vector<string> run_created_levels;  // $ROOT..$RUN_ID
-static vector<string> test_created_levels; // $TEST_ID
 static vector<string> home_created_levels; // the HOME sandbox sibling
-static string active_test_leaf;            // currently-materialized $TEST_ID dir ("" when none)
+
+//! The $TEST_ID dir a test materialized, and the levels its path created. Keyed by TEST_ID rather
+//! than held in one global: test files can run concurrently, and every thread working on one test
+//! (a concurrentloop spawns several) has to find that test's entry.
+struct ActiveTestTempDir {
+	string leaf;
+	vector<string> created_levels;
+};
+static mutex active_test_lock;
+static unordered_map<string, ActiveTestTempDir> active_tests;
 
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 	}
 	return !result.HasError();
+}
+
+duckdb::unique_ptr<duckdb::QueryResultStream> OpenStream(duckdb::Connection &con, const string &query) {
+	return duckdb::make_uniq<duckdb::QueryResultStream>(con.Submit(query));
+}
+
+duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream &stream) {
+	auto statement_type = stream.GetStatementType();
+	auto properties = stream.GetStatementProperties();
+	auto names = stream.GetNames();
+	auto client_properties = stream.GetClientProperties();
+	auto collection =
+	    duckdb::make_uniq<duckdb::ColumnDataCollection>(duckdb::Allocator::DefaultAllocator(), stream.GetTypes());
+	duckdb::ColumnDataAppendState append_state;
+	collection->InitializeAppend(append_state);
+	while (auto chunk = stream.Fetch()) {
+		if (chunk->size() == 0) {
+			break;
+		}
+		collection->Append(append_state, *chunk);
+	}
+	if (stream.HasError()) {
+		return duckdb::make_uniq<duckdb::QueryResult>(stream.GetErrorObject());
+	}
+	return duckdb::make_uniq<duckdb::QueryResult>(statement_type, properties, names, std::move(collection),
+	                                              client_properties);
 }
 
 bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
@@ -522,12 +558,20 @@ void DestroyTempDir(bool success) {
 // Fired at test end with THIS test's pass/fail. Only the $TEST_ID level is in scope -- $RUN_ID/$ROOT
 // were made by PrepareTempDir, so ReclaimLevels stops there.
 void DestroyTestTempDir(bool success) {
-	if (!active_test_leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
-		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		ReclaimLevels(*fs, active_test_leaf, test_created_levels);
+	ActiveTestTempDir entry;
+	{
+		lock_guard<mutex> guard(active_test_lock);
+		auto it = active_tests.find(ResolveTestId());
+		if (it == active_tests.end()) {
+			return;
+		}
+		entry = std::move(it->second);
+		active_tests.erase(it);
 	}
-	active_test_leaf.clear();
-	test_created_levels.clear();
+	if (!entry.leaf.empty() && DestroyFires(temp_dir_destroy, success)) {
+		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+		ReclaimLevels(*fs, entry.leaf, entry.created_levels);
+	}
 }
 
 // $ROOT/[RUN_ID]/[TEST_ID], materializing the $TEST_ID level on first request -- lazily, because the
@@ -535,14 +579,22 @@ void DestroyTestTempDir(bool success) {
 static string MaterializeLocalTestPath() {
 	string path = TreeTestPath(LocalRoot()).ToString();
 	string root = TreeRunIdRoot(LocalRoot()).ToString();
-	if (path != root && path != active_test_leaf) {
-		active_test_leaf = path;
-		test_created_levels.clear();
-		duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		if (!fs->DirectoryExists(path)) {
-			RecordAndCreateLevels(*fs, path, test_created_levels);
-		}
+	if (path == root) {
+		return path;
 	}
+	lock_guard<mutex> guard(active_test_lock);
+	auto test_id = ResolveTestId();
+	auto entry = active_tests.find(test_id);
+	if (entry != active_tests.end() && entry->second.leaf == path) {
+		return path;
+	}
+	ActiveTestTempDir active;
+	active.leaf = path;
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	if (!fs->DirectoryExists(path)) {
+		RecordAndCreateLevels(*fs, path, active.created_levels);
+	}
+	active_tests[test_id] = std::move(active);
 	return path;
 }
 // -----------------------------------------------------------------------------
@@ -568,6 +620,18 @@ bool DeleteTestPath() {
 }
 
 static bool emit_test_events = false;
+
+static std::function<void(DuckDB &)> static_extension_loader;
+
+void SetStaticExtensionLoader(std::function<void(DuckDB &)> loader) {
+	static_extension_loader = std::move(loader);
+}
+
+void LoadStaticExtensions(DuckDB &db) {
+	if (static_extension_loader) {
+		static_extension_loader(db);
+	}
+}
 
 void SetEmitTestEvents(bool emit) {
 	emit_test_events = emit;
@@ -650,12 +714,7 @@ unique_ptr<DBConfig> GetTestConfig() {
 	return result;
 }
 
-bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Value> values) {
-	if (result_.GetResultType() == QueryResultType::STREAM_RESULT) {
-		fprintf(stderr, "Unexpected stream query result in CHECK_COLUMN\n");
-		return false;
-	}
-	auto &result = (MaterializedQueryResult &)result_;
+bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Value> values) {
 	if (result.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
 		return false;
@@ -700,27 +759,16 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 }
 
 bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
-	if (result->GetResultType() == QueryResultType::STREAM_RESULT) {
-		auto &stream = (StreamQueryResult &)*result;
-		result = stream.Materialize();
-	}
 	return CHECK_COLUMN(*result, column_number, values);
 }
 
-bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number,
-                  vector<duckdb::Value> values) {
-	return CHECK_COLUMN((QueryResult &)*result, column_number, values);
-}
-
 string compare_csv(duckdb::QueryResult &result, string csv, bool header) {
-	D_ASSERT(result.GetResultType() == QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = (MaterializedQueryResult &)result;
-	if (materialized.HasError()) {
-		fprintf(stderr, "Query failed with message: %s\n", materialized.GetError().c_str());
-		return materialized.GetError();
+	if (result.HasError()) {
+		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
+		return result.GetError();
 	}
 	string error;
-	if (!compare_result(csv, materialized.Collection(), materialized.GetTypes(), header, error)) {
+	if (!compare_result(csv, result.Collection(), result.GetTypes(), header, error)) {
 		return error;
 	}
 	return "";

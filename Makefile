@@ -155,9 +155,6 @@ endif
 ifneq (${EXTENSION_STATIC_BUILD}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
-ifeq (${DISABLE_GCC_FUNCTION_SECTIONS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_GCC_FUNCTION_SECTIONS=1
-endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
 endif
@@ -226,6 +223,9 @@ endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
 endif
+TIDY_SHARD_COUNT ?= 1
+TIDY_SHARD_INDEX ?= 0
+TIDY_SHARD_PARAMETERS := --shard-count ${TIDY_SHARD_COUNT} --shard-index ${TIDY_SHARD_INDEX}
 CLANGD_TIDY_VERSION := 1.1.1
 CLANGD_TIDY_VENV ?= $(abspath build/clangd-tidy-venv)
 ifeq ($(CLANGD_TIDY_BINARY),)
@@ -543,8 +543,7 @@ TEST_CONFIGS_QUERY_VERIFICATION := \
 	test/configs/verify_statement_serialization.json \
 	test/configs/disable_optimizer.json \
 	test/configs/verification_projection.json \
-	test/configs/verify_column_bindings.json \
-	test/configs/heap_based_parser.json
+	test/configs/verify_column_bindings.json
 
 TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
@@ -555,7 +554,8 @@ TEST_CONFIGS_EXECUTION := \
 	test/configs/variant_vector.json \
 	test/configs/verify_aggregate_state_export.json \
 	test/configs/verify_functions.json \
-	test/configs/shredded_vector.json
+	test/configs/shredded_vector.json \
+	test/configs/verify_progress.json
 
 TEST_CONFIGS_PERSISTENCE := \
 	test/configs/force_storage.json \
@@ -678,6 +678,20 @@ cli-release-artifact:
 shared-libs-release-artifact:
 	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
 
+# Writes a C source defining duckdb_register_static_extensions(), which links statically built extensions into a
+# program: compile it next to your own sources, put the extension archives before libduckdb_static.a, and call the
+# function before opening a database (or compile extension/loader/static_extension_autoregister.cpp too to have it called
+# before main). LINK_EXTENSIONS picks the extensions (space or semicolon separated); without it, every extension
+# archive in STATIC_EXTENSION_LOADER_BUILD_DIR is used.
+STATIC_EXTENSION_LOADER_BUILD_DIR ?= build/release
+STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.c
+
+.PHONY: static_extension_loader
+static_extension_loader:
+	$(PYTHON) scripts/generate_static_extension_loader.py --output "$(STATIC_EXTENSION_LOADER_FILE)" \
+		$(if $(LINK_EXTENSIONS),"$(LINK_EXTENSIONS)",$(patsubst lib%_extension.a,%,$(notdir $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/extension/*/lib*_extension.a))))
+	@echo "Wrote $(STATIC_EXTENSION_LOADER_FILE)"
+
 .PHONY: static-libs-release-artifact
 
 static-libs-release-artifact:
@@ -692,6 +706,11 @@ symbol-leakage-check:
 
 banned-symbol-check:
 	$(PYTHON) scripts/banned_symbols_check.py --directory build/release/src
+
+.PHONY: linux-release-link-checks
+
+linux-release-link-checks:
+	bash scripts/ci/linux_release_link_checks.sh
 
 define ensure_apt_commands
 	missing=0; \
@@ -809,7 +828,7 @@ tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
-	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_SHARD_PARAMETERS} ${TIDY_PERFORM_CHECKS}
 
 install-clangd-tidy:
 	mkdir -p $(dir $(CLANGD_TIDY_VENV)) && \
@@ -850,8 +869,8 @@ format-fix: $(FORMAT_SETUP_DEPS)
 
 format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
-	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/compiled_grammar.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher_factory.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
 
@@ -941,55 +960,14 @@ generate-files: $(CAPIGEN_SETUP_DEPS)
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
-bundle-setup:
-	cd build/release && \
-	rm -rf bundle && \
-	mkdir -p bundle && \
-	cp src/libduckdb_static.a bundle/. && \
-	cp third_party/*/libduckdb_*.a bundle/. && \
-	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
-	cp extension/*/lib*_extension.a bundle/. && \
-	mkdir -p vcpkg_installed && \
-	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
-	mkdir -p _deps && \
-	if [ -f linked_libs.txt ]; then \
-		while IFS= read -r libline || [ -n "$$libline" ]; do \
-			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
-		done < linked_libs.txt; \
-	fi && \
-	cd bundle && \
-	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
-	find . -name '*.a' -execdir ${AR} -x {} \;
-
-bundle-library-o: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library-obj: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library: release
-	make bundle-library-o
-
-.PHONY: gather-libs
-
-GATHER_LIBS_BUILD_DIR ?= build/release
-GATHER_LIBS_PREFIX ?= lib
-GATHER_LIBS_EXTENSION ?= a
-
-gather-libs:
-	cd $(GATHER_LIBS_BUILD_DIR) && \
-	rm -rf libs && \
-	mkdir -p libs && \
-	cp src/$(GATHER_LIBS_PREFIX)duckdb_static.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp third_party/*/$(GATHER_LIBS_PREFIX)duckdb_*.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp extension/$(GATHER_LIBS_PREFIX)duckdb_generated_extension_loader.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp extension/*/$(GATHER_LIBS_PREFIX)*_extension.$(GATHER_LIBS_EXTENSION) libs/.
-
-#### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
+#### Setup VCPKG to correct version 2026.06.24 tag is cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3
 vcpkg/scripts/buildsystems/vcpkg.cmake:
-	git -C vcpkg fetch || git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
+	if [ -d vcpkg/.git ]; then \
+		git -C vcpkg fetch --tags && \
+		git -C vcpkg checkout --detach 2026.06.24; \
+	else \
+		git clone --branch 2026.06.24 https://github.com/microsoft/vcpkg; \
+	fi
 	cd vcpkg && ./bootstrap-vcpkg.sh
 
 setup-vcpkg: vcpkg/scripts/buildsystems/vcpkg.cmake

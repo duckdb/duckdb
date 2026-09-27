@@ -1,8 +1,8 @@
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
 
 #include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 
 namespace duckdb {
 
@@ -33,8 +33,8 @@ SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto &gstate = input.global_state.Cast<BatchCollectorGlobalState>();
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
-	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),
-	                                                 context.GetClientProperties());
+	auto result =
+	    make_uniq<QueryResult>(statement_type, properties, names, std::move(collection), context.GetClientProperties());
 	gstate.result = std::move(result);
 	return SinkFinalizeType::READY;
 }

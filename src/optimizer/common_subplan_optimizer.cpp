@@ -250,6 +250,9 @@ private:
 			auto &get = op.Cast<LogicalGet>();
 			switch (TYPE) {
 			case ConversionType::TO_CANONICAL: {
+				// Source ordinality is represented by the bound operators.
+				source_ordinality = get.source_ordinality;
+				get.source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 				D_ASSERT(column_ids.empty());
 				// Grab selected GET columns and populate with all possible columns
 				column_ids = std::move(get.GetMutableColumnIds());
@@ -327,6 +330,7 @@ private:
 				break;
 			}
 			case ConversionType::RESTORE_ORIGINAL:
+				get.source_ordinality = source_ordinality;
 				D_ASSERT(!column_ids.empty());
 				get.GetMutableColumnIds() = std::move(column_ids);
 				D_ASSERT(get.projection_ids.empty());
@@ -480,6 +484,7 @@ private:
 	vector<vector<ProjectionIndex>> projection_maps;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
+	OrdinalityType source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 	vector<ColumnIndex> column_ids;
 	vector<column_t> chunk_column_ids;
 	vector<ProjectionIndex> projection_ids;
@@ -1017,8 +1022,12 @@ public:
 				D_ASSERT(subplan.canonical_bindings.size() == new_bindings.size());
 				for (idx_t i = 0; i < old_bindings[subplan_idx].size(); i++) {
 					replacer.replacement_bindings.emplace_back(old_bindings[subplan_idx][i], new_bindings[i]);
+#ifdef D_ASSERT_IS_ENABLED
 					const auto inserted = generated_binding_map.emplace(new_bindings[i], subplan.canonical_bindings[i]);
 					D_ASSERT(inserted.second);
+#else
+					generated_binding_map.emplace(new_bindings[i], subplan.canonical_bindings[i]);
+#endif
 				}
 			}
 
