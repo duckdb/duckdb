@@ -76,7 +76,8 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		AddToMultiStatement(multi_statement, std::move(result->info));
 	}
 	if (follow_ups.add_not_null) {
-		AddToMultiStatement(multi_statement, make_uniq<SetNotNullInfo>(alter_entry_data, column_name));
+		AddToMultiStatement(multi_statement,
+		                    make_uniq<SetNotNullInfo>(alter_entry_data, vector<Identifier> {column_name}));
 	}
 	if (follow_ups.add_unique) {
 		vector<Identifier> unique_columns;
