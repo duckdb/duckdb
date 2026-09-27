@@ -1,13 +1,17 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression_binder/insert_binder.hpp"
@@ -342,6 +346,79 @@ static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_i
 	return conflict_column_names;
 }
 
+static bool HasNullableColumn(TableCatalogEntry &table, const vector<Identifier> &column_names) {
+	logical_index_set_t not_null_columns;
+	for (auto &constraint : table.GetConstraints()) {
+		if (constraint->type == ConstraintType::NOT_NULL) {
+			not_null_columns.insert(constraint->Cast<NotNullConstraint>().index);
+		}
+	}
+	for (auto &name : column_names) {
+		if (!not_null_columns.count(table.GetColumns().GetColumn(name).Logical())) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static unique_ptr<SelectNode> SelectStarFrom(unique_ptr<TableRef> from_table,
+                                             unique_ptr<ParsedExpression> where_clause = nullptr) {
+	auto select_node = make_uniq<SelectNode>();
+	select_node->select_list.push_back(make_uniq<StarExpression>());
+	select_node->from_table = std::move(from_table);
+	select_node->where_clause = std::move(where_clause);
+	return select_node;
+}
+
+//! Deduplicates the source on the conflict columns - rows with a NULL key never conflict, so they skip the dedup
+static unique_ptr<TableRef> DeduplicateOnConflictSource(unique_ptr<TableRef> source,
+                                                        const vector<Identifier> &conflict_columns, bool nullable,
+                                                        const Identifier &cte_name) {
+	auto distinct = make_uniq<DistinctModifier>();
+	vector<unique_ptr<ParsedExpression>> null_checks;
+	for (auto &col : conflict_columns) {
+		distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(col));
+		null_checks.push_back(
+		    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, make_uniq<ColumnRefExpression>(col)));
+	}
+	auto select_stmt = make_uniq<SelectStatement>();
+	if (!nullable) {
+		auto select_node = SelectStarFrom(std::move(source));
+		select_node->modifiers.push_back(std::move(distinct));
+		select_stmt->node = std::move(select_node);
+		return make_uniq<SubqueryRef>(std::move(select_stmt), "excluded");
+	}
+	// WITH cte AS MATERIALIZED (source)
+	// SELECT DISTINCT ON (keys) * FROM cte WHERE NOT has_null_key UNION ALL SELECT * FROM cte WHERE has_null_key
+	unique_ptr<ParsedExpression> has_null_key;
+	if (null_checks.size() == 1) {
+		has_null_key = std::move(null_checks[0]);
+	} else {
+		has_null_key = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(null_checks));
+	}
+	auto select_from_cte = [&](unique_ptr<ParsedExpression> where_clause) {
+		auto cte_ref = make_uniq<BaseTableRef>();
+		cte_ref->SetTable(cte_name);
+		return SelectStarFrom(std::move(cte_ref), std::move(where_clause));
+	};
+	auto non_null_rows =
+	    select_from_cte(make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, has_null_key->Copy()));
+	non_null_rows->modifiers.push_back(std::move(distinct));
+	auto union_node = make_uniq<SetOperationNode>();
+	union_node->setop_type = SetOperationType::UNION;
+	union_node->setop_all = true;
+	union_node->children.push_back(std::move(non_null_rows));
+	union_node->children.push_back(select_from_cte(std::move(has_null_key)));
+
+	auto cte = make_uniq<CommonTableExpressionInfo>();
+	cte->query_node = SelectStarFrom(std::move(source));
+	cte->materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+	union_node->cte_map.map[cte_name] = std::move(cte);
+
+	select_stmt->node = std::move(union_node);
+	return make_uniq<SubqueryRef>(std::move(select_stmt), "excluded");
+}
+
 unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, TableCatalogEntry &table) {
 	D_ASSERT(node.on_conflict_info);
 
@@ -526,18 +603,11 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		}
 	}
 	// push DISTINCT ON(unique_columns)
-	for (auto &distinct_on_columns : all_distinct_on_columns) {
-		auto distinct_stmt = make_uniq<SelectStatement>();
-		auto select_node = make_uniq<SelectNode>();
-		auto distinct = make_uniq<DistinctModifier>();
-		for (auto &col : distinct_on_columns) {
-			distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(col));
-		}
-		select_node->modifiers.push_back(std::move(distinct));
-		select_node->select_list.push_back(make_uniq<StarExpression>());
-		select_node->from_table = std::move(source);
-		distinct_stmt->node = std::move(select_node);
-		source = make_uniq<SubqueryRef>(std::move(distinct_stmt), "excluded");
+	for (idx_t i = 0; i < all_distinct_on_columns.size(); i++) {
+		auto &distinct_on_columns = all_distinct_on_columns[i];
+		bool nullable = HasNullableColumn(table, distinct_on_columns);
+		Identifier cte_name(StringUtil::Format("__duckdb_on_conflict_source_%d", i));
+		source = DeduplicateOnConflictSource(std::move(source), distinct_on_columns, nullable, cte_name);
 	}
 
 	merge_into->node->source = std::move(source);
