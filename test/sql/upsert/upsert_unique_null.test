@@ -32,3 +32,41 @@ select * from tbl;
 1	3
 NULL	5
 NULL	5
+
+# NULL keys within the same batch do not conflict with each other
+statement ok
+create or replace table tbl (id integer, val integer unique);
+
+statement ok
+insert into tbl VALUES (1, NULL), (2, NULL) ON CONFLICT (val) DO NOTHING;
+
+statement ok
+insert into tbl VALUES (3, NULL), (4, NULL), (5, 1), (6, 1) ON CONFLICT DO NOTHING;
+
+statement ok
+insert into tbl VALUES (7, NULL), (8, NULL) ON CONFLICT (val) DO UPDATE SET id = 42;
+
+query II
+select * from tbl order by id;
+----
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+5	1
+7	NULL
+8	NULL
+
+# composite keys with a NULL component do not conflict
+statement ok
+create or replace table tbl (a integer, b integer, c integer, unique (a, b));
+
+statement ok
+insert into tbl VALUES (1, NULL, 1), (1, NULL, 2), (1, 1, 3), (1, 1, 4) ON CONFLICT (a, b) DO NOTHING;
+
+query III
+select * from tbl order by c;
+----
+1	NULL	1
+1	NULL	2
+1	1	3
