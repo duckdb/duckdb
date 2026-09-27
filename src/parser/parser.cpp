@@ -267,26 +267,16 @@ void Parser::ParseQuery(const string &query_p) {
 			last_strict_extension_error.Throw();
 		}
 	}
-	// PEG parser: tokenize, then peel one TopLevelStatement at a time. On per-statement PEG
-	// failure, hand the rest of the query to parse_function extensions; the extension reports
-	// how many bytes it consumed and we advance the token cursor past them.
+	// Tokenize once, then parse statements with extension fallback for grammar mismatches.
 	auto owned_tokens = make_uniq<vector<MatcherToken>>();
 	ParserTokenizerBehavior behavior(query, *owned_tokens);
 	auto &tokenizer = GetGrammar().GetTokenizer();
 	tokenizer.TokenizeInput(behavior);
 	TokenIterator token_iterator(std::move(owned_tokens));
 	while (token_iterator.Current()) {
-		try {
-			auto stmt = ParseTopLevelStatement(token_iterator);
-			if (stmt) {
-				statements.push_back(std::move(stmt));
-			}
-		} catch (ParserException &e) {
-			auto ext_stmt = TryParseExtensionStatement(token_iterator, query);
-			if (!ext_stmt) {
-				throw;
-			}
-			statements.push_back(std::move(ext_stmt));
+		auto stmt = ParseTopLevelStatementWithExtensions(token_iterator, query);
+		if (stmt) {
+			statements.push_back(std::move(stmt));
 		}
 	}
 
@@ -357,6 +347,25 @@ unique_ptr<SQLStatement> Parser::ParseTopLevelStatement(TokenIterator &token_ite
 	}
 	auto &compiled_grammar = GetGrammar();
 	return PEGTransformerFactory::TransformTopLevelStatement(token_iterator, options, compiled_grammar);
+}
+
+unique_ptr<SQLStatement> Parser::ParseTopLevelStatementWithExtensions(TokenIterator &token_iterator,
+                                                                      const string &query) {
+	auto &compiled_grammar = GetGrammar();
+	bool match_failed = false;
+	try {
+		return PEGTransformerFactory::TransformTopLevelStatement(token_iterator, options, compiled_grammar,
+		                                                         &match_failed);
+	} catch (ParserException &) {
+		if (!match_failed) {
+			throw;
+		}
+		auto statement = TryParseExtensionStatement(token_iterator, query);
+		if (!statement) {
+			throw;
+		}
+		return statement;
+	}
 }
 
 vector<SimplifiedToken> Parser::Tokenize(const string &query) {

@@ -60,7 +60,11 @@ static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &tra
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(TokenIterator &token_iterator,
                                                                            ParserOptions &options,
-                                                                           const CompiledGrammar &grammar) {
+                                                                           const CompiledGrammar &grammar,
+                                                                           optional_ptr<bool> match_failed) {
+	if (match_failed) {
+		*match_failed = false;
+	}
 	if (!token_iterator.Current()) {
 		return nullptr;
 	}
@@ -76,6 +80,9 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	process_allocator.FreeAll();
 	if (!match_result.IsSuccess()) {
+		if (match_failed) {
+			*match_failed = true;
+		}
 		// syntax error — surface as a parser exception in the same shape as Transform()
 		auto token_stream = token_iterator.ToString();
 		idx_t error_token_idx = state.GetMaxTokenIndex();
@@ -95,9 +102,6 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 	D_ASSERT(match_result.HasParseResult());
 
-	// Advance the caller's cursor past the consumed tokens.
-	token_iterator.SetPosition(state.token_iterator);
-
 	// TopLevelStatement <- Statement? (';'+ / EndOfInput)
 	//   child 0: Optional<Statement>
 	//   child 1: bracket-wrapper list around Choice<';'+ | EndOfInput>
@@ -105,6 +109,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	auto &stmt_opt = tls.Child<OptionalParseResult>(0);
 	if (!stmt_opt.HasResult()) {
 		// separator-only or EOI-only TopLevelStatement — no statement to yield
+		token_iterator.SetPosition(state.token_iterator);
 		return nullptr;
 	}
 	auto &term_wrapper = tls.Child<ListParseResult>(1);
@@ -118,9 +123,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	}
 
 	ArenaAllocator transformer_allocator(Allocator::DefaultAllocator());
-	PEGTransformer transformer(transformer_allocator, token_iterator, options, grammar);
+	PEGTransformer transformer(transformer_allocator, state.token_iterator, options, grammar);
 
-	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
+	auto statement =
+	    ExtractAndTransformStatement(transformer, state.token_iterator, stmt_opt.GetResult(), terminator_offset);
+	token_iterator.SetPosition(state.token_iterator);
+	return statement;
 }
 
 #define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)

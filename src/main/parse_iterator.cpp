@@ -84,8 +84,8 @@ bool ParseIterator::Peek() {
 		parser = make_uniq<Parser>(options);
 	}
 	EnsureTokenized();
-	// Walk the token cursor through the cached `tokens`, calling Parser::ParseTopLevelStatement
-	// repeatedly. A nullptr return with cursor advanced means a separator-only TopLevelStatement
+	// Walk the token cursor through the cached tokens with parser extension fallback.
+	// A nullptr return with cursor advanced means a separator-only TopLevelStatement
 	// (e.g. between statements or trailing ';'s); we loop past it. A nullptr return with cursor
 	// at end means the input is exhausted.
 	while (true) {
@@ -93,17 +93,7 @@ bool ParseIterator::Peek() {
 			exhausted = true;
 			return false;
 		}
-		unique_ptr<SQLStatement> stmt;
-		try {
-			stmt = parser->ParseTopLevelStatement(*token_iterator);
-		} catch (ParserException &) {
-			// Mirror Parser::ParseQuery's parse_function-extension fallback so extensions like
-			// `quack` can claim a segment that PEG couldn't parse.
-			stmt = parser->TryParseExtensionStatement(*token_iterator, sql);
-			if (!stmt) {
-				throw;
-			}
-		}
+		auto stmt = parser->ParseTopLevelStatementWithExtensions(*token_iterator, sql);
 		if (stmt) {
 			// ParseTopLevelStatement doesn't populate stmt->query (it operates on tokens, not the
 			// source string). Mirror Parser::ParseQuery's per-statement post-processing: extend from

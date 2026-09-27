@@ -28,3 +28,32 @@ statement error
 QUACK string_split('hello-world', ';');QUACK string_split('hello-world', ';')
 ----
 <REGEX>:Parser Error: syntax error at or near.*
+
+# An extension statement after a transformation error must not hide the error.
+foreach parser_mode false true
+
+statement ok
+SET heap_based_parser = {parser_mode};
+
+statement error
+SELECT TRY(1, 2); quack quack quack;
+----
+Wrong number of arguments provided to TRY expression
+
+statement error
+SELECT 42; SELECT TRY(1, 2); quack quack quack;
+----
+Wrong number of arguments provided to TRY expression
+
+# Genuine grammar failures still fall back to the extension.
+query T
+quack quack quack;
+----
+QUACK
+QUACK
+QUACK
+
+statement ok
+quack quack quack; SELECT 42;
+
+endloop

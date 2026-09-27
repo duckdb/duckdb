@@ -626,12 +626,12 @@ class PEGTransformerFactory {
 public:
 	static void RegisterDefaultTransforms(ParsedGrammar &grammar);
 
-	//! Match a single TopLevelStatement from `tokens` starting at `token_cursor` and transform it
+	//! Match a single TopLevelStatement from `token_iterator` and transform it
 	//! into a SQLStatement. Returns nullptr if the matched TLS was separator-only (no statement).
-	//! Throws on syntax error. `token_cursor` is in/out: it's the token index where matching
-	//! starts, and on return holds the token index immediately past the last consumed token.
+	//! Advances the iterator only on success. Sets `match_failed` only for a grammar mismatch.
 	static unique_ptr<SQLStatement> TransformTopLevelStatement(TokenIterator &token_iterator, ParserOptions &options,
-	                                                           const CompiledGrammar &grammar);
+	                                                           const CompiledGrammar &grammar,
+	                                                           optional_ptr<bool> match_failed = nullptr);
 	static ParseResult &ExtractResultFromParens(ParseResult &parse_result);
 	static vector<reference<ParseResult>> ExtractParseResultsFromList(ParseResult &parse_result);
 	static bool ExpressionIsEmptyStar(const ParsedExpression &expr);

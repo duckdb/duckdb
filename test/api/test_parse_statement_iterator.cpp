@@ -3,12 +3,64 @@
 
 #include "duckdb/main/parse_iterator.hpp"
 #include "duckdb/main/statement_iterator.hpp"
+#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
+#include "duckdb/parser/token_iterator.hpp"
 
 using namespace duckdb;
+
+struct CountingParserExtensionInfo : ParserExtensionInfo {
+	idx_t calls = 0;
+};
+
+static ParserExtensionParseResult CountingParserExtension(ParserExtensionInfo *info, const vector<SimpleToken> &) {
+	auto &counting_info = static_cast<CountingParserExtensionInfo &>(*info);
+	counting_info.calls++;
+	throw ParserException("counting parser extension invoked");
+}
+
+static shared_ptr<CountingParserExtensionInfo> RegisterCountingParserExtension(Connection &con) {
+	auto info = make_shared_ptr<CountingParserExtensionInfo>();
+	ParserExtension extension;
+	extension.parse_function = CountingParserExtension;
+	extension.parser_info = info;
+	ExtensionCallbackManager::Get(*con.context).Register(std::move(extension));
+	return info;
+}
+
+static unique_ptr<TokenIterator> TokenizeForParser(ClientContext &context, const string &query) {
+	auto tokens = make_uniq<vector<MatcherToken>>();
+	ParserTokenizerBehavior behavior(query, *tokens);
+	auto grammar = CompiledGrammar::Get(context);
+	grammar->GetTokenizer().TokenizeInput(behavior);
+	return make_uniq<TokenIterator>(std::move(tokens));
+}
+
+template <class FUNC>
+static void RequireTransformError(FUNC &&parse) {
+	try {
+		parse();
+		FAIL("Expected parser transform error");
+	} catch (ParserException &ex) {
+		REQUIRE(StringUtil::Contains(ex.what(), "Wrong number of arguments provided to TRY expression"));
+	}
+}
+
+template <class FUNC>
+static void RequireExtensionError(FUNC &&parse) {
+	try {
+		parse();
+		FAIL("Expected parser extension error");
+	} catch (ParserException &ex) {
+		REQUIRE(StringUtil::Contains(ex.what(), "counting parser extension invoked"));
+	}
+}
 
 // ParseIterator and StatementIterator no longer share a contract. Both bind their ClientContext at
 // construction, so Peek()/GetStatement() take no context argument:
@@ -194,6 +246,60 @@ TEST_CASE("ParseIterator: semicolons in strings and comments handled", "[api][pa
 
 	ParseIterator with_comments(ctx, "/* block */ SELECT 1; -- line comment\nSELECT 2;");
 	REQUIRE(DrainParse(with_comments).size() == 2);
+}
+
+TEST_CASE("Parser extensions only handle grammar match failures", "[api][parse_iterator][parser_extension]") {
+	for (auto heap_based_parser : {false, true}) {
+		DuckDB db(nullptr);
+		Connection con(db);
+		auto setting = StringUtil::Format("SET heap_based_parser = %s", heap_based_parser ? "true" : "false");
+		REQUIRE_NO_FAIL(*con.Query(setting));
+		auto info = RegisterCountingParserExtension(con);
+
+		Parser eager_parser(con.context->GetParserOptions());
+		RequireTransformError([&]() { eager_parser.ParseQuery("SELECT TRY(1,2); quack quack quack;"); });
+		REQUIRE(info->calls == 0);
+
+		ParseIterator lazy_parser(*con.context, "SELECT TRY(1,2); quack quack quack;");
+		RequireTransformError([&]() { lazy_parser.Peek(); });
+		REQUIRE(info->calls == 0);
+
+		Parser eager_grammar_failure(con.context->GetParserOptions());
+		RequireExtensionError([&]() { eager_grammar_failure.ParseQuery("quack quack quack;"); });
+		REQUIRE(info->calls == 1);
+
+		ParseIterator lazy_grammar_failure(*con.context, "quack quack quack;");
+		RequireExtensionError([&]() { lazy_grammar_failure.Peek(); });
+		REQUIRE(info->calls == 2);
+	}
+}
+
+TEST_CASE("ParseTopLevelStatement commits its token cursor only on success", "[api][parse_iterator]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	for (auto heap_based_parser : {false, true}) {
+		auto options = con.context->GetParserOptions();
+		options.heap_based_parser = heap_based_parser;
+		Parser parser(options);
+
+		auto failed_tokens = TokenizeForParser(*con.context, "SELECT TRY(1,2); SELECT 42;");
+		auto initial_position = failed_tokens->Position();
+		RequireTransformError([&]() { parser.ParseTopLevelStatement(*failed_tokens); });
+		REQUIRE(failed_tokens->Position() == initial_position);
+
+		auto successful_tokens = TokenizeForParser(*con.context, ";;; SELECT 42;");
+		auto separator_position = successful_tokens->Position();
+		auto separators = parser.ParseTopLevelStatement(*successful_tokens);
+		REQUIRE_FALSE(separators);
+		REQUIRE(successful_tokens->Position() > separator_position);
+
+		auto statement_position = successful_tokens->Position();
+		auto statement = parser.ParseTopLevelStatement(*successful_tokens);
+		REQUIRE(statement);
+		REQUIRE(statement->type == StatementType::SELECT_STATEMENT);
+		REQUIRE(successful_tokens->Position() > statement_position);
+	}
 }
 
 //===--------------------------------------------------------------------===//
