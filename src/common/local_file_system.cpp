@@ -2112,18 +2112,36 @@ static bool IsSymbolicLink(const string &path) {
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
                                                            bool absolute_path) {
 	vector<OpenFileInfo> result;
-	if (FileExists(path, opener) || IsPipe(path, opener)) {
-		result.emplace_back(path);
-	} else if (!absolute_path) {
+	auto add_file = [&](const string &file_path) {
+		OpenFileInfo file(file_path);
+		auto file_metadata = GetStatsIfExists(file, opener);
+		if (!file_metadata) {
+			return false;
+		}
+		switch (file_metadata->file_type) {
+		case FileType::FILE_TYPE_REGULAR:
+		case FileType::FILE_TYPE_FIFO:
+		case FileType::FILE_TYPE_CHARDEV:
+			break;
+		default:
+			return false;
+		}
+		file.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		FillFileOptions(*file_metadata, file.extended_info->options);
+		result.push_back(std::move(file));
+		return true;
+	};
+	if (add_file(path)) {
+		return result;
+	}
+	if (!absolute_path) {
 		Value value;
 		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
-					result.emplace_back(joined_path);
-				}
+				add_file(joined_path);
 			}
 		}
 	}
