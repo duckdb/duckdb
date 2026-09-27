@@ -6,6 +6,14 @@
 #include "duckdb/main/relation/value_relation.hpp"
 #include "iostream"
 #include "test_helpers.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/statement/relation_statement.hpp"
+#include "duckdb/main/relation/update_relation.hpp"
+#include "duckdb/main/relation/delete_relation.hpp"
+#include "duckdb/main/relation/create_view_relation.hpp"
+#include "duckdb/main/relation/explain_relation.hpp"
+#include "duckdb/main/relation/materialized_relation.hpp"
 #include "duckdb/main/relation/materialized_relation.hpp"
 
 using namespace duckdb;
@@ -1165,4 +1173,148 @@ TEST_CASE("Test create table with empty name", "[relation_api]") {
 
 	auto values = con.Values("(42)");
 	REQUIRE_THROWS_AS(values->Create(""), ParserException);
+}
+
+TEST_CASE("Test query text of relation API statements", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dest(i INTEGER)"));
+
+	auto tbl = con.Table("integers");
+	// compose expectations from the child rather than hard-coding its SQL
+	auto child = tbl->GetQuery();
+	REQUIRE(!child.empty());
+
+	// action relations report the SQL they are equivalent to, rather than an empty string
+	REQUIRE(tbl->InsertRel(DEFAULT_SCHEMA, "dest")->GetQuery() == "INSERT INTO dest " + child);
+	REQUIRE(tbl->CreateRel(DEFAULT_SCHEMA, "new_tbl")->GetQuery() == "CREATE TABLE new_tbl AS " + child);
+	REQUIRE(tbl->WriteCSVRel("out.csv")->GetQuery() == "COPY (" + child + ") TO 'out.csv' ( FORMAT csv )");
+	REQUIRE(tbl->WriteParquetRel("out.parquet")->GetQuery() ==
+	        "COPY (" + child + ") TO 'out.parquet' ( FORMAT parquet )");
+
+	auto view_rel = make_shared_ptr<CreateViewRelation>(tbl, "v", false, false);
+	REQUIRE(view_rel->GetQuery() == "CREATE VIEW v AS " + child);
+
+	auto explain_rel = make_shared_ptr<ExplainRelation>(tbl);
+	REQUIRE(explain_rel->GetQuery() == "EXPLAIN " + child);
+
+	// the text survives being wrapped in a statement, which is what consumers read
+	auto insert_rel = tbl->InsertRel(DEFAULT_SCHEMA, "dest");
+	RelationStatement insert_stmt(insert_rel);
+	REQUIRE(insert_stmt.query == "INSERT INTO dest " + child);
+
+	// UPDATE / DELETE render their condition and SET list
+	auto delete_rel = make_shared_ptr<DeleteRelation>(tbl->context, make_uniq<ConstantExpression>(Value::BOOLEAN(true)),
+	                                                  INVALID_CATALOG, DEFAULT_SCHEMA, "integers");
+	REQUIRE(delete_rel->GetQuery() == "DELETE FROM integers WHERE " + Value::BOOLEAN(true).ToSQLString());
+
+	duckdb::vector<duckdb::unique_ptr<ParsedExpression>> update_expressions;
+	update_expressions.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+	auto update_rel =
+	    make_shared_ptr<UpdateRelation>(tbl->context, nullptr, INVALID_CATALOG, DEFAULT_SCHEMA, "integers",
+	                                    duckdb::vector<string> {"i"}, std::move(update_expressions));
+	REQUIRE(update_rel->GetQuery() == "UPDATE integers SET i = 42");
+}
+
+TEST_CASE("Test query text uses the canonical CREATE prefix and EXPLAIN options", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	auto tbl = con.Table("integers");
+	auto child = tbl->GetQuery();
+
+	// TEMP, not TEMPORARY - matches CreateInfo::GetCreatePrefix. A temporary table drops the catalog, as
+	// CreateTableInfo::ToString does.
+	auto temp_tbl =
+	    tbl->CreateRel(INVALID_CATALOG, DEFAULT_SCHEMA, "tmp_tbl", true, OnCreateConflict::REPLACE_ON_CONFLICT);
+	REQUIRE(temp_tbl->GetQuery() == "CREATE OR REPLACE TEMP TABLE tmp_tbl AS " + child);
+
+	auto temp_view = make_shared_ptr<CreateViewRelation>(tbl, "tmp_v", true, true);
+	REQUIRE(temp_view->GetQuery() == "CREATE OR REPLACE TEMP VIEW tmp_v AS " + child);
+
+	// EXPLAIN carries ANALYZE through
+	auto analyze = make_shared_ptr<ExplainRelation>(tbl, ExplainType::EXPLAIN_ANALYZE);
+	REQUIRE(analyze->GetQuery() == "EXPLAIN (ANALYZE) " + child);
+}
+
+TEST_CASE("Test query text quotes identifiers that need it", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	// "target" is a keyword and "my table" has a space - both must be quoted to stay valid SQL
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE target(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE \"my table\"(i INTEGER)"));
+
+	auto tbl = con.Table("integers");
+	auto child = tbl->GetQuery();
+	REQUIRE(tbl->InsertRel(DEFAULT_SCHEMA, "target")->GetQuery() == "INSERT INTO \"target\" " + child);
+	REQUIRE(tbl->InsertRel(DEFAULT_SCHEMA, "my table")->GetQuery() == "INSERT INTO \"my table\" " + child);
+
+	// the rendered text is valid SQL that round-trips through the parser
+	Parser parser;
+	REQUIRE_NOTHROW(parser.ParseQuery(tbl->InsertRel(DEFAULT_SCHEMA, "my table")->GetQuery()));
+	REQUIRE(parser.statements.size() == 1);
+}
+
+TEST_CASE("Test synthesized query text is never truncated", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dest(i INTEGER)"));
+
+	// A shortened statement can still parse - cutting a UNION ALL chain after a complete SELECT leaves valid SQL
+	// that inserts fewer rows. ClientContext forwards `query` to Catalog::RemoteExecute for a catalog that
+	// declares RemoteCapability::CONNECT, so query text is reported whole or not at all.
+	string sel = "SELECT 1 AS i";
+	for (idx_t i = 2; i <= 600; i++) {
+		sel += " UNION ALL SELECT " + std::to_string(i);
+	}
+	auto ins = con.RelationFromQuery(sel)->InsertRel(DEFAULT_SCHEMA, "dest");
+	RelationStatement stmt(ins);
+	REQUIRE(!StringUtil::Contains(stmt.query, "truncated"));
+	REQUIRE(StringUtil::Contains(stmt.query, "SELECT 600"));
+
+	// the reported text runs to the same effect as the relation itself
+	REQUIRE_NO_FAIL(con.Query(stmt.query));
+	auto count = con.Query("SELECT count(*) FROM dest");
+	REQUIRE(CHECK_COLUMN(count, 0, {600}));
+}
+
+TEST_CASE("Test client-side data relations report either faithful or non-SQL text", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE dest(i INTEGER)"));
+
+	// A value list carries its rows inside the statement, so its text is reported in full and runs to the same
+	// effect wherever it is sent.
+	auto values = con.Values("(42), (84)");
+	RelationStatement direct(values);
+	REQUIRE(StringUtil::Contains(direct.query, "42"));
+	RelationStatement embedded(values->InsertRel(DEFAULT_SCHEMA, "dest"));
+	REQUIRE(StringUtil::Contains(embedded.query, "42"));
+	REQUIRE_NO_FAIL(con.Query(embedded.query));
+	auto sum_result = con.Query("SELECT sum(i)::INTEGER FROM dest");
+	REQUIRE(CHECK_COLUMN(sum_result, 0, {126}));
+
+	// A materialized collection exists only in this process, so no SQL reproduces it. Naming it would produce a
+	// statement that binds against whatever else carries that name - describe it instead.
+	auto result = con.Query("SELECT 7 AS i");
+	auto &materialized_result = result->Cast<MaterializedQueryResult>();
+	auto materialized = make_shared_ptr<MaterializedRelation>(con.context, materialized_result.TakeCollection(),
+	                                                          result->names, "uploaded");
+	RelationStatement mat(materialized);
+	REQUIRE(mat.query == "SELECT * FROM /* client-side data: uploaded */");
+	RelationStatement mat_insert(materialized->InsertRel(DEFAULT_SCHEMA, "dest"));
+	REQUIRE(mat_insert.query == "INSERT INTO dest SELECT * FROM /* client-side data: uploaded */");
+
+	// neither form can be mistaken for a runnable statement
+	for (auto &text : duckdb::vector<string> {mat.query, mat_insert.query}) {
+		Parser parser;
+		REQUIRE_THROWS(parser.ParseQuery(text));
+	}
+	// but the relation itself still executes
+	REQUIRE_NO_FAIL(materialized->InsertRel(DEFAULT_SCHEMA, "dest")->Execute());
+	auto count_result = con.Query("SELECT count(*)::INTEGER FROM dest WHERE i = 7");
+	REQUIRE(CHECK_COLUMN(count_result, 0, {1}));
 }

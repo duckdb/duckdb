@@ -27,6 +27,7 @@ public:
 	string GetAlias() override;
 	unique_ptr<TableRef> GetTableRef() override;
 	unique_ptr<QueryNode> GetQueryNode() override;
+	string GetQuery() override;
 };
 
 } // namespace duckdb

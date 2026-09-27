@@ -1,4 +1,6 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+
+#include <algorithm>
 #include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
@@ -38,8 +40,9 @@ string CopyInfo::CopyOptionsToString() const {
 
 	result += " (";
 	vector<string> stringified;
+	string format_option;
 	if (!format.empty() && !is_format_auto_detected) {
-		stringified.push_back(StringUtil::Format(" FORMAT %s", format));
+		format_option = StringUtil::Format(" FORMAT %s", format);
 	}
 	for (auto &opt : parsed_options) {
 		auto &name = opt.first;
@@ -68,6 +71,11 @@ string CopyInfo::CopyOptionsToString() const {
 			}
 			stringified.push_back(option + "( " + StringUtil::Join(sub_values, ", ") + " )");
 		}
+	}
+	// the option maps are unordered - sort for stable text, FORMAT first
+	std::sort(stringified.begin(), stringified.end());
+	if (!format_option.empty()) {
+		stringified.insert(stringified.begin(), format_option);
 	}
 	result += StringUtil::Join(stringified, ", ");
 	result += " )";

@@ -40,7 +40,12 @@ unique_ptr<QueryNode> CreateViewRelation::GetQueryNode() {
 }
 
 string CreateViewRelation::GetQuery() {
-	return string();
+	// reuse the catalog's prefix rendering for OR REPLACE / TEMP
+	CreateViewInfo info;
+	info.on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info.temporary = temporary;
+	return info.GetCreatePrefix("VIEW") + ParseInfo::QualifierToString("", schema_name, view_name) + " AS " +
+	       child->GetQuery();
 }
 
 const vector<ColumnDefinition> &CreateViewRelation::Columns() {
