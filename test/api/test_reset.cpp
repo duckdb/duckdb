@@ -134,7 +134,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"storage_block_prefetch", {"always_prefetch"}},
 	    {"pin_threads", {"off"}},
 	    {"current_transaction_invalidation_policy", {"ALL_ERRORS_INVALIDATE_TRANSACTION"}},
-	    {"enable_caching_operators", {false}}};
+	    {"enable_caching_operators", {false}},
+	    {"enable_optimistic_write", {false}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		switch (type.id()) {
