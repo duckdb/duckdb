@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
@@ -16,7 +15,26 @@ namespace duckdb {
 
 namespace {
 
-void FindUniqueColumnSets(LogicalGet &get, vector<column_binding_set_t> &result) {
+class ApplyFunctionalDependencies : public LogicalOperatorVisitor {
+public:
+	ApplyFunctionalDependencies() {
+	}
+
+	void VisitOperator(LogicalOperator &op) override;
+
+private:
+	void VisitLogicalGet(LogicalGet &get);
+	void VisitLogicalAggregate(LogicalAggregate &aggr);
+	void VisitLogicalDistinct(LogicalDistinct &distinct);
+	void VisitLogicalProjection(LogicalProjection &projection);
+	void VisitLogicalOrder(LogicalOrder &order);
+
+	vector<column_binding_set_t> result;
+};
+
+void ApplyFunctionalDependencies::VisitLogicalGet(LogicalGet &get) {
+	VisitOperatorChildren(get);
+
 	auto table = get.GetTable();
 	if (!table || !table->IsDuckTable() || !get.projected_input.empty() || get.GetColumnIds().empty()) {
 		return;
@@ -64,7 +82,12 @@ void FindUniqueColumnSets(LogicalGet &get, vector<column_binding_set_t> &result)
 	}
 }
 
-void FindUniqueColumnSets(LogicalAggregate &aggr, vector<column_binding_set_t> &result) {
+void ApplyFunctionalDependencies::VisitLogicalAggregate(LogicalAggregate &aggr) {
+	VisitOperatorChildren(aggr);
+
+	//	TODO: use child FDs to simplify groupings.
+	result.clear();
+
 	if (aggr.groups.empty() || aggr.grouping_sets.size() > 1 || !aggr.grouping_functions.empty()) {
 		return;
 	}
@@ -86,7 +109,12 @@ void FindUniqueColumnSets(LogicalAggregate &aggr, vector<column_binding_set_t> &
 	}
 }
 
-void FindUniqueColumnSets(LogicalDistinct &distinct, vector<column_binding_set_t> &result) {
+void ApplyFunctionalDependencies::VisitLogicalDistinct(LogicalDistinct &distinct) {
+	VisitOperatorChildren(distinct);
+
+	//	TODO: use child FDs to simplify groupings.
+	result.clear();
+
 	column_binding_set_t key;
 	bool all_columns = true;
 	for (auto &target : distinct.distinct_targets) {
@@ -101,8 +129,11 @@ void FindUniqueColumnSets(LogicalDistinct &distinct, vector<column_binding_set_t
 	}
 }
 
-void ForwardUniqueColumnSets(LogicalProjection &projection, const vector<column_binding_set_t> &child_sets,
-                             vector<column_binding_set_t> &result) {
+void ApplyFunctionalDependencies::VisitLogicalProjection(LogicalProjection &projection) {
+	VisitOperatorChildren(projection);
+
+	vector<column_binding_set_t> child_sets;
+	child_sets.swap(result);
 	if (child_sets.empty()) {
 		return;
 	}
@@ -131,8 +162,10 @@ void ForwardUniqueColumnSets(LogicalProjection &projection, const vector<column_
 	}
 }
 
-void RemoveRedundantKeys(LogicalOrder &order, const vector<column_binding_set_t> &unique_sets) {
-	if (order.orders.size() < 2 || unique_sets.empty()) {
+void ApplyFunctionalDependencies::VisitLogicalOrder(LogicalOrder &order) {
+	VisitOperatorChildren(order);
+
+	if (order.orders.size() < 2 || result.empty()) {
 		return;
 	}
 	column_binding_set_t prefix;
@@ -142,7 +175,7 @@ void RemoveRedundantKeys(LogicalOrder &order, const vector<column_binding_set_t>
 			continue;
 		}
 		prefix.insert(expr.Cast<BoundColumnRefExpression>().Binding());
-		for (auto &unique_set : unique_sets) {
+		for (auto &unique_set : result) {
 			bool covered = true;
 			for (auto &binding : unique_set) {
 				if (prefix.find(binding) == prefix.end()) {
@@ -159,69 +192,40 @@ void RemoveRedundantKeys(LogicalOrder &order, const vector<column_binding_set_t>
 	}
 }
 
-void VisitOperator(LogicalOperator &op);
-
-void VisitChildren(LogicalOperator &op, idx_t start) {
-	for (idx_t child_idx = start; child_idx < op.children.size(); child_idx++) {
-		VisitOperator(*op.children[child_idx]);
-	}
-}
-
-vector<column_binding_set_t> CollectUniqueColumnSets(LogicalOperator &op) {
-	vector<column_binding_set_t> result;
+void ApplyFunctionalDependencies::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto &order = op.Cast<LogicalOrder>();
-		result = CollectUniqueColumnSets(*order.children[0]);
-		RemoveRedundantKeys(order, result);
-		VisitChildren(op, 1);
-		return result;
-	}
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		VisitLogicalOrder(op.Cast<LogicalOrder>());
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_LIMIT:
-		result = CollectUniqueColumnSets(*op.children[0]);
-		VisitChildren(op, 1);
-		return result;
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto &projection = op.Cast<LogicalProjection>();
-		auto child_sets = CollectUniqueColumnSets(*projection.children[0]);
-		ForwardUniqueColumnSets(projection, child_sets, result);
-		VisitChildren(op, 1);
-		return result;
-	}
+		VisitOperatorChildren(op);
+		break;
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+		VisitLogicalProjection(op.Cast<LogicalProjection>());
+		break;
 	case LogicalOperatorType::LOGICAL_GET:
-		FindUniqueColumnSets(op.Cast<LogicalGet>(), result);
+		VisitLogicalGet(op.Cast<LogicalGet>());
 		break;
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		FindUniqueColumnSets(op.Cast<LogicalAggregate>(), result);
+		VisitLogicalAggregate(op.Cast<LogicalAggregate>());
 		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
-		FindUniqueColumnSets(op.Cast<LogicalDistinct>(), result);
+		VisitLogicalDistinct(op.Cast<LogicalDistinct>());
 		break;
 	default:
+		VisitOperatorChildren(op);
+		//	Clear the keys because we don't know if the operator preserves them.
+		result.clear();
 		break;
 	}
-	VisitChildren(op, 0);
-	return result;
-}
-
-void VisitOperator(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-		auto &order = op.Cast<LogicalOrder>();
-		if (order.orders.size() >= 2) {
-			auto unique_sets = CollectUniqueColumnSets(*order.children[0]);
-			RemoveRedundantKeys(order, unique_sets);
-			VisitChildren(op, 1);
-			return;
-		}
-	}
-	VisitChildren(op, 0);
 }
 
 } // namespace
 
 void RemoveRedundantOrderKeys::Optimize(LogicalOperator &op) {
-	VisitOperator(op);
+	ApplyFunctionalDependencies visitor;
+	visitor.VisitOperator(op);
 }
 
 } // namespace duckdb
