@@ -105,14 +105,14 @@ struct VariantStatsVisitor {
 	}
 
 	static void VisitArray(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                       VariantShreddingStats &stats, idx_t stats_column_index) {
+	                       idx_t depth, VariantShreddingStats &stats, idx_t stats_column_index) {
 		auto &element_stats = stats.GetOrCreateElement(stats_column_index);
 		auto index = element_stats.index;
-		VariantVisitor<VariantStatsVisitor>::VisitArrayItems(variant, row, nested_data, stats, index);
+		VariantVisitor<VariantStatsVisitor>::VisitArrayItems(variant, row, nested_data, depth, stats, index);
 	}
 
 	static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, const VariantNestedData &nested_data,
-	                        VariantShreddingStats &stats, idx_t stats_column_index) {
+	                        idx_t depth, VariantShreddingStats &stats, idx_t stats_column_index) {
 		//! Then visit the fields in sorted order
 		for (idx_t i = 0; i < nested_data.child_count; i++) {
 			auto source_children_idx = nested_data.children_idx + i;
@@ -126,7 +126,7 @@ struct VariantStatsVisitor {
 
 			//! Visit the child value
 			auto values_index = variant.GetValuesIndex(row, source_children_idx);
-			VariantVisitor<VariantStatsVisitor>::Visit(variant, row, values_index, stats, index);
+			VariantVisitor<VariantStatsVisitor>::Visit(variant, row, values_index, depth + 1, stats, index);
 		}
 	}
 
@@ -501,7 +501,7 @@ void VariantShreddingStats::Update(const Vector &input, idx_t count) {
 	UnifiedVariantVectorData variant(recursive_format);
 
 	for (idx_t i = 0; i < count; i++) {
-		VariantVisitor<VariantStatsVisitor>::Visit(variant, i, 0, *this, static_cast<idx_t>(0));
+		VariantVisitor<VariantStatsVisitor>::Visit(variant, i, 0, 0, *this, static_cast<idx_t>(0));
 	}
 }
 
@@ -541,7 +541,7 @@ static void VisitObject(const UnifiedVariantVectorData &variant, idx_t row, cons
 		state.keys_indexes[children_idx] = keys_idx;
 		children_idx++;
 		keys_idx++;
-		VariantVisitor<VariantNormalizer>::Visit(variant, row, values_index, state);
+		VariantVisitor<VariantNormalizer>::Visit(variant, row, values_index, 0, state);
 	}
 }
 
@@ -773,7 +773,7 @@ void VariantColumnData::ShredVariantData(const Vector &input, Vector &output, id
 				VisitObject(variant, row, nested_data, normalizer_state, unshredded_value.unshredded_children);
 				continue;
 			}
-			VariantVisitor<VariantNormalizer>::Visit(variant, row, value_index, normalizer_state);
+			VariantVisitor<VariantNormalizer>::Visit(variant, row, value_index, 0, normalizer_state);
 		}
 		blob_data.SetSizeAndFinalize(normalizer_state.blob_size, original_data.GetSize());
 		keys_list_entry.length = normalizer_state.keys_size;
