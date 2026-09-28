@@ -181,7 +181,7 @@ logging_storage	memory
 statement error
 CALL enable_logging(storage='file', level='DEBUG', storage_config={'hocus_pocus': 'this is bogus', 'path': '{TEST_DIR}/hi.csv'});
 ----
-Invalid Input Error: Unrecognized log storage config option for storage: 'FileLogStorage': 'hocus_pocus'
+Invalid Input Error: Unrecognized log sink config option for sink: 'FileLogSink': 'hocus_pocus'
 
 # enable_logging is currently not atomic TODO: fix this
 query II
@@ -201,7 +201,7 @@ CALL disable_logging();
 statement error
 CALL enable_logging(storage='memory', storage_config={'path': 'bla'});
 ----
-Invalid Input Error: Unrecognized log storage config option for storage: 'InMemoryLogStorage': 'path'
+Invalid Input Error: Unrecognized log sink config option for sink: 'InMemoryLogSink': 'path'
 
 # storage_config should be a struct
 statement error
@@ -277,5 +277,5 @@ RESET logging_storage
 statement error
 CALL enable_logging(storage_config:={aaaargh:'blaargh'})
 ----
-Unrecognized log storage config option
+Unrecognized log sink config option
 
