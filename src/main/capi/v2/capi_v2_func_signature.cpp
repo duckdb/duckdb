@@ -4,7 +4,7 @@
 using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(duckdb_v2_function_signature_handle sig,
-                                                           duckdb_v2_identifier_t name,
+                                                           const duckdb_v2_identifier_t *name,
                                                            duckdb_v2_logical_type_handle type,
                                                            duckdb_v2_value_handle value,
                                                            duckdb_v2_error_info_handle *err) {
