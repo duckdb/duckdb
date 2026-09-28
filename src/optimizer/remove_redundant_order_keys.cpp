@@ -33,6 +33,8 @@ private:
 
 	void VisitWindowExpression(BoundWindowExpression &wexpr);
 
+	void VisitPartitioning(vector<unique_ptr<Expression>> &partitions);
+
 	vector<column_binding_set_t> result;
 };
 
@@ -196,10 +198,10 @@ void ApplyFunctionalDependencies::VisitLogicalOrder(LogicalOrder &order) {
 	}
 }
 
-void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &wexpr) {
+void ApplyFunctionalDependencies::VisitPartitioning(vector<unique_ptr<Expression>> &partitions) {
 	//	Extract the partitioning references
 	column_binding_set_t partition_bindings;
-	for (auto &expr : wexpr.Partitions()) {
+	for (auto &expr : partitions) {
 		if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue;
 		}
@@ -228,7 +230,7 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 		//	Replace the partitioning with the unique bindings
 		auto &unique_set = result.at(smallest.GetIndex());
 		vector<unique_ptr<Expression>> reduced;
-		for (auto &expr : wexpr.Partitions()) {
+		for (auto &expr : partitions) {
 			if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				continue;
 			}
@@ -238,13 +240,15 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 			}
 			reduced.emplace_back(ref.Copy());
 		}
-		std::swap(wexpr.PartitionsMutable(), reduced);
-		partition_bindings = unique_set;
+		std::swap(partitions, reduced);
 	}
 }
 
+void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &wexpr) {
+	VisitPartitioning(wexpr.PartitionsMutable());
+}
+
 void ApplyFunctionalDependencies::VisitExpression(unique_ptr<Expression> *expression) {
-	auto &expr = **expression;
 	switch ((*expression)->GetExpressionClass()) {
 	case ExpressionClass::BOUND_WINDOW:
 		VisitWindowExpression((*expression)->Cast<BoundWindowExpression>());
