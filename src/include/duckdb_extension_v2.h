@@ -1224,9 +1224,6 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_prepared_statement_reuses_plan)
 	(duckdb_v2_prepared_statement_handle prepared, bool *out_reuses, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_result_to_arrow_stream)
-	(duckdb_v2_result_handle *result, idx_t batch_size, struct ArrowArrayStream *out_stream,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_table_description_destroy)(duckdb_v2_table_description_handle *desc);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_description_get_column)
 	(duckdb_v2_table_description_handle desc, idx_t index, duckdb_v2_column_description_handle *column,
@@ -1914,7 +1911,6 @@ typedef struct {
 #define duckdb_v2_prepared_statement_destroy             duckdb_ext_api.duckdb_v2_prepared_statement_destroy
 #define duckdb_v2_prepared_statement_execute             duckdb_ext_api.duckdb_v2_prepared_statement_execute
 #define duckdb_v2_prepared_statement_reuses_plan         duckdb_ext_api.duckdb_v2_prepared_statement_reuses_plan
-#define duckdb_v2_result_to_arrow_stream                 duckdb_ext_api.duckdb_v2_result_to_arrow_stream
 #define duckdb_v2_table_description_destroy              duckdb_ext_api.duckdb_v2_table_description_destroy
 #define duckdb_v2_table_description_get_column           duckdb_ext_api.duckdb_v2_table_description_get_column
 #define duckdb_v2_table_description_get_column_count     duckdb_ext_api.duckdb_v2_table_description_get_column_count

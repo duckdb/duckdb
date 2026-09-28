@@ -1,7 +1,6 @@
 module: arrow
 #
-# Arrow C Data Interface interop: convert between DuckDB and Arrow in both directions, and
-# export a streaming result as an ArrowArrayStream.
+# Arrow C Data Interface interop: convert between DuckDB and Arrow in both directions.
 #
 # The three standard Arrow structs -- ArrowSchema, ArrowArray and ArrowArrayStream -- are
 # emitted into the generated header under the same ARROW_C_DATA_INTERFACE /
@@ -20,9 +19,8 @@ module: arrow
 # `batch_size` given at creation caps the rows per output. A long input is split across several
 # outputs. Rows left over that do not fill a batch are held back and joined with the next input,
 # so an output may span two inputs. The converter cannot tell when the input ends, so the append
-# call takes a `flush` flag that releases the held rows as a final short output.
-# `[[result_to_arrow_stream]]` owns its source and needs no flush. A `batch_size` of 0 means no
-# maximum: each input becomes one output and nothing is held back.
+# call takes a `flush` flag that releases the held rows as a final short output. A `batch_size`
+# of 0 means no maximum: each input becomes one output and nothing is held back.
 #
 # Resolving the type mapping happens once, at creation, so a table function can create a
 # converter at bind time and pay nothing per batch. Creation reads the catalog for extension
@@ -42,9 +40,8 @@ module: arrow
 #     registry and expose it through a table function or a replacement scan, built from the
 #     general function API and these converters.
 #   - Arrow IPC, the serialized wire format. Provided by the arrow extension as SQL functions.
-#   - A parallel, buffered Arrow collector. `[[result_to_arrow_stream]]` converts on the
-#     consumer's thread as it pulls. A pipelined collector has to be installed before execution
-#     starts, which needs a query entry point that does not exist yet.
+#   - Exporting a query result as an ArrowArrayStream. A binding can convert the result's chunks
+#     with an exporter.
 #   - Database-level registration of custom Arrow type extensions (the engine's
 #     ArrowTypeExtension).
 
@@ -75,57 +72,6 @@ handles:
 # Functions
 #-----------------------------------------------------------------------------------------------------------------------
 functions:
-  #---------------------------------------------------------------------------------------------------------------------
-  # Streaming a result
-  #---------------------------------------------------------------------------------------------------------------------
-  result_to_arrow_stream:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-03" ]
-    description: |
-      Exports a result as a lazy ArrowArrayStream. Consuming.
-
-      Takes ownership of the result, sets the slot to NULL, and fills the caller-allocated `out_stream`. The stream
-      owns the result from then on. Releasing the stream, with `out_stream->release(out_stream)`, does not drain the
-      result, but closes the query and frees the connection's live-result slot as `[[result_destroy]]` would, so the
-      connection can run its next query.
-
-      The stream's `get_next` drives the result, waiting internally until a batch is ready, and gathers DuckDB chunks
-      into one Arrow array of up to `batch_size` rows. The Arrow schema and the extension type map are built and
-      cached here, while the query's transaction is still active, because building them can run extension
-      populate-schema callbacks and read ENUM dictionaries. `get_schema` returns a copy of the cached schema and never
-      touches the catalog.
-
-      A result that has already yielded some chunks is allowed and produces a stream over the remaining rows.
-
-      If the statement expanded into a group whose row-producing fragment has not started yet, this call steps the
-      result far enough to cache the schema, which may block briefly. No rows are lost, since none are produced
-      before that fragment is prepared. For an ordinary statement nothing executes here.
-
-      The result is consumed on every path that reaches the engine, including failures. Only a null-argument
-      rejection leaves it intact. `out_stream` is untouched unless the call succeeds.
-    role: method
-    belongs_to: result
-    parameters:
-      result:
-        type: result
-        indirection: 1
-        kind: IN_TRANSFER
-        description: The result to export. Consumed and set to NULL, except when the call rejects a null argument.
-      batch_size:
-        type: idx
-        description: |
-          Maximum rows per Arrow array. Pass 0 for the default of 131072, which is 64 vectors in a default build.
-      out_stream:
-        type: ArrowArrayStream
-        indirection: 1
-        kind: OUT
-        description: Caller-allocated stream the library fills. Release it with `out_stream->release(out_stream)`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   #---------------------------------------------------------------------------------------------------------------------
   # Importing: Arrow arrays -> data chunks
   #---------------------------------------------------------------------------------------------------------------------

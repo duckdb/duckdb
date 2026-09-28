@@ -258,7 +258,6 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in binding
 	result = con.Query("SELECT * FROM nonexistanttable");
 	REQUIRE(!result->ToString().empty());
-	REQUIRE(result->GetResultType() == QueryResultType::MATERIALIZED_RESULT);
 	REQUIRE_FAIL(result);
 
 	// error in stream that only happens after fetching

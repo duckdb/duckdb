@@ -5295,43 +5295,6 @@ typedef struct _duckdb_v2_arrow_exporter {
 /* --- Functions for arrow --- */
 
 /*!
- * Exports a result as a lazy ArrowArrayStream. Consuming.
- *
- * Takes ownership of the result, sets the slot to NULL, and fills the caller-allocated `out_stream`. The stream owns
- * the result from then on. Releasing the stream, with `out_stream->release(out_stream)`, does not drain the result, but
- * closes the query and frees the connection's live-result slot as `duckdb_v2_result_destroy()` would, so the connection
- * can run its next query.
- *
- * The stream's `get_next` drives the result, waiting internally until a batch is ready, and gathers DuckDB chunks into
- * one Arrow array of up to `batch_size` rows. The Arrow schema and the extension type map are built and cached here,
- * while the query's transaction is still active, because building them can run extension populate-schema callbacks and
- * read ENUM dictionaries. `get_schema` returns a copy of the cached schema and never touches the catalog.
- *
- * A result that has already yielded some chunks is allowed and produces a stream over the remaining rows.
- *
- * If the statement expanded into a group whose row-producing fragment has not started yet, this call steps the result
- * far enough to cache the schema, which may block briefly. No rows are lost, since none are produced before that
- * fragment is prepared. For an ordinary statement nothing executes here.
- *
- * The result is consumed on every path that reaches the engine, including failures. Only a null-argument rejection
- * leaves it intact. `out_stream` is untouched unless the call succeeds.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param result The result to export. Consumed and set to NULL, except when the call rejects a null argument.
- * @param batch_size Maximum rows per Arrow array. Pass 0 for the default of 131072, which is 64 vectors in a default
- * build.
- * @param out_stream Caller-allocated stream the library fills. Release it with `out_stream->release(out_stream)`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_to_arrow_stream(duckdb_v2_result_handle *result, idx_t batch_size,
-                                                              struct ArrowArrayStream *out_stream,
-                                                              duckdb_v2_error_info_handle *err);
-
-/*!
  * Resolves an Arrow schema into a reusable importer.
  *
  * Works out every column's DuckDB logical type and the Arrow type information the conversion needs, once, so any number
@@ -12069,8 +12032,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle resul
  *
  * Drains the result into a column data collection and renders it with the same renderer the DuckDB CLI uses, so every
  * client displays results identically without reimplementing table formatting. The result is consumed by transfer: the
- * slot is set to NULL on success and on failure alike, as with result_to_arrow_stream. A partially consumed result is
- * accepted, and the remainder is what gets rendered.
+ * slot is set to NULL on success and on failure alike. A partially consumed result is accepted, and the remainder is
+ * what gets rendered.
  *
  * The whole remaining result materializes in memory before rendering. max_rows bounds what is DISPLAYED, not what is
  * read, so with limit 0 the footer's row count is exact. A caller who cannot afford full materialization should bound
