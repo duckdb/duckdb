@@ -1096,7 +1096,7 @@ PEGTransformerFactory::TransformInSelectStatement(PEGTransformer &transformer,
 }
 
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformBetweenClause(PEGTransformer &transformer,
+PEGTransformerFactory::TransformBetweenClause(PEGTransformer &transformer, const bool &,
                                               unique_ptr<ParsedExpression> other_operator_expression,
                                               unique_ptr<ParsedExpression> other_operator_expression_1) {
 	auto result = make_uniq<BetweenExpression>(nullptr, std::move(other_operator_expression),

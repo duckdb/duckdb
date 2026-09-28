@@ -5052,7 +5052,8 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformInSelectStatement(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<ParsedExpression>
-	TransformBetweenClause(PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+	TransformBetweenClause(PEGTransformer &transformer, const bool &has_result,
+	                       unique_ptr<ParsedExpression> other_operator_expression,
 	                       unique_ptr<ParsedExpression> other_operator_expression_1);
 	static unique_ptr<ParsedExpression>
 	TransformInfixOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,

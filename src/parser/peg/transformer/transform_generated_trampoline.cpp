@@ -16265,16 +16265,20 @@ void PEGTransformerFactory::InitializeBetweenClauseTrampoline(PEGTransformer &tr
                                                               GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule("OtherOperatorExpression"), list_pr.GetChild(3)}, 1);
-	process.PushChild({transformer.GetRule("OtherOperatorExpression"), list_pr.GetChild(1)}, 0);
+	process.PushChild({transformer.GetRule("OtherOperatorExpression"), list_pr.GetChild(4)}, 1);
+	process.PushChild({transformer.GetRule("OtherOperatorExpression"), list_pr.GetChild(2)}, 0);
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeBetweenClauseTrampoline(PEGTransformer &transformer,
                                                        GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto other_operator_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
 	auto other_operator_expression_1 = process.TakeResult<unique_ptr<ParsedExpression>>(1);
-	auto result = TransformBetweenClause(transformer, std::move(other_operator_expression),
+	auto result = TransformBetweenClause(transformer, has_result, std::move(other_operator_expression),
 	                                     std::move(other_operator_expression_1));
 	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
 }
