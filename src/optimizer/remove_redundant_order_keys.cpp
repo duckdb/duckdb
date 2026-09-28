@@ -31,9 +31,10 @@ private:
 	void VisitLogicalProjection(LogicalProjection &projection);
 	void VisitLogicalOrder(LogicalOrder &order);
 
-	void VisitWindowExpression(BoundWindowExpression &wexpr);
+	void VisitWindowExpression(BoundWindowExpression &wexpr) const;
 
-	void VisitPartitioning(vector<unique_ptr<Expression>> &partitions);
+	void VisitPartitioning(vector<unique_ptr<Expression>> &partitions) const;
+	void VisitOrderBys(vector<BoundOrderByNode> &orders) const;
 
 	vector<column_binding_set_t> result;
 };
@@ -171,12 +172,16 @@ void ApplyFunctionalDependencies::VisitLogicalProjection(LogicalProjection &proj
 void ApplyFunctionalDependencies::VisitLogicalOrder(LogicalOrder &order) {
 	VisitOperatorChildren(order);
 
-	if (order.orders.size() < 2 || result.empty()) {
+	VisitOrderBys(order.orders);
+}
+
+void ApplyFunctionalDependencies::VisitOrderBys(vector<BoundOrderByNode> &orders) const {
+	if (orders.size() < 2 || result.empty()) {
 		return;
 	}
 	column_binding_set_t prefix;
-	for (idx_t i = 0; i + 1 < order.orders.size(); i++) {
-		auto &expr = *order.orders[i].expression;
+	for (idx_t i = 0; i + 1 < orders.size(); i++) {
+		auto &expr = *orders[i].expression;
 		if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			continue;
 		}
@@ -192,13 +197,13 @@ void ApplyFunctionalDependencies::VisitLogicalOrder(LogicalOrder &order) {
 			if (!covered) {
 				continue;
 			}
-			order.orders.erase(order.orders.begin() + NumericCast<int64_t>(i + 1), order.orders.end());
+			orders.erase(orders.begin() + NumericCast<int64_t>(i + 1), orders.end());
 			return;
 		}
 	}
 }
 
-void ApplyFunctionalDependencies::VisitPartitioning(vector<unique_ptr<Expression>> &partitions) {
+void ApplyFunctionalDependencies::VisitPartitioning(vector<unique_ptr<Expression>> &partitions) const {
 	//	Extract the partitioning references
 	column_binding_set_t partition_bindings;
 	for (auto &expr : partitions) {
@@ -244,8 +249,9 @@ void ApplyFunctionalDependencies::VisitPartitioning(vector<unique_ptr<Expression
 	}
 }
 
-void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &wexpr) {
+void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &wexpr) const {
 	VisitPartitioning(wexpr.PartitionsMutable());
+	VisitOrderBys(wexpr.OrderByMutable());
 }
 
 void ApplyFunctionalDependencies::VisitExpression(unique_ptr<Expression> *expression) {

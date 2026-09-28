@@ -50,6 +50,13 @@ a	1
 b	4
 c	3
 
+query II
+EXPLAIN 
+SELECT id, MAX(grp) OVER(ORDER BY payload, id, grp)
+FROM t
+----
+physical_plan	<REGEX>:.*ORDER BY payload ASC NULLS LAST, id ASC NULLS LAST[^,].*
+
 # an expression over the unique column is not the unique column
 query II
 EXPLAIN SELECT CAST(id AS BOOLEAN) AS b, payload FROM t ORDER BY b, payload;
@@ -83,9 +90,23 @@ EXPLAIN SELECT ukey FROM u ORDER BY ukey, tiebreak;
 physical_plan	<REGEX>:.*Order By: [^\n]*, [^\n]*│.*
 
 query II
+EXPLAIN 
+SELECT ukey, MAX(skey) OVER(ORDER BY ukey, tiebreak)
+FROM u ;
+----
+physical_plan	<REGEX>:.*ORDER BY ukey ASC NULLS LAST, tiebreak ASC NULLS LAST.*
+
+query II
 EXPLAIN SELECT skey FROM u ORDER BY skey, tiebreak;
 ----
 physical_plan	<REGEX>:.*Order By: skey ASC +│.*
+
+query II
+EXPLAIN 
+SELECT skey, MAX(ukey) OVER(ORDER BY skey, tiebreak)
+FROM u ;
+----
+physical_plan	<REGEX>:.*ORDER BY skey ASC NULLS LAST[^,].*
 
 query II
 EXPLAIN SELECT skey FROM u ORDER BY skey COLLATE NOCASE, tiebreak;
@@ -115,6 +136,20 @@ query II
 EXPLAIN SELECT k1 FROM c ORDER BY k2, k1, tiebreak;
 ----
 physical_plan	<REGEX>:.*Order By: [^\n]*, k1 ASC +│.*
+
+query II
+EXPLAIN 
+SELECT k1, MAX(payload) OVER(ORDER BY k1, tiebreak)
+FROM c;
+----
+physical_plan	<REGEX>:.*ORDER BY [^\n]*, [^\n,]*[^,].*
+
+query II
+EXPLAIN 
+SELECT k1, MAX(payload) OVER(ORDER BY k2, k1, tiebreak)
+FROM c;
+----
+physical_plan	<REGEX>:.*ORDER BY [^\n]*, [^\n,]*[^,].*
 
 # every column of a composite key has to be in the partitioning
 query II
