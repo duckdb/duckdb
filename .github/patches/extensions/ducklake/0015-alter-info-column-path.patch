@@ -1,0 +1,78 @@
+diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
+index c923ebd8..f7028c53 100644
+--- a/src/storage/ducklake_table_entry.cpp
++++ b/src/storage/ducklake_table_entry.cpp
+@@ -694,10 +694,10 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(ClientContext &context,
+                                                         SetNotNullInfo &info) {
+ 	auto create_info = GetInfo();
+ 	auto &table_info = create_info->Cast<CreateTableInfo>();
+-	if (!table_info.columns.ColumnExists(info.column_name)) {
+-		throw CatalogException("Failed to alter column - column %s does not exist", info.column_name);
++	if (!table_info.columns.ColumnExists(info.column_path[0])) {
++		throw CatalogException("Failed to alter column - column %s does not exist", info.column_path[0]);
+ 	}
+-	auto &col = table_info.columns.GetColumn(info.column_name);
++	auto &col = table_info.columns.GetColumn(info.column_path[0]);
+ 	auto &field_id = GetFieldId(col.Physical());
+ 
+ 	// check if there is an existing constraint
+@@ -743,10 +743,10 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(ClientContext &context,
+ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, DropNotNullInfo &info) {
+ 	auto create_info = GetInfo();
+ 	auto &table_info = create_info->Cast<CreateTableInfo>();
+-	if (!table_info.columns.ColumnExists(info.column_name)) {
+-		throw CatalogException("Failed to alter column - column %s does not exist", info.column_name);
++	if (!table_info.columns.ColumnExists(info.column_path[0])) {
++		throw CatalogException("Failed to alter column - column %s does not exist", info.column_path[0]);
+ 	}
+-	auto &col = table_info.columns.GetColumn(info.column_name);
++	auto &col = table_info.columns.GetColumn(info.column_path[0]);
+ 	auto &field_id = GetFieldId(col.Physical());
+ 
+ 	// find the existing index
+@@ -1091,10 +1091,10 @@ unique_ptr<DuckLakeFieldId> DuckLakeTableEntry::TypePromotion(const DuckLakeFiel
+ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, ChangeColumnTypeInfo &info) {
+ 	auto create_info = GetInfo();
+ 	auto &table_info = create_info->Cast<CreateTableInfo>();
+-	if (!ColumnExists(info.column_name)) {
+-		throw BinderException("Table %s does not have a column with name %s", name, info.column_name);
++	if (!ColumnExists(info.column_path[0])) {
++		throw BinderException("Table %s does not have a column with name %s", name, info.column_path[0]);
+ 	}
+-	auto &col = table_info.columns.GetColumn(info.column_name);
++	auto &col = table_info.columns.GetColumn(info.column_path[0]);
+ 	auto &field_id = GetFieldId(col.Physical());
+ 	if (!IsSimpleCast(*info.expression)) {
+ 		throw NotImplementedException("Column type cannot be modified using an expression");
+@@ -1109,7 +1109,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ 	ColumnList new_columns;
+ 	for (auto &col : columns.Logical()) {
+ 		auto copy = col.Copy();
+-		if (copy.Name() == info.column_name) {
++		if (copy.Name() == info.column_path[0]) {
+ 			copy.SetType(info.target_type);
+ 		}
+ 		new_columns.AddColumn(std::move(copy));
+@@ -1120,7 +1120,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ 	auto &current_field_ids = field_data->GetFieldIds();
+ 	auto new_field_ids = make_shared_ptr<DuckLakeFieldData>();
+ 	for (auto &field_id : current_field_ids) {
+-		if (new_field_id && field_id->Name() == info.column_name) {
++		if (new_field_id && field_id->Name() == info.column_path[0]) {
+ 			new_field_ids->Add(std::move(new_field_id));
+ 			new_field_id.reset();
+ 		} else {
+@@ -1327,10 +1327,10 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, SetDefaultInfo &info) {
+ 	auto create_info = GetInfo();
+ 	auto &table_info = create_info->Cast<CreateTableInfo>();
+-	if (!ColumnExists(info.column_name)) {
+-		throw BinderException("Table %s does not have a column with name %s", name, info.column_name);
++	if (!ColumnExists(info.column_path[0])) {
++		throw BinderException("Table %s does not have a column with name %s", name, info.column_path[0]);
+ 	}
+-	auto &col = table_info.columns.GetColumnMutable(info.column_name);
++	auto &col = table_info.columns.GetColumnMutable(info.column_path[0]);
+ 	auto &field_id = GetFieldId(col.Physical());
+ 	col.SetDefaultValue(std::move(info.expression));
+ 	bool new_column = !transaction.GetMetadataManager().IsColumnCreatedWithTable(
