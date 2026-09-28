@@ -1380,6 +1380,9 @@ typedef struct {
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_partitioning_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_validate_utf8)(duckdb_v2_str text, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_order_preservation)
+	(duckdb_v2_table_function_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
+	 duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -2022,6 +2025,8 @@ typedef struct {
 #define duckdb_v2_table_function_set_partitioning_callback                                                             \
 	duckdb_ext_api.duckdb_v2_table_function_set_partitioning_callback
 #define duckdb_v2_validate_utf8 duckdb_ext_api.duckdb_v2_validate_utf8
+#define duckdb_v2_table_function_bind_set_order_preservation                                                           \
+	duckdb_ext_api.duckdb_v2_table_function_bind_set_order_preservation
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

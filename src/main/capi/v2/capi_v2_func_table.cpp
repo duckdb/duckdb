@@ -124,6 +124,7 @@ public:
 	idx_t out_cardinality = 0;
 	bool out_cardinality_is_exact = false;
 	bool out_cardinality_set = false;
+	OrderPreservationType out_order_preservation = OrderPreservationType::INSERTION_ORDER;
 };
 
 static auto Convert(duckdb_v2_table_function_bind_info_handle info) -> CV2TableBindInfo * {
@@ -279,6 +280,20 @@ static auto CV2ConvertPartitionInfo(DUCKDB_V2_TABLE_PARTITION_INFO value) -> Tab
 	return static_cast<TablePartitionInfo>(value);
 }
 
+static_assert(static_cast<int>(OrderPreservationType::NO_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_NO_ORDER,
+              "OrderPreservationType::NO_ORDER mismatch");
+static_assert(static_cast<int>(OrderPreservationType::INSERTION_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_INSERTION_ORDER,
+              "OrderPreservationType::INSERTION_ORDER mismatch");
+static_assert(static_cast<int>(OrderPreservationType::FIXED_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER,
+              "OrderPreservationType::FIXED_ORDER mismatch");
+
+static auto CV2ConvertOrderPreservation(DUCKDB_V2_ORDER_PRESERVATION value) -> OrderPreservationType {
+	if (static_cast<uint32_t>(value) > DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER) {
+		throw duckdb::InvalidInputException("Invalid value in duckdb_v2_table_function_bind_set_order_preservation");
+	}
+	return static_cast<OrderPreservationType>(value);
+}
+
 class CV2TableFunctionInfo : public TableFunctionInfo {
 public:
 	duckdb_v2_table_function_bind_callback_fn bind_cb = nullptr;
@@ -361,6 +376,9 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 		throw InvalidInputException("The bind callback of table function \"%s\" did not declare any result columns.",
 		                            input.table_function.name);
 	}
+
+	// The binder hands each call site its own copy of the function, so this does not leak into other calls.
+	input.table_function.order_preservation_type = args.out_order_preservation;
 
 	result->column_types = args.out_column_types;
 	return_types = std::move(args.out_column_types);
@@ -966,6 +984,13 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_cardinality(duckdb_v2_table_fu
 		bind_info.out_cardinality_is_exact = is_exact;
 		bind_info.out_cardinality_set = true;
 	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_order_preservation(duckdb_v2_table_function_bind_info_handle info,
+                                                                     DUCKDB_V2_ORDER_PRESERVATION order,
+                                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_order_preservation = CV2ConvertOrderPreservation(order); });
 }
 
 DUCKDB_V2_ERROR

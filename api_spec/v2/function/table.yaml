@@ -726,6 +726,31 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  table_function_bind_set_order_preservation:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-28" ]
+    description: |
+      Sets the order guarantee of the rows this call of the function produces. Defaults to
+      `ORDER_PRESERVATION_INSERTION_ORDER`.
+
+      With `ORDER_PRESERVATION_NO_ORDER`, a scan that reports more than one thread via
+      `[[table_function_init_global_set_max_threads]]` runs in parallel into query results, INSERT and COPY without
+      a `[[table_function_set_partition_data_callback]]`, and the rows arrive in no particular order. With
+      insertion order kept, those consumers need the partition data callback to run in parallel. Fails with
+      `ERROR_INPUT_INVALID` when order is not one of the enum's declared values.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      order:
+        type: ORDER_PRESERVATION
+        description: The order guarantee of the produced rows.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Global Init Callback Functions
   #---------------------------------------------------------------------------------------------------------------------

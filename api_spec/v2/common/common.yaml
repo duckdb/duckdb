@@ -1,4 +1,25 @@
 module: common
+enums:
+  ORDER_PRESERVATION:
+    description: |
+      The order guarantee a producer of rows makes about its output, which decides whether the rows it produces
+      must be kept in order downstream.
+    values:
+      ORDER_PRESERVATION_NO_ORDER:
+        value: 0
+        description: |
+          The rows have no meaningful order. The engine may reorder them freely, and consumers that otherwise keep
+          insertion order, such as query results, INSERT and COPY, run in parallel without ordering them.
+      ORDER_PRESERVATION_INSERTION_ORDER:
+        value: 1
+        description: |
+          The rows are produced in insertion order, which the engine keeps unless the `preserve_insertion_order`
+          setting is disabled.
+      ORDER_PRESERVATION_FIXED_ORDER:
+        value: 2
+        description: |
+          The rows are produced in an order that must be kept, as if sorted by an `ORDER BY`, even when the
+          `preserve_insertion_order` setting is disabled.
 handles:
   environment:
     description: |

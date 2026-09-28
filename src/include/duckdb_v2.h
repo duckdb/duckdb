@@ -185,6 +185,31 @@ typedef struct _duckdb_extension_info *duckdb_v2_extension_handle;
 
 /* --- Enums for common --- */
 
+/*!
+ * The order guarantee a producer of rows makes about its output, which decides whether the rows it produces must be
+ * kept in order downstream.
+ */
+typedef enum DUCKDB_V2_ORDER_PRESERVATION {
+	/*!
+	 * The rows have no meaningful order. The engine may reorder them freely, and consumers that otherwise keep
+	 * insertion order, such as query results, INSERT and COPY, run in parallel without ordering them.
+	 */
+	DUCKDB_V2_ORDER_PRESERVATION_NO_ORDER = 0,
+
+	/*!
+	 * The rows are produced in insertion order, which the engine keeps unless the `preserve_insertion_order` setting is
+	 * disabled.
+	 */
+	DUCKDB_V2_ORDER_PRESERVATION_INSERTION_ORDER = 1,
+
+	/*!
+	 * The rows are produced in an order that must be kept, as if sorted by an `ORDER BY`, even when the
+	 * `preserve_insertion_order` setting is disabled.
+	 */
+	DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER = 2,
+	DUCKDB_V2_ORDER_PRESERVATION_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_ORDER_PRESERVATION;
+
 /* --- Struct forward declarations for common --- */
 
 typedef struct duckdb_v2_str duckdb_v2_str;
@@ -12714,6 +12739,29 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_cardinality(
     duckdb_v2_table_function_bind_info_handle info, idx_t cardinality, bool is_exact, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the order guarantee of the rows this call of the function produces. Defaults to
+ * `ORDER_PRESERVATION_INSERTION_ORDER`.
+ *
+ * With `ORDER_PRESERVATION_NO_ORDER`, a scan that reports more than one thread via
+ * `duckdb_v2_table_function_init_global_set_max_threads()` runs in parallel into query results, INSERT and COPY without
+ * a `duckdb_v2_table_function_set_partition_data_callback()`, and the rows arrive in no particular order. With
+ * insertion order kept, those consumers need the partition data callback to run in parallel. Fails with
+ * `ERROR_INPUT_INVALID` when order is not one of the enum's declared values.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param order The order guarantee of the produced rows.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_order_preservation(
+    duckdb_v2_table_function_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
+    duckdb_v2_error_info_handle *err);
 
 /*!
  * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.

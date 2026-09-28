@@ -3969,6 +3969,19 @@ auto TableFunction::BindInput::SetCardinality(idx_t cardinality, bool is_exact) 
 	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), cardinality, is_exact);
 }
 
+static_assert(static_cast<uint8_t>(OrderPreservation::NO_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_NO_ORDER,
+              "OrderPreservation::NO_ORDER mismatch");
+static_assert(static_cast<uint8_t>(OrderPreservation::INSERTION_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_INSERTION_ORDER,
+              "OrderPreservation::INSERTION_ORDER mismatch");
+static_assert(static_cast<uint8_t>(OrderPreservation::FIXED_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER,
+              "OrderPreservation::FIXED_ORDER mismatch");
+
+auto TableFunction::BindInput::SetOrderPreservation(OrderPreservation order) -> void {
+	CheckedAPICall(duckdb_v2_table_function_bind_set_order_preservation,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(args),
+	               static_cast<DUCKDB_V2_ORDER_PRESERVATION>(order));
+}
+
 auto TableFunction::BindInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
 }
