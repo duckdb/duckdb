@@ -213,9 +213,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// Try autoloading an extension, then retry the replacement scan bind
-		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName().Catalog().GetIdentifierName(),
-		                                              ref.GetQualifiedName().Schema().GetIdentifierName(),
-		                                              ref.Table().GetIdentifierName());
+		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName());
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);

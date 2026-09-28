@@ -133,7 +133,7 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=windows-amd64 CLI_BINARY=duckdb.exe
         make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
-        make static-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 STATIC_LIBRARIES="src/duckdb_static.lib extension/*/*_extension.lib"
+        make static-libs-release-artifact ARTIFACT_SUFFIX=windows-amd64 STATIC_LIBRARIES="src/duckdb_static.lib src/duckdb_shell.lib extension/*/*_extension.lib"
         ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-amd64.tar.gz duckdb-shared-libs-windows-amd64.tar.gz duckdb-static-libs-windows-amd64.tar.gz
 
     - uses: actions/upload-artifact@v7
@@ -150,6 +150,12 @@ jobs:
       with:
         path: duckdb-static-libs-windows-amd64.tar.gz
         archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: release-core-extensions-windows-amd64
+        path: repository
+        if-no-files-found: error
 
  win-release-32:
     name: Windows (32 Bit)
@@ -266,7 +272,7 @@ jobs:
        run: |
          make cli-release-artifact ARTIFACT_SUFFIX=windows-arm64 CLI_BINARY=duckdb.exe
          make shared-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 SHARED_LIBRARIES="src/duckdb.dll src/duckdb.lib"
-         make static-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 STATIC_LIBRARIES="src/duckdb_static.lib extension/*/*_extension.lib"
+         make static-libs-release-artifact ARTIFACT_SUFFIX=windows-arm64 STATIC_LIBRARIES="src/duckdb_static.lib src/duckdb_shell.lib extension/*/*_extension.lib"
          ./scripts/upload-assets-to-staging.sh github_release duckdb-cli-windows-arm64.tar.gz duckdb-shared-libs-windows-arm64.tar.gz duckdb-static-libs-windows-arm64.tar.gz
 
      - uses: actions/upload-artifact@v7
@@ -284,6 +290,12 @@ jobs:
          path: duckdb-static-libs-windows-arm64.tar.gz
          archive: false
 
+     - uses: actions/upload-artifact@v7
+       with:
+         name: release-core-extensions-windows-arm64
+         path: repository
+         if-no-files-found: error
+
  mingw:
      name: MinGW (64 Bit)
      needs:
@@ -291,6 +303,8 @@ jobs:
      runs-on: ${{ fromJSON(inputs.runners).windows_2022_x64 || 'windows-2022' }}
      env:
        GEN: ninja
+       CC: C:/rtools42/x86_64-w64-mingw32.static.posix/bin/gcc.exe
+       CXX: C:/rtools42/x86_64-w64-mingw32.static.posix/bin/g++.exe
        EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
        ENABLE_EXTENSION_AUTOLOADING: 1
        ENABLE_EXTENSION_AUTOINSTALL: 1
@@ -305,15 +319,19 @@ jobs:
          with:
            python-version: '3.12'
 
+       - name: Setup Rtools
+         uses: r-lib/actions/setup-r@d3c5be51b12e724e68f33216ca3c148b66d5f0b6 # v2.12.1
+         with:
+           r-version: devel
+           update-rtools: true
+           rtools-version: '42'
+
        - name: Dependencies
          shell: bash
          run: |
            python scripts/ci/retry.py -- choco install \
              ccache \
              make \
-             --no-progress
-           python scripts/ci/retry.py -- choco install \
-             mingw --version 14.2.0 \
              --no-progress
 
        - uses: ./.github/actions/ccache-action
@@ -326,8 +344,8 @@ jobs:
              echo 'C:/Program Files/Git/bin'
              # make, ninja and ccache from Chocolatey
              echo 'C:/ProgramData/Chocolatey/bin'
-             # g++ from Chocolatey
-             echo 'C:/ProgramData/mingw64/mingw64/bin'
+             # gcc and g++ from Rtools42
+             echo 'C:/rtools42/x86_64-w64-mingw32.static.posix/bin'
            } >> "${GITHUB_PATH}"
 
        - name: Build Environment Check
@@ -374,10 +392,16 @@ jobs:
            AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
            AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
          run: |
-           make static-libs-release-artifact ARTIFACT_SUFFIX=windows-mingw STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a"
+           make static-libs-release-artifact ARTIFACT_SUFFIX=windows-mingw STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/extension/*/lib*_extension.a"
            ./scripts/upload-assets-to-staging.sh github_release duckdb-static-libs-windows-mingw.tar.gz
 
        - uses: actions/upload-artifact@v7
          with:
            path: duckdb-static-libs-windows-mingw.tar.gz
            archive: false
+
+       - uses: actions/upload-artifact@v7
+         with:
+           name: release-core-extensions-windows-mingw
+           path: build/release/repository
+           if-no-files-found: error

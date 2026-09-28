@@ -2747,6 +2747,9 @@ public:
 	static void InitializeBitOperatorTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeBitOperatorTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static void InitializeTildeExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTildeExpressionTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
 	static void InitializeAdditiveExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAdditiveExpressionTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
@@ -5071,10 +5074,13 @@ public:
 	                                                 const optional<vector<string>> &col_id_dot,
 	                                                 const string &any_operator_literal);
 	static unique_ptr<ParsedExpression>
-	TransformBitwiseExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> additive_expression,
+	TransformBitwiseExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> tilde_expression,
 	                           optional<vector<BinaryExpressionTail>> bitwise_expression_tail);
 	static BinaryExpressionTail TransformBitwiseExpressionTail(PEGTransformer &transformer, const string &bit_operator,
-	                                                           unique_ptr<ParsedExpression> additive_expression);
+	                                                           unique_ptr<ParsedExpression> tilde_expression);
+	static unique_ptr<ParsedExpression> TransformTildeExpression(PEGTransformer &transformer,
+	                                                             optional<vector<string>> tilde_prefix_operator,
+	                                                             unique_ptr<ParsedExpression> additive_expression);
 	static unique_ptr<ParsedExpression>
 	TransformAdditiveExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> multiplicative_expression,
 	                            optional<vector<BinaryExpressionTail>> additive_expression_tail);
