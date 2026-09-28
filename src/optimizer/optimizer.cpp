@@ -334,10 +334,9 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway
-	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
-		OuterJoinSimplification outer_join_simplification;
-		outer_join_simplification.VisitOperator(*plan);
-	});
+	// Or the match is guaranteed (FK coverage)
+	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION,
+	             [&]() { plan = OuterJoinSimplification::Optimize(std::move(plan)); });
 
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
@@ -504,6 +503,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::PARTITIONED_EXECUTION, [&]() {
 		PartitionedExecution partitioned_execution(*this, plan);
 		partitioned_execution.Optimize(plan);
+	});
+
+	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
+		JoinElimination join_elimination;
+		plan = join_elimination.Optimize(std::move(plan));
 	});
 
 	// perform join filter pushdown after the dust has settled
