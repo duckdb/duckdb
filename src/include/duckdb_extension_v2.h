@@ -943,19 +943,11 @@ typedef struct {
 	(duckdb_v2_custom_type_handle type, duckdb_v2_identifier_t name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_file_close)(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_file_destroy)(duckdb_v2_file_handle *file);
-	DUCKDB_V2_ERROR(*duckdb_v2_file_open_options_create)
-	(duckdb_v2_file_system_handle file_system, duckdb_v2_file_open_options_handle *options,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_file_open_options_destroy)(duckdb_v2_file_open_options_handle *options);
-	DUCKDB_V2_ERROR(*duckdb_v2_file_open_options_set_flag)
-	(duckdb_v2_file_open_options_handle options, DUCKDB_V2_FILE_FLAG flag, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_file_open_options_set_value)
-	(duckdb_v2_file_open_options_handle options, duckdb_v2_str name, duckdb_v2_value_handle value,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_read)
 	(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size, idx_t *bytes_read, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_read_at)
-	(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size, idx_t location, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_file_handle file, void *buffer, idx_t buffer_size, idx_t location, idx_t *bytes_read,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_seek)
 	(duckdb_v2_file_handle file, idx_t position, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_file_size)(duckdb_v2_file_handle file, idx_t *size, duckdb_v2_error_info_handle *err);
@@ -966,15 +958,16 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_file_system_get_from_context)
 	(duckdb_v2_context_handle context, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_system_open)
-	(duckdb_v2_file_system_handle file_system, duckdb_v2_str file_path, duckdb_v2_file_open_options_handle options,
-	 duckdb_v2_file_handle *file, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str file_path, const DUCKDB_V2_FILE_FLAG *flags,
+	 idx_t flag_count, duckdb_v2_file_metadata_handle metadata, duckdb_v2_file_handle *file,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_tell)
 	(duckdb_v2_file_handle file, idx_t *position, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_write)
 	(duckdb_v2_file_handle file, const void *buffer, idx_t buffer_size, idx_t *bytes_written,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_write_at)
-	(duckdb_v2_file_handle file, const void *buffer, idx_t buffer_size, idx_t location,
+	(duckdb_v2_file_handle file, const void *buffer, idx_t buffer_size, idx_t location, idx_t *bytes_written,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_qname_create)
 	(const duckdb_v2_identifier_t *parts, idx_t part_count, duckdb_v2_qname_handle *name,
@@ -1379,6 +1372,131 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_partitioning_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_partitioning_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_file_abort)(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_listing_add_entry)
+	(duckdb_v2_file_listing_handle listing, duckdb_v2_str path, DUCKDB_V2_FILE_TYPE type,
+	 duckdb_v2_file_metadata_handle *metadata, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_file_listing_destroy)(duckdb_v2_file_listing_handle *listing);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_listing_get_entry_count)
+	(duckdb_v2_file_listing_handle listing, idx_t *count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_listing_get_entry_metadata)
+	(duckdb_v2_file_listing_handle listing, idx_t index, duckdb_v2_file_metadata_handle *metadata,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_listing_get_entry_path)
+	(duckdb_v2_file_listing_handle listing, idx_t index, duckdb_v2_str *path, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_listing_get_entry_type)
+	(duckdb_v2_file_listing_handle listing, idx_t index, DUCKDB_V2_FILE_TYPE *type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_copy)
+	(duckdb_v2_file_metadata_handle target, duckdb_v2_file_metadata_handle source, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_create)
+	(duckdb_v2_file_metadata_handle *metadata, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_file_metadata_destroy)(duckdb_v2_file_metadata_handle *metadata);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_get_last_modified)
+	(duckdb_v2_file_metadata_handle metadata, int64_t *last_modified, bool *is_known, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_get_size)
+	(duckdb_v2_file_metadata_handle metadata, idx_t *size, bool *is_known, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_get_type)
+	(duckdb_v2_file_metadata_handle metadata, DUCKDB_V2_FILE_TYPE *type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_get_value)
+	(duckdb_v2_file_metadata_handle metadata, duckdb_v2_str name, duckdb_v2_value_handle *value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_get_version_tag)
+	(duckdb_v2_file_metadata_handle metadata, duckdb_v2_str *version_tag, bool *is_known,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_set_last_modified)
+	(duckdb_v2_file_metadata_handle metadata, int64_t last_modified, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_set_size)
+	(duckdb_v2_file_metadata_handle metadata, idx_t size, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_set_type)
+	(duckdb_v2_file_metadata_handle metadata, DUCKDB_V2_FILE_TYPE type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_set_value)
+	(duckdb_v2_file_metadata_handle metadata, duckdb_v2_str name, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_metadata_set_version_tag)
+	(duckdb_v2_file_metadata_handle metadata, duckdb_v2_str version_tag, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_stat)
+	(duckdb_v2_file_handle file, duckdb_v2_file_metadata_handle *metadata, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_create_directory)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_glob)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str pattern, duckdb_v2_file_listing_handle *listing,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_list)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_file_listing_handle *listing,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_move)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str source, duckdb_v2_str target,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_remove_directory)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_remove_file)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_system_stat)
+	(duckdb_v2_file_system_handle file_system, duckdb_v2_str path, duckdb_v2_file_metadata_handle *metadata,
+	 bool *exists, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_file_truncate)
+	(duckdb_v2_file_handle file, idx_t size, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_add_prefix)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_str prefix, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_create_with_connection)
+	(duckdb_v2_connection_handle connection, duckdb_v2_vfs_handle *file_system, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_create_with_extension)
+	(duckdb_v2_extension_handle extension, duckdb_v2_vfs_handle *file_system, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_vfs_destroy)(duckdb_v2_vfs_handle *file_system);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_set_data)
+	(duckdb_v2_vfs_file_open_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_file_open_set_property)
+	(duckdb_v2_vfs_file_open_info_handle info, DUCKDB_V2_FILE_PROPERTY property, bool value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_get_file_system)
+	(duckdb_v2_vfs_info_handle info, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_get_user_data)
+	(duckdb_v2_vfs_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_info_try_get_context)
+	(duckdb_v2_vfs_info_handle info, duckdb_v2_context_handle *context, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_vfs_register)(duckdb_v2_vfs_handle file_system, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_claim_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_claim_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_create_directory_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_create_directory_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_abort_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_abort_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_close_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_close_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_open_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_open_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_read_at_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_read_at_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_stat_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_stat_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_sync_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_sync_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_truncate_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_truncate_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_file_write_at_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_file_write_at_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_glob_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_glob_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_list_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_list_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_move_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_move_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_name)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_str name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_remove_directory_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_remove_directory_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_remove_file_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_remove_file_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_stat_callback)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_vfs_stat_callback_fn callback, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_vfs_set_user_data)
+	(duckdb_v2_vfs_handle file_system, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_validate_utf8)(duckdb_v2_str text, duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -1799,10 +1917,6 @@ typedef struct {
 #define duckdb_v2_custom_type_set_name                   duckdb_ext_api.duckdb_v2_custom_type_set_name
 #define duckdb_v2_file_close                             duckdb_ext_api.duckdb_v2_file_close
 #define duckdb_v2_file_destroy                           duckdb_ext_api.duckdb_v2_file_destroy
-#define duckdb_v2_file_open_options_create               duckdb_ext_api.duckdb_v2_file_open_options_create
-#define duckdb_v2_file_open_options_destroy              duckdb_ext_api.duckdb_v2_file_open_options_destroy
-#define duckdb_v2_file_open_options_set_flag             duckdb_ext_api.duckdb_v2_file_open_options_set_flag
-#define duckdb_v2_file_open_options_set_value            duckdb_ext_api.duckdb_v2_file_open_options_set_value
 #define duckdb_v2_file_read                              duckdb_ext_api.duckdb_v2_file_read
 #define duckdb_v2_file_read_at                           duckdb_ext_api.duckdb_v2_file_read_at
 #define duckdb_v2_file_seek                              duckdb_ext_api.duckdb_v2_file_seek
@@ -2021,7 +2135,64 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_table_function_set_partition_data_callback
 #define duckdb_v2_table_function_set_partitioning_callback                                                             \
 	duckdb_ext_api.duckdb_v2_table_function_set_partitioning_callback
-#define duckdb_v2_validate_utf8 duckdb_ext_api.duckdb_v2_validate_utf8
+#define duckdb_v2_file_abort                        duckdb_ext_api.duckdb_v2_file_abort
+#define duckdb_v2_file_listing_add_entry            duckdb_ext_api.duckdb_v2_file_listing_add_entry
+#define duckdb_v2_file_listing_destroy              duckdb_ext_api.duckdb_v2_file_listing_destroy
+#define duckdb_v2_file_listing_get_entry_count      duckdb_ext_api.duckdb_v2_file_listing_get_entry_count
+#define duckdb_v2_file_listing_get_entry_metadata   duckdb_ext_api.duckdb_v2_file_listing_get_entry_metadata
+#define duckdb_v2_file_listing_get_entry_path       duckdb_ext_api.duckdb_v2_file_listing_get_entry_path
+#define duckdb_v2_file_listing_get_entry_type       duckdb_ext_api.duckdb_v2_file_listing_get_entry_type
+#define duckdb_v2_file_metadata_copy                duckdb_ext_api.duckdb_v2_file_metadata_copy
+#define duckdb_v2_file_metadata_create              duckdb_ext_api.duckdb_v2_file_metadata_create
+#define duckdb_v2_file_metadata_destroy             duckdb_ext_api.duckdb_v2_file_metadata_destroy
+#define duckdb_v2_file_metadata_get_last_modified   duckdb_ext_api.duckdb_v2_file_metadata_get_last_modified
+#define duckdb_v2_file_metadata_get_size            duckdb_ext_api.duckdb_v2_file_metadata_get_size
+#define duckdb_v2_file_metadata_get_type            duckdb_ext_api.duckdb_v2_file_metadata_get_type
+#define duckdb_v2_file_metadata_get_value           duckdb_ext_api.duckdb_v2_file_metadata_get_value
+#define duckdb_v2_file_metadata_get_version_tag     duckdb_ext_api.duckdb_v2_file_metadata_get_version_tag
+#define duckdb_v2_file_metadata_set_last_modified   duckdb_ext_api.duckdb_v2_file_metadata_set_last_modified
+#define duckdb_v2_file_metadata_set_size            duckdb_ext_api.duckdb_v2_file_metadata_set_size
+#define duckdb_v2_file_metadata_set_type            duckdb_ext_api.duckdb_v2_file_metadata_set_type
+#define duckdb_v2_file_metadata_set_value           duckdb_ext_api.duckdb_v2_file_metadata_set_value
+#define duckdb_v2_file_metadata_set_version_tag     duckdb_ext_api.duckdb_v2_file_metadata_set_version_tag
+#define duckdb_v2_file_stat                         duckdb_ext_api.duckdb_v2_file_stat
+#define duckdb_v2_file_system_create_directory      duckdb_ext_api.duckdb_v2_file_system_create_directory
+#define duckdb_v2_file_system_glob                  duckdb_ext_api.duckdb_v2_file_system_glob
+#define duckdb_v2_file_system_list                  duckdb_ext_api.duckdb_v2_file_system_list
+#define duckdb_v2_file_system_move                  duckdb_ext_api.duckdb_v2_file_system_move
+#define duckdb_v2_file_system_remove_directory      duckdb_ext_api.duckdb_v2_file_system_remove_directory
+#define duckdb_v2_file_system_remove_file           duckdb_ext_api.duckdb_v2_file_system_remove_file
+#define duckdb_v2_file_system_stat                  duckdb_ext_api.duckdb_v2_file_system_stat
+#define duckdb_v2_file_truncate                     duckdb_ext_api.duckdb_v2_file_truncate
+#define duckdb_v2_vfs_add_prefix                    duckdb_ext_api.duckdb_v2_vfs_add_prefix
+#define duckdb_v2_vfs_create_with_connection        duckdb_ext_api.duckdb_v2_vfs_create_with_connection
+#define duckdb_v2_vfs_create_with_extension         duckdb_ext_api.duckdb_v2_vfs_create_with_extension
+#define duckdb_v2_vfs_destroy                       duckdb_ext_api.duckdb_v2_vfs_destroy
+#define duckdb_v2_vfs_file_open_set_data            duckdb_ext_api.duckdb_v2_vfs_file_open_set_data
+#define duckdb_v2_vfs_file_open_set_property        duckdb_ext_api.duckdb_v2_vfs_file_open_set_property
+#define duckdb_v2_vfs_info_get_file_system          duckdb_ext_api.duckdb_v2_vfs_info_get_file_system
+#define duckdb_v2_vfs_info_get_user_data            duckdb_ext_api.duckdb_v2_vfs_info_get_user_data
+#define duckdb_v2_vfs_info_try_get_context          duckdb_ext_api.duckdb_v2_vfs_info_try_get_context
+#define duckdb_v2_vfs_register                      duckdb_ext_api.duckdb_v2_vfs_register
+#define duckdb_v2_vfs_set_claim_callback            duckdb_ext_api.duckdb_v2_vfs_set_claim_callback
+#define duckdb_v2_vfs_set_create_directory_callback duckdb_ext_api.duckdb_v2_vfs_set_create_directory_callback
+#define duckdb_v2_vfs_set_file_abort_callback       duckdb_ext_api.duckdb_v2_vfs_set_file_abort_callback
+#define duckdb_v2_vfs_set_file_close_callback       duckdb_ext_api.duckdb_v2_vfs_set_file_close_callback
+#define duckdb_v2_vfs_set_file_open_callback        duckdb_ext_api.duckdb_v2_vfs_set_file_open_callback
+#define duckdb_v2_vfs_set_file_read_at_callback     duckdb_ext_api.duckdb_v2_vfs_set_file_read_at_callback
+#define duckdb_v2_vfs_set_file_stat_callback        duckdb_ext_api.duckdb_v2_vfs_set_file_stat_callback
+#define duckdb_v2_vfs_set_file_sync_callback        duckdb_ext_api.duckdb_v2_vfs_set_file_sync_callback
+#define duckdb_v2_vfs_set_file_truncate_callback    duckdb_ext_api.duckdb_v2_vfs_set_file_truncate_callback
+#define duckdb_v2_vfs_set_file_write_at_callback    duckdb_ext_api.duckdb_v2_vfs_set_file_write_at_callback
+#define duckdb_v2_vfs_set_glob_callback             duckdb_ext_api.duckdb_v2_vfs_set_glob_callback
+#define duckdb_v2_vfs_set_list_callback             duckdb_ext_api.duckdb_v2_vfs_set_list_callback
+#define duckdb_v2_vfs_set_move_callback             duckdb_ext_api.duckdb_v2_vfs_set_move_callback
+#define duckdb_v2_vfs_set_name                      duckdb_ext_api.duckdb_v2_vfs_set_name
+#define duckdb_v2_vfs_set_remove_directory_callback duckdb_ext_api.duckdb_v2_vfs_set_remove_directory_callback
+#define duckdb_v2_vfs_set_remove_file_callback      duckdb_ext_api.duckdb_v2_vfs_set_remove_file_callback
+#define duckdb_v2_vfs_set_stat_callback             duckdb_ext_api.duckdb_v2_vfs_set_stat_callback
+#define duckdb_v2_vfs_set_user_data                 duckdb_ext_api.duckdb_v2_vfs_set_user_data
+#define duckdb_v2_validate_utf8                     duckdb_ext_api.duckdb_v2_validate_utf8
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

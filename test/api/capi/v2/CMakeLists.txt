@@ -30,7 +30,8 @@ add_library_unity(
   test_capi_v2_tokenizer.cpp
   test_capi_v2_static_extension.cpp
   test_capi_v2_value.cpp
-  test_capi_v2_vector_write.cpp)
+  test_capi_v2_vector_write.cpp
+  test_capi_v2_virtual_file_system.cpp)
 
 # The extension itself is built on its own: the entrypoint macro claims fixed
 # names, so it cannot share a unity TU.
