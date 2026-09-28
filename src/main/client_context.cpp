@@ -276,7 +276,11 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 				}
 			} else if (invalidate_transaction) {
 				D_ASSERT(!success);
-				ValidChecker::Invalidate(ActiveTransaction(), "Failed to commit");
+				if (transaction.GetAutoRollback()) {
+					transaction.Rollback(previous_error);
+				} else {
+					ValidChecker::Invalidate(ActiveTransaction(), "Failed to commit");
+				}
 			}
 		}
 	} catch (std::exception &ex) {

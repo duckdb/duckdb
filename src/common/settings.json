@@ -265,6 +265,13 @@
         "default_value": "NONE"
     },
     {
+        "name": "debug_checkpoint_scan_sleep_ms",
+        "description": "DEBUG SETTING: time to sleep after a checkpoint has written a table's row groups, before it installs them",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "0"
+    },
+    {
         "name": "debug_checkpoint_sleep_ms",
         "description": "DEBUG SETTING: time to sleep before a checkpoint",
         "type": "UBIGINT",
@@ -519,6 +526,13 @@
         "type": "BOOLEAN",
         "default_scope": "global",
         "default_value": "false"
+    },
+    {
+        "name": "enable_optimistic_write",
+        "description": "Whether or not to optimistically write large appends to disk before committing. Disable this to keep bulk appends in memory (e.g. for in-memory benchmarks).",
+        "type": "BOOLEAN",
+        "default_scope": "global",
+        "default_value": "true"
     },
     {
         "name": "enable_profiling",

@@ -140,6 +140,8 @@ public:
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
 	bool HasChanges() const;
+	//! The delete blocks the last checkpoint wrote for this row group
+	vector<MetaBlockPointer> GetPersistedDeletePointers() const;
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);
