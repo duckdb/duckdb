@@ -170,7 +170,13 @@ LogicalNotExpression <- NotExpression? IsExpression
 NotExpression <- NotKeyword+
 NotKeyword <- 'NOT'
 # LEVEL 4
-IsExpression <- IsDistinctFromExpression IsTest*
+IsExpression <- IsDistinctFromExpression IsExpressionContinuation?
+IsExpressionContinuation <- IsTest IsExpressionTail*
+IsExpressionTail <- IsTestTail / IsDistinctTail / IsComparisonTail / IsOtherOperatorTail
+IsTestTail <- IsTest
+IsDistinctTail <- IsDistinctFromTail
+IsComparisonTail <- ComparisonExpressionTail
+IsOtherOperatorTail <- OtherOperatorTail
 IsTest <- IsLiteral / NotNull / IsNull
 IsLiteral <- 'IS' 'NOT'? IsLiteralValue
 IsLiteralValue <- TrueLiteral / FalseLiteral / NullLiteral / UnknownLiteral
@@ -180,7 +186,7 @@ NotNullKeyword <- 'NOT' 'NULL'
 NotNullOperator <- 'NOTNULL'
 IsNull <- IsNullOperator
 IsNullOperator <- 'ISNULL'
-# LEVEL 5 (Split because IsDistinctFromExpression allows post expression while IsOperator does not)
+# LEVEL 5 (IS DISTINCT FROM retains the comparison binding)
 IsDistinctFromExpression <- ComparisonExpression IsDistinctFromTail*
 IsDistinctFromTail <- IsDistinctFromOp ComparisonExpression
 IsDistinctFromOp <- 'IS' 'NOT'? 'DISTINCT' 'FROM'

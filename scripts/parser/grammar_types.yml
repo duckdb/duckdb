@@ -1635,6 +1635,24 @@ overrides:
   ComparisonExpressionTail:
     type: "ComparisonExpressionTail"
     by_value: true
+  IsExpressionTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsExpressionContinuation:
+    type: "vector<IsExpressionTail>"
+    by_value: true
+  IsTestTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsDistinctTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsComparisonTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsOtherOperatorTail:
+    type: "IsExpressionTail"
+    by_value: true
   BetweenInLikeOp:
     type: "BetweenInLikeOperator"
     by_value: true

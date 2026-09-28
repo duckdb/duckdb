@@ -689,29 +689,117 @@ vector<bool> PEGTransformerFactory::TransformNotExpression(PEGTransformer &trans
 	return not_keyword;
 }
 
+static unique_ptr<ParsedExpression> ApplyIsTest(unique_ptr<ParsedExpression> expr,
+                                                unique_ptr<ParsedExpression> is_expr) {
+	if (is_expr->GetExpressionClass() == ExpressionClass::COMPARISON) {
+		auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(is_expr));
+		compare_expr->LeftMutable() = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(expr));
+		return std::move(compare_expr);
+	}
+	if (is_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
+		auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(is_expr));
+		operator_expr->GetChildrenMutable().insert(operator_expr->GetChildrenMutable().begin(), std::move(expr));
+		return std::move(operator_expr);
+	}
+	throw InternalException("Unexpected expression encountered in IsExpression: %s",
+	                        ExpressionClassToString(is_expr->GetExpressionClass()));
+}
+
+static unique_ptr<ParsedExpression> ApplyIsDistinctFromTail(unique_ptr<ParsedExpression> expr,
+                                                            IsDistinctFromTail tail) {
+	return make_uniq<ComparisonExpression>(tail.comparison_type, std::move(expr), std::move(tail.expression));
+}
+
+static unique_ptr<ParsedExpression> ApplyComparisonTail(unique_ptr<ParsedExpression> expr,
+                                                        ComparisonExpressionTail tail) {
+	auto right_expr = std::move(tail.expression);
+	for (idx_t i = 0; i < tail.not_keywords.size(); i++) {
+		vector<unique_ptr<ParsedExpression>> inner_list_children;
+		inner_list_children.push_back(std::move(right_expr));
+		right_expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
+	}
+	return make_uniq<ComparisonExpression>(tail.comparison_type, std::move(expr), std::move(right_expr));
+}
+
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformIsExpression(PEGTransformer &transformer,
                                              unique_ptr<ParsedExpression> is_distinct_from_expression,
-                                             optional<vector<unique_ptr<ParsedExpression>>> is_test) {
+                                             optional<vector<IsExpressionTail>> is_expression_continuation) {
 	auto expr = std::move(is_distinct_from_expression);
-	if (!is_test) {
+	if (!is_expression_continuation) {
 		return expr;
 	}
-	for (auto &is_expr : *is_test) {
-		if (is_expr->GetExpressionClass() == ExpressionClass::COMPARISON) {
-			auto compare_expr = unique_ptr_cast<ParsedExpression, ComparisonExpression>(std::move(is_expr));
-			compare_expr->LeftMutable() = make_uniq<CastExpression>(LogicalType::BOOLEAN, std::move(expr));
-			expr = std::move(compare_expr);
-		} else if (is_expr->GetExpressionClass() == ExpressionClass::OPERATOR) {
-			auto operator_expr = unique_ptr_cast<ParsedExpression, OperatorExpression>(std::move(is_expr));
-			operator_expr->GetChildrenMutable().insert(operator_expr->GetChildrenMutable().begin(), std::move(expr));
-			expr = std::move(operator_expr);
-		} else {
-			throw InternalException("Unexpected expression encountered in IsExpression: %s",
-			                        ExpressionClassToString(is_expr->GetExpressionClass()));
+	auto previous_type = ExpressionTailType::IS_TEST;
+	for (auto &tail : *is_expression_continuation) {
+		if (tail.type == previous_type &&
+		    (tail.type == ExpressionTailType::DISTINCT || tail.type == ExpressionTailType::COMPARISON)) {
+			throw ParserException("Chained comparisons are not supported, use AND to combine comparisons");
 		}
+		switch (tail.type) {
+		case ExpressionTailType::IS_TEST:
+			expr = ApplyIsTest(std::move(expr), std::move(tail.test));
+			break;
+		case ExpressionTailType::DISTINCT:
+			expr = ApplyIsDistinctFromTail(std::move(expr), std::move(tail.distinct));
+			break;
+		case ExpressionTailType::COMPARISON:
+			expr = ApplyComparisonTail(std::move(expr), std::move(tail.comparison));
+			break;
+		case ExpressionTailType::OTHER_OPERATOR: {
+			vector<OtherOperatorTail> other_tail;
+			other_tail.push_back(std::move(tail.other));
+			expr = TransformInfixOtherOperatorExpression(transformer, std::move(expr), std::move(other_tail));
+			break;
+		}
+		}
+		previous_type = tail.type;
 	}
 	return expr;
+}
+
+vector<IsExpressionTail>
+PEGTransformerFactory::TransformIsExpressionContinuation(PEGTransformer &transformer,
+                                                         unique_ptr<ParsedExpression> is_test,
+                                                         optional<vector<IsExpressionTail>> is_expression_tail) {
+	vector<IsExpressionTail> result;
+	result.push_back(TransformIsTestTail(transformer, std::move(is_test)));
+	if (is_expression_tail) {
+		for (auto &tail : *is_expression_tail) {
+			result.push_back(std::move(tail));
+		}
+	}
+	return result;
+}
+
+IsExpressionTail PEGTransformerFactory::TransformIsTestTail(PEGTransformer &transformer,
+                                                            unique_ptr<ParsedExpression> is_test) {
+	IsExpressionTail result;
+	result.test = std::move(is_test);
+	return result;
+}
+
+IsExpressionTail PEGTransformerFactory::TransformIsDistinctTail(PEGTransformer &transformer,
+                                                                IsDistinctFromTail is_distinct_from_tail) {
+	IsExpressionTail result;
+	result.type = ExpressionTailType::DISTINCT;
+	result.distinct = std::move(is_distinct_from_tail);
+	return result;
+}
+
+IsExpressionTail PEGTransformerFactory::TransformIsComparisonTail(PEGTransformer &transformer,
+                                                                  ComparisonExpressionTail comparison_expression_tail) {
+	IsExpressionTail result;
+	result.type = ExpressionTailType::COMPARISON;
+	result.comparison = std::move(comparison_expression_tail);
+	return result;
+}
+
+IsExpressionTail PEGTransformerFactory::TransformIsOtherOperatorTail(PEGTransformer &transformer,
+                                                                     OtherOperatorTail other_operator_tail) {
+	IsExpressionTail result;
+	result.type = ExpressionTailType::OTHER_OPERATOR;
+	result.other = std::move(other_operator_tail);
+	return result;
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformIsLiteral(PEGTransformer &transformer,
@@ -758,9 +846,7 @@ PEGTransformerFactory::TransformIsDistinctFromExpression(PEGTransformer &transfo
 		throw ParserException("Chained comparisons are not supported, use AND to combine comparisons");
 	}
 	for (auto &is_distinct : *is_distinct_from_tail) {
-		auto distinct_operator = make_uniq<ComparisonExpression>(is_distinct.comparison_type, std::move(expr),
-		                                                         std::move(is_distinct.expression));
-		expr = std::move(distinct_operator);
+		expr = ApplyIsDistinctFromTail(std::move(expr), std::move(is_distinct));
 	}
 	return expr;
 }
@@ -777,13 +863,7 @@ unique_ptr<ParsedExpression> PEGTransformerFactory::TransformComparisonExpressio
 	}
 	auto cmp_depth_guard = transformer.StackCheck(comparison_expression_tail->size());
 	for (auto &comparison_expr : *comparison_expression_tail) {
-		auto right_expr = std::move(comparison_expr.expression);
-		for (idx_t i = 0; i < comparison_expr.not_keywords.size(); i++) {
-			vector<unique_ptr<ParsedExpression>> inner_list_children;
-			inner_list_children.push_back(std::move(right_expr));
-			right_expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(inner_list_children));
-		}
-		expr = make_uniq<ComparisonExpression>(comparison_expr.comparison_type, std::move(expr), std::move(right_expr));
+		expr = ApplyComparisonTail(std::move(expr), std::move(comparison_expr));
 	}
 	return expr;
 }

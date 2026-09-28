@@ -1665,6 +1665,23 @@ static const TransformFrameOps NOT_KEYWORD_OPS = {"NotKeyword", &PEGTransformerF
 static const TransformFrameOps IS_EXPRESSION_OPS = {"IsExpression",
                                                     &PEGTransformerFactory::InitializeIsExpressionTrampoline,
                                                     &PEGTransformerFactory::FinalizeIsExpressionTrampoline};
+static const TransformFrameOps IS_EXPRESSION_CONTINUATION_OPS = {
+    "IsExpressionContinuation", &PEGTransformerFactory::InitializeIsExpressionContinuationTrampoline,
+    &PEGTransformerFactory::FinalizeIsExpressionContinuationTrampoline};
+static const TransformFrameOps IS_EXPRESSION_TAIL_OPS = {"IsExpressionTail",
+                                                         &PEGTransformerFactory::InitializeIsExpressionTailTrampoline,
+                                                         &PEGTransformerFactory::FinalizeIsExpressionTailTrampoline};
+static const TransformFrameOps IS_TEST_TAIL_OPS = {"IsTestTail", &PEGTransformerFactory::InitializeIsTestTailTrampoline,
+                                                   &PEGTransformerFactory::FinalizeIsTestTailTrampoline};
+static const TransformFrameOps IS_DISTINCT_TAIL_OPS = {"IsDistinctTail",
+                                                       &PEGTransformerFactory::InitializeIsDistinctTailTrampoline,
+                                                       &PEGTransformerFactory::FinalizeIsDistinctTailTrampoline};
+static const TransformFrameOps IS_COMPARISON_TAIL_OPS = {"IsComparisonTail",
+                                                         &PEGTransformerFactory::InitializeIsComparisonTailTrampoline,
+                                                         &PEGTransformerFactory::FinalizeIsComparisonTailTrampoline};
+static const TransformFrameOps IS_OTHER_OPERATOR_TAIL_OPS = {
+    "IsOtherOperatorTail", &PEGTransformerFactory::InitializeIsOtherOperatorTailTrampoline,
+    &PEGTransformerFactory::FinalizeIsOtherOperatorTailTrampoline};
 static const TransformFrameOps IS_TEST_OPS = {"IsTest", &PEGTransformerFactory::InitializeIsTestTrampoline,
                                               &PEGTransformerFactory::FinalizeIsTestTrampoline};
 static const TransformFrameOps IS_LITERAL_OPS = {"IsLiteral", &PEGTransformerFactory::InitializeIsLiteralTrampoline,
@@ -3593,6 +3610,12 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"NotExpression", &NOT_EXPRESSION_OPS},
 	    {"NotKeyword", &NOT_KEYWORD_OPS},
 	    {"IsExpression", &IS_EXPRESSION_OPS},
+	    {"IsExpressionContinuation", &IS_EXPRESSION_CONTINUATION_OPS},
+	    {"IsExpressionTail", &IS_EXPRESSION_TAIL_OPS},
+	    {"IsTestTail", &IS_TEST_TAIL_OPS},
+	    {"IsDistinctTail", &IS_DISTINCT_TAIL_OPS},
+	    {"IsComparisonTail", &IS_COMPARISON_TAIL_OPS},
+	    {"IsOtherOperatorTail", &IS_OTHER_OPERATOR_TAIL_OPS},
 	    {"IsTest", &IS_TEST_OPS},
 	    {"IsLiteral", &IS_LITERAL_OPS},
 	    {"IsLiteralValue", &IS_LITERAL_VALUE_OPS},
@@ -15485,6 +15508,30 @@ PEGTransformerFactory::FinalizeNotKeywordTrampoline(PEGTransformer &transformer,
 void PEGTransformerFactory::InitializeIsExpressionTrampoline(PEGTransformer &transformer,
                                                              GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	auto &is_expression_continuation_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (is_expression_continuation_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("IsExpressionContinuation"), is_expression_continuation_opt.GetResult()},
+		                  1);
+	}
+	process.PushChild({transformer.GetRule("IsDistinctFromExpression"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIsExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto is_distinct_from_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	optional<vector<IsExpressionTail>> is_expression_continuation {};
+	if (process.child_results[1]) {
+		is_expression_continuation = process.TakeResult<vector<IsExpressionTail>>(1);
+	}
+	auto result = TransformIsExpression(transformer, std::move(is_distinct_from_expression),
+	                                    std::move(is_expression_continuation));
+	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIsExpressionContinuationTrampoline(PEGTransformer &transformer,
+                                                                         GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	auto &repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	idx_t dynamic_child_count = 0;
 	if (repeat_opt.HasResult()) {
@@ -15494,16 +15541,18 @@ void PEGTransformerFactory::InitializeIsExpressionTrampoline(PEGTransformer &tra
 		process.ReserveChildSlots(2 + dynamic_child_count - 1);
 		for (idx_t i = repeat_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
-			process.PushChild({transformer.GetRule("IsTest"), repeat_children[child_idx].get()}, 1 + child_idx);
+			process.PushChild({transformer.GetRule("IsExpressionTail"), repeat_children[child_idx].get()},
+			                  1 + child_idx);
 		}
 	} else {
 		process.ReserveChildSlots(2 - 1);
 	}
-	process.PushChild({transformer.GetRule("IsDistinctFromExpression"), list_pr.GetChild(0)}, 0);
+	process.PushChild({transformer.GetRule("IsTest"), list_pr.GetChild(0)}, 0);
 }
 
 unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeIsExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+PEGTransformerFactory::FinalizeIsExpressionContinuationTrampoline(PEGTransformer &transformer,
+                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	idx_t dynamic_child_count = 0;
 	auto &dynamic_repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
@@ -15512,17 +15561,97 @@ PEGTransformerFactory::FinalizeIsExpressionTrampoline(PEGTransformer &transforme
 		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 		dynamic_child_count = dynamic_repeat_children.size();
 	}
-	auto is_distinct_from_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	optional<vector<unique_ptr<ParsedExpression>>> is_test {};
+	auto is_test = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	optional<vector<IsExpressionTail>> is_expression_tail {};
 	if (dynamic_child_count > 0) {
-		vector<unique_ptr<ParsedExpression>> is_test_value;
+		vector<IsExpressionTail> is_expression_tail_value;
 		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
-			is_test_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
+			is_expression_tail_value.push_back(process.TakeResult<IsExpressionTail>(i));
 		}
-		is_test = std::move(is_test_value);
+		is_expression_tail = std::move(is_expression_tail_value);
 	}
-	auto result = TransformIsExpression(transformer, std::move(is_distinct_from_expression), std::move(is_test));
-	return make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(std::move(result));
+	auto result = TransformIsExpressionContinuation(transformer, std::move(is_test), std::move(is_expression_tail));
+	return make_uniq<TypedTransformResult<vector<IsExpressionTail>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIsExpressionTailTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIsExpressionTailTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<IsExpressionTail>(0);
+	return make_uniq<TypedTransformResult<IsExpressionTail>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIsTestTailTrampoline(PEGTransformer &transformer,
+                                                           GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("IsTest"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIsTestTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto is_test = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto result = TransformIsTestTail(transformer, std::move(is_test));
+	return make_uniq<TypedTransformResult<IsExpressionTail>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIsDistinctTailTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("IsDistinctFromTail"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIsDistinctTailTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto is_distinct_from_tail = process.TakeResult<IsDistinctFromTail>(0);
+	auto result = TransformIsDistinctTail(transformer, std::move(is_distinct_from_tail));
+	return make_uniq<TypedTransformResult<IsExpressionTail>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIsComparisonTailTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("ComparisonExpressionTail"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIsComparisonTailTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto comparison_expression_tail = process.TakeResult<ComparisonExpressionTail>(0);
+	auto result = TransformIsComparisonTail(transformer, std::move(comparison_expression_tail));
+	return make_uniq<TypedTransformResult<IsExpressionTail>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("OtherOperatorTail"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto other_operator_tail = process.TakeResult<OtherOperatorTail>(0);
+	auto result = TransformIsOtherOperatorTail(transformer, std::move(other_operator_tail));
+	return make_uniq<TypedTransformResult<IsExpressionTail>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeIsTestTrampoline(PEGTransformer &transformer,
