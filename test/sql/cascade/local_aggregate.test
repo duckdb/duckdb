@@ -1,0 +1,174 @@
+# name: test/sql/cascade/local_aggregate.test
+# description: section 3.3 must split an aggregate around a join without changing rows
+# group: [cascade]
+
+# Section 3.3: G_{A,F} R = G_{A,F_g} LG_{A,F_l} R, applied to an aggregate above an
+# inner join. The local aggregate reduces the rows reaching the join and the global one
+# recombines the parts, which is what lets the local grouping columns be extended
+# freely - and what makes the move unconditional, unlike the plain GroupBy pushdown of
+# section 3.1, which needs the kept side to be keyed.
+#
+# The switch is off by default (it is a cost decision), so these run only when asked.
+
+require-env DUCKDB_CASCADE 1
+
+require-env DUCKDB_CASCADE_KEEP_APPLY 1
+
+require-env DUCKDB_CASCADE_LOCAL_AGG 1
+
+statement ok
+CREATE TABLE ts(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO ts VALUES (1,10),(1,10),(2,20),(3,30);
+
+statement ok
+CREATE TABLE tr(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO tr VALUES (1,100),(1,200),(2,300),(4,400);
+
+
+# The aggregate reads only the joined relation, so it splits into a local aggregate
+# below the join and a global one above it: `G_{A,F_g}(TS join LG(TR))`.
+query II
+SELECT ts.a, sum(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	600
+2	300
+
+
+# Duplicate rows on the kept side are what the *plain* GroupBy pushdown cannot do -
+# it would need the kept side to be keyed. Keeping the global aggregation makes it
+# harmless: two rows of a group contribute the same local parts twice, exactly as
+# they contributed their rows twice before.
+query II
+SELECT a, sum(m) FROM (SELECT ts.a AS a, sum(tr.v) AS m FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a) q GROUP BY a ORDER BY a;
+----
+1	600
+2	300
+
+
+# min and max split the same way, and the global part is the same function.
+query III
+SELECT ts.a, min(tr.v), max(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	100	200
+2	300	300
+
+
+# An aggregate that reads the *kept* side cannot move below the join, and is left
+# where it is.
+query II
+SELECT ts.a, sum(tr.v + ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	640
+2	320
+
+
+# count is not split: its global part is a sum, which would widen the result type,
+# so the rule declines rather than change the column the parent reads.
+query II
+SELECT ts.a, count(*) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	4
+2	1
+
+
+# avg is not split either: the paper notes it has no local/global pair and has to be
+# decomposed into sum and count first.
+query II
+SELECT ts.a, avg(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	150.0
+2	300.0
+
+
+# A grouping expression over the aggregated relation moves down with the aggregate.
+query II
+SELECT tr.k % 2 AS k, sum(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY tr.k % 2 ORDER BY k;
+----
+0	300
+1	600
+
+
+# Two aggregates over the same joined relation, one of which cannot be split: the
+# whole aggregate stays, because it is one operator.
+query III
+SELECT ts.a, sum(tr.v), count(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	600	4
+2	300	1
+
+
+# Section 3.3 also rewrites an aggregate whose argument only the *other* side of the join
+# can supply: `sum(a) = a * count(*)`, with the local `count(*)` carrying how many rows each
+# local group collapsed. The local aggregate reads the joined relation; the sum above the
+# join multiplies the other side's value back in.
+query II
+SELECT ts.a, sum(ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	40
+2	20
+
+# count(a) = sum(count(*) * (a IS NOT NULL)): the multiplicity is weighted by whether the
+# value is there at all, which is what count() over the joined rows counts.
+query II
+SELECT ts.a, count(ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	4
+2	1
+
+# avg(a) puts the same two stages back together with a division.
+query II
+SELECT ts.a, avg(ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	10.0
+2	20.0
+
+# A mixed argument is NOT rewritten, and this is the reason: `sum(o + i)` is not
+# `sum(o) + sum(i)`, because a NULL in either part makes the whole pair NULL and `sum`
+# skips it, while each sum on its own still counts the non-NULL half.
+query II
+SELECT ts.a, sum(ts.b + tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	640
+2	320
+
+query II
+SELECT ts.a, sum(ts.b * tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	6000
+2	6000
+
+# The rewritten and the ordinary functions mix in one aggregation.
+query IIIII
+SELECT ts.a, sum(ts.b), count(*), avg(tr.v), min(ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	40	4	150.0	10
+2	20	1	300.0	20
+
+# The same rewrite with the grouping on the other relation's column.
+query IIII
+SELECT tr.k, sum(ts.b), count(ts.b), avg(ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY tr.k ORDER BY tr.k;
+----
+1	40	4	10.0
+2	20	1	20.0
+
+
+# A DISTINCT aggregate is not splittable at all, and the multiplicity rewrite must not
+# quietly take it: rewriting `count(DISTINCT x)` as a weighted count drops the DISTINCT
+# (this case did exactly that - it returned 4 where the answer is 2 - until the rewrite
+# re-checked it). The unsplittable function blocks the whole aggregation.
+query III
+SELECT ts.a, sum(tr.v), count(DISTINCT tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	600	2
+2	300	1
+
+# The same block with the aggregate argument coming from the other side.
+query II
+SELECT ts.a, count(DISTINCT ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY ts.a;
+----
+1	1
+2	1

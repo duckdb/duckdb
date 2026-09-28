@@ -1,5 +1,6 @@
 #include "duckdb/planner/planner.hpp"
 
+#include "duckdb/cascade/cascade_config.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
@@ -198,8 +199,11 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		RewriteTriggersToDependent(*this->binder, *this->plan);
 		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
-		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
-		D_ASSERT(!ContainsDependentJoin(*this->plan));
+		if (!CascadeConfig::KeepApply()) {
+			// Leave LogicalDependentJoin (Apply) in the plan for the cascade optimizer to decorrelate.
+			this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+			D_ASSERT(!ContainsDependentJoin(*this->plan));
+		}
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));
 		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));
 	}

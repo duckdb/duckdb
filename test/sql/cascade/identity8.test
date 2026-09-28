@@ -1,0 +1,94 @@
+# name: test/sql/cascade/identity8.test
+# description: identity (8) must decorrelate a sub-query whose correlation is under its own GroupBy
+# group: [cascade]
+
+# Identity (8): R A_x (G_{A,F} E) = G_{A u columns(R), F}(R A_x E). A sub-query's own GroupBy
+# cannot be aggregated around, so the Apply moves below it and the outer columns join its
+# grouping. Three things make that correct for a scalar sub-query, each of them a bug first:
+# the outer side is deduplicated before it drives the grouping, the join under the GroupBy is
+# an inner join (so no padding row becomes a group), and the outer rows' multiplicity is
+# restored by joining the result back to the original rows.
+
+require-env DUCKDB_CASCADE 1
+
+require-env DUCKDB_CASCADE_KEEP_APPLY 1
+
+statement ok
+CREATE TABLE t(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t VALUES (1,10),(1,10),(2,20),(4,40),(NULL,50);
+
+statement ok
+CREATE TABLE s(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO s VALUES (1,1),(1,2),(2,3),(3,4);
+
+
+# The correlation sits below a GroupBy of the sub-query's own, so the Apply moves below
+# it (identity (8)) and the outer columns join that GroupBy's grouping.
+query II
+SELECT a, (SELECT sum(q.x) FROM (SELECT s.a AS a2, max(s.b) AS x FROM s WHERE s.a = t.a GROUP BY s.a) q) FROM t ORDER BY a NULLS LAST;
+----
+1	2
+1	2
+2	3
+4	NULL
+NULL	NULL
+
+
+# Duplicate outer rows: the original Apply evaluates the sub-query once per distinct
+# correlation value, so the rows driving the grouping are deduplicated and the
+# multiplicity is handed back by joining the result to the original relation.
+query II
+SELECT a, (SELECT sum(q.x) FROM (SELECT s.a AS a2, max(s.b) AS x FROM s WHERE s.a = t.a GROUP BY s.a) q) FROM t WHERE a = 1 ORDER BY a;
+----
+1	2
+1	2
+
+
+# count over the derived table: an outer value with no match has an *empty* derived
+# table, so the answer is 0 - the inner join must not pad a row for it.
+query II
+SELECT a, (SELECT count(*) FROM (SELECT s.a AS a2, max(s.b) AS x FROM s WHERE s.a = t.a GROUP BY s.a) q) FROM t ORDER BY a NULLS LAST;
+----
+1	1
+1	1
+2	1
+4	0
+NULL	0
+
+
+# A non-idempotent combination, sum over an inner sum, must not count an outer row's
+# rows twice.
+query II
+SELECT a, (SELECT sum(q.x) FROM (SELECT s.a AS a2, sum(s.b) AS x FROM s WHERE s.a = t.a GROUP BY s.a) q) FROM t ORDER BY a NULLS LAST;
+----
+1	3
+1	3
+2	3
+4	NULL
+NULL	NULL
+
+
+# min and max over the derived table.
+query III
+SELECT a, (SELECT min(q.x) FROM (SELECT s.a AS a2, min(s.b) AS x FROM s WHERE s.a = t.a GROUP BY s.a) q), (SELECT max(q.x) FROM (SELECT s.a AS a2, min(s.b) AS x FROM s WHERE s.a = t.a GROUP BY s.a) q) FROM t ORDER BY a NULLS LAST;
+----
+1	1	1
+1	1	1
+2	3	3
+4	NULL	NULL
+NULL	NULL	NULL
+
+
+# The derived table's own local filters stay where they are.
+query II
+SELECT a, (SELECT sum(q.x) FROM (SELECT s.a AS a2, max(s.b) AS x FROM s WHERE s.a = t.a AND s.b > 1 GROUP BY s.a) q) FROM t ORDER BY a NULLS LAST;
+----
+1	2
+1	2
+2	3
+4	NULL
+NULL	NULL

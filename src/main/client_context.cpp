@@ -1,5 +1,7 @@
 #include "duckdb/main/client_context.hpp"
 
+#include "duckdb/cascade/cascade_config.hpp"
+#include "duckdb/cascade/cascade_optimizer.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
@@ -517,11 +519,16 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	if (logical_plan->RequireOptimizer()) {
 		{
 			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
-			Optimizer optimizer(*logical_planner.binder, *this);
-			if (optimize) {
-				logical_plan = optimizer.Optimize(std::move(logical_plan));
+			if (CascadeConfig::UseCascadeOptimizer()) {
+				CascadeOptimizer cascade(*logical_planner.binder, *this);
+				logical_plan = cascade.Optimize(std::move(logical_plan));
 			} else {
-				logical_plan = optimizer.LowerMandatoryAggregateRewrites(std::move(logical_plan));
+				Optimizer optimizer(*logical_planner.binder, *this);
+				if (optimize) {
+					logical_plan = optimizer.Optimize(std::move(logical_plan));
+				} else {
+					logical_plan = optimizer.LowerMandatoryAggregateRewrites(std::move(logical_plan));
+				}
 			}
 			D_ASSERT(logical_plan);
 		}

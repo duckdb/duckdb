@@ -1,0 +1,111 @@
+# name: test/sql/cascade/aggregate_pushdown.test
+# description: section 3.1 must push an aggregate below an inner join without changing rows
+# group: [cascade]
+
+# Section 3.1 in the direction that *removes* the aggregation above the join:
+#
+#     G_{A,F}( S join_p R )  =  S join_p G_{A - cols(S), F}( R )
+#
+# The paper's three conditions are what makes it an identity, and each one is exercised
+# below as a shape that must be left alone:
+#   1. the predicate's columns on the aggregated side have to be grouping columns, or the
+#      predicate cannot be evaluated once that side is aggregated;
+#   2. the join has to pick at most one row of the other side per group - a unique
+#      constraint of that side, equated by the predicate - or the join multiplies the group;
+#   3. the aggregate functions have to read only the aggregated side.
+# An ungrouped aggregate is refused too: it returns a row for empty input, the join does not.
+#
+# The switch is off by default (it is a cost decision), so these run only when asked.
+
+require-env DUCKDB_CASCADE 1
+
+require-env DUCKDB_CASCADE_KEEP_APPLY 1
+
+require-env DUCKDB_CASCADE_AGG_PUSHDOWN 1
+
+statement ok
+CREATE TABLE ts(a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+INSERT INTO ts VALUES (1,10),(2,20),(3,30);
+
+# No key on this one.
+statement ok
+CREATE TABLE tn(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO tn VALUES (1,10),(1,10),(2,20);
+
+statement ok
+CREATE TABLE tr(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO tr VALUES (1,100),(1,200),(2,300),(4,400);
+
+
+# The shape the rule is for: the grouping has the joined-against side's key in it, and the
+# predicate's aggregated-side column (`tr.k`) is a grouping column as well. The aggregation
+# moves below the join, and the grouping column that comes from the other side is supplied
+# by the join.
+query III
+SELECT tr.k, ts.a, sum(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY tr.k, ts.a ORDER BY 1, 2;
+----
+1	1	300
+2	2	300
+
+query IIIII
+SELECT tr.k, ts.a, count(*), min(tr.v), max(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY tr.k, ts.a ORDER BY 1, 2;
+----
+1	1	2	100	200
+2	2	1	300	300
+
+# An aggregate that cannot be split into local and global parts still moves: this direction
+# moves the whole function, so DISTINCT is no obstacle.
+query III
+SELECT tr.k, ts.a, sum(DISTINCT tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY tr.k, ts.a ORDER BY 1, 2;
+----
+1	1	300
+2	2	300
+
+# A filter on the joined-against side is simply skipped when its key is looked for.
+query III
+SELECT tr.k, ts.a, sum(tr.v) FROM ts JOIN tr ON tr.k = ts.a WHERE ts.b > 10 GROUP BY tr.k, ts.a ORDER BY 1, 2;
+----
+2	2	300
+
+
+# Condition 1: `tr.k` is not a grouping column, so the predicate could not be evaluated on
+# the pre-aggregated relation.
+query II
+SELECT ts.a, sum(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY ts.a ORDER BY 1;
+----
+1	300
+2	300
+
+# Condition 2: the grouping does not pin a row of the other side down, so the join above
+# would multiply the pre-aggregated groups.
+query II
+SELECT tr.k, sum(tr.v) FROM ts JOIN tr ON tr.k = ts.a GROUP BY tr.k ORDER BY 1;
+----
+1	300
+2	300
+
+# Condition 2 again, with a joined-against side that has no unique constraint at all.
+query III
+SELECT tr.k, tn.a, sum(tr.v) FROM tn JOIN tr ON tr.k = tn.a GROUP BY tr.k, tn.a ORDER BY 1, 2;
+----
+1	1	600
+2	2	300
+
+# Condition 3: the function reads the joined-against side as well.
+query III
+SELECT tr.k, ts.a, sum(tr.v + ts.b) FROM ts JOIN tr ON tr.k = ts.a GROUP BY tr.k, ts.a ORDER BY 1, 2;
+----
+1	1	320
+2	2	320
+
+# An ungrouped aggregate stays where it is.
+query I
+SELECT sum(tr.v) FROM ts JOIN tr ON tr.k = ts.a;
+----
+600

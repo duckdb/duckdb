@@ -1,0 +1,134 @@
+# name: test/sql/cascade/groupby_reorder.test
+# description: section 3.1 must move a predicate below the GroupBy it is constant in
+# group: [cascade]
+
+# Section 3.1: reordering a GroupBy with the filter / semijoin / antijoin around it.
+#
+# The rule moves a predicate below the GroupBy when the predicate is constant within a
+# group, which the plan can decide: every column it reads must be a grouping column.
+# These assertions pin the answers down. section31_probe.py pins down *which* cases the
+# rule fires on - by comparing the plan with the rule on against the plan with it off -
+# and checks that the two agree on the rows.
+
+require-env DUCKDB_CASCADE 1
+
+require-env DUCKDB_CASCADE_KEEP_APPLY 1
+
+
+statement ok
+CREATE TABLE tgrp(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO tgrp VALUES (1,10),(1,20),(2,30),(2,40),(3,50),(4,60),(5,70);
+
+statement ok
+CREATE TABLE sgrp(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO sgrp VALUES (1,1),(2,2),(3,3);
+
+
+# HAVING on a grouping column: the predicate is constant within a group, so the
+# aggregate gets to see fewer rows.
+query II
+SELECT a, sum(b) FROM tgrp GROUP BY a HAVING a > 2 ORDER BY a;
+----
+3	50
+4	60
+5	70
+
+
+# The same with two conjuncts, one of which cannot move: `a > 2 AND a < 5` goes
+# below the GroupBy and `sum(b) > 40` stays above it.
+query II
+SELECT a, sum(b) FROM tgrp GROUP BY a HAVING a > 2 AND a < 5 AND sum(b) > 40 ORDER BY a;
+----
+3	50
+4	60
+
+
+# HAVING on an aggregate result must not move: the aggregate does not exist below
+# the GroupBy.
+query II
+SELECT a, sum(b) FROM tgrp GROUP BY a HAVING sum(b) > 40 ORDER BY a;
+----
+2	70
+3	50
+4	60
+5	70
+
+
+# A derived table puts a projection between the filter and the GroupBy; the rule
+# sees through it because it only renames grouping columns.
+query II
+SELECT * FROM (SELECT a, sum(b) AS s FROM tgrp GROUP BY a) q WHERE q.a > 2 ORDER BY q.a;
+----
+3	50
+4	60
+5	70
+
+
+# A computed group expression is a grouping column too; the filter is re-expressed
+# over it below the GroupBy.
+query II
+SELECT a % 2 AS k, sum(b) FROM tgrp GROUP BY a % 2 HAVING a % 2 = 1 ORDER BY k;
+----
+1	150
+
+
+# Semijoin on a grouping column moves below the GroupBy: the join filters the rows
+# that get aggregated, instead of the groups that come out.
+query II
+SELECT q.a, q.s FROM (SELECT a, sum(b) AS s FROM tgrp GROUP BY a) q WHERE EXISTS (SELECT 1 FROM sgrp WHERE sgrp.a = q.a) ORDER BY q.a;
+----
+1	30
+2	70
+3	50
+
+
+# Antijoin is where the paper's condition earns its keep: it may only move below
+# the GroupBy because the predicate is constant within a group.
+query II
+SELECT q.a, q.s FROM (SELECT a, sum(b) AS s FROM tgrp GROUP BY a) q WHERE NOT EXISTS (SELECT 1 FROM sgrp WHERE sgrp.a = q.a) ORDER BY q.a;
+----
+4	60
+5	70
+
+
+# Antijoin with an extra condition on the inner relation: only the GroupBy side has
+# to be constant within a group, the other side may vary freely.
+query II
+SELECT q.a, q.s FROM (SELECT a, sum(b) AS s FROM tgrp GROUP BY a) q WHERE NOT EXISTS (SELECT 1 FROM sgrp WHERE sgrp.a = q.a AND sgrp.b > 1) ORDER BY q.a;
+----
+1	30
+4	60
+5	70
+
+
+# A semijoin whose predicate reads the aggregate result must stay above the GroupBy.
+query II
+SELECT q.a, q.s FROM (SELECT a, sum(b) AS s FROM tgrp GROUP BY a) q WHERE EXISTS (SELECT 1 FROM sgrp WHERE sgrp.a = q.a AND q.s > 30) ORDER BY q.a;
+----
+2	70
+3	50
+
+
+# IN over a grouping column is planned as the same semijoin.
+query II
+SELECT q.a, q.s FROM (SELECT a, sum(b) AS s FROM tgrp GROUP BY a) q WHERE q.a IN (SELECT a FROM sgrp) ORDER BY q.a;
+----
+1	30
+2	70
+3	50
+
+# GROUPING SETS pads the columns a set does not mention with NULL, so a predicate on
+# such a column is NOT constant within a group and must not move. The guard is the
+# one DuckDB's own filter pushdown carries.
+query II
+SELECT a, count(*) FROM tgrp GROUP BY GROUPING SETS ((a),()) HAVING a IS NOT NULL ORDER BY a;
+----
+1	2
+2	2
+3	1
+4	1
+5	1

@@ -1,0 +1,156 @@
+# name: test/sql/cascade/aggregate_pullup.test
+# description: section 3.1 must pull an aggregate above a keyed join without changing rows
+# group: [cascade]
+
+# Section 3.1: S join_p (G_{A,F} R) = G_{A u columns(S), F}( S join_p R ), applied to an
+# aggregate below an inner join. Moving the aggregate up means the join, not the
+# aggregate, does the reducing, and it removes the global aggregation entirely - so it is
+# only sound when a key on the joined relation makes one outer row match at most one row
+# there. With a duplicate there, two rows would land in one group and be aggregated twice.
+#
+# The switch is off by default (it is a cost decision), so these run only when asked.
+
+require-env DUCKDB_CASCADE 1
+
+require-env DUCKDB_CASCADE_KEEP_APPLY 1
+
+require-env DUCKDB_CASCADE_AGG_PULLUP 1
+
+statement ok
+CREATE TABLE ts(a INTEGER PRIMARY KEY, b INTEGER);
+
+statement ok
+INSERT INTO ts VALUES (1,10),(2,20),(3,30);
+
+# No key, and rows that are duplicates in every column.
+statement ok
+CREATE TABLE tn(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO tn VALUES (1,10),(1,10),(2,20);
+
+statement ok
+CREATE TABLE tr(k INTEGER, v INTEGER);
+
+statement ok
+INSERT INTO tr VALUES (1,100),(1,200),(2,300),(4,400);
+
+
+# The aggregate sits below the join and the kept side is keyed, so the grouping moves
+# above the join: `G_{a u k}(TS join G(TR))`.
+query I
+SELECT count(*) FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.a = g.k) q;
+----
+2
+
+query I
+SELECT sum(q.t) FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.a = g.k) q;
+----
+600
+
+# The kept relation is on the left of the join, so the pull-up has to recognise the
+# aggregate on either side.
+query II
+SELECT q.a, q.t FROM (SELECT ts.a, g.t FROM (SELECT k, sum(v) AS t FROM tr GROUP BY k) g JOIN ts ON ts.a = g.k) q ORDER BY q.a;
+----
+1	300
+2	300
+
+# Several grouping columns, one of them computed: all of them join the new grouping.
+query II
+SELECT q.a, q.t FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, k % 2 AS p, sum(v) AS t FROM tr GROUP BY k, k % 2) g ON ts.a = g.k) q ORDER BY q.a;
+----
+1	300
+2	300
+
+# The projection that shapes the derived table's output rides above the new GroupBy, and
+# its expressions are rewritten onto the new aggregate.
+query I
+SELECT q.x FROM (SELECT ts.a, g.t * 2 AS x FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.a = g.k) q ORDER BY q.x;
+----
+600
+600
+
+# DuckDB's optimizer leaves two projections stacked above the aggregate when the derived
+# table computes a ratio; both are rewritten onto the new GroupBy, and the join predicate is
+# substituted all the way down through them.
+query II
+SELECT q.a, q.x FROM (SELECT ts.a, g.x FROM ts JOIN (SELECT k, sum(v) / count(*) AS x FROM tr GROUP BY k) g ON ts.a = g.k) q ORDER BY q.a;
+----
+1	150
+2	300
+
+query I
+SELECT sum(q.x) FROM (SELECT ts.a, g.x FROM ts JOIN (SELECT k, CAST(sum(v) / count(*) AS BIGINT) AS x FROM tr GROUP BY k) g ON ts.a = g.k) q;
+----
+450
+
+# Every aggregate splits the same way; count over the joined rows is unchanged because
+# the key means each of them is joined exactly once.
+query II
+SELECT q.a, q.c FROM (SELECT ts.a, g.c FROM ts JOIN (SELECT k, count(*) AS c FROM tr GROUP BY k) g ON ts.a = g.k) q ORDER BY q.a;
+----
+1	2
+2	1
+
+query II
+SELECT q.a, q.s FROM (SELECT ts.a, g.s FROM ts JOIN (SELECT k, avg(v) AS s FROM tr GROUP BY k) g ON ts.a = g.k) q ORDER BY q.a;
+----
+1	150.0
+2	300.0
+
+
+# A kept side without a key must be left alone: two of its rows are duplicates, so
+# pulling the grouping up would collapse them and count their rows once instead of twice.
+query I
+SELECT count(*) FROM (SELECT tn.a, g.t FROM tn JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON tn.a = g.k) q;
+----
+3
+
+# The predicate has to constrain the key itself; `b` is not unique.
+query I
+SELECT count(*) FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.b = g.k) q;
+----
+0
+
+# The predicate may not read the aggregate's results - they do not exist below the join.
+query I
+SELECT count(*) FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.a = g.k AND g.t > 100) q;
+----
+2
+
+# An outer join keeps the grouping where it is.
+query II
+SELECT ts.a, g.t FROM ts LEFT JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.a = g.k ORDER BY ts.a;
+----
+1	300
+2	300
+3	NULL
+
+# A HAVING filter sits between the join and the aggregate. A selection commutes with the
+# join that moves below it, so it stays where it is - above the new GroupBy, whose
+# aggregate values are the same ones it was filtering.
+query I
+SELECT count(*) FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k HAVING sum(v) > 250) g ON ts.a = g.k) q;
+----
+2
+
+# The same for a predicate on the derived table's grouping column, which DuckDB's join
+# filter pushdown also places on the aggregate side.
+query II
+SELECT q.a, q.t FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.a = g.k WHERE g.k = 1) q ORDER BY q.a;
+----
+1	300
+
+query I
+SELECT count(*) FROM (SELECT ts.a, g.t FROM ts JOIN (SELECT k, sum(v) AS t FROM tr GROUP BY k) g ON ts.a = g.k AND g.k % 2 = 0) q;
+----
+1
+
+# Nothing below the join to pull up.
+query II
+SELECT ts.a, tr.v FROM ts JOIN tr ON tr.k = ts.a ORDER BY ts.a, tr.v;
+----
+1	100
+1	200
+2	300

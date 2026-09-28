@@ -447,7 +447,7 @@ define cmake_build
 	mkdir -p ./$(1) && \
 	$(call sync_extensions_into,${PROJ_DIR}$(1)) \
 	cd $(1) && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}$(1)) $(3) -DCMAKE_BUILD_TYPE=$(2) ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}$(1)) $(3) -DCMAKE_BUILD_TYPE=$(2) $(PROJ_DIR) && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config $(2)
 endef
 
@@ -634,6 +634,21 @@ allunit:
 ifndef CI
 allunit: release
 endif
+
+# Cascade experiment only: the tests under test/sql/cascade are guarded with
+# `require-env DUCKDB_CASCADE`, so they need these switches to run at all.
+.PHONY: test_cascade
+# The cascade tests run the rules with DuckDB's optimizer switched off, so they say
+# something about the rewrites themselves. They run the dev binary, which is the one
+# built with the tpch/tpcds core extensions linked in for the benchmark probes.
+test_cascade:
+	DUCKDB_CASCADE=1 DUCKDB_CASCADE_KEEP_APPLY=1 ./build/dev/test/unittest "test/sql/cascade/*" $(T)
+
+# The section 3.3 tests only run when the local aggregate switch is on, since that
+# rule is a cost decision and is off by default.
+test_cascade_local_agg:
+	DUCKDB_CASCADE=1 DUCKDB_CASCADE_KEEP_APPLY=1 DUCKDB_CASCADE_LOCAL_AGG=1 \
+		./build/dev/test/unittest "test/sql/cascade/*" $(T)
 
 unittest_threadsan: export TSAN_OPTIONS ?= "suppressions=./.sanitizer-thread-suppressions.txt"
 unittest_threadsan: unittest_reldebug
