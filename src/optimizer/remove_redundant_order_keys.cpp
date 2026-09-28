@@ -5,6 +5,7 @@
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -21,6 +22,7 @@ public:
 	}
 
 	void VisitOperator(LogicalOperator &op) override;
+	void VisitExpression(unique_ptr<Expression> *expression) override;
 
 private:
 	void VisitLogicalGet(LogicalGet &get);
@@ -28,6 +30,8 @@ private:
 	void VisitLogicalDistinct(LogicalDistinct &distinct);
 	void VisitLogicalProjection(LogicalProjection &projection);
 	void VisitLogicalOrder(LogicalOrder &order);
+
+	void VisitWindowExpression(BoundWindowExpression &wexpr);
 
 	vector<column_binding_set_t> result;
 };
@@ -192,6 +196,64 @@ void ApplyFunctionalDependencies::VisitLogicalOrder(LogicalOrder &order) {
 	}
 }
 
+void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &wexpr) {
+	//	Extract the partitioning references
+	column_binding_set_t partition_bindings;
+	for (auto &expr : wexpr.Partitions()) {
+		if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+			continue;
+		}
+		partition_bindings.insert(expr->Cast<BoundColumnRefExpression>().Binding());
+	}
+
+	//	Find the smallest unique set that is covered by the bindings
+	optional_idx smallest;
+	for (idx_t i = 0; i < result.size(); ++i) {
+		auto &unique_set = result.at(i);
+		bool covered = true;
+		for (auto &binding : unique_set) {
+			if (!partition_bindings.count(binding)) {
+				covered = false;
+				break;
+			}
+		}
+		if (!covered) {
+			continue;
+		}
+		if (!smallest.IsValid() || unique_set.size() < result.at(smallest.GetIndex()).size()) {
+			smallest = i;
+		}
+	}
+	if (smallest.IsValid()) {
+		//	Replace the partitioning with the unique bindings
+		auto &unique_set = result.at(smallest.GetIndex());
+		vector<unique_ptr<Expression>> reduced;
+		for (auto &expr : wexpr.Partitions()) {
+			if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
+				continue;
+			}
+			const auto &ref = expr->Cast<BoundColumnRefExpression>();
+			if (!unique_set.count(ref.Binding())) {
+				continue;
+			}
+			reduced.emplace_back(ref.Copy());
+		}
+		std::swap(wexpr.PartitionsMutable(), reduced);
+		partition_bindings = unique_set;
+	}
+}
+
+void ApplyFunctionalDependencies::VisitExpression(unique_ptr<Expression> *expression) {
+	auto &expr = **expression;
+	switch ((*expression)->GetExpressionClass()) {
+	case ExpressionClass::BOUND_WINDOW:
+		VisitWindowExpression((*expression)->Cast<BoundWindowExpression>());
+		break;
+	default:
+		break;
+	}
+}
+
 void ApplyFunctionalDependencies::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
@@ -200,6 +262,11 @@ void ApplyFunctionalDependencies::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		VisitOperatorChildren(op);
+		break;
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		VisitOperatorChildren(op);
+		VisitOperatorExpressions(op);
+		//	Windowing only adds bindings
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		VisitLogicalProjection(op.Cast<LogicalProjection>());
