@@ -15,7 +15,6 @@
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_empty_result.hpp"
@@ -87,12 +86,13 @@ static LogicalPlanSQLExportResult ExportContextExpressions(LogicalOperator &op, 
 		return LogicalPlanSQLExportResult::Failure(child);
 	}
 	LogicalPlanSQLExportHelpers::PropagateSemanticTypes(fields, {child.GetValue()});
+	auto plain = LogicalPlanSQLExportHelpers::PlainScope(*child.GetValue().relation.query);
 	auto select = make_uniq<SelectNode>();
 	for (idx_t i = 0; i < child.GetValue().relation.fields.size(); i++) {
-		select->select_list.push_back(LogicalPlanSQLExportHelpers::ChildColumn(child.GetValue(), i));
+		select->select_list.push_back(LogicalPlanSQLExportHelpers::ChildColumn(child.GetValue(), i, plain));
 	}
 	auto expression_context =
-	    LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), {child.GetValue()});
+	    LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), {child.GetValue()}, {plain});
 	for (idx_t i = 0; i < op.expressions.size(); i++) {
 		auto expression_path = LogicalPlanSQLExportHelpers::PlanExpressionPath(path, i);
 		auto expression = exporter(op.expressions[i]->Cast<EXPRESSION>(), expression_context, expression_path);
@@ -102,7 +102,7 @@ static LogicalPlanSQLExportResult ExportContextExpressions(LogicalOperator &op, 
 		expression.GetValue()->SetAlias(LogicalPlanSQLExportHelpers::FieldIdentifier(select->select_list.size()));
 		select->select_list.push_back(std::move(expression.GetValue()));
 	}
-	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child.GetValue()));
+	LogicalPlanSQLExportHelpers::SetChildScope(*select, std::move(child.GetValue()), plain);
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields)});
 }
 
@@ -242,15 +242,16 @@ static LogicalPlanSQLExportResult ExportOrderedRelation(LogicalOperator &op, Log
 		return LogicalPlanSQLExportResult::Failure(child);
 	}
 	LogicalPlanSQLExportHelpers::PropagateSemanticTypes(fields.GetValue(), {child.GetValue()});
+	auto plain = LogicalPlanSQLExportHelpers::PlainScope(*child.GetValue().relation.query);
 	auto expression_context =
-	    LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), {child.GetValue()});
-	auto select = context.ForwardFields(child.GetValue(), fields.GetValue());
+	    LogicalPlanSQLExportHelpers::CreateBindingContext(context.GetClientContext(), {child.GetValue()}, {plain});
+	auto select = context.ForwardFields(child.GetValue(), fields.GetValue(), plain);
 	auto modifier = ExportOrderModifier(op, context, path, orders, expression_context, 0);
 	if (modifier.HasError()) {
 		return LogicalPlanSQLExportResult::Failure(modifier);
 	}
 	select->modifiers.push_back(std::move(modifier.GetValue()));
-	select->from_table = LogicalPlanSQLExportHelpers::CreateSubquery(std::move(child.GetValue()));
+	LogicalPlanSQLExportHelpers::SetChildScope(*select, std::move(child.GetValue()), plain);
 	return LogicalPlanSQLExportResult::Success({std::move(select), std::move(fields.GetValue())});
 }
 
