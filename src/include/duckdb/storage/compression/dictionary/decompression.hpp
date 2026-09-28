@@ -12,16 +12,6 @@ struct CompressedStringScanState : public SegmentScanState {
 private:
 	//! Dictionary segment data from disk, with byte ranges checked by ReadLayout.
 	struct SegmentLayout {
-		//! Check each selected dictionary index against the offset table.
-		//! The selection must be set and the requested range must fit within its capacity.
-		void ValidateDictionaryIndices(const SelectionVector &sel, idx_t start_offset, idx_t scan_count) const;
-		//! Validate the index buffer (offsets monotonic and within the dictionary) so scans can trust it.
-		void ValidateIndexBuffer() const;
-		//! The index must be within the table and the offsets must be nondecreasing to avoid underflow.
-		uint32_t GetStringLength(idx_t index) const;
-		//! The offset must be within the dictionary and the length must not extend past its end.
-		string_t FetchStringFromDict(uint32_t dict_offset, uint32_t string_len) const;
-
 		//! Bits per dictionary index, derived from the entry count and checked against the stored width.
 		bitpacking_width_t current_width;
 		//! Packed indices, mapping each row to a dictionary entry.
@@ -34,10 +24,10 @@ private:
 	};
 
 public:
-	CompressedStringScanState(BufferHandle &&handle_p, const ColumnSegment &segment)
+	explicit CompressedStringScanState(BufferHandle &&handle_p, const ColumnSegment &segment)
 	    : owned_handle(std::move(handle_p)), layout(ReadLayout(owned_handle, segment)) {
 	}
-	CompressedStringScanState(BufferHandle &handle_p, const ColumnSegment &segment)
+	explicit CompressedStringScanState(BufferHandle &handle_p, const ColumnSegment &segment)
 	    : layout(ReadLayout(handle_p, segment)) {
 	}
 
@@ -50,6 +40,15 @@ public:
 	                            idx_t scan_count);
 
 private:
+	//! The offset must be within the dictionary and the length must not extend past its end.
+	string_t FetchStringFromDict(uint32_t dict_offset, uint32_t string_len) const;
+	//! The index must be within the table and the offsets must be nondecreasing to avoid underflow.
+	uint32_t GetStringLength(idx_t index) const;
+	//! Check each selected dictionary index against the offset table.
+	//! The selection must be set and the requested range must fit within its capacity.
+	void ValidateDictionaryIndices(const SelectionVector &sel, idx_t start_offset, idx_t scan_count) const;
+	//! Validate the index buffer (offsets monotonic and within the dictionary) so scans can trust it.
+	void ValidateIndexBuffer() const;
 	static SegmentLayout ReadLayout(const BufferHandle &handle, const ColumnSegment &segment);
 	//! Returns packed bytes starting at the group containing start.
 	//! decompress_count must cover whole bitpacking groups that fit within the selection stream.

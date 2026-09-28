@@ -7,16 +7,15 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Dictionary Validation
 //===--------------------------------------------------------------------===//
-void CompressedStringScanState::SegmentLayout::ValidateDictionaryIndices(const SelectionVector &sel,
-                                                                         const idx_t start_offset,
-                                                                         const idx_t scan_count) const {
+void CompressedStringScanState::ValidateDictionaryIndices(const SelectionVector &sel, const idx_t start_offset,
+                                                          const idx_t scan_count) const {
 	D_ASSERT(sel.IsSet());
 	D_ASSERT(start_offset <= sel.Capacity());
 	D_ASSERT(scan_count <= sel.Capacity() - start_offset);
 	bool has_error = false;
 	for (idx_t i = 0; i < scan_count; i++) {
 		const idx_t sel_idx = sel.get_index_unsafe(i + start_offset);
-		has_error |= sel_idx >= index_buffer.size();
+		has_error |= sel_idx >= layout.index_buffer.size();
 	}
 
 	if (has_error) {
@@ -26,14 +25,14 @@ void CompressedStringScanState::SegmentLayout::ValidateDictionaryIndices(const S
 	}
 }
 
-void CompressedStringScanState::SegmentLayout::ValidateIndexBuffer() const {
+void CompressedStringScanState::ValidateIndexBuffer() const {
 	// Only the checks required to avoid out-of-bounds reads when trusting the buffer: offsets must be
 	// monotonically increasing (else a length underflows) and the largest offset must lie within the dictionary.
 	bool has_error = false;
-	for (idx_t i = 1; i < index_buffer.size(); i++) {
-		has_error |= index_buffer[i] < index_buffer[i - 1];
+	for (idx_t i = 1; i < layout.index_buffer.size(); i++) {
+		has_error |= layout.index_buffer[i] < layout.index_buffer[i - 1];
 	}
-	has_error |= index_buffer[index_buffer.size() - 1] > dictionary_reader.Size();
+	has_error |= layout.index_buffer[layout.index_buffer.size() - 1] > layout.dictionary_reader.Size();
 
 	if (has_error) {
 		throw DataCorruptionException(
@@ -45,27 +44,26 @@ void CompressedStringScanState::SegmentLayout::ValidateIndexBuffer() const {
 //===--------------------------------------------------------------------===//
 // String Reading
 //===--------------------------------------------------------------------===//
-uint32_t CompressedStringScanState::SegmentLayout::GetStringLength(idx_t index) const {
-	D_ASSERT(index < index_buffer.size());
+uint32_t CompressedStringScanState::GetStringLength(idx_t index) const {
+	D_ASSERT(index < layout.index_buffer.size());
 	if (index == 0) {
 		return 0;
 	}
-	D_ASSERT(index_buffer[index] >= index_buffer[index - 1]);
-	// Offsets are validated up front by ValidateIndexBuffer, so the length can be read directly.
-	const auto string_length = index_buffer[index] - index_buffer[index - 1];
+	D_ASSERT(layout.index_buffer[index] >= layout.index_buffer[index - 1]);
+	// Offsets are validated before this call, so the length can be read directly.
+	const auto string_length = layout.index_buffer[index] - layout.index_buffer[index - 1];
 	return string_length;
 }
 
-string_t CompressedStringScanState::SegmentLayout::FetchStringFromDict(uint32_t dict_offset,
-                                                                       uint32_t string_len) const {
-	D_ASSERT(dict_offset <= dictionary_reader.Size());
+string_t CompressedStringScanState::FetchStringFromDict(uint32_t dict_offset, uint32_t string_len) const {
+	D_ASSERT(dict_offset <= layout.dictionary_reader.Size());
 	D_ASSERT(string_len <= dict_offset);
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
 	}
 
 	// normal string: read string from this block
-	auto string_data = dictionary_reader.GetBytes(dictionary_reader.Size() - dict_offset, string_len);
+	auto string_data = layout.dictionary_reader.GetBytes(layout.dictionary_reader.Size() - dict_offset, string_len);
 	return string_t(const_char_ptr_cast(string_data.data()), string_len);
 }
 
@@ -138,7 +136,7 @@ CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(c
 //===--------------------------------------------------------------------===//
 void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segment) {
 	// Validate the whole index buffer once so the dictionary build below can trust it.
-	layout.ValidateIndexBuffer();
+	ValidateIndexBuffer();
 
 	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), layout.index_buffer.size());
 	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, layout.index_buffer.size());
@@ -146,8 +144,8 @@ void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segmen
 	dict_child_data.WriteStringRef(string_t(nullptr, 0));
 	FlatVector::SetNull(dictionary->data, 0, true);
 	for (idx_t i = 1; i < layout.index_buffer.size(); i++) {
-		const auto str_len = layout.GetStringLength(i);
-		dict_child_data.WriteStringRef(layout.FetchStringFromDict(layout.index_buffer[i], str_len));
+		const auto str_len = GetStringLength(i);
+		dict_child_data.WriteStringRef(FetchStringFromDict(layout.index_buffer[i], str_len));
 	}
 }
 
@@ -199,8 +197,8 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		}
 		has_error |= elem_error;
 
-		const auto str_len = layout.GetStringLength(string_dict_index);
-		result_data.WriteStringRef(layout.FetchStringFromDict(str_dict_offset, str_len));
+		const auto str_len = GetStringLength(string_dict_index);
+		result_data.WriteStringRef(FetchStringFromDict(str_dict_offset, str_len));
 	}
 
 	if (has_error) {
@@ -236,7 +234,7 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src.data(), decompress_count, layout.current_width);
 
 	sel_vec->ShiftLeft(start_offset, scan_count);
-	layout.ValidateDictionaryIndices(*sel_vec, 0, scan_count);
+	ValidateDictionaryIndices(*sel_vec, 0, scan_count);
 
 	result.Dictionary(dictionary, *sel_vec, scan_count);
 }
