@@ -40,7 +40,8 @@ duckdb_v2_function_signature_handle SigOf(duckdb_v2_scalar_function_handle funct
 
 void SigParam(duckdb_v2_function_signature_handle sig, const char *name, duckdb_v2_logical_type_handle type,
               duckdb_v2_value_handle default_value = nullptr) {
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, Ident(name), type, default_value, nullptr) ==
+	auto name_str = Ident(name);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, type, default_value, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 }
 
@@ -136,7 +137,8 @@ void VarargSumExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_co
 	if (duckdb_v2_scalar_function_exec_get_arg(info, arg_count, &past_the_end, nullptr) !=
 	    DUCKDB_V2_ERROR_INPUT_INVALID) {
 		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_API);
-		duckdb_v2_error_info_set_text(*err, Convert("past-the-end argument vector index was not refused"));
+		auto text_str = Convert("past-the-end argument vector index was not refused");
+		duckdb_v2_error_info_set_text(*err, &text_str);
 	}
 }
 
@@ -147,7 +149,8 @@ void NoopExec(duckdb_v2_scalar_function_exec_info_handle, duckdb_v2_context_hand
 void FailingExec(duckdb_v2_scalar_function_exec_info_handle, duckdb_v2_context_handle,
                  duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("scalar exec failed on purpose"));
+	auto text_str = Convert("scalar exec failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 // ---------------------------------------------------------------------------
@@ -388,7 +391,8 @@ TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2
 	auto sig = SigOf(function);
 
 	REQUIRE(duckdb_v2_function_signature_set_varargs(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, Ident("\x80"), integer, nullptr, nullptr) ==
+	auto name_str = Ident("\x80");
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, integer, nullptr, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	SigParam(sig, "first", integer);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);

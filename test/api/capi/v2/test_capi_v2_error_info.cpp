@@ -69,7 +69,8 @@ TEST_CASE("V2 error: directly-set messages have no raw body", "[capi_v2][error]"
 	REQUIRE(raw.len == 0);
 
 	// set_text leaves no raw body either.
-	REQUIRE(duckdb_v2_error_info_set_text(err, Convert("reset")) == DUCKDB_V2_ERROR_NONE);
+	auto text_str = Convert("reset");
+	REQUIRE(duckdb_v2_error_info_set_text(err, &text_str) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(raw.ptr == nullptr);
 	REQUIRE(raw.len == 0);
@@ -100,7 +101,8 @@ TEST_CASE("V2 error: raw body does not leak across slot reuse", "[capi_v2][error
 	REQUIRE(raw.ptr != nullptr);
 
 	// Reuse the slot with a directly-set message: the raw body is cleared.
-	REQUIRE(duckdb_v2_error_info_set_text(err, Convert("manual")) == DUCKDB_V2_ERROR_NONE);
+	auto text_str = Convert("manual");
+	REQUIRE(duckdb_v2_error_info_set_text(err, &text_str) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(raw.ptr == nullptr);
 	REQUIRE(raw.len == 0);
@@ -119,6 +121,17 @@ TEST_CASE("V2 error: get_raw_message rejects null args", "[capi_v2][error]") {
 	duckdb_v2_str out = {nullptr, 0};
 	REQUIRE(duckdb_v2_error_info_get_raw_text(nullptr, &out) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_error_info_get_raw_text(err, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	duckdb_v2_error_info_destroy(&err);
+}
+
+TEST_CASE("V2 error: set_text rejects a null view", "[capi_v2][error]") {
+	duckdb_v2_error_info_handle err = nullptr;
+	SetErrorInfo(&err, DUCKDB_V2_ERROR_API, "x");
+
+	REQUIRE(duckdb_v2_error_info_set_text(err, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_str malformed = {nullptr, 3};
+	REQUIRE(duckdb_v2_error_info_set_text(err, &malformed) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_error_info_destroy(&err);
 }

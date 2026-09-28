@@ -277,6 +277,8 @@ functions:
       name:
         type: identifier
         indirection: 1
+        const: true
+        kind: IN
         description: The name to set. Borrowed and copied.
       err:
         type: error_info
@@ -692,6 +694,9 @@ functions:
         description: The bind info handle.
       name:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: The name of the column. Borrowed and copied.
       type:
         type: logical_type

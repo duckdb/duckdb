@@ -811,12 +811,11 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duckdb_v2_extensi
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function, duckdb_v2_str *name,
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function, const duckdb_v2_str *name,
                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(*name)); });
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_signature(duckdb_v2_table_function_handle function,
@@ -956,7 +955,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_v2_table_func
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_function_bind_info_handle info,
-                                                                duckdb_v2_identifier_t name,
+                                                                const duckdb_v2_identifier_t *name,
                                                                 duckdb_v2_logical_type_handle type,
                                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);

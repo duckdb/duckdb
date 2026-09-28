@@ -384,8 +384,8 @@ typedef duckdb_v2_str duckdb_v2_identifier_t;
  *
  * Invoked exactly once per producing call, with the complete text in a single view.
  *
- * The view is borrowed for the duration of the call only. Copy what you need before returning, and do not retain
- * `text.ptr`. The bytes are NOT guaranteed to be null-terminated.
+ * The view is borrowed for the duration of the call only. Copy what you need before returning, and do not retain `text`
+ * or `text->ptr`. The bytes are NOT guaranteed to be null-terminated.
  *
  * `err` is a live error slot, never NULL. Populate it with `duckdb_v2_error_info_set_code()` /
  * `duckdb_v2_error_info_set_text()` to signal failure to DuckDB. Do not destroy it yourself.
@@ -393,7 +393,7 @@ typedef duckdb_v2_str duckdb_v2_identifier_t;
  * The sink runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not re-enter
  * the API on the handle being operated on.
  */
-typedef void (*duckdb_v2_text_sink_fn)(duckdb_v2_str text, void *user_data, duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_text_sink_fn)(const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err);
 
 /*!
  * Compares two caller-defined resources for equality.
@@ -428,6 +428,9 @@ typedef void (*duckdb_v2_opaque_destroy_fn)(void *data);
  * "valid until the owning handle is destroyed"). `{NULL, 0}` is the canonical empty view, and `ptr` must not be
  * dereferenced when `len` is 0. Not to be confused with `bytes`, the transparent 16-byte *storage* format for a
  * variable-size value in a vector.
+ *
+ * Functions take an input view as a `const str *`, which must not be NULL; a NULL pointer, or a view whose `ptr` is
+ * NULL while `len` is nonzero, fails with ERROR_INPUT_INVALID. Point at a `{NULL, 0}` view to pass an empty string.
  *
  * Text inputs, such as VARCHAR values and names, must contain valid UTF-8. The caller is responsible for ensuring this;
  * API functions do not necessarily validate the input. Binary inputs, such as BLOB values, do not require valid UTF-8.
@@ -1679,7 +1682,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_name(duckdb_v2_context_handle ctx,
-                                                                  duckdb_v2_identifier_t name,
+                                                                  const duckdb_v2_identifier_t *name,
                                                                   duckdb_v2_option_handle *out_option,
                                                                   duckdb_v2_error_info_handle *err);
 
@@ -1806,7 +1809,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_extension(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_set_name(duckdb_v2_custom_type_handle type,
-                                                            duckdb_v2_identifier_t name,
+                                                            const duckdb_v2_identifier_t *name,
                                                             duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2217,7 +2220,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_code(duckdb_v2_error_info_
  * @param text The error text to set in the info.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_text(duckdb_v2_error_info_handle info, duckdb_v2_str text);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_text(duckdb_v2_error_info_handle info, const duckdb_v2_str *text);
 
 /*!
  * Destroys an error info handle and frees its resources.
@@ -2483,7 +2486,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_flag(duckdb_v2_file
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_value(duckdb_v2_file_open_options_handle options,
-                                                                   duckdb_v2_str name, duckdb_v2_value_handle value,
+                                                                   const duckdb_v2_str *name,
+                                                                   duckdb_v2_value_handle value,
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2529,7 +2533,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_destroy(duckdb_v2_file_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_system,
-                                                        duckdb_v2_str file_path,
+                                                        const duckdb_v2_str *file_path,
                                                         duckdb_v2_file_open_options_handle options,
                                                         duckdb_v2_file_handle *file, duckdb_v2_error_info_handle *err);
 
@@ -2760,7 +2764,7 @@ typedef struct _duckdb_v2_function_signature {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(duckdb_v2_function_signature_handle sig,
-                                                                        duckdb_v2_identifier_t name,
+                                                                        const duckdb_v2_identifier_t *name,
                                                                         duckdb_v2_logical_type_handle type,
                                                                         duckdb_v2_value_handle value,
                                                                         duckdb_v2_error_info_handle *err);
@@ -2850,7 +2854,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_return_type(duckdb
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_identifier_render_quoted(duckdb_v2_identifier_t name, char *out_text,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_identifier_render_quoted(const duckdb_v2_identifier_t *name, char *out_text,
                                                                 idx_t out_capacity, idx_t *out_length,
                                                                 duckdb_v2_error_info_handle *err);
 
@@ -2946,8 +2950,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_destroy(duckdb_v2_instance_handl
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, duckdb_v2_str path,
-                                                       duckdb_v2_identifier_t *name,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
+                                                       const duckdb_v2_identifier_t *name,
                                                        duckdb_v2_attach_options_handle options, bool make_default,
                                                        duckdb_v2_error_info_handle *err);
 
@@ -2970,7 +2974,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, duckdb_v2_str path,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
                                                        duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2993,7 +2997,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance, duckdb_v2_str path,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance,
+                                                            const duckdb_v2_str *path,
                                                             duckdb_v2_error_info_handle *err);
 
 /*!
@@ -3035,7 +3040,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_instance_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options,
-                                                          duckdb_v2_identifier_t key, duckdb_v2_str setting,
+                                                          const duckdb_v2_identifier_t *key,
+                                                          const duckdb_v2_str *setting,
                                                           duckdb_v2_error_info_handle *err);
 
 /*!
@@ -3072,7 +3078,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_o
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance,
-                                                           duckdb_v2_identifier_t name, duckdb_v2_str setting,
+                                                           const duckdb_v2_identifier_t *name,
+                                                           const duckdb_v2_str *setting,
                                                            duckdb_v2_error_info_handle *err);
 
 /*!
@@ -3095,7 +3102,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_ha
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_name(duckdb_v2_instance_handle instance,
-                                                                   duckdb_v2_identifier_t name,
+                                                                   const duckdb_v2_identifier_t *name,
                                                                    duckdb_v2_option_handle *out_option,
                                                                    duckdb_v2_error_info_handle *err);
 
@@ -3213,7 +3220,7 @@ typedef enum DUCKDB_V2_LOG_LEVEL {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level,
-                                                   duckdb_v2_str log_type, duckdb_v2_str message,
+                                                   const duckdb_v2_str *log_type, const duckdb_v2_str *message,
                                                    duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for logging --- */
@@ -3262,7 +3269,7 @@ typedef struct _duckdb_v2_qname {
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(duckdb_v2_str text, duckdb_v2_qname_handle *name,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(const duckdb_v2_str *text, duckdb_v2_qname_handle *name,
                                                    duckdb_v2_error_info_handle *err);
 
 /*!
@@ -3558,7 +3565,7 @@ typedef struct _duckdb_v2_token_iterator {
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, duckdb_v2_str sql,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
                                                     duckdb_v2_token_iterator_handle *out_iterator,
                                                     duckdb_v2_error_info_handle *err);
 
@@ -4109,13 +4116,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx
                                                      duckdb_v2_error_info_handle *err);
 
 /*!
- * Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters.
+ * Validates all text->len bytes as UTF-8, including bytes after embedded NUL characters.
  *
- * Returns ERROR_INPUT_INVALID if either:
- * - text.ptr is NULL and text.len is nonzero.
+ * Returns ERROR_INPUT_INVALID if any of:
+ * - text is NULL.
+ * - text->ptr is NULL and text->len is nonzero.
  * - The input contains malformed UTF-8.
  *
- * A NULL pointer with zero length is valid.
+ * A view with a NULL ptr and zero length is valid.
  *
  * history:
  * - stable: v2.0.0
@@ -4124,7 +4132,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_validate_utf8(duckdb_v2_str text, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_validate_utf8(const duckdb_v2_str *text, duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for vector --- */
 
@@ -4328,7 +4336,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_aggregate_function_handle function,
-                                                                   duckdb_v2_identifier_t *name,
+                                                                   const duckdb_v2_identifier_t *name,
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
@@ -5788,7 +5796,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_h
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn,
-                                                             duckdb_v2_identifier_t name, duckdb_v2_str setting,
+                                                             const duckdb_v2_identifier_t *name,
+                                                             const duckdb_v2_str *setting,
                                                              DUCKDB_V2_SETTING_SCOPE scope,
                                                              duckdb_v2_error_info_handle *err);
 
@@ -5811,7 +5820,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connectio
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option_by_name(duckdb_v2_connection_handle conn,
-                                                                     duckdb_v2_identifier_t name,
+                                                                     const duckdb_v2_identifier_t *name,
                                                                      duckdb_v2_option_handle *out_option,
                                                                      duckdb_v2_error_info_handle *err);
 
@@ -6131,7 +6140,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_extension(duckd
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function,
-                                                              duckdb_v2_identifier_t *name,
+                                                              const duckdb_v2_identifier_t *name,
                                                               duckdb_v2_error_info_handle *err);
 
 /*!
@@ -7892,7 +7901,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx, duckdb_v2_str text,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx,
+                                                                     const duckdb_v2_str *text,
                                                                      duckdb_v2_logical_type_handle *out_type,
                                                                      duckdb_v2_error_info_handle *err);
 
@@ -7988,7 +7998,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn,
-                                                                        duckdb_v2_str text,
+                                                                        const duckdb_v2_str *text,
                                                                         duckdb_v2_logical_type_handle *out_type,
                                                                         duckdb_v2_error_info_handle *err);
 
@@ -8177,7 +8187,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param(duckdb_v2_logical_
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handle ctx,
                                                                       duckdb_v2_logical_type_handle base_type,
-                                                                      duckdb_v2_identifier_t alias_name,
+                                                                      const duckdb_v2_identifier_t *alias_name,
                                                                       duckdb_v2_logical_type_handle *out_type,
                                                                       duckdb_v2_error_info_handle *err);
 
@@ -8204,7 +8214,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_v2_connection_handle conn,
                                                                          duckdb_v2_logical_type_handle base_type,
-                                                                         duckdb_v2_identifier_t alias_name,
+                                                                         const duckdb_v2_identifier_t *alias_name,
                                                                          duckdb_v2_logical_type_handle *out_type,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -8460,7 +8470,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_argument(duckdb_v2_r
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckdb_v2_replacement_scan_info_handle info,
-                                                                           duckdb_v2_identifier_t name,
+                                                                           const duckdb_v2_identifier_t *name,
                                                                            duckdb_v2_value_handle value,
                                                                            duckdb_v2_error_info_handle *err);
 
@@ -8525,7 +8535,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_scan_info_handle info,
-                                                                     duckdb_v2_str sql,
+                                                                     const duckdb_v2_str *sql,
                                                                      duckdb_v2_error_info_handle *err);
 
 /*!
@@ -8545,7 +8555,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_r
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_replacement_scan_info_handle info,
-                                                                  duckdb_v2_identifier_t alias,
+                                                                  const duckdb_v2_identifier_t *alias,
                                                                   duckdb_v2_error_info_handle *err);
 
 /*!
@@ -8714,7 +8724,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duc
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar_function_handle function,
-                                                                duckdb_v2_identifier_t *name,
+                                                                const duckdb_v2_identifier_t *name,
                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
@@ -10114,7 +10124,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_context(duckdb_v2_context_handle ctx,
-                                                                          duckdb_v2_uhugeint_t in_value,
+                                                                          const duckdb_v2_uhugeint_t *in_value,
                                                                           duckdb_v2_value_handle *out_value,
                                                                           duckdb_v2_error_info_handle *err);
 
@@ -10206,7 +10216,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_context(duckdb_v
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_context(duckdb_v2_context_handle ctx,
-                                                                         duckdb_v2_hugeint_t in_value,
+                                                                         const duckdb_v2_hugeint_t *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -10225,7 +10235,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_context(duckdb_v2_context_handle ctx,
-                                                                         duckdb_v2_str in_value,
+                                                                         const duckdb_v2_str *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -10244,7 +10254,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_context(duckdb_v2_context_handle ctx,
-                                                                      duckdb_v2_str in_value,
+                                                                      const duckdb_v2_str *in_value,
                                                                       duckdb_v2_value_handle *out_value,
                                                                       duckdb_v2_error_info_handle *err);
 
@@ -10432,7 +10442,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                                             duckdb_v2_uhugeint_t in_value,
+                                                                             const duckdb_v2_uhugeint_t *in_value,
                                                                              duckdb_v2_value_handle *out_value,
                                                                              duckdb_v2_error_info_handle *err);
 
@@ -10527,7 +10537,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_connection(duckd
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                                            duckdb_v2_hugeint_t in_value,
+                                                                            const duckdb_v2_hugeint_t *in_value,
                                                                             duckdb_v2_value_handle *out_value,
                                                                             duckdb_v2_error_info_handle *err);
 
@@ -10546,7 +10556,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_connection(duckdb_v2_connection_handle conn,
-                                                                            duckdb_v2_str in_value,
+                                                                            const duckdb_v2_str *in_value,
                                                                             duckdb_v2_value_handle *out_value,
                                                                             duckdb_v2_error_info_handle *err);
 
@@ -10565,7 +10575,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_connection(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_str in_value,
+                                                                         const duckdb_v2_str *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -11046,7 +11056,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_connect
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_context(duckdb_v2_context_handle ctx,
-                                                                          duckdb_v2_interval_t in_value,
+                                                                          const duckdb_v2_interval_t *in_value,
                                                                           duckdb_v2_value_handle *out_value,
                                                                           duckdb_v2_error_info_handle *err);
 
@@ -11066,7 +11076,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_context(duckdb
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duckdb_v2_connection_handle conn,
-                                                                             duckdb_v2_interval_t in_value,
+                                                                             const duckdb_v2_interval_t *in_value,
                                                                              duckdb_v2_value_handle *out_value,
                                                                              duckdb_v2_error_info_handle *err);
 
@@ -11090,8 +11100,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duc
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_context(duckdb_v2_context_handle ctx,
-                                                                         duckdb_v2_hugeint_t in_value, uint8_t width,
-                                                                         uint8_t scale,
+                                                                         const duckdb_v2_hugeint_t *in_value,
+                                                                         uint8_t width, uint8_t scale,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -11115,8 +11125,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_connection(duckdb_v2_connection_handle conn,
-                                                                            duckdb_v2_hugeint_t in_value, uint8_t width,
-                                                                            uint8_t scale,
+                                                                            const duckdb_v2_hugeint_t *in_value,
+                                                                            uint8_t width, uint8_t scale,
                                                                             duckdb_v2_value_handle *out_value,
                                                                             duckdb_v2_error_info_handle *err);
 
@@ -11137,7 +11147,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_context(duckdb_v2_context_handle ctx,
-                                                                      duckdb_v2_hugeint_t in_value,
+                                                                      const duckdb_v2_hugeint_t *in_value,
                                                                       duckdb_v2_value_handle *out_value,
                                                                       duckdb_v2_error_info_handle *err);
 
@@ -11158,7 +11168,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_context(duckdb_v2_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_connection(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_hugeint_t in_value,
+                                                                         const duckdb_v2_hugeint_t *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -11179,7 +11189,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_connection(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_context(duckdb_v2_context_handle ctx,
-                                                                     duckdb_v2_str in_value,
+                                                                     const duckdb_v2_str *in_value,
                                                                      duckdb_v2_value_handle *out_value,
                                                                      duckdb_v2_error_info_handle *err);
 
@@ -11200,7 +11210,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_context(duckdb_v2_c
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_connection(duckdb_v2_connection_handle conn,
-                                                                        duckdb_v2_str in_value,
+                                                                        const duckdb_v2_str *in_value,
                                                                         duckdb_v2_value_handle *out_value,
                                                                         duckdb_v2_error_info_handle *err);
 
@@ -11221,7 +11231,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_connection(duckdb_v
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_context(duckdb_v2_context_handle ctx,
-                                                                        duckdb_v2_str in_value,
+                                                                        const duckdb_v2_str *in_value,
                                                                         duckdb_v2_value_handle *out_value,
                                                                         duckdb_v2_error_info_handle *err);
 
@@ -11242,7 +11252,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_context(duckdb_v
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_connection(duckdb_v2_connection_handle conn,
-                                                                           duckdb_v2_str in_value,
+                                                                           const duckdb_v2_str *in_value,
                                                                            duckdb_v2_value_handle *out_value,
                                                                            duckdb_v2_error_info_handle *err);
 
@@ -12054,9 +12064,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle resul
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_render_box(duckdb_v2_result_handle *result, idx_t max_rows,
-                                                         idx_t max_width, idx_t max_col_width, duckdb_v2_str null_value,
-                                                         idx_t render_mode, idx_t limit, duckdb_v2_text_sink_fn sink,
-                                                         void *user_data, duckdb_v2_error_info_handle *err);
+                                                         idx_t max_width, idx_t max_col_width,
+                                                         const duckdb_v2_str *null_value, idx_t render_mode,
+                                                         idx_t limit, duckdb_v2_text_sink_fn sink, void *user_data,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Runs the result to completion and reports the changed-row count.
@@ -12360,7 +12371,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function,
-                                                               duckdb_v2_identifier_t *name,
+                                                               const duckdb_v2_identifier_t *name,
                                                                duckdb_v2_error_info_handle *err);
 
 /*!
@@ -12718,8 +12729,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(
-    duckdb_v2_table_function_bind_info_handle info, duckdb_v2_identifier_t name, duckdb_v2_logical_type_handle type,
-    duckdb_v2_error_info_handle *err);
+    duckdb_v2_table_function_bind_info_handle info, const duckdb_v2_identifier_t *name,
+    duckdb_v2_logical_type_handle type, duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the estimated number of rows the scan will produce.
