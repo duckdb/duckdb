@@ -5,38 +5,6 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Error Helpers
-//===--------------------------------------------------------------------===//
-[[noreturn]] static void ThrowDictionaryIndexOutOfRange() {
-	throw DataCorruptionException(
-	    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
-	    "to be corrupted.");
-}
-
-[[noreturn]] static void ThrowDictionaryOffsetOutOfRange() {
-	throw DataCorruptionException(
-	    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
-	    "to be corrupted.");
-}
-
-[[noreturn]] static void ThrowDictionaryOutOfRange() {
-	throw DataCorruptionException(
-	    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
-}
-
-[[noreturn]] static void ThrowDictionaryBitpackingWidthInvalid() {
-	throw DataCorruptionException(
-	    "Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be "
-	    "corrupted.");
-}
-
-[[noreturn]] static void ThrowDictionarySelectionBufferOutOfRange() {
-	throw DataCorruptionException(
-	    "Failed to scan dictionary string - selection buffer was out of range. Database file appears "
-	    "to be corrupted.");
-}
-
-//===--------------------------------------------------------------------===//
 // Dictionary Validation
 //===--------------------------------------------------------------------===//
 void CompressedStringScanState::SegmentLayout::ValidateDictionaryIndices(const SelectionVector &sel,
@@ -52,7 +20,9 @@ void CompressedStringScanState::SegmentLayout::ValidateDictionaryIndices(const S
 	}
 
 	if (has_error) {
-		ThrowDictionaryIndexOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 }
 
@@ -66,7 +36,9 @@ void CompressedStringScanState::SegmentLayout::ValidateIndexBuffer() const {
 	has_error |= index_buffer[index_buffer.size() - 1] > dictionary_reader.Size();
 
 	if (has_error) {
-		ThrowDictionaryOffsetOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 }
 
@@ -106,16 +78,21 @@ CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(c
 	auto header = reader.Read<dictionary_compression_header_t>();
 	// Index zero represents NULL, so even an all-NULL segment needs one dictionary offset.
 	if (header.index_buffer_count == 0) {
-		ThrowDictionaryOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
 	}
 	// Selections refer to entries in the offset table, so the last index determines the bit width.
 	auto expected_width = BitpackingPrimitives::MinimumBitWidth(header.index_buffer_count - 1);
 	if (header.bitpacking_width != expected_width) {
-		ThrowDictionaryBitpackingWidthInvalid();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - bitpacking width was invalid. Database file appears to be "
+		    "corrupted.");
 	}
 	// The offset table must start at (or after) the header's end.
 	if (header.index_buffer_offset < reader.Position()) {
-		ThrowDictionarySelectionBufferOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - selection buffer was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 	auto selection_reader =
 	    reader.ReadSubReader(header.index_buffer_offset - reader.Position(), "dictionary selections");
@@ -129,25 +106,26 @@ CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(c
 		// With only the NULL entry to select, no bits are encoded.
 		// The selection reader must therefore be empty, otherwise its size conflicts with the zero bit width.
 		if (selection_reader.Size() != 0) {
-			ThrowDictionarySelectionBufferOutOfRange();
+			throw DataCorruptionException(
+			    "Failed to scan dictionary string - selection buffer was out of range. Database file appears "
+			    "to be corrupted.");
 		}
 	} else {
 		// Require exactly enough whole groups for the rows. Compare by division to avoid overflowing.
 		if (selection_reader.Size() % group_bytes != 0 || selection_reader.Size() / group_bytes != group_count) {
-			ThrowDictionarySelectionBufferOutOfRange();
+			throw DataCorruptionException(
+			    "Failed to scan dictionary string - selection buffer was out of range. Database file appears "
+			    "to be corrupted.");
 		}
 	}
-	// Dictionary bytes grow backwards from dict_end, so dict_size must not exceed it.
-	if (header.dict_size > header.dict_end) {
-		ThrowDictionaryOutOfRange();
-	}
 
-	// Check that the offset table is aligned, fits within the segment and does not overlap the dictionary.
-	// Defer checking its values so fetching one string does not require validating every offset.
+	// Check that the offset table is aligned and fits within the segment.
 	auto index_buffer = reader.GetArray<uint32_t>(header.index_buffer_offset, header.index_buffer_count);
 	auto index_buffer_end = header.index_buffer_offset + sizeof(uint32_t) * index_buffer.size();
-	if (header.dict_end - header.dict_size < index_buffer_end) {
-		ThrowDictionaryOutOfRange();
+	// Dictionary bytes grow backwards from dict_end and must not overlap the offset table.
+	if (header.dict_size > header.dict_end || header.dict_end - header.dict_size < index_buffer_end) {
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary was out of range. Database file appears to be corrupted.");
 	}
 	// Check that the dictionary fits within the reader, then restrict string reads to its bytes.
 	auto dictionary_reader =
@@ -157,18 +135,24 @@ CompressedStringScanState::SegmentLayout CompressedStringScanState::ReadLayout(c
 
 string_t CompressedStringScanState::SegmentLayout::ValidateAndGetEntry(idx_t index) const {
 	if (index >= index_buffer.size()) {
-		ThrowDictionaryIndexOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 	auto offset = index_buffer[index];
 	if (offset > dictionary_reader.Size()) {
-		ThrowDictionaryOffsetOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 	if (index == 0) {
 		return string_t(nullptr, 0);
 	}
 	auto previous_offset = index_buffer[index - 1];
 	if (offset < previous_offset) {
-		ThrowDictionaryOffsetOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary offset was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 	const auto string_length = offset - previous_offset;
 	auto string_data = dictionary_reader.GetBytes(dictionary_reader.Size() - offset, string_length);
@@ -205,7 +189,6 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
 	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
-	auto source = GetSelectionBytes(start, decompress_count);
 
 	// Create a decompression buffer of sufficient size if we don't already have one.
 	if (!sel_vec || sel_vec_size < decompress_count) {
@@ -214,8 +197,10 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	}
 
 	D_ASSERT(decompress_count <= sel_vec->Capacity());
+	auto src = GetSelectionBytes(start, decompress_count);
 	sel_t *sel_vec_ptr = sel_vec->data();
-	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), source.data(), decompress_count,
+
+	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), src.data(), decompress_count,
 	                                          layout.current_width);
 
 	auto result_data = FlatVector::Writer<string_t>(result, scan_count, result_offset);
@@ -240,7 +225,9 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	}
 
 	if (has_error) {
-		ThrowDictionaryIndexOutOfRange();
+		throw DataCorruptionException(
+		    "Failed to scan dictionary string - dictionary index was out of range. Database file appears "
+		    "to be corrupted.");
 	}
 }
 
