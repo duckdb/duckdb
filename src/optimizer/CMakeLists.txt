@@ -1,4 +1,5 @@
 add_subdirectory(compressed_materialization)
+add_subdirectory(constraint_propagation)
 add_subdirectory(join_order)
 add_subdirectory(matcher)
 add_subdirectory(pullup)
@@ -59,8 +60,7 @@ add_library_unity(
   type_pushdown.cpp
   scalar_fn_pushdown.cpp
   projection_pullup.cpp
-  remote_pushdown_optimizer.cpp
-  constraint_propagator.cpp)
+  remote_pushdown_optimizer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
     PARENT_SCOPE)
