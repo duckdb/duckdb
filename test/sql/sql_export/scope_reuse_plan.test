@@ -241,10 +241,16 @@ EXPLAIN (SQL) SELECT i FROM scope_input USING SAMPLE 100% ORDER BY i;
 ----
 sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
 
+# Ordinary column grouping needs no key-staging scope; the window still has its own scope.
 query TT
 EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT i,count(*) n FROM scope_input GROUP BY i) q;
 ----
-sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*[(]SELECT.*
+sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT i,count(*) n FROM scope_input GROUP BY i) q;
+----
+sql	<!REGEX>:.*[(]SELECT.*[(]SELECT.*[(]SELECT.*
 
 query TT
 EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT row_number() OVER(ORDER BY i) n FROM scope_input) q;

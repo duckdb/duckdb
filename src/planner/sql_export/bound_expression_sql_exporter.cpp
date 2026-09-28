@@ -291,7 +291,10 @@ BoundExpressionSQLExportState::ExportColumnRef(const BoundColumnRefExpression &e
 		issue.message = "The resolved SQL column type differs from the bound expression type";
 		return BoundExpressionSQLExportResult::Failure({std::move(issue)});
 	}
-	auto result = BoundExpressionSQLExportResult::Success(make_uniq<ColumnRefExpression>(std::move(resolved->names)));
+	auto replacement = substitutions.find(binding);
+	auto result = BoundExpressionSQLExportResult::Success(
+	    replacement == substitutions.end() ? make_uniq<ColumnRefExpression>(std::move(resolved->names))
+	                                       : replacement->second.get().Copy());
 	if (optimizer_type_match) {
 		return result;
 	}
