@@ -1,13 +1,66 @@
 #include "duckdb/optimizer/rule/constant_order_normalization.hpp"
 
-#include "duckdb/optimizer/expression_rewriter.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
 
 static bool MultiplicationConstantBelongsAtEnd(const BoundFunctionExpression &expr) {
 	return expr.Function().GetName() == "*";
+}
+
+// Integer +/* are not associative once overflow is an error. Only pull constants together when
+// folding them cannot change overflow of the remaining (non-constant) operands.
+static bool ConstantsSafeToReassociate(ClientContext &context, const BoundFunctionExpression &root,
+                                       const vector<reference<Expression>> &constants) {
+	const bool is_multiply = MultiplicationConstantBelongsAtEnd(root);
+	const bool check_sign = root.GetReturnType().IsSigned();
+
+	int8_t sign = 0;
+	unique_ptr<Expression> folded;
+	FunctionBinder binder(context);
+	ErrorData error;
+	for (auto &binding : constants) {
+		Value value;
+		if (!ExpressionExecutor::TryEvaluateScalar(context, binding.get(), value)) {
+			return false;
+		}
+		if (!value.IsNull() && check_sign) {
+			const auto integral = IntegralValue::Get(value);
+			if (is_multiply && integral < 0) {
+				return false;
+			}
+			if (integral != 0) {
+				const int8_t value_sign = integral > 0 ? 1 : -1;
+				if (sign != 0 && sign != value_sign) {
+					return false;
+				}
+				sign = value_sign;
+			}
+		}
+		auto constant_expr = make_uniq<BoundConstantExpression>(std::move(value));
+		if (!folded) {
+			folded = std::move(constant_expr);
+			continue;
+		}
+		vector<unique_ptr<Expression>> children;
+		children.push_back(std::move(folded));
+		children.push_back(std::move(constant_expr));
+		folded = binder.BindScalarFunction(Identifier::DefaultSchema(), root.Function().GetName(), std::move(children),
+		                                   error, root.IsOperator());
+		if (!folded) {
+			return false;
+		}
+		Value folded_value;
+		if (!ExpressionExecutor::TryEvaluateScalar(context, *folded, folded_value)) {
+			return false;
+		}
+		folded = make_uniq<BoundConstantExpression>(std::move(folded_value));
+	}
+	return true;
 }
 
 class RecursiveFunctionExpressionMatcher : public ExpressionMatcher {
@@ -50,7 +103,7 @@ private:
 };
 
 ConstantOrderNormalizationRule::ConstantOrderNormalizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	// '+' and '*' satisfy commutative law and associative law.
+	// '+' and '*' are commutative; association is only valid when overflow cannot change.
 	auto add_matcher = make_uniq<FunctionExpressionMatcher>();
 	add_matcher->function = make_uniq<SpecificFunctionMatcher>("+");
 	add_matcher->type = make_uniq<IntegerTypeMatcher>();
@@ -100,6 +153,16 @@ unique_ptr<Expression> ConstantOrderNormalizationRule::Apply(LogicalOperator &op
 	}
 
 	if (ordered_bindings.empty()) {
+		return nullptr;
+	}
+
+	// Swapping a single multiply is commutative. Pulling constants across multiple non-constants
+	// changes association, e.g. (a + 1) + (b + 2) => (3 + a) + b, which can overflow.
+	if (remain_bindings.size() > 1) {
+		return nullptr;
+	}
+
+	if (ordered_bindings.size() > 1 && !ConstantsSafeToReassociate(rewriter.context, root, ordered_bindings)) {
 		return nullptr;
 	}
 
