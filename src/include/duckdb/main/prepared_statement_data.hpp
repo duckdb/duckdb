@@ -62,4 +62,7 @@ public:
 	DUCKDB_API bool TryGetType(const Identifier &identifier, LogicalType &result);
 };
 
+DUCKDB_API bool CheckCatalogIdentity(ClientContext &context, const Identifier &catalog_name,
+                                     StatementProperties::CatalogIdentity catalog_identity);
+
 } // namespace duckdb

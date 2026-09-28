@@ -62,7 +62,15 @@
         "test/sql/types/geo/geometry_shred_empty.test",
         "test/sql/types/geo/geometry_shred_limit.test",
         "test/sql/types/geo/geometry_shred_checkpoint.test",
-        "test/optimizer/joins/denominator_cardinality_estimation.test"
+        "test/optimizer/joins/denominator_cardinality_estimation.test",
+        "test/sql/optimizer/secure_view_statistics.test",
+        "test/sql/alter/add_col/test_add_col_distinct_stats.test",
+        "test/sql/alter/alter_type/alter_type_distinct_stats.test",
+        "test/issues/general/test_24049.test",
+        "test/optimizer/joins/fkpk_composite_key_ce.test",
+        "test/optimizer/partitioned_execution_coverage.test",
+        "test/optimizer/projection_placement.test",
+        "test/optimizer/statistics/statistics_count_not_null_pruning.test"
       ]
     },
     {
@@ -78,7 +86,8 @@
         "test/sql/timezone/test_icu_calendar_islamic.test",
         "test/sql/timezone/test_icu_calendar_islamic_observed.test",
         "test/sql/timezone/test_icu_calendar_japanese.test",
-        "test/sql/timezone/test_icu_datetime_sweep.test"
+        "test/sql/timezone/test_icu_datetime_sweep.test",
+        "test/sql/optimizer/constant_function_zonemap_pruning.test"
       ]
     }
   ]

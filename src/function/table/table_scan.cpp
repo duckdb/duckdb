@@ -40,6 +40,7 @@
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/profiler/profiling_node.hpp"
 
@@ -1227,6 +1228,53 @@ void SetPartitionsToScan(vector<idx_t> partition_indices, optional_ptr<FunctionD
 	bind_data.partitions_to_scan = make_uniq<unordered_set<idx_t>>(partition_indices.begin(), partition_indices.end());
 }
 
+static string TableScanToSQLGuard(const LogicalGet &get, bool has_input) {
+	auto &data = get.bind_data->Cast<TableScanBindData>();
+	if (has_input) {
+		return "input_child";
+	}
+	if (get.ordinality_idx.IsValid()) {
+		return "ordinality";
+	}
+	if (!get.scan_partition_indices.empty()) {
+		return "scan_partitions";
+	}
+	if (data.is_create_index) {
+		return "create_index";
+	}
+	if (data.partitions_to_scan) {
+		return "bound_scan_partitions";
+	}
+	const bool has_filters =
+	    get.table_filters.HasFilters() || get.table_filters.HasMultiColumnFilters() || get.dynamic_filters;
+	for (auto &index : get.GetColumnIds()) {
+		if (index.IsRowNumberColumn() && has_filters) {
+			return "row_number_with_filters";
+		}
+		if (index.IsVirtualColumn() && !index.IsRowIdColumn() && !index.IsRowNumberColumn()) {
+			return "virtual_column";
+		}
+		if (!index.IsVirtualColumn()) {
+			auto &definition = data.table.GetColumn(index.ToLogical());
+			if (!index.IsPushdownExtract() && definition.Type() != get.GetColumnType(index)) {
+				return "column_type";
+			}
+		}
+	}
+	return string();
+}
+
+static TableFunctionToSQLResult TableScanToSQL(ClientContext &, const LogicalGet &get) {
+	auto guard = TableScanToSQLGuard(get, !get.children.empty());
+	if (!guard.empty()) {
+		return {nullptr, std::move(guard)};
+	}
+	auto table = make_uniq<BaseTableRef>();
+	auto entry = get.GetTable();
+	table->SetQualifiedName(entry->schema.GetQualifiedName(entry->name));
+	return {std::move(table), {}};
+}
+
 TableFunction TableScanFunction::GetFunction() {
 	TableFunction scan_function("seq_scan", {}, TableScanFunc);
 	scan_function.init_local = TableScanInitLocal;
@@ -1237,6 +1285,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.get_metrics = TableScanGetMetrics;
 	scan_function.pushdown_complex_filter = nullptr;
 	scan_function.to_string = TableScanToString;
+	scan_function.to_sql = TableScanToSQL;
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_partition_data = TableScanGetPartitionData;
 	scan_function.get_partition_stats = TableScanGetPartitionStats;

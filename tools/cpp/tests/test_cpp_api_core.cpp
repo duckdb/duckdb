@@ -33,6 +33,60 @@ TEST_CASE("Stable C++API: Instance GetOption by name and option target scope", "
 	REQUIRE_THROWS_MATCHES(instance.GetOption("no_such_option"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	REQUIRE(env.GetInstanceCount() == 0);
+	auto instance = env.Open(":memory:");
+	REQUIRE(env.GetInstanceCount() == 1);
+
+	REQUIRE(instance.GetOptionCount() > 0);
+	bool found_memory_limit = false;
+	for (size_t i = 0; i < instance.GetOptionCount(); i++) {
+		auto option = instance.GetOptionByIndex(i);
+		if (option.GetName() != "max_memory") {
+			continue;
+		}
+		found_memory_limit = true;
+		REQUIRE_FALSE(option.GetDescription().empty());
+		REQUIRE(option.GetAliasCount() > 0);
+		bool found_alias = false;
+		for (size_t alias_idx = 0; alias_idx < option.GetAliasCount(); alias_idx++) {
+			found_alias |= option.GetAliasByIndex(alias_idx) == "memory_limit";
+		}
+		REQUIRE(found_alias);
+	}
+	REQUIRE(found_memory_limit);
+	REQUIRE_FALSE(instance.GetOption("allow_community_extensions").GetDefaultValue().empty());
+
+	auto conn = instance.Connect();
+	REQUIRE(conn.GetOptionCount() == instance.GetOptionCount());
+	REQUIRE_FALSE(conn.GetOptionByIndex(0).GetName().empty());
+}
+
+TEST_CASE("Stable C++API: Instance SetDefault selects the database for new connections", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto first_path = duckdb::TestCreatePath("cpp_api_default_first.duckdb");
+	auto second_path = duckdb::TestCreatePath("cpp_api_default_second.duckdb");
+	duckdb::DeleteDatabase(first_path);
+	duckdb::DeleteDatabase(second_path);
+
+	Environment env;
+	{
+		auto instance = env.CreateInstance();
+		instance.Attach(first_path, "first", {}, true);
+		instance.Attach(second_path, "second");
+		instance.SetDefault(second_path);
+
+		auto conn = instance.Connect();
+		auto result = conn.Execute("SELECT current_database()");
+		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<varchar_t>().view() == "cpp_api_default_second");
+	}
+	duckdb::DeleteDatabase(first_path);
+	duckdb::DeleteDatabase(second_path);
+}
 TEST_CASE("Stable C++API: RenderQuotedIdentifier quotes only when required", "[cpp_api]") {
 	using duckdb::cxx::RenderQuotedIdentifier;
 	REQUIRE(RenderQuotedIdentifier("col") == "col");
