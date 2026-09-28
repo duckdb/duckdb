@@ -534,6 +534,7 @@ unittest_release:
 	build/release/test/run $(T)
 
 TEST_CONFIGS_QUERY_VERIFICATION := \
+	test/configs/verify_statement_explain_sql.json \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \
 	test/configs/verify_statement_explain.json \
@@ -590,6 +591,7 @@ test_configs:
 
 test_configs_query_verification:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_QUERY_VERIFICATION),--test-config=$(cfg))
+
 
 test_configs_execution:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_EXECUTION),--test-config=$(cfg))

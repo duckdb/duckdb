@@ -24,15 +24,6 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}"
   )
 endif()
 
-set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
-
-if(MSVC OR MINGW)
-  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 rstrtmgr)
-endif()
-if(MSVC)
-  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} bcrypt)
-endif()
-
 if(MSVC)
   add_compile_options("/bigobj")
 endif()

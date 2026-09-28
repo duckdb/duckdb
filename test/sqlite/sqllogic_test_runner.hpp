@@ -150,7 +150,7 @@ public:
 private:
 	void ExecuteInternal(SQLLogicParser &parser, const string &script);
 	RequireResult CheckRequire(SQLLogicParser &parser, const vector<string> &params);
-	void ConfigureDefaultInMemoryTemporaryDirectory(const string &script);
+	void ConfigureDefaultInMemoryTemporaryDirectory(DuckDB &database, const string &db_path);
 	static void AddSkipReason(const string &reason);
 
 private:

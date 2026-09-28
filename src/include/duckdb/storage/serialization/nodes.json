@@ -91,6 +91,30 @@
     ]
   },
   {
+    "class": "BoundAtClause",
+    "includes": [
+      "duckdb/planner/tableref/bound_at_clause.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "unit",
+        "type": "Identifier"
+      },
+      {
+        "id": 101,
+        "name": "value",
+        "type": "Value",
+        "property": "val"
+      }
+    ],
+    "pointer_type": "unique_ptr",
+    "constructor": [
+      "unit",
+      "value"
+    ]
+  },
+  {
     "class": "BoundOrderByNode",
     "includes": [
       "duckdb/planner/bound_result_modifier.hpp"
