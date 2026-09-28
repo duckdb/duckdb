@@ -24,6 +24,13 @@
       "paths": [
         "test/optimizer/projection_placement.test"
       ]
+    },
+    {
+      "reason": "Checks exact SQL scope/compression topology; synthetic verification projections deliberately change it. Result coverage remains in the companion tests.",
+      "paths": [
+        "test/sql/sql_export/compression_fallbacks_plan.test",
+        "test/sql/sql_export/scope_reuse_plan.test"
+      ]
     }
   ]
 }

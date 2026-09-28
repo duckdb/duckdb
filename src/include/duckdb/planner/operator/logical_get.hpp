@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter_set.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 
 #include "duckdb/storage/table/row_group_order_options.hpp"
@@ -19,10 +20,14 @@
 namespace duckdb {
 class TableCatalogEntry;
 class DynamicTableFilterSet;
+struct LogicalPlanSQLExportField;
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
 public:
+	LogicalPlanSQLExportResult ToSQL(LogicalPlanSQLExportContext &context,
+	                                 const LogicalPlanVerificationPath &path) override;
+
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
@@ -64,6 +69,10 @@ public:
 	//! pushed down into the table scan
 	//! Stored so the can be included in explain output
 	ExtraOperatorInfo extra_info;
+	//! The scan consumed a projection whose source expression is no longer retained.
+	bool has_pushed_projection = false;
+	//! The effective AT clause the table was looked up with, retained for SQL reconstruction
+	unique_ptr<BoundAtClause> at_clause;
 	//! Contains a reference to dynamically generated table filters (through e.g. a join up in the tree)
 	shared_ptr<DynamicTableFilterSet> dynamic_filters;
 	//! Information for WITH ORDINALITY
@@ -119,6 +128,10 @@ protected:
 	void ResolveTypes() override;
 
 private:
+	friend class LogicalWindow;
+	LogicalPlanVerificationResult<LogicalPlanSQLExportRelation>
+	ExportSQLSource(LogicalPlanSQLExportContext &context, const LogicalPlanVerificationPath &path,
+	                optional_ptr<const LogicalPlanSQLExportField> ordinality = nullptr);
 	LogicalGet();
 
 private:

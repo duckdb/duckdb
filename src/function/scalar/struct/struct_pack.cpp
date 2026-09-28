@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
@@ -77,6 +78,18 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 }
 
 template <bool IS_STRUCT_PACK>
+static unique_ptr<ParsedExpression> StructPackUnbind(FunctionUnbindInput &input) {
+	auto &expression = input.expression;
+	vector<FunctionArgument> arguments;
+	for (idx_t i = 0; i < input.children.size(); i++) {
+		auto name = IS_STRUCT_PACK ? StructType::GetChildName(expression.GetReturnType(), i) : Identifier();
+		arguments.emplace_back(std::move(name), std::move(input.children[i]));
+	}
+	return make_uniq<FunctionExpression>(expression.Function().GetDefinition()->GetQualifiedName(),
+	                                     std::move(arguments));
+}
+
+template <bool IS_STRUCT_PACK>
 static ScalarFunction GetStructPackFunction() {
 	ScalarFunction fun(IS_STRUCT_PACK ? "struct_pack" : "row", {},
 	                   IS_STRUCT_PACK ? LogicalTypeId::STRUCT : LogicalTypeId::TUPLE, StructPackFunction,
@@ -96,6 +109,7 @@ static ScalarFunction GetStructPackFunction() {
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
+	fun.SetUnbindCallback(StructPackUnbind<IS_STRUCT_PACK>);
 	return fun;
 }
 

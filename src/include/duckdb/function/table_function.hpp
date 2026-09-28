@@ -52,6 +52,7 @@ enum class OrderByStatistics : uint8_t;
 struct RowGroupOrderOptions;
 class LogicalOperator;
 class Binder;
+class QueryNode;
 
 struct TableFunctionInfo {
 	DUCKDB_API virtual ~TableFunctionInfo();
@@ -426,6 +427,15 @@ typedef unique_ptr<FunctionData> (*table_function_combine_schema_t)(ClientContex
                                                                     vector<Identifier> &names);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
 
+struct TableFunctionToSQLResult {
+	unique_ptr<TableRef> source;
+	string unsupported_reason;
+};
+
+//! Reconstruct the unprojected source; the exporter applies scan projections, predicates and ordinality.
+//! Return an owned table reference without executing the source, or a reason why reconstruction is unsupported.
+typedef TableFunctionToSQLResult (*table_function_to_sql_t)(ClientContext &context, const LogicalGet &get);
+
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(Deserializer &deserializer, TableFunction &function);
@@ -557,6 +567,9 @@ public:
 	table_function_schedule_io_t schedule_io;
 	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
+	//! (Optional) reconstruct the source's SQL-visible state without retaining native objects.
+	//! Must not execute the source or perform effects during export.
+	table_function_to_sql_t to_sql = nullptr;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the partition info of the current scan operator

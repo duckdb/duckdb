@@ -77,6 +77,19 @@ private:
 	BoundAggregateFunction &bound_function;
 };
 
+class FunctionExpression;
+
+struct AggregateFunctionUnbindInput {
+	AggregateFunctionUnbindInput(const BoundAggregateExpression &expression_p,
+	                             vector<unique_ptr<ParsedExpression>> children_p);
+	~AggregateFunctionUnbindInput();
+
+	const BoundAggregateExpression &expression;
+	vector<unique_ptr<ParsedExpression>> children;
+};
+
+typedef unique_ptr<FunctionExpression> (*aggregate_function_unbind_t)(AggregateFunctionUnbindInput &input);
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)(AggregateStateInput &input);
 //! The type used for initializing hashed aggregate function states (batched: initializes `count` states)
@@ -194,6 +207,9 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	bind_aggregate_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
+	bool HasUnbindCallback() const { return unbind != nullptr; }
+	aggregate_function_unbind_t GetUnbindCallback() const { return unbind; }
+	void SetUnbindCallback(aggregate_function_unbind_t callback) { unbind = callback; }
 
 	bool HasStateInitCallback() const { return initialize != nullptr; }
 	aggregate_initialize_t GetStateInitCallback() const { return initialize; }
@@ -296,6 +312,7 @@ public:
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind = nullptr;
+	aggregate_function_unbind_t unbind = nullptr;
 
 	//! The destructor method (may be null)
 	aggregate_destructor_t destructor = nullptr;
@@ -393,6 +410,9 @@ public: // Callbacks
 	auto HasBindCallback() const -> bool { return callbacks.bind != nullptr; }
 	auto GetBindCallback() const -> bind_aggregate_function_t { return callbacks.bind; }
 	auto SetBindCallback(bind_aggregate_function_t callback) -> void { callbacks.bind = callback; }
+	auto HasUnbindCallback() const -> bool { return callbacks.unbind != nullptr; }
+	auto GetUnbindCallback() const -> aggregate_function_unbind_t { return callbacks.unbind; }
+	auto SetUnbindCallback(aggregate_function_unbind_t callback) -> void { callbacks.unbind = callback; }
 
 	auto HasStateInitCallback() const -> bool { return callbacks.initialize != nullptr; }
 	auto GetStateInitCallback() const -> aggregate_initialize_t { return callbacks.initialize; }

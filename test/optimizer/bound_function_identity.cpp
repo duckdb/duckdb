@@ -13,6 +13,10 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/planner.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
+
 using namespace duckdb;
 
 namespace {
@@ -363,4 +367,47 @@ TEST_CASE("Specializing a bound aggregate keeps its definition", "[optimizer][fu
 		RequireIdentityFunction(PlanIdentityFunctions(con, entry.first), Identifier(entry.second));
 	}
 	con.Rollback();
+}
+
+TEST_CASE("Exported recursive payload aggregates resolve qualified schemas",
+          "[optimizer][function_identity][recursive_cte]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("CREATE SCHEMA payload_schema; CREATE SCHEMA outer_schema; "
+	                                 "CREATE SCHEMA outer_schema.inner_schema"));
+	connection.BeginTransaction();
+	auto &catalog = Catalog::GetCatalog(*connection.context, Identifier("memory"));
+	MetaTransaction::Get(*connection.context)
+	    .ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
+	for (idx_t schema = 0; schema < 3; schema++) {
+		auto &entry = Catalog::GetEntry<AggregateFunctionCatalogEntry>(
+		    *connection.context, QualifiedName("system", "main", schema == 0 ? "min" : "max"));
+		auto functions = entry.functions;
+		functions.SetName("payload_choice");
+		functions.ApplyToFunctions([](AggregateFunction &function) { function.SetName("payload_choice"); });
+		CreateAggregateFunctionInfo info(std::move(functions));
+		info.SetQualifiedName(
+		    schema == 2 ? QualifiedName(vector<Identifier> {"memory", "outer_schema", "inner_schema"}, "payload_choice")
+		                : QualifiedName("memory", schema == 0 ? "main" : "payload_schema", "payload_choice"));
+		info.internal = false;
+		catalog.CreateFunction(*connection.context, info);
+	}
+	connection.Commit();
+	REQUIRE_NO_FAIL(connection.Query("SET search_path='payload_schema,main'"));
+	REQUIRE_NO_FAIL(connection.Query("SET debug_verify_statement='explain_sql_strict'"));
+	for (auto name : {"memory.main.payload_choice", "memory.payload_schema.payload_choice",
+	                  "memory.outer_schema.inner_schema.payload_choice", "payload_choice"}) {
+		CAPTURE(name);
+		auto expected = string(name) == "memory.main.payload_choice" ? 1 : 3;
+		auto ordinary = connection.Query("SELECT " + string(name) + "(v) FROM (VALUES(1),(3))t(v)");
+		REQUIRE_NO_FAIL(*ordinary);
+		REQUIRE(ordinary->GetValue(0, 0) == Value::INTEGER(expected));
+		auto recursive = connection.Query("WITH RECURSIVE r(k,v) USING KEY(k," + string(name) +
+		                                  "(v)) AS (SELECT * FROM (VALUES(1,1),(1,3))t(k,v) UNION ALL "
+		                                  "SELECT k+1,v FROM r WHERE k<2) SELECT k,v FROM r ORDER BY k");
+		REQUIRE_NO_FAIL(*recursive);
+		REQUIRE(recursive->RowCount() == 2);
+		REQUIRE(recursive->GetValue(1, 0) == Value::INTEGER(expected));
+		REQUIRE(recursive->GetValue(1, 1) == Value::INTEGER(expected));
+	}
 }
