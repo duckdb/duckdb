@@ -39,7 +39,7 @@ public:
 // Reader
 //===--------------------------------------------------------------------===//
 TableFunctionFileReader::TableFunctionFileReader(TableFunction function_p, OpenFileInfo file_p,
-                                                 named_parameter_map_t named_parameters_p, string reader_type_p)
+                                                 named_argument_map_t named_parameters_p, string reader_type_p)
     : BaseFileReader(std::move(file_p)), function(std::move(function_p)),
       named_parameters(std::move(named_parameters_p)), reader_type(std::move(reader_type_p)), file_is_assigned(false),
       exhausted(false) {
@@ -66,11 +66,13 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	vector<Value> inputs;
 	inputs.emplace_back(file.path);
 	auto parameters = named_parameters;
+	function.GetSignature().FillNamedDefaults(context, parameters);
 	vector<LogicalType> input_table_types;
 	vector<Identifier> input_table_names;
 	TableFunctionRef empty_ref;
+	BoundTableFunction bound_function(function);
 	TableFunctionBindInput bind_input(inputs, parameters, input_table_types, input_table_names,
-	                                  function.function_info.get(), nullptr, function, empty_ref);
+	                                  function.function_info.get(), nullptr, bound_function, empty_ref);
 	bind_input.multi_file_options = file_options;
 	bind_input.multi_file_scan = options.multi_file_scan;
 	if (!options.expected_names.empty()) {
@@ -272,12 +274,32 @@ unique_ptr<BaseFileReaderOptions> TableFunctionMultiFileWrapper::InitializeOptio
 	return make_uniq<TableFunctionFileReaderOptions>();
 }
 
+optional<pair<Identifier, LogicalType>> TableFunctionMultiFileWrapper::GetDeclaredOption(const Identifier &key) const {
+	auto &signature = function.GetSignature();
+	auto index = signature.GetParameterIndexByName(key);
+	if (index.IsValid()) {
+		auto &param = signature.GetParameter(index.GetIndex());
+		if (param.GetKind() != FunctionParameterKind::KEYWORD_ONLY) {
+			return {};
+		}
+		return make_pair(param.GetName(), param.GetType());
+	}
+	auto option_schema = signature.GetTypedKwargs();
+	auto option = option_schema ? option_schema->Find(key) : nullptr;
+	if (!option) {
+		return {};
+	}
+	return make_pair(option->name, option->type);
+}
+
 bool TableFunctionMultiFileWrapper::ParseNamedParameter(const Identifier &key, const Value &val,
                                                         TableFunctionFileReaderOptions &options) const {
-	if (function.named_parameters.find(key) == function.named_parameters.end()) {
+	auto declared_option = GetDeclaredOption(key);
+	if (!declared_option) {
 		return false;
 	}
-	options.named_parameters[key] = val;
+	// under the name of the option, whichever alias was used
+	options.named_parameters[declared_option->first] = val;
 	return true;
 }
 
@@ -299,11 +321,11 @@ bool TableFunctionMultiFileWrapper::ParseCopyOption(ClientContext &context, cons
                                                     vector<Identifier> &, vector<LogicalType> &) {
 	// COPY supports exactly the named parameters of the wrapped function - the only difference is that COPY passes
 	// the values as a list, and that a bare option (e.g. "auto_detect") means "true"
-	auto entry = function.named_parameters.find(key);
-	if (entry == function.named_parameters.end()) {
+	auto declared_option = GetDeclaredOption(key);
+	if (!declared_option) {
 		return false;
 	}
-	auto &type = entry->second;
+	auto &type = declared_option->second;
 	Value val;
 	if (type.id() == LogicalTypeId::LIST || (type.id() == LogicalTypeId::ANY && values.size() != 1)) {
 		// COPY passes the elements of a list-valued option as separate values - an option that takes any value is
@@ -539,8 +561,9 @@ unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindCopy(Client
 
 TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single_file_function, Identifier name,
                                                             TableFunctionMultiFileSettings settings) {
-	if (single_file_function.GetArguments().size() != 1 ||
-	    single_file_function.GetArguments()[0] != LogicalType::VARCHAR) {
+	auto &wrapped_signature = single_file_function.GetSignature();
+	if (wrapped_signature.GetPositionalParameterCount() != 1 ||
+	    wrapped_signature.GetParameter(0).GetType() != LogicalType::VARCHAR) {
 		throw InternalException("Only table functions taking a single VARCHAR file path can be wrapped in a multi "
 		                        "file function, %s does not",
 		                        single_file_function.name);
@@ -550,9 +573,11 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
 	}
 	TableFunctionMultiFileFunction result(std::move(name));
 	result.bind = TableFunctionMultiFileBind;
-	// forward the named parameters and the pushdown capabilities of the wrapped function
-	for (auto &named_parameter : single_file_function.named_parameters) {
-		result.named_parameters[named_parameter.first] = named_parameter.second;
+	// forward the options and the pushdown capabilities of the wrapped function
+	auto &signature = result.GetSignature();
+	auto wrapped_options = single_file_function.GetSignature().GetTypedKwargs();
+	if (wrapped_options) {
+		signature.ExtendTypedKwargs([&](TypedKwargs &options) { options = options.Merge(*wrapped_options); });
 	}
 	result.projection_pushdown = single_file_function.projection_pushdown;
 	result.filter_pushdown = single_file_function.filter_pushdown;

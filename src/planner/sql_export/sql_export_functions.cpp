@@ -164,7 +164,8 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 	}
 	const auto logical_argument_count = function.GetLogicalArguments().size();
 	const auto child_count = expression.GetChildren().size();
-	const bool retained_variadic_arguments = definition->HasVarArgs() && child_count >= logical_argument_count;
+	const bool retained_variadic_arguments =
+	    definition->GetSignature().GetArgs() && child_count >= logical_argument_count;
 	const bool has_scalar_arguments =
 	    child_count == logical_argument_count || retained_variadic_arguments || definition->HasUnbindCallback();
 	const bool has_expected_arguments =
