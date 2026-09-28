@@ -5751,6 +5751,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_h
  * one, and the legacy analogues. An unknown name is rejected unless an extension that defines it can be autoloaded; to
  * stage a setting for an extension before startup, use `duckdb_v2_instance_set_option()`.
  *
+ * Refuses with ERROR_RESOURCE_IN_USE while this connection has a live result, whatever the scope. Drain, destroy, or
+ * interrupt that result first. The refusal covers this connection only: a GLOBAL write through another connection or
+ * `duckdb_v2_instance_set_option()` is not refused, and live results on other connections may observe it, as with SQL
+ * `SET GLOBAL`.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -8531,8 +8536,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_repl
  * connection-scoped ones before instance-wide ones, and the first to claim a name wins. A scan cannot be registered
  * twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering an instance-wide scan
  * while queries are binding on other connections is not thread-safe; register from an extension load callback or before
- * issuing queries. The caller still owns the handle after registration and must destroy it with
- * `duckdb_v2_replacement_scan_destroy()`, which does not affect the registered scan.
+ * issuing queries. A connection-scoped scan is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live
+ * result; drain, destroy, or interrupt that result first, then register the same handle again. The caller still owns
+ * the handle after registration and must destroy it with `duckdb_v2_replacement_scan_destroy()`, which does not affect
+ * the registered scan.
  *
  * history:
  * - stable: v2.0.0

@@ -131,13 +131,12 @@ public:
 		if (registered) {
 			throw InvalidInputException("The replacement scan is already registered.");
 		}
-
-		registered = true;
-
 		auto data = make_uniq<CV2ReplacementScanData>();
 		data->callback = info.callback;
 		data->user_data = info.user_data;
 		RegisterScan(ReplacementScan(CV2ReplacementScanTrampoline, std::move(data)));
+
+		registered = true;
 	}
 
 	virtual ~CV2ReplacementScan() = default;
@@ -154,14 +153,14 @@ public:
 	}
 
 	void RegisterScan(ReplacementScan scan) override {
-		auto &ctx = connection.context;
-
-		if (GetBusySlot(*ctx)->owner.load() != nullptr) {
-			throw duckdb::ResourceInUseException(
-			    "connection has a live result; drain, destroy, or interrupt it before registering a replacement scan.");
+		auto &context = *connection.context;
+		// Binding a later fragment of a live result reads this list, so refuse while one is live.
+		if (GetBusySlot(context)->owner.load() != nullptr) {
+			throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before "
+			                             "registering a replacement scan (or open another connection)");
 		}
 		// Connection-scoped: this touches only the connection's own state, never the shared database config.
-		ctx->config.replacement_scans.push_back(make_shared_ptr<ReplacementScan>(std::move(scan)));
+		context.config.replacement_scans.push_back(make_shared_ptr<ReplacementScan>(std::move(scan)));
 	}
 
 private:

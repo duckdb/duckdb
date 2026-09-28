@@ -1,5 +1,4 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
-#include "duckdb/main/capi_v2/capi_v2_result_internal.hpp"
 
 namespace duckdb {
 namespace capiv2 {
@@ -57,10 +56,10 @@ DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn
 	DUCKDB_CHECK_ARG(setting);
 	return WithErrorHandler(err, [&]() {
 		auto &client = *Convert(conn)->context;
-
+		// The live result's execution reads the session config, so refuse while one is live.
 		if (GetBusySlot(client)->owner.load() != nullptr) {
-			throw duckdb::ResourceInUseException(
-			    "connection has a live result; drain, destroy, or interrupt it before setting an option.");
+			throw duckdb::ResourceInUseException("connection has a live result; drain, destroy, or interrupt it "
+			                                     "before setting an option (or open another connection)");
 		}
 		duckdb::PhysicalSet::SetVariable(client, duckdb::Identifier(ConvertIdentifierName(name)),
 		                                 MapSettingScope(scope), duckdb::Value(duckdb::string(Convert(setting))));
