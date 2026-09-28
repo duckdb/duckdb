@@ -1,0 +1,239 @@
+# name: test/sql/sql_export/mark_results.test
+# description: SQL export preserves scalar MARK results and rejects unsupported conjunction semantics
+# group: [sql_export]
+
+statement ok
+SET debug_verify_statement='explain_sql_strict';
+
+statement ok
+SET threads=1;
+
+query I rowsort
+SELECT 1 = ANY(SELECT 1);
+----
+1
+
+query I rowsort
+SELECT 1 = ANY(SELECT 2);
+----
+0
+
+query I rowsort
+SELECT 'ABC' COLLATE nocase IN (SELECT 'aBc');
+----
+1
+
+query I rowsort
+SELECT NULL::INTERVAL IN (SELECT INTERVAL 1 DAY);
+----
+NULL
+
+query I rowsort
+SELECT 1 = ANY(SELECT 1 WHERE false);
+----
+0
+
+query I rowsort
+SELECT 1 = ANY(SELECT NULL::INTEGER);
+----
+NULL
+
+query I rowsort
+SELECT 1 NOT IN (VALUES (2),(NULL));
+----
+NULL
+
+query I rowsort
+SELECT 1 WHERE (1,2) IN (SELECT 1,2);
+----
+1
+
+query I rowsort
+SELECT 1 WHERE (1,2) IN (VALUES (1,2),(1,2),(NULL,2));
+----
+1
+
+statement error
+EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a IS DISTINCT FROM 2;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: .*MARK.*semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (NULL::INTEGER)) l(a) JOIN BY (TYPE MARK) (VALUES (2)) r(b) ON a IS DISTINCT FROM NULL::INTEGER;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: .*MARK.*semantics.*
+
+statement ok
+CREATE TABLE mark_probe(id INTEGER,label VARCHAR,a INTEGER,c INTEGER);
+
+statement ok
+INSERT INTO mark_probe VALUES (0,'null',NULL,NULL),(1,'one',1,NULL),(2,'two',2,2);
+
+statement ok
+CREATE TABLE mark_build(b INTEGER,d INTEGER);
+
+statement ok
+INSERT INTO mark_build VALUES (1,NULL);
+
+statement error
+EXPLAIN (SQL) SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement ok
+DELETE FROM mark_build;
+
+statement error
+EXPLAIN (SQL) SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement ok
+DROP TABLE IF EXISTS l;
+
+statement ok
+DROP TABLE IF EXISTS r;
+
+statement ok
+CREATE TABLE l(g DOUBLE,k INTEGER,x INTEGER);
+
+statement ok
+CREATE TABLE r(g DOUBLE,k INTEGER,y INTEGER);
+
+statement ok
+INSERT INTO l SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1,2,10),(1,2,NULL),(1,3,NULL),(2,1,20),(NULL,1,10),(NULL,1,NULL),(1,NULL,20),(NULL,NULL,NULL)) t(g,k,v);
+
+statement ok
+INSERT INTO r SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement ok
+DROP TABLE IF EXISTS l;
+
+statement ok
+DROP TABLE IF EXISTS r;
+
+statement ok
+CREATE TABLE l(g DOUBLE,k INTEGER,x DECIMAL(9,2));
+
+statement ok
+CREATE TABLE r(g DOUBLE,k INTEGER,y DECIMAL(9,2));
+
+statement ok
+INSERT INTO l SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1,2,10),(1,2,NULL),(1,3,NULL),(2,1,20),(NULL,1,10),(NULL,1,NULL),(1,NULL,20),(NULL,NULL,NULL)) t(g,k,v);
+
+statement ok
+INSERT INTO r SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement ok
+DROP TABLE IF EXISTS l;
+
+statement ok
+DROP TABLE IF EXISTS r;
+
+statement ok
+CREATE TABLE l(g DOUBLE,k INTEGER,x INTEGER[]);
+
+statement ok
+CREATE TABLE r(g DOUBLE,k INTEGER,y INTEGER[]);
+
+statement ok
+INSERT INTO l SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE [v,NULL] END FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1,2,10),(1,2,NULL),(1,3,NULL),(2,1,20),(NULL,1,10),(NULL,1,NULL),(1,NULL,20),(NULL,NULL,NULL)) t(g,k,v);
+
+statement ok
+INSERT INTO r SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE [v,NULL] END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement ok
+DROP TABLE IF EXISTS l;
+
+statement ok
+DROP TABLE IF EXISTS r;
+
+statement ok
+CREATE TABLE l(g DOUBLE,k INTEGER,x STRUCT(v INTEGER));
+
+statement ok
+CREATE TABLE r(g DOUBLE,k INTEGER,y STRUCT(v INTEGER));
+
+statement ok
+INSERT INTO l SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE {'v':v} END FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1,2,10),(1,2,NULL),(1,3,NULL),(2,1,20),(NULL,1,10),(NULL,1,NULL),(1,NULL,20),(NULL,NULL,NULL)) t(g,k,v);
+
+statement ok
+INSERT INTO r SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE {'v':v} END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+
+statement ok
+DROP TABLE IF EXISTS l;
+
+statement ok
+DROP TABLE IF EXISTS r;
+
+statement ok
+CREATE TABLE l(g DOUBLE,k INTEGER,x VARCHAR COLLATE nocase);
+
+statement ok
+CREATE TABLE r(g DOUBLE,k INTEGER,y VARCHAR COLLATE nocase);
+
+statement ok
+INSERT INTO l SELECT g,k,CASE v WHEN 10 THEN 'a' WHEN 20 THEN 'B' ELSE NULL END FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1,2,10),(1,2,NULL),(1,3,NULL),(2,1,20),(NULL,1,10),(NULL,1,NULL),(1,NULL,20),(NULL,NULL,NULL)) t(g,k,v);
+
+statement ok
+INSERT INTO r SELECT g,k,CASE v WHEN 10 THEN 'a' WHEN 20 THEN 'B' ELSE NULL END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
+
+statement error
+EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+----
+<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*

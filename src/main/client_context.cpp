@@ -317,7 +317,7 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));
 	}
 	active_query = make_uniq<ActiveQueryContext>();
-	if (transaction.IsAutoCommit()) {
+	if (transaction.IsAutoCommit() && !transaction.HasActiveTransaction()) {
 		transaction.BeginTransaction();
 	}
 
@@ -494,6 +494,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 		D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
 	}
 
+	if (logical_planner.properties.bound_all_parameters) {
+		logical_planner.Optimize();
+	}
 	auto logical_plan = std::move(logical_planner.plan);
 	// extract the result column names from the plan
 	result->properties = logical_planner.properties;
@@ -503,31 +506,6 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatementInternal
 	if (!logical_planner.properties.bound_all_parameters) {
 		// not all parameters were bound - return
 		return result;
-	}
-#ifdef DEBUG
-	logical_plan->Verify(*this);
-#endif
-	bool optimize = Settings::Get<EnableOptimizerSetting>(*this);
-	if (Settings::Get<DebugDisableOptimizerSetting>(*this)) {
-		// verify disable optimizer - disable EXCEPT for explain, otherwise every single EXPLAIN query breaks
-		if (logical_plan->type != LogicalOperatorType::LOGICAL_EXPLAIN) {
-			optimize = false;
-		}
-	}
-	if (logical_plan->RequireOptimizer()) {
-		{
-			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
-			Optimizer optimizer(*logical_planner.binder, *this);
-			if (optimize) {
-				logical_plan = optimizer.Optimize(std::move(logical_plan));
-			} else {
-				logical_plan = optimizer.LowerMandatoryAggregateRewrites(std::move(logical_plan));
-			}
-			D_ASSERT(logical_plan);
-		}
-#ifdef DEBUG
-		logical_plan->Verify(*this);
-#endif
 	}
 
 	// Convert the logical query plan into a physical query plan.
