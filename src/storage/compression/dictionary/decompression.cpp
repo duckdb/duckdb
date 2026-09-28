@@ -75,13 +75,13 @@ void CompressedStringScanState::SegmentLayout::ValidateIndexBuffer() const {
 // String Reading
 //===--------------------------------------------------------------------===//
 uint32_t CompressedStringScanState::SegmentLayout::GetStringLength(idx_t index) const {
-	const auto &offsets = index_buffer;
-	D_ASSERT(index < offsets.size());
+	D_ASSERT(index < index_buffer.size());
 	if (index == 0) {
 		return 0;
 	}
-	D_ASSERT(offsets[index] >= offsets[index - 1]);
-	const auto string_length = offsets[index] - offsets[index - 1];
+	D_ASSERT(index_buffer[index] >= index_buffer[index - 1]);
+	// Offsets are validated up front by ValidateIndexBuffer, so the length can be read directly.
+	const auto string_length = index_buffer[index] - index_buffer[index - 1];
 	return string_length;
 }
 
@@ -183,15 +183,14 @@ void CompressedStringScanState::InitializeDictionary(const ColumnSegment &segmen
 	// Validate the whole index buffer once so the dictionary build below can trust it.
 	layout.ValidateIndexBuffer();
 
-	const auto &offsets = layout.index_buffer;
-	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), offsets.size());
-	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, offsets.size());
+	dictionary = DictionaryVector::CreateReusableDictionary(segment.GetType(), layout.index_buffer.size());
+	auto dict_child_data = FlatVector::Writer<string_t>(dictionary->data, layout.index_buffer.size());
 	// A separate validity scan can mark a row selecting index zero valid, so initialize its string slot.
 	dict_child_data.WriteStringRef(string_t(nullptr, 0));
 	FlatVector::SetNull(dictionary->data, 0, true);
-	for (idx_t i = 1; i < offsets.size(); i++) {
+	for (idx_t i = 1; i < layout.index_buffer.size(); i++) {
 		const auto str_len = layout.GetStringLength(i);
-		dict_child_data.WriteStringRef(layout.FetchStringFromDict(offsets[i], str_len));
+		dict_child_data.WriteStringRef(layout.FetchStringFromDict(layout.index_buffer[i], str_len));
 	}
 }
 
@@ -219,6 +218,32 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			FlatVector::SetNull(result, result_offset + i, true);
 		}
 	}
+}
+
+void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
+                                                       idx_t start, idx_t scan_count) {
+	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
+	D_ASSERT(result_offset == 0);
+
+	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
+
+	// Create a selection vector of sufficient size if we don't already have one.
+	if (!sel_vec || sel_vec_size < decompress_count) {
+		sel_vec_size = decompress_count;
+		sel_vec = make_buffer<SelectionVector>(decompress_count);
+	}
+
+	// Scanning 2048 values, emitting a dict vector
+	data_ptr_t dst = data_ptr_cast(sel_vec->data());
+	auto src = GetSelectionBytes(start, decompress_count);
+
+	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src.data(), decompress_count, layout.current_width);
+
+	sel_vec->ShiftLeft(start_offset, scan_count);
+	layout.ValidateDictionaryIndices(*sel_vec, 0, scan_count);
+
+	result.Dictionary(dictionary, *sel_vec, scan_count);
 }
 
 unsafe_array_ptr<const uint8_t> CompressedStringScanState::GetSelectionBytes(idx_t start,
@@ -251,32 +276,6 @@ void CompressedStringScanState::UnpackSelection(idx_t start, idx_t decompress_co
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), source.data(), decompress_count,
 	                                          layout.current_width);
-}
-
-void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
-                                                       idx_t start, idx_t scan_count) {
-	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
-	D_ASSERT(result_offset == 0);
-
-	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
-	auto source = GetSelectionBytes(start, decompress_count);
-
-	// Create a selection vector of sufficient size if we don't already have one.
-	if (!sel_vec || sel_vec_size < decompress_count) {
-		sel_vec_size = decompress_count;
-		sel_vec = make_buffer<SelectionVector>(decompress_count);
-	}
-
-	// Scanning 2048 values, emitting a dict vector
-	data_ptr_t dst = data_ptr_cast(sel_vec->data());
-
-	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, source.data(), decompress_count, layout.current_width);
-
-	sel_vec->ShiftLeft(start_offset, scan_count);
-	layout.ValidateDictionaryIndices(*sel_vec, 0, scan_count);
-
-	result.Dictionary(dictionary, *sel_vec, scan_count);
 }
 
 //===--------------------------------------------------------------------===//
