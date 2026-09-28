@@ -4493,14 +4493,14 @@ public:
 	static PartitionSortedOptions
 	TransformPartitionOptSortedOptions(PEGTransformer &transformer,
 	                                   vector<unique_ptr<ParsedExpression>> partition_options,
-	                                   optional<vector<unique_ptr<ParsedExpression>>> sorted_options);
+	                                   optional<vector<OrderByNode>> sorted_options);
 	static PartitionSortedOptions
-	TransformSortedOptPartitionOptions(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> sorted_options,
+	TransformSortedOptPartitionOptions(PEGTransformer &transformer, vector<OrderByNode> sorted_options,
 	                                   optional<vector<unique_ptr<ParsedExpression>>> partition_options);
 	static vector<unique_ptr<ParsedExpression>>
 	TransformPartitionOptions(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression);
-	static vector<unique_ptr<ParsedExpression>> TransformSortedOptions(PEGTransformer &transformer,
-	                                                                   vector<unique_ptr<ParsedExpression>> expression);
+	static vector<OrderByNode> TransformSortedOptions(PEGTransformer &transformer,
+	                                                  vector<OrderByNode> order_by_expression_list);
 	static bool TransformWithDataOnly(PEGTransformer &transformer);
 	static bool TransformWithNoData(PEGTransformer &transformer);
 	static ColumnList TransformIdentifierList(PEGTransformer &transformer, const vector<Identifier> &identifier);

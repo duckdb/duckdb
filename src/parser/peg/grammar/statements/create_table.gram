@@ -14,7 +14,7 @@ PartitionSortedOptions <- PartitionOptSortedOptions / SortedOptPartitionOptions
 PartitionOptSortedOptions <- PartitionOptions SortedOptions?
 SortedOptPartitionOptions <- SortedOptions PartitionOptions?
 PartitionOptions <- 'PARTITIONED' 'BY' Parens(List(Expression))
-SortedOptions <- 'SORTED' 'BY' Parens(List(Expression))
+SortedOptions <- 'SORTED' 'BY' Parens(OrderByExpressionList)
 
 WithData <- WithDataOnly / WithNoData
 WithDataOnly <- 'WITH' 'DATA'

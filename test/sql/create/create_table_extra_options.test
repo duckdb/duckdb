@@ -12,6 +12,33 @@ CREATE TABLE integers(i INTEGER) SORTED BY (i);
 ----
 <REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
 
+# sort modifiers
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (i ASC);
+----
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE integers(i INTEGER, j VARCHAR) SORTED BY (i DESC NULLS FIRST, j ASCENDING NULLS LAST);
+----
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (i DESCENDING) PARTITIONED BY (i);
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
+# SORTED BY ALL is not supported
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (ALL);
+----
+<REGEX>:.*Parser Error.*
+
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY ();
+----
+<REGEX>:.*Parser Error.*
+
 statement error
 CREATE TABLE integers(i INTEGER) PARTITIONED BY (i) SORTED BY (i);
 ----

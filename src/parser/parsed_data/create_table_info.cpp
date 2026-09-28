@@ -27,7 +27,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 		result->partition_keys.push_back(partition->Copy());
 	}
 	for (auto &order : sort_keys) {
-		result->sort_keys.push_back(order->Copy());
+		result->sort_keys.emplace_back(order.type, order.null_order, order.expression->Copy());
 	}
 	for (auto &option : options) {
 		result->options.emplace(option.first, option.second->Copy());
@@ -36,6 +36,23 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
 	return std::move(result);
+}
+
+vector<unique_ptr<ParsedExpression>> CreateTableInfo::GetLegacySortKeys() const {
+	vector<unique_ptr<ParsedExpression>> result;
+	for (auto &order : sort_keys) {
+		result.push_back(order.expression->Copy());
+	}
+	return result;
+}
+
+void CreateTableInfo::SetLegacySortKeys(vector<unique_ptr<ParsedExpression>> legacy_sort_keys) {
+	if (!sort_keys.empty()) {
+		return;
+	}
+	for (auto &expr : legacy_sort_keys) {
+		sort_keys.emplace_back(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT, std::move(expr));
+	}
 }
 
 string CreateTableInfo::ExtraOptionsToString() const {
@@ -51,7 +68,7 @@ string CreateTableInfo::ExtraOptionsToString() const {
 	if (!sort_keys.empty()) {
 		ret += " SORTED BY (";
 		for (auto &order : sort_keys) {
-			ret += order->ToString() + ",";
+			ret += order.ToString() + ",";
 		}
 		ret.pop_back();
 		ret += ")";

@@ -12,6 +12,22 @@ CREATE TABLE integers SORTED BY (i) as select range i from range(10);
 ----
 <REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
 
+# sort modifiers
+statement error
+CREATE TABLE integers SORTED BY (i ASC) as select range i from range(10);
+----
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE t (i) SORTED BY (i DESC NULLS LAST) AS FROM range(10) t1(i);
+----
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE integers PARTITIONED BY (i) SORTED BY (i DESC NULLS FIRST) as select range i from range(10);
+----
+<REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
+
 statement error
 CREATE TABLE integers PARTITIONED BY (i) SORTED BY (i) as select range i from range(10);
 ----
