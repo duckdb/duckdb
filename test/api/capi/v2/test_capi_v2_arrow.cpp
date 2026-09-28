@@ -640,8 +640,7 @@ void ArrowTopLevelValidityExec(duckdb_v2_scalar_function_exec_info_handle info, 
 	auto bigint = ArrowTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
 	duckdb_v2_logical_type_handle mood = nullptr;
 	auto text_str = Convert("mood");
-	if (!bigint ||
-	    duckdb_v2_context_create_type_from_text(context, &text_str, &mood, err) != DUCKDB_V2_ERROR_NONE) {
+	if (!bigint || duckdb_v2_context_create_type_from_text(context, &text_str, &mood, err) != DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_logical_type_destroy(&bigint);
 		return;
 	}
