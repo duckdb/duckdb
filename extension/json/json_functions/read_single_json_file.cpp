@@ -307,8 +307,9 @@ static unique_ptr<NodeStatistics> ReadSingleJSONFileCardinality(ClientContext &c
 
 TableFunction JSONFunctions::GetReadSingleJSONFileTableFunction(shared_ptr<JSONScanInfo> function_info) {
 	const auto scan_type = function_info->type;
-	TableFunction table_function("read_single_json_file", {LogicalType::VARCHAR}, ReadSingleJSONFileFunction,
-	                             ReadSingleJSONFileBind, ReadSingleJSONFileInitGlobal, ReadSingleJSONFileInitLocal);
+	TableFunction table_function(
+	    "read_single_json_file", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	    ReadSingleJSONFileFunction, ReadSingleJSONFileBind, ReadSingleJSONFileInitGlobal, ReadSingleJSONFileInitLocal);
 	JSONScan::TableFunctionDefaults(table_function);
 	if (scan_type != JSONScanType::READ_JSON_OBJECTS) {
 		// read_json_objects always emits a single JSON column - it has no schema options
@@ -333,8 +334,9 @@ TableFunction JSONFunctions::GetJSONTableFunction(Identifier name, shared_ptr<JS
 	// the schema is determined by combining the schemas of up to 32 files - the keys of the files are unified, so a
 	// file does not need to have every column of the combined schema
 	settings.maximum_sample_files = 32;
-	return TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
-	                                                     std::move(settings));
+	auto function = TableFunctionMultiFileWrapper::CreateFunction(std::move(single_file_function), std::move(name),
+	                                                              std::move(settings));
+	return function;
 }
 
 static TableFunctionSet CreateJSONFunctionSet(Identifier name, shared_ptr<JSONScanInfo> function_info) {
