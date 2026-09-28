@@ -102,6 +102,7 @@ BoundTableFunction::BoundTableFunction(shared_ptr<const TableFunction> function_
 	supports_read_ahead = function.supports_read_ahead;
 	schedule_io = function.schedule_io;
 	to_string = function.to_string;
+	to_sql = function.to_sql;
 	table_scan_progress = function.table_scan_progress;
 	get_partition_data = function.get_partition_data;
 	get_bind_info = function.get_bind_info;
