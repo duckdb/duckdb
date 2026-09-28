@@ -706,6 +706,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
                                     idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = state.GetPositionInSegment();
+	D_ASSERT(start <= segment.count.load());
+	D_ASSERT(scan_count <= segment.count.load() - start);
 
 	bool enable_fsst_vectors = false;
 	if (ALLOW_FSST_VECTORS && scan_state.layout.have_symbol_table) {
@@ -756,7 +758,9 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
                          const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = state.GetPositionInSegment();
-
+	D_ASSERT(start <= segment.count.load());
+	D_ASSERT(vector_count <= segment.count.load() - start);
+	D_ASSERT(sel_count <= vector_count);
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	auto &str_allocator = StringVector::GetStringAllocator(result);
@@ -765,6 +769,7 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = sel.get_index(i);
+		D_ASSERT(index < vector_count);
 		result_data[i] = scan_state.DecompressString(strings.GetCompressedString(index), str_allocator);
 	}
 }
@@ -774,6 +779,10 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 //===--------------------------------------------------------------------===//
 void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
+	D_ASSERT(row_id >= 0);
+	auto row_index = NumericCast<idx_t>(row_id);
+	D_ASSERT(row_index < segment.count.load());
+
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(state.context, segment.GetBlockHandle());
 	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "FSST");
@@ -784,7 +793,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 
 	// We basically just do a scan of 1 which is kinda expensive as we need to repeatedly delta decode until we
 	// reach the row we want, we could consider a more clever caching trick if this is slow
-	auto offsets = CalculateBpDeltaOffsets(-1, UnsafeNumericCast<idx_t>(row_id), 1);
+	auto offsets = CalculateBpDeltaOffsets(-1, row_index, 1);
 
 	auto bitunpack_buffer = unique_ptr<uint32_t[]>(new uint32_t[offsets.total_bitunpack_count]);
 	BitUnpackRange(layout.lengths, data_ptr_cast(bitunpack_buffer.get()), offsets.total_bitunpack_count,
@@ -889,10 +898,17 @@ FSSTScanState::SegmentLayout FSSTScanState::ParseFSSTSegmentHeader(CompressionSe
 // - bitunpacking needs to be aligned to BITPACKING_ALGORITHM_GROUP_SIZE
 // - delta decoding needs to decode from the last known value.
 bp_delta_offsets_t FSSTStorage::CalculateBpDeltaOffsets(int64_t last_known_row, idx_t start, idx_t scan_count) {
-	D_ASSERT((idx_t)(last_known_row + 1) <= start);
+	D_ASSERT(last_known_row >= -1);
+	// The next scan resumes at last_known_row + 1, which is start + scan_count.
+	// Keep that value within int64_t.
+	const auto max_row = static_cast<idx_t>(NumericLimits<int64_t>::Maximum());
+	if (start > max_row || scan_count > max_row - start) {
+		ThrowInvalidFSSTSegment("row range exceeded the supported limit");
+	}
 	bp_delta_offsets_t result;
 
-	result.delta_decode_start_row = (idx_t)(last_known_row + 1);
+	result.delta_decode_start_row = last_known_row < 0 ? 0 : static_cast<idx_t>(last_known_row) + 1;
+	D_ASSERT(result.delta_decode_start_row <= start);
 	result.bitunpack_alignment_offset =
 	    result.delta_decode_start_row % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 	result.bitunpack_start_row = result.delta_decode_start_row - result.bitunpack_alignment_offset;
@@ -901,6 +917,10 @@ bp_delta_offsets_t FSSTStorage::CalculateBpDeltaOffsets(int64_t last_known_row, 
 	result.total_delta_decode_count = scan_count + result.unused_delta_decoded_values;
 	result.total_bitunpack_count =
 	    BitpackingPrimitives::RoundUpToAlgorithmGroupSize<idx_t>(scan_count + result.scan_offset);
+	// Both decoding buffers contain uint32_t values, including complete groups in the unpack buffer.
+	if (result.total_bitunpack_count > NumericLimits<size_t>::Maximum() / sizeof(uint32_t)) {
+		ThrowInvalidFSSTSegment("decoding buffer size was out of range");
+	}
 
 	D_ASSERT(result.total_delta_decode_count + result.bitunpack_alignment_offset <= result.total_bitunpack_count);
 	return result;
