@@ -47,7 +47,7 @@ public:
 			const annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
 			file_size = cached_file->validation_info.file_size;
 		}
-		const idx_t block_size = cache.GetCacheBlockSize(cached_file->path);
+		const idx_t block_size = cache.GetCacheMaxBlockSize(cached_file->path);
 		const idx_t num_blocks = (file_size + block_size - 1) / block_size;
 		// Estimated memory consumption for each block metadata.
 		static constexpr idx_t BLOCK_METADATA_SIZE = sizeof(CacheBlock);
@@ -65,7 +65,7 @@ private:
 	shared_ptr<CachedFile> cached_file;
 };
 
-idx_t ExternalFileCache::GetCacheBlockSize(const string &path) const {
+idx_t ExternalFileCache::GetCacheMaxBlockSize(const string &path) const {
 	auto &db = buffer_manager.GetDatabase();
 	if (FileSystem::IsRemoteFile(path)) {
 		return Settings::Get<ExternalFileCacheRemoteMaxBlockSizeSetting>(db);

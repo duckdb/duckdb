@@ -431,7 +431,7 @@ TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[exter
 	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
 	auto &cache = db_instance.GetExternalFileCache();
 
-	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const idx_t FILE_SIZE = 3 * BLOCK_SIZE + 50;
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_cache_sized.bin", content);
@@ -456,6 +456,33 @@ TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[exter
 	REQUIRE(ReadFull(*handle, 10, FILE_SIZE - 10) == content.substr(FILE_SIZE - 10, 10));
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{3 * BLOCK_SIZE, 50}});
 	REQUIRE(CountCachedBlocks(cache) == 4);
+}
+
+TEST_CASE("Reads past the end of the file fetch only the bytes in it", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto &cache = db_instance.GetExternalFileCache();
+
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
+	const idx_t FILE_SIZE = 2 * BLOCK_SIZE + 50;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_past_end.bin", content);
+
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	auto group = handle->Read(100, FILE_SIZE - 10);
+	REQUIRE(group.GetHandles().size() == 1);
+	REQUIRE(group.GetHandles()[0].length == 10);
+	string tail(10, '\0');
+	group.CopyTo(reinterpret_cast<data_ptr_t>(&tail[0]), 10);
+	REQUIRE(tail == content.substr(FILE_SIZE - 10));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{2 * BLOCK_SIZE, 50}});
+
+	REQUIRE(handle->Read(10, FILE_SIZE).GetHandles().empty());
+	REQUIRE(recording_fs->TakeReads().empty());
+	REQUIRE(CountCachedBlocks(cache) == 1);
 }
 
 TEST_CASE("Disabled external file cache does not insert into ObjectCache", "[external_file_cache]") {
@@ -499,7 +526,7 @@ TEST_CASE("Sequential read preserves its position when the cache is disabled", "
 	auto &cache = db.instance->GetExternalFileCache();
 	auto tracking_fs = make_uniq<EFCTrackingFileSystem>();
 
-	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string first_block(block_size, 'A');
 	const string second_block(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_disabled_sequential_position.bin", first_block + second_block);
@@ -625,7 +652,7 @@ TEST_CASE("Disabling external file cache clears ObjectCache sentinels", "[extern
 	auto &cache = db_instance.GetExternalFileCache();
 	auto &object_cache = db_instance.GetObjectCache();
 
-	const auto block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const auto block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const auto content = MakeTestContent(block_size);
 	EFCTestFileGuard test_file("test_efc_object_cache_disable.bin", content);
 
@@ -657,7 +684,7 @@ TEST_CASE("Entry evicted while referenced allows re-creation of the same path", 
 	auto &cache = db_instance.GetExternalFileCache();
 	auto &object_cache = db_instance.GetObjectCache();
 
-	const auto block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const auto block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const auto content = MakeTestContent(block_size);
 	EFCTestFileGuard test_file("test_efc_evict_referenced_entry.bin", content);
 
@@ -701,7 +728,7 @@ TEST_CASE("Failed CachingFileHandle construction leaves evictable cached file en
 
 	REQUIRE(cache.GetCachedFileCount() == 2);
 
-	const auto content = MakeTestContent(cache.GetCacheBlockSize(missing_a));
+	const auto content = MakeTestContent(cache.GetCacheMaxBlockSize(missing_a));
 	WriteTestContent(missing_a, content);
 	{
 		auto handle = cfs.OpenFile(MakeTestOpenFileInfo(missing_a), FileFlags::FILE_FLAGS_READ);
@@ -721,7 +748,7 @@ TEST_CASE("File with freshness deadline but no validators is cached and reused",
 
 	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
 
-	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
 	const string content_b(BLOCK_SIZE, 'B'); // same size as content_a
 	EFCTestFileGuard test_file("test_efc_freshness_reuse.bin", content_a);
@@ -763,7 +790,7 @@ TEST_CASE("NO_VALIDATION retains and enforces the initial freshness deadline", "
 
 	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
 
-	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
 	const string content_b(BLOCK_SIZE, 'B');
 	const string content_c(BLOCK_SIZE, 'C');
@@ -818,7 +845,7 @@ TEST_CASE("File with freshness deadline is invalidated when the file size change
 
 	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
 
-	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
 	const string content_b(BLOCK_SIZE * 2, 'B');
 	EFCTestFileGuard test_file("test_efc_freshness_size_change.bin", content_a);
@@ -848,7 +875,7 @@ TEST_CASE("Long-lived handle does not use cache after the freshness deadline", "
 
 	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
 
-	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
 	const string content_b(BLOCK_SIZE, 'B');
 	EFCTestFileGuard test_file("test_efc_freshness_long_lived_handle.bin", content_a);
@@ -873,7 +900,7 @@ TEST_CASE("Long-lived handle with validators stops using cache after the freshne
 	auto validating_fs = make_uniq<CachePolicyFileSystem>();
 	validating_fs->cache_valid_until = timestamp_t(Timestamp::GetCurrentTimestamp().value + 600 * 1000000LL);
 
-	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(block_size, 'A');
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_validator_freshness_long_lived_handle.bin", content_a);
@@ -899,7 +926,7 @@ TEST_CASE("File marked as not cacheable does not retain cached blocks", "[extern
 	auto &cache = db.instance->GetExternalFileCache();
 	auto policy_fs = make_uniq<CachePolicyFileSystem>();
 
-	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(block_size, 'A');
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_no_store.bin", content_a);
@@ -927,7 +954,7 @@ TEST_CASE("Explicit cache reuse prohibition is honored under NO_VALIDATION", "[e
 	auto policy_fs = make_uniq<CachePolicyFileSystem>();
 	policy_fs->cache_valid_until = timestamp_t::ninfinity();
 
-	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(block_size, 'A');
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_no_reuse_no_validation.bin", content_a);
@@ -955,7 +982,7 @@ TEST_CASE("Expired freshness deadline is not served from cache", "[external_file
 	auto fresh_fs = make_uniq<FreshnessOnlyFileSystem>();
 	fresh_fs->max_age_micros = -1000000; // deadline is always in the past
 
-	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
 	const string content_b(BLOCK_SIZE, 'B'); // same size as content_a
 	EFCTestFileGuard test_file("test_efc_freshness_expired.bin", content_a);
@@ -980,7 +1007,7 @@ TEST_CASE("Waiter on a loading block refetches when the response prohibits shari
 	auto &cache = db.instance->GetExternalFileCache();
 	auto policy_fs = make_uniq<BlockingCachePolicyFileSystem>();
 
-	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content(block_size, 'A');
 	EFCTestFileGuard test_file("test_efc_loading_waiter.bin", content);
 	CachingFileSystem cfs(*policy_fs, *db.instance);
@@ -1030,7 +1057,7 @@ TEST_CASE("Content response can prohibit cache reuse", "[external_file_cache]") 
 	auto &cache = db.instance->GetExternalFileCache();
 	auto policy_fs = make_uniq<CachePolicyFileSystem>();
 
-	const idx_t block_size = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t block_size = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(block_size, 'A');
 	const string content_b(block_size, 'B');
 	EFCTestFileGuard test_file("test_efc_content_policy.bin", content_a);
@@ -1054,7 +1081,7 @@ TEST_CASE("No-metadata file is not cached and always returns fresh content", "[e
 
 	auto no_meta_fs = make_uniq<EFCNoMetadataFileSystem>();
 
-	const idx_t BLOCK_SIZE = cache.GetCacheBlockSize(TestDirectoryPath());
+	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
 	const string content_a(BLOCK_SIZE, 'A');
 	const string content_b(BLOCK_SIZE * 2, 'B');
 	EFCTestFileGuard test_file("test_efc_no_metadata.bin", content_a);
