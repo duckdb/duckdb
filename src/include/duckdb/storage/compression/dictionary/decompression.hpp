@@ -45,21 +45,17 @@ public:
 
 public:
 	void InitializeDictionary(const ColumnSegment &segment);
-	//! Requires a materialized dictionary.
+	//! Scans require InitializeDictionary; fetch validates its selected entry instead.
+	template <bool NEEDS_STRING_OFFSET_CHECK = false>
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
 	                            idx_t scan_count);
-	//! result must be flat and have capacity for the entry at result_offset.
-	void FetchRow(Vector &result, idx_t result_offset, idx_t row_id);
 
 private:
 	static SegmentLayout ReadLayout(const BufferHandle &handle, const ColumnSegment &segment);
 	//! Returns packed bytes starting at the group containing start.
 	//! decompress_count must cover whole bitpacking groups that fit within the selection stream.
 	unsafe_array_ptr<const uint8_t> GetSelectionBytes(idx_t start, idx_t decompress_count) const;
-	//! Unpack into sel_vec, starting with the group containing start.
-	//! decompress_count must cover whole bitpacking groups that fit within the selection stream.
-	void UnpackSelection(idx_t start, idx_t decompress_count);
 
 public:
 	BufferHandle owned_handle;
