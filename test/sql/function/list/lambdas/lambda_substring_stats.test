@@ -1,0 +1,81 @@
+# name: test/sql/function/list/lambdas/lambda_substring_stats.test
+# description: statistics seeded into lambda bodies must not corrupt substring results (issue #23229)
+# group: [lambdas]
+
+# wrongly seeded "no unicode" statistics would make substring corrupt multi-byte characters
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+# ordered ASCII, unicode, ASCII, so that shifted capture statistics in either direction corrupt the unicode capture
+# offsets are lambda parameters: constant arguments would skip the fast path for these single-row captures
+statement ok
+CREATE TABLE caps AS SELECT 'abc' AS a1, 'áéí' AS u1, 'def' AS a2;
+
+query I
+SELECT list_transform([1, 2, 3], lambda i: substring(a1, i, 1) || substring(u1, i, 1) || substring(a2, i, 1)) FROM caps;
+----
+[aád, bée, cíf]
+
+# a unicode list element
+query I
+SELECT list_transform(['café', 'abcd'], lambda x: substring(x, 2, 2));
+----
+[af, bc]
+
+# the index parameter precedes the list element
+query I
+SELECT list_transform(['xyz', 'óúü'], lambda x, i: substring(a1, i, 1) || substring(u1, i, 1) || substring(a2, i, 1) || substring(x, i, 1)) FROM caps;
+----
+[aádx, béeú]
+
+query I
+SELECT list_filter([1, 2, 3], lambda i: substring(a1, i, 1) || substring(u1, i, 1) || substring(a2, i, 1) <> 'aád') FROM caps;
+----
+[2, 3]
+
+# the accumulator follows the list element, and the initial value is not an input of the lambda body
+query I
+SELECT list_reduce([1, 2], lambda acc, x: acc || substring(a1, x, 1) || substring(u1, x, 1) || substring(a2, x, 1), 'Q') FROM caps;
+----
+Qaádbée
+
+query I
+SELECT list_reduce(['1', '2'], lambda acc, x, i: acc || substring(a1, i, 1) || substring(u1, i, 1) || substring(a2, i, 1) || x) FROM caps;
+----
+1bée2
+
+# the outer lambda parameter is an input of the inner lambda body
+query I
+SELECT list_transform(['óúü'], lambda x: list_transform([1, 2, 3], lambda i: substring(a1, i, 1) || substring(u1, i, 1) || substring(x, i, 1))) FROM caps;
+----
+[[aáó, béú, cíü]]
+
+# ARRAY input is cast to a list
+query I
+SELECT list_transform(['café', 'abcd']::VARCHAR[2], lambda x: substring(x, 2, 2));
+----
+[af, bc]
+
+statement ok
+CREATE TABLE arr AS SELECT ['xyz', 'óúü']::VARCHAR[2] AS a;
+
+query I
+SELECT list_transform(a, lambda x, i: substring(a1, i, 1) || substring(u1, i, 1) || substring(a2, i, 1) || substring(x, i, 1)) FROM arr, caps;
+----
+[aádx, béeú]
+
+query I
+SELECT list_transform(NULL::VARCHAR[], lambda x: substring(x, 1, 1));
+----
+NULL
+
+query I
+SELECT list_transform([]::VARCHAR[], lambda x: substring(x, 1, 1));
+----
+[]
+
+query I
+SELECT list_transform(['áé', NULL], lambda x: substring(x, 2, 1));
+----
+[é, NULL]

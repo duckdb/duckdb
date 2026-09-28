@@ -93,6 +93,11 @@ public:
 	                                               vector<unique_ptr<Expression>> &arguments,
 	                                               const bool has_index = false);
 
+	//! Propagates the list element and capture statistics into the lambda body
+	static unique_ptr<BaseStatistics> ListLambdaStats(ClientContext &context, FunctionStatisticsInput &input);
+	//! Like ListLambdaStats, for list_reduce, whose lambda body also receives the accumulator
+	static unique_ptr<BaseStatistics> ListReduceStats(ClientContext &context, FunctionStatisticsInput &input);
+
 	//! Internally executes list_transform
 	static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result);
 	//! Internally executes list_filter

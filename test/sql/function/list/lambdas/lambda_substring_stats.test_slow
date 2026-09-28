@@ -1,0 +1,27 @@
+# name: test/sql/function/list/lambdas/lambda_substring_stats.test_slow
+# description: substring chunking a large captured string in a lambda must stay linear (issue #23229)
+# group: [lambdas]
+
+statement ok
+SET lambda_syntax='DISABLE_SINGLE_ARROW'
+
+# quadratic (~12s instead of ~0.2s) if statistics do not reach the lambda body
+
+statement ok
+CREATE TABLE big AS SELECT repeat('x', 64 * 1024 * 1024) AS s;
+
+# 64 MB / 65536 = 1024 chunks
+query I
+SELECT count(*) FROM (
+    SELECT unnest(list_transform(range(0, length(s) // 65536), lambda i: substring(s, i * 65536 + 1, 65536))) AS x
+    FROM big);
+----
+1024
+
+# every chunk is exactly 65536 bytes and the chunks reconstruct the original length
+query II
+SELECT min(len)::BIGINT, sum(len)::BIGINT FROM (
+    SELECT length(unnest(list_transform(range(0, length(s) // 65536), lambda i: substring(s, i * 65536 + 1, 65536)))) AS len
+    FROM big);
+----
+65536	67108864
