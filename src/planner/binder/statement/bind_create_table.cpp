@@ -615,6 +615,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = result->Base();
 	base.dependencies = LogicalDependencyList();
 	auto &dependencies = base.dependencies;
+	dependencies.AddDependency(schema);
 	auto &catalog = schema.ParentCatalog();
 	optional_ptr<StorageManager> storage_manager;
 	if (catalog.IsDuckCatalog() && !catalog.InMemory()) {
