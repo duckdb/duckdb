@@ -227,6 +227,20 @@ TEST_CASE("V2 conn option: scope enforcement matches SQL", "[capi_v2][conn][opti
 	duckdb_v2_error_info_destroy(&err);
 }
 
+TEST_CASE("V2 conn option: Not allowed during query", "[capi_v2][conn][option]") {
+	EnvFixture fx;
+
+	duckdb_v2_result_handle result = nullptr;
+
+	REQUIRE(Query(fx.conn, "SELECT 42", &result, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	// max_execution_time is LOCAL_DEFAULT → AUTOMATIC resolves to SESSION → write succeeds.
+	REQUIRE(duckdb_v2_connection_set_option(fx.conn, Convert("max_execution_time"), Convert("5000"),
+	                                        DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
+	                                        nullptr) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(ConnSetting(fx.conn, "max_execution_time") == "0");
+}
+
 TEST_CASE("V2 conn option: AUTOMATIC scope mirrors bare SQL `SET`", "[capi_v2][conn][option]") {
 	EnvFixture fx;
 	// max_execution_time is LOCAL_DEFAULT → AUTOMATIC resolves to SESSION → write succeeds.

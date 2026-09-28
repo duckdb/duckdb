@@ -131,6 +131,7 @@ public:
 		if (registered) {
 			throw InvalidInputException("The replacement scan is already registered.");
 		}
+
 		registered = true;
 
 		auto data = make_uniq<CV2ReplacementScanData>();
@@ -153,8 +154,14 @@ public:
 	}
 
 	void RegisterScan(ReplacementScan scan) override {
+		auto &ctx = connection.context;
+
+		if (GetBusySlot(*ctx)->owner.load() != nullptr) {
+			throw duckdb::ResourceInUseException(
+			    "connection has a live result; drain, destroy, or interrupt it before registering a replacement scan.");
+		}
 		// Connection-scoped: this touches only the connection's own state, never the shared database config.
-		connection.context->config.replacement_scans.push_back(make_shared_ptr<ReplacementScan>(std::move(scan)));
+		ctx->config.replacement_scans.push_back(make_shared_ptr<ReplacementScan>(std::move(scan)));
 	}
 
 private:
