@@ -57,7 +57,7 @@ class ExternalFileCache {
 public:
 	//! Get the maximum cache block size for a given file path.
 	DUCKDB_API idx_t GetCacheMaxBlockSize(const string &path) const;
-	//! Get the size that smaller reads of a given file path are widened to.
+	//! Get the block size that reads of a given file path are rounded out to.
 	DUCKDB_API idx_t GetCacheMinBlockSize(const string &path) const;
 	//! Whether reads of the given file should go through the cache (remote files only, unless forced).
 	DUCKDB_API bool ShouldCacheFile(const string &path) const;

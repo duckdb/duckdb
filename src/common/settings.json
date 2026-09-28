@@ -928,7 +928,7 @@
     },
     {
         "name": "external_file_cache_remote_min_block_size",
-        "description": "Reads of remote files smaller than this are widened to aligned blocks of this size, so tiny reads do not each cost a request.",
+        "description": "Reads of remote files are rounded out to aligned blocks of this size, so tiny reads do not each cost a request.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "4096",

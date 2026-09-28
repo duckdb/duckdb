@@ -1517,8 +1517,8 @@ struct ExternalFileCacheRemoteMaxBlockSizeSetting {
 struct ExternalFileCacheRemoteMinBlockSizeSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "external_file_cache_remote_min_block_size";
-	static constexpr const char *Description = "Reads of remote files smaller than this are widened to aligned blocks "
-	                                           "of this size, so tiny reads do not each cost a request.";
+	static constexpr const char *Description = "Reads of remote files are rounded out to aligned blocks of this size, "
+	                                           "so tiny reads do not each cost a request.";
 	static constexpr const char *InputType = "UBIGINT";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

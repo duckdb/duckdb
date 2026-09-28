@@ -381,13 +381,14 @@ TEST_CASE("A file no larger than the block size is fetched whole on the first re
 	REQUIRE(recording_fs->TakeReads().empty());
 }
 
-TEST_CASE("Short reads of remote files fetch the minimum blocks around them", "[external_file_cache]") {
+TEST_CASE("Reads of remote files are rounded out to the minimum blocks around them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
 	auto remote_fs = make_uniq<RemotePathFileSystem>();
 
+	const idx_t MAX_BLOCK_SIZE = 16384;
 	Connection con(db);
-	con.Query("SET external_file_cache_remote_max_block_size=16384");
+	con.Query(StringUtil::Format("SET external_file_cache_remote_max_block_size=%llu", MAX_BLOCK_SIZE));
 	const idx_t MIN_BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = 16 * MIN_BLOCK_SIZE + 100;
 	auto content = MakeTestContent(FILE_SIZE);
@@ -404,6 +405,11 @@ TEST_CASE("Short reads of remote files fetch the minimum blocks around them", "[
 
 	REQUIRE(ReadFull(*handle, 100, 2 * MIN_BLOCK_SIZE - 50) == content.substr(2 * MIN_BLOCK_SIZE - 50, 100));
 	REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{2 * MIN_BLOCK_SIZE, MIN_BLOCK_SIZE}});
+
+	const idx_t long_read = 5 * MIN_BLOCK_SIZE + 10;
+	REQUIRE(ReadFull(*handle, MAX_BLOCK_SIZE + 1, long_read) == content.substr(long_read, MAX_BLOCK_SIZE + 1));
+	REQUIRE(remote_fs->TakeReads() ==
+	        vector<pair<idx_t, idx_t>> {{5 * MIN_BLOCK_SIZE, MAX_BLOCK_SIZE}, {9 * MIN_BLOCK_SIZE, MIN_BLOCK_SIZE}});
 
 	REQUIRE(ReadFull(*handle, 10, FILE_SIZE - 10) == content.substr(FILE_SIZE - 10, 10));
 	REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{16 * MIN_BLOCK_SIZE, 100}});

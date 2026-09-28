@@ -363,7 +363,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	} else if (flags.GetRequestSizing() == RequestSizing::BY_CACHE) {
 		fetch_location = location - location % max_block_size;
 		fetch_end = AlignValue(fetch_end, max_block_size);
-	} else if (nr_bytes < min_block_size) {
+	} else {
 		fetch_location = location - location % min_block_size;
 		fetch_end = AlignValue(fetch_end, min_block_size);
 	}
