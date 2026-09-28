@@ -84,6 +84,22 @@ TEST_CASE("V2: value_create_null rejects null type / null out", "[capi_v2][value
 	duckdb_v2_logical_type_destroy(&int_type);
 }
 
+TEST_CASE("V2: value constructors reject a null payload pointer", "[capi_v2][value][null]") {
+	EnvFixture fx;
+	duckdb_v2_value_handle v = nullptr;
+	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, nullptr, &v, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_value_create_hugeint_with_connection(fx.conn, nullptr, &v, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_value_create_uhugeint_with_connection(fx.conn, nullptr, &v, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_value_create_interval_with_connection(fx.conn, nullptr, &v, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, nullptr, 18, 3, &v, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(v == nullptr);
+}
+
 TEST_CASE("V2: value_is_null distinguishes NULL from non-NULL", "[capi_v2][value][null]") {
 	EnvFixture fx;
 	duckdb_v2_value_handle v = nullptr;
@@ -215,10 +231,10 @@ TEST_CASE("V2: HUGEINT and UHUGEINT carry both 128-bit halves", "[capi_v2][value
 	EnvFixture fx;
 	auto conn = fx.conn;
 	auto make_hugeint = [&](duckdb_v2_hugeint_t x, duckdb_v2_value_handle *v) {
-		return duckdb_v2_value_create_hugeint_with_connection(conn, x, v, nullptr);
+		return duckdb_v2_value_create_hugeint_with_connection(conn, &x, v, nullptr);
 	};
 	auto make_uhugeint = [&](duckdb_v2_uhugeint_t x, duckdb_v2_value_handle *v) {
-		return duckdb_v2_value_create_uhugeint_with_connection(conn, x, v, nullptr);
+		return duckdb_v2_value_create_uhugeint_with_connection(conn, &x, v, nullptr);
 	};
 
 	RequireTypedRoundTrip<duckdb_v2_hugeint_t>(make_hugeint, {42, 0}, "42");
@@ -232,8 +248,8 @@ TEST_CASE("V2: VARCHAR round-trips its bytes and borrows them", "[capi_v2][value
 	// An embedded NUL: the payload is a byte range, not a C string.
 	const char raw[4] = {'a', '\0', 'b', 'c'};
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, duckdb_v2_str {raw, 4}, &v, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	auto value_str = duckdb_v2_str {raw, 4};
+	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, &value_str, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// The borrow is stable: two reads hand back the same pointer.
 	duckdb_v2_str first = {nullptr, 0};
@@ -246,16 +262,16 @@ TEST_CASE("V2: VARCHAR round-trips its bytes and borrows them", "[capi_v2][value
 	duckdb_v2_value_destroy(&v);
 
 	// Empty: a null pointer is valid when the length is 0.
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, duckdb_v2_str {nullptr, 0}, &v, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	auto value_str2 = duckdb_v2_str {nullptr, 0};
+	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, &value_str2, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(ConsumeValue<std::string>(v).empty());
 
 	// The engine rejects invalid UTF-8 at construction.
 	const char bad_utf8[2] = {'\xC0', '\x00'};
 	duckdb_v2_value_handle bad = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, duckdb_v2_str {bad_utf8, 2}, &bad, &err) !=
-	        DUCKDB_V2_ERROR_NONE);
+	auto value_str3 = duckdb_v2_str {bad_utf8, 2};
+	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, &value_str3, &bad, &err) != DUCKDB_V2_ERROR_NONE);
 	REQUIRE(bad == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
@@ -342,7 +358,8 @@ TEST_CASE("V2: typed constructors and getters null-arg refusals", "[capi_v2][val
 	REQUIRE(duckdb_v2_value_create_int_with_connection(fx.conn, 1, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// A null byte range is only valid empty.
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, duckdb_v2_str {nullptr, 4}, &v, nullptr) ==
+	auto value_str = duckdb_v2_str {nullptr, 4};
+	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, &value_str, &v, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(v == nullptr);
 
@@ -420,7 +437,7 @@ TEST_CASE("V2: temporal values round-trip through their constructor / getter pai
 	duckdb_v2_interval_t iv {1, 2, 3000000};
 	RequireTemporalRoundTrip<duckdb_v2_interval_t>(
 	    [&](duckdb_v2_interval_t x, duckdb_v2_value_handle *v) {
-		    return duckdb_v2_value_create_interval_with_connection(conn, x, v, nullptr);
+		    return duckdb_v2_value_create_interval_with_connection(conn, &x, v, nullptr);
 	    },
 	    [](duckdb_v2_value_handle v, duckdb_v2_interval_t *out) {
 		    return duckdb_v2_value_get_interval(v, out, nullptr);
@@ -718,7 +735,7 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	for (auto &c : cases) {
 		duckdb_v2_hugeint_t payload {static_cast<uint64_t>(c.scaled), c.scaled < 0 ? -1 : 0};
 		duckdb_v2_value_handle v = nullptr;
-		REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, payload, c.width, c.scale, &v, nullptr) ==
+		REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, &payload, c.width, c.scale, &v, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		REQUIRE(Render(v) == c.text);
 		duckdb_v2_value_destroy(&v);
@@ -727,7 +744,8 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	// Width 38 sits in the int128 tier, which the narrower path cannot carry.
 	duckdb_v2_hugeint_t wide {123456789012345ull, 0};
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, wide, 38, 10, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, &wide, 38, 10, &v, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Render(v) == "12345.6789012345");
 	duckdb_v2_logical_type_handle t = nullptr;
 	REQUIRE(duckdb_v2_value_get_logical_type(v, &t, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -740,7 +758,7 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	// SMALLINT, whatever its storage tier.
 	duckdb_v2_value_handle narrow = nullptr;
 	duckdb_v2_hugeint_t scaled {1234, 0};
-	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, scaled, 4, 2, &narrow, nullptr) ==
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, &scaled, 4, 2, &narrow, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_hugeint_t read {};
 	uint8_t read_width = 0;
@@ -766,26 +784,26 @@ TEST_CASE("V2: DECIMAL takes its backing integer plus width and scale", "[capi_v
 	duckdb_v2_hugeint_t one {1, 0};
 	auto out = reinterpret_cast<duckdb_v2_value_handle>(0x1);
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, one, 0, 0, &out, &err) ==
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, &one, 0, 0, &out, &err) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(out == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
-	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, one, 39, 0, &out, nullptr) ==
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, &one, 39, 0, &out, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, one, 4, 5, &out, nullptr) ==
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, &one, 4, 5, &out, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// A value too wide for the tier the width selects is refused rather than
 	// silently truncated.
 	duckdb_v2_hugeint_t huge {0, 1};
-	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, huge, 4, 2, &out, nullptr) ==
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(fx.conn, &huge, 4, 2, &out, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// The scope handle is mandatory, as everywhere else.
-	REQUIRE(duckdb_v2_value_create_decimal_with_connection(nullptr, one, 4, 2, &out, nullptr) ==
+	REQUIRE(duckdb_v2_value_create_decimal_with_connection(nullptr, &one, 4, 2, &out, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_value_create_decimal_with_context(nullptr, one, 4, 2, &out, nullptr) ==
+	REQUIRE(duckdb_v2_value_create_decimal_with_context(nullptr, &one, 4, 2, &out, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
@@ -795,7 +813,7 @@ TEST_CASE("V2: UUID takes its internal 128-bit form", "[capi_v2][value][uuid]") 
 	// so the integer sorts. Rendering still shows the canonical 36 chars.
 	duckdb_v2_hugeint_t raw {0x1234, 0x5678};
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_value_create_uuid_with_connection(fx.conn, raw, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_uuid_with_connection(fx.conn, &raw, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 	const auto canonical = Render(v);
 	REQUIRE(canonical.size() == 36);
 	duckdb_v2_logical_type_handle t = nullptr;
@@ -817,8 +835,8 @@ TEST_CASE("V2: BIT takes its wire bytes", "[capi_v2][value][bit]") {
 	// five of 0b000'10101.
 	const char wire[2] = {3, '\x15'};
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_value_create_bit_with_connection(fx.conn, duckdb_v2_str {wire, 2}, &v, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	auto value_str = duckdb_v2_str {wire, 2};
+	REQUIRE(duckdb_v2_value_create_bit_with_connection(fx.conn, &value_str, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Render(v) == "10101");
 	// The same bytes come back through the byte-string getter.
 	REQUIRE(ConsumeBlob(v) == std::string(wire, 2));
@@ -826,7 +844,8 @@ TEST_CASE("V2: BIT takes its wire bytes", "[capi_v2][value][bit]") {
 	// The header byte is mandatory.
 	auto out = reinterpret_cast<duckdb_v2_value_handle>(0x1);
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_value_create_bit_with_connection(fx.conn, duckdb_v2_str {nullptr, 0}, &out, &err) ==
+	auto value_str2 = duckdb_v2_str {nullptr, 0};
+	REQUIRE(duckdb_v2_value_create_bit_with_connection(fx.conn, &value_str2, &out, &err) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(out == nullptr);
 	REQUIRE(err != nullptr);
@@ -841,7 +860,7 @@ TEST_CASE("V2: BIGNUM takes its storage bytes from the codec", "[capi_v2][value]
 	auto storage = BignumEncode(magnitude, 3, false);
 	duckdb_v2_str bytes {reinterpret_cast<const char *>(storage.data()), storage.size()};
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_value_create_bignum_with_connection(fx.conn, bytes, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_bignum_with_connection(fx.conn, &bytes, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Render(v) == "66051");
 	bool is_negative = true;
 	auto out_magnitude = BignumMagnitude(v, is_negative);
@@ -853,14 +872,15 @@ TEST_CASE("V2: BIGNUM takes its storage bytes from the codec", "[capi_v2][value]
 	// magnitude; the codec is what translates.
 	auto negative = BignumEncode(magnitude, 3, true);
 	duckdb_v2_str neg_bytes {reinterpret_cast<const char *>(negative.data()), negative.size()};
-	REQUIRE(duckdb_v2_value_create_bignum_with_connection(fx.conn, neg_bytes, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_bignum_with_connection(fx.conn, &neg_bytes, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Render(v) == "-66051");
 	duckdb_v2_value_destroy(&v);
 
 	// A header with no magnitude byte is not addressable storage.
 	const char short_bytes[3] = {0, 0, 0};
 	auto out = reinterpret_cast<duckdb_v2_value_handle>(0x1);
-	REQUIRE(duckdb_v2_value_create_bignum_with_connection(fx.conn, duckdb_v2_str {short_bytes, 3}, &out, nullptr) ==
+	auto value_str = duckdb_v2_str {short_bytes, 3};
+	REQUIRE(duckdb_v2_value_create_bignum_with_connection(fx.conn, &value_str, &out, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(out == nullptr);
 }
@@ -873,7 +893,8 @@ TEST_CASE("V2: failure path populates error info", "[capi_v2][value][error]") {
 	EnvFixture fx;
 	duckdb_v2_value_handle v = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, duckdb_v2_str {nullptr, 4}, &v, &err) ==
+	auto value_str = duckdb_v2_str {nullptr, 4};
+	REQUIRE(duckdb_v2_value_create_varchar_with_connection(fx.conn, &value_str, &v, &err) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(err != nullptr);
 	duckdb_v2_str msg = {nullptr, 0};
@@ -1642,7 +1663,8 @@ TEST_CASE("V2: VARIANT cells are read by casting them", "[capi_v2][value][varian
 TEST_CASE("V2: VARIANT values are built by casting into them", "[capi_v2][value][variant]") {
 	EnvFixture f;
 	duckdb_v2_logical_type_handle variant_type = nullptr;
-	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, Convert("VARIANT"), &variant_type, nullptr) ==
+	auto text_str = Convert("VARIANT");
+	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str, &variant_type, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 
 	// In: any value casts to VARIANT. Out: back to the same type.
