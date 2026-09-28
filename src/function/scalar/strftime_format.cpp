@@ -895,7 +895,7 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 		for (size_t l = 0; l < literal.size();) {
 			// Match runs of spaces to runs of spaces.
 			if (StringUtil::CharacterIsSpace(literal[l])) {
-				if (!StringUtil::CharacterIsSpace(data[pos])) {
+				if (pos >= size || !StringUtil::CharacterIsSpace(data[pos])) {
 					error_message = "Space does not match, expected " + literals[i];
 					error_position = pos;
 					return false;
@@ -909,7 +909,7 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				continue;
 			}
 			// literal does not match
-			if (data[pos++] != literal[l++]) {
+			if (pos >= size || data[pos++] != literal[l++]) {
 				error_message = "Literal does not match, expected " + literal;
 				error_position = pos;
 				return false;
