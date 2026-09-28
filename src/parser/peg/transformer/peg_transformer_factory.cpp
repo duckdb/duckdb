@@ -110,13 +110,47 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 }
 
 PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
+	case_insensitive_set_t collapsible_rules;
+	//===--------------------------------------------------------------------===//
+	// START GENERATED COLLAPSIBLE RULES
+	//===--------------------------------------------------------------------===//
+	collapsible_rules.insert("Expression");
+	collapsible_rules.insert("ColumnDefaultExpr");
+	collapsible_rules.insert("LambdaArrowExpression");
+	collapsible_rules.insert("LogicalOrExpression");
+	collapsible_rules.insert("ColDefOrExpr");
+	collapsible_rules.insert("LogicalAndExpression");
+	collapsible_rules.insert("ColDefAndExpr");
+	collapsible_rules.insert("LogicalNotExpression");
+	collapsible_rules.insert("IsExpression");
+	collapsible_rules.insert("IsDistinctFromExpression");
+	collapsible_rules.insert("ComparisonExpression");
+	collapsible_rules.insert("BetweenInLikeExpression");
+	collapsible_rules.insert("OtherOperatorExpression");
+	collapsible_rules.insert("InfixOtherOperatorExpression");
+	collapsible_rules.insert("BitwiseExpression");
+	collapsible_rules.insert("AdditiveExpression");
+	collapsible_rules.insert("MultiplicativeExpression");
+	collapsible_rules.insert("ExponentiationExpression");
+	collapsible_rules.insert("CollateExpression");
+	collapsible_rules.insert("AtTimeZoneExpression");
+	collapsible_rules.insert("PrefixExpression");
+	collapsible_rules.insert("BaseExpression");
+	collapsible_rules.insert("SelectSetOpChain");
+	collapsible_rules.insert("IntersectChain");
+	collapsible_rules.insert("TableRef");
+	//===--------------------------------------------------------------------===//
+	// END GENERATED COLLAPSIBLE RULES
+	//===--------------------------------------------------------------------===//
+
 	for (auto &entry : GeneratedTransformFrameOps()) {
 		auto process_info = entry.second;
 		grammar.SetTransformProcess(
 		    entry.first,
 		    [process_info](PEGTransformer &transformer, ParseResult &parse_result) -> unique_ptr<TransformProcess> {
 			    return make_uniq<GeneratedTransformProcess>(transformer, TransformInput {parse_result}, *process_info);
-		    });
+		    },
+		    collapsible_rules.count(entry.first) > 0);
 	}
 }
 

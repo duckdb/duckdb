@@ -38,6 +38,8 @@ struct ParsedGrammarRule {
 	string name;
 	PEGRule recipe;
 	grammar_transform_process_function_t transform_process;
+	//! See ParsedGrammar::SetTransformProcess
+	bool collapsible = false;
 };
 
 //! Mutable, owning representation of a PEG grammar before matcher compilation.
@@ -64,8 +66,12 @@ public:
 	                              const grammar_cursor_function_t &find_cursor);
 	DUCKDB_API void ReplaceRule(const string &rule_definition,
 	                            grammar_transform_process_function_t transform_process = nullptr);
-	DUCKDB_API void SetTransformProcess(const string &rule_name,
-	                                    grammar_transform_process_function_t transform_process);
+	//! A collapsible transform promises to return its only child's result unchanged whenever the rule matched no
+	//! other child with a result, such as a level of the operator precedence hierarchy that matched no tail. The
+	//! matcher then skips building a result for the rule and the child is transformed as itself. Setting a new
+	//! transform clears that promise unless the caller repeats it, since it is a property of the transform.
+	DUCKDB_API void SetTransformProcess(const string &rule_name, grammar_transform_process_function_t transform_process,
+	                                    bool collapsible = false);
 	DUCKDB_API void AddTerminalRuleOverride(const string &rule_name, terminal_rule_matcher_factory_t matcher_factory);
 
 private:
@@ -93,14 +99,17 @@ private:
 
 //! Immutable semantic data referenced directly by matchers and parse results.
 struct CompiledGrammarRule {
-	CompiledGrammarRule(string name_p, grammar_transform_process_function_t transform_process_p)
-	    : name(std::move(name_p)), transform_process(std::move(transform_process_p)) {
+	CompiledGrammarRule(string name_p, grammar_transform_process_function_t transform_process_p,
+	                    bool collapsible_p = false)
+	    : name(std::move(name_p)), transform_process(std::move(transform_process_p)), collapsible(collapsible_p) {
 	}
 
 	unique_ptr<TransformProcess> StartTransform(PEGTransformer &transformer, ParseResult &parse_result) const;
 
 	string name;
 	grammar_transform_process_function_t transform_process;
+	//! See ParsedGrammar::SetTransformProcess
+	bool collapsible;
 };
 
 } // namespace duckdb
