@@ -20,7 +20,10 @@ statement ok
 COPY (SELECT * FROM (VALUES ('4714-11-23 23:00-02 BC')) t(v)) TO '__TEST_DIR__/tz_bc.csv' (HEADER);
 
 statement ok
-COPY (SELECT * FROM (VALUES ('2020-01-01 00:00:00'), ('2020-01-01 10:00:00+02'), (NULL), ('2020-06-01 12:00:00 Europe/Amsterdam')) t(v)) TO '__TEST_DIR__/tz_good.csv' (HEADER);
+COPY (SELECT * FROM (VALUES ('2020-01-01 10:00:00+02'), ('2020-01-01 10:00 Mars/Olympus')) t(v)) TO '__TEST_DIR__/tz_name_bad.csv' (HEADER);
+
+statement ok
+COPY (SELECT * FROM (VALUES ('2020-01-01 00:00:00'),('2020-01-01 10:00:00+02'), (NULL), ('2020-06-01 12:00:00 Europe/Amsterdam')) t(v)) TO '__TEST_DIR__/tz_good.csv' (HEADER);
 
 # The engine cast rejects the same inputs
 statement error
@@ -38,10 +41,15 @@ SELECT CAST('4714-11-23 23:00-02 BC' AS TIMESTAMPTZ);
 ----
 Conversion Error
 
-query II
-SELECT TRY_CAST('not-a-time' AS TIMESTAMPTZ), TRY_CAST('not-a-time' AS TIMETZ);
+statement error
+SELECT CAST('2020-01-01 10:00 Mars/Olympus' AS TIMESTAMPTZ);
 ----
-NULL	NULL
+Unknown TimeZone 'Mars/Olympus'
+
+query III
+SELECT TRY_CAST('not-a-time' AS TIMESTAMPTZ), TRY_CAST('not-a-time' AS TIMETZ), TRY_CAST('2020-01-01 10:00 Mars/Olympus' AS TIMESTAMPTZ);
+----
+NULL	NULL	NULL
 
 # read_csv with explicit columns
 statement error
@@ -75,6 +83,22 @@ statement error
 SELECT * FROM read_csv('__TEST_DIR__/tz_bc.csv', columns={'v': 'TIMESTAMPTZ'}, header=true);
 ----
 Could not convert string "4714-11-23 23:00-02 BC" to 'TIMESTAMP WITH TIME ZONE'
+
+# Unknown time zone names that the engine cast rejects
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_name_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true);
+----
+Could not convert string "2020-01-01 10:00 Mars/Olympus" to 'TIMESTAMP WITH TIME ZONE'
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_name_bad.csv', columns={'v': 'TIMESTAMPTZ_NS'}, header=true);
+----
+Could not convert string "2020-01-01 10:00 Mars/Olympus"
+
+query I
+SELECT * FROM read_csv('__TEST_DIR__/tz_name_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true, ignore_errors=true);
+----
+2020-01-01 08:00:00+00
 
 # read_csv_auto with types
 statement error
