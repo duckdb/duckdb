@@ -1,19 +1,15 @@
 //===----------------------------------------------------------------------===//
-//                         DuckDB
-//
 // duckdb/optimizer/join_elimination.hpp
-//
-//
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
-#include "constraint_propagator.hpp"
+#include "duckdb/optimizer/constraint_propagation/constraint_propagator.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
+class ConstraintPropagator;
 
 class JoinElimination {
 public:
@@ -29,7 +25,11 @@ private:
 
 	static unique_ptr<LogicalOperator> TryEliminateJoin(unique_ptr<LogicalOperator> op,
 	                                                    const unordered_set<TableIndex> &ref_table_ids,
-	                                                    bool outer_is_distinct, ConstraintPropagator &propagator);
+	                                                    bool outer_is_distinct, const ConstraintPropagator &propagator,
+	                                                    bool &changed);
+	static unique_ptr<LogicalOperator> TryEliminateMarkJoin(unique_ptr<LogicalOperator> op,
+	                                                        const unordered_set<TableIndex> &refs_above,
+	                                                        const ConstraintPropagator &propagator, bool &changed);
 };
 
 } // namespace duckdb
