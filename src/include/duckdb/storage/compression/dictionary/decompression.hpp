@@ -12,7 +12,7 @@ struct CompressedStringScanState : public SegmentScanState {
 private:
 	//! Dictionary segment data from disk, with byte ranges checked by ReadLayout.
 	struct SegmentLayout {
-		//! Bits per dictionary index, derived from the entry count and checked against the stored width.
+		//! Bits per dictionary index (derived from the entry count and checked against the stored width)
 		bitpacking_width_t current_width;
 		//! Packed indices, mapping each row to a dictionary entry.
 		CompressionSegmentReader selection_reader;
@@ -33,7 +33,7 @@ public:
 
 public:
 	void InitializeDictionary(const ColumnSegment &segment);
-	//! Scans require InitializeDictionary; fetch validates its selected entry instead.
+	//! Scans require InitializeDictionary, fetch validates its selected entry instead.
 	template <bool NEEDS_STRING_OFFSET_CHECK = false>
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
@@ -44,14 +44,14 @@ private:
 	string_t FetchStringFromDict(uint32_t dict_offset, uint32_t string_len) const;
 	//! The index must be within the table and the offsets must be nondecreasing to avoid underflow.
 	uint32_t GetStringLength(idx_t index) const;
-	//! Check each selected dictionary index against the offset table.
+	//! Checks each selected dictionary index against the offset table.
 	//! The selection must be set and the requested range must fit within its capacity.
 	void ValidateDictionaryIndices(const SelectionVector &sel, idx_t start_offset, idx_t scan_count) const;
-	//! Validate the index buffer (offsets monotonic and within the dictionary) so scans can trust it.
+	//! Validate the index buffer (offsets must be monotonic and within the dictionary) so scans can trust it.
 	void ValidateIndexBuffer() const;
 	static SegmentLayout ReadLayout(const BufferHandle &handle, const ColumnSegment &segment);
 	//! Returns packed bytes starting at the group containing start.
-	//! decompress_count must cover whole bitpacking groups that fit within the selection stream.
+	//! decompress_count must cover whole bitpacking groups that fit within the selection buffer.
 	unsafe_array_ptr<const uint8_t> GetSelectionBytes(idx_t start, idx_t decompress_count) const;
 
 public:

@@ -50,7 +50,7 @@ uint32_t CompressedStringScanState::GetStringLength(idx_t index) const {
 		return 0;
 	}
 	D_ASSERT(layout.index_buffer[index] >= layout.index_buffer[index - 1]);
-	// Offsets are validated before this call, so the length can be read directly.
+	// Offsets are validated up front by ValidateIndexBuffer, so the length can be read directly.
 	const auto string_length = layout.index_buffer[index] - layout.index_buffer[index - 1];
 	return string_length;
 }
