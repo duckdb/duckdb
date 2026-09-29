@@ -114,26 +114,6 @@ private:
 	BaseQueryResult *open_result = nullptr;
 };
 
-//! RAII wrapper that ensures the active query is reset if an exception occurs during preparation
-struct ActiveQueryGuard {
-	unique_ptr<ActiveQueryContext> &active_query;
-	bool set_active_query;
-
-	ActiveQueryGuard(unique_ptr<ActiveQueryContext> &active_query_p, const string &query)
-	    : active_query(active_query_p), set_active_query(false) {
-		if (!active_query) {
-			active_query = make_uniq<ActiveQueryContext>();
-			set_active_query = true;
-			active_query->query = query;
-		}
-	}
-	~ActiveQueryGuard() {
-		if (set_active_query) {
-			active_query.reset();
-		}
-	}
-};
-
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
