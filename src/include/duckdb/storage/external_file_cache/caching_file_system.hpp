@@ -68,6 +68,8 @@ public:
 	DUCKDB_API FileBufferHandleGroup Read(idx_t nr_bytes, idx_t location);
 	//! Read [nr_bytes] bytes and sets [nr_bytes] to the actually read bytes.
 	DUCKDB_API FileBufferHandleGroup Read(idx_t &nr_bytes);
+	//! Whether positioned reads can use the external file cache.
+	DUCKDB_API bool CanCacheRead();
 	//! Read and record time
 	DUCKDB_API void ReadAndRecord(QueryContext context, data_ptr_t buffer, idx_t nr_bytes, idx_t location);
 	//! Whether responses observed by this handle prohibit sharing cached data (e.g., HTTP no-store/Vary)

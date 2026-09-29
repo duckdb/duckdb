@@ -113,6 +113,7 @@ const char *ParquetPrefetchStrategyToString(ParquetPrefetchStrategy strategy);
 enum class ParquetPrefetchStrategyOption : uint8_t {
 	AUTO,        //! Uses the runtime strategy to pick between ParquetPrefetchStrategy
 	WHOLE_GROUP, //! Always do the whole row group
+	ON_DEMAND,   //! Read through the caching file handle without column-chunk prefetch
 };
 
 ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const string &value);
