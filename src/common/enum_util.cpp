@@ -71,6 +71,7 @@
 #include "duckdb/common/enums/relation_type.hpp"
 #include "duckdb/common/enums/result_eagerness.hpp"
 #include "duckdb/common/enums/result_lifetime.hpp"
+#include "duckdb/common/enums/result_ordering.hpp"
 #include "duckdb/common/enums/row_group_append_mode.hpp"
 #include "duckdb/common/enums/row_id_handling.hpp"
 #include "duckdb/common/enums/set_operation_type.hpp"
@@ -130,7 +131,6 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_state.hpp"
-#include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 #include "duckdb/execution/operator/join/join_filter_pushdown.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte_state.hpp"
@@ -196,6 +196,7 @@
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
@@ -559,6 +560,25 @@ AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char
 	return static_cast<AlterScalarFunctionType>(StringUtil::StringToEnum(GetAlterScalarFunctionTypeValues(), 2, "AlterScalarFunctionType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetAlterSchemaTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(AlterSchemaType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(AlterSchemaType::SET_SCHEMA_OPTIONS), "SET_SCHEMA_OPTIONS" },
+		{ static_cast<uint32_t>(AlterSchemaType::RESET_SCHEMA_OPTIONS), "RESET_SCHEMA_OPTIONS" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<AlterSchemaType>(AlterSchemaType value) {
+	return StringUtil::EnumToString(GetAlterSchemaTypeValues(), 3, "AlterSchemaType", static_cast<uint32_t>(value));
+}
+
+template<>
+AlterSchemaType EnumUtil::FromString<AlterSchemaType>(const char *value) {
+	return static_cast<AlterSchemaType>(StringUtil::StringToEnum(GetAlterSchemaTypeValues(), 3, "AlterSchemaType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetAlterTableFunctionTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(AlterTableFunctionType::INVALID), "INVALID" },
@@ -623,19 +643,20 @@ const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
 		{ static_cast<uint32_t>(AlterType::ALTER_TABLE_FUNCTION), "ALTER_TABLE_FUNCTION" },
 		{ static_cast<uint32_t>(AlterType::SET_COMMENT), "SET_COMMENT" },
 		{ static_cast<uint32_t>(AlterType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" },
-		{ static_cast<uint32_t>(AlterType::ALTER_DATABASE), "ALTER_DATABASE" }
+		{ static_cast<uint32_t>(AlterType::ALTER_DATABASE), "ALTER_DATABASE" },
+		{ static_cast<uint32_t>(AlterType::ALTER_SCHEMA), "ALTER_SCHEMA" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterType>(AlterType value) {
-	return StringUtil::EnumToString(GetAlterTypeValues(), 10, "AlterType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTypeValues(), 11, "AlterType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterType EnumUtil::FromString<AlterType>(const char *value) {
-	return static_cast<AlterType>(StringUtil::StringToEnum(GetAlterTypeValues(), 10, "AlterType", value));
+	return static_cast<AlterType>(StringUtil::StringToEnum(GetAlterTypeValues(), 11, "AlterType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterViewTypeValues() {
@@ -4507,6 +4528,7 @@ const StringUtil::EnumStringLiteral *GetParseResultTypeValues() {
 		{ static_cast<uint32_t>(ParseResultType::NUMBER), "NUMBER" },
 		{ static_cast<uint32_t>(ParseResultType::STRING), "STRING" },
 		{ static_cast<uint32_t>(ParseResultType::END_OF_INPUT), "END_OF_INPUT" },
+		{ static_cast<uint32_t>(ParseResultType::TOKEN), "TOKEN" },
 		{ static_cast<uint32_t>(ParseResultType::INVALID), "INVALID" }
 	};
 	return values;
@@ -4514,12 +4536,12 @@ const StringUtil::EnumStringLiteral *GetParseResultTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ParseResultType>(ParseResultType value) {
-	return StringUtil::EnumToString(GetParseResultTypeValues(), 14, "ParseResultType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetParseResultTypeValues(), 15, "ParseResultType", static_cast<uint32_t>(value));
 }
 
 template<>
 ParseResultType EnumUtil::FromString<ParseResultType>(const char *value) {
-	return static_cast<ParseResultType>(StringUtil::StringToEnum(GetParseResultTypeValues(), 14, "ParseResultType", value));
+	return static_cast<ParseResultType>(StringUtil::StringToEnum(GetParseResultTypeValues(), 15, "ParseResultType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetParserExtensionResultTypeValues() {
@@ -5350,6 +5372,24 @@ RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
 	return static_cast<RenderMode>(StringUtil::StringToEnum(GetRenderModeValues(), 2, "RenderMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetRequestSizingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(RequestSizing::BY_CACHE), "BY_CACHE" },
+		{ static_cast<uint32_t>(RequestSizing::BY_READER), "BY_READER" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value) {
+	return StringUtil::EnumToString(GetRequestSizingValues(), 2, "RequestSizing", static_cast<uint32_t>(value));
+}
+
+template<>
+RequestSizing EnumUtil::FromString<RequestSizing>(const char *value) {
+	return static_cast<RequestSizing>(StringUtil::StringToEnum(GetRequestSizingValues(), 2, "RequestSizing", value));
+}
+
 const StringUtil::EnumStringLiteral *GetRequestTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(RequestType::GET_REQUEST), "GET" },
@@ -6118,6 +6158,7 @@ const StringUtil::EnumStringLiteral *GetStatementTypeValues() {
 		{ static_cast<uint32_t>(StatementType::CONNECT_STATEMENT), "CONNECT_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::DISCONNECT_STATEMENT), "DISCONNECT_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::EXTERNAL_RESOURCE_STATEMENT), "EXTERNAL_RESOURCE_STATEMENT" },
+		{ static_cast<uint32_t>(StatementType::PASSTHROUGH_STATEMENT), "PASSTHROUGH_STATEMENT" },
 		{ static_cast<uint32_t>(StatementType::ENUM_SIZE), "ENUM_SIZE" }
 	};
 	return values;

@@ -94,7 +94,7 @@ TEST_CASE("Aggregate SQL clauses retain logical result annotations",
 		REQUIRE(call.GetValue()->GetQualifiedName() == QualifiedName("system", "main", "last"));
 		auto direct = connection.Query("SELECT (" + call.GetValue()->ToString() + ")='A' FROM clause_values");
 		REQUIRE_NO_FAIL(*direct);
-		REQUIRE(direct->GetValue(0, 0) == Value::BOOLEAN(false));
+		REQUIRE(direct->Collection().GetValue(0, 0) == Value::BOOLEAN(false));
 		aggregate.SetReturnType(LogicalType::VARCHAR_COLLATION("nocase"));
 		auto rejected = BoundExpressionSQLExporter::ExportAggregateCallAtPath(aggregate, context, path);
 		REQUIRE(rejected.HasError());
@@ -104,7 +104,7 @@ TEST_CASE("Aggregate SQL clauses retain logical result annotations",
 		REQUIRE(ordinary.IsSuccess());
 		auto annotated = connection.Query("SELECT (" + ordinary.GetValue()->ToString() + ")='A' FROM clause_values");
 		REQUIRE_NO_FAIL(*annotated);
-		REQUIRE(annotated->GetValue(0, 0) == Value::BOOLEAN(true));
+		REQUIRE(annotated->Collection().GetValue(0, 0) == Value::BOOLEAN(true));
 	}
 	const ColumnBinding binding(TableIndex(1), ProjectionIndex(0));
 	for (const auto &type :

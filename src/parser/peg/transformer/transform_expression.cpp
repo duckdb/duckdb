@@ -2188,6 +2188,9 @@ PEGTransformerFactory::TransformBetweenFrameExtent(PEGTransformer &transformer, 
 
 vector<WindowBoundaryExpression>
 PEGTransformerFactory::TransformSingleFrameExtent(PEGTransformer &transformer, WindowBoundaryExpression frame_bound) {
+	if (frame_bound.boundary == WindowBoundary::EXPR_FOLLOWING_RANGE) {
+		throw ParserException("Frame starting from following row cannot end with current row");
+	}
 	vector<WindowBoundaryExpression> result;
 	result.push_back(std::move(frame_bound));
 	WindowBoundaryExpression end_current_row;

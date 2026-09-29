@@ -626,6 +626,10 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 
+	if (!info.HasPrev()) {
+		// never linked (the update failed): data may be partial and the vector root may belong to another update
+		return;
+	}
 	// move the data from the UpdateInfo back into the base info
 	auto entry = GetUpdateNode(*lock_handle, info.vector_index);
 	if (!entry.IsSet()) {
@@ -642,16 +646,20 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 // Cleanup Update
 //===--------------------------------------------------------------------===//
 void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info) {
+	// pin both neighbours before modifying either: Pin can throw (OOM), and a half-unlinked node corrupts the chain
+	UndoBufferReference prev_pin;
+	UndoBufferReference next_pin;
 	if (info.HasPrev()) {
-		auto pin = info.prev.Pin();
-		auto &prev_info = UpdateInfo::Get(pin);
-		prev_info.next = info.next;
+		prev_pin = info.prev.Pin();
 	}
 	if (info.HasNext()) {
-		auto next = info.next;
-		auto next_pin = next.Pin();
-		auto &next_info = UpdateInfo::Get(next_pin);
-		next_info.prev = info.prev;
+		next_pin = info.next.Pin();
+	}
+	if (prev_pin.IsSet()) {
+		UpdateInfo::Get(prev_pin).next = info.next;
+	}
+	if (next_pin.IsSet()) {
+		UpdateInfo::Get(next_pin).prev = info.prev;
 	}
 }
 
@@ -1473,9 +1481,13 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 			node->column_index = column_index;
 
 			// insert the new node into the chain
+			// pin first: Pin can throw (OOM), and rolling back a half-linked node corrupts the chain
+			UndoBufferReference next_pin;
+			if (base_info.next.IsSet()) {
+				next_pin = base_info.next.Pin();
+			}
 			node->next = base_info.next;
-			if (node->next.IsSet()) {
-				auto next_pin = node->next.Pin();
+			if (next_pin.IsSet()) {
 				auto &next_info = UpdateInfo::Get(next_pin);
 				next_info.prev = node_ref.GetBufferPointer();
 			}

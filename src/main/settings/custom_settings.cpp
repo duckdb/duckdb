@@ -659,26 +659,27 @@ void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &inp
 //===----------------------------------------------------------------------===//
 // External File Cache Block Sizes
 //===----------------------------------------------------------------------===//
-void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+static void ValidateExternalFileCacheBlockSize(const char *name, const Value &input) {
 	const auto bytes = input.GetValue<uint64_t>();
 	if (bytes == 0) {
-		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(name));
 	}
 	if (!IsPowerOfTwo(bytes)) {
-		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(name),
 		                            bytes);
 	}
 }
 
-void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	const auto bytes = input.GetValue<uint64_t>();
-	if (bytes == 0) {
-		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
-	}
-	if (!IsPowerOfTwo(bytes)) {
-		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
-		                            bytes);
-	}
+void ExternalFileCacheLocalMaxBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	ValidateExternalFileCacheBlockSize(Name, input);
+}
+
+void ExternalFileCacheRemoteMaxBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	ValidateExternalFileCacheBlockSize(Name, input);
+}
+
+void ExternalFileCacheRemoteMinBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	ValidateExternalFileCacheBlockSize(Name, input);
 }
 
 //===----------------------------------------------------------------------===//
