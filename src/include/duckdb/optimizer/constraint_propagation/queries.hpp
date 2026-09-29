@@ -4,6 +4,7 @@
 
 namespace duckdb {
 
+class ConstraintPropagator;
 class LogicalOperator;
 class LogicalComparisonJoin;
 class TableCatalogEntry;
