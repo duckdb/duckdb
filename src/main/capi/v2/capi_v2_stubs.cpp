@@ -6,3 +6,9 @@
 #endif
 
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+
+DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_context(duckdb_v2_context_handle conn, const duckdb_v2_str *sql,
+                                                    duckdb_v2_token_iterator_handle *out_iterator,
+                                                    duckdb_v2_error_info_handle *err) {
+	return DUCKDB_V2_ERROR_API; // Not yet implemented
+}

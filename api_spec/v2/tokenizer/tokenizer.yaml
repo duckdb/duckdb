@@ -47,7 +47,7 @@ enums:
         description: "Not a token; reported by token_iterator_next once the input is exhausted, with start equal to the input length and length 0."
 
 functions:
-  tokenize_sql:
+  tokenize_sql_from_connection:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-11" ]
     description: |
@@ -65,6 +65,42 @@ functions:
       conn:
         type: connection
         description: The connection supplying the grammar.
+      sql:
+        type: str
+        indirection: 1
+        const: true
+        kind: IN
+        description: The SQL text. Borrowed for the call only; may contain interior null bytes. {NULL, 0} is the empty input.
+      out_iterator:
+        type: token_iterator
+        indirection: 1
+        kind: OUT
+        description: Receives the new iterator handle. Destroy via token_iterator_destroy.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  tokenize_sql_from_context:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-11" ]
+    description: |
+      Tokenizes a SQL string into an iterator over its tokens.
+
+      Lexical tokenization, in the context of whatever grammar extensions are loaded on the given connection. Closing
+      the context or changing settings afterwards does not affect the tokens. The SQL string is borrowed for the call
+      only, the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error;
+      `[[token_iterator_ends_unterminated]]` reports whether the input ended inside an open token.
+
+      *out_iterator is set to NULL on failure.
+    role: constructor
+    belongs_to: token_iterator
+    parameters:
+      conn:
+        type: context
+        description: The context supplying the grammar.
       sql:
         type: str
         indirection: 1

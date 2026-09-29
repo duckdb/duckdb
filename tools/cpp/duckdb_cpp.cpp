@@ -703,7 +703,7 @@ static_assert(static_cast<uint8_t>(TokenType::TERMINATOR) == DUCKDB_V2_TOKEN_TYP
 auto Connection::Tokenize(std::string_view sql) const -> TokenList {
 	duckdb_v2_token_iterator_handle iterator = nullptr;
 	auto sql_str = ToStr(sql);
-	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), &sql_str, &iterator);
+	CheckedAPICall(duckdb_v2_tokenize_sql_from_connection, handle(), &sql_str, &iterator);
 	TokenList list;
 	try {
 		while (true) {

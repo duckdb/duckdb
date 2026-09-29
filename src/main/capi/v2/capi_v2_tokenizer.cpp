@@ -70,9 +70,9 @@ auto Convert(TokenIteratorWrapperV2 *ptr) -> duckdb_v2_token_iterator_handle {
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
-                                       duckdb_v2_token_iterator_handle *out_iterator,
-                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_connection(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
+                                                       duckdb_v2_token_iterator_handle *out_iterator,
+                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(out_iterator);
 	*out_iterator = nullptr;
 	DUCKDB_CHECK_ARG(conn);
@@ -83,6 +83,40 @@ DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, const d
 		duckdb::vector<duckdb::MatcherToken> raw_tokens;
 		CleanExitTokenizerBehavior behavior(input, raw_tokens);
 		auto grammar = duckdb::CompiledGrammar::Get(*connection->context);
+		const bool clean_exit = grammar->GetTokenizer().TokenizeInput(behavior);
+
+		auto wrapper = duckdb::make_uniq<TokenIteratorWrapperV2>();
+		wrapper->input_length = input.size();
+		wrapper->tokens.reserve(raw_tokens.size());
+		bool last_unterminated = false;
+		for (auto &token : raw_tokens) {
+			if (token.type == duckdb::TokenType::END_OF_INPUT ||
+			    token.type == duckdb::TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+				continue;
+			}
+			wrapper->tokens.push_back({ConvertTokenType(token.type), token.offset, token.length});
+			last_unterminated = token.unterminated;
+		}
+		// A trailing line comment is a dirty exit without the flag; an open string or quoted identifier is a clean
+		// exit with it.
+		wrapper->ends_unterminated = !clean_exit || last_unterminated;
+		*out_iterator = Convert(wrapper.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_from_context(duckdb_v2_context_handle context, const duckdb_v2_str *sql,
+                                                         duckdb_v2_token_iterator_handle *out_iterator,
+                                                         duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_iterator);
+	*out_iterator = nullptr;
+	DUCKDB_CHECK_ARG(context);
+	DUCKDB_CHECK_ARG(sql);
+	return WithErrorHandler(err, [&]() {
+		auto *ctx = Convert(context);
+		duckdb::string input(Convert(sql));
+		duckdb::vector<duckdb::MatcherToken> raw_tokens;
+		CleanExitTokenizerBehavior behavior(input, raw_tokens);
+		auto grammar = duckdb::CompiledGrammar::Get(*ctx);
 		const bool clean_exit = grammar->GetTokenizer().TokenizeInput(behavior);
 
 		auto wrapper = duckdb::make_uniq<TokenIteratorWrapperV2>();

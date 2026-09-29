@@ -3565,9 +3565,34 @@ typedef struct _duckdb_v2_token_iterator {
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
-                                                    duckdb_v2_token_iterator_handle *out_iterator,
-                                                    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_connection(duckdb_v2_connection_handle conn,
+                                                                    const duckdb_v2_str *sql,
+                                                                    duckdb_v2_token_iterator_handle *out_iterator,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Tokenizes a SQL string into an iterator over its tokens.
+ *
+ * Lexical tokenization, in the context of whatever grammar extensions are loaded on the given connection. Closing the
+ * context or changing settings afterwards does not affect the tokens. The SQL string is borrowed for the call only, the
+ * caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error;
+ * `duckdb_v2_token_iterator_ends_unterminated()` reports whether the input ended inside an open token.
+ *
+ * *out_iterator is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The context supplying the grammar.
+ * @param sql The SQL text. Borrowed for the call only; may contain interior null bytes. {NULL, 0} is the empty input.
+ * @param out_iterator Receives the new iterator handle. Destroy via token_iterator_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_context(duckdb_v2_context_handle conn,
+                                                                 const duckdb_v2_str *sql,
+                                                                 duckdb_v2_token_iterator_handle *out_iterator,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Yields the next token, or END_OF_INPUT once exhausted.

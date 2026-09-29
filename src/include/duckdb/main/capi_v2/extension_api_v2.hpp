@@ -1259,8 +1259,11 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_next)
 	(duckdb_v2_token_iterator_handle iterator, DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start, idx_t *out_length,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
+	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql_from_connection)
 	(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql, duckdb_v2_token_iterator_handle *out_iterator,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql_from_context)
+	(duckdb_v2_context_handle conn, const duckdb_v2_str *sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_attach_options_create)
 	(duckdb_v2_instance_handle instance, duckdb_v2_attach_options_handle *out_options,
@@ -1878,7 +1881,8 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_token_iterator_destroy = duckdb_v2_token_iterator_destroy;
 	result.duckdb_v2_token_iterator_ends_unterminated = duckdb_v2_token_iterator_ends_unterminated;
 	result.duckdb_v2_token_iterator_next = duckdb_v2_token_iterator_next;
-	result.duckdb_v2_tokenize_sql = duckdb_v2_tokenize_sql;
+	result.duckdb_v2_tokenize_sql_from_connection = duckdb_v2_tokenize_sql_from_connection;
+	result.duckdb_v2_tokenize_sql_from_context = duckdb_v2_tokenize_sql_from_context;
 	result.duckdb_v2_attach_options_create = duckdb_v2_attach_options_create;
 	result.duckdb_v2_attach_options_destroy = duckdb_v2_attach_options_destroy;
 	result.duckdb_v2_attach_options_set = duckdb_v2_attach_options_set;

@@ -108,7 +108,7 @@ bool EndsUnterminated(duckdb_v2_token_iterator_handle it) {
 // Tokenize a length-delimited view, drain, destroy. The flag is read before and after draining and must agree.
 Lexed TokenizeAll(duckdb_v2_connection_handle conn, duckdb_v2_str sql) {
 	duckdb_v2_token_iterator_handle it = nullptr;
-	REQUIRE(duckdb_v2_tokenize_sql(conn, &sql, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(conn, &sql, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(it != nullptr);
 	auto before = EndsUnterminated(it);
 	auto tokens = TokDrain(it, sql.len);
@@ -278,7 +278,7 @@ TEST_CASE("V2 tokenizer: ends_unterminated is a property of the input", "[capi_v
 	EnvFixture fx;
 	duckdb_v2_token_iterator_handle it = nullptr;
 	auto sql_str = Convert("SELECT 'abc");
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// Before, during and after draining, and after exhaustion, the answer is the same.
 	REQUIRE(EndsUnterminated(it));
@@ -321,7 +321,7 @@ TEST_CASE("V2 tokenizer: exhaustion is in-band and idempotent", "[capi_v2][token
 	std::string sql = "SELECT 1";
 	duckdb_v2_token_iterator_handle it = nullptr;
 	auto sql_str = Convert(sql);
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(TokNext(it) == Tok {KEYWORD, 0, 6});
 	REQUIRE(TokNext(it) == Tok {NUMBER, 7, 1});
@@ -351,7 +351,7 @@ TEST_CASE("V2 tokenizer: the input is borrowed for the call only", "[capi_v2][to
 	auto *buffer = new std::string("SELECT 42");
 	duckdb_v2_token_iterator_handle it = nullptr;
 	auto sql_str = Convert(*buffer);
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// Clobber, then free, the caller's bytes before the first next().
 	buffer->assign(buffer->size(), 'x');
 	delete buffer;
@@ -365,7 +365,7 @@ TEST_CASE("V2 tokenizer: the iterator outlives the connection and the database",
 	EnvFixture fx;
 	duckdb_v2_token_iterator_handle it = nullptr;
 	auto sql_str = Convert("SELECT 1; 'x");
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(duckdb_v2_connection_destroy(&fx.conn) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_instance_destroy(&fx.instance) == DUCKDB_V2_ERROR_NONE);
@@ -396,7 +396,7 @@ TEST_CASE("V2 tokenizer: the keyword set is the connection's grammar", "[capi_v2
 	// The grammar is read when the iterator is created, not when it is stepped.
 	duckdb_v2_token_iterator_handle it = nullptr;
 	auto sql_str = Convert("ANSWER");
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 	ExecSQL(fx.conn, "RESET active_grammar_extensions");
 	REQUIRE(TokDrain(it, 6) == Toks {{KEYWORD, 0, 6}});
 	duckdb_v2_token_iterator_destroy(&it);
@@ -414,12 +414,12 @@ TEST_CASE("V2 tokenizer: tokenize_sql argument checks", "[capi_v2][tokenizer]") 
 
 	// A null connection or a null view with a non-zero length is an input error, and the slot is reset.
 	auto it = stale;
-	REQUIRE(duckdb_v2_tokenize_sql(nullptr, &sql, &it, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(nullptr, &sql, &it, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(it == nullptr);
 	it = stale;
 	duckdb_v2_error_info_handle err = nullptr;
 	auto sql_str = duckdb_v2_str {nullptr, 3};
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(it == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_str message = {nullptr, 0};
@@ -428,14 +428,14 @@ TEST_CASE("V2 tokenizer: tokenize_sql argument checks", "[capi_v2][tokenizer]") 
 	duckdb_v2_error_info_destroy(&err);
 
 	// A null out slot is an input error.
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 TEST_CASE("V2 tokenizer: next argument checks", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
 	duckdb_v2_token_iterator_handle it = nullptr;
 	auto sql_str = Convert("SELECT 1");
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// All three out-params are required.
 	auto type = STALE_TYPE;
@@ -460,7 +460,7 @@ TEST_CASE("V2 tokenizer: ends_unterminated argument checks", "[capi_v2][tokenize
 	EnvFixture fx;
 	duckdb_v2_token_iterator_handle it = nullptr;
 	auto sql_str = Convert("SELECT 'abc");
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// A null slot is an input error; a null iterator fails and resets the slot.
 	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(it, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -480,7 +480,7 @@ TEST_CASE("V2 tokenizer: destroy is null-safe and idempotent", "[capi_v2][tokeni
 	REQUIRE(it == nullptr);
 
 	auto sql_str = Convert("SELECT 1");
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_tokenize_sql_from_connection(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(it != nullptr);
 	// Destroying a half-consumed iterator, then destroying the emptied slot again.
 	REQUIRE(TokNext(it) == Tok {KEYWORD, 0, 6});
