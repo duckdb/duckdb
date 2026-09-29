@@ -1,0 +1,203 @@
+# name: test/sql/optimizer/expression/enum_full_domain_join.test
+# description: Full-domain ENUM (NOT) IN in join conditions: pushdown, degeneration and folding
+# group: [expression]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+CREATE TYPE mood AS ENUM('sad', 'ok', 'happy');
+
+# nullable column with all domain values plus one NULL row
+statement ok
+CREATE TABLE a AS SELECT (range % 3)::INTEGER AS k, ['sad', 'ok', 'happy'][1 + range % 3]::mood AS m FROM range(12);
+
+statement ok
+CREATE TABLE b AS SELECT (range % 3)::INTEGER AS k, range::INTEGER AS v FROM range(12);
+
+statement ok
+INSERT INTO a VALUES (99, NULL);
+
+# 1. INNER join: the single-side ON predicate is pushed into a filter on a, where the
+#    NOT-IN over the full domain collapses to an empty result
+query II
+explain
+SELECT count(*) FROM a JOIN b ON a.k = b.k AND a.m NOT IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*EMPTY.*
+
+query I
+SELECT count(*) FROM a JOIN b ON a.k = b.k AND a.m NOT IN ('sad', 'ok', 'happy');
+----
+0
+
+# 2. INNER join with IN over the full domain: pushed down as an IS NOT NULL filter
+query II
+explain
+SELECT count(*) FROM a JOIN b ON a.k = b.k AND a.m IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*m IS NOT NULL.*
+
+query I
+SELECT count(*) FROM a JOIN b ON a.k = b.k AND a.m IN ('sad', 'ok', 'happy');
+----
+48
+
+# 4. LEFT join, preserved-side IN over the full domain: constant_or_null stays in the join
+#    condition (matches on non-NULL m; the NULL row survives unmatched). The IN direction does
+#    not degenerate: constant_or_null(true, m) is TRUE-or-NULL, and a NULL condition still
+#    rejects a pair, so non-NULL rows can still match
+query II
+explain
+SELECT count(*) FROM a LEFT JOIN b ON a.k = b.k AND a.m IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*constant_or_null\(true, m\).*
+
+query I
+SELECT count(*) FROM a LEFT JOIN b ON a.k = b.k AND a.m IN ('sad', 'ok', 'happy');
+----
+49
+
+# 5. RIGHT join with the predicate on the preserved side behaves like case 3
+query II
+explain
+SELECT count(*) FROM b RIGHT JOIN a ON a.k = b.k AND a.m NOT IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*Conditions:.*k = k,.*constant_or_null\(false, m\).*
+
+query I
+SELECT count(*) FROM b RIGHT JOIN a ON a.k = b.k AND a.m NOT IN ('sad', 'ok', 'happy');
+----
+13
+
+# 9. DML CTE plans skip statistics propagation entirely, so the join is not degenerated -
+#     the INSERT must still run exactly once
+statement ok
+CREATE TABLE guard_check(k INTEGER, m mood);
+
+statement ok
+INSERT INTO guard_check VALUES (1, 'sad');
+
+query I
+WITH ins AS (INSERT INTO guard_check VALUES (99, NULL) RETURNING *) SELECT count(*) FROM a LEFT JOIN ins ON a.k = ins.k AND a.m NOT IN ('sad', 'ok', 'happy');
+----
+13
+
+query I
+SELECT count(*) FROM guard_check;
+----
+2
+
+query I
+SELECT count(*) FROM guard_check WHERE m IS NULL;
+----
+1
+
+# 10. join-condition folding: with a provably non-NULL enum column, the full-domain IN folds
+#     to constant true and is erased, leaving a single equi-join condition (the multi-condition
+#     rendering would put "k = k," on its own line below "Conditions:")
+statement ok
+CREATE TABLE a_nn AS SELECT (range % 3)::INTEGER AS k, ['sad', 'ok', 'happy'][1 + range % 3]::mood AS m FROM range(12);
+
+query II
+explain
+SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND a_nn.m IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*Conditions: k = k.*
+
+query I
+SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND a_nn.m IN ('sad', 'ok', 'happy');
+----
+48
+
+# 11. a single always-true condition turns the INNER join into a cross product
+query II
+explain
+SELECT count(*) FROM a_nn JOIN b ON a_nn.m IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+query I
+SELECT count(*) FROM a_nn JOIN b ON a_nn.m IN ('sad', 'ok', 'happy');
+----
+144
+
+# 12. LEFT join with the folded condition: erased, and every row still matches
+query I
+SELECT count(*) FROM a_nn LEFT JOIN b ON a_nn.k = b.k AND a_nn.m IN ('sad', 'ok', 'happy');
+----
+48
+
+# 13. DML CTE plans do not fold join conditions (stale statistics could hide NULL rows) -
+#     the condition is evaluated per row and the INSERT still runs
+query II
+explain
+WITH ins AS (INSERT INTO guard_check VALUES (2, 'ok') RETURNING *) SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND a_nn.m IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*constant_or_null\(true, m\).*
+
+query I
+WITH ins AS (INSERT INTO guard_check VALUES (2, 'ok') RETURNING *) SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND a_nn.m IN ('sad', 'ok', 'happy');
+----
+48
+
+query I
+SELECT count(*) FROM guard_check;
+----
+3
+
+# 14. compound constant_or_null inputs are not folded: the nullability proof only covers bare
+#     column references, so the expression survives and is pushed down as a scan filter
+query II
+explain
+SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND constant_or_null(TRUE, a_nn.k + 1);
+----
+physical_plan	<REGEX>:.*constant_or_null\(true, \(k \+ 1\)\).*
+
+query I
+SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND constant_or_null(TRUE, a_nn.k + 1);
+----
+48
+
+# 15. inputs referencing both join sides are not folded (no single child can prove them)
+query II
+explain
+SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND constant_or_null(TRUE, a_nn.k + b.k);
+----
+physical_plan	<REGEX>:.*constant_or_null\(true, \(k \+ k\)\).*
+
+query I
+SELECT count(*) FROM a_nn JOIN b ON a_nn.k = b.k AND constant_or_null(TRUE, a_nn.k + b.k);
+----
+48
+
+# 16. folding inside an ANY-join condition (OR): the folded disjunct collapses the whole
+#     condition to always-true and the join becomes a cross product
+query II
+explain
+SELECT count(*) FROM a_nn JOIN b ON a_nn.m IN ('sad', 'ok', 'happy') OR a_nn.k = b.k;
+----
+physical_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+query I
+SELECT count(*) FROM a_nn JOIN b ON a_nn.m IN ('sad', 'ok', 'happy') OR a_nn.k = b.k;
+----
+144
+
+# 17. ASOF join: the folded IN conjunct is erased from the conditions, the ASOF inequality stays
+statement ok
+CREATE TABLE a_t AS SELECT (range % 3)::INTEGER AS k, ['sad', 'ok', 'happy'][1 + range % 3]::mood AS m, range::INTEGER AS t FROM range(12);
+
+statement ok
+CREATE TABLE b_t AS SELECT (range % 3)::INTEGER AS k, range::INTEGER AS t FROM range(12);
+
+query II
+explain
+SELECT count(*) FROM a_t ASOF JOIN b_t ON a_t.k = b_t.k AND a_t.t >= b_t.t AND a_t.m IN ('sad', 'ok', 'happy');
+----
+physical_plan	<REGEX>:.*Conditions: k = k, t <= t.*
+
+query I
+SELECT count(*) FROM a_t ASOF JOIN b_t ON a_t.k = b_t.k AND a_t.t >= b_t.t AND a_t.m IN ('sad', 'ok', 'happy');
+----
+12
