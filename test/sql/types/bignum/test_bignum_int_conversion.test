@@ -1,0 +1,239 @@
+# name: test/sql/types/bignum/test_bignum_int_conversion.test
+# description: Test casting BIGNUM to the integer types, including out-of-range values
+# group: [bignum]
+
+# round-trips for the full range of every integer type
+foreach int_type tinyint smallint integer bigint hugeint
+
+query I
+select distinct i::{int_type}::bignum::{int_type} = i from range(-100, 100) t(i);
+----
+true
+
+endloop
+
+foreach int_type utinyint usmallint uinteger ubigint uhugeint
+
+query I
+select distinct i::{int_type}::bignum::{int_type} = i from range(0, 100) t(i);
+----
+true
+
+endloop
+
+# TINYINT boundaries
+query I
+select 127::bignum::tinyint
+----
+127
+
+query I
+select (-128)::bignum::tinyint
+----
+-128
+
+statement error
+select 128::bignum::tinyint
+----
+Could not convert bignum '128' to INT8
+
+statement error
+select (-129)::bignum::tinyint
+----
+Could not convert bignum '-129' to INT8
+
+# SMALLINT boundaries
+query I
+select (-32768)::bignum::smallint
+----
+-32768
+
+statement error
+select (-32769)::bignum::smallint
+----
+Could not convert bignum '-32769' to INT16
+
+# INTEGER boundaries
+query I
+select (-2147483648)::bignum::integer
+----
+-2147483648
+
+statement error
+select (-2147483649)::bignum::integer
+----
+Could not convert bignum '-2147483649' to INT32
+
+# USMALLINT boundaries
+query I
+select 65535::bignum::usmallint
+----
+65535
+
+statement error
+select 65536::bignum::usmallint
+----
+Could not convert bignum '65536' to UINT16
+
+# BIGINT boundaries
+query I
+select '9223372036854775807'::bignum::bigint
+----
+9223372036854775807
+
+query I
+select '-9223372036854775808'::bignum::bigint
+----
+-9223372036854775808
+
+statement error
+select '-9223372036854775809'::bignum::bigint
+----
+Could not convert bignum '-9223372036854775809' to INT64
+
+# UBIGINT boundaries
+query I
+select '18446744073709551615'::bignum::ubigint
+----
+18446744073709551615
+
+statement error
+select '18446744073709551616'::bignum::ubigint
+----
+Could not convert bignum '18446744073709551616' to UINT64
+
+# HUGEINT boundaries
+query I
+select '170141183460469231731687303715884105727'::bignum::hugeint
+----
+170141183460469231731687303715884105727
+
+query I
+select '-170141183460469231731687303715884105728'::bignum::hugeint
+----
+-170141183460469231731687303715884105728
+
+statement error
+select '170141183460469231731687303715884105728'::bignum::hugeint
+----
+Could not convert bignum '170141183460469231731687303715884105728' to INT128
+
+statement error
+select '-170141183460469231731687303715884105729'::bignum::hugeint
+----
+Could not convert bignum '-170141183460469231731687303715884105729' to INT128
+
+# UHUGEINT boundaries
+query I
+select '340282366920938463463374607431768211455'::bignum::uhugeint
+----
+340282366920938463463374607431768211455
+
+statement error
+select '340282366920938463463374607431768211456'::bignum::uhugeint
+----
+Could not convert bignum '340282366920938463463374607431768211456' to UINT128
+
+# values whose absolute value does not fit in 16 bytes are out of range for every integer type
+statement error
+select '340282366920938463463374607431768211456'::bignum::utinyint
+----
+Could not convert bignum '340282366920938463463374607431768211456' to UINT8
+
+statement error
+select '-340282366920938463463374607431768211457'::bignum::hugeint
+----
+Could not convert bignum '-340282366920938463463374607431768211457' to INT128
+
+statement error
+select '99999999999999999999999999999999999999999'::bignum::ubigint
+----
+Could not convert bignum '99999999999999999999999999999999999999999' to UINT64
+
+query I
+select try_cast('340282366920938463463374607431768211456'::bignum as uhugeint)
+----
+NULL
+
+# a negative value is never in range for an unsigned type
+foreach int_type utinyint usmallint uinteger ubigint uhugeint
+
+statement error
+select (-1)::bignum::{int_type}
+----
+Could not convert bignum '-1' to
+
+endloop
+
+# the same holds when the value is stored in a table
+statement ok
+create table bignum_values(b bignum);
+
+statement ok
+insert into bignum_values values ((-1)::bignum), (0::bignum), (255::bignum), (256::bignum);
+
+statement error
+insert into bignum_values values ((-1)::bignum::utinyint)
+----
+Could not convert bignum '-1' to UINT8
+
+statement error
+select b::utinyint from bignum_values
+----
+Could not convert bignum '-1' to UINT8
+
+# inserting a negative BIGNUM into an unsigned column must fail instead of storing 255
+statement ok
+create table utinyint_values(u utinyint);
+
+statement error
+insert into utinyint_values values ((-1)::bignum)
+----
+Could not convert bignum '-1' to UINT8
+
+query I
+select count(*) from utinyint_values
+----
+0
+
+statement ok
+insert into utinyint_values values (255::bignum);
+
+statement error
+insert into utinyint_values values (256::bignum)
+----
+Could not convert bignum '256' to UINT8
+
+query I
+select u from utinyint_values
+----
+255
+
+# TRY_CAST returns NULL instead of throwing
+query I
+select try_cast(b as utinyint) from bignum_values order by b
+----
+NULL
+0
+255
+NULL
+
+query I
+select try_cast((-1)::bignum as utinyint)
+----
+NULL
+
+query I
+select try_cast(300::bignum as utinyint)
+----
+NULL
+
+query I
+select try_cast('99999999999999999999999999999999999999999'::bignum as hugeint)
+----
+NULL
+
+query I
+select try_cast(1::bignum as hugeint)
+----
+1
