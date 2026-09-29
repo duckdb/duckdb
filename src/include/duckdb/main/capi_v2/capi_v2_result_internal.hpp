@@ -33,7 +33,7 @@ struct ResultWrapperV2 {
 	//! that is retained rather than streamed.
 	unique_ptr<QueryResult> handle;
 	//! Live while state == STREAMING, for a statement whose result can be streamed.
-	unique_ptr<QueryResultStream> stream;
+	unique_ptr<QueryResultStream<>> stream;
 
 	//! Keeps the ClientContext alive for starting subsequent fragments and
 	//! preserves the guarantee that an undrained result survives disconnect:

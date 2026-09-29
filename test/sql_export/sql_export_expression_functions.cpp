@@ -260,7 +260,7 @@ TEST_CASE("Incremental scalar registration preserves live SQL identity",
 		REQUIRE_NO_FAIL(*rebound);
 		REQUIRE(rebound->GetTypes() == vector<LogicalType> {value.type()});
 		REQUIRE(rebound->RowCount() == 1);
-		REQUIRE(rebound->GetValue(0, 0) == value);
+		REQUIRE(rebound->Collection().GetValue(0, 0) == value);
 	}
 	auto standalone = make_function(LogicalType::INTEGER);
 	standalone.SetCatalogName(Identifier::SystemCatalog());
@@ -389,11 +389,11 @@ TEST_CASE("Standalone function binding does not autoload catalog collisions",
 		    "SELECT installed, loaded FROM duckdb_extensions() WHERE extension_name = 'core_functions'");
 		REQUIRE_FALSE(extension_state->HasError());
 		REQUIRE(extension_state->RowCount() == 1);
-		REQUIRE(extension_state->GetValue(0, 0) == Value::BOOLEAN(false));
-		REQUIRE(extension_state->GetValue(1, 0) == Value::BOOLEAN(false));
+		REQUIRE(extension_state->Collection().GetValue(0, 0) == Value::BOOLEAN(false));
+		REQUIRE(extension_state->Collection().GetValue(1, 0) == Value::BOOLEAN(false));
 		auto count_if = connection.Query("SELECT count(*) FROM duckdb_functions() WHERE function_name = 'count_if'");
 		REQUIRE_FALSE(count_if->HasError());
-		REQUIRE(count_if->GetValue(0, 0) == Value::BIGINT(0));
+		REQUIRE(count_if->Collection().GetValue(0, 0) == Value::BIGINT(0));
 	};
 	require_core_functions_absent();
 	connection.BeginTransaction();
@@ -547,7 +547,7 @@ TEST_CASE("Bound expression SQL export preserves qualified operator function ide
 	auto rebound = connection.Query("SELECT " + parsed.ToString());
 	REQUIRE_FALSE(rebound->HasError());
 	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
-	REQUIRE(rebound->GetValue(0, 0) == Value::INTEGER(5));
+	REQUIRE(rebound->Collection().GetValue(0, 0) == Value::INTEGER(5));
 	connection.Rollback();
 }
 
