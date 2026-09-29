@@ -155,10 +155,7 @@ public:
 	void RegisterScan(ReplacementScan scan) override {
 		auto &context = *connection.context;
 		// Binding a later fragment of a live result reads this list, so refuse while one is live.
-		if (GetBusySlot(context)->owner.load() != nullptr) {
-			throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before "
-			                             "registering a replacement scan (or open another connection)");
-		}
+		ThrowIfConnectionBusy(context, "registering a replacement scan");
 		// Connection-scoped: this touches only the connection's own state, never the shared database config.
 		context.config.replacement_scans.push_back(make_shared_ptr<ReplacementScan>(std::move(scan)));
 	}

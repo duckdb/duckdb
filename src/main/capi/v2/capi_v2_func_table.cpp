@@ -686,6 +686,8 @@ public:
 
 	void RegisterToCatalog(TableFunction function) override {
 		auto &context = *connection.context;
+		// Registering runs in a live result's transaction, where a failure would abort that query.
+		ThrowIfConnectionBusy(context, "registering a table function");
 
 		context.RunFunctionInTransaction([&]() {
 			auto &catalog = Catalog::GetSystemCatalog(context);

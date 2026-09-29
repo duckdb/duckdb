@@ -613,6 +613,15 @@ inline shared_ptr<ConnectionBusySlotV2> GetBusySlot(ClientContext &context) {
 	return context.registered_state->GetOrCreate<ConnectionBusySlotV2>(BUSY_SLOT_STATE_KEY);
 }
 
+//! Refuses with RESOURCE_IN_USE while the connection has a live result; `action` completes "before ...".
+inline void ThrowIfConnectionBusy(ClientContext &context, const char *action) {
+	if (GetBusySlot(context)->owner.load() != nullptr) {
+		throw ResourceInUseException(
+		    "connection has a live result; drain, destroy, or interrupt it before %s (or open another connection)",
+		    action);
+	}
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Text sinks
 //----------------------------------------------------------------------------------------------------------------------

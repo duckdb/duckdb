@@ -609,6 +609,20 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
+	// Registering on a connection with a live result; the refused handle can be registered once it is gone.
+	{
+		duckdb_v2_result_handle result = nullptr;
+		REQUIRE(Query(fx.conn, "SELECT 42", &result) == DUCKDB_V2_ERROR_NONE);
+		auto function = MakeScalar(fx.conn, "while_busy");
+		auto sig = SigOf(function);
+		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+		duckdb_v2_result_destroy(&result);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_scalar_function_destroy(&function);
+	}
+
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
 }

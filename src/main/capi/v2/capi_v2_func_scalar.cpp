@@ -237,6 +237,8 @@ public:
 
 	void RegisterToCatalog(ScalarFunction function) override {
 		auto &context = *connection.context;
+		// Registering runs in a live result's transaction, where a failure would abort that query.
+		ThrowIfConnectionBusy(context, "registering a scalar function");
 
 		context.RunFunctionInTransaction([&]() {
 			auto &catalog = Catalog::GetSystemCatalog(context);
