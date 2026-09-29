@@ -256,7 +256,7 @@ TEST_CASE("Uncached reads are split at the cache block size", "[external_file_ca
 	const idx_t BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
 	Connection con(db);
-	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
 	auto &cache = db_instance.GetExternalFileCache();
 	cache.SetEnabled(false);
 
@@ -286,7 +286,7 @@ TEST_CASE("Reads of files the cache does not handle are not split", "[external_f
 	const idx_t BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
 	Connection con(db);
-	con.Query(StringUtil::Format("SET external_file_cache_local_block_size=%llu", BLOCK_SIZE));
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
 
 	auto content = MakeTestContent(FILE_SIZE);
 	EFCTestFileGuard test_file("test_efc_local_unsplit_reads.bin", content);

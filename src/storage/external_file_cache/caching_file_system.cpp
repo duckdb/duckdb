@@ -436,7 +436,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 }
 
 void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
-	const idx_t max_block_size = external_file_cache.GetCacheBlockSize(path.path);
+	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(path.path);
 	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek()) {
 		ReadAndRecord(context, buffer, nr_bytes, location);
 		return;
