@@ -325,7 +325,7 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 	auto buffer_count = info.buffer_ids.size();
 	if (info.block_pointers.size() != buffer_count || info.segment_counts.size() != buffer_count ||
 	    info.allocation_sizes.size() != buffer_count) {
-		throw SerializationException("invalid number of index buffers in the index storage information");
+		throw DataCorruptionException("invalid number of index buffers in the index storage information");
 	}
 
 	for (idx_t i = 0; i < info.buffer_ids.size(); i++) {
@@ -347,7 +347,7 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 
 		// Memory safety check: each buffer is stored in a single block.
 		if (allocation_size > block_manager.GetBlockSize()) {
-			throw SerializationException("invalid allocation size in index storage information");
+			throw DataCorruptionException("invalid allocation size in index storage information");
 		}
 
 		// create the FixedSizeBuffer

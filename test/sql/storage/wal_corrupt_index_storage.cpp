@@ -259,20 +259,17 @@ TEST_CASE("Reject an index buffer size that exceeds the block size during WAL re
 		REQUIRE(fs.FileExists(wal_path));
 	}
 
-	// By default, WAL replay tolerates entries that it can not replay: the corrupted index is dropped instead of
-	// overflowing the index buffer.
+	// A corrupt WAL entry must also fail when truncated WAL entries are tolerated.
 	config->options.abort_on_wal_failure = false;
 	{
-		DuckDB db(database_path, config.get());
-		Connection con(db);
-
-		// The remaining WAL entries replay fine.
-		auto result = con.Query("SELECT count(*) FROM t");
-		REQUIRE(CHECK_COLUMN(result, 0, {1000}));
-
-		// The corrupted entry is rejected instead of overflowing the index buffer.
-		result = con.Query("SELECT count(*) FROM duckdb_indexes()");
-		REQUIRE(CHECK_COLUMN(result, 0, {0}));
+		bool threw = false;
+		try {
+			DuckDB db(database_path, config.get());
+		} catch (std::exception &ex) {
+			threw = true;
+			REQUIRE(StringUtil::Contains(ex.what(), "Corrupt WAL: index buffer size 1000000 exceeds the block size"));
+		}
+		REQUIRE(threw);
 	}
 
 	DeleteDatabase(database_path);
