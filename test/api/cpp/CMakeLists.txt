@@ -18,7 +18,6 @@ add_library(
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_copy_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_core.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_file_system.cpp
-  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_multi_file_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_prepared_statement.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_query.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_replacement_scan.cpp
@@ -26,8 +25,7 @@ add_library(
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_table_function.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_tokenizer.cpp
   ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_types_values.cpp
-  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_vector.cpp
-  test_cpp_api_multi_file_identifiers.cpp)
+  ${CMAKE_SOURCE_DIR}/tools/cpp/tests/test_cpp_api_vector.cpp)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_cpp_api>
