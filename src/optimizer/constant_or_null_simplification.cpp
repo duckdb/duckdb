@@ -128,7 +128,6 @@ unique_ptr<Expression> ConstantOrNullSimplification::SimplifyExpression(LogicalO
 
 	vector<unique_ptr<Expression>> children;
 	children.reserve(func_children.size());
-	children.push_back(make_uniq<BoundConstantExpression>(Value::BOOLEAN(!value.value())));
 	for (idx_t child_idx = 1; child_idx < func_children.size(); ++child_idx) {
 		children.push_back(std::move(func_children[child_idx]));
 	}
