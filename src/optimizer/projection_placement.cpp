@@ -482,7 +482,7 @@ static ProjectionRewrite RebuildProjection(Optimizer &optimizer,
                                            const column_binding_set_t &removed_bindings,
                                            vector<LiftDependency> &dependencies,
                                            vector<pair<ColumnBinding, ColumnBinding>> &binding_replacements,
-                                           optional_ptr<LogicalOperator> parent, idx_t parent_child_index) {
+                                           optional_ptr<LogicalOperator> &lowest_rebuilt) {
 	auto projection_ptr = FindOperator(root, projection);
 	if (!projection_ptr) {
 		throw InternalException("Projection placement lost a projection while lifting an expression");
@@ -502,9 +502,12 @@ static ProjectionRewrite RebuildProjection(Optimizer &optimizer,
 		if (expression->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 			auto &colref = expression->Cast<BoundColumnRefExpression>();
 			if (colref.Depth() == 0) {
+				// the expressions still refer to the bindings of projections rebuilt below us: the binding replacer
+				// only runs once the whole placement is in place (see ApplyLiftPlacement)
+				auto current_binding = ResolveBinding(colref.Binding(), binding_replacements);
 				for (idx_t dependency_idx = 0; dependency_idx < dependencies.size(); dependency_idx++) {
 					if (!dependency_indexes[dependency_idx].IsValid() &&
-					    colref.Binding() == dependencies[dependency_idx].current_binding &&
+					    current_binding == dependencies[dependency_idx].current_binding &&
 					    colref.GetReturnType() == dependencies[dependency_idx].type) {
 						dependency_indexes[dependency_idx] = optional_idx(new_index);
 					}
@@ -533,10 +536,8 @@ static ProjectionRewrite RebuildProjection(Optimizer &optimizer,
 	optional_ptr<LogicalOperator> replacement_ptr = *replacement;
 	*projection_ptr = std::move(replacement);
 
-	ColumnBindingReplacer replacer;
 	for (auto &retained_binding : retained_bindings) {
 		auto new_binding = ColumnBinding(table_index, ProjectionIndex(retained_binding.second));
-		replacer.replacement_bindings.emplace_back(retained_binding.first, new_binding);
 		binding_replacements.emplace_back(retained_binding.first, new_binding);
 		CopyStatistics(statistics_map, retained_binding.first, new_binding);
 	}
@@ -546,15 +547,14 @@ static ProjectionRewrite RebuildProjection(Optimizer &optimizer,
 		CopyStatistics(statistics_map, old_binding, new_binding);
 		dependencies[dependency_idx].current_binding = new_binding;
 	}
-	// the parent's projection map still refers to the positions of the old projection - remap it before the
-	// binding replacer walks the plan, since that walk resolves the column bindings of every operator above us
-	auto new_bindings = replacement_ptr->GetColumnBindings();
-	RemapParentProjectionMap(parent, parent_child_index, old_bindings, new_bindings);
-
-	replacer.stop_operator = replacement_ptr;
-	replacer.VisitOperator(*root);
-
-	return {std::move(old_bindings), std::move(new_bindings)};
+	if (!lowest_rebuilt) {
+		lowest_rebuilt = replacement_ptr;
+	}
+	// The references to the old bindings are replaced later, in one go, once the lifted expression has been placed:
+	// the projection maps of the operators above us are only made consistent with the new column layout step by
+	// step (RemapParentProjectionMap, ExposeBinding, and finally the restore projection), and walking the plan with
+	// a ColumnBindingReplacer before that resolves the column bindings of every operator through these stale maps.
+	return {std::move(old_bindings), replacement_ptr->GetColumnBindings()};
 }
 
 static void RewriteLiftedExpression(unique_ptr<Expression> &expression, const vector<LiftDependency> &dependencies) {
@@ -586,26 +586,27 @@ static void ApplyLiftPlacement(Optimizer &optimizer, column_binding_map_t<unique
 
 	column_binding_set_t source_binding;
 	source_binding.insert(placement.source_binding);
-	RebuildProjection(optimizer, statistics_map, root, source, source_binding, dependencies, binding_replacements,
-	                  placement.path[0].op.get(), placement.path[0].child_index);
+	optional_ptr<LogicalOperator> lowest_rebuilt;
+	auto source_rewrite = RebuildProjection(optimizer, statistics_map, root, source, source_binding, dependencies,
+	                                        binding_replacements, lowest_rebuilt);
+	RemapParentProjectionMap(placement.path[0].op.get(), placement.path[0].child_index, source_rewrite.old_bindings,
+	                         source_rewrite.new_bindings);
 
 	for (idx_t path_idx = 0; path_idx < placement.path.size(); path_idx++) {
 		auto &step = placement.path[path_idx];
-		optional_ptr<LogicalOperator> next_op;
-		idx_t next_child_index = 0;
-		if (path_idx + 1 < placement.path.size()) {
-			next_op = placement.path[path_idx + 1].op.get();
-			next_child_index = placement.path[path_idx + 1].child_index;
-		}
+		ProjectionRewrite rewrite {step.output_bindings, step.output_bindings};
 		if (step.op.get().type == LogicalOperatorType::LOGICAL_PROJECTION) {
-			RebuildProjection(optimizer, statistics_map, root, step.op.get().Cast<LogicalProjection>(),
-			                  step.result_bindings, dependencies, binding_replacements, next_op, next_child_index);
+			rewrite = RebuildProjection(optimizer, statistics_map, root, step.op.get().Cast<LogicalProjection>(),
+			                            step.result_bindings, dependencies, binding_replacements, lowest_rebuilt);
 		} else {
 			for (auto &dependency : dependencies) {
 				ExposeBinding(step.op.get(), step.child_index, dependency.current_binding);
 			}
-			RemapParentProjectionMap(next_op, next_child_index, step.output_bindings,
-			                         step.op.get().GetColumnBindings());
+			rewrite.new_bindings = step.op.get().GetColumnBindings();
+		}
+		if (path_idx + 1 < placement.path.size()) {
+			RemapParentProjectionMap(placement.path[path_idx + 1].op.get(), placement.path[path_idx + 1].child_index,
+			                         rewrite.old_bindings, rewrite.new_bindings);
 		}
 	}
 
@@ -681,6 +682,19 @@ static void ApplyLiftPlacement(Optimizer &optimizer, column_binding_map_t<unique
 	}
 	CopyStatistics(statistics_map, placement.source_binding,
 	               ColumnBinding(compute_table_index, ProjectionIndex(candidate_idx)));
+
+	// now that the restore projection reproduces the target's original column layout, every projection map in the
+	// plan is consistent again: replace the references to the bindings of the rebuilt projections (resolved through
+	// the chain of rebuilds) everywhere above the lowest rebuilt projection
+	ColumnBindingReplacer rebuild_replacer;
+	for (auto &replacement : binding_replacements) {
+		auto final_binding = ResolveBinding(replacement.first, binding_replacements);
+		if (final_binding != replacement.first) {
+			rebuild_replacer.replacement_bindings.emplace_back(replacement.first, final_binding);
+		}
+	}
+	rebuild_replacer.stop_operator = lowest_rebuilt;
+	rebuild_replacer.VisitOperator(*root);
 
 	ColumnBindingReplacer replacer;
 	for (idx_t target_idx = 0; target_idx < placement.target_bindings.size(); target_idx++) {
