@@ -77,6 +77,14 @@ FROM t;
 ----
 physical_plan	<REGEX>:.*PARTITION BY id ORDER BY.*
 
+# FD window partitions should eliminate the others
+query II
+EXPLAIN 
+SELECT t.id, MAX(payload) OVER(PARTITION BY grp, sqrt(grp) ORDER BY payload)
+FROM t;
+----
+physical_plan	<REGEX>:.*PARTITION BY grp ORDER BY.*
+
 # FD single ORDER BYs should be removed.
 query II
 EXPLAIN

@@ -224,6 +224,21 @@ void ApplyFunctionalDependencies::VisitOrderBys(vector<BoundOrderByNode> &orders
 }
 
 void ApplyFunctionalDependencies::VisitPartitioning(vector<unique_ptr<Expression>> &partitions) const {
+	//	Remove partitioning keys that are FD on the others
+	for (idx_t i = 0; i < partitions.size();) {
+		vector<reference<Expression>> refs;
+		for (idx_t j = 0; j < partitions.size(); ++j) {
+			if (i != j) {
+				refs.emplace_back(*partitions[j]);
+			}
+		}
+		if (BaseSelectBinder::IsFunctionallyDependent(partitions[i], refs)) {
+			partitions.erase(partitions.begin() + NumericCast<int64_t>(i));
+		} else {
+			++i;
+		}
+	}
+
 	//	Extract the partitioning references
 	column_binding_set_t partition_bindings;
 	for (auto &expr : partitions) {
