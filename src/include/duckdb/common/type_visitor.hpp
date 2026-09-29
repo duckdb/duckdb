@@ -23,11 +23,11 @@ struct TypeVisitor {
 	static LogicalType VisitReplace(const LogicalType &type, F &&func);
 
 private:
-		template <class F>
-	    static LogicalType VisitReplaceInternal(const LogicalType &type, F &&func , idx_t depth);
+	template <class F>
+	static LogicalType VisitReplaceInternal(const LogicalType &type, F &&func, idx_t depth);
 
-		template <class F>
-	    static bool ContainsInternal(const LogicalType &type, F &&predicate, idx_t depth);
+	template <class F>
+	static bool ContainsInternal(const LogicalType &type, F &&predicate, idx_t depth);
 };
 
 template <class F>
@@ -36,7 +36,7 @@ inline LogicalType TypeVisitor::VisitReplace(const LogicalType &type, F &&func) 
 }
 
 template <class F>
-inline LogicalType TypeVisitor::VisitReplaceInternal(const LogicalType &type, F &&func , idx_t depth) {
+inline LogicalType TypeVisitor::VisitReplaceInternal(const LogicalType &type, F &&func, idx_t depth) {
 	if (depth >= MAX_TYPE_RECURSION_DEPTH) {
 		throw InternalException("Max type recursion depth limit of %llu exceeded in TypeVisitor::VisitReplace",
 		                        MAX_TYPE_RECURSION_DEPTH);
@@ -93,13 +93,13 @@ inline LogicalType TypeVisitor::VisitReplaceInternal(const LogicalType &type, F 
 		}
 		const auto &key = MapType::KeyType(type);
 		const auto &value = MapType::ValueType(type);
-		return func(LogicalType::MAP(VisitReplaceInternal(key, func, depth + 1), VisitReplaceInternal(value, func, depth + 1)));
+		return func(
+		    LogicalType::MAP(VisitReplaceInternal(key, func, depth + 1), VisitReplaceInternal(value, func, depth + 1)));
 	}
 	default:
 		return func(type);
 	}
 }
-
 
 template <class F>
 inline bool TypeVisitor::Contains(const LogicalType &type, F &&predicate) {
@@ -152,8 +152,8 @@ inline bool TypeVisitor::ContainsInternal(const LogicalType &type, F &&predicate
 		if (!type.AuxInfo()) {
 			return false;
 		}
-		return ContainsInternal(MapType::KeyType(type), predicate , depth + 1) ||
-			ContainsInternal(MapType::ValueType(type), predicate, depth + 1);
+		return ContainsInternal(MapType::KeyType(type), predicate, depth + 1) ||
+		       ContainsInternal(MapType::ValueType(type), predicate, depth + 1);
 	default:
 		return false;
 	}
