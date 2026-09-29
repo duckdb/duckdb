@@ -3,6 +3,45 @@
 
 namespace duckdb {
 
+//! RFC 7396 merge patch; a missing or non-object orig is treated as an empty object
+static yyjson_mut_val *MergePatchRecursive(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
+	if (!yyjson_mut_is_obj(patch)) {
+		return yyjson_mut_val_mut_copy(doc, patch);
+	}
+
+	auto builder = yyjson_mut_obj(doc);
+	if (!yyjson_mut_is_obj(orig)) {
+		// yyjson_mut_obj_getn on a non-object returns nullptr, so lookups below need no special case
+		orig = nullptr;
+	}
+
+	// Copy orig keys that the patch does not touch
+	if (orig) {
+		idx_t idx, max;
+		yyjson_mut_val *key, *orig_val;
+		yyjson_mut_obj_foreach(orig, idx, max, key, orig_val) {
+			auto patch_val = yyjson_mut_obj_getn(patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+			if (!patch_val) {
+				yyjson_mut_obj_add(builder, yyjson_mut_val_mut_copy(doc, key), yyjson_mut_val_mut_copy(doc, orig_val));
+			}
+		}
+	}
+
+	// Merge patch keys; null removes the key
+	idx_t idx, max;
+	yyjson_mut_val *key, *patch_val;
+	yyjson_mut_obj_foreach(patch, idx, max, key, patch_val) {
+		if (unsafe_yyjson_is_null(patch_val)) {
+			continue;
+		}
+		auto orig_val = yyjson_mut_obj_getn(orig, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+		auto merged_val = MergePatchRecursive(doc, orig_val, patch_val);
+		yyjson_mut_obj_add(builder, yyjson_mut_val_mut_copy(doc, key), merged_val);
+	}
+
+	return builder;
+}
+
 static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
 	if ((yyjson_mut_get_tag(orig) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) ||
 	    (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE))) {
@@ -11,7 +50,7 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 	}
 
 	// Both are object, do the merge
-	return yyjson_mut_merge_patch(doc, orig, patch);
+	return MergePatchRecursive(doc, orig, patch);
 }
 
 static inline void ReadObjects(yyjson_mut_doc *doc, const Vector &input, yyjson_mut_val *objs[]) {
