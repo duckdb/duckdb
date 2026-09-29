@@ -53,7 +53,7 @@ auto Convert(StatementIteratorWrapperV2 *ptr) -> duckdb_v2_statement_iterator_ha
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char *sql,
+DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
                                     duckdb_v2_statement_iterator_handle *out_iterator,
                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);
@@ -71,7 +71,7 @@ DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char
 		// statement_execute, so a statement group is never split across the API
 		// boundary. A parse error is not raised here; it surfaces from the next()
 		// that reaches the failing statement.
-		auto wrapper = duckdb::make_uniq<StatementIteratorWrapperV2>(connection->context, std::string(sql));
+		auto wrapper = duckdb::make_uniq<StatementIteratorWrapperV2>(connection->context, std::string(Convert(*sql)));
 		*out_iterator = Convert(wrapper.release());
 	});
 }

@@ -253,7 +253,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_option_get_target_scope)
 	(duckdb_v2_option_handle option, DUCKDB_V2_OPTION_TARGET_SCOPE *out_target_scope, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql)
-	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
+	(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql, duckdb_v2_statement_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_result_destroy)(duckdb_v2_result_handle *result);
 	DUCKDB_V2_ERROR(*duckdb_v2_result_drain)

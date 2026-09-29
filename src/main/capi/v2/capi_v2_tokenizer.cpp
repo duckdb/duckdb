@@ -2,6 +2,7 @@
 
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
+#include "duckdb_v2.h"
 
 namespace duckdb::capiv2 {
 namespace {

@@ -676,7 +676,8 @@ auto StatementIterator::Next() -> SqlStatement {
 
 auto Connection::ParseSQL(const char *sql) -> StatementIterator {
 	duckdb_v2_statement_iterator_handle iterator = nullptr;
-	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, &iterator);
+	auto sql_str = ToStr(std::string_view(sql));
+	CheckedAPICall(duckdb_v2_parse_sql, handle(), &sql_str, &iterator);
 	return detail::Factory::Make<StatementIterator>(iterator);
 }
 
