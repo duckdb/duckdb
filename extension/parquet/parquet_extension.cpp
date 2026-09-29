@@ -1006,7 +1006,12 @@ static vector<unique_ptr<Expression>> ParquetWriteSelect(CopyToSelectInput &inpu
 static unique_ptr<FunctionData> ParquetCopyFromBind(ClientContext &context, CopyFromFunctionBindInput &input,
                                                     vector<Identifier> &expected_names,
                                                     vector<LogicalType> &expected_types) {
-	return TableFunctionMultiFileWrapper::MultiFileBindCopyWith(context, input, expected_names, expected_types,
+	// write options (e.g. written by EXPORT DATABASE) have no effect on reading - the codec is read from the file
+	auto info = input.info.Copy();
+	info->options.erase("codec");
+	info->options.erase("row_group_size");
+	CopyFromFunctionBindInput read_input(*info, input.tf);
+	return TableFunctionMultiFileWrapper::MultiFileBindCopyWith(context, read_input, expected_names, expected_types,
 	                                                            ParquetScanFunction::GetSingleFileFunction(),
 	                                                            ParquetScanFunction::GetMultiFileSettings());
 }
