@@ -1,6 +1,7 @@
 #include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
@@ -37,8 +38,10 @@ static idx_t ExpressionSize(const ParsedExpression &expression) {
 }
 
 static bool IsLeaf(const ParsedExpression &expression) {
+	// Bare integers would become positional references in GROUP BY and ORDER BY.
 	return expression.GetExpressionClass() == ExpressionClass::COLUMN_REF ||
-	       expression.GetExpressionClass() == ExpressionClass::CONSTANT;
+	       (expression.GetExpressionClass() == ExpressionClass::CONSTANT &&
+	        expression.Cast<ConstantExpression>().GetLiteral().IsNull());
 }
 
 static optional_ptr<SelectNode> CompositionScope(QueryNode &query) {
@@ -282,19 +285,21 @@ bool LogicalPlanSQLExportHelpers::ComposeProjection(LogicalProjection &projectio
 	if (HasAggregateStage(*projection.children[0]) && !retains_aggregate) {
 		return false;
 	}
-	BoundExpressionSQLExportState state(context);
-	AddSubstitutions(state, child, *source);
 	vector<unique_ptr<ParsedExpression>> composed;
 	idx_t new_size = 0;
-	for (idx_t i = 0; i < projection.expressions.size(); i++) {
-		old_size += ExpressionSize(*select.select_list[i]);
-		auto expression = state.Export(*projection.expressions[i], PlanExpressionPath(path, i));
-		if (expression.HasError()) {
-			return false;
+	{
+		BoundExpressionSQLExportState state(context);
+		AddSubstitutions(state, child, *source);
+		for (idx_t i = 0; i < projection.expressions.size(); i++) {
+			old_size += ExpressionSize(*select.select_list[i]);
+			auto expression = state.Export(*projection.expressions[i], PlanExpressionPath(path, i));
+			if (expression.HasError()) {
+				return false;
+			}
+			new_size += ExpressionSize(*expression.GetValue());
+			expression.GetValue()->SetAlias(FieldIdentifier(i));
+			composed.push_back(std::move(expression.GetValue()));
 		}
-		new_size += ExpressionSize(*expression.GetValue());
-		expression.GetValue()->SetAlias(FieldIdentifier(i));
-		composed.push_back(std::move(expression.GetValue()));
 	}
 	if (new_size > old_size) {
 		return false;
@@ -334,7 +339,9 @@ bool LogicalPlanSQLExportHelpers::ComposeOrder(LogicalOperator &op, LogicalPlanS
 		}
 		auto &column = expression.Cast<BoundColumnRefExpression>();
 		auto replacement = state.substitutions.find(column.Binding());
-		if (replacement == state.substitutions.end() || !IsLeaf(replacement->second) ||
+		// Literal order keys are positional or require order_by_non_integer_literal.
+		if (replacement == state.substitutions.end() ||
+		    replacement->second.get().GetExpressionClass() != ExpressionClass::COLUMN_REF ||
 		    !OutputProperties(*op.children[0], column.Binding()).safe) {
 			return false;
 		}

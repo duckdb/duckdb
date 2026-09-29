@@ -295,6 +295,7 @@ BoundExpressionSQLExportState::ExportColumnRef(const BoundColumnRefExpression &e
 	auto result = BoundExpressionSQLExportResult::Success(
 	    replacement == substitutions.end() ? make_uniq<ColumnRefExpression>(std::move(resolved->names))
 	                                       : replacement->second.get().Copy());
+	result.GetValue()->ClearAlias();
 	if (optimizer_type_match) {
 		return result;
 	}

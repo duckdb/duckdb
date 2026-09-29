@@ -140,17 +140,20 @@ LogicalPlanSQLExportResult LogicalFilter::ToSQL(LogicalPlanSQLExportContext &exp
 	vector<reference<const LogicalPlanSQLExportedChild>> child_references {child.GetValue()};
 	auto expression_context =
 	    LogicalPlanSQLExportHelpers::CreateBindingContext(export_context.GetClientContext(), child_references, {plain});
-	BoundExpressionSQLExportState composition(expression_context);
-	auto composed = plain ? nullptr : LogicalPlanSQLExportHelpers::ComposeInput(filter, child.GetValue(), composition);
+	optional_ptr<const SelectNode> composed;
 	auto expressions = LogicalPlanSQLExportHelpers::CollectExpressions(filter);
 	vector<unique_ptr<ParsedExpression>> predicates;
-	for (idx_t expression_index = 0; expression_index < filter.expressions.size(); expression_index++) {
-		auto predicate = export_context.ExportExpression(filter, expressions, expression_index, expression_context,
-		                                                 path, composed ? &composition : nullptr);
-		if (predicate.HasError()) {
-			return LogicalPlanSQLExportResult::Failure(predicate);
+	{
+		BoundExpressionSQLExportState composition(expression_context);
+		composed = plain ? nullptr : LogicalPlanSQLExportHelpers::ComposeInput(filter, child.GetValue(), composition);
+		for (idx_t expression_index = 0; expression_index < filter.expressions.size(); expression_index++) {
+			auto predicate = export_context.ExportExpression(filter, expressions, expression_index, expression_context,
+			                                                 path, composed ? &composition : nullptr);
+			if (predicate.HasError()) {
+				return LogicalPlanSQLExportResult::Failure(predicate);
+			}
+			predicates.push_back(std::move(predicate.GetValue()));
 		}
-		predicates.push_back(std::move(predicate.GetValue()));
 	}
 	auto select = make_uniq<SelectNode>();
 	for (idx_t field_index = 0; field_index < fields.GetValue().size(); field_index++) {
@@ -383,28 +386,33 @@ LogicalPlanSQLExportResult LogicalAggregate::ToSQL(LogicalPlanSQLExportContext &
 		expression_context =
 		    LogicalPlanSQLExportHelpers::CreateBindingContext(export_context.GetClientContext(), {child.GetValue()});
 	}
-	BoundExpressionSQLExportState composition(expression_context);
-	auto composed = !plain && !stage_groups
-	                    ? LogicalPlanSQLExportHelpers::ComposeInput(aggregate, child.GetValue(), composition)
-	                    : nullptr;
+	optional_ptr<const SelectNode> composed;
 	auto select = make_uniq<SelectNode>();
-	for (idx_t expression_index = 0; expression_index < expressions.size(); expression_index++) {
-		unique_ptr<ParsedExpression> result;
-		if (expression_index < aggregate.groups.size() && stage_groups) {
-			result = LogicalPlanSQLExportHelpers::ChildColumn(child.GetValue(), input_field_count + expression_index);
-		} else {
-			auto expression = export_context.ExportExpression(
-			    aggregate, expressions, expression_index, expression_context, path, composed ? &composition : nullptr);
-			if (expression.HasError()) {
-				return LogicalPlanSQLExportResult::Failure(expression);
+	{
+		BoundExpressionSQLExportState composition(expression_context);
+		composed = !plain && !stage_groups
+		               ? LogicalPlanSQLExportHelpers::ComposeInput(aggregate, child.GetValue(), composition)
+		               : nullptr;
+		for (idx_t expression_index = 0; expression_index < expressions.size(); expression_index++) {
+			unique_ptr<ParsedExpression> result;
+			if (expression_index < aggregate.groups.size() && stage_groups) {
+				result =
+				    LogicalPlanSQLExportHelpers::ChildColumn(child.GetValue(), input_field_count + expression_index);
+			} else {
+				auto expression =
+				    export_context.ExportExpression(aggregate, expressions, expression_index, expression_context, path,
+				                                    composed ? &composition : nullptr);
+				if (expression.HasError()) {
+					return LogicalPlanSQLExportResult::Failure(expression);
+				}
+				result = std::move(expression.GetValue());
 			}
-			result = std::move(expression.GetValue());
+			if (expression_index < aggregate.groups.size()) {
+				select->groups.group_expressions.push_back(result->Copy());
+			}
+			result->SetAlias(LogicalPlanSQLExportHelpers::FieldIdentifier(expression_index));
+			select->select_list.push_back(std::move(result));
 		}
-		if (expression_index < aggregate.groups.size()) {
-			select->groups.group_expressions.push_back(result->Copy());
-		}
-		result->SetAlias(LogicalPlanSQLExportHelpers::FieldIdentifier(expression_index));
-		select->select_list.push_back(std::move(result));
 	}
 	select->groups.grouping_sets = aggregate.grouping_sets;
 	if (select->groups.grouping_sets.empty() && !aggregate.groups.empty()) {

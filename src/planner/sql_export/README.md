@@ -45,7 +45,7 @@ The C++ exporter consumes an already planned logical tree. It does not choose an
 
 ## Implementation layout
 
-Logical operators implement SQL reconstruction through `ToSQL`, including extension operators. The shared export context owns alias allocation, ancestor tracking, and named-relation scope. Its implementations are grouped by sources, VALUES/chunks, relational operators, joins, CTEs, LIMIT, and PIVOT. Shared binding and relation construction live in `sql_export_scope.cpp`. Ordering, windows and UNNEST also reuse plain column-reference scopes rather than adding a subquery. Expression composition lives in `sql_export_composition.cpp`. It substitutes typed column bindings into compatible projections and aggregate inputs, removes semantic identity projections, and avoids staging distinct column grouping keys for ordinary grouping. Computed scalar inputs must be safe and used at most once; projection composition also bounds expression-tree growth. Aggregate-output composition preserves the aggregate stage and retains unused computed outputs. Ordering can reuse a computed SELECT when its keys remain source column references. Volatile expressions, throwing evaluation boundaries, shared scalar computations, existing modifiers, sampling and incompatible grouping or CTE stages retain their scopes. LIMIT reconstruction returns its modifier together with the scalar-input relations it needs. The LIMIT operator materializes those relations once and substitutes their names only while exporting its child.
+Logical operators implement SQL reconstruction through `ToSQL`, including extension operators. The shared export context owns alias allocation, ancestor tracking, and named-relation scope. Its implementations are grouped by sources, VALUES/chunks, relational operators, joins, CTEs, LIMIT, and PIVOT. Shared binding and relation construction live in `sql_export_scope.cpp`. LIMIT reconstruction returns its modifier together with the scalar-input relations it needs. The LIMIT operator materializes those relations once and substitutes their names only while exporting its child.
 
 The expression exporter owns binding context and lambda reference scopes. Constant values use the shared `ConstantExpression::FromValue` conversion, including nested type metadata and aggregate states. The exporter adds result typing and structured diagnostics; function calls and window expressions have separate implementations. Ordinary table functions reconstruct their qualified retained invocation by default. Source-specific callbacks return only a table reference; scan projection, ordinality, sampling and predicates are applied centrally. Generic source reconstruction lives in `table_function_sql_export.cpp`.
 
@@ -54,6 +54,18 @@ RANGE frames retain the binder-selected function signature and inserted casts as
 Internal helper declarations live under `src/include/duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. Shared SQL constructors in `sql_export_helpers.hpp` combine predicates and qualify generated system-function calls. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
+
+### Scope composition
+
+Ordering, windows and UNNEST reuse suitable plain column-reference scopes. The helpers in `sql_export_composition.cpp` also combine compatible computed stages using typed column bindings:
+
+- Semantic identity projections can disappear, and ordinary grouping over distinct column references does not need an input scope for staging keys.
+- Computed scalar inputs must be safe to move and used at most once. Volatile expressions, throwing evaluation boundaries and shared scalar computations retain their scopes.
+- Aggregate-output composition preserves the aggregate stage and retains unused computed outputs. Repeated aggregate calls can be shared by the binder, but composition is rejected when their duplication would grow the combined expression trees.
+- Ordering can reuse a computed SELECT when its keys remain source column references. Literal order keys can be positional or rejected by the binder. Group-key substitution admits NULL literals but excludes bare integers, which GROUP BY can interpret as positions.
+- Existing modifiers, sampling, conditional evaluation and incompatible grouping or CTE stages retain their boundaries. Computed composition does not currently cross expression-list or column-data sources such as VALUES; identity elimination and plain-scope reuse remain separate rules.
+
+### Verification
 
 The CI Query Verification configuration uses `debug_verify_statement='explain_sql'`.
 It executes reconstructed SQL when export succeeds and falls back for explicitly
