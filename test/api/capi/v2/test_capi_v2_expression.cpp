@@ -306,8 +306,8 @@ void DeleteProbeGlobal(void *ptr) {
 	delete static_cast<ProbeGlobal *>(ptr);
 }
 
-void ProbeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
-                 duckdb_v2_error_info_handle *err) {
+void ProbeBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_function_bind_info_handle result,
+                 duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 	struct {
 		const char *name;
 		DUCKDB_V2_LOGICAL_TYPE_ID id;
@@ -321,7 +321,7 @@ void ProbeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_conte
 			return;
 		}
 		auto rc = duckdb_v2_table_function_bind_add_result_column(
-		    info, duckdb_v2_identifier_t {column.name, std::strlen(column.name)}, type, err);
+		    result, duckdb_v2_identifier_t {column.name, std::strlen(column.name)}, type, err);
 		duckdb_v2_logical_type_destroy(&type);
 		if (rc != DUCKDB_V2_ERROR_NONE) {
 			return;

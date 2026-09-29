@@ -39,8 +39,9 @@ duckdb_v2_function_signature_handle AggSigOf(duckdb_v2_aggregate_function_handle
 }
 
 void AggSigParam(duckdb_v2_function_signature_handle sig, const char *name, duckdb_v2_logical_type_handle type) {
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, AggName(name), type, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, AggName(name), type, nullptr,
+	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 }
 
 // Run a query producing a single BIGINT cell.
@@ -98,8 +99,9 @@ void SumUpdate(duckdb_v2_aggregate_function_update_info_handle info, duckdb_v2_e
 	}
 	// The count is the exclusive bound: index `count` of the argument vectors
 	// is refused.
-	uint32_t arg_count = 0;
-	if (duckdb_v2_aggregate_function_update_get_arg_count(info, &arg_count, err) != DUCKDB_V2_ERROR_NONE) {
+	idx_t arg_count = 0;
+	if (duckdb_v2_aggregate_function_update_get_arg_count(info, &arg_count, nullptr, nullptr, nullptr, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_vector_handle past_the_end = nullptr;
@@ -209,14 +211,13 @@ void AggFlowDestroyBindData(void *) {
 	agg_flow.bind_data_destroys++;
 }
 
-void AggFlowBind(duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_context_handle context,
-                 duckdb_v2_error_info_handle *err) {
-	if (duckdb_v2_aggregate_function_bind_get_user_data(info, &agg_flow.user_data_in_bind, err) !=
-	    DUCKDB_V2_ERROR_NONE) {
+void AggFlowBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_function_bind_info_handle result,
+                 duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	if (duckdb_v2_function_bind_get_user_data(info, &agg_flow.user_data_in_bind, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_opaque bind_data = {&agg_bind_marker, AggFlowDestroyBindData, nullptr};
-	if (duckdb_v2_aggregate_function_bind_set_bind_data(info, &bind_data, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_function_bind_set_bind_data(info, &bind_data, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	// Resolve the declared ANY return type to a concrete INTEGER.
@@ -225,7 +226,7 @@ void AggFlowBind(duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_c
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	duckdb_v2_aggregate_function_bind_set_return_type(info, integer, err);
+	duckdb_v2_aggregate_function_bind_set_return_type(result, integer, err);
 	duckdb_v2_logical_type_destroy(&integer);
 }
 
@@ -339,14 +340,15 @@ struct {
 	DUCKDB_V2_ERROR oob_value_rc = DUCKDB_V2_ERROR_NONE;
 } agg_arg_probe;
 
-void AggArgProbeBind(duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_context_handle context,
-                     duckdb_v2_error_info_handle *err) {
-	if (duckdb_v2_aggregate_function_bind_get_arg_count(info, &agg_arg_probe.arg_count, err) != DUCKDB_V2_ERROR_NONE) {
+void AggArgProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_function_bind_info_handle result,
+                     duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	if (duckdb_v2_function_bind_get_arg_count(info, &agg_arg_probe.arg_count, nullptr, nullptr, nullptr, err) !=
+	    DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	for (idx_t i = 0; i < agg_arg_probe.arg_count && i < 2; i++) {
 		duckdb_v2_logical_type_handle type = nullptr;
-		if (duckdb_v2_aggregate_function_bind_get_arg_type(info, i, &type, err) != DUCKDB_V2_ERROR_NONE) {
+		if (duckdb_v2_function_bind_get_arg_type(info, i, &type, err) != DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
 		auto rc = duckdb_v2_logical_type_get_id(type, &agg_arg_probe.arg_types[i], err);
@@ -358,12 +360,12 @@ void AggArgProbeBind(duckdb_v2_aggregate_function_bind_info_handle info, duckdb_
 	// An index past the last argument is an input error.
 	duckdb_v2_logical_type_handle oob_type = nullptr;
 	duckdb_v2_value_handle oob_value = nullptr;
-	agg_arg_probe.oob_type_rc = duckdb_v2_aggregate_function_bind_get_arg_type(info, 5, &oob_type, nullptr);
-	agg_arg_probe.oob_value_rc = duckdb_v2_aggregate_function_bind_get_arg_value(info, 5, &oob_value, nullptr);
+	agg_arg_probe.oob_type_rc = duckdb_v2_function_bind_get_arg_type(info, 5, &oob_type, nullptr);
+	agg_arg_probe.oob_value_rc = duckdb_v2_function_bind_get_arg_value(info, 5, &oob_value, nullptr);
 
 	// Fold the second argument to a constant. A non-constant argument fails here.
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_aggregate_function_bind_get_arg_value(info, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_function_bind_get_arg_value(info, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto rc = duckdb_v2_value_get_int(value, &agg_arg_probe.constant, err);
@@ -377,7 +379,7 @@ void AggArgProbeBind(duckdb_v2_aggregate_function_bind_info_handle info, duckdb_
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	duckdb_v2_aggregate_function_bind_set_return_type(info, integer, err);
+	duckdb_v2_aggregate_function_bind_set_return_type(result, integer, err);
 	duckdb_v2_logical_type_destroy(&integer);
 }
 
@@ -667,15 +669,6 @@ TEST_CASE("V2 aggregate: null arguments and destroy null-safety", "[capi_v2][agg
 	REQUIRE(duckdb_v2_aggregate_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_aggregate_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	idx_t arg_count = 0;
-	duckdb_v2_logical_type_handle arg_type = nullptr;
-	duckdb_v2_value_handle arg_value = nullptr;
-	REQUIRE(duckdb_v2_aggregate_function_bind_get_arg_count(nullptr, &arg_count, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_aggregate_function_bind_get_arg_type(nullptr, 0, &arg_type, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_aggregate_function_bind_get_arg_value(nullptr, 0, &arg_value, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_aggregate_function_destroy(&function);
 
 	REQUIRE(duckdb_v2_aggregate_function_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -727,6 +720,100 @@ TEST_CASE("V2 aggregate: function properties", "[capi_v2][aggregate_function]") 
 	duckdb_v2_logical_type_destroy(&bigint);
 
 	REQUIRE(AggQueryI64(fx.conn, "SELECT prop_sum(r::INTEGER) FROM range(100) t(r)") == 100LL * 99 / 2);
+}
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// weighted_sum(x, *, weight := 1) -> BIGINT: the sum of x * weight. The named-only weight reaches update after
+// the positional arguments.
+// ---------------------------------------------------------------------------
+
+struct WeightedProbe {
+	idx_t counts[4] = {};
+	bool oob_arg_refused = false;
+};
+WeightedProbe weighted_probe;
+
+void WeightedUpdate(duckdb_v2_aggregate_function_update_info_handle info, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_vector_handle x = nullptr;
+	duckdb_v2_vector_handle weight = nullptr;
+	void **states = nullptr;
+	idx_t count = 0;
+	auto &counts = weighted_probe.counts;
+	if (duckdb_v2_aggregate_function_update_get_arg_count(info, &counts[0], &counts[1], &counts[2], &counts[3], err) !=
+	        DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_update_get_arg(info, 0, &x, err) != DUCKDB_V2_ERROR_NONE ||
+	    // the first named argument follows the positional ones
+	    duckdb_v2_aggregate_function_update_get_arg(info, counts[0] + counts[1], &weight, err) !=
+	        DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_update_get_states(info, &states, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_aggregate_function_update_get_row_count(info, &count, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	duckdb_v2_vector_view x_view {};
+	duckdb_v2_vector_view weight_view {};
+	if (duckdb_v2_vector_get_view(x, &x_view, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_vector_get_view(weight, &weight_view, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	const auto *x_data = static_cast<const int32_t *>(x_view.data);
+	const auto *weight_data = static_cast<const int32_t *>(weight_view.data);
+	for (idx_t i = 0; i < count; i++) {
+		*static_cast<int64_t *>(states[i]) +=
+		    int64_t(x_data[SelAt(x_view.sel, i)]) * weight_data[SelAt(weight_view.sel, i)];
+	}
+	duckdb_v2_vector_handle past_the_end = nullptr;
+	const auto arg_count = counts[0] + counts[1] + counts[2] + counts[3];
+	weighted_probe.oob_arg_refused = duckdb_v2_aggregate_function_update_get_arg(
+	                                     info, arg_count, &past_the_end, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID;
+}
+
+} // namespace
+
+// ===========================================================================
+// A named-only parameter reaches update after the positional arguments.
+// ===========================================================================
+
+TEST_CASE("V2 aggregate: named-only arguments reach update", "[capi_v2][aggregate_function]") {
+	EnvFixture fx;
+	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto one = MakeInt32Value(fx.conn, 1);
+
+	auto function = MakeAggregate(fx.conn, "weighted_sum");
+	auto sig = AggSigOf(function);
+	AggSigParam(sig, "x", integer);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, AggName("weight"), integer, one,
+	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_NAMED_ONLY,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, bigint, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_size_callback(function, SumSize, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_init_callback(function, SumInit, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_update_callback(function, WeightedUpdate, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_combine_callback(function, SumCombine, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, SumFinalize, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_aggregate_function_destroy(&function);
+	duckdb_v2_value_destroy(&one);
+	duckdb_v2_logical_type_destroy(&bigint);
+	duckdb_v2_logical_type_destroy(&integer);
+
+	// The omitted weight carries its default.
+	REQUIRE(AggQueryI64(fx.conn, "SELECT weighted_sum(r::INTEGER) FROM range(10) t(r)") == 45);
+	REQUIRE(weighted_probe.counts[0] == 1);
+	REQUIRE(weighted_probe.counts[1] == 0);
+	REQUIRE(weighted_probe.counts[2] == 1);
+	REQUIRE(weighted_probe.counts[3] == 0);
+	REQUIRE(weighted_probe.oob_arg_refused);
+	// A constant weight, and a column.
+	REQUIRE(AggQueryI64(fx.conn, "SELECT weighted_sum(r::INTEGER, weight := 3) FROM range(10) t(r)") == 135);
+	REQUIRE(AggQueryI64(fx.conn, "SELECT weighted_sum(r::INTEGER, weight := r::INTEGER) FROM range(10) t(r)") == 285);
+	// The weight can only be passed by name.
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT weighted_sum(1, 2)", &result) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_result_destroy(&result);
 }
 
 } // namespace test_capi_v2

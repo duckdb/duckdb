@@ -115,14 +115,14 @@ duckdb_v2_data_chunk_handle ArrowRoundtripChunk(ArrowRoundtrip &rt, duckdb_v2_da
 // pair. One function therefore covers every type, nested ones included.
 // ---------------------------------------------------------------------------
 
-void ArrowRtBind(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_context_handle context,
-                 duckdb_v2_error_info_handle *err) {
+void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle result,
+                 duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_logical_type_handle arg_type = nullptr;
-	if (duckdb_v2_scalar_function_bind_get_arg_type(info, 0, &arg_type, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_function_bind_get_arg_type(info, 0, &arg_type, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	// The result type follows the argument type.
-	auto rc = duckdb_v2_scalar_function_bind_set_return_type(info, arg_type, err);
+	auto rc = duckdb_v2_scalar_function_bind_set_return_type(result, arg_type, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_logical_type_destroy(&arg_type);
 		return;
@@ -134,7 +134,7 @@ void ArrowRtBind(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_cont
 		return;
 	}
 	duckdb_v2_opaque bind_data = {rt, ArrowRoundtripDestroy, nullptr};
-	duckdb_v2_scalar_function_bind_set_bind_data(info, &bind_data, err);
+	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
 }
 
 void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
@@ -193,8 +193,9 @@ void RegisterArrowRoundtrip(duckdb_v2_connection_handle conn) {
 	auto any = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("x"), any, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("x"), any, nullptr,
+	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, ArrowRtBind, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -228,10 +229,10 @@ void ArrowRangeDestroyGlobal(void *ptr) {
 	delete static_cast<ArrowRangeGlobal *>(ptr);
 }
 
-void ArrowRangeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
-                      duckdb_v2_error_info_handle *err) {
+void ArrowRangeBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_table_function_bind_info_handle result,
+                      duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_table_function_bind_get_arg_value(info, 0, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_function_bind_get_arg_value(info, 0, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	int64_t count = 0;
@@ -248,8 +249,8 @@ void ArrowRangeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_
 		duckdb_v2_logical_type_destroy(&varchar);
 		return;
 	}
-	duckdb_v2_table_function_bind_add_result_column(info, ArrowIdent("i"), bigint, err);
-	duckdb_v2_table_function_bind_add_result_column(info, ArrowIdent("s"), varchar, err);
+	duckdb_v2_table_function_bind_add_result_column(result, ArrowIdent("i"), bigint, err);
+	duckdb_v2_table_function_bind_add_result_column(result, ArrowIdent("s"), varchar, err);
 
 	duckdb_v2_logical_type_handle types[2] = {bigint, varchar};
 	duckdb_v2_str names[2] = {Convert("i"), Convert("s")};
@@ -261,7 +262,7 @@ void ArrowRangeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_
 	}
 	auto *bind = new ArrowRangeBind {count, rt};
 	duckdb_v2_opaque bind_data = {bind, ArrowRangeDestroyBind, nullptr};
-	duckdb_v2_table_function_bind_set_bind_data(info, &bind_data, err);
+	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
 }
 
 void ArrowRangeInitCb(duckdb_v2_table_function_init_global_info_handle info, duckdb_v2_context_handle,
@@ -358,8 +359,9 @@ void RegisterArrowRoundtripRange(duckdb_v2_connection_handle conn) {
 	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_table_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("n"), bigint, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("n"), bigint, nullptr,
+	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ArrowRangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ArrowRangeInitCb, nullptr) ==
@@ -592,8 +594,9 @@ void RegisterArrowProbe(duckdb_v2_connection_handle conn, const char *name,
 	auto integer = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("x"), integer, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("x"), integer, nullptr,
+	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, exec, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -874,8 +877,9 @@ TEST_CASE("V2 arrow: a dictionary column resolves to VARCHAR by default", "[capi
 	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("x"), integer, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, ArrowIdent("x"), integer, nullptr,
+	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, EnumProbeExec, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
