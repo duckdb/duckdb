@@ -3798,29 +3798,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_size(duckdb_v2_vector_handle v
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_set_size(duckdb_v2_vector_handle vector, idx_t size,
                                                        duckdb_v2_error_info_handle *err);
 
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
- * Sets the total number of entries the rows of a MAP vector refer to.
- *
- * Reserves room for that many entries in both the keys and the values children, and declares that many of them written.
- * The rows of the vector then refer to entries in [0, size) through their offsets and lengths. The entries of a MAP
- * must be sized with this function: sizing its keys and values children with vector_set_size does not size the entries
- * of the MAP itself. The elements of a LIST are sized by calling vector_set_size on its child. Reserving may reallocate
- * the child vectors, which invalidates data pointers and views taken from them earlier. Returns ERROR_INPUT_INVALID
- * unless the vector is a FLAT MAP vector.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param vector The MAP vector.
- * @param size The total number of entries.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_set_map_size(duckdb_v2_vector_handle vector, idx_t size,
-                                                           duckdb_v2_error_info_handle *err);
-#endif
-
 /*!
  * Reads one cell of a vector as an owned value.
  *
@@ -4050,8 +4027,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_arena(duckdb_v2_vector_handle 
 /*!
  * Returns the number of child vectors a nested vector exposes.
  *
- * 1 for LIST and ARRAY; 2 for MAP, the keys and the values; the field count for STRUCT; member_count + 1 for UNION, the
- * tag plus the members; and 0 for any non-nested kind. vector_get_child documents what each index addresses.
+ * 1 for LIST, MAP and ARRAY; the field count for STRUCT; member_count + 1 for UNION, the tag plus the members; and 0
+ * for any non-nested kind. vector_get_child documents what each index addresses.
  *
  * history:
  * - stable: v2.0.0
@@ -4067,9 +4044,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_child_count(duckdb_v2_vector_h
 /*!
  * Borrows a child vector by index.
  *
- * What each index addresses, by kind: LIST and ARRAY expose [0] = the elements; MAP [0] = keys and [1] = values, hiding
- * its internal LIST<STRUCT(K, V)>; STRUCT and TUPLE [i] = field i; and UNION [0] = the tag with [1..N] = the members.
- * Note that value_get_child diverges on UNION, exposing only the active member.
+ * What each index addresses, by kind: LIST and ARRAY expose [0] = the elements; MAP [0] = the entries, a STRUCT(key,
+ * value) whose children are the keys and the values; STRUCT and TUPLE [i] = field i; and UNION [0] = the tag with
+ * [1..N] = the members. Note that value_get_child diverges on UNION, exposing only the active member.
  *
  * The returned child is borrowed and lives as long as the owning chunk. Returns ERROR_INPUT_INVALID if the vector has
  * no children, or if the index is out of range.

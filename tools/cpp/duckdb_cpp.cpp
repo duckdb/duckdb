@@ -2064,10 +2064,6 @@ auto Vector::SetSize(idx_t size) -> void {
 	CheckedAPICall(duckdb_v2_vector_set_size, handle(), size);
 }
 
-auto Vector::SetMapSize(idx_t size) -> void {
-	CheckedAPICall(duckdb_v2_vector_set_map_size, handle(), size);
-}
-
 auto Vector::GetView() const -> VectorView {
 	duckdb_v2_vector_view view {};
 	CheckedAPICall(duckdb_v2_vector_get_view, handle(), &view);

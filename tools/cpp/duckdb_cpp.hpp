@@ -2224,8 +2224,9 @@ public:
 	/// @throws InvalidInputException Unless the vector is FLAT or CONSTANT.
 	auto GetDataMutable() -> void *;
 
-	/// How many child vectors this one has: 1 for LIST and ARRAY, one per field for STRUCT and TUPLE, 2 for MAP (the
-	/// keys and the values), one per member plus the leading tag for UNION, and 0 for anything else.
+	/// How many child vectors this one has: 1 for LIST, MAP and ARRAY, one per field for STRUCT and TUPLE, one per
+	/// member plus the leading tag for UNION, and 0 for anything else. A MAP's child is its entries, a STRUCT of the
+	/// keys and the values.
 	auto GetChildCount() const -> idx_t;
 
 	/// One child vector, e.g. a LIST's elements or a STRUCT's field. A LIST's child is sized to its capacity, not to
@@ -2253,13 +2254,6 @@ public:
 	/// earlier. A chunk derives its row count from its vectors, so this is also how a hand-filled chunk gets its
 	/// cardinality: size every column alike.
 	auto SetSize(idx_t size) -> void;
-
-	/// Sets the total number of entries the rows of a MAP vector refer to, reserving room for them in its keys and
-	/// values. Sizing the keys and values with `SetSize` does not size the entries of the MAP, so this is how they
-	/// are sized; the elements of a LIST are sized with `SetSize` on its child. May reallocate the child vectors,
-	/// which invalidates views and pointers taken from them earlier. Unstable API.
-	/// @throws InvalidInputException Unless the vector is a FLAT MAP vector.
-	auto SetMapSize(idx_t size) -> void;
 
 	/// Reads the vector in a single call, so that the per-row work afterwards is inline.
 	/// @return A view borrowed from the vector. Taking the view of a DICTIONARY vector may flatten the vector it

@@ -768,7 +768,7 @@ TEST_CASE("Stable C++API: Vector Reference aliases the source without copying", 
 }
 #endif
 
-TEST_CASE("Stable C++API: MAP entries are sized with SetMapSize", "[cpp_api]") {
+TEST_CASE("Stable C++API: MAP entries are written through its entries child", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
@@ -780,10 +780,13 @@ TEST_CASE("Stable C++API: MAP entries are sized with SetMapSize", "[cpp_api]") {
 	DataChunk chunk(appender.ColumnTypes());
 	auto map_vec = chunk.GetVector(0);
 	map_vec.SetSize(1);
-	// sizing the keys and values alone would leave the entries of the MAP empty
-	map_vec.SetMapSize(2);
-	auto keys = map_vec.GetChild(0);
-	auto values = map_vec.GetChild(1);
+	REQUIRE(map_vec.GetChildCount() == 1);
+	// sizing the entries sizes both the keys and the values
+	auto entries = map_vec.GetChild(0);
+	entries.SetSize(2);
+	REQUIRE(entries.GetChildCount() == 2);
+	auto keys = entries.GetChild(0);
+	auto values = entries.GetChild(1);
 
 	auto *key_data = keys.GetDataMutable<int32_t>();
 	key_data[0] = 1;
@@ -798,13 +801,7 @@ TEST_CASE("Stable C++API: MAP entries are sized with SetMapSize", "[cpp_api]") {
 	auto out = result.FetchChunk();
 	REQUIRE(out);
 	REQUIRE(out.GetVector(0).GetValue(0).Get<varchar_t>().view() == "{1=one, 2=two}");
-
-	// the elements of a LIST are sized through its child instead
-	std::vector<LogicalType> list_types;
-	list_types.push_back(conn.ParseType("INTEGER[]"));
-	DataChunk list_chunk(list_types);
-	REQUIRE_THROWS_MATCHES(list_chunk.GetVector(0).SetMapSize(2), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(map_vec.GetChild(1), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 
 TEST_CASE("Stable C++API: DataChunk capacity", "[cpp_api]") {
