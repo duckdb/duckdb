@@ -901,13 +901,13 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
 		// The index storage information describes one entry per fixed-size allocator.
 		if (i >= info.allocator_infos.size()) {
-			throw SerializationException("Corrupt WAL: missing allocator %llu in the index storage information", i);
+			throw DataCorruptionException("Corrupt WAL: missing allocator %llu in the index storage information", i);
 		}
 		auto &data_info = info.allocator_infos[i];
 		if (data_info.allocation_sizes.size() != data_info.block_pointers.size()) {
-			throw SerializationException("Corrupt WAL: the number of index buffers (%llu) does not match the number "
-			                             "of block pointers (%llu)",
-			                             data_info.allocation_sizes.size(), data_info.block_pointers.size());
+			throw DataCorruptionException("Corrupt WAL: the number of index buffers (%llu) does not match the number "
+			                              "of block pointers (%llu)",
+			                              data_info.allocation_sizes.size(), data_info.block_pointers.size());
 		}
 		auto block_size = block_manager->GetBlockSize();
 
@@ -916,8 +916,8 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 			// Each index buffer is read into a single block, so a larger allocation size would overflow the buffer.
 			auto allocation_size = data_info.allocation_sizes[j];
 			if (allocation_size > block_size) {
-				throw SerializationException("Corrupt WAL: index buffer size %llu exceeds the block size %llu",
-				                             allocation_size, block_size);
+				throw DataCorruptionException("Corrupt WAL: index buffer size %llu exceeds the block size %llu",
+				                              allocation_size, block_size);
 			}
 
 			// Read the data into a buffer handle.
