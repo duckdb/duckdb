@@ -148,9 +148,10 @@ DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_name(duckdb_v2_function_bind_inf
 }
 
 DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_index(duckdb_v2_function_bind_info_handle info,
-                                                      duckdb_v2_identifier_t name, idx_t *index, bool *found,
+                                                      const duckdb_v2_identifier_t *name, idx_t *index, bool *found,
                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(index);
 	DUCKDB_CHECK_ARG(found);
 	return WithErrorHandler(err, [&]() {

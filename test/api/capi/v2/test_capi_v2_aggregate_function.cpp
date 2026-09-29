@@ -39,7 +39,8 @@ duckdb_v2_function_signature_handle AggSigOf(duckdb_v2_aggregate_function_handle
 }
 
 void AggSigParam(duckdb_v2_function_signature_handle sig, const char *name, duckdb_v2_logical_type_handle type) {
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, AggName(name), type, nullptr,
+	auto name_str = AggName(name);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, type, nullptr,
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 }
@@ -108,7 +109,8 @@ void SumUpdate(duckdb_v2_aggregate_function_update_info_handle info, duckdb_v2_e
 	if (duckdb_v2_aggregate_function_update_get_arg(info, arg_count, &past_the_end, nullptr) !=
 	    DUCKDB_V2_ERROR_INPUT_INVALID) {
 		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_API);
-		duckdb_v2_error_info_set_text(*err, Convert("past-the-end argument vector index was not refused"));
+		auto text_str = Convert("past-the-end argument vector index was not refused");
+		duckdb_v2_error_info_set_text(*err, &text_str);
 	}
 }
 
@@ -185,7 +187,8 @@ void AggNoopFinalize(duckdb_v2_aggregate_function_finalize_info_handle, duckdb_v
 // Fails the query through the update callback's error slot.
 void FailingUpdate(duckdb_v2_aggregate_function_update_info_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("aggregate update failed on purpose"));
+	auto text_str = Convert("aggregate update failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 // ---------------------------------------------------------------------------
@@ -784,7 +787,8 @@ TEST_CASE("V2 aggregate: named-only arguments reach update", "[capi_v2][aggregat
 	auto function = MakeAggregate(fx.conn, "weighted_sum");
 	auto sig = AggSigOf(function);
 	AggSigParam(sig, "x", integer);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, AggName("weight"), integer, one,
+	auto weight_ident = AggName("weight");
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &weight_ident, integer, one,
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_NAMED_ONLY,
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, bigint, nullptr) == DUCKDB_V2_ERROR_NONE);

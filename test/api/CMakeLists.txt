@@ -38,7 +38,10 @@ set(TEST_API_OBJECTS
     test_extension_schema_api.cpp
     test_pending_query.cpp
     test_query_result.cpp
+    test_query_result_format.cpp
+    test_query_result_format_buffer.cpp
     test_query_result_stream.cpp
+    test_retained_result_collection.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
     test_stream_result_buffer.cpp
@@ -53,6 +56,8 @@ set(TEST_API_OBJECTS
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
     test_grammar_extension.cpp
+    test_passthrough_dialect.cpp
+    test_passthrough_token_matcher.cpp
     test_progress_bar.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp

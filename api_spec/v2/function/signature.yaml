@@ -65,6 +65,8 @@ functions:
         description: The signature to configure.
       name:
         type: identifier
+        indirection: 1
+        const: true
         kind: IN
         description: The parameter name. Borrowed and copied.
       type:

@@ -3097,6 +3097,17 @@ enum class FunctionCollationHandling : uint8_t {
 	IGNORE = 2,
 };
 
+/// The order guarantee a producer of rows makes about its output.
+enum class OrderPreservation : uint8_t {
+	/// The rows have no meaningful order and may be reordered freely.
+	NO_ORDER = 0,
+	/// The rows are in insertion order, kept unless the `preserve_insertion_order` setting is disabled (default).
+	INSERTION_ORDER = 1,
+	/// The rows are in an order that must be kept, as if sorted by an `ORDER BY`, even when the
+	/// `preserve_insertion_order` setting is disabled.
+	FIXED_ORDER = 2,
+};
+
 //----------------------------------------------------------------------------------------------------------------------
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
@@ -3981,6 +3992,13 @@ public:
 		/// @param cardinality The estimated row count.
 		/// @param is_exact Whether the estimate is exact, which also makes it an upper bound.
 		auto SetCardinality(idx_t cardinality, bool is_exact) -> void;
+
+		/// Sets the order guarantee of the rows this call produces. Defaults to `OrderPreservation::INSERTION_ORDER`.
+		/// With `OrderPreservation::NO_ORDER`, a scan that allows more than one thread runs in parallel into query
+		/// results, INSERT and COPY without a partition data callback, and the rows arrive in no particular order.
+		/// @param order The order guarantee of the produced rows.
+		/// @throws InvalidInputException When order is not a declared enum value.
+		auto SetOrderPreservation(OrderPreservation order) -> void;
 
 	private:
 		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {

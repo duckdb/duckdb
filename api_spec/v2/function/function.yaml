@@ -218,6 +218,9 @@ functions:
         description: The bind info handle.
       name:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: The name to look up. Borrowed for the call only.
       index:
         type: idx

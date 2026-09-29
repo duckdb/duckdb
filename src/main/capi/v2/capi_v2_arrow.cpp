@@ -663,7 +663,7 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_create(duckdb_v2_context_handle context
 			if (!types[i]) {
 				throw duckdb::InvalidInputException("null logical type at index %llu", i);
 			}
-			if (IsNullArgument(names[i])) {
+			if (IsNullArgument(&names[i])) {
 				throw duckdb::InvalidInputException("malformed column name at index %llu", i);
 			}
 			exporter->types.push_back(*Convert(types[i]));

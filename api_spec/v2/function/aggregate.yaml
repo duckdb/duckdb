@@ -218,6 +218,8 @@ functions:
       name:
         type: identifier
         indirection: 1
+        const: true
+        kind: IN
         description: The name to set. Borrowed and copied.
       err:
         type: error_info

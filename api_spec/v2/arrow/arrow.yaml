@@ -338,6 +338,7 @@ functions:
         type: str
         indirection: 1
         const: true
+        kind: IN
         description: |
           An array of `count` column names, parallel to `types`. Each name must be valid UTF-8.
           May be NULL only when `count` is 0.

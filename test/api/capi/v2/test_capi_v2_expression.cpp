@@ -320,8 +320,8 @@ void ProbeBindCb(duckdb_v2_function_bind_info_handle, duckdb_v2_table_function_b
 		    DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
-		auto rc = duckdb_v2_table_function_bind_add_result_column(
-		    result, duckdb_v2_identifier_t {column.name, std::strlen(column.name)}, type, err);
+		duckdb_v2_identifier_t name_str = {column.name, std::strlen(column.name)};
+		auto rc = duckdb_v2_table_function_bind_add_result_column(result, &name_str, type, err);
 		duckdb_v2_logical_type_destroy(&type);
 		if (rc != DUCKDB_V2_ERROR_NONE) {
 			return;
