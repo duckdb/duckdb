@@ -192,8 +192,13 @@ void CreateTableInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<unique_ptr<Constraint>>>(202, "constraints", constraints);
 	serializer.WritePropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", query);
 	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", partition_keys);
-	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", sort_keys);
+	if (!serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", GetLegacySortKeys());
+	}
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", options);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<vector<OrderByNode>>(207, "sort_orders", sort_keys);
+	}
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
@@ -203,9 +208,11 @@ unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Constraint>>>(202, "constraints", result->constraints);
 	deserializer.ReadPropertyWithDefault<unique_ptr<SelectStatement>>(203, "query", result->query);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(204, "partition_keys", result->partition_keys);
-	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys", result->sort_keys);
+	auto sort_keys = deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(205, "sort_keys");
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(206, "options", result->options);
+	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(207, "sort_orders", result->sort_keys);
 	result->SetName(std::move(table));
+	result->SetLegacySortKeys(std::move(sort_keys));
 	return std::move(result);
 }
 

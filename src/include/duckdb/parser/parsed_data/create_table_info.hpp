@@ -38,7 +38,7 @@ struct CreateTableInfo : public CreateInfo {
 	//! Table Partition definitions
 	vector<unique_ptr<ParsedExpression>> partition_keys;
 	//! Table Sort definitions
-	vector<unique_ptr<ParsedExpression>> sort_keys;
+	vector<OrderByNode> sort_keys;
 	//! Extra Table options if any
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 
@@ -49,6 +49,10 @@ public:
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 	string ExtraOptionsToString() const;
+
+	//! Sort key expressions without sort modifiers, used to serialize to storage versions before v2.0.0
+	vector<unique_ptr<ParsedExpression>> GetLegacySortKeys() const;
+	void SetLegacySortKeys(vector<unique_ptr<ParsedExpression>> legacy_sort_keys);
 	string ToString() const override;
 };
 
