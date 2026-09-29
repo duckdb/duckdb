@@ -1241,14 +1241,14 @@ void SingleFileBlockManager::Truncate() {
 		blocks_to_truncate++;
 		max_block--;
 	}
-	if (blocks_to_truncate == 0) {
-		// nothing to truncate
-		return;
+	if (blocks_to_truncate > 0) {
+		// truncate the file
+		free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	}
-	// truncate the file
-	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	auto new_size = NumericCast<idx_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize());
-	handle->Truncate(new_size);
+	if (blocks_to_truncate > 0 || handle->GetFileSize() > new_size) {
+		handle->Truncate(new_size);
+	}
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
