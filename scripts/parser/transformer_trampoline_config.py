@@ -8,6 +8,7 @@ from grammar_types import load_grammar_types_yaml
 
 
 class TrampolineRuleMode(str, Enum):
+    FORWARD_IF_SINGLE_CHILD = "forward_if_single_child"
     MANUAL = "manual"
     MANUAL_FINALIZE = "manual_finalize"
     FORWARD = "forward"
@@ -39,6 +40,20 @@ def load_transformer_trampoline_config(
     if not isinstance(rules, Mapping):
         errors.append("top-level 'rules' entry must be a mapping")
         _fail(config_file, errors)
+
+    forward_single_child = data.get("forward_single_child", [])
+    if not isinstance(forward_single_child, list):
+        errors.append("top-level 'forward_single_child' entry must be a list")
+        _fail(config_file, errors)
+
+    rules = dict(rules)
+    for rule_name in forward_single_child:
+        if not isinstance(rule_name, str):
+            errors.append("'forward_single_child' entries must be rule names")
+        elif rule_name in rules:
+            errors.append(f"rule '{rule_name}' is declared more than once")
+        else:
+            rules[rule_name] = {"mode": TrampolineRuleMode.FORWARD_IF_SINGLE_CHILD}
 
     result = {}
     known_rule_set = set(known_rules)
@@ -76,9 +91,9 @@ def load_transformer_trampoline_config(
                 errors.append(f"manual_finalize rule '{rule_name}' must not declare an init hook")
             if not finalize:
                 errors.append(f"manual_finalize rule '{rule_name}' must declare a finalize hook")
-        elif mode == TrampolineRuleMode.FORWARD:
+        elif mode in (TrampolineRuleMode.FORWARD, TrampolineRuleMode.FORWARD_IF_SINGLE_CHILD):
             if init or finalize:
-                errors.append(f"forward rule '{rule_name}' must not declare hooks")
+                errors.append(f"{mode.value} rule '{rule_name}' must not declare hooks")
         elif mode == TrampolineRuleMode.EXCLUDED:
             if init or finalize:
                 errors.append(f"excluded rule '{rule_name}' must not declare hooks")

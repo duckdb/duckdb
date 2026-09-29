@@ -14,7 +14,7 @@ SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
 expression depth limit
 
 statement ok
-SET max_expression_depth TO 1000;
+RESET max_expression_depth;
 
 statement ok
 SELECT (1+(1+(1+(1+(1+(1+(1+1)))))));
