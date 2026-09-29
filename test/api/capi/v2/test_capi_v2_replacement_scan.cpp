@@ -100,7 +100,8 @@ void ReplClaimRange(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	duckdb_v2_replacement_scan_set_alias(info, ReplIdent("claimed"), err);
+	auto alias_str = ReplIdent("claimed");
+	duckdb_v2_replacement_scan_set_alias(info, &alias_str, err);
 }
 
 // Records the name and declines.
@@ -129,7 +130,8 @@ void ReplClaimCsv(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context
 // Fails with a specific code.
 void ReplFail(duckdb_v2_replacement_scan_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("the replacement scan refused"));
+	auto text_str = Convert("the replacement scan refused");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 // Claims a function that does not exist.
@@ -155,7 +157,8 @@ void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 	    ReplClaimFunction(info, "range", err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	repl_observed.mixed_form_rc = duckdb_v2_replacement_scan_set_subquery(info, Convert("SELECT 1"), nullptr);
+	auto sql_str = Convert("SELECT 1");
+	repl_observed.mixed_form_rc = duckdb_v2_replacement_scan_set_subquery(info, &sql_str, nullptr);
 
 	duckdb_v2_value_handle two = nullptr;
 	if (duckdb_v2_value_create_bigint_with_context(context, 2, &two, err) != DUCKDB_V2_ERROR_NONE) {
@@ -168,7 +171,8 @@ void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 // Claims with a subquery.
 void ReplClaimSubquery(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle,
                        duckdb_v2_error_info_handle *err) {
-	duckdb_v2_replacement_scan_set_subquery(info, Convert("SELECT 41 + 1 AS v"), err);
+	auto sql_str = Convert("SELECT 41 + 1 AS v");
+	duckdb_v2_replacement_scan_set_subquery(info, &sql_str, err);
 }
 
 // Latches the rejections the subquery form makes.
@@ -178,11 +182,15 @@ DUCKDB_V2_ERROR repl_bad_syntax_rc = DUCKDB_V2_ERROR_NONE;
 
 void ReplClaimBadSubqueries(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle,
                             duckdb_v2_error_info_handle *err) {
-	repl_multi_statement_rc = duckdb_v2_replacement_scan_set_subquery(info, Convert("SELECT 1; SELECT 2"), nullptr);
-	repl_non_select_rc = duckdb_v2_replacement_scan_set_subquery(info, Convert("CREATE TABLE x (i INTEGER)"), nullptr);
-	repl_bad_syntax_rc = duckdb_v2_replacement_scan_set_subquery(info, Convert("SELECT FROM WHERE"), nullptr);
+	auto sql_str = Convert("SELECT 1; SELECT 2");
+	repl_multi_statement_rc = duckdb_v2_replacement_scan_set_subquery(info, &sql_str, nullptr);
+	auto sql_str2 = Convert("CREATE TABLE x (i INTEGER)");
+	repl_non_select_rc = duckdb_v2_replacement_scan_set_subquery(info, &sql_str2, nullptr);
+	auto sql_str3 = Convert("SELECT FROM WHERE");
+	repl_bad_syntax_rc = duckdb_v2_replacement_scan_set_subquery(info, &sql_str3, nullptr);
 	// Still claim something valid, so the query itself succeeds.
-	duckdb_v2_replacement_scan_set_subquery(info, Convert("SELECT 7 AS v"), err);
+	auto sql_str4 = Convert("SELECT 7 AS v");
+	duckdb_v2_replacement_scan_set_subquery(info, &sql_str4, err);
 }
 
 // Counts how many times a user data destructor ran.
@@ -202,7 +210,8 @@ void ReplClaimWithUserData(duckdb_v2_replacement_scan_info_handle info, duckdb_v
 	auto *tag = static_cast<std::string *>(user_data);
 	if (!tag || *tag != "planted") {
 		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_INPUT_INVALID);
-		duckdb_v2_error_info_set_text(*err, Convert("user data did not reach the replacement scan"));
+		auto text_str = Convert("user data did not reach the replacement scan");
+		duckdb_v2_error_info_set_text(*err, &text_str);
 		return;
 	}
 	ReplClaimRange(info, context, err);
@@ -594,9 +603,10 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 	REQUIRE(duckdb_v2_replacement_scan_get_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_set_function_name(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_add_argument(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_set_subquery(nullptr, Convert("SELECT 1"), nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_set_alias(nullptr, ReplIdent("x"), nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	auto sql_str = Convert("SELECT 1");
+	REQUIRE(duckdb_v2_replacement_scan_set_subquery(nullptr, &sql_str, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	auto alias_str = ReplIdent("x");
+	REQUIRE(duckdb_v2_replacement_scan_set_alias(nullptr, &alias_str, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	REQUIRE(duckdb_v2_replacement_scan_destroy(&scan) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(scan == nullptr);
