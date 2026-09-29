@@ -899,10 +899,27 @@ void WriteAheadLogDeserializer::ReplayIndexData(IndexStorageInfo &info) {
 	auto &buffer_manager = block_manager->buffer_manager;
 
 	deserializer.ReadList(103, "index_storage", [&](Deserializer::List &list, idx_t i) {
+		// The index storage information describes one entry per fixed-size allocator.
+		if (i >= info.allocator_infos.size()) {
+			throw SerializationException("Corrupt WAL: missing allocator %llu in the index storage information", i);
+		}
 		auto &data_info = info.allocator_infos[i];
+		if (data_info.allocation_sizes.size() != data_info.block_pointers.size()) {
+			throw SerializationException("Corrupt WAL: the number of index buffers (%llu) does not match the number "
+			                             "of block pointers (%llu)",
+			                             data_info.allocation_sizes.size(), data_info.block_pointers.size());
+		}
+		auto block_size = block_manager->GetBlockSize();
 
 		// Read the data into buffer handles and convert them to blocks on disk.
 		for (idx_t j = 0; j < data_info.allocation_sizes.size(); j++) {
+			// Each index buffer is read into a single block, so a larger allocation size would overflow the buffer.
+			auto allocation_size = data_info.allocation_sizes[j];
+			if (allocation_size > block_size) {
+				throw SerializationException("Corrupt WAL: index buffer size %llu exceeds the block size %llu",
+				                             allocation_size, block_size);
+			}
+
 			// Read the data into a buffer handle.
 			auto buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.get(), false);
 			auto block_handle = buffer_handle.GetBlockHandle();
