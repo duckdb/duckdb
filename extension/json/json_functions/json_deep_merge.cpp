@@ -4,7 +4,7 @@
 namespace duckdb {
 
 //! Coalescing deep merge: null in patch means "absent/unknown", keeps the original value.
-//! Non-null patch values overwrite. Nested objects are merged recursively.
+//! Non-null patch values overwrite.
 static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root, yyjson_mut_val *patch_root) {
 	if (!yyjson_mut_is_obj(orig_root) || !yyjson_mut_is_obj(patch_root)) {
 		if (unsafe_yyjson_is_null(patch_root)) {
@@ -31,7 +31,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 		stack.pop_back();
 
 		auto builder = nodes.builder;
-
+		
 		// Copy orig keys not in patch or where patch value is null
 		{
 			idx_t idx, max;

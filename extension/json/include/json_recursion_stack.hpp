@@ -21,8 +21,10 @@ private:
 };
 
 template<class RETURN_TYPE, class STACK_ITEM>
-static RETURN_TYPE JSONIterator(std::function<> p) {
-	// some code here
-	// return some RETURN_TYPE object
+static RETURN_TYPE JSONIterator(std::function base_case, std::function iter_case) {
+	// lets have some void function, we run the loop and apply that function until the base case
+
+	// two functio types -- unary (i.e. edit in place, transform the input into the output
+	// binary -- take two inputs and output something that
 }
 }

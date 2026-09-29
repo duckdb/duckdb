@@ -37,7 +37,7 @@ static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyj
 		}
 
 		// Both objects: compute structural diff
-		if (item.old_node && item.new_node && yyjson_is_obj(item.old_node) && yyjson_is_obj(item.new_node)) {
+		if (yyjson_is_obj(item.old_node) && yyjson_is_obj(item.new_node)) {
 			auto builder = yyjson_mut_obj(doc);
 
 			// Keys in old but not in new: removed (emit null)
@@ -57,7 +57,7 @@ static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyj
 			{
 				idx_t idx, max;
 				yyjson_val *key, *new_child;
-				std::vector<stack_item> children;
+				vector<stack_item> children;
 				yyjson_obj_foreach(item.new_node, idx, max, key, new_child) {
 					auto old_child =
 					    yyjson_obj_getn(item.old_node, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
