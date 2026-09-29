@@ -267,8 +267,11 @@ QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const Qual
 	// [catalog, schema path..., name] is fully qualified
 	auto catalog = path.front();
 	if (IsInvalidCatalog(catalog)) {
-		catalog = Identifier(retriever.GetSearchPath().GetDefaultCatalog(schema_path[0]));
-		if (IsInvalidCatalog(catalog)) {
+		EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(schema_path[0]));
+		auto schema = Catalog::GetSchema(retriever, schema_lookup, OnEntryNotFound::RETURN_NULL);
+		if (schema) {
+			catalog = schema->ParentCatalog().GetName();
+		} else {
 			catalog = DatabaseManager::GetDefaultDatabase(retriever.GetContext());
 		}
 	}
