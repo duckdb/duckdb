@@ -74,7 +74,7 @@ function(duckdb_link_extensions TARGET)
     endif()
 endfunction()
 
-# Resolves what the DuckDB targets link statically. STATICALLY_LINK_CAPABILITIES picks among the capabilities this
+# Resolves what the DuckDB targets link statically. DUCKDB_CAPABILITIES picks among the capabilities this
 # build makes: httplib, loadable_extensions and local_extension_repository (automatic installs come from this build's
 # repository instead of the core one), all of them by default. STATICALLY_LINK_EXTENSIONS picks the extensions, by
 # default every built extension without DONT_LINK. Either can be 'none', and takes names separated by spaces or ';'.
@@ -90,7 +90,7 @@ function(duckdb_resolve_static_link OUT_CAPABILITIES OUT_EXTENSIONS)
     list(APPEND BUILT_CAPABILITIES local_extension_repository)
     set(DEFAULT_CAPABILITIES ${BUILT_CAPABILITIES})
 
-    string(REPLACE " " ";" CAPABILITIES "${STATICALLY_LINK_CAPABILITIES}")
+    string(REPLACE " " ";" CAPABILITIES "${DUCKDB_CAPABILITIES}")
     list(REMOVE_ITEM CAPABILITIES "")
     if("${CAPABILITIES}" STREQUAL "")
         set(CAPABILITIES ${DEFAULT_CAPABILITIES})
@@ -99,7 +99,7 @@ function(duckdb_resolve_static_link OUT_CAPABILITIES OUT_EXTENSIONS)
     endif()
     foreach(CAPABILITY IN LISTS CAPABILITIES)
         if(NOT CAPABILITY IN_LIST KNOWN_CAPABILITIES)
-            message(FATAL_ERROR "Unknown capability '${CAPABILITY}' in STATICALLY_LINK_CAPABILITIES, known are: ${KNOWN_CAPABILITIES}")
+            message(FATAL_ERROR "Unknown capability '${CAPABILITY}' in DUCKDB_CAPABILITIES, known are: ${KNOWN_CAPABILITIES}")
         elseif(NOT CAPABILITY IN_LIST BUILT_CAPABILITIES)
             message(FATAL_ERROR "Capability '${CAPABILITY}' is not built (ENABLE_BUILTIN_HTTPLIB / ENABLE_EXTENSION_LOAD)")
         endif()

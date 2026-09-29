@@ -260,7 +260,7 @@ endif
 # what the DuckDB targets link (space or semicolon separated, or none); always passed, so leaving them out restores the
 # defaults
 CMAKE_VARS:=${CMAKE_VARS} -DSTATICALLY_LINK_EXTENSIONS="$(STATICALLY_LINK_EXTENSIONS)"
-CMAKE_VARS:=${CMAKE_VARS} -DSTATICALLY_LINK_CAPABILITIES="$(STATICALLY_LINK_CAPABILITIES)"
+CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_CAPABILITIES="$(DUCKDB_CAPABILITIES)"
 ifneq ($(EXTENSION_CONFIGS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS="$(EXTENSION_CONFIGS)"
 endif
@@ -460,12 +460,12 @@ WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DSTATICALLY_LINK_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DSTATICALLY_LINK_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 # The wasm targets do not go through CMAKE_VARS, so DISABLE_RTTI is forwarded explicitly.
@@ -682,12 +682,12 @@ shared-libs-release-artifact:
 # Writes a C source defining duckdb_register_static_extensions(), which links statically built extensions and
 # capabilities into a program: compile it next to your own sources, put their archives before libduckdb_static.a, and
 # call the function before opening a database (or compile extension/loader/static_extension_autoregister.cpp too to have
-# it called before main). STATICALLY_LINK_CAPABILITIES and STATICALLY_LINK_EXTENSIONS pick them (LINK_EXTENSIONS is
+# it called before main). DUCKDB_CAPABILITIES and STATICALLY_LINK_EXTENSIONS pick them (LINK_EXTENSIONS is
 # the older name for the latter, 'none' picks nothing); each defaults to every archive of its kind in
 # STATIC_EXTENSION_LOADER_BUILD_DIR.
 LOADER_BUILT_CAPABILITIES = $(if $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/src/main/http/libduckdb_httplib.a),httplib) $(if $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/src/main/extension/libduckdb_loadable_extensions.a),loadable_extensions)
 LOADER_BUILT_EXTENSIONS = $(patsubst lib%_extension.a,%,$(notdir $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/extension/*/lib*_extension.a)))
-LOADER_CAPABILITIES = $(if $(strip $(STATICALLY_LINK_CAPABILITIES)),$(subst ;, ,$(STATICALLY_LINK_CAPABILITIES)),$(LOADER_BUILT_CAPABILITIES))
+LOADER_CAPABILITIES = $(if $(strip $(DUCKDB_CAPABILITIES)),$(subst ;, ,$(DUCKDB_CAPABILITIES)),$(LOADER_BUILT_CAPABILITIES))
 LOADER_EXTENSIONS = $(or $(strip $(subst ;, ,$(STATICALLY_LINK_EXTENSIONS) $(LINK_EXTENSIONS))),$(LOADER_BUILT_EXTENSIONS))
 STATIC_EXTENSION_LOADER_BUILD_DIR ?= build/release
 STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.c

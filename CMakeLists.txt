@@ -639,7 +639,7 @@ set(STATICALLY_LINK_EXTENSIONS
       STRING
       "Extensions the DuckDB targets link, e.g. 'json parquet' or 'none' (empty: every built extension without DONT_LINK)"
 )
-set(STATICALLY_LINK_CAPABILITIES
+set(DUCKDB_CAPABILITIES
     ""
     CACHE
       STRING
