@@ -23,7 +23,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 				throw NotImplementedException(
 				    "Duplicate name \"%s\" in struct auto-detected in JSON: it only differs in case from \"%s\". Try "
 				    "ignore_case=true to merge keys that only differ in case, or ignore_errors=true to skip them",
-				    child_type.first, *insert_result.first);
+				    child_type.first.GetIdentifierName(), *insert_result.first);
 			} else {
 				child_types.emplace_back(child_type.first, RemoveDuplicateStructKeys(child_type.second, ignore_errors));
 			}

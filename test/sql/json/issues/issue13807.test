@@ -94,3 +94,18 @@ query II
 SELECT column_name, column_type FROM (DESCRIBE FROM read_json('{DATA_DIR}/json/13807_deep.ndjson', ignore_case=true));
 ----
 Root	STRUCT(Level1 STRUCT(Level2 STRUCT(Leaf BIGINT)[]))
+
+# different casing in different files
+query III
+SELECT * FROM read_json('{DATA_DIR}/json/13807_multi/*.ndjson', ignore_case=true) ORDER BY id;
+----
+1	a	{'Key': 1, 'List': [{'Leaf': 10}]}
+2	b	{'Key': 2, 'List': [{'Leaf': 20}]}
+3	c	{'Key': 3, 'List': [{'Leaf': 30}]}
+
+query III
+SELECT * FROM read_json('{DATA_DIR}/json/13807_multi/*.ndjson', ignore_case=true, union_by_name=true) ORDER BY id;
+----
+1	a	{'Key': 1, 'List': [{'Leaf': 10}]}
+2	b	{'Key': 2, 'List': [{'Leaf': 20}]}
+3	c	{'Key': 3, 'List': [{'Leaf': 30}]}
