@@ -105,6 +105,10 @@ struct CentroidComparator {
 };
 
 class TDigest {
+	static constexpr Index INITIAL_CAPACITY = 8;
+	static Index MinimumInt(Index a, Index b) {
+		return a < b ? a : b;
+	}
 	class TDigestComparator {
 	public:
 		TDigestComparator() {
@@ -129,9 +133,11 @@ public:
 	    : compression_(compression), maxProcessed_(processedSize(mergedSize, compression)),
 	      maxUnprocessed_(unprocessedSize(unmergedSize, compression)), processed_(allocator), unprocessed_(allocator),
 	      cumulative_(allocator) {
-		processed_.reserve(maxProcessed_);
-		unprocessed_.reserve(maxUnprocessed_ + maxProcessed_ + 1);
-		cumulative_.reserve(maxProcessed_ + 1);
+		// The buffers grow on demand: an aggregate state per group that only ever sees a handful of values must not
+		// pay for the full merge buffer (~1000 centroids with the default compression) up front.
+		processed_.reserve(MinimumInt(maxProcessed_, INITIAL_CAPACITY));
+		unprocessed_.reserve(MinimumInt(maxUnprocessed_ + maxProcessed_ + 1, INITIAL_CAPACITY));
+		cumulative_.reserve(MinimumInt(maxProcessed_ + 1, INITIAL_CAPACITY));
 	}
 
 	TDigest(duckdb::arena_vector<Centroid> &&processed, duckdb::arena_vector<Centroid> &&unprocessed, Value compression,

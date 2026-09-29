@@ -119,7 +119,9 @@ struct ApproxQuantileOperation {
 			return;
 		}
 		if (!state.h) {
-			state.h = new duckdb_tdigest::TDigest(unary_input.input.allocator, 100);
+			// the digest and its buffers live in the aggregate's arena, so an aborted query does not leak them
+			auto &allocator = unary_input.input.allocator;
+			state.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		state.h->add(val);
 		state.pos++;
@@ -132,7 +134,8 @@ struct ApproxQuantileOperation {
 		}
 		D_ASSERT(source.h);
 		if (!target.h) {
-			target.h = new duckdb_tdigest::TDigest(aggr_input_data.allocator, 100);
+			auto &allocator = aggr_input_data.allocator;
+			target.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		target.h->merge(source.h);
 		target.pos += source.pos;
@@ -140,9 +143,7 @@ struct ApproxQuantileOperation {
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.h) {
-			delete state.h;
-		}
+		// the digest lives in the arena, which is released with the aggregate
 	}
 
 	static bool IgnoreNull() {
@@ -282,11 +283,11 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 			}
 			centroids.emplace_back(mean_entry.GetValue(), weight_entry.GetValue());
 		}
-		auto digest = make_uniq<duckdb_tdigest::TDigest>(
+		auto digest = input.allocator.Make<duckdb_tdigest::TDigest>(
 		    std::move(centroids), duckdb::arena_vector<duckdb_tdigest::Centroid>(input.allocator), 100, 0, 0);
 		digest->setMinMax(min_entry.GetValue(), max_entry.GetValue());
 		state.pos = count_entry.GetValue();
-		state.h = digest.release();
+		state.h = digest;
 	}
 }
 
