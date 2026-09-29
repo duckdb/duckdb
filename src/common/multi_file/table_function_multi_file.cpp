@@ -81,10 +81,21 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 		bind_input.expected_types = options.expected_types;
 		bind_input.expected_bind_data = options.schema_bind_data.get();
 	}
+	TableFunctionFileBindInfo file_info;
+	bind_input.file_info = file_info;
 	names.clear();
 	types.clear();
 	bind_data = function.bind(context, bind_input, types, names);
-	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	if (file_info.columns.empty()) {
+		columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	} else {
+		if (file_info.columns.size() != names.size()) {
+			throw InternalException("Table function %s described %llu columns of file \"%s\", but bound %llu",
+			                        function.name, file_info.columns.size(), file.path, names.size());
+		}
+		columns = std::move(file_info.columns);
+	}
+	metadata = std::move(file_info.metadata);
 
 	cardinality = optional_idx();
 	if (function.cardinality) {
@@ -241,7 +252,7 @@ double TableFunctionFileReader::GetProgressInFile(ClientContext &context) {
 }
 
 InsertionOrderPreservingMap<Value> TableFunctionFileReader::GetMetadata() const {
-	return {};
+	return metadata;
 }
 
 //===--------------------------------------------------------------------===//
@@ -544,6 +555,12 @@ using TableFunctionMultiFileFunction = MultiFileFunction<TableFunctionMultiFileW
 static unique_ptr<FunctionData> TableFunctionMultiFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types,
                                                            vector<Identifier> &names) {
+	if (!input.info) {
+		// the wrapped function is reached through the function info, which a caller binding the function itself has
+		// to pass along
+		throw InvalidInputException("Multi-file table function %s was bound without its function info",
+		                            input.table_function.GetName());
+	}
 	auto &info = input.info->Cast<TableFunctionMultiFileInfo>();
 	return TableFunctionMultiFileFunction::MultiFileBindInterface(
 	    context, input, return_types, names, make_uniq<TableFunctionMultiFileWrapper>(info.function, info.settings));

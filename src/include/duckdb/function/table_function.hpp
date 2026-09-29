@@ -26,6 +26,7 @@ namespace duckdb {
 enum class TablePartitionInfo : uint8_t;
 struct PartitionStatistics;
 struct MultiFileOptions;
+struct TableFunctionFileBindInfo;
 
 //! Controls how a table function manages parallelism.
 enum class TableFunctionParallelism : uint8_t {
@@ -145,6 +146,10 @@ struct TableFunctionBindInput {
 	//! Whether the caller reads several files with this function. Options that describe the schema then describe the
 	//! scan rather than this one file, so the bind should not hold this file to them exactly
 	bool multi_file_scan = false;
+	//! (Optional) Set when binding a single file of a multi-file scan. The bind can describe the file it binds in more
+	//! detail than its names and types - e.g. attach the field ids of its columns, or the key-value metadata of the
+	//! file - which the multi-file reader then uses to read the file
+	optional_ptr<TableFunctionFileBindInfo> file_info;
 
 	bool HasExpectedSchema() const {
 		return expected_names && expected_types;

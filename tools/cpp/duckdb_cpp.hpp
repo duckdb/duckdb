@@ -96,6 +96,7 @@ class ColumnDescription;
 class FileSystem;
 class FileHandle;
 class FileOpenOptions;
+class MultiFileFunction;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -958,6 +959,10 @@ public:
 /// "v1.5.0-dev123" on development builds.
 auto LibraryVersion() -> std::string;
 
+/// The number of rows the vectors DuckDB hands out hold at most, e.g. those of a table function's output chunk. Fixed
+/// for a build of DuckDB, and 2048 unless the build chose otherwise. Unstable API.
+auto StandardVectorSize() -> idx_t;
+
 /// Renders a name as a SQL identifier, quoting and escaping only when required: the name itself when it is a legal
 /// bare identifier, or double-quoted with interior quotes doubled when it is a keyword or contains characters that
 /// require quoting. Use it for every name embedded in SQL text rather than quoting by hand.
@@ -1041,6 +1046,9 @@ public:
 
 	/// `WithAlias` outside a callback.
 	auto WithAlias(const Connection &conn, std::string_view alias) const -> LogicalType;
+
+	/// An owned copy of this type.
+	auto Copy() const -> LogicalType;
 
 	/// The kind of this type, e.g. `LogicalTypeId::DECIMAL` for any DECIMAL regardless of its parameters.
 	auto GetTypeId() const -> LogicalTypeId;
@@ -2249,6 +2257,13 @@ public:
 	/// earlier. A chunk derives its row count from its vectors, so this is also how a hand-filled chunk gets its
 	/// cardinality: size every column alike.
 	auto SetSize(idx_t size) -> void;
+
+	/// Sets the total number of elements the rows of a LIST or MAP vector refer to, reserving room for them in the
+	/// child vectors: the elements of a LIST, the keys and values of a MAP. Sizing the keys and values of a MAP with
+	/// `SetSize` does not size its entries, so this is how a MAP's elements are sized. May reallocate the child
+	/// vectors, which invalidates views and pointers taken from them earlier. Unstable API.
+	/// @throws InvalidInputException Unless the vector is a FLAT LIST or MAP vector.
+	auto SetListSize(idx_t size) -> void;
 
 	/// Reads the vector in a single call, so that the per-row work afterwards is inline.
 	/// @return A view borrowed from the vector. Taking the view of a DICTIONARY vector may flatten the vector it
@@ -3814,6 +3829,7 @@ public:
 	class FilterPushdownInput;
 	class PartitionDataInput;
 	class PartitioningInput;
+	class ClaimBatchInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -3846,6 +3862,11 @@ public:
 	/// Called while the query is planned, possibly more than once, with a candidate `GROUP BY` column set; reports
 	/// whether every batch carries a single value for it. Optional; requires a partition data callback.
 	using PartitioningCallback = void (*)(PartitioningInput &input);
+	/// Called on a scanning thread to claim its next batch of work - before the exec callback first runs on the thread,
+	/// and again whenever the exec callback leaves the output chunk empty. The exec callback then produces the rows of
+	/// the claimed batch only. The callback may run while the other scanning threads wait for it, so it should only
+	/// claim the work (e.g. reserve a block number) and leave reading it to the exec callback. Optional; unstable API.
+	using ClaimBatchCallback = void (*)(ClaimBatchInput &input);
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -3890,6 +3911,10 @@ public:
 	auto SetFilterPushdownCallback(FilterPushdownCallback callback) & -> TableFunction &;
 	auto SetPartitionDataCallback(PartitionDataCallback callback) & -> TableFunction &;
 	auto SetPartitioningCallback(PartitioningCallback callback) & -> TableFunction &;
+	/// Makes the function scan one batch at a time: see `ClaimBatchCallback`. Telling the batches apart lets a caller
+	/// that scans several of them in parallel put their rows back in order - e.g. a `MultiFileFunction` wrapping this
+	/// function keeps the rows of a file in order also when several threads scan it. Unstable API.
+	auto SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction &;
 
 	/// Declares whether the function supports projection pushdown. Defaults to false. With it, the engine asks for
 	/// only the columns a query uses: the exec callback's output chunk holds one vector per requested column, and
@@ -3916,6 +3941,7 @@ private:
 	FilterPushdownCallback filter_pushdown_callback = nullptr;
 	PartitionDataCallback partition_data_callback = nullptr;
 	PartitioningCallback partitioning_callback = nullptr;
+	ClaimBatchCallback claim_batch_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -3973,6 +3999,26 @@ public:
 		/// @param order The order guarantee of the produced rows.
 		/// @throws InvalidInputException When order is not a declared enum value.
 		auto SetOrderPreservation(OrderPreservation order) -> void;
+		/// Attaches an identifier to a declared result column: an INTEGER field id, or a VARCHAR name. Only consulted
+		/// when the function reads a file for a `MultiFileFunction`, whose reader can then map the columns of every
+		/// file by identifier rather than by name. Unstable API.
+		/// @param column_index The column, in `AddResultColumn` order.
+		/// @param identifier The identifier.
+		/// @throws InvalidInputException When the column was not declared, or the identifier is not an INTEGER or
+		/// VARCHAR.
+		auto SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void;
+
+		/// Attaches an identifier to a field nested inside a declared result column, addressed by a path of child
+		/// indexes: a STRUCT field by its index, the elements of a LIST or ARRAY by 0, the keys of a MAP by 0 and its
+		/// values by 1, and a UNION member by its index. See `SetColumnIdentifier`. Unstable API.
+		/// @throws InvalidInputException When the column was not declared, or the path does not address a nested
+		/// field of it.
+		auto SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path, const Value &identifier)
+		    -> void;
+
+		/// Adds an entry to the key-value metadata of the file the function reads. Only consulted when the function
+		/// reads a file for a `MultiFileFunction`, as the metadata its reader exposes. Unstable API.
+		auto AddFileMetadata(const std::string &key, const Value &value) -> void;
 
 		/// The binding context. Borrowed, valid only for the callback duration.
 		auto GetContext() const -> Context;
@@ -4392,6 +4438,115 @@ public:
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the claim batch callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	///
+	/// The callback claims the next batch of work for the thread's local state - typically from the global state,
+	/// which is shared with the other scanning threads - and reports whether it claimed one with `SetClaimed`. A
+	/// callback that returns without claiming a batch ends the scan for the thread.
+	class ClaimBatchInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The global state set via `InitGlobalInput::SetGlobalState`. Shared with every other scanning thread;
+		/// access must be synchronized.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetGlobalState() const -> T & {
+			return *static_cast<T *>(GetGlobalStateInternal());
+		}
+
+		/// The local state set via `InitLocalInput::SetLocalState`, of the thread claiming a batch.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetLocalState() const -> T & {
+			return *static_cast<T *>(GetLocalStateInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports whether a batch was claimed.
+		auto SetClaimed(bool claimed) -> void;
+
+		/// The execution context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		ClaimBatchInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetGlobalStateInternal() const;
+		void *GetLocalStateInternal() const;
+		void *GetUserDataInternal() const;
+	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Multi-File Function
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A table function that reads many files, built on top of a registered `TableFunction` that reads a single one.
+/// Unstable API.
+///
+/// The single-file function takes the path of the file to read as its only positional VARCHAR parameter, and is bound
+/// and scanned once for every file that is read. The multi-file function adds everything that involves several files:
+/// globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Every named
+/// parameter of the single-file function is also a named parameter of the multi-file function, forwarded as given.
+///
+/// When the single-file function reads a file for a multi-file function, it can describe the file in more detail than
+/// its columns: `BindInput::SetColumnIdentifier` attaches field ids to the columns, and `BindInput::AddFileMetadata`
+/// the metadata of the file. With a claim batch callback, the rows of a file keep their order also when several
+/// threads scan it.
+class MultiFileFunction final : public detail::Handle<MultiFileFunction> {
+	friend detail::Factory;
+
+public:
+	MultiFileFunction(MultiFileFunction &&) noexcept = default;
+	MultiFileFunction &operator=(MultiFileFunction &&) noexcept = default;
+
+	~MultiFileFunction() override;
+
+	/// Creates a function that `Register` adds to the connection's database.
+	static auto Create(const Connection &conn) -> MultiFileFunction;
+	/// Creates a function that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> MultiFileFunction;
+
+	/// Sets the function's name, as SQL will call it.
+	auto SetName(const std::string &name) & -> MultiFileFunction &;
+
+	/// Sets the name of the registered table function that reads a single file.
+	auto SetSingleFileFunction(const std::string &name) & -> MultiFileFunction &;
+
+	/// Sets how the files are referred to in messages, e.g. "Avro". Defaults to the name of the function.
+	auto SetReaderType(const std::string &reader_type) & -> MultiFileFunction &;
+
+	/// Sets the extension of the files the function reads, without a leading dot, e.g. "avro". A path naming a
+	/// directory then reads the files with that extension inside it.
+	auto SetFileExtension(const std::string &extension) & -> MultiFileFunction &;
+
+	/// Registers the function in the catalog it was created against. The function object remains valid.
+	/// @throws InvalidInputException When the name or the single-file function is missing, or the single-file
+	/// function does not exist or does not take the path of a file as its only positional VARCHAR parameter.
+	auto Register() -> void;
+
+private:
+	explicit MultiFileFunction(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4465,6 +4620,7 @@ public:
 	class CopyToBatchInput;
 	class CopyToFlushInput;
 	class CopyToFinalizeInput;
+	class CopyToStatisticsInput;
 	class CopyFromBindInput;
 	class CopyFromInitGlobalInput;
 	class CopyFromInitLocalInput;
@@ -4485,6 +4641,9 @@ public:
 	using CopyToFlushCallback = void (*)(CopyToFlushInput &input);
 	/// Called once per output file after its last batch has been flushed. Optional.
 	using CopyToFinalizeCallback = void (*)(CopyToFinalizeInput &input);
+	/// Called once per output file after its finalize callback, to report the statistics of the written file when the
+	/// statement asks for them (`RETURN_STATS`). Optional: without it, `RETURN_STATS` is rejected. Unstable API.
+	using CopyToStatisticsCallback = void (*)(CopyToStatisticsInput &input);
 
 	/// Called once per `COPY ... FROM` statement while it is bound. Required for the side.
 	using CopyFromBindCallback = void (*)(CopyFromBindInput &input);
@@ -4525,6 +4684,7 @@ public:
 	auto SetCopyToBatchCallback(CopyToBatchCallback callback) & -> CopyFunction &;
 	auto SetCopyToFlushCallback(CopyToFlushCallback callback) & -> CopyFunction &;
 	auto SetCopyToFinalizeCallback(CopyToFinalizeCallback callback) & -> CopyFunction &;
+	auto SetCopyToStatisticsCallback(CopyToStatisticsCallback callback) & -> CopyFunction &;
 
 	auto SetCopyFromBindCallback(CopyFromBindCallback callback) & -> CopyFunction &;
 	auto SetCopyFromInitGlobalCallback(CopyFromInitGlobalCallback callback) & -> CopyFunction &;
@@ -4550,6 +4710,7 @@ private:
 	CopyToBatchCallback copy_to_batch_callback = nullptr;
 	CopyToFlushCallback copy_to_flush_callback = nullptr;
 	CopyToFinalizeCallback copy_to_finalize_callback = nullptr;
+	CopyToStatisticsCallback copy_to_statistics_callback = nullptr;
 	CopyFromBindCallback copy_from_bind_callback = nullptr;
 	CopyFromInitGlobalCallback copy_from_init_global_callback = nullptr;
 	CopyFromInitLocalCallback copy_from_init_local_callback = nullptr;
@@ -4849,6 +5010,54 @@ public:
 
 	private:
 		CopyToFinalizeInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetInitDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the `COPY ... TO` statistics callback works with. Borrowed, valid only for the callback duration. Unstable
+	/// API.
+	class CopyToStatisticsInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `CopyToBindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The init data set via `CopyToInitInput::SetInitData` for the file being reported.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetInitData() const -> T & {
+			return *static_cast<T *>(GetInitDataInternal());
+		}
+
+		/// The user data set via `CopyFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Reports how many rows were written to the file. Reported as 0 when not set.
+		auto SetRowCount(idx_t row_count) -> void;
+
+		/// Reports the size of the file in bytes. Reported as 0 when not set.
+		auto SetFileSize(idx_t file_size_bytes) -> void;
+
+		/// The query context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		CopyToStatisticsInput(void *args, void *context) : args(args), context(context) {
 		}
 
 		void *args;
@@ -5286,6 +5495,10 @@ enum class FileFlags : uint8_t {
 	/// or `WriteAt` are used concurrently, so that a file system which would otherwise assume sequential access does
 	/// not.
 	PARALLEL_ACCESS = 7,
+	/// Read the file through DuckDB's external file cache, which keeps the bytes that were read in memory for later
+	/// reads - also by later queries. Whether a local file is cached is decided by the `cache_local_files` setting.
+	/// Only for reading. Unstable API.
+	EXTERNAL_FILE_CACHE = 8,
 };
 
 /// An open file, obtained from `FileSystem::OpenFile`. Closes on destruction.

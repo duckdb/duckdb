@@ -34,6 +34,10 @@
 #include "duckdb/main/database.hpp"
 
 // V2 C API header -- all types use duckdb_v2_ prefix, no collision with V1.
+// The engine implements the whole surface, including the unstable part.
+#ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
+#define DUCKDB_V2_API_ALLOW_UNSTABLE 1
+#endif
 #include "duckdb_v2.h"
 
 #include <new>

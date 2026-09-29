@@ -385,6 +385,29 @@ DUCKDB_V2_ERROR duckdb_v2_vector_set_size(duckdb_v2_vector_handle vector, idx_t 
 	});
 }
 
+DUCKDB_V2_ERROR duckdb_v2_vector_get_standard_size(idx_t *out_size, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_size);
+	return WithErrorHandler(err, [&]() { *out_size = STANDARD_VECTOR_SIZE; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_vector_set_list_size(duckdb_v2_vector_handle vector, idx_t size,
+                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(vector);
+	return WithErrorHandler(err, [&]() {
+		auto *vec = Convert(vector);
+		const auto type_id = vec->GetType().id();
+		if (type_id != duckdb::LogicalTypeId::LIST && type_id != duckdb::LogicalTypeId::MAP) {
+			throw duckdb::InvalidInputException("duckdb_v2_vector_set_list_size: expected a LIST or MAP vector, got %s",
+			                                    vec->GetType().ToString());
+		}
+		if (vec->GetVectorType() != duckdb::VectorType::FLAT_VECTOR) {
+			throw duckdb::InvalidInputException("duckdb_v2_vector_set_list_size: the vector must be FLAT");
+		}
+		duckdb::ListVector::Reserve(*vec, size);
+		duckdb::ListVector::SetListSize(*vec, size);
+	});
+}
+
 // ---------------------------------------------------------------------------
 // Single-cell value bridge
 // ---------------------------------------------------------------------------
