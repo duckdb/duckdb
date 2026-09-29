@@ -297,9 +297,8 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
 
 	// the binder places every argument in its signature slot, defaults included, so the call reads them as-is
-	CV2ConstantBindInfo bind_info(input.table_function.GetSignature(),
-	                              info.user_data ? info.user_data->GetData() : nullptr, input.inputs,
-	                              input.named_parameters);
+	CV2ConstantBindInfo bind_info(input.table_function, info.user_data ? info.user_data->GetData() : nullptr,
+	                              input.inputs, input.named_parameters);
 	CV2TableBindInfo args = {};
 
 	CV2ErrorInfo err = {};
@@ -309,7 +308,7 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	// Take ownership of whatever the callback set before reporting an error, so it is destroyed either way.
 	auto result = make_uniq<CV2TableFunctionData>();
 	result->info = &info;
-	result->handle = bind_info.TakeBindData();
+	result->handle = std::move(bind_info.out_bind_data);
 	result->cardinality = args.out_cardinality;
 	result->cardinality_is_exact = args.out_cardinality_is_exact;
 	result->cardinality_set = args.out_cardinality_set;

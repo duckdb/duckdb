@@ -73,10 +73,8 @@ public:
 
 	Vector *inputs = nullptr;
 	idx_t input_count = 0;
-	//! Tells the variadic arguments apart from the fixed ones
+	//! Tells the four parts of the argument list apart
 	const BoundAggregateFunction *function = nullptr;
-	//! The trailing inputs that hold the named arguments
-	idx_t named_count = 0;
 	idx_t row_count = 0;
 	void **states = nullptr;
 };
@@ -163,9 +161,7 @@ static auto CV2AggregateBind(BindAggregateFunctionInput &input) -> unique_ptr<Fu
 	const auto &info = input.GetBoundFunction().GetExtraFunctionInfo().Cast<CV2AggregateFunctionInfo>();
 
 	auto &bound_function = input.GetBoundFunction();
-	CV2ExpressionBindInfo bind_info(bound_function.GetDefinition()->GetSignature(),
-	                                info.user_data ? info.user_data->GetData() : nullptr, input,
-	                                bound_function.GetNamedArguments());
+	CV2ExpressionBindInfo bind_info(bound_function, info.user_data ? info.user_data->GetData() : nullptr, input);
 	CV2AggregateBindInfo result_info = {};
 	result_info.in_input = &input;
 
@@ -174,9 +170,9 @@ static auto CV2AggregateBind(BindAggregateFunctionInput &input) -> unique_ptr<Fu
 	info.bind_cb(Convert(&bind_info), Convert(&result_info), Convert(&input.GetClientContext()), &err_ptr);
 
 	unique_ptr<FunctionData> result = nullptr;
-	if (auto bind_data = bind_info.TakeBindData()) {
+	if (bind_info.out_bind_data) {
 		auto set_result = make_uniq<CV2AggregateFunctionData>();
-		set_result->handle = std::move(bind_data);
+		set_result->handle = std::move(bind_info.out_bind_data);
 		result = std::move(set_result);
 	}
 
@@ -233,7 +229,6 @@ static auto CV2AggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_d
 	args.inputs = inputs;
 	args.input_count = input_count;
 	args.function = &aggr_input_data.function;
-	args.named_count = aggr_input_data.function.GetNamedArguments().size();
 	args.row_count = count;
 	args.states = FlatVector::GetDataMutableUnsafe<void *>(state);
 
@@ -630,19 +625,18 @@ DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_arg_count(duckdb_v2_aggr
                                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err, [&]() {
-		auto &update_info = *Convert(info);
+		auto &function = *Convert(info)->function;
 		if (positional_fixed) {
-			*positional_fixed =
-			    update_info.input_count - update_info.named_count - update_info.function->GetVarArgsCount();
+			*positional_fixed = function.GetStandardArgumentCount();
 		}
 		if (positional_variadic) {
-			*positional_variadic = update_info.function->GetVarArgsCount();
+			*positional_variadic = function.GetVarArgsCount();
 		}
 		if (named_fixed) {
-			*named_fixed = update_info.named_count - update_info.function->GetKwargsCount();
+			*named_fixed = function.GetKeywordOnlyArgumentCount();
 		}
 		if (named_variadic) {
-			*named_variadic = update_info.function->GetKwargsCount();
+			*named_variadic = function.GetKwargsCount();
 		}
 	});
 }

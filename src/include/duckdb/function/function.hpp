@@ -647,11 +647,14 @@ public:
 		named_arguments = std::move(named_arguments_p);
 	}
 
-protected:
 	//! The arguments are laid out as [standard | *args | keyword-only | **kwargs], these need the signature of the
 	//! function to tell them apart
+	DUCKDB_API auto GetStandardArgumentCount(const FunctionSignature &signature) const -> idx_t;
 	DUCKDB_API auto GetVarArgsCount(const FunctionSignature &signature) const -> idx_t;
+	DUCKDB_API auto GetKeywordOnlyArgumentCount(const FunctionSignature &signature) const -> idx_t;
 	DUCKDB_API auto GetKwargsCount(const FunctionSignature &signature) const -> idx_t;
+
+protected:
 	DUCKDB_API auto GetArgumentParameterKind(const FunctionSignature &signature, idx_t argument_index) const
 	    -> FunctionParameterKind;
 
