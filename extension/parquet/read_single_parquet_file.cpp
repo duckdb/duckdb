@@ -511,9 +511,8 @@ const ParquetOptions &ParquetScanFunction::GetFileOptions(const FunctionData &fi
 TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	TableFunction read_parquet("read_single_parquet_file",
 	                           FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
-	                           ReadSingleParquetFileFunction,
-	                           ReadSingleParquetFileBind, ReadSingleParquetFileInitGlobal,
-	                           ReadSingleParquetFileInitLocal);
+	                           ReadSingleParquetFileFunction, ReadSingleParquetFileBind,
+	                           ReadSingleParquetFileInitGlobal, ReadSingleParquetFileInitLocal);
 	read_parquet.table_scan_progress = ReadSingleParquetFileProgress;
 	read_parquet.cardinality = ReadSingleParquetFileCardinality;
 	read_parquet.statistics = ReadSingleParquetFileStatistics;
