@@ -512,6 +512,8 @@ enum class ShowBehaviorType : uint8_t;
 
 enum class ShowType : uint8_t;
 
+enum class SideMultiplicity : uint8_t;
+
 enum class SimplifiedTokenType : uint8_t;
 
 enum class SinkCombineResultType : uint8_t;
@@ -1360,6 +1362,9 @@ const char* EnumUtil::ToChars<ShowBehaviorType>(ShowBehaviorType value);
 
 template<>
 const char* EnumUtil::ToChars<ShowType>(ShowType value);
+
+template<>
+const char* EnumUtil::ToChars<SideMultiplicity>(SideMultiplicity value);
 
 template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value);
@@ -2273,6 +2278,9 @@ ShowBehaviorType EnumUtil::FromString<ShowBehaviorType>(const char *value);
 
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value);
+
+template<>
+SideMultiplicity EnumUtil::FromString<SideMultiplicity>(const char *value);
 
 template<>
 SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value);
