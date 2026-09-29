@@ -1160,4 +1160,50 @@ TEST_CASE("Retiring cache blocks preserves existing readers and cannot erase rep
 	REQUIRE(reacquired[1] == replacements[1]);
 }
 
+TEST_CASE("Request sizing can make every read cover the aligned blocks around it", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+	con.Query("SET external_file_cache_request_sizing='GRID'");
+
+	const idx_t FILE_SIZE = 5 * BLOCK_SIZE;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_request_sizing_grid.bin", content);
+
+	// a reader that sizes its own requests reads whole blocks
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+	recording_fs->TakeReads();
+
+	REQUIRE(ReadFull(*handle, 100, BLOCK_SIZE + 10) == content.substr(BLOCK_SIZE + 10, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE, BLOCK_SIZE}});
+}
+
+TEST_CASE("Request sizing can make every read cover exactly the requested bytes", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+
+	const idx_t BLOCK_SIZE = 4096;
+	Connection con(db);
+	con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE));
+	con.Query("SET external_file_cache_request_sizing='EXACT'");
+
+	const idx_t FILE_SIZE = 5 * BLOCK_SIZE;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_request_sizing_exact.bin", content);
+
+	// a reader sized by the cache reads exactly the requested bytes
+	CachingFileSystem cfs(*recording_fs, db_instance);
+	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+	recording_fs->TakeReads();
+
+	REQUIRE(ReadFull(*handle, 100, BLOCK_SIZE + 10) == content.substr(BLOCK_SIZE + 10, 100));
+	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE + 10, 100}});
+}
+
 } // namespace duckdb

@@ -7,6 +7,7 @@
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -354,13 +355,24 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(current_cached_file->path);
 	const idx_t min_block_size =
 	    MinValue(external_file_cache.GetCacheMinBlockSize(current_cached_file->path), max_block_size);
+	auto request_sizing = flags.GetRequestSizing();
+	switch (Settings::Get<ExternalFileCacheRequestSizingSetting>(caching_file_system.db)) {
+	case ExternalFileCacheRequestSizing::GRID:
+		request_sizing = RequestSizing::BY_CACHE;
+		break;
+	case ExternalFileCacheRequestSizing::EXACT:
+		request_sizing = RequestSizing::BY_READER;
+		break;
+	case ExternalFileCacheRequestSizing::AUTO:
+		break;
+	}
 	idx_t fetch_location = location;
 	idx_t fetch_end = location + nr_bytes;
 	if (file_size <= max_block_size) {
 		// fetch a file that fits in one block whole, so later reads of it hit the cache
 		fetch_location = 0;
 		fetch_end = file_size;
-	} else if (flags.GetRequestSizing() == RequestSizing::BY_CACHE) {
+	} else if (request_sizing == RequestSizing::BY_CACHE) {
 		fetch_location = location - location % max_block_size;
 		fetch_end = AlignValue(fetch_end, max_block_size);
 	} else {

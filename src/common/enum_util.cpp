@@ -2448,6 +2448,25 @@ ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const ch
 	return static_cast<ExtensionUpdateResultTag>(StringUtil::StringToEnum(GetExtensionUpdateResultTagValues(), 8, "ExtensionUpdateResultTag", value));
 }
 
+const StringUtil::EnumStringLiteral *GetExternalFileCacheRequestSizingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::GRID), "GRID" },
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::EXACT), "EXACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExternalFileCacheRequestSizing>(ExternalFileCacheRequestSizing value) {
+	return StringUtil::EnumToString(GetExternalFileCacheRequestSizingValues(), 3, "ExternalFileCacheRequestSizing", static_cast<uint32_t>(value));
+}
+
+template<>
+ExternalFileCacheRequestSizing EnumUtil::FromString<ExternalFileCacheRequestSizing>(const char *value) {
+	return static_cast<ExternalFileCacheRequestSizing>(StringUtil::StringToEnum(GetExternalFileCacheRequestSizingValues(), 3, "ExternalFileCacheRequestSizing", value));
+}
+
 const StringUtil::EnumStringLiteral *GetExternalResourceOperationValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ExternalResourceOperation::CREATE), "CREATE" },
