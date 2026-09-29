@@ -15,13 +15,15 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 		case_insensitive_set_t child_names;
 		child_list_t<LogicalType> child_types;
 		for (auto &child_type : StructType::GetChildTypes(type)) {
-			auto insert_success = child_names.insert(child_type.first.GetIdentifierName()).second;
-			if (!insert_success) {
+			auto insert_result = child_names.insert(child_type.first.GetIdentifierName());
+			if (!insert_result.second) {
 				if (ignore_errors) {
 					continue;
 				}
 				throw NotImplementedException(
-				    "Duplicate name \"%s\" in struct auto-detected in JSON, try ignore_errors=true", child_type.first);
+				    "Duplicate name \"%s\" in struct auto-detected in JSON: it only differs in case from \"%s\". Try "
+				    "ignore_case=true to merge keys that only differ in case, or ignore_errors=true to skip them",
+				    child_type.first, *insert_result.first);
 			} else {
 				child_types.emplace_back(child_type.first, RemoveDuplicateStructKeys(child_type.second, ignore_errors));
 			}
@@ -103,7 +105,8 @@ public:
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = scan_state.values[i];
 				if (val) {
-					JSONStructure::ExtractStructure(val, node, true, options.geojson.value_or(false));
+					JSONStructure::ExtractStructure(val, node, true, options.geojson.value_or(false),
+					                                options.ignore_case);
 				}
 			}
 			remaining -= next;

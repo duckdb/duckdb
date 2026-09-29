@@ -480,7 +480,7 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	const idx_t column_count = names.size();
 
 	// Build hash map from key to column index so we don't have to linearly search using the key
-	json_key_map_t<idx_t> key_map;
+	auto key_map = CreateJSONKeyMap<idx_t>(options.ignore_case);
 	vector<yyjson_val **> nested_vals;
 	nested_vals.reserve(column_count);
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {

@@ -502,7 +502,15 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild() {
 	return children.back();
 }
 
-JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_ptr, const size_t key_size) {
+bool JSONStructureDescription::IgnoreCase() const {
+	return key_map.key_eq().case_insensitive;
+}
+
+JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_ptr, const size_t key_size,
+                                                              const bool ignore_case) {
+	if (children.empty() && IgnoreCase() != ignore_case) {
+		key_map = CreateJSONKeyMap<idx_t>(ignore_case);
+	}
 	// Check if there is already a child with the same key
 	const JSONKey temp_key {key_ptr, key_size};
 	const auto it = key_map.find(temp_key);
@@ -519,15 +527,16 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(const char *key_pt
 }
 
 JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, yyjson_val *val,
-                                                              const bool ignore_errors, const bool detect_geojson) {
+                                                              const bool ignore_errors, const bool detect_geojson,
+                                                              const bool ignore_case) {
 	D_ASSERT(yyjson_is_str(key));
-	auto &child = GetOrCreateChild(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
+	auto &child = GetOrCreateChild(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key), ignore_case);
+	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, ignore_case);
 	return child;
 }
 
 static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, const bool ignore_errors,
-                                  const bool detect_geojson) {
+                                  const bool detect_geojson, const bool ignore_case) {
 	D_ASSERT(yyjson_is_arr(arr));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::LIST);
 	auto &child = description.GetOrCreateChild();
@@ -535,12 +544,12 @@ static void ExtractStructureArray(yyjson_val *arr, JSONStructureNode &node, cons
 	size_t idx, max;
 	yyjson_val *val;
 	yyjson_arr_foreach(arr, idx, max, val) {
-		JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson);
+		JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, ignore_case);
 	}
 }
 
 static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, const bool ignore_errors,
-                                   const bool detect_geojson) {
+                                   const bool detect_geojson, const bool ignore_case) {
 	D_ASSERT(yyjson_is_obj(obj));
 	auto &description = node.GetOrCreateDescription(LogicalTypeId::STRUCT);
 
@@ -562,7 +571,7 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 			                                    *insert_result.first + "\" in object %s",
 			                                obj);
 		}
-		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson);
+		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson, ignore_case);
 	}
 }
 
@@ -577,7 +586,7 @@ static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors,
-                                     const bool detect_geojson) {
+                                     const bool detect_geojson, const bool ignore_case) {
 	node.count++;
 	const auto tag = yyjson_get_tag(val);
 	if (tag == (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE)) {
@@ -586,7 +595,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 
 	switch (tag) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
-		return ExtractStructureArray(val, node, ignore_errors, detect_geojson);
+		return ExtractStructureArray(val, node, ignore_errors, detect_geojson, ignore_case);
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		// A GeoJSON geometry is a leaf: it becomes GEOMETRY rather than a struct of type/coordinates. Detecting it
 		// here (rather than on the finished tree) means geometries of different kinds still merge into one type.
@@ -594,7 +603,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 			node.GetOrCreateDescription(LogicalTypeId::GEOMETRY);
 			return;
 		}
-		return ExtractStructureObject(val, node, ignore_errors, detect_geojson);
+		return ExtractStructureObject(val, node, ignore_errors, detect_geojson, ignore_case);
 	default:
 		return ExtractStructureVal(val, node);
 	}
@@ -704,7 +713,8 @@ static void MergeNodeObject(JSONStructureNode &merged, const JSONStructureDescri
 	auto &merged_desc = merged.GetOrCreateDescription(LogicalTypeId::STRUCT);
 	for (auto &struct_child : child_desc.children) {
 		const auto &struct_child_key = *struct_child.key;
-		auto &merged_child = merged_desc.GetOrCreateChild(struct_child_key.c_str(), struct_child_key.length());
+		auto &merged_child =
+		    merged_desc.GetOrCreateChild(struct_child_key.c_str(), struct_child_key.length(), child_desc.IgnoreCase());
 		JSONStructure::MergeNodes(merged_child, struct_child);
 	}
 }
