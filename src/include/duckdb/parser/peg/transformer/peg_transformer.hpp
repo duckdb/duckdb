@@ -4500,7 +4500,7 @@ public:
 	static vector<unique_ptr<ParsedExpression>>
 	TransformPartitionOptions(PEGTransformer &transformer, vector<unique_ptr<ParsedExpression>> expression);
 	static vector<OrderByNode> TransformSortedOptions(PEGTransformer &transformer,
-	                                                  vector<OrderByNode> order_by_expression_list);
+	                                                  vector<OrderByNode> order_by_expressions);
 	static bool TransformWithDataOnly(PEGTransformer &transformer);
 	static bool TransformWithNoData(PEGTransformer &transformer);
 	static ColumnList TransformIdentifierList(PEGTransformer &transformer, const vector<Identifier> &identifier);

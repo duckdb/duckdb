@@ -543,8 +543,8 @@ PEGTransformerFactory::TransformPartitionOptions(PEGTransformer &transformer,
 }
 
 vector<OrderByNode> PEGTransformerFactory::TransformSortedOptions(PEGTransformer &transformer,
-                                                                  vector<OrderByNode> order_by_expression_list) {
-	return order_by_expression_list;
+                                                                  vector<OrderByNode> order_by_expressions) {
+	return order_by_expressions;
 }
 
 PartitionSortedOptions

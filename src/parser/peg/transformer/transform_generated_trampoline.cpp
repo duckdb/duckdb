@@ -9408,14 +9408,14 @@ void PEGTransformerFactory::InitializeSortedOptionsTrampoline(PEGTransformer &tr
                                                               GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("OrderByExpressionList"), ExtractResultFromParens(list_pr.GetChild(2))}, 0);
+	process.PushChild({transformer.GetRule("OrderByExpressions"), ExtractResultFromParens(list_pr.GetChild(2))}, 0);
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeSortedOptionsTrampoline(PEGTransformer &transformer,
                                                        GeneratedTransformProcess &process) {
-	auto order_by_expression_list = process.TakeResult<vector<OrderByNode>>(0);
-	auto result = TransformSortedOptions(transformer, std::move(order_by_expression_list));
+	auto order_by_expressions = process.TakeResult<vector<OrderByNode>>(0);
+	auto result = TransformSortedOptions(transformer, std::move(order_by_expressions));
 	return make_uniq<TypedTransformResult<vector<OrderByNode>>>(std::move(result));
 }
 

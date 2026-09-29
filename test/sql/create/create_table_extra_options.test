@@ -28,11 +28,15 @@ CREATE TABLE integers(i INTEGER) SORTED BY (i DESCENDING) PARTITIONED BY (i);
 ----
 <REGEX>:.*PARTITIONED BY is not supported for tables in a duckdb catalog.*
 
-# SORTED BY ALL is not supported
 statement error
 CREATE TABLE integers(i INTEGER) SORTED BY (ALL);
 ----
-<REGEX>:.*Parser Error.*
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
+
+statement error
+CREATE TABLE integers(i INTEGER) SORTED BY (ALL DESC NULLS LAST);
+----
+<REGEX>:.*SORTED BY is not supported for tables in a duckdb catalog.*
 
 statement error
 CREATE TABLE integers(i INTEGER) SORTED BY ();
