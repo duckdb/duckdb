@@ -69,16 +69,44 @@ SELECT column_name, column_type FROM (DESCRIBE SELECT * FROM (VALUES ('x', 42)) 
 x	VARCHAR
 x	INTEGER
 
-# the name resolves to the first of the duplicates, the rest are reachable by position
+# the name is ambiguous, as in Postgres - the columns are reachable by position
+statement error
+SELECT x FROM (SELECT i AS i, i + 100 AS i FROM range(1) tbl(i)) tbl(x, x);
+----
+<REGEX>:Binder Error: Ambiguous reference to column name "x".*
+
 query II
-SELECT x, #2 FROM (SELECT i AS i, i + 100 AS i FROM range(1) tbl(i)) tbl(x, x);
+SELECT #1, #2 FROM (SELECT i AS i, i + 100 AS i FROM range(1) tbl(i)) tbl(x, x);
 ----
 0	100
 
-query I
+statement error
 SELECT x FROM (SELECT 1 AS x, 2 AS x) t;
 ----
-1
+<REGEX>:Binder Error: Ambiguous reference to column name "x": "t" has more than one column named "x".*
+
+# qualifying the name does not tell the columns apart either
+statement error
+SELECT t.x FROM (SELECT 1 AS x, 2 AS x) t;
+----
+<REGEX>:Binder Error: Ambiguous reference to column name "x".*
+
+statement error
+SELECT t.x.a FROM (SELECT {'a': 1} AS x, 2 AS x) t;
+----
+<REGEX>:Binder Error: Ambiguous reference to column name "x".*
+
+# a name that is not duplicated resolves as usual
+query I
+SELECT y FROM (SELECT 1 AS x, 2 AS x, 3 AS y) t;
+----
+3
+
+# excluding the name removes every column that carries it
+query I
+SELECT * EXCLUDE (x) FROM (SELECT 1 AS x, 2 AS x, 3 AS y) t;
+----
+3
 
 # values are unaffected
 query II
@@ -143,25 +171,29 @@ SELECT * FROM query('SELECT 1 AS x, 2 AS x');
 ----
 1	2
 
-# grouping on the name groups the first column, so the second one is not grouped
+# referring to the name in any clause is ambiguous
 statement error
 SELECT * FROM (SELECT 1 AS x, 2 AS x) t GROUP BY x;
 ----
-<REGEX>:.*"x" must appear in the GROUP BY clause.*
+<REGEX>:Binder Error: Ambiguous reference to column name "x".*
+
+statement error
+SELECT * FROM (SELECT 1 AS x, 2 AS x) t ORDER BY x;
+----
+<REGEX>:Binder Error: Ambiguous reference to column name "x".*
+
+statement error
+SELECT * FROM (SELECT 1 AS x, 2 AS x) t WHERE x = 1;
+----
+<REGEX>:Binder Error: Ambiguous reference to column name "x".*
 
 query II
-SELECT x, count(*) FROM (SELECT 1 AS x, 2 AS x) t GROUP BY x;
+SELECT #1, count(*) FROM (SELECT 1 AS x, 2 AS x) t GROUP BY #1;
 ----
 1	1
 
-# referring to the name elsewhere reaches the first column
 query II
-SELECT * FROM (SELECT 1 AS x, 2 AS x) t ORDER BY x;
-----
-1	2
-
-query II
-SELECT * FROM (SELECT 1 AS x, 2 AS x) t WHERE x = 1;
+SELECT * FROM (SELECT 1 AS x, 2 AS x) t WHERE #2 = 2;
 ----
 1	2
 

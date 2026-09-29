@@ -31,8 +31,9 @@ void Binding::Initialize() {
 		auto &name = names[i];
 		D_ASSERT(!name.empty());
 		if (name_map.find(name) != name_map.end()) {
-			// duplicate column name - the first one wins for name resolution, the shadowed
-			// column remains reachable by index
+			// duplicate column name - referring to it by name is ambiguous, the columns remain
+			// reachable by index
+			duplicate_names.insert(name);
 			continue;
 		}
 		name_map[name] = i;
@@ -102,6 +103,7 @@ bool Binding::TryGetColumnIndex(ColumnRefExpression &colref, column_t &result) {
 		result = colref.GetResolvedIndex();
 		return result < names.size() || IsVirtualColumn(result);
 	}
+	ThrowIfAmbiguousColumnName(colref.GetColumnName());
 	return TryGetBindingIndex(colref.GetColumnName(), result);
 }
 
@@ -111,17 +113,14 @@ bool Binding::HasMatchingBinding(const Identifier &column_name) {
 }
 
 bool Binding::HasDuplicateColumnName(const Identifier &column_name) {
-	bool found = false;
-	for (auto &name : names) {
-		if (name != column_name) {
-			continue;
-		}
-		if (found) {
-			return true;
-		}
-		found = true;
+	return duplicate_names.find(column_name) != duplicate_names.end();
+}
+
+void Binding::ThrowIfAmbiguousColumnName(const Identifier &column_name, QueryErrorContext context) {
+	if (HasDuplicateColumnName(column_name)) {
+		throw BinderException(context, "Ambiguous reference to column name %s: %s has more than one column named %s",
+		                      column_name, GetAlias(), column_name);
 	}
-	return false;
 }
 
 void Binding::AddColumnAlias(const Identifier &column_alias, column_t column_index) {

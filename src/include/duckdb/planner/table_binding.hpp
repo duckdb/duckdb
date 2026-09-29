@@ -47,6 +47,8 @@ public:
 	bool HasMatchingBinding(const Identifier &column_name);
 	//! Whether more than one column in this binding carries the given name
 	bool HasDuplicateColumnName(const Identifier &column_name);
+	//! Throw if the name alone cannot tell which column of this binding it refers to
+	void ThrowIfAmbiguousColumnName(const Identifier &column_name, QueryErrorContext context = QueryErrorContext());
 	//! Register an alternative name for an existing column - the alias can be bound, but is hidden from *
 	void AddColumnAlias(const Identifier &column_alias, column_t column_index);
 	//! Returns the name under which a column is registered in this binding (this can differ from the provided name
@@ -107,6 +109,8 @@ protected:
 	vector<Identifier> names;
 	//! Name -> index for the names
 	identifier_map_t<column_t> name_map;
+	//! Names carried by more than one column - these cannot be resolved by name
+	identifier_set_t duplicate_names;
 	//! Whether rows of this binding can be NULL-extended by an outer join
 	bool null_extended = false;
 };

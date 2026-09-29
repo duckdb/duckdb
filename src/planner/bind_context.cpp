@@ -241,6 +241,9 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const BindingAli
 	if (!binding) {
 		return std::move(result);
 	}
+	if (!resolved_index.IsValid()) {
+		binding->ThrowIfAmbiguousColumnName(column_name);
+	}
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (resolved_index.IsValid()) {
 		// the reference already knows which column it is - the name on its own may reach a
@@ -296,6 +299,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const Identifier
 	if (!binding) {
 		return std::move(result);
 	}
+	binding->ThrowIfAmbiguousColumnName(column_name);
 	auto column_index = binding->GetBindingIndex(column_name);
 	if (bind_type == ColumnBindType::EXPAND_GENERATED_COLUMNS && ColumnIsGenerated(*binding, column_index)) {
 		return ExpandGeneratedColumn(binding->Cast<TableBinding>(), column_index, column_name);
@@ -640,8 +644,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 					handled_using_columns.insert(using_binding);
 					continue;
 				}
-				auto new_expr =
-				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				auto new_expr = CreateColumnReference(binding_alias, column_name,
+				                                      ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS, col_idx);
 				SetResolvedColumnIndex(*new_expr, col_idx);
 				if (HandleRename(expr, qualified_column, new_expr, star_state)) {
 					new_select_list.push_back(std::move(new_expr));
@@ -696,8 +700,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 				if (CheckExclusionList(expr, qualified_name, star_state)) {
 					continue;
 				}
-				auto new_expr =
-				    CreateColumnReference(binding_alias, column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+				auto new_expr = CreateColumnReference(binding_alias, column_name,
+				                                      ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS, col_idx);
 				SetResolvedColumnIndex(*new_expr, col_idx);
 				if (HandleRename(expr, qualified_name, new_expr, star_state)) {
 					new_select_list.push_back(std::move(new_expr));

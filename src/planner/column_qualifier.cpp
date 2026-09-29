@@ -129,9 +129,10 @@ unique_ptr<ParsedExpression> ColumnQualifier::CreateStructPack(ColumnRefExpressi
 	auto &column_names = binding->GetColumnNames();
 	vector<FunctionArgument> child_expressions;
 	child_expressions.reserve(column_names.size());
-	for (const auto &column_name : column_names) {
-		auto ref = binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), column_name,
-		                                                     ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS);
+	for (idx_t column_idx = 0; column_idx < column_names.size(); column_idx++) {
+		auto &column_name = column_names[column_idx];
+		auto ref = binder.bind_context.CreateColumnReference(
+		    binding->GetBindingAlias(), column_name, ColumnBindType::DO_NOT_EXPAND_GENERATED_COLUMNS, column_idx);
 		child_expressions.emplace_back(column_name, std::move(ref));
 	}
 	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
@@ -195,6 +196,9 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnName(const ParsedExpr
 
 	// bind as a regular column
 	if (table_binding) {
+		if (!ResolvedIndexOf(expr).IsValid()) {
+			table_binding->ThrowIfAmbiguousColumnName(column_name, expr);
+		}
 		return binder.bind_context.CreateColumnReference(table_binding->GetBindingAlias(), column_name,
 		                                                 ColumnBindType::EXPAND_GENERATED_COLUMNS,
 		                                                 ResolvedIndexOf(expr));
@@ -392,6 +396,7 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameWithManyDotsInter
 			ErrorData attempt_error;
 			auto binding = binder.GetMatchingBinding(alias, column_name, attempt_error);
 			if (binding) {
+				binding->ThrowIfAmbiguousColumnName(column_name, col_ref);
 				struct_extract_start = table_index + 2;
 				return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), column_name);
 			}
@@ -529,6 +534,9 @@ unique_ptr<ParsedExpression> ColumnQualifier::QualifyColumnNameInternal(ColumnRe
 		auto binding = binder.GetMatchingBinding(col_ref.ColumnNames()[0], col_ref.ColumnNames()[1], error);
 		if (binding) {
 			// it is! return the column reference directly
+			if (!col_ref.HasResolvedIndex()) {
+				binding->ThrowIfAmbiguousColumnName(col_ref.GetColumnName(), col_ref);
+			}
 			return binder.bind_context.CreateColumnReference(binding->GetBindingAlias(), col_ref.GetColumnName(),
 			                                                 ColumnBindType::EXPAND_GENERATED_COLUMNS,
 			                                                 ResolvedIndexOf(col_ref));
