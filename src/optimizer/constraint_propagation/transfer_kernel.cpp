@@ -147,7 +147,7 @@ static void TransferJoinUniqueFacts(FactStore &store, LogicalOperator &op, Scope
 }
 
 //===----------------------------------------------------------------------===//
-// Kernal
+// Kernel
 //===----------------------------------------------------------------------===//
 TransferKernel::TransferKernel(ConstraintPropagator &owner) : owner_(owner) {
 }
