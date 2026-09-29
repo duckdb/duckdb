@@ -171,6 +171,9 @@ void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<optional<int64_t>>(207, "last_value", last_value);
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<bool>(208, "exhausted", exhausted);
+	}
 }
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
@@ -183,6 +186,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<int64_t>(205, "start_value", result->start_value);
 	deserializer.ReadPropertyWithDefault<bool>(206, "cycle", result->cycle);
 	deserializer.ReadPropertyWithDefault<optional<int64_t>>(207, "last_value", result->last_value);
+	deserializer.ReadPropertyWithDefault<bool>(208, "exhausted", result->exhausted);
 	result->SetName(std::move(name));
 	return std::move(result);
 }

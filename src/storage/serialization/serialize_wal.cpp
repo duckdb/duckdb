@@ -358,6 +358,9 @@ void WALSequenceValue::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WritePropertyWithDefault<QualifiedName>(106, "qualified_name", qualified_name, QualifiedName());
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<bool>(107, "exhausted", exhausted);
+	}
 }
 
 WALSequenceValue WALSequenceValue::Deserialize(Deserializer &deserializer) {
@@ -368,6 +371,7 @@ WALSequenceValue WALSequenceValue::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<int64_t>(104, "counter", result.counter);
 	deserializer.ReadPropertyWithDefault<optional<int64_t>>(105, "last_value", result.last_value);
 	deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(106, "qualified_name", result.qualified_name, QualifiedName());
+	deserializer.ReadPropertyWithDefault<bool>(107, "exhausted", result.exhausted);
 	if (result.qualified_name.Path().empty()) {
 		result.qualified_name = QualifiedName(vector<Identifier> {std::move(schema)}, std::move(name));
 	}
