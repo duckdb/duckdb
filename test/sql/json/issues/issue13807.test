@@ -63,6 +63,26 @@ FROM read_json('{DATA_DIR}/json/13807_duplicate.ndjson', ignore_case=true, ignor
 ----
 1
 
+statement error
+FROM read_json('{DATA_DIR}/json/13807_duplicate_nested.ndjson', ignore_case=true);
+----
+<REGEX>:Invalid Input Error:.*duplicate key "A".*
+
+query I
+FROM read_json('{DATA_DIR}/json/13807_duplicate_nested.ndjson', ignore_case=true, ignore_errors=true);
+----
+{'a': 1}
+
+statement error
+FROM read_json('{DATA_DIR}/json/13807_duplicate_list.ndjson', ignore_case=true);
+----
+<REGEX>:Invalid Input Error:.*duplicate key "A".*
+
+query I
+FROM read_json('{DATA_DIR}/json/13807_duplicate_list.ndjson', ignore_case=true, ignore_errors=true);
+----
+[{'a': 1}]
+
 # COPY FROM
 statement ok
 CREATE TABLE tbl (id INTEGER, value VARCHAR, nested STRUCT(key INTEGER));
