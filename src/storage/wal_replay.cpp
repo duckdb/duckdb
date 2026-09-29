@@ -66,8 +66,10 @@ public:
 	WALReplayState replay_state;
 
 	struct ReplayIndexInfo {
-		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
-		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid) {
+		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid,
+		                bool is_deferred = false)
+		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
+		      is_deferred(is_deferred) {
 		}
 
 		reference<TableIndexList> index_list;
@@ -78,6 +80,7 @@ public:
 		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
 		//! targeted by DROP INDEX.
 		optional_idx index_oid;
+		bool is_deferred;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -627,7 +630,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index));
+					info.index_list.get().AddIndex(std::move(info.index), info.is_deferred);
 				}
 				state.replay_index_infos.clear();
 
@@ -994,7 +997,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx());
+	                                      /*index_oid=*/optional_idx(), unique_info.IsDeferred());
 
 	catalog.Alter(context, alter_info);
 }

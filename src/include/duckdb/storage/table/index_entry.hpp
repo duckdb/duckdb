@@ -111,7 +111,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	explicit IndexEntry(unique_ptr<Index> index);
+	explicit IndexEntry(unique_ptr<Index> index, bool is_deferred = false);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -126,6 +126,9 @@ public:
 	                     optional_idx active_checkpoint);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
+	bool IsDeferred() const {
+		return is_deferred;
+	}
 	//! Returns whether the physical index matches the foreign key columns and role.
 	bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type) const;
 	//! Returns the name of the physical index.
@@ -199,6 +202,8 @@ private:
 	mutable StorageLock lock;
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
+	//! Constraint timing is derived from the catalog constraint, not serialized with the index.
+	bool is_deferred;
 	IndexDeltas deltas;
 };
 

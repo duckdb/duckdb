@@ -1,0 +1,71 @@
+# name: test/sql/constraints/deferred/test_deferred_persistence.test
+# description: Deferred constraint timing survives checkpoints and WAL replay
+# group: [deferred]
+
+load {TEST_DIR}/deferred_constraint.db readwrite v2.0.0
+
+statement ok
+CREATE TABLE checkpointed(i INTEGER PRIMARY KEY DEFERRED);
+
+statement ok
+CREATE TABLE altered(i INTEGER);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+ALTER TABLE altered ADD UNIQUE(i) DEFERRED;
+
+statement ok
+INSERT INTO checkpointed VALUES (1);
+
+statement ok
+INSERT INTO altered VALUES (1);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DELETE FROM altered WHERE i = 1;
+
+statement ok
+INSERT INTO altered VALUES (1);
+
+statement ok
+COMMIT;
+
+restart
+
+query I rowsort
+SELECT constraint_text FROM duckdb_constraints()
+WHERE table_name IN ('checkpointed', 'altered') AND constraint_type <> 'NOT NULL';
+----
+PRIMARY KEY(i) DEFERRED
+UNIQUE(i) DEFERRED
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO checkpointed VALUES (1);
+
+statement error
+COMMIT;
+----
+Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO altered VALUES (1);
+
+statement error
+COMMIT;
+----
+Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
+
+query I
+SELECT count(*) FROM altered;
+----
+1

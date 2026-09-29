@@ -2,25 +2,29 @@
 # description: Test constraint timing for primary key and unique constraints
 # group: [deferred]
 
-statement error
+statement ok
 CREATE TABLE t(i INTEGER UNIQUE DEFERRED);
-----
-Not implemented Error: Deferred UNIQUE constraints are not implemented yet
 
-statement error
+statement ok
+DROP TABLE t;
+
+statement ok
 CREATE TABLE t(i INTEGER PRIMARY KEY DEFERRED);
-----
-Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
 
-statement error
+statement ok
+DROP TABLE t;
+
+statement ok
 CREATE TABLE t(i INTEGER, UNIQUE(i) DEFERRED);
-----
-Not implemented Error: Deferred UNIQUE constraints are not implemented yet
 
-statement error
+statement ok
+DROP TABLE t;
+
+statement ok
 CREATE TABLE t(i INTEGER, PRIMARY KEY(i) DEFERRED);
-----
-Not implemented Error: Deferred PRIMARY KEY constraints are not implemented yet
+
+statement ok
+DROP TABLE t;
 
 # Preserve explicit timing when copying or reparsing statements.
 foreach mode NONE COPY_STATEMENT REPARSE_STATEMENT

@@ -186,7 +186,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info));
+				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), unique.IsDeferred());
 				continue;
 			}
 
@@ -197,7 +197,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				index_storage_info.name = name_info.name;
 			}
 
-			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info));
+			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info),
+			                  unique.IsDeferred());
 			continue;
 		}
 

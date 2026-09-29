@@ -184,10 +184,6 @@ void Binder::VerifyConstraintTimingStorageVersion(const Constraint &constraint, 
 unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
                                                          const ColumnList &columns) {
 	auto &unique = constraint.Cast<UniqueConstraint>();
-	if (unique.IsDeferred()) {
-		throw NotImplementedException("Deferred %s constraints are not implemented yet",
-		                              unique.IsPrimaryKey() ? "PRIMARY KEY" : "UNIQUE");
-	}
 
 	// Resolve the columns.
 	vector<PhysicalIndex> indexes;
@@ -476,6 +472,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
                                           ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
+	bool found_deferred = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
 	bool find_primary_key = fk.pk_columns.empty();
 	for (auto &constr : constraints) {
@@ -503,6 +500,9 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
 			}
+			if (unique.IsDeferred()) {
+				throw BinderException("Failed to create foreign key: referenced PRIMARY KEY is DEFERRED");
+			}
 			fk.pk_columns = pk_names;
 			return;
 		}
@@ -520,8 +520,15 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (!equals) {
 			continue;
 		}
+		if (unique.IsDeferred()) {
+			found_deferred = true;
+			continue;
+		}
 		// found match
 		return;
+	}
+	if (found_deferred) {
+		throw BinderException("Failed to create foreign key: referenced UNIQUE or PRIMARY KEY constraint is DEFERRED");
 	}
 	// no match found! examine why
 	if (!found_constraint) {

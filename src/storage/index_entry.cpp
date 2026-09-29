@@ -18,7 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p) : owned_index(std::move(index_p)) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, bool is_deferred_p)
+    : owned_index(std::move(index_p)), is_deferred(is_deferred_p) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -115,7 +116,9 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableInd
 
 	auto constraint_type = bound_index.GetConstraintType();
 	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
-	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+	if (!is_deferred) {
+		append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+	}
 }
 
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
@@ -456,6 +459,7 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	result.is_primary = owned_index->IsPrimary();
 	result.is_unique = owned_index->IsUnique() || result.is_primary;
 	result.is_foreign = owned_index->IsForeign();
+	result.is_deferred = is_deferred;
 	result.column_set = owned_index->GetColumnIdSet();
 	return result;
 }

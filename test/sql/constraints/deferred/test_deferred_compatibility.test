@@ -1,0 +1,158 @@
+# name: test/sql/constraints/deferred/test_deferred_compatibility.test
+# description: Deferred keys cannot be foreign key or conflict targets
+# group: [deferred]
+
+statement ok
+CREATE TABLE parent(i INTEGER PRIMARY KEY DEFERRED, j INTEGER UNIQUE DEFERRED);
+
+statement error
+CREATE TABLE child(i INTEGER REFERENCES parent(i));
+----
+referenced UNIQUE or PRIMARY KEY constraint is DEFERRED
+
+statement error
+CREATE TABLE child(i INTEGER REFERENCES parent(j));
+----
+referenced UNIQUE or PRIMARY KEY constraint is DEFERRED
+
+statement error
+CREATE TABLE child(i INTEGER REFERENCES parent);
+----
+referenced PRIMARY KEY is DEFERRED
+
+statement error
+INSERT INTO parent VALUES (1, 1) ON CONFLICT (i) DO NOTHING;
+----
+A DEFERRED UNIQUE or PRIMARY KEY constraint cannot be an ON CONFLICT target
+
+statement error
+INSERT INTO parent VALUES (1, 1) ON CONFLICT (j) DO NOTHING;
+----
+A DEFERRED UNIQUE or PRIMARY KEY constraint cannot be an ON CONFLICT target
+
+statement error
+INSERT OR IGNORE INTO parent VALUES (1, 1);
+----
+DEFERRED UNIQUE or PRIMARY KEY constraints cannot be ON CONFLICT targets
+
+statement error
+INSERT OR REPLACE INTO parent VALUES (1, 1);
+----
+DEFERRED UNIQUE or PRIMARY KEY constraints cannot be ON CONFLICT targets
+
+statement ok
+CREATE TABLE mixed(i INTEGER UNIQUE DEFERRED, j INTEGER UNIQUE);
+
+statement ok
+INSERT INTO mixed VALUES (1, 1);
+
+statement ok
+INSERT OR IGNORE INTO mixed VALUES (2, 1);
+
+query I
+SELECT count(*) FROM mixed;
+----
+1
+
+statement ok
+INSERT INTO mixed VALUES (2, 2) ON CONFLICT (j) DO NOTHING;
+
+statement error
+INSERT INTO mixed VALUES (1, 3) ON CONFLICT (i) DO NOTHING;
+----
+A DEFERRED UNIQUE or PRIMARY KEY constraint cannot be an ON CONFLICT target
+
+statement ok
+CREATE TABLE existing(i INTEGER);
+
+statement ok
+INSERT INTO existing VALUES (1), (1);
+
+statement error
+ALTER TABLE existing ADD UNIQUE(i) DEFERRED;
+----
+Data contains duplicates on indexed column(s)
+
+statement ok
+CREATE TABLE valid(i INTEGER);
+
+statement ok
+INSERT INTO valid VALUES (1), (2);
+
+statement ok
+ALTER TABLE valid ADD UNIQUE(i) DEFERRED;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO valid VALUES (2);
+
+statement error
+COMMIT;
+----
+Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
+
+statement ok
+CREATE TABLE altered_in_transaction(i INTEGER);
+
+statement ok
+INSERT INTO altered_in_transaction VALUES (1);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO altered_in_transaction VALUES (2);
+
+statement ok
+ALTER TABLE altered_in_transaction ADD UNIQUE(i) DEFERRED;
+
+statement ok
+DELETE FROM altered_in_transaction WHERE i = 1;
+
+statement ok
+INSERT INTO altered_in_transaction VALUES (1);
+
+statement ok
+COMMIT;
+
+query I rowsort
+SELECT i FROM altered_in_transaction;
+----
+1
+2
+
+statement ok
+CREATE TABLE local_duplicates(i INTEGER);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO local_duplicates VALUES (1), (1);
+
+statement error
+ALTER TABLE local_duplicates ADD UNIQUE(i) DEFERRED;
+----
+duplicate key
+
+statement ok
+ROLLBACK;
+
+statement ok
+INSERT INTO local_duplicates VALUES (1);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+INSERT INTO local_duplicates VALUES (1);
+
+statement error
+ALTER TABLE local_duplicates ADD UNIQUE(i) DEFERRED;
+----
+duplicate key
+
+statement ok
+ROLLBACK;
