@@ -19,6 +19,9 @@ bool CollectEquiKeys(const FactStore &store, const LogicalComparisonJoin &join, 
 	key0 = ColumnMask(b0->size());
 	key1 = ColumnMask(b1->size());
 	for (auto &cond : join.conditions) {
+		if (!cond.IsComparison()) {
+			continue;
+		}
 		bool is_equality = cond.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
 		bool is_null_safe = cond.GetComparisonType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		if (!is_equality && !is_null_safe) {
