@@ -138,6 +138,12 @@
         "test/sql/sql_export/empty_aggregate_state.test",
         "test/sql/sql_export/mark_condition_shapes.test"
       ]
+    },
+    {
+      "reason": "Nested schemas require storage version v2.0.0 but encrypted databases use an older default storage version",
+      "paths": [
+        "test/sql/alter/alter_schema_set_schema_options.test"
+      ]
     }
   ]
 }
