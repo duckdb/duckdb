@@ -91,7 +91,7 @@ struct IndexInfo {
 	bool is_unique;
 	bool is_primary;
 	bool is_foreign;
-	bool is_deferred = false;
+	bool is_deferrable = false;
 	unordered_set<column_t> column_set;
 };
 

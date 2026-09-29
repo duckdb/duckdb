@@ -243,7 +243,7 @@ unique_ptr<UpdateSetInfo> CreateSetInfoForReplace(TableCatalogEntry &table, Inse
 	// should not be part of the SET list.
 	unordered_set<column_t> conflict_columns;
 	for (auto &index : storage_info.index_info) {
-		if (!index.is_unique || index.is_deferred) {
+		if (!index.is_unique) {
 			continue;
 		}
 		for (auto &column_id : index.column_set) {
@@ -326,7 +326,7 @@ void Binder::BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &
 static identifier_set_t GetConflictColumnNames(const TableStorageInfo &storage_info, TableCatalogEntry &table) {
 	unordered_set<column_t> conflict_column_ids;
 	for (auto &index : storage_info.index_info) {
-		if (!index.is_unique || index.is_deferred) {
+		if (!index.is_unique) {
 			continue;
 		}
 		for (auto &col_id : index.column_set) {
@@ -363,14 +363,14 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		vector<unique_ptr<ParsedExpression>> join_conditions;
 		// We check if there are any constraints on the table, if there aren't we throw an error.
 		idx_t found_matching_indexes = 0;
-		bool has_deferred_index = false;
 		for (auto &index : storage_info.index_info) {
 			if (!index.is_unique) {
 				continue;
 			}
-			if (index.is_deferred) {
-				has_deferred_index = true;
-				continue;
+			if (index.is_deferrable) {
+				// Without a conflict target, every constraint is a conflict target.
+				throw BinderException("DEFERRED PRIMARY KEY or UNIQUE constraints cannot be ON CONFLICT targets, "
+				                      "specify the ON CONFLICT columns of a constraint that is not DEFERRED");
 			}
 
 			vector<unique_ptr<ParsedExpression>> and_children;
@@ -412,9 +412,6 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		merge_into->node->join_condition = std::move(join_condition);
 
 		if (!found_matching_indexes) {
-			if (has_deferred_index) {
-				throw BinderException("DEFERRED UNIQUE or PRIMARY KEY constraints cannot be ON CONFLICT targets");
-			}
 			throw BinderException("There are no UNIQUE/PRIMARY KEY constraints that refer to this table, specify ON "
 			                      "CONFLICT columns manually");
 		} else if (found_matching_indexes != 1) {
@@ -449,24 +446,21 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			}
 		}
 		bool index_references_columns = false;
-		bool deferred_index_matches = false;
+		bool deferrable_index_matches = false;
 		for (auto &index : storage_info.index_info) {
-			if (!index.is_unique) {
+			if (!index.is_unique || on_conflict_filter != index.column_set) {
 				continue;
 			}
-			bool index_matches = on_conflict_filter == index.column_set;
-			if (index_matches) {
-				if (index.is_deferred) {
-					deferred_index_matches = true;
-				} else {
-					index_references_columns = true;
-					break;
-				}
+			if (index.is_deferrable) {
+				deferrable_index_matches = true;
+				continue;
 			}
+			index_references_columns = true;
+			break;
 		}
 		if (!index_references_columns) {
-			if (deferred_index_matches) {
-				throw BinderException("A DEFERRED UNIQUE or PRIMARY KEY constraint cannot be an ON CONFLICT target");
+			if (deferrable_index_matches) {
+				throw BinderException("DEFERRED PRIMARY KEY or UNIQUE constraints cannot be ON CONFLICT targets");
 			}
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead
 			// But since this makes no logical sense, it's probably better to throw an error

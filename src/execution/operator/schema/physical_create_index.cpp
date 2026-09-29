@@ -6,13 +6,12 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
-#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -147,12 +146,12 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
-	bool is_deferred = false;
-	if (alter_table_info) {
-		auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
-		is_deferred = constraint_info.constraint->Cast<UniqueConstraint>().IsDeferred();
-	}
 
+	// The ALTER moves the transaction-local storage of the table, so we get it upfront.
+	auto &local_storage = LocalStorage::Get(context, storage.db);
+	auto local_table_storage = local_storage.GetStorage(storage);
+
+	bool deferrable = false;
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
 		auto entry =
@@ -180,65 +179,23 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 		// PRIMARY KEY columns cannot be NULL.
 		if (info->constraint_type == IndexConstraintType::PRIMARY) {
-			auto &local_storage = LocalStorage::Get(context, storage.db);
 			for (const auto &column_id : storage_ids) {
 				BoundNotNullConstraint not_null {PhysicalIndex(column_id)};
 				local_storage.VerifyNewConstraint(storage, not_null);
 			}
 		}
-		if (is_deferred) {
-			auto &local_storage = LocalStorage::Get(context, storage.db);
-			if (auto local = local_storage.GetStorage(storage)) {
-				auto &collection = local->GetCollection();
-				auto &transaction = local_storage.GetTransaction();
-				row_t next_row_id = MAX_ROW_ID;
-				auto revert = [&]() {
-					row_t row_id = MAX_ROW_ID;
-					for (auto &chunk : collection.Chunks(transaction)) {
-						if (row_id == next_row_id) {
-							break;
-						}
-						Vector row_ids(LogicalType::ROW_TYPE);
-						VectorOperations::GenerateSequence(row_ids, chunk.size(), row_id, 1);
-						bound_index->Delete(chunk, row_ids);
-						row_id += UnsafeNumericCast<row_t>(chunk.size());
-					}
-				};
-				try {
-					for (auto &chunk : collection.Chunks(transaction)) {
-						Vector row_ids(LogicalType::ROW_TYPE);
-						VectorOperations::GenerateSequence(row_ids, chunk.size(), next_row_id, 1);
-						auto error = bound_index->Append(chunk, row_ids);
-						if (error.HasError()) {
-							error.Throw();
-						}
-						next_row_id += UnsafeNumericCast<row_t>(chunk.size());
-					}
-				} catch (...) {
-					revert();
-					throw;
-				}
-				revert();
-			}
-		}
+		auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
+		deferrable = constraint_info.constraint->Cast<UniqueConstraint>().IsDeferrable();
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);
 	}
 
 	// Add the index to the storage.
-	storage.AddIndex(std::move(bound_index), is_deferred);
-	if (is_deferred) {
-		auto &catalog = Catalog::GetCatalog(context, alter_table_info->GetQualifiedName().Catalog());
-		auto &altered_table =
-		    catalog.GetEntry<TableCatalogEntry>(context, alter_table_info->GetQualifiedName()).Cast<DuckTableEntry>();
-		auto &altered_storage = altered_table.GetStorage();
-		auto &local_storage = LocalStorage::Get(context, altered_storage.db);
-		if (auto local = local_storage.GetStorage(altered_storage)) {
-			auto index_entry = storage.GetDataTableInfo()->GetIndexes().FindEntry(info->GetIndexName());
-			D_ASSERT(index_entry);
-			index_entry->InitializeLocalIndexes(local->delete_indexes, local->append_indexes);
-		}
+	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), deferrable);
+	if (local_table_storage) {
+		// Existing transaction-local rows are validated when committing, so we only add a delete index.
+		index_entry->InitializeLocalIndexes(local_table_storage->delete_indexes, nullptr);
 	}
 
 	return SinkFinalizeType::READY;

@@ -82,14 +82,15 @@ TableIndexList::~TableIndexList() {
 	}
 }
 
-void TableIndexList::AddIndex(unique_ptr<Index> index, bool is_deferred) {
+shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, const bool deferrable) {
 	D_ASSERT(index);
 	annotated_lock_guard lock(index_entries_lock);
-	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), is_deferred);
+	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), deferrable);
 	if (index_entry->GetBindState() != IndexBindState::BOUND) {
 		unbound_count++;
 	}
-	index_entries.push_back(std::move(index_entry));
+	index_entries.push_back(index_entry);
+	return index_entry;
 }
 
 void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
@@ -101,7 +102,7 @@ void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, Tabl
 
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		entry->InitializeLocalIndexes(delete_indexes, append_indexes);
+		entry->InitializeLocalIndexes(delete_indexes, &append_indexes);
 	}
 }
 
@@ -206,7 +207,8 @@ void TableIndexList::VerifyUniqueIndexes(optional_ptr<const TableIndexList> dele
 	annotated_lock_guard lock(index_entries_lock);
 	if (!manager) {
 		for (const auto &entry : index_entries) {
-			if (!entry->IsUnique() || entry->IsDeferred() || entry->GetIndexType() != ART::TYPE_NAME) {
+			if (!entry->IsUnique() || entry->GetCheckTime() != ConstraintCheckTime::IMMEDIATE ||
+			    entry->GetIndexType() != ART::TYPE_NAME) {
 				continue;
 			}
 			auto delete_entry = delete_indexes ? delete_indexes->FindEntry(entry->GetName()) : nullptr;
@@ -219,7 +221,8 @@ void TableIndexList::VerifyUniqueIndexes(optional_ptr<const TableIndexList> dele
 	const auto &conflict_info = manager->GetConflictInfo();
 	for (const auto &entry : index_entries) {
 		auto index_info = entry->GetStorageInfo();
-		if (!index_info.is_unique || index_info.is_deferred || entry->GetIndexType() != ART::TYPE_NAME ||
+		if (!index_info.is_unique || entry->GetCheckTime() != ConstraintCheckTime::IMMEDIATE ||
+		    entry->GetIndexType() != ART::TYPE_NAME ||
 		    !conflict_info.ConflictTargetMatches(index_info.is_unique, index_info.column_set)) {
 			continue;
 		}
@@ -239,8 +242,8 @@ void TableIndexList::VerifyUniqueIndexes(optional_ptr<const TableIndexList> dele
 	// Scan the other indexes and throw if there are any conflicts.
 	manager->SetMode(ConflictManagerMode::THROW);
 	for (const auto &entry : index_entries) {
-		if (!entry->IsUnique() || entry->IsDeferred() || entry->GetIndexType() != ART::TYPE_NAME ||
-		    manager->IndexMatches(entry->GetName())) {
+		if (!entry->IsUnique() || entry->GetCheckTime() != ConstraintCheckTime::IMMEDIATE ||
+		    entry->GetIndexType() != ART::TYPE_NAME || manager->IndexMatches(entry->GetName())) {
 			continue;
 		}
 		auto delete_entry = delete_indexes ? delete_indexes->FindEntry(entry->GetName()) : nullptr;
@@ -493,7 +496,7 @@ vector<unordered_set<column_t>> TableIndexList::GetConflictTargetColumns(const C
 	vector<unordered_set<column_t>> result;
 	for (const auto &entry : index_entries) {
 		auto index_info = entry->GetStorageInfo();
-		if (!index_info.is_unique || index_info.is_deferred ||
+		if (!index_info.is_unique || index_info.is_deferrable ||
 		    !conflict_info.ConflictTargetMatches(index_info.is_unique, index_info.column_set)) {
 			continue;
 		}

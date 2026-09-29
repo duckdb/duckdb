@@ -1463,6 +1463,24 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetConstraintCheckTimeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConstraintCheckTime::IMMEDIATE), "IMMEDIATE" },
+		{ static_cast<uint32_t>(ConstraintCheckTime::COMMIT), "COMMIT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConstraintCheckTime>(ConstraintCheckTime value) {
+	return StringUtil::EnumToString(GetConstraintCheckTimeValues(), 2, "ConstraintCheckTime", static_cast<uint32_t>(value));
+}
+
+template<>
+ConstraintCheckTime EnumUtil::FromString<ConstraintCheckTime>(const char *value) {
+	return static_cast<ConstraintCheckTime>(StringUtil::StringToEnum(GetConstraintCheckTimeValues(), 2, "ConstraintCheckTime", value));
+}
+
 const StringUtil::EnumStringLiteral *GetConstraintTimingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ConstraintTiming::DEFAULT), "DEFAULT" },

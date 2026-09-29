@@ -153,11 +153,15 @@ public:
 				// DELETE + INSERT of the same key: commit appends the new row first, then
 				// commit-delete cleanup removes the old row ID. No other main-ART append should
 				// enter during that window because commit-time main-index appends are serialized
-				// by the WAL lock or transaction manager commit lock.
+				// by the WAL lock or transaction manager commit lock. The same commit may append
+				// the deleted key again, which is a constraint violation.
 				//
 				// Local append and delete indexes should not contain such gates either.
 				// Note that VerifyLeaf may still legitimately observe the temporary duplicate
 				// leaf state.
+				if (IsDeleted(key, delete_index_info)) {
+					return ARTConflictType::CONSTRAINT;
+				}
 				throw FatalException("Corrupted unique ART index \"%s\": encountered an existing gated leaf in unique "
 				                     "index while inserting",
 				                     art.name);
@@ -334,6 +338,20 @@ public:
 	}
 
 private:
+	//! Returns true, if the key is in any of the delete indexes.
+	static bool IsDeleted(const ARTKey &key, DeleteIndexInfo delete_index_info) {
+		if (!delete_index_info.delete_indexes) {
+			return false;
+		}
+		for (auto &delete_index : *delete_index_info.delete_indexes) {
+			auto &delete_art = delete_index.get().Cast<ART>();
+			if (Lookup(delete_art, delete_art.root_ptr, key, 0)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	static ARTConflictType InsertIntoInlined(ArenaAllocator &arena, ART &art, NodePtr &node_ptr, const ARTKey &key,
 	                                         const ARTKey &row_id, const idx_t depth, const GateStatus status,
 	                                         DeleteIndexInfo delete_index_info, const IndexAppendMode append_mode) {

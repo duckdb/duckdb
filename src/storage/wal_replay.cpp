@@ -67,9 +67,9 @@ public:
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid,
-		                bool is_deferred = false)
+		                bool deferrable)
 		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
-		      is_deferred(is_deferred) {
+		      deferrable(deferrable) {
 		}
 
 		reference<TableIndexList> index_list;
@@ -80,7 +80,8 @@ public:
 		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
 		//! targeted by DROP INDEX.
 		optional_idx index_oid;
-		bool is_deferred;
+		//! Whether the index enforces a deferrable constraint.
+		bool deferrable;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -630,7 +631,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index), info.is_deferred);
+					info.index_list.get().AddIndex(std::move(info.index), info.deferrable);
 				}
 				state.replay_index_infos.clear();
 
@@ -997,7 +998,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx(), unique_info.IsDeferred());
+	                                      /*index_oid=*/optional_idx(), unique_info.IsDeferrable());
 
 	catalog.Alter(context, alter_info);
 }
@@ -1262,7 +1263,8 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 	auto unbound_index = make_uniq<UnboundIndex>(std::move(create_info), std::move(index_info), io_manager, db);
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
-	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid);
+	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid,
+	                                      /*deferrable=*/false);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

@@ -290,9 +290,9 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              IndexStorageInfo index_info, bool is_deferred = false);
+	              IndexStorageInfo index_info, bool deferrable);
 	//! AddIndex moves an index to this table's index list.
-	void AddIndex(unique_ptr<Index> index, bool is_deferred = false);
+	void AddIndex(unique_ptr<Index> index);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);

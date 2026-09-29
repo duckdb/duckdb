@@ -468,11 +468,16 @@ static void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identi
 	}
 }
 
+static void ThrowDeferrableReferencedKey() {
+	throw BinderException(
+	    "Failed to create foreign key: the referenced PRIMARY KEY or UNIQUE constraint cannot be DEFERRED");
+}
+
 static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
                                           ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
-	bool found_deferred = false;
+	bool found_deferrable = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
 	bool find_primary_key = fk.pk_columns.empty();
 	for (auto &constr : constraints) {
@@ -500,8 +505,8 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
 			}
-			if (unique.IsDeferred()) {
-				throw BinderException("Failed to create foreign key: referenced PRIMARY KEY is DEFERRED");
+			if (unique.IsDeferrable()) {
+				ThrowDeferrableReferencedKey();
 			}
 			fk.pk_columns = pk_names;
 			return;
@@ -520,15 +525,16 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (!equals) {
 			continue;
 		}
-		if (unique.IsDeferred()) {
-			found_deferred = true;
+		if (unique.IsDeferrable()) {
+			// keep looking for a matching constraint that is not deferrable
+			found_deferrable = true;
 			continue;
 		}
 		// found match
 		return;
 	}
-	if (found_deferred) {
-		throw BinderException("Failed to create foreign key: referenced UNIQUE or PRIMARY KEY constraint is DEFERRED");
+	if (found_deferrable) {
+		ThrowDeferrableReferencedKey();
 	}
 	// no match found! examine why
 	if (!found_constraint) {

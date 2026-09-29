@@ -132,7 +132,7 @@ INSERT INTO immediate VALUES (1);
 statement error
 INSERT INTO immediate VALUES (1);
 ----
-duplicate key
+<REGEX>:Constraint Error.*(D|d)uplicate key.*
 
 statement ok
 ROLLBACK;

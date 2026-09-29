@@ -49,8 +49,8 @@ public:
 
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
-	//! Adds an index entry to the list of index entries.
-	void AddIndex(unique_ptr<Index> index, bool is_deferred = false);
+	//! Adds an index entry to the list of index entries, and returns it.
+	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, bool deferrable);
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -93,7 +93,7 @@ public:
 	}
 	//! Returns true, if there are unique indexes.
 	bool HasUniqueIndexes() const;
-	//! Verifies all unique ART indexes, optionally recording conflicts.
+	//! Verifies all immediately checked unique ART indexes, optionally recording conflicts.
 	void VerifyUniqueIndexes(optional_ptr<const TableIndexList> delete_indexes, DataChunk &chunk,
 	                         optional_ptr<ConflictManager> manager) const;
 	//! Vacuums all bound indexes.

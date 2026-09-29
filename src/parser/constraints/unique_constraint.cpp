@@ -56,6 +56,11 @@ bool UniqueConstraint::IsDeferred() const {
 	return timing == ConstraintTiming::DEFERRED;
 }
 
+bool UniqueConstraint::IsDeferrable() const {
+	// DEFERRED is DEFERRABLE INITIALLY DEFERRED, while DEFAULT and IMMEDIATE are NOT DEFERRABLE.
+	return IsDeferred();
+}
+
 IndexConstraintType UniqueConstraint::GetIndexConstraintType() const {
 	return IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
 }

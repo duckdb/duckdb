@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, bool is_deferred_p)
-    : owned_index(std::move(index_p)), is_deferred(is_deferred_p) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, const bool deferrable_p)
+    : owned_index(std::move(index_p)), deferrable(deferrable_p) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -104,7 +104,8 @@ void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	}
 }
 
-void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
+void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes,
+                                        optional_ptr<TableIndexList> append_indexes) const {
 	auto entry_lock = lock.GetSharedLock();
 	if (owned_index->GetConstraintType() == IndexConstraintType::NONE || !owned_index->IsBound()) {
 		return;
@@ -115,9 +116,9 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableInd
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
-	if (!is_deferred) {
-		append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferrable=*/false);
+	if (append_indexes && GetCheckTime() == ConstraintCheckTime::IMMEDIATE) {
+		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferrable=*/false);
 	}
 }
 
@@ -283,9 +284,23 @@ bool IndexEntry::IsUnique() const {
 	return owned_index->IsUnique();
 }
 
+bool IndexEntry::IsDeferrable() const {
+	return deferrable;
+}
+
+ConstraintCheckTime IndexEntry::GetCheckTime() const {
+	// Deferrable constraints are initially deferred.
+	return deferrable ? ConstraintCheckTime::COMMIT : ConstraintCheckTime::IMMEDIATE;
+}
+
 bool IndexEntry::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) const {
 	auto entry_lock = lock.GetSharedLock();
-	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !owned_index->IsUnique() : !owned_index->IsForeign()) {
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+		// Foreign keys never reference a deferrable key.
+		if (!owned_index->IsUnique() || deferrable) {
+			return false;
+		}
+	} else if (!owned_index->IsForeign()) {
 		return false;
 	}
 	const auto &column_ids = owned_index->GetColumnIds();
@@ -459,7 +474,7 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	result.is_primary = owned_index->IsPrimary();
 	result.is_unique = owned_index->IsUnique() || result.is_primary;
 	result.is_foreign = owned_index->IsForeign();
-	result.is_deferred = is_deferred;
+	result.is_deferrable = deferrable;
 	result.column_set = owned_index->GetColumnIdSet();
 	return result;
 }
