@@ -8,9 +8,6 @@ statement ok
 SET TimeZone='UTC'
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE store_sales AS
 SELECT (i % 1800) + 1 AS ss_item_sk, (i % 5) + 1 AS ss_quantity, CAST((i % 1000) / 10.0 AS DECIMAL(7,2)) AS ss_sales_price,
        CAST((i % 200) - 100 AS DECIMAL(7,2)) AS ss_net_profit, 2451000 + (i % 1000) AS ss_sold_date_sk, i AS ss_ticket_number

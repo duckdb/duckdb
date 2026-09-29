@@ -8,9 +8,6 @@ statement ok
 SET TimeZone='UTC'
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE TABLE store_sales(ss_item_sk INT, ss_customer_sk INT, ss_quantity INT, ss_sales_price DECIMAL(7,2), ss_net_profit DECIMAL(7,2), ss_sold_date_sk INT, ss_coupon_amt DECIMAL(7,2), ss_ticket_number BIGINT);
 
 statement ok
