@@ -177,9 +177,28 @@ void ApplyFunctionalDependencies::VisitLogicalOrder(LogicalOrder &order) {
 }
 
 void ApplyFunctionalDependencies::VisitOrderBys(vector<BoundOrderByNode> &orders) const {
-	if (orders.size() < 2 || result.empty()) {
+	if (orders.size() < 2) {
 		return;
 	}
+
+	//	Remove orderings that are FD on the prefix
+	vector<reference<Expression>> refs;
+	refs.emplace_back(*orders[0].expression);
+	for (idx_t i = 1; i < orders.size();) {
+		auto &expr = orders[i].expression;
+		if (BaseSelectBinder::IsFunctionallyDependent(expr, refs)) {
+			orders.erase(orders.begin() + NumericCast<int64_t>(i));
+			continue;
+		}
+		refs.emplace_back(*expr);
+		++i;
+	}
+
+	//	Remove trailing orderings that are FD on a primary key
+	if (result.empty()) {
+		return;
+	}
+
 	column_binding_set_t prefix;
 	for (idx_t i = 0; i + 1 < orders.size(); i++) {
 		auto &expr = *orders[i].expression;

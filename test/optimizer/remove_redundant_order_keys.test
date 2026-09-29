@@ -99,6 +99,20 @@ FROM t;
 ----
 physical_plan	<REGEX>:.*ORDER BY.*
 
+query II
+EXPLAIN
+SELECT id, MIN(id) OVER(ORDER BY grp, sqrt(grp))
+FROM t;
+----
+physical_plan	<REGEX>:.*ORDER BY [^\n,]+[^,].*
+
+query II
+EXPLAIN
+SELECT id, MIN(id) OVER(ORDER BY grp, sqrt(grp), payload)
+FROM t;
+----
+physical_plan	<REGEX>:.*ORDER BY [^\n,]+, [^\n,]+[^,].*
+
 # UNIQUE only counts when it cannot hold NULLs, and only uncollated
 statement ok
 CREATE TABLE u(ukey INTEGER UNIQUE, skey VARCHAR UNIQUE NOT NULL, tiebreak INTEGER);
