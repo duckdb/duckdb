@@ -34,14 +34,14 @@ MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 MultiFileReader::~MultiFileReader() {
 }
 
-unique_ptr<MultiFileReader> MultiFileReader::Create(const TableFunction &table_function) {
+unique_ptr<MultiFileReader> MultiFileReader::Create(const BoundTableFunction &table_function) {
 	unique_ptr<MultiFileReader> res;
 	if (table_function.get_multi_file_reader) {
 		res = table_function.get_multi_file_reader(table_function);
-		res->function_name = table_function.name;
+		res->function_name = table_function.GetName();
 	} else {
 		res = make_uniq<MultiFileReader>();
-		res->function_name = table_function.name;
+		res->function_name = table_function.GetName();
 	}
 	return res;
 }
@@ -85,13 +85,25 @@ Value MultiFileReader::CreateValueFromFileList(const vector<string> &file_list) 
 	return Value::LIST(LogicalType::VARCHAR, std::move(files));
 }
 
-void MultiFileReader::AddParameters(TableFunction &table_function) {
-	table_function.named_parameters["filename"] = LogicalType::ANY;
-	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["hive_types"] = LogicalType::ANY;
-	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
+void MultiFileReader::AddParameters(TableFunction &table_function, MultiFileParameters which) {
+	auto add_options = [&](TypedKwargs &options) {
+		if (which == MultiFileParameters::ALL) {
+			// "filename" is a boolean, or the name of the column to hold the file name
+			options.Add("filename", LogicalType::ANY)
+			    .Add("hive_partitioning", LogicalType::BOOLEAN)
+			    .Add("union_by_name", LogicalType::BOOLEAN)
+			    .Add("hive_types", LogicalType::ANY)
+			    .Add("hive_types_autocast", LogicalType::BOOLEAN);
+		}
+		options.Add("allow_empty", LogicalType::BOOLEAN);
+	};
+	// a reader can declare its own options before or after these
+	auto &signature = table_function.GetSignature();
+	if (signature.GetTypedKwargs()) {
+		signature.ExtendTypedKwargs(add_options);
+	} else {
+		signature.WithTypedKwargs("options", add_options);
+	}
 }
 
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
@@ -607,15 +619,20 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
 	TableFunctionSet function_set {table_function.name};
 	function_set.AddFunction(table_function);
-	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
+	D_ASSERT(table_function.GetSignature().GetPositionalParameterCount() > 0 &&
+	         table_function.GetSignature().GetParameter(0).GetType() == LogicalType::VARCHAR);
 	// the list variant takes ANY as its child type: a file is either a path (VARCHAR) or a STRUCT/VARIANT
 	// holding the path together with the options to open the file with
 	auto list_function = table_function;
-	list_function.GetArguments()[0] = LogicalType::LIST(LogicalType::ANY);
+	auto &list_parameter = list_function.GetSignature().GetParameter(0);
+	list_parameter.SetType(LogicalType::LIST(LogicalType::ANY));
+	if (list_parameter.GetName() == "path") {
+		list_parameter.SetName("paths");
+	}
 	function_set.AddFunction(std::move(list_function));
 	// a single file can also be passed as a VARIANT - without this overload it would implicitly cast to VARCHAR
 	// and the stringified variant would be read as a path
-	table_function.GetArguments()[0] = LogicalType::VARIANT();
+	table_function.GetSignature().GetParameter(0).SetType(LogicalType::VARIANT());
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
 }

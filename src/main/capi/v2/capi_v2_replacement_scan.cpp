@@ -292,7 +292,8 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_argument(duckdb_v2_replacement_sc
 }
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckdb_v2_replacement_scan_info_handle info,
-                                                              duckdb_v2_identifier_t name, duckdb_v2_value_handle value,
+                                                              const duckdb_v2_identifier_t *name,
+                                                              duckdb_v2_value_handle value,
                                                               duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
@@ -339,8 +340,8 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(duckdb_v2_replacement_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_str sql,
-                                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_scan_info_handle info,
+                                                        const duckdb_v2_str *sql, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(sql);
 	return WithErrorHandler(err, [&]() {
@@ -364,7 +365,8 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_sc
 }
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_replacement_scan_info_handle info,
-                                                     duckdb_v2_identifier_t alias, duckdb_v2_error_info_handle *err) {
+                                                     const duckdb_v2_identifier_t *alias,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(alias);
 	return WithErrorHandler(err,

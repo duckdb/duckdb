@@ -1836,6 +1836,9 @@ static const TransformFrameOps BITWISE_EXPRESSION_TAIL_OPS = {
 static const TransformFrameOps BIT_OPERATOR_OPS = {"BitOperator",
                                                    &PEGTransformerFactory::InitializeBitOperatorTrampoline,
                                                    &PEGTransformerFactory::FinalizeBitOperatorTrampoline};
+static const TransformFrameOps TILDE_EXPRESSION_OPS = {"TildeExpression",
+                                                       &PEGTransformerFactory::InitializeTildeExpressionTrampoline,
+                                                       &PEGTransformerFactory::FinalizeTildeExpressionTrampoline};
 static const TransformFrameOps ADDITIVE_EXPRESSION_OPS = {
     "AdditiveExpression", &PEGTransformerFactory::InitializeAdditiveExpressionTrampoline,
     &PEGTransformerFactory::FinalizeAdditiveExpressionTrampoline};
@@ -3651,6 +3654,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"BitwiseExpression", &BITWISE_EXPRESSION_OPS},
 	    {"BitwiseExpressionTail", &BITWISE_EXPRESSION_TAIL_OPS},
 	    {"BitOperator", &BIT_OPERATOR_OPS},
+	    {"TildeExpression", &TILDE_EXPRESSION_OPS},
 	    {"AdditiveExpression", &ADDITIVE_EXPRESSION_OPS},
 	    {"AdditiveExpressionTail", &ADDITIVE_EXPRESSION_TAIL_OPS},
 	    {"Term", &TERM_OPS},
@@ -16618,7 +16622,7 @@ void PEGTransformerFactory::InitializeBitwiseExpressionTrampoline(PEGTransformer
 	} else {
 		process.ReserveChildSlots(2 - 1);
 	}
-	process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(0)}, 0);
+	process.PushChild({transformer.GetRule("TildeExpression"), list_pr.GetChild(0)}, 0);
 }
 
 arena_ptr<TransformResultValue>
@@ -16632,7 +16636,7 @@ PEGTransformerFactory::FinalizeBitwiseExpressionTrampoline(PEGTransformer &trans
 		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 		dynamic_child_count = dynamic_repeat_children.size();
 	}
-	auto additive_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
+	auto tilde_expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
 	optional<vector<BinaryExpressionTail>> bitwise_expression_tail {};
 	if (dynamic_child_count > 0) {
 		vector<BinaryExpressionTail> bitwise_expression_tail_value;
@@ -16642,7 +16646,7 @@ PEGTransformerFactory::FinalizeBitwiseExpressionTrampoline(PEGTransformer &trans
 		bitwise_expression_tail = std::move(bitwise_expression_tail_value);
 	}
 	auto result =
-	    TransformBitwiseExpression(transformer, std::move(additive_expression), std::move(bitwise_expression_tail));
+	    TransformBitwiseExpression(transformer, std::move(tilde_expression), std::move(bitwise_expression_tail));
 	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
@@ -16650,7 +16654,7 @@ void PEGTransformerFactory::InitializeBitwiseExpressionTailTrampoline(PEGTransfo
                                                                       GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(1)}, 1);
+	process.PushChild({transformer.GetRule("TildeExpression"), list_pr.GetChild(1)}, 1);
 	process.PushChild({transformer.GetRule("BitOperator"), list_pr.GetChild(0)}, 0);
 }
 
@@ -16658,8 +16662,8 @@ arena_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeBitwiseExpressionTailTrampoline(PEGTransformer &transformer,
                                                                GeneratedTransformProcess &process) {
 	auto bit_operator = process.TakeResult<string>(0);
-	auto additive_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
-	auto result = TransformBitwiseExpressionTail(transformer, bit_operator, std::move(additive_expression));
+	auto tilde_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	auto result = TransformBitwiseExpressionTail(transformer, bit_operator, std::move(tilde_expression));
 	return transformer.MakeResult<BinaryExpressionTail>(std::move(result));
 }
 
@@ -16674,6 +16678,54 @@ PEGTransformerFactory::FinalizeBitOperatorTrampoline(PEGTransformer &transformer
 	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
 	auto result = choice_pr.GetResult().Cast<KeywordParseResult>().keyword;
 	return transformer.MakeResult<string>(result);
+}
+
+void PEGTransformerFactory::InitializeTildeExpressionTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &repeat_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (repeat_opt.HasResult()) {
+		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto repeat_children = repeat_pr.GetChildren();
+		dynamic_child_count = repeat_children.size();
+		process.ReserveChildSlots(2 + dynamic_child_count - 1);
+		process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(1)},
+		                  1 + dynamic_child_count - 1);
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			process.PushChild({transformer.GetRule("TildePrefixOperator"), repeat_children[child_idx].get()},
+			                  0 + child_idx);
+		}
+	} else {
+		process.ReserveChildSlots(2 - 1);
+		process.PushChild({transformer.GetRule("AdditiveExpression"), list_pr.GetChild(1)},
+		                  1 + dynamic_child_count - 1);
+	}
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTildeExpressionTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
+	optional<vector<string>> tilde_prefix_operator {};
+	if (dynamic_child_count > 0) {
+		vector<string> tilde_prefix_operator_value;
+		for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+			tilde_prefix_operator_value.push_back(process.TakeResult<string>(i));
+		}
+		tilde_prefix_operator = std::move(tilde_prefix_operator_value);
+	}
+	auto additive_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1 + dynamic_child_count - 1);
+	auto result = TransformTildeExpression(transformer, tilde_prefix_operator, std::move(additive_expression));
+	return transformer.MakeResult<unique_ptr<ParsedExpression>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAdditiveExpressionTrampoline(PEGTransformer &transformer,

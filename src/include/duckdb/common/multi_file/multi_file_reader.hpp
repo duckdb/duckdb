@@ -107,7 +107,7 @@ public:
 	virtual ~MultiFileReader();
 
 	//! Create a MultiFileReader for a specific TableFunction, using its function name for errors
-	DUCKDB_API static unique_ptr<MultiFileReader> Create(const TableFunction &table_function);
+	DUCKDB_API static unique_ptr<MultiFileReader> Create(const BoundTableFunction &table_function);
 	//! Create a default MultiFileReader, function_name is used for errors
 	DUCKDB_API static unique_ptr<MultiFileReader> CreateDefault(const string &function_name = "");
 
@@ -115,7 +115,11 @@ public:
 	static Value CreateValueFromFileList(const vector<string> &files);
 
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
-	DUCKDB_API static void AddParameters(TableFunction &table_function);
+	//! Which of the multi-file options to declare on a function. A function that reads exactly one file per call
+	//! takes only "allow_empty"; the others describe how several files are combined
+	enum class MultiFileParameters { ALL, ALLOW_EMPTY_ONLY };
+	DUCKDB_API static void AddParameters(TableFunction &table_function,
+	                                     MultiFileParameters which = MultiFileParameters::ALL);
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 

@@ -218,7 +218,7 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 ScalarFunction IndexKeyFun::GetFunction() {
 	ScalarFunction fun("index_key", {}, LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
 	fun.GetSignature().AddParameter("path", LogicalTypeId::STRUCT).AddParameter("name", LogicalType::VARCHAR);
-	fun.GetSignature().AddArgsParameter("args", LogicalTypeId::ANY);
+	fun.GetSignature().AddArgs("args", LogicalTypeId::ANY);
 	return fun;
 }
 

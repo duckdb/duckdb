@@ -314,6 +314,13 @@ public:
 	bool IsPackratMemoized() const {
 		return packrat_memoized;
 	}
+	//! See ParsedGrammar::SetTransformProcess
+	void SetCollapsible() {
+		collapsible = true;
+	}
+	bool IsCollapsible() const {
+		return collapsible;
+	}
 
 public:
 	template <class TARGET>
@@ -338,6 +345,7 @@ protected:
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	bool collapsible = false;
 	optional_ptr<const CompiledGrammarRule> rule;
 };
 

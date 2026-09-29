@@ -183,6 +183,7 @@ static void MarkJoinComparisonSwitch(const Vector &left, const Vector &right, id
 
 void NestedLoopJoinMark::Perform(DataChunk &left, ColumnDataCollection &right, bool found_match[],
                                  const vector<JoinCondition> &conditions, optional_ptr<bool> found_unknown) {
+	D_ASSERT(conditions.size() == 1);
 	// initialize a new temporary selection vector for the left chunk
 	// loop over all chunks in the RHS
 	ColumnDataScanState scan_state;
@@ -192,11 +193,6 @@ void NestedLoopJoinMark::Perform(DataChunk &left, ColumnDataCollection &right, b
 	right.InitializeScanChunk(scan_chunk);
 
 	while (right.Scan(scan_state, scan_chunk)) {
-		if (conditions.size() > 1) {
-			MarkJoinRowComparison::Perform(left, scan_chunk, found_match, conditions, found_unknown);
-			continue;
-		}
-		D_ASSERT(conditions.size() == 1);
 		MarkJoinComparisonSwitch(left.data[0], scan_chunk.data[0], left.size(), scan_chunk.size(), found_match,
 		                         conditions[0].GetComparisonType(), found_unknown);
 	}

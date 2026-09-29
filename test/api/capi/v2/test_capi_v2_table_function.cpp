@@ -46,7 +46,8 @@ duckdb_v2_function_signature_handle SigOf(duckdb_v2_table_function_handle functi
 
 void TableSigParam(duckdb_v2_function_signature_handle sig, const char *name, duckdb_v2_logical_type_handle type,
                    duckdb_v2_value_handle default_value = nullptr) {
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, TableIdent(name), type, default_value, nullptr) ==
+	auto name_str = TableIdent(name);
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, type, default_value, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 }
 
@@ -151,7 +152,8 @@ void RangeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_conte
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
-	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("i"), bigint, err);
+	auto name_str = TableIdent("i");
+	rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, bigint, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -263,7 +265,8 @@ void PairsBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_conte
 	if (!integer) {
 		return;
 	}
-	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("a"), integer, err);
+	auto name_str = TableIdent("a");
+	rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, integer, err);
 	duckdb_v2_logical_type_destroy(&integer);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -272,7 +275,8 @@ void PairsBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_conte
 	if (!varchar) {
 		return;
 	}
-	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("b"), varchar, err);
+	auto name_str2 = TableIdent("b");
+	rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str2, varchar, err);
 	duckdb_v2_logical_type_destroy(&varchar);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -373,7 +377,8 @@ void ArgsBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_contex
 	if (!bigint) {
 		return;
 	}
-	auto rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("n"), bigint, err);
+	auto name_str = TableIdent("n");
+	auto rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, bigint, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -445,7 +450,8 @@ void StateBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_conte
 	if (!bigint) {
 		return;
 	}
-	auto rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("v"), bigint, err);
+	auto name_str = TableIdent("v");
+	auto rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, bigint, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -522,13 +528,15 @@ void StateExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 void FailingBindCb(duckdb_v2_table_function_bind_info_handle, duckdb_v2_context_handle,
                    duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_INPUT_INVALID);
-	duckdb_v2_error_info_set_text(*err, Convert("bind refused"));
+	auto text_str = Convert("bind refused");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 void FailingExecCb(duckdb_v2_table_function_exec_info_handle, duckdb_v2_context_handle,
                    duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE);
-	duckdb_v2_error_info_set_text(*err, Convert("exec refused"));
+	auto text_str = Convert("exec refused");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 // A bind callback that declares nothing: registration cannot catch this, the scan must.
@@ -543,7 +551,8 @@ void AnyColumnBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_c
 	if (!any) {
 		return;
 	}
-	auto rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("x"), any, err);
+	auto name_str = TableIdent("x");
+	auto rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, any, err);
 	duckdb_v2_logical_type_destroy(&any);
 	(void)rc;
 }
@@ -639,7 +648,7 @@ TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_
 #endif
 
 // ===========================================================================
-// Argument routing: required parameters are positional, defaulted ones named.
+// Argument routing: every parameter can be passed by position or by name, and a defaulted one can be omitted.
 // ===========================================================================
 
 TEST_CASE("V2 table: parameter defaults, named arguments and varargs", "[capi_v2][table_function]") {
@@ -676,13 +685,17 @@ TEST_CASE("V2 table: parameter defaults, named arguments and varargs", "[capi_v2
 	REQUIRE(table_arg_probe.values[0] == 1);
 	REQUIRE(table_arg_probe.values[1] == 5);
 
-	// The variadic tail follows the fixed slots, in call order.
-	REQUIRE(QueryI64(fx.conn, "SELECT * FROM my_args(1, 30, 40)") == 4);
-	REQUIRE(table_arg_probe.arg_count == 4);
+	// A defaulted parameter is filled by position before the variadic tail, which follows in call order.
+	REQUIRE(QueryI64(fx.conn, "SELECT * FROM my_args(1, 30, 40)") == 3);
+	REQUIRE(table_arg_probe.arg_count == 3);
 	REQUIRE(table_arg_probe.values[0] == 1);
-	REQUIRE(table_arg_probe.values[1] == 7);
-	REQUIRE(table_arg_probe.values[2] == 30);
-	REQUIRE(table_arg_probe.values[3] == 40);
+	REQUIRE(table_arg_probe.values[1] == 30);
+	REQUIRE(table_arg_probe.values[2] == 40);
+
+	// The bind callback receives no argument names, so a name no parameter declares is rejected rather than dropped.
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT * FROM my_args(1, 30, x := 40)", &result) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_result_destroy(&result);
 }
 
 // ===========================================================================
@@ -942,8 +955,8 @@ void ProjBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_contex
 		return;
 	}
 	for (auto name : {"x", "y", "z"}) {
-		if (duckdb_v2_table_function_bind_add_result_column(info, TableIdent(name), bigint, err) !=
-		    DUCKDB_V2_ERROR_NONE) {
+		auto name_str = TableIdent(name);
+		if (duckdb_v2_table_function_bind_add_result_column(info, &name_str, bigint, err) != DUCKDB_V2_ERROR_NONE) {
 			break;
 		}
 	}
@@ -1108,7 +1121,8 @@ void ClaimBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_conte
 	if (!bigint) {
 		return;
 	}
-	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("i"), bigint, err);
+	auto name_str = TableIdent("i");
+	rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, bigint, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -1366,7 +1380,8 @@ void BatchOrderBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_
 	if (!bigint) {
 		return;
 	}
-	duckdb_v2_table_function_bind_add_result_column(info, TableIdent("b"), bigint, err);
+	auto name_str = TableIdent("b");
+	duckdb_v2_table_function_bind_add_result_column(info, &name_str, bigint, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 
@@ -1510,9 +1525,11 @@ void PartProbeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_c
 	if (!bigint) {
 		return;
 	}
-	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("part_col"), bigint, err);
+	auto name_str = TableIdent("part_col");
+	rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, bigint, err);
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("val"), bigint, err);
+		auto name_str2 = TableIdent("val");
+		rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str2, bigint, err);
 	}
 	duckdb_v2_logical_type_destroy(&bigint);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
@@ -1784,12 +1801,15 @@ void ProjPartProbeBindCb(duckdb_v2_table_function_bind_info_handle info, duckdb_
 		duckdb_v2_logical_type_destroy(&integer);
 		return;
 	}
-	rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("pad"), integer, err);
+	auto name_str = TableIdent("pad");
+	rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str, integer, err);
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("part_col"), bigint, err);
+		auto name_str2 = TableIdent("part_col");
+		rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str2, bigint, err);
 	}
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_table_function_bind_add_result_column(info, TableIdent("val"), bigint, err);
+		auto name_str3 = TableIdent("val");
+		rc = duckdb_v2_table_function_bind_add_result_column(info, &name_str3, bigint, err);
 	}
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&bigint);

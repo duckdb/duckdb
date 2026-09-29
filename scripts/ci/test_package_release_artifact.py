@@ -80,6 +80,8 @@ class PackageReleaseArtifactTest(unittest.TestCase):
             libraries.mkdir()
             library = libraries / "libduckdb_static.a"
             library.write_bytes(b"library")
+            shell = libraries / "libduckdb_shell.a"
+            shell.write_bytes(b"shell")
             extension = libraries / "libcore_functions_extension.a"
             extension.write_bytes(b"extension")
 
@@ -97,6 +99,7 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                     set(members),
                     {
                         "libduckdb_static.a",
+                        "libduckdb_shell.a",
                         "libcore_functions_extension.a",
                         "duckdb.h",
                         "duckdb_v2.h",
@@ -106,6 +109,7 @@ class PackageReleaseArtifactTest(unittest.TestCase):
                     },
                 )
                 self.assertEqual(archive.extractfile(members["libduckdb_static.a"]).read(), b"library")
+                self.assertEqual(archive.extractfile(members["libduckdb_shell.a"]).read(), b"shell")
                 self.assertEqual(archive.extractfile(members["libcore_functions_extension.a"]).read(), b"extension")
 
 

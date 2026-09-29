@@ -273,6 +273,9 @@ functions:
         description: "The context."
       name:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: "Option name (canonical or alias)."
       out_option:
         type: option

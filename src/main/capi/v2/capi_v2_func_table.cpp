@@ -124,6 +124,7 @@ public:
 	idx_t out_cardinality = 0;
 	bool out_cardinality_is_exact = false;
 	bool out_cardinality_set = false;
+	OrderPreservationType out_order_preservation = OrderPreservationType::INSERTION_ORDER;
 };
 
 static auto Convert(duckdb_v2_table_function_bind_info_handle info) -> CV2TableBindInfo * {
@@ -279,6 +280,20 @@ static auto CV2ConvertPartitionInfo(DUCKDB_V2_TABLE_PARTITION_INFO value) -> Tab
 	return static_cast<TablePartitionInfo>(value);
 }
 
+static_assert(static_cast<int>(OrderPreservationType::NO_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_NO_ORDER,
+              "OrderPreservationType::NO_ORDER mismatch");
+static_assert(static_cast<int>(OrderPreservationType::INSERTION_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_INSERTION_ORDER,
+              "OrderPreservationType::INSERTION_ORDER mismatch");
+static_assert(static_cast<int>(OrderPreservationType::FIXED_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER,
+              "OrderPreservationType::FIXED_ORDER mismatch");
+
+static auto CV2ConvertOrderPreservation(DUCKDB_V2_ORDER_PRESERVATION value) -> OrderPreservationType {
+	if (static_cast<uint32_t>(value) > DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER) {
+		throw duckdb::InvalidInputException("Invalid value in duckdb_v2_table_function_bind_set_order_preservation");
+	}
+	return static_cast<OrderPreservationType>(value);
+}
+
 class CV2TableFunctionInfo : public TableFunctionInfo {
 public:
 	duckdb_v2_table_function_bind_callback_fn bind_cb = nullptr;
@@ -293,50 +308,16 @@ public:
 	bool projection_pushdown = false;
 
 	Identifier name;
-
-	// The signature's slot plan, captured at registration: every parameter name in signature order, how many of them
-	// lead the positional prefix (the ones without a default), and the default of each remaining parameter. The bind
-	// wrapper assembles the argument list from it, injecting the default for a parameter the call site omitted, so
-	// the bind callback observes a value for every parameter.
-	vector<Identifier> parameter_names;
-	idx_t positional_count = 0;
-	identifier_map_t<Value> named_parameter_defaults;
 };
-
-//! Assembles the call's arguments in signature-slot order: first the parameters without a default, taken from the
-//! positional arguments, then the parameters with one, taken from the named arguments or the declared default when
-//! the call site omitted them, then the variadic tail.
-static auto CV2TableCollectArguments(const CV2TableFunctionInfo &info, TableFunctionBindInput &input) -> vector<Value> {
-	vector<Value> arguments;
-	const auto positional_count = MinValue<idx_t>(info.positional_count, input.inputs.size());
-
-	for (idx_t i = 0; i < positional_count; i++) {
-		arguments.push_back(input.inputs[i]);
-	}
-	for (idx_t i = info.positional_count; i < info.parameter_names.size(); i++) {
-		const auto &name = info.parameter_names[i];
-		auto provided = input.named_parameters.find(name);
-		if (provided != input.named_parameters.end()) {
-			arguments.push_back(provided->second);
-		} else {
-			arguments.push_back(info.named_parameter_defaults.at(name));
-		}
-	}
-	for (idx_t i = positional_count; i < input.inputs.size(); i++) {
-		arguments.push_back(input.inputs[i]);
-	}
-	return arguments;
-}
 
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
                          vector<Identifier> &names) -> unique_ptr<FunctionData> {
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
 
-	auto arguments = CV2TableCollectArguments(info, input);
-
 	CV2TableBindInfo args = {};
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
-	args.in_args = &arguments;
+	// the binder places every argument in its signature slot, defaults included, so the call reads them as-is
+	args.in_args = &input.inputs;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -359,8 +340,11 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 
 	if (args.out_column_types.empty()) {
 		throw InvalidInputException("The bind callback of table function \"%s\" did not declare any result columns.",
-		                            input.table_function.name);
+		                            input.table_function.GetName());
 	}
+
+	// The binder hands each call site its own copy of the function, so this does not leak into other calls.
+	input.table_function.order_preservation_type = args.out_order_preservation;
 
 	result->column_types = args.out_column_types;
 	return_types = std::move(args.out_column_types);
@@ -658,20 +642,9 @@ public:
 
 		signature.Verify();
 
-		// Route the signature onto the two ways SQL passes arguments to a table function: a parameter without a
-		// default value is a required positional argument, a parameter with one is an optional named argument.
-		vector<LogicalType> positional;
-		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
-			const auto &param = signature.GetParameter(i);
-			if (!param.IsVariadic() && !param.HasDefaultValue()) {
-				positional.push_back(param.GetType());
-			}
-		}
-
-		TableFunction function(name, positional, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
-		if (signature.HasVarArgs()) {
-			function.SetVarArgs(signature.GetVarArgs());
-		}
+		// A table function holds a signature of its own, so the declared one is handed over as-is
+		TableFunction function(name, {}, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
+		function.GetSignature() = signature;
 
 		// Always wired: it serves the estimate a bind callback may set, which is not known at registration. It
 		// reports no estimate when the bind callback sets none.
@@ -691,20 +664,7 @@ public:
 		function.projection_pushdown = info.projection_pushdown;
 
 		info.name = name;
-		auto function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
-		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
-			const auto &param = signature.GetParameter(i);
-			if (param.IsVariadic()) {
-				continue;
-			}
-			if (param.HasDefaultValue()) {
-				function.named_parameters[param.GetName()] = param.GetType();
-				function_info->named_parameter_defaults[param.GetName()] = *param.GetDefaultValue();
-			}
-			function_info->parameter_names.push_back(param.GetName());
-		}
-		function_info->positional_count = positional.size();
-		function.function_info = std::move(function_info);
+		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 
 		// Call the implementation to register
 		RegisterToCatalog(std::move(function));
@@ -793,12 +753,11 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duckdb_v2_extensi
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function, duckdb_v2_str *name,
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function, const duckdb_v2_str *name,
                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(*name)); });
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_signature(duckdb_v2_table_function_handle function,
@@ -938,7 +897,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_v2_table_func
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_function_bind_info_handle info,
-                                                                duckdb_v2_identifier_t name,
+                                                                const duckdb_v2_identifier_t *name,
                                                                 duckdb_v2_logical_type_handle type,
                                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
@@ -966,6 +925,13 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_cardinality(duckdb_v2_table_fu
 		bind_info.out_cardinality_is_exact = is_exact;
 		bind_info.out_cardinality_set = true;
 	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_order_preservation(duckdb_v2_table_function_bind_info_handle info,
+                                                                     DUCKDB_V2_ORDER_PRESERVATION order,
+                                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_order_preservation = CV2ConvertOrderPreservation(order); });
 }
 
 DUCKDB_V2_ERROR

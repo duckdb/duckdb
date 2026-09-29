@@ -23,14 +23,21 @@ namespace test_capi_v2 {
 
 TEST_CASE("V2: UTF-8 validation reports input errors", "[capi_v2][vector_write]") {
 	duckdb_v2_error_info_handle error = nullptr;
-	REQUIRE(duckdb_v2_validate_utf8({nullptr, 0}, &error) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_str text_str = {nullptr, 0};
+	REQUIRE(duckdb_v2_validate_utf8(&text_str, &error) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(error == nullptr);
-	REQUIRE(duckdb_v2_validate_utf8(Convert("🦆"), &error) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_validate_utf8(Convert(std::string("a\0b", 3)), &error) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_validate_utf8(Convert("\xFF"), &error) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	auto text_str2 = Convert("🦆");
+	REQUIRE(duckdb_v2_validate_utf8(&text_str2, &error) == DUCKDB_V2_ERROR_NONE);
+	const std::string embedded_nul("a\0b", 3);
+	auto embedded_nul_str = Convert(embedded_nul);
+	REQUIRE(duckdb_v2_validate_utf8(&embedded_nul_str, &error) == DUCKDB_V2_ERROR_NONE);
+	auto text_str3 = Convert("\xFF");
+	REQUIRE(duckdb_v2_validate_utf8(&text_str3, &error) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(error != nullptr);
 	duckdb_v2_error_info_destroy(&error);
-	REQUIRE(duckdb_v2_validate_utf8({nullptr, 1}, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_str text_str4 = {nullptr, 1};
+	REQUIRE(duckdb_v2_validate_utf8(&text_str4, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_validate_utf8(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 }
 
 // These tests almost always assume a vector is 2048 rows to write into, so only run them if that is the case
