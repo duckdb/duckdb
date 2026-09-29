@@ -8,6 +8,10 @@
 using namespace duckdb; // NOLINT
 
 TEST_CASE("Buffer pool flushes the allocator after bulk deallocation", "[storage][buffer_pool]") {
+#ifdef DUCKDB_DEBUG_DESTROY_BLOCKS
+	// unpinned buffers are replaced by a copy in this mode, so every buffer is freed twice and the counts below are off
+	return;
+#endif
 	DBConfig config;
 	config.options.maximum_memory = 256ULL * 1024 * 1024;
 	// the block allocator pool supports flushing on every platform, unlike the fallback allocator
