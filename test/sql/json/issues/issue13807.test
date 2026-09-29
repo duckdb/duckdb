@@ -81,3 +81,16 @@ statement error
 FROM read_json('{DATA_DIR}/json/13807.json', ignore_case=NULL);
 ----
 <REGEX>:Binder Error:.*Cannot use NULL.*
+
+# root and deeply nested keys (including structs inside lists) are merged
+query I
+FROM read_json('{DATA_DIR}/json/13807_deep.ndjson', ignore_case=true);
+----
+{'Level1': {'Level2': [{'Leaf': 1}]}}
+{'Level1': {'Level2': [{'Leaf': 2}, {'Leaf': 3}]}}
+{'Level1': {'Level2': [{'Leaf': 4}]}}
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE FROM read_json('{DATA_DIR}/json/13807_deep.ndjson', ignore_case=true));
+----
+Root	STRUCT(Level1 STRUCT(Level2 STRUCT(Leaf BIGINT)[]))
