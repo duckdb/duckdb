@@ -157,7 +157,7 @@ TEST_CASE("Bound expression SQL export reconstructs registered casts", "[sql_exp
 	auto rebound = registered_connection.Query("SELECT " + exported.GetValue()->ToString());
 	REQUIRE_FALSE(rebound->HasError());
 	REQUIRE(rebound->GetTypes() == vector<LogicalType> {LogicalType::BIGINT});
-	REQUIRE(rebound->GetValue(0, 0) == Value::BIGINT(8));
+	REQUIRE(rebound->Collection().GetValue(0, 0) == Value::BIGINT(8));
 
 	context.client_context = registered_connection.context.get();
 	auto default_direct = BoundCastExpression::AddDefaultCastToType(Constant(Value::INTEGER(7)), LogicalType::BIGINT);
@@ -177,7 +177,7 @@ TEST_CASE("Bound expression SQL export reconstructs registered casts", "[sql_exp
 	REQUIRE(default_unrelated_result.IsSuccess());
 	auto unrelated_rebound = unrelated_connection.Query("SELECT " + default_unrelated_result.GetValue()->ToString());
 	REQUIRE_NO_FAIL(*unrelated_rebound);
-	REQUIRE(unrelated_rebound->GetValue(0, 0) == Value::INTEGER(7));
+	REQUIRE(unrelated_rebound->Collection().GetValue(0, 0) == Value::INTEGER(7));
 
 	for (auto nested_types : vector<pair<LogicalType, LogicalType>> {
 	         {LogicalType::LIST(LogicalType::INTEGER), LogicalType::LIST(LogicalType::BIGINT)},
@@ -201,7 +201,7 @@ TEST_CASE("Bound expression SQL export reconstructs registered casts", "[sql_exp
 	REQUIRE(list_export.IsSuccess());
 	auto list_result = registered_connection.Query("SELECT " + list_export.GetValue()->ToString());
 	REQUIRE_NO_FAIL(*list_result);
-	REQUIRE(list_result->GetValue(0, 0) ==
+	REQUIRE(list_result->Collection().GetValue(0, 0) ==
 	        ExpressionExecutor::EvaluateScalar(*registered_connection.context, *unrelated_list));
 
 	auto union_type = LogicalType::UNION({{"small", LogicalType::INTEGER}, {"big", LogicalType::BIGINT}});
@@ -251,7 +251,7 @@ TEST_CASE("Default VARIANT casts retain runtime binding protection", "[sql_expor
 	loader.RegisterCastFunction(LogicalType::VARCHAR, LogicalType::INTEGER, BoundCastInfo(StringToIntegerEight), 0);
 	auto input = connection.Query("SELECT '7'::VARIANT");
 	REQUIRE_NO_FAIL(*input);
-	auto value = input->GetValue(0, 0);
+	auto value = input->Collection().GetValue(0, 0);
 	auto original = BoundCastExpression::AddDefaultCastToType(Constant(value), LogicalType::INTEGER);
 	auto rebound = BoundCastExpression::AddCastToType(*connection.context, Constant(value), LogicalType::INTEGER);
 	REQUIRE(ExpressionExecutor::EvaluateScalar(*connection.context, *original) == Value::INTEGER(7));
@@ -275,7 +275,7 @@ TEST_CASE("Default VARIANT casts retain runtime binding protection", "[sql_expor
 	REQUIRE(safe_export.IsSuccess());
 	auto result = default_connection.Query("SELECT " + safe_export.GetValue()->ToString());
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(7));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
 }
 
 TEST_CASE("Bound expression SQL export rejects TRY around volatile children",

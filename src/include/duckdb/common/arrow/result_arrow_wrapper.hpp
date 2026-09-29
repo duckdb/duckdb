@@ -28,7 +28,7 @@ public:
 	//! The handle, when the result is read from its retained collection
 	unique_ptr<QueryResult> result;
 	//! The engine stream, when the result is drained
-	unique_ptr<QueryResultStream> stream_result;
+	unique_ptr<QueryResultStream<>> stream_result;
 	ErrorData last_error;
 	idx_t batch_size;
 	vector<LogicalType> column_types;
