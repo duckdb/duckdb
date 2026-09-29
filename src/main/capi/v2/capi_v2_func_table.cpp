@@ -656,7 +656,7 @@ static auto CV2TableExecBatch(ClientContext &context, TableFunctionInput &input,
 	// batch's row count and propagate it to the others. A table function always has at least one result column.
 	auto row_count = target.get().data[0].size();
 	if (output.ColumnCount() == 0) {
-		output.SetCardinality(row_count);
+		output.SetCardinalityUnsafe(row_count);
 		return;
 	}
 	output.SetChildCardinality(row_count);

@@ -959,10 +959,6 @@ public:
 /// "v1.5.0-dev123" on development builds.
 auto LibraryVersion() -> std::string;
 
-/// The number of rows the vectors DuckDB hands out hold at most, e.g. those of a table function's output chunk. Fixed
-/// for a build of DuckDB, and 2048 unless the build chose otherwise. Unstable API.
-auto StandardVectorSize() -> idx_t;
-
 /// Renders a name as a SQL identifier, quoting and escaping only when required: the name itself when it is a legal
 /// bare identifier, or double-quoted with interior quotes doubled when it is a keyword or contains characters that
 /// require quoting. Use it for every name embedded in SQL text rather than quoting by hand.
@@ -2258,12 +2254,12 @@ public:
 	/// cardinality: size every column alike.
 	auto SetSize(idx_t size) -> void;
 
-	/// Sets the total number of elements the rows of a LIST or MAP vector refer to, reserving room for them in the
-	/// child vectors: the elements of a LIST, the keys and values of a MAP. Sizing the keys and values of a MAP with
-	/// `SetSize` does not size its entries, so this is how a MAP's elements are sized. May reallocate the child
-	/// vectors, which invalidates views and pointers taken from them earlier. Unstable API.
-	/// @throws InvalidInputException Unless the vector is a FLAT LIST or MAP vector.
-	auto SetListSize(idx_t size) -> void;
+	/// Sets the total number of entries the rows of a MAP vector refer to, reserving room for them in its keys and
+	/// values. Sizing the keys and values with `SetSize` does not size the entries of the MAP, so this is how they
+	/// are sized; the elements of a LIST are sized with `SetSize` on its child. May reallocate the child vectors,
+	/// which invalidates views and pointers taken from them earlier. Unstable API.
+	/// @throws InvalidInputException Unless the vector is a FLAT MAP vector.
+	auto SetMapSize(idx_t size) -> void;
 
 	/// Reads the vector in a single call, so that the per-row work afterwards is inline.
 	/// @return A view borrowed from the vector. Taking the view of a DICTIONARY vector may flatten the vector it
@@ -2390,6 +2386,10 @@ public:
 
 	/// How many rows the chunk holds.
 	auto GetRowCount() const -> idx_t;
+
+	/// How many rows the chunk can hold, e.g. how many rows a table function may write into its output chunk in one
+	/// call. Unstable API.
+	auto GetCapacity() const -> idx_t;
 
 	/// Access one column, e.g. to read or write its data.
 	/// @param index Column index in [0, GetVectorCount()).

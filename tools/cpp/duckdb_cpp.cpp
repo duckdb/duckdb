@@ -349,12 +349,6 @@ auto WithExceptionGuard(duckdb_v2_error_info_handle *err, T callback) -> DUCKDB_
 // Free Functions
 //----------------------------------------------------------------------------------------------------------------------
 
-auto StandardVectorSize() -> idx_t {
-	idx_t size = 0;
-	CheckedAPICall(duckdb_v2_vector_get_standard_size, &size);
-	return size;
-}
-
 auto LibraryVersion() -> std::string {
 	duckdb_v2_str version;
 	CheckedAPICall(duckdb_v2_library_version, &version);
@@ -2070,8 +2064,8 @@ auto Vector::SetSize(idx_t size) -> void {
 	CheckedAPICall(duckdb_v2_vector_set_size, handle(), size);
 }
 
-auto Vector::SetListSize(idx_t size) -> void {
-	CheckedAPICall(duckdb_v2_vector_set_list_size, handle(), size);
+auto Vector::SetMapSize(idx_t size) -> void {
+	CheckedAPICall(duckdb_v2_vector_set_map_size, handle(), size);
 }
 
 auto Vector::GetView() const -> VectorView {
@@ -2235,6 +2229,12 @@ auto DataChunk::GetRowCount() const -> idx_t {
 	idx_t count = 0;
 	CheckedAPICall(duckdb_v2_data_chunk_get_size, handle(), &count);
 	return count;
+}
+
+auto DataChunk::GetCapacity() const -> idx_t {
+	idx_t capacity = 0;
+	CheckedAPICall(duckdb_v2_data_chunk_get_capacity, handle(), &capacity);
+	return capacity;
 }
 
 auto DataChunk::GetVectorCount() const -> idx_t {

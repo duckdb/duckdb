@@ -1401,6 +1401,8 @@ typedef struct {
 	(duckdb_v2_copy_to_statistics_info_handle info, idx_t file_size_bytes, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_statistics_set_row_count)
 	(duckdb_v2_copy_to_statistics_info_handle info, idx_t row_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_capacity)
+	(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_connection)
 	(duckdb_v2_connection_handle connection, duckdb_v2_multi_file_function_handle *function,
 	 duckdb_v2_error_info_handle *err);
@@ -1437,8 +1439,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_claim_batch_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_claim_batch_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_vector_get_standard_size)(idx_t *out_size, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vector_set_list_size)
+	DUCKDB_V2_ERROR(*duckdb_v2_vector_set_map_size)
 	(duckdb_v2_vector_handle vector, idx_t size, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
@@ -2104,6 +2105,9 @@ typedef struct {
 #define duckdb_v2_copy_to_statistics_set_row_count duckdb_ext_api.duckdb_v2_copy_to_statistics_set_row_count
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_chunk_get_capacity duckdb_ext_api.duckdb_v2_data_chunk_get_capacity
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_multi_file_function_create_with_connection                                                           \
 	duckdb_ext_api.duckdb_v2_multi_file_function_create_with_connection
 #endif
@@ -2161,10 +2165,7 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_table_function_set_claim_batch_callback
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_vector_get_standard_size duckdb_ext_api.duckdb_v2_vector_get_standard_size
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_vector_set_list_size duckdb_ext_api.duckdb_v2_vector_set_list_size
+#define duckdb_v2_vector_set_map_size duckdb_ext_api.duckdb_v2_vector_set_map_size
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

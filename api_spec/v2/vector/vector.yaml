@@ -315,46 +315,27 @@ functions:
         kind: OUT
         description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
     return_type: ERROR
-  vector_get_standard_size:
+  vector_set_map_size:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-09-18" ]
     description: |
-      Returns the number of rows the vectors DuckDB hands out hold at most, e.g. the vectors of the output chunk
-      a table function fills. Fixed for a build of DuckDB, and 2048 unless the build chose otherwise.
-    role: getter
-    parameters:
-      out_size:
-        type: idx
-        indirection: 1
-        kind: OUT
-        description: Receives the number of rows.
-      err:
-        type: error_info
-        indirection: 1
-        kind: OUT
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
-    return_type: ERROR
-  vector_set_list_size:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-09-18" ]
-    description: |
-      Sets the total number of elements the rows of a LIST or MAP vector refer to.
+      Sets the total number of entries the rows of a MAP vector refer to.
 
-      Reserves room for that many elements in the child vectors - the elements of a LIST, and both the keys and
-      the values of a MAP - and declares that many of them written. The rows of the vector then refer to
-      elements in [0, size) through their offsets and lengths. Setting the list size is how the elements of a MAP
-      are sized: sizing its keys and values children with vector_set_size does not size the entries of the MAP
-      itself. Reserving may reallocate the child vectors, which invalidates data pointers and views taken from
-      them earlier. Returns ERROR_INPUT_INVALID unless the vector is a FLAT LIST or MAP vector.
+      Reserves room for that many entries in both the keys and the values children, and declares that many of them
+      written. The rows of the vector then refer to entries in [0, size) through their offsets and lengths. The
+      entries of a MAP must be sized with this function: sizing its keys and values children with vector_set_size
+      does not size the entries of the MAP itself. The elements of a LIST are sized by calling vector_set_size on its
+      child. Reserving may reallocate the child vectors, which invalidates data pointers and views taken from them
+      earlier. Returns ERROR_INPUT_INVALID unless the vector is a FLAT MAP vector.
     role: setter
     belongs_to: vector
     parameters:
       vector:
         type: vector
-        description: The LIST or MAP vector.
+        description: The MAP vector.
       size:
         type: idx
-        description: The total number of elements.
+        description: The total number of entries.
       err:
         type: error_info
         indirection: 1

@@ -2023,6 +2023,23 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_destroy(duckdb_v2_data_chunk_h
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_size(duckdb_v2_data_chunk_handle chunk, idx_t *out_size,
                                                            duckdb_v2_error_info_handle *err);
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Returns the number of rows a data chunk can hold, e.g. how many rows the exec callback of a table function may write
+ * into its output chunk in one call.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param chunk The chunk.
+ * @param out_capacity Receives the number of rows the chunk can hold.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_capacity(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity,
+                                                               duckdb_v2_error_info_handle *err);
+#endif
+
 /*!
  * Returns the number of vectors in a data chunk.
  *
@@ -3783,40 +3800,25 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_set_size(duckdb_v2_vector_handle v
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Returns the number of rows the vectors DuckDB hands out hold at most, e.g. the vectors of the output chunk a table
- * function fills. Fixed for a build of DuckDB, and 2048 unless the build chose otherwise.
+ * Sets the total number of entries the rows of a MAP vector refer to.
+ *
+ * Reserves room for that many entries in both the keys and the values children, and declares that many of them written.
+ * The rows of the vector then refer to entries in [0, size) through their offsets and lengths. The entries of a MAP
+ * must be sized with this function: sizing its keys and values children with vector_set_size does not size the entries
+ * of the MAP itself. The elements of a LIST are sized by calling vector_set_size on its child. Reserving may reallocate
+ * the child vectors, which invalidates data pointers and views taken from them earlier. Returns ERROR_INPUT_INVALID
+ * unless the vector is a FLAT MAP vector.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param out_size Receives the number of rows.
+ * @param vector The MAP vector.
+ * @param size The total number of entries.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_standard_size(idx_t *out_size, duckdb_v2_error_info_handle *err);
-#endif
-
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
- * Sets the total number of elements the rows of a LIST or MAP vector refer to.
- *
- * Reserves room for that many elements in the child vectors - the elements of a LIST, and both the keys and the values
- * of a MAP - and declares that many of them written. The rows of the vector then refer to elements in [0, size) through
- * their offsets and lengths. Setting the list size is how the elements of a MAP are sized: sizing its keys and values
- * children with vector_set_size does not size the entries of the MAP itself. Reserving may reallocate the child
- * vectors, which invalidates data pointers and views taken from them earlier. Returns ERROR_INPUT_INVALID unless the
- * vector is a FLAT LIST or MAP vector.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param vector The LIST or MAP vector.
- * @param size The total number of elements.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_set_list_size(duckdb_v2_vector_handle vector, idx_t size,
-                                                            duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_set_map_size(duckdb_v2_vector_handle vector, idx_t size,
+                                                           duckdb_v2_error_info_handle *err);
 #endif
 
 /*!

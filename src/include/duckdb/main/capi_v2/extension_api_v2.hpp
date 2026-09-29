@@ -1335,6 +1335,8 @@ typedef struct {
 	(duckdb_v2_copy_to_statistics_info_handle info, idx_t file_size_bytes, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_statistics_set_row_count)
 	(duckdb_v2_copy_to_statistics_info_handle info, idx_t row_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_capacity)
+	(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_connection)
 	(duckdb_v2_connection_handle connection, duckdb_v2_multi_file_function_handle *function,
 	 duckdb_v2_error_info_handle *err);
@@ -1371,8 +1373,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_claim_batch_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_claim_batch_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR (*duckdb_v2_vector_get_standard_size)(idx_t *out_size, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_vector_set_list_size)
+	DUCKDB_V2_ERROR(*duckdb_v2_vector_set_map_size)
 	(duckdb_v2_vector_handle vector, idx_t size, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
@@ -1976,6 +1977,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_copy_to_statistics_get_user_data = duckdb_v2_copy_to_statistics_get_user_data;
 	result.duckdb_v2_copy_to_statistics_set_file_size = duckdb_v2_copy_to_statistics_set_file_size;
 	result.duckdb_v2_copy_to_statistics_set_row_count = duckdb_v2_copy_to_statistics_set_row_count;
+	result.duckdb_v2_data_chunk_get_capacity = duckdb_v2_data_chunk_get_capacity;
 	result.duckdb_v2_multi_file_function_create_with_connection = duckdb_v2_multi_file_function_create_with_connection;
 	result.duckdb_v2_multi_file_function_create_with_extension = duckdb_v2_multi_file_function_create_with_extension;
 	result.duckdb_v2_multi_file_function_destroy = duckdb_v2_multi_file_function_destroy;
@@ -1995,8 +1997,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_claim_batch_get_user_data = duckdb_v2_table_function_claim_batch_get_user_data;
 	result.duckdb_v2_table_function_claim_batch_set_claimed = duckdb_v2_table_function_claim_batch_set_claimed;
 	result.duckdb_v2_table_function_set_claim_batch_callback = duckdb_v2_table_function_set_claim_batch_callback;
-	result.duckdb_v2_vector_get_standard_size = duckdb_v2_vector_get_standard_size;
-	result.duckdb_v2_vector_set_list_size = duckdb_v2_vector_set_list_size;
+	result.duckdb_v2_vector_set_map_size = duckdb_v2_vector_set_map_size;
 	return result;
 }
 
