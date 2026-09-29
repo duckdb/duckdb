@@ -69,8 +69,9 @@ functions:
       before startup, use `[[instance_set_option]]`.
 
       Refuses with ERROR_RESOURCE_IN_USE while this connection has a live
-      result. Drain, destroy, or interrupt that result
-      first. The refusal covers this connection only: a GLOBAL write through
+      result, whatever the scope. Drain or destroy that result first; an
+      interrupted result frees the connection once a step reports it
+      cancelled. The refusal covers this connection only: a GLOBAL write through
       another connection or `[[instance_set_option]]` is not refused, and
       live results on other connections may observe it, as with SQL
       `SET GLOBAL`.

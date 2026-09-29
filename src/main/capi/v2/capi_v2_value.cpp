@@ -1210,7 +1210,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_connection(duckdb_v2_connection
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction([&]() { *out_value = Emit(BuildList(ctx, child_type, children, child_count)); });
+		RunReadOnlyInTransaction(ctx, [&]() { *out_value = Emit(BuildList(ctx, child_type, children, child_count)); });
 	});
 }
 
@@ -1236,7 +1236,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_connection(duckdb_v2_connectio
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction([&]() { *out_value = Emit(BuildArray(ctx, child_type, children, child_count)); });
+		RunReadOnlyInTransaction(ctx, [&]() { *out_value = Emit(BuildArray(ctx, child_type, children, child_count)); });
 	});
 }
 
@@ -1304,8 +1304,8 @@ duckdb_v2_value_create_map_with_connection(duckdb_v2_connection_handle conn, duc
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction(
-		    [&]() { *out_value = Emit(BuildMap(ctx, key_type, value_type, keys, values, entry_count)); });
+		RunReadOnlyInTransaction(
+		    ctx, [&]() { *out_value = Emit(BuildMap(ctx, key_type, value_type, keys, values, entry_count)); });
 	});
 }
 
@@ -1375,7 +1375,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_cast_with_connection(duckdb_v2_connection_handle
 	DUCKDB_CHECK_ARG(out_value);
 	return WithErrorHandler(err, [&]() {
 		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction([&]() { CastValueV2(ctx, value, target_type, out_value); });
+		RunReadOnlyInTransaction(ctx, [&]() { CastValueV2(ctx, value, target_type, out_value); });
 	});
 }
 

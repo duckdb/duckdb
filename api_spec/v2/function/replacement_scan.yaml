@@ -435,8 +435,8 @@ functions:
       registered twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering an
       instance-wide scan while queries are binding on other connections is not thread-safe; register from an
       extension load callback or before issuing queries. A connection-scoped scan is refused with
-      `ERROR_RESOURCE_IN_USE` while its connection has a live result; drain, destroy, or interrupt that result first,
-      then register the same handle again. The caller still owns the handle after registration and
+      `ERROR_RESOURCE_IN_USE` while its connection has a live result; drain or destroy that result first, then
+      register the same handle again. The caller still owns the handle after registration and
       must destroy it with `[[replacement_scan_destroy]]`, which does not affect the registered scan.
     parameters:
       scan:

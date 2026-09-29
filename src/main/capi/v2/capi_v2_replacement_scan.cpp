@@ -125,6 +125,7 @@ static auto CV2ReplacementScanTrampoline(ClientContext &context, ReplacementScan
 class CV2ReplacementScan {
 public:
 	void Register() {
+		CheckCanRegister();
 		if (!info.callback) {
 			throw InvalidInputException("Callback must be set for the replacement scan.");
 		}
@@ -140,6 +141,9 @@ public:
 	}
 
 	virtual ~CV2ReplacementScan() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterScan(ReplacementScan scan) = 0;
 
 public:
@@ -152,12 +156,14 @@ public:
 	explicit CV2ConnectionReplacementScan(Connection &connection) : connection(connection) {
 	}
 
-	void RegisterScan(ReplacementScan scan) override {
-		auto &context = *connection.context;
+	void CheckCanRegister() override {
 		// Binding a later fragment of a live result reads this list, so refuse while one is live.
-		ThrowIfConnectionBusy(context, "registering a replacement scan");
+		ThrowIfConnectionBusy(*connection.context, "registering a replacement scan");
+	}
+
+	void RegisterScan(ReplacementScan scan) override {
 		// Connection-scoped: this touches only the connection's own state, never the shared database config.
-		context.config.replacement_scans.push_back(make_shared_ptr<ReplacementScan>(std::move(scan)));
+		connection.context->config.replacement_scans.push_back(make_shared_ptr<ReplacementScan>(std::move(scan)));
 	}
 
 private:

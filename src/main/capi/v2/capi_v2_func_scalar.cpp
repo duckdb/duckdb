@@ -178,6 +178,7 @@ public:
 	}
 
 	void Register() {
+		CheckCanRegister();
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -221,6 +222,9 @@ public:
 	}
 
 	virtual ~CV2ScalarFunction() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterToCatalog(ScalarFunction function) = 0;
 
 public:
@@ -235,10 +239,13 @@ public:
 	explicit CV2ConnectionScalarFunction(Connection &connection) : connection(connection) {
 	}
 
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a scalar function");
+	}
+
 	void RegisterToCatalog(ScalarFunction function) override {
 		auto &context = *connection.context;
-		// Registering runs in a live result's transaction, where a failure would abort that query.
-		ThrowIfConnectionBusy(context, "registering a scalar function");
 
 		context.RunFunctionInTransaction([&]() {
 			auto &catalog = Catalog::GetSystemCatalog(context);

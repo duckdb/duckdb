@@ -97,8 +97,9 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 	DUCKDB_V2_ERROR rc = DUCKDB_V2_ERROR_NONE;
 	duckdb_v2_error_info_handle err = nullptr;
 	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	// Bound the loop by time: a warm process can issue a million steps before the 50ms timeout fires.
+	// Bounded by time, not step count: how many steps fit before the timeout depends on the machine.
 	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+	bool terminated = false;
 	while (std::chrono::steady_clock::now() < deadline) {
 		duckdb_v2_data_chunk_handle chunk = nullptr;
 		status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
@@ -110,6 +111,7 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 		// (the bug), or a finish (should not happen at this scale).
 		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED ||
 		    status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED) {
+			terminated = true;
 			break;
 		}
 		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
@@ -117,7 +119,7 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 		}
 	}
 
-	REQUIRE(deadline > std::chrono::steady_clock::now());
+	REQUIRE(terminated);
 
 	// The timeout must never be reported as a cancellation.
 	std::string msg;

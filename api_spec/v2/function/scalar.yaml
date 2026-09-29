@@ -680,6 +680,9 @@ functions:
       an ANY return type is accepted only together with a bind callback that sets the concrete type per call
       site. The caller still owns the handle after registration and must destroy it with
       `[[scalar_function_destroy]]`, which does not affect the registered function.
+
+      A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result.
+      The handle is left unchanged; drain or destroy that result first, then register the same handle again.
     parameters:
       function:
         type: scalar_function

@@ -653,6 +653,7 @@ static auto CV2CopyFromProgress(ClientContext &context, const FunctionData *bind
 class CV2CopyFunction {
 public:
 	void Register() {
+		CheckCanRegister();
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -711,6 +712,9 @@ public:
 	}
 
 	virtual ~CV2CopyFunction() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterToCatalog(CopyFunction function) = 0;
 
 public:
@@ -723,10 +727,13 @@ public:
 	explicit CV2ConnectionCopyFunction(Connection &connection) : connection(connection) {
 	}
 
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a copy function");
+	}
+
 	void RegisterToCatalog(CopyFunction function) override {
 		auto &context = *connection.context;
-		// Registering runs in a live result's transaction, where a failure would abort that query.
-		ThrowIfConnectionBusy(context, "registering a copy function");
 
 		context.RunFunctionInTransaction([&]() {
 			auto &catalog = Catalog::GetSystemCatalog(context);

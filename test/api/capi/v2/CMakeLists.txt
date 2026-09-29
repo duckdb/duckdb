@@ -5,6 +5,7 @@ add_library_unity(
   test_capi_v2_basic.cpp
   test_capi_v2_arena.cpp
   test_capi_v2_arrow.cpp
+  test_capi_v2_busy_connection.cpp
   test_capi_v2_bytes.cpp
   test_capi_v2_catalog.cpp
   test_capi_v2_cast_function.cpp

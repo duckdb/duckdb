@@ -135,8 +135,9 @@ functions:
       ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
 
       One live result per connection: this refuses with ERROR_RESOURCE_IN_USE
-      while the connection already has a live result. Drain, destroy, or
-      interrupt that one first, or open another connection.
+      while the connection already has a live result. Drain or destroy
+      that one first, or open another connection; an interrupted result frees
+      the connection once a step reports it cancelled.
 
       Schema metadata — result type, statement type, column count, names,
       logical types — is available on the returned handle immediately, before

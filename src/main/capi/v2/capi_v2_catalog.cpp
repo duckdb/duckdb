@@ -19,6 +19,8 @@ DUCKDB_V2_ERROR duckdb_v2_connection_describe_table(duckdb_v2_connection_handle 
 	*desc = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &context = *Convert(conn)->context;
+		// Both lookups run in a transaction, where a failure would abort a live result's query.
+		ThrowIfConnectionBusy(context, "describing a table");
 		auto &qname = *Convert(name);
 		auto &path = qname.Path();
 		// The qname invariant guarantees one to three non-empty parts. A two-part name is read as SQL reads it: the

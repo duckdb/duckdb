@@ -1096,6 +1096,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_exec_get_mode(duckdb_v2_cas
  * registration and must destroy it with `duckdb_v2_cast_function_destroy()`, which does not affect the registered
  * function.
  *
+ * A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result. The
+ * handle is left unchanged; drain or destroy that result first, then register the same handle again.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -1839,6 +1842,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_set_base_type(duckdb_v2_custo
  * The type is registered on the target given at creation: the connection's database or the loading extension.
  * Registration requires a name and a complete base type. The caller still owns the handle after registration and must
  * destroy it with `duckdb_v2_custom_type_destroy()`, which does not affect the registered type.
+ *
+ * A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result. The
+ * handle is left unchanged; drain or destroy that result first, then register the same handle again.
  *
  * history:
  * - stable: v2.0.0
@@ -5103,6 +5109,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_states(
  * site. The caller still owns the handle after registration and must destroy it with
  * `duckdb_v2_aggregate_function_destroy()`, which does not affect the registered function.
  *
+ * A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result. The
+ * handle is left unchanged; drain or destroy that result first, then register the same handle again.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -5528,6 +5537,9 @@ typedef struct _duckdb_v2_column_description {
  * error; a name that resolves to a view is rejected with the engine's not-a-table error, since a description snapshots
  * a base table.
  *
+ * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result: the lookup runs in a transaction, and a
+ * failure there would abort that result's query. Drain or destroy that result first.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -5784,10 +5796,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_h
  * one, and the legacy analogues. An unknown name is rejected unless an extension that defines it can be autoloaded; to
  * stage a setting for an extension before startup, use `duckdb_v2_instance_set_option()`.
  *
- * Refuses with ERROR_RESOURCE_IN_USE while this connection has a live result, whatever the scope. Drain, destroy, or
- * interrupt that result first. The refusal covers this connection only: a GLOBAL write through another connection or
- * `duckdb_v2_instance_set_option()` is not refused, and live results on other connections may observe it, as with SQL
- * `SET GLOBAL`.
+ * Refuses with ERROR_RESOURCE_IN_USE while this connection has a live result, whatever the scope. Drain or destroy that
+ * result first; an interrupted result frees the connection once a step reports it cancelled. The refusal covers this
+ * connection only: a GLOBAL write through another connection or `duckdb_v2_instance_set_option()` is not refused, and
+ * live results on other connections may observe it, as with SQL `SET GLOBAL`.
  *
  * history:
  * - stable: v2.0.0
@@ -7364,6 +7376,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_from_progress_set_progress(duckdb_v2
  * implement fails with an error. The caller still owns the handle after registration and must destroy it with
  * `duckdb_v2_copy_function_destroy()`, which does not affect the registered function.
  *
+ * A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result. The
+ * handle is left unchanged; drain or destroy that result first, then register the same handle again.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -7934,6 +7949,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_c
  * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
  * connection_create_type_from_text — and for INVALID.
  *
+ * A failure here leaves a live result on the connection unaffected.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -7964,6 +7981,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_id(
  * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
  * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
  *
+ * A failure here leaves a live result on the connection unaffected.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -7992,6 +8011,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(
  *
  * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
  * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
+ *
+ * A failure here leaves a live result on the connection unaffected.
  *
  * history:
  * - stable: v2.0.0
@@ -8572,9 +8593,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_repl
  * twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering an instance-wide scan
  * while queries are binding on other connections is not thread-safe; register from an extension load callback or before
  * issuing queries. A connection-scoped scan is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live
- * result; drain, destroy, or interrupt that result first, then register the same handle again. The caller still owns
- * the handle after registration and must destroy it with `duckdb_v2_replacement_scan_destroy()`, which does not affect
- * the registered scan.
+ * result; drain or destroy that result first, then register the same handle again. The caller still owns the handle
+ * after registration and must destroy it with `duckdb_v2_replacement_scan_destroy()`, which does not affect the
+ * registered scan.
  *
  * history:
  * - stable: v2.0.0
@@ -9145,6 +9166,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2
  * accepted only together with a bind callback that sets the concrete type per call site. The caller still owns the
  * handle after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect the
  * registered function.
+ *
+ * A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result. The
+ * handle is left unchanged; drain or destroy that result first, then register the same handle again.
  *
  * history:
  * - stable: v2.0.0
@@ -11300,6 +11324,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_context(
  * The elements are borrowed and copied in, and a NULL element becomes a typed NULL. The type is rebuilt from its child,
  * so an alias on the outer LIST type is not preserved; value_cast is the alias-preserving path.
  *
+ * A failure here leaves a live result on the connection unaffected.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -11345,6 +11371,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_context(
  * minimum array size is 1, so an empty element array returns ERROR_INPUT_INVALID whether or not child_type is given.
  *
  * The elements are borrowed and copied in, and a NULL element becomes a typed NULL.
+ *
+ * A failure here leaves a live result on the connection unaffected.
  *
  * history:
  * - stable: v2.0.0
@@ -11496,6 +11524,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_map_with_context(
  * Keys and values are borrowed and copied in, and the two arrays must be the same length. Keys must be non-NULL and
  * unique; both are enforced.
  *
+ * A failure here leaves a live result on the connection unaffected.
+ *
  * history:
  * - stable: v2.0.0
  *
@@ -11573,6 +11603,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle va
  * enum type, is the sanctioned way to build UNION and ENUM values.
  *
  * The input value and target type are borrowed. The returned value is caller-owned; destroy it via value_destroy.
+ *
+ * A failure here leaves a live result on the connection unaffected.
  *
  * history:
  * - stable: v2.0.0
@@ -11719,8 +11751,8 @@ typedef struct _duckdb_v2_prepared_statement {
  * `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup finds
  * out here rather than after silently taking the slow path.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that result
- * first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
+ * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain or destroy that result first, or
+ * prepare on another connection. `*out_prepared` is set to NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11764,9 +11796,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_conne
  * parameter type that differs from the one the cached plan assumed, triggers a re-bind that is invisible apart from its
  * cost.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it first,
- * or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
- * `*out_result` is set to NULL on failure.
+ * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain or destroy it first, or execute on
+ * another connection. A failed execution, at any stage, leaves the prepared statement usable. `*out_result` is set to
+ * NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11911,7 +11943,8 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  * ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
  *
  * One live result per connection: this refuses with ERROR_RESOURCE_IN_USE while the connection already has a live
- * result. Drain, destroy, or interrupt that one first, or open another connection.
+ * result. Drain or destroy that one first, or open another connection; an interrupted result frees the connection once
+ * a step reports it cancelled.
  *
  * Schema metadata — result type, statement type, column count, names, logical types — is available on the returned
  * handle immediately, before the first step.
@@ -13608,6 +13641,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_set_partition
  * type, since a table function declares the columns it returns from its bind callback. The caller still owns the handle
  * after registration and must destroy it with `duckdb_v2_table_function_destroy()`, which does not affect the
  * registered function.
+ *
+ * A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result. The
+ * handle is left unchanged; drain or destroy that result first, then register the same handle again.
  *
  * history:
  * - stable: v2.0.0

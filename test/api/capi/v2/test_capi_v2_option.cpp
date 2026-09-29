@@ -253,7 +253,11 @@ TEST_CASE("V2 conn option: Not allowed during query", "[capi_v2][conn][option]")
 	                                        nullptr) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
 	REQUIRE(ConnSetting(fx.conn, "max_execution_time") == "0");
 
+	// Once the result is gone the write goes through.
 	duckdb_v2_result_destroy(&result);
+	REQUIRE(duckdb_v2_connection_set_option(fx.conn, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
+	                                        nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ConnSetting(fx.conn, "max_execution_time") == "5000");
 }
 
 TEST_CASE("V2 conn option: AUTOMATIC scope mirrors bare SQL `SET`", "[capi_v2][conn][option]") {

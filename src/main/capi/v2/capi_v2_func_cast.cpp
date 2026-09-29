@@ -90,6 +90,7 @@ static auto CV2CastExec(Vector &input, Vector &output, idx_t count, CastParamete
 class CV2CastFunction {
 public:
 	void Register() {
+		CheckCanRegister();
 		if (!source_type.IsComplete()) {
 			throw InvalidInputException("Source type must be set to a fully defined concrete type");
 		}
@@ -105,6 +106,9 @@ public:
 	}
 
 	virtual ~CV2CastFunction() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterToCatalog(BoundCastInfo cast_info) = 0;
 
 public:
@@ -120,10 +124,13 @@ public:
 	explicit CV2ConnectionCastFunction(Connection &connection) : connection(connection) {
 	}
 
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a cast function");
+	}
+
 	void RegisterToCatalog(BoundCastInfo cast_info) override {
 		auto &context = *connection.context;
-		// Registering runs in a live result's transaction, where a failure would abort that query.
-		ThrowIfConnectionBusy(context, "registering a cast function");
 
 		context.RunFunctionInTransaction([&]() {
 			auto &casts = CastFunctionSet::Get(context);
