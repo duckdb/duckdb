@@ -6,6 +6,7 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -250,8 +251,26 @@ void ApplyFunctionalDependencies::VisitPartitioning(vector<unique_ptr<Expression
 }
 
 void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &wexpr) const {
+	//	Equivalence 1: Reduce partitioning to minimal functional dependency
 	VisitPartitioning(wexpr.PartitionsMutable());
+
+	//	Equivalence 2: Truncate ordering at minimal functional dependency
 	VisitOrderBys(wexpr.OrderByMutable());
+
+	//	Equivalence 3: Remove a single ORDER BY if it is FD on the partitioning
+	//	Note that this implies that the ordering expression is constant on the partition,
+	//	so there is only one peer group, which is the same as having no ORDER BY clause.
+	auto &partition_bys = wexpr.Partitions();
+	auto &order_bys = wexpr.OrderByMutable();
+	if (!partition_bys.empty() && order_bys.size() == 1) {
+		vector<reference<Expression>> refs;
+		for (auto &arg : partition_bys) {
+			refs.emplace_back(*arg);
+		}
+		if (BaseSelectBinder::IsFunctionallyDependent(order_bys[0].expression, refs)) {
+			order_bys.clear();
+		}
+	}
 }
 
 void ApplyFunctionalDependencies::VisitExpression(unique_ptr<Expression> *expression) {
