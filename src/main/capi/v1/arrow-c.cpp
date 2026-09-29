@@ -44,7 +44,7 @@ idx_t ChangedRows(QueryResult &result) {
 	if (arrays.empty()) {
 		return 0;
 	}
-	auto &array = arrays.front()->array.arrow_array;
+	auto &array = arrays.front()->arrow_array;
 	if (array.length != 1 || array.n_children != 1 || !array.children || !array.children[0]) {
 		return 0;
 	}
@@ -277,9 +277,9 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 		return DuckDBSuccess;
 	}
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
-	duckdb::unique_ptr<duckdb::ArrowPayload> payload;
+	duckdb::unique_ptr<duckdb::ArrowArrayWrapper> array;
 	try {
-		payload = wrapper->result->Fetch<ArrowFormat>();
+		array = wrapper->result->Fetch<ArrowFormat>();
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		wrapper->result->SetError(duckdb::ErrorData(ex));
 		return DuckDBError;
@@ -287,10 +287,10 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 		wrapper->result->SetError(duckdb::ErrorData("Unknown error in Fetch"));
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
-	if (!payload) {
+	if (!array) {
 		return DuckDBSuccess;
 	}
-	payload->array.MoveTo(*reinterpret_cast<ArrowArray *>(*out_array));
+	array->MoveTo(*reinterpret_cast<ArrowArray *>(*out_array));
 	return DuckDBSuccess;
 }
 

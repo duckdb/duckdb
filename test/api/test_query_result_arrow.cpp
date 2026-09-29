@@ -24,25 +24,26 @@ unique_ptr<QueryResult> SubmitArrow(Connection &con, const string &query, idx_t 
 	return handle;
 }
 
-idx_t Rows(const ArrowPayload &payload) {
-	return NumericCast<idx_t>(payload.array.arrow_array.length);
+idx_t Rows(const ArrowArrayWrapper &array) {
+	return NumericCast<idx_t>(array.arrow_array.length);
 }
 
-vector<unique_ptr<ArrowPayload>> DrainArrays(QueryResultStream<ArrowFormat> &stream) {
-	vector<unique_ptr<ArrowPayload>> arrays;
-	while (auto payload = stream.Fetch()) {
-		REQUIRE(payload->array.arrow_array.release != nullptr);
-		REQUIRE(Rows(*payload) > 0);
-		arrays.push_back(std::move(payload));
+vector<unique_ptr<ArrowArrayWrapper>> DrainArrays(QueryResultStream<ArrowFormat> &stream) {
+	vector<unique_ptr<ArrowArrayWrapper>> arrays;
+	while (auto array = stream.Fetch()) {
+		REQUIRE(array->arrow_array.release != nullptr);
+		REQUIRE(Rows(*array) > 0);
+		arrays.push_back(std::move(array));
 	}
 	REQUIRE(!stream.HasError());
 	return arrays;
 }
 
-idx_t TotalRows(const vector<unique_ptr<ArrowPayload>> &arrays) {
+template <class ARRAYS>
+idx_t TotalRows(const ARRAYS &arrays) {
 	idx_t rows = 0;
-	for (auto &payload : arrays) {
-		rows += Rows(*payload);
+	for (auto &array : arrays) {
+		rows += Rows(*array);
 	}
 	return rows;
 }
@@ -75,7 +76,7 @@ vector<unique_ptr<ResultUnit>> FormatUnits(Connection &con, const string &query,
 class ServedArrays {
 public:
 	ServedArrays(vector<LogicalType> types_p, vector<string> names_p, ClientProperties properties_p,
-	             vector<unique_ptr<ArrowPayload>> arrays_p)
+	             vector<unique_ptr<ArrowArrayWrapper>> arrays_p)
 	    : types(std::move(types_p)), names(std::move(names_p)), properties(std::move(properties_p)),
 	      arrays(std::move(arrays_p)) {
 		stream.private_data = this;
@@ -107,14 +108,13 @@ private:
 		if (self.next == self.arrays.size()) {
 			return 0;
 		}
-		self.arrays[self.next++]->array.MoveTo(*out);
+		self.arrays[self.next++]->MoveTo(*out);
 		return 0;
 	}
 	static const char *GetLastError(ArrowArrayStream *stream) {
 		return "";
 	}
-	// The copies arrow_scan makes are released independently, so this frees nothing: the arrays and
-	// their owner outlive every copy
+	// arrow_scan releases the arrays it took, and the ones never served go with this object
 	static void Release(ArrowArrayStream *stream) {
 		stream->release = nullptr;
 	}
@@ -123,14 +123,14 @@ private:
 	vector<LogicalType> types;
 	vector<string> names;
 	ClientProperties properties;
-	vector<unique_ptr<ArrowPayload>> arrays;
+	vector<unique_ptr<ArrowArrayWrapper>> arrays;
 	idx_t next = 0;
 	ArrowArrayStream stream {};
 };
 
 //! The arrays of a stream, scanned back into a DuckDB result
 unique_ptr<QueryResult> ScanBack(Connection &con, QueryResultStream<ArrowFormat> &stream,
-                                 vector<unique_ptr<ArrowPayload>> arrays) {
+                                 vector<unique_ptr<ArrowArrayWrapper>> arrays) {
 	ServedArrays served(stream.GetTypes(), IdentifiersToStrings(stream.GetNames()), stream.GetClientProperties(),
 	                    std::move(arrays));
 	return served.Scan(con);
@@ -197,8 +197,8 @@ TEST_CASE("An Arrow batch size smaller than a chunk fills every array but the la
 		auto arrays = DrainArrays(stream);
 		REQUIRE(TotalRows(arrays) == ROWS);
 		REQUIRE(arrays.size() == ROWS / BATCH);
-		for (auto &payload : arrays) {
-			REQUIRE(Rows(*payload) == BATCH);
+		for (auto &array : arrays) {
+			REQUIRE(Rows(*array) == BATCH);
 		}
 	}
 	SECTION("with a cap smaller than one array") {
@@ -227,8 +227,8 @@ TEST_CASE("An Arrow batch larger than a row group gives one array per row group"
 	auto arrays = DrainArrays(stream);
 	REQUIRE(TotalRows(arrays) == rows);
 	// NextBatch finishes the array before the producer moves on, so none spans two row groups
-	for (auto &payload : arrays) {
-		REQUIRE(Rows(*payload) <= DEFAULT_ROW_GROUP_SIZE);
+	for (auto &array : arrays) {
+		REQUIRE(Rows(*array) <= DEFAULT_ROW_GROUP_SIZE);
 	}
 	REQUIRE(arrays.size() == GROUPS);
 }
@@ -309,8 +309,8 @@ TEST_CASE("Arrow units over NULL-heavy and nested columns keep their counts", "[
 	auto arrays = DrainArrays(stream);
 	REQUIRE(TotalRows(arrays) == ROWS);
 	REQUIRE(arrays.size() == ROWS / BATCH + 1);
-	for (auto &payload : arrays) {
-		auto &array = payload->array.arrow_array;
+	for (auto &wrapper : arrays) {
+		auto &array = wrapper->arrow_array;
 		REQUIRE(array.n_children == 3);
 		REQUIRE(array.children[0]->length == array.length);
 		REQUIRE(array.children[1]->length == array.length);
@@ -367,6 +367,9 @@ TEST_CASE("An empty result in the Arrow format has no units", "[api][query_resul
 		REQUIRE(result->Collection<ArrowFormat>().empty());
 		REQUIRE(result->Fetch<ArrowFormat>() == nullptr);
 		REQUIRE(result->FormatState<ArrowFormat>().Schema().n_children == 1);
+		auto taken = result->TakeCollection<ArrowFormat>();
+		REQUIRE(taken);
+		REQUIRE(taken->empty());
 	}
 }
 
@@ -392,133 +395,398 @@ TEST_CASE("Query with an Arrow format returns its arrays and their schema", "[ap
 	REQUIRE(TotalRows(collection) == ROWS);
 }
 
-TEST_CASE("An Arrow payload copies into a view that outlives the original", "[api][query_result_arrow]") {
-	constexpr idx_t ROWS = 3000;
-	DuckDB db(nullptr);
-	Connection con(db);
+namespace {
 
-	auto result = con.Query("SELECT i FROM range(3000) t(i)", make_shared_ptr<ArrowFormat>(1024));
-	REQUIRE_NO_FAIL(*result);
+const int64_t *Int64Values(const ArrowArray &node) {
+	return reinterpret_cast<const int64_t *>(node.buffers[1]) + node.offset;
+}
 
-	SECTION("fetching copies, so the result can be read twice") {
-		vector<unique_ptr<ArrowPayload>> first_pass;
-		while (auto payload = result->Fetch<ArrowFormat>()) {
-			first_pass.push_back(std::move(payload));
-		}
-		REQUIRE(first_pass.size() == ROWS / 1024 + 1);
-		REQUIRE(TotalRows(first_pass) == ROWS);
-		auto &collection = result->Collection<ArrowFormat>();
-		REQUIRE(collection.size() == first_pass.size());
-		REQUIRE(TotalRows(collection) == ROWS);
-		for (idx_t i = 0; i < first_pass.size(); i++) {
-			auto &stored = collection[i]->array.arrow_array;
-			auto &fetched = first_pass[i]->array.arrow_array;
-			REQUIRE(stored.release != nullptr);
-			REQUIRE(fetched.release != nullptr);
-			REQUIRE(fetched.length == stored.length);
-			// A copy shares the buffers rather than duplicating them
-			REQUIRE(fetched.children[0]->buffers[1] == stored.children[0]->buffers[1]);
-		}
+bool IsValidRow(const ArrowArray &node, idx_t row) {
+	auto validity = reinterpret_cast<const uint8_t *>(node.buffers[0]);
+	if (!validity) {
+		return true;
 	}
+	auto bit = NumericCast<idx_t>(node.offset) + row;
+	return (validity[bit / 8] >> (bit % 8)) & 1;
+}
 
-	SECTION("an array moved out of the collection can still be fetched") {
-		ArrowArray taken;
-		result->Collection<ArrowFormat>()[0]->array.MoveTo(taken);
-		auto fetched = result->Fetch<ArrowFormat>();
-		REQUIRE(fetched);
-		REQUIRE(Rows(*fetched) == 1024);
-		REQUIRE(fetched->array.arrow_array.children[0]->buffers[1] == taken.children[0]->buffers[1]);
-		taken.release(&taken);
-		auto values = reinterpret_cast<const int64_t *>(fetched->array.arrow_array.children[0]->buffers[1]);
-		REQUIRE(values[1023] == 1023);
+string StringAt(const ArrowArray &node, idx_t row) {
+	auto offsets = reinterpret_cast<const int32_t *>(node.buffers[1]) + node.offset;
+	auto data = reinterpret_cast<const char *>(node.buffers[2]);
+	return string(data + offsets[row], NumericCast<idx_t>(offsets[row + 1] - offsets[row]));
+}
+
+//! An export has a descriptor of its own at every node, and the source's metadata and buffers
+void RequireSharedExport(const ArrowArray &exported, const ArrowArray &source) {
+	REQUIRE(exported.release != nullptr);
+	REQUIRE(exported.release != source.release);
+	REQUIRE(exported.private_data != source.private_data);
+	REQUIRE(exported.length == source.length);
+	REQUIRE(exported.null_count == source.null_count);
+	REQUIRE(exported.offset == source.offset);
+	REQUIRE(exported.n_buffers == source.n_buffers);
+	REQUIRE(exported.buffers == source.buffers);
+	REQUIRE(exported.n_children == source.n_children);
+	if (source.n_children > 0) {
+		REQUIRE(exported.children != source.children);
 	}
-
-	SECTION("a copy stays readable after the original and the collection are gone") {
-		auto original = result->Fetch<ArrowFormat>();
-		REQUIRE(original);
-		auto copy = original->Copy();
-		REQUIRE(Rows(*copy) == Rows(*original));
-		original.reset();
-		result.reset();
-		auto &array = copy->array.arrow_array;
-		REQUIRE(array.length == 1024);
-		auto values = reinterpret_cast<const int64_t *>(array.children[0]->buffers[1]);
-		for (idx_t i = 0; i < 1024; i++) {
-			REQUIRE(values[array.offset + array.children[0]->offset + i] == NumericCast<int64_t>(i));
-		}
+	for (int64_t i = 0; i < source.n_children; i++) {
+		REQUIRE(exported.children[i] != source.children[i]);
+		RequireSharedExport(*exported.children[i], *source.children[i]);
 	}
-
-	SECTION("a consumer holding a view keeps the buffers alive on its own") {
-		ArrowArray exported;
-		result->Fetch<ArrowFormat>()->array.MoveTo(exported);
-		result.reset();
-		REQUIRE(exported.release != nullptr);
-		auto values = reinterpret_cast<const int64_t *>(exported.children[0]->buffers[1]);
-		REQUIRE(values[exported.offset + exported.children[0]->offset + 1023] == 1023);
-		exported.release(&exported);
-		REQUIRE(exported.release == nullptr);
+	REQUIRE((exported.dictionary == nullptr) == (source.dictionary == nullptr));
+	if (source.dictionary) {
+		REQUIRE(exported.dictionary != source.dictionary);
+		RequireSharedExport(*exported.dictionary, *source.dictionary);
 	}
 }
 
-namespace {
+//! An original built by hand, {a: dictionary encoded, s: {x}}, whose release only counts, so a test sees
+//! exactly when its last holder lets go
+class HandBuiltArray {
+public:
+	HandBuiltArray() {
+		Node(root, root_buffers, 1);
+		root.n_children = 2;
+		root.children = root_children;
+		root.private_data = &releases;
+		root.release = CountRelease;
+		Node(a, a_buffers, 2);
+		a.dictionary = &dictionary;
+		Node(dictionary, dictionary_buffers, 2);
+		Node(s, s_buffers, 1);
+		s.n_children = 1;
+		s.children = s_children;
+		Node(x, x_buffers, 2);
+		x.offset = 1;
+	}
 
-const int64_t *StructFieldA(const ArrowArray &array) {
-	auto &field = *array.children[0]->children[0];
-	return reinterpret_cast<const int64_t *>(field.buffers[1]) + field.offset;
+public:
+	ArrowArrayOwner Own() {
+		auto wrapper = make_uniq<ArrowArrayWrapper>();
+		wrapper->arrow_array = root;
+		return ArrowArrayOwner(std::move(wrapper));
+	}
+
+public:
+	idx_t releases = 0;
+
+private:
+	static void Node(ArrowArray &node, const void **buffers, int64_t n_buffers) {
+		node = ArrowArray {};
+		node.length = 3;
+		node.n_buffers = n_buffers;
+		node.buffers = buffers;
+		node.release = ReleaseChild;
+	}
+	static void CountRelease(ArrowArray *array) {
+		(*static_cast<idx_t *>(array->private_data))++;
+		array->release = nullptr;
+	}
+	static void ReleaseChild(ArrowArray *array) {
+		array->release = nullptr;
+	}
+
+private:
+	int8_t indexes[3] = {2, 0, 1};
+	int64_t words[3] = {10, 20, 30};
+	int64_t values[4] = {1, 2, 3, 4};
+	const void *root_buffers[1] = {nullptr};
+	const void *a_buffers[2] = {nullptr, indexes};
+	const void *dictionary_buffers[2] = {nullptr, words};
+	const void *s_buffers[1] = {nullptr};
+	const void *x_buffers[2] = {nullptr, values};
+	ArrowArray root;
+	ArrowArray a;
+	ArrowArray dictionary;
+	ArrowArray s;
+	ArrowArray x;
+	ArrowArray *root_children[2] = {&a, &s};
+	ArrowArray *s_children[1] = {&x};
+};
+
+//! Integers with NULLs, strings, a struct over a list, and an ENUM, which Arrow receives as a dictionary
+const char *const MIXED_QUERY = "SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS n, 'v' || i AS s, "
+                                "{'a': i, 'l': [i, i + 1]} AS st, "
+                                "(['x', 'y', 'z'])[i % 3 + 1]::ENUM('x', 'y', 'z') AS e FROM range(3000) t(i)";
+
+//! Samples the rows of one array of MIXED_QUERY, whose first row is first_row
+void RequireMixedRows(const ArrowArray &array, idx_t first_row) {
+	REQUIRE(array.n_children == 4);
+	auto &n = *array.children[0];
+	auto &s = *array.children[1];
+	auto &st = *array.children[2];
+	auto &e = *array.children[3];
+	REQUIRE(e.dictionary != nullptr);
+	REQUIRE(StringAt(*e.dictionary, 2) == "z");
+	auto &list = *st.children[1];
+	auto list_offsets = reinterpret_cast<const int32_t *>(list.buffers[1]) + list.offset;
+	for (idx_t row = 0; row < NumericCast<idx_t>(array.length); row += 100) {
+		auto i = NumericCast<int64_t>(first_row + row);
+		REQUIRE(IsValidRow(n, row) == (i % 3 != 0));
+		if (i % 3 != 0) {
+			REQUIRE(Int64Values(n)[row] == i);
+		}
+		REQUIRE(StringAt(s, row) == "v" + to_string(i));
+		REQUIRE(Int64Values(*st.children[0])[row] == i);
+		REQUIRE(Int64Values(*list.children[0])[list_offsets[row] + 1] == i + 1);
+	}
 }
 
 } // namespace
 
-TEST_CASE("Views of one Arrow payload are independent struct trees over shared buffers", "[api][query_result_arrow]") {
-	DuckDB db(nullptr);
-	Connection con(db);
+TEST_CASE("Exports of one Arrow array are independent descriptor trees over its buffers", "[api][query_result_arrow]") {
+	HandBuiltArray source;
+	auto owner = source.Own();
+	auto first = ArrowFormat::ShareArray(owner);
+	auto second = ArrowFormat::ShareArray(owner);
+	RequireSharedExport(first->arrow_array, owner->arrow_array);
+	RequireSharedExport(second->arrow_array, owner->arrow_array);
+	REQUIRE(first->arrow_array.children != second->arrow_array.children);
+	REQUIRE(first->arrow_array.children[0]->dictionary != second->arrow_array.children[0]->dictionary);
+	REQUIRE(first->arrow_array.children[1]->children[0] != second->arrow_array.children[1]->children[0]);
+	REQUIRE(first->arrow_array.children[1]->children[0]->children == nullptr);
+	REQUIRE(source.releases == 0);
 
-	auto result = con.Query("SELECT {'a': i, 'b': 'x' || i} AS s, [i, i + 1] AS l FROM range(2000) t(i)",
-	                        make_shared_ptr<ArrowFormat>(1024));
-	REQUIRE_NO_FAIL(*result);
-	auto first = result->Fetch<ArrowFormat>();
-	REQUIRE(first);
-	auto second = first->Copy();
-	auto &stored = result->Collection<ArrowFormat>()[0]->array.arrow_array;
-	auto &first_array = first->array.arrow_array;
-	auto &second_array = second->array.arrow_array;
-	// Distinct child structs, the same buffers
-	REQUIRE(first_array.children != stored.children);
-	REQUIRE(first_array.children != second_array.children);
-	REQUIRE(first_array.children[0] != stored.children[0]);
-	REQUIRE(first_array.children[0]->children[0]->buffers[1] == stored.children[0]->children[0]->buffers[1]);
-	REQUIRE(first_array.children[1]->children[0]->buffers[1] == stored.children[1]->children[0]->buffers[1]);
-
-	SECTION("a child moved out of one view leaves the other views whole") {
-		// The C interface lets a consumer take a child by copying its struct and clearing its release
-		ArrowArray moved = *first_array.children[0];
-		first_array.children[0]->release = nullptr;
-		REQUIRE(stored.children[0]->release != nullptr);
-		REQUIRE(second_array.children[0]->release != nullptr);
-		REQUIRE(StructFieldA(second_array)[7] == 7);
-
+	SECTION("the original goes with the last export, after the owner") {
+		owner.reset();
+		first.reset();
+		REQUIRE(source.releases == 0);
+		REQUIRE(Int64Values(*second->arrow_array.children[1]->children[0])[2] == 4);
+		second.reset();
+		REQUIRE(source.releases == 1);
+	}
+	SECTION("the original goes with the owner, after the exports") {
+		second.reset();
+		first.reset();
+		REQUIRE(source.releases == 0);
+		owner.reset();
+		REQUIRE(source.releases == 1);
+	}
+	SECTION("a root moved to a consumer holds the original on its own") {
+		ArrowArray exported;
+		first->MoveTo(exported);
+		first.reset();
+		second.reset();
+		owner.reset();
+		REQUIRE(source.releases == 0);
+		REQUIRE(Int64Values(*exported.children[1]->children[0])[0] == 2);
+		exported.release(&exported);
+		REQUIRE(exported.release == nullptr);
+		REQUIRE(source.releases == 1);
+	}
+	SECTION("a child moved out outlives its parent, the other export and the owner") {
+		// The C interface lets a consumer take a child by copying its descriptor and clearing its release
+		auto &child = *first->arrow_array.children[1];
+		ArrowArray moved = child;
+		child.release = nullptr;
+		first.reset();
+		second.reset();
+		owner.reset();
+		REQUIRE(source.releases == 0);
+		REQUIRE(Int64Values(*moved.children[0])[1] == 3);
 		moved.release(&moved);
 		REQUIRE(moved.release == nullptr);
-		first.reset();
-		result.reset();
-		REQUIRE(StructFieldA(second_array)[1023] == 1023);
-		REQUIRE(second_array.children[1]->children[0]->length == 2048);
+		REQUIRE(source.releases == 1);
 	}
-
-	SECTION("a released sibling does not touch the copies still alive") {
-		auto third = second->Copy();
-		second.reset();
-		REQUIRE(StructFieldA(first_array)[5] == 5);
-		result.reset();
+	SECTION("a dictionary moved out outlives its parent, the other export and the owner") {
+		auto &dictionary = *first->arrow_array.children[0]->dictionary;
+		ArrowArray moved = dictionary;
+		dictionary.release = nullptr;
 		first.reset();
-		auto &third_array = third->array.arrow_array;
-		REQUIRE(third_array.children[0]->release != nullptr);
-		REQUIRE(StructFieldA(third_array)[1000] == 1000);
-		ArrowArray exported;
-		third->array.MoveTo(exported);
-		third.reset();
-		REQUIRE(StructFieldA(exported)[1000] == 1000);
-		exported.release(&exported);
+		second.reset();
+		owner.reset();
+		REQUIRE(source.releases == 0);
+		REQUIRE(Int64Values(moved)[2] == 30);
+		moved.release(&moved);
+		REQUIRE(moved.release == nullptr);
+		REQUIRE(source.releases == 1);
+	}
+}
+
+TEST_CASE("A streamed Arrow array is the one the appender built and outlives its stream", "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	auto con = make_uniq<Connection>(db);
+	// Stored arrays are the appender's own, so their release tells an original from an export
+	auto retained = con->Query("SELECT i FROM range(10) t(i)", make_shared_ptr<ArrowFormat>(1024));
+	REQUIRE_NO_FAIL(*retained);
+	auto appender_release = retained->Collection<ArrowFormat>()[0]->arrow_array.release;
+	REQUIRE(retained->Fetch<ArrowFormat>()->arrow_array.release != appender_release);
+	retained.reset();
+
+	auto stream = make_uniq<QueryResultStream<ArrowFormat>>(SubmitArrow(*con, MIXED_QUERY, 1024));
+	auto first = stream->Fetch();
+	REQUIRE(first);
+	REQUIRE(first->arrow_array.release == appender_release);
+	stream.reset();
+	con.reset();
+	RequireMixedRows(first->arrow_array, 0);
+}
+
+TEST_CASE("Fetching a retained Arrow result exports its arrays and leaves the collection whole",
+          "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto result = con.Query(MIXED_QUERY, make_shared_ptr<ArrowFormat>(1024));
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection<ArrowFormat>().size() == 3);
+	weak_ptr<const ArrowArrayWrapper> original = result->Collection<ArrowFormat>()[0];
+
+	SECTION("the collection outlives every fetched array") {
+		vector<unique_ptr<ArrowArrayWrapper>> fetched;
+		while (auto array = result->Fetch<ArrowFormat>()) {
+			fetched.push_back(std::move(array));
+		}
+		REQUIRE(result->Fetch<ArrowFormat>() == nullptr);
+		auto &collection = result->Collection<ArrowFormat>();
+		REQUIRE(fetched.size() == collection.size());
+		for (idx_t i = 0; i < fetched.size(); i++) {
+			RequireSharedExport(fetched[i]->arrow_array, collection[i]->arrow_array);
+			RequireMixedRows(fetched[i]->arrow_array, i * 1024);
+		}
+		fetched.clear();
+		REQUIRE(!original.expired());
+		REQUIRE(TotalRows(collection) == 3000);
+		for (idx_t i = 0; i < collection.size(); i++) {
+			RequireMixedRows(collection[i]->arrow_array, i * 1024);
+		}
+	}
+	SECTION("a fetched array outlives the result") {
+		auto first = result->Fetch<ArrowFormat>();
+		result.reset();
+		REQUIRE(!original.expired());
+		RequireMixedRows(first->arrow_array, 0);
+		first.reset();
+		REQUIRE(original.expired());
+	}
+	SECTION("two exports of one array are released in either order") {
+		auto first = result->Fetch<ArrowFormat>();
+		auto second = ArrowFormat::ShareArray(result->Collection<ArrowFormat>()[0]);
+		REQUIRE(first->arrow_array.children != second->arrow_array.children);
+		REQUIRE(first->arrow_array.children[3]->dictionary != second->arrow_array.children[3]->dictionary);
+		REQUIRE(first->arrow_array.children[1]->buffers[2] == second->arrow_array.children[1]->buffers[2]);
+		result.reset();
+		SECTION("the fetched one first") {
+			first.reset();
+			REQUIRE(!original.expired());
+			RequireMixedRows(second->arrow_array, 0);
+			second.reset();
+		}
+		SECTION("the shared one first") {
+			second.reset();
+			REQUIRE(!original.expired());
+			RequireMixedRows(first->arrow_array, 0);
+			first.reset();
+		}
+		REQUIRE(original.expired());
+	}
+}
+
+TEST_CASE("A child or dictionary moved out of a retained Arrow export outlives the rest", "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto result = con.Query(MIXED_QUERY, make_shared_ptr<ArrowFormat>(1024));
+	REQUIRE_NO_FAIL(*result);
+	weak_ptr<const ArrowArrayWrapper> original = result->Collection<ArrowFormat>()[0];
+	auto first = result->Fetch<ArrowFormat>();
+	auto second = ArrowFormat::ShareArray(result->Collection<ArrowFormat>()[0]);
+
+	SECTION("a nested child") {
+		auto &child = *first->arrow_array.children[2];
+		ArrowArray moved = child;
+		child.release = nullptr;
+		first.reset();
+		second.reset();
+		result.reset();
+		REQUIRE(!original.expired());
+		auto &list = *moved.children[1];
+		auto list_offsets = reinterpret_cast<const int32_t *>(list.buffers[1]) + list.offset;
+		REQUIRE(Int64Values(*moved.children[0])[1023] == 1023);
+		REQUIRE(Int64Values(*list.children[0])[list_offsets[1023] + 1] == 1024);
+		moved.release(&moved);
+		REQUIRE(moved.release == nullptr);
+		REQUIRE(original.expired());
+	}
+	SECTION("a dictionary") {
+		auto &dictionary = *first->arrow_array.children[3]->dictionary;
+		ArrowArray moved = dictionary;
+		dictionary.release = nullptr;
+		first.reset();
+		second.reset();
+		result.reset();
+		REQUIRE(!original.expired());
+		REQUIRE(moved.length == 3);
+		REQUIRE(StringAt(moved, 0) == "x");
+		REQUIRE(StringAt(moved, 1) == "y");
+		REQUIRE(StringAt(moved, 2) == "z");
+		moved.release(&moved);
+		REQUIRE(moved.release == nullptr);
+		REQUIRE(original.expired());
+	}
+}
+
+TEST_CASE("A taken Arrow collection leaves the result and outlives it", "[api][query_result_arrow]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto result = con.Query(MIXED_QUERY, make_shared_ptr<ArrowFormat>(1024));
+	REQUIRE_NO_FAIL(*result);
+
+	SECTION("exports of a taken collection outlive the container") {
+		auto taken = result->TakeCollection<ArrowFormat>();
+		REQUIRE_THROWS_AS(result->Collection<ArrowFormat>(), InvalidInputException);
+		REQUIRE_THROWS_AS(result->Fetch<ArrowFormat>(), InvalidInputException);
+		result.reset();
+		REQUIRE(taken->size() == 3);
+		REQUIRE(TotalRows(*taken) == 3000);
+		weak_ptr<const ArrowArrayWrapper> original = (*taken)[1];
+		vector<unique_ptr<ArrowArrayWrapper>> exported;
+		for (auto &owner : *taken) {
+			exported.push_back(ArrowFormat::ShareArray(owner));
+		}
+		taken.reset();
+		REQUIRE(!original.expired());
+		RequireMixedRows(exported[1]->arrow_array, 1024);
+		exported.clear();
+		REQUIRE(original.expired());
+	}
+	SECTION("arrays fetched before the take and exported after it coexist") {
+		auto early = result->Fetch<ArrowFormat>();
+		auto taken = result->TakeCollection<ArrowFormat>();
+		weak_ptr<const ArrowArrayWrapper> original = (*taken)[0];
+		auto late = ArrowFormat::ShareArray((*taken)[0]);
+		result.reset();
+		taken.reset();
+		REQUIRE(early->arrow_array.children != late->arrow_array.children);
+		REQUIRE(early->arrow_array.children[1]->buffers[2] == late->arrow_array.children[1]->buffers[2]);
+		early.reset();
+		REQUIRE(!original.expired());
+		RequireMixedRows(late->arrow_array, 0);
+		late.reset();
+		REQUIRE(original.expired());
+	}
+	SECTION("a taken collection scans back through arrow_scan") {
+		auto types = result->GetTypes();
+		auto names = IdentifiersToStrings(result->GetNames());
+		auto properties = result->client_properties;
+		auto taken = result->TakeCollection<ArrowFormat>();
+		result.reset();
+		vector<unique_ptr<ArrowArrayWrapper>> exported;
+		for (auto &owner : *taken) {
+			exported.push_back(ArrowFormat::ShareArray(owner));
+		}
+		taken.reset();
+		ServedArrays served(std::move(types), std::move(names), std::move(properties), std::move(exported));
+		auto scanned = served.Scan(con);
+		REQUIRE(!scanned->HasError());
+		auto &collection = scanned->Collection();
+		REQUIRE(collection.Count() == 3000);
+		auto rows = collection.GetRows();
+		REQUIRE(rows.GetValue(0, 3).IsNull());
+		REQUIRE(rows.GetValue(1, 7) == Value("v7"));
+		REQUIRE(rows.GetValue(2, 2999) ==
+		        Value::STRUCT({{"a", Value::BIGINT(2999)},
+		                       {"l", Value::LIST(LogicalType::BIGINT, {Value::BIGINT(2999), Value::BIGINT(3000)})}}));
+		REQUIRE(rows.GetValue(3, 2).ToString() == "z");
 	}
 }
 
@@ -535,8 +803,8 @@ TEST_CASE("An Arrow stream outlives the connection that submitted it", "[api][qu
 	con.reset();
 
 	idx_t rows = Rows(*first);
-	while (auto payload = stream.Fetch()) {
-		rows += Rows(*payload);
+	while (auto array = stream.Fetch()) {
+		rows += Rows(*array);
 	}
 	REQUIRE(!stream.HasError());
 	REQUIRE(rows == 3000);
@@ -553,7 +821,7 @@ TEST_CASE("A statement on the connection ends an Arrow stream, which the stream 
 
 	REQUIRE_NO_FAIL(con.Query("SELECT 42"));
 
-	unique_ptr<ArrowPayload> next;
+	unique_ptr<ArrowArrayWrapper> next;
 	REQUIRE(stream.TryFetch(next) == QueryResultState::EXECUTION_ERROR);
 	REQUIRE(!next);
 	REQUIRE(StringUtil::Contains(stream.GetError(), "cancelled"));

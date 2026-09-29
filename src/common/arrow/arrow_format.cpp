@@ -4,86 +4,75 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// ArrowPayload
+// Shared exports
 //===--------------------------------------------------------------------===//
 namespace {
 
-//! One node of a view: its own struct tree over the owner's buffers, so a consumer that moves a
-//! child out of this view, as the C interface allows, touches nothing another view still reads
-struct SharedArrayView {
-	shared_ptr<ArrowArrayWrapper> owner;
-	vector<unique_ptr<ArrowArray>> children;
-	vector<ArrowArray *> child_pointers;
-	unique_ptr<ArrowArray> dictionary;
-};
-
-void ReleaseSharedArrayView(ArrowArray *array) {
+//! Also releases a partly built export, whose n_children counts only the children attached so far
+void ReleaseSharedArray(ArrowArray *array) {
 	if (!array || !array->release) {
 		return;
 	}
-	auto view = static_cast<SharedArrayView *>(array->private_data);
-	for (auto &child : view->children) {
+	array->release = nullptr;
+	for (int64_t i = 0; i < array->n_children; i++) {
+		auto child = array->children[i];
 		// A child without a release was moved out and is released by whoever took it
 		if (child->release) {
-			child->release(child.get());
+			child->release(child);
+		}
+		delete child;
+	}
+	delete[] array->children;
+	if (array->dictionary) {
+		if (array->dictionary->release) {
+			array->dictionary->release(array->dictionary);
+		}
+		delete array->dictionary;
+	}
+	delete static_cast<ArrowArrayOwner *>(array->private_data);
+	array->children = nullptr;
+	array->dictionary = nullptr;
+	array->private_data = nullptr;
+}
+
+ArrowArray *NewSharedNode() {
+	auto node = make_uniq<ArrowArray>();
+	node->release = ReleaseSharedArray;
+	return node.release();
+}
+
+//! The target's release is installed before the call and each allocation is attached as soon as it is made,
+//! so a throw leaves nothing that release cannot free
+void FillSharedArray(ArrowArray &target, const ArrowArray &source, const ArrowArrayOwner &owner) {
+	target.private_data = make_uniq<ArrowArrayOwner>(owner).release();
+	target.length = source.length;
+	target.null_count = source.null_count;
+	target.offset = source.offset;
+	target.n_buffers = source.n_buffers;
+	target.buffers = source.buffers;
+	if (source.n_children > 0) {
+		target.children = make_unsafe_uniq_array<ArrowArray *>(NumericCast<idx_t>(source.n_children)).release();
+		for (int64_t i = 0; i < source.n_children; i++) {
+			target.children[i] = NewSharedNode();
+			target.n_children = i + 1;
+			FillSharedArray(*target.children[i], *source.children[i], owner);
 		}
 	}
-	if (view->dictionary && view->dictionary->release) {
-		view->dictionary->release(view->dictionary.get());
-	}
-	delete view;
-	array->private_data = nullptr;
-	array->release = nullptr;
-}
-
-ArrowArray ViewOf(const ArrowArray &source, const shared_ptr<ArrowArrayWrapper> &owner) {
-	auto view = make_uniq<SharedArrayView>();
-	view->owner = owner;
-	ArrowArray result = source;
-	for (int64_t i = 0; i < source.n_children; i++) {
-		view->children.push_back(make_uniq<ArrowArray>(ViewOf(*source.children[i], owner)));
-		view->child_pointers.push_back(view->children.back().get());
-	}
-	result.children = view->child_pointers.data();
 	if (source.dictionary) {
-		view->dictionary = make_uniq<ArrowArray>(ViewOf(*source.dictionary, owner));
-		result.dictionary = view->dictionary.get();
+		target.dictionary = NewSharedNode();
+		FillSharedArray(*target.dictionary, *source.dictionary, owner);
 	}
-	result.private_data = view.release();
-	result.release = ReleaseSharedArrayView;
-	return result;
-}
-
-ArrowArrayWrapper ViewOf(const shared_ptr<ArrowArrayWrapper> &owner) {
-	ArrowArrayWrapper view;
-	view.arrow_array = ViewOf(owner->arrow_array, owner);
-	return view;
-}
-
-shared_ptr<ArrowArrayWrapper> Own(ArrowArray array) {
-	auto owner = make_shared_ptr<ArrowArrayWrapper>();
-	owner->arrow_array = array;
-	return owner;
 }
 
 } // namespace
-
-ArrowPayload::ArrowPayload(ArrowArray array_p) : ArrowPayload(Own(array_p)) {
-}
-
-ArrowPayload::ArrowPayload(shared_ptr<ArrowArrayWrapper> owner_p) : array(ViewOf(owner_p)), owner(std::move(owner_p)) {
-}
-
-unique_ptr<ArrowPayload> ArrowPayload::Copy() const {
-	return make_uniq<ArrowPayload>(owner);
-}
 
 ArrowFormatGlobalState::ArrowFormatGlobalState(const ResultFormatContext &context)
     : types(context.types), properties(context.client_properties) {
@@ -104,12 +93,12 @@ namespace {
 
 class ArrowUnit : public ResultUnit {
 public:
-	ArrowUnit(idx_t row_count, idx_t byte_size, unique_ptr<ArrowPayload> payload_p)
-	    : ResultUnit(row_count, byte_size), payload(std::move(payload_p)) {
+	ArrowUnit(idx_t row_count, idx_t byte_size, unique_ptr<ArrowArrayWrapper> array_p)
+	    : ResultUnit(row_count, byte_size), array(std::move(array_p)) {
 	}
 
 public:
-	unique_ptr<ArrowPayload> payload;
+	unique_ptr<ArrowArrayWrapper> array;
 };
 
 class ArrowFormatLocalState : public ResultFormatLocalState {
@@ -124,9 +113,11 @@ unique_ptr<ArrowUnit> SealAppender(ArrowFormatLocalState &lstate) {
 	// Finalize hands the buffers to the array, so the size has to be read before it
 	auto rows = lstate.appender->RowCount();
 	auto bytes = lstate.appender->ByteSize();
-	auto unit = make_uniq<ArrowUnit>(rows, bytes, make_uniq<ArrowPayload>(lstate.appender->Finalize()));
+	// Allocated before Finalize, so nothing can throw between the array's creation and its adoption
+	auto array = make_uniq<ArrowArrayWrapper>();
+	array->arrow_array = lstate.appender->Finalize();
 	lstate.appender.reset();
-	return unit;
+	return make_uniq<ArrowUnit>(rows, bytes, std::move(array));
 }
 
 } // namespace
@@ -186,15 +177,39 @@ unique_ptr<ResultUnit> ArrowFormat::FinishUnit(ResultFormatGlobalState &gstate, 
 	return SealAppender(lstate);
 }
 
-unique_ptr<ArrowPayload> ArrowFormat::UnpackUnit(unique_ptr<ResultUnit> unit) {
+unique_ptr<RetainedResultCollection> ArrowFormat::CreateCollection(ClientContext &context,
+                                                                   ResultFormatGlobalState &gstate,
+                                                                   const ResultFormatContext &format_context) {
+	return make_uniq<ArrowRetainedCollection>(*this, gstate);
+}
+
+unique_ptr<ArrowArrayWrapper> ArrowFormat::UnpackUnit(unique_ptr<ResultUnit> unit) {
 	if (!unit) {
 		return nullptr;
 	}
-	return std::move(unit->Cast<ArrowUnit>().payload);
+	return std::move(unit->Cast<ArrowUnit>().array);
 }
 
-unique_ptr<ArrowPayload> ArrowFormat::CopyPayload(const ArrowPayload &payload) {
-	return payload.Copy();
+unique_ptr<ArrowArrayWrapper> ArrowFormat::ShareArray(const ArrowArrayOwner &owner) {
+	D_ASSERT(owner && owner->arrow_array.release);
+	auto result = make_uniq<ArrowArrayWrapper>();
+	result->arrow_array = ArrowArray {};
+	result->arrow_array.release = ReleaseSharedArray;
+	FillSharedArray(result->arrow_array, owner->arrow_array, owner);
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// ArrowRetainedCollection
+//===--------------------------------------------------------------------===//
+unique_ptr<ArrowArrayWrapper> ArrowRetainedCollection::Fetch() {
+	auto &arrays = Get();
+	if (fetch_index >= arrays.size()) {
+		return nullptr;
+	}
+	auto array = ArrowFormat::ShareArray(arrays[fetch_index]);
+	fetch_index++;
+	return array;
 }
 
 } // namespace duckdb

@@ -12,7 +12,9 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb/main/result_format.hpp"
@@ -20,28 +22,12 @@
 
 namespace duckdb {
 
+class ArrowRetainedCollection;
 class ArrowTypeExtensionData;
 
-//! One Arrow array as a consumer receives it. Its buffers are shared: every copy holds its own view,
-//! a struct tree over the same buffers whose release drops one reference, and the buffers go with the
-//! last holder
-class ArrowPayload {
-public:
-	//! Takes over the array, which the appender finalized
-	DUCKDB_API explicit ArrowPayload(ArrowArray array);
-	//! A payload over buffers another payload already holds
-	DUCKDB_API explicit ArrowPayload(shared_ptr<ArrowArrayWrapper> owner);
-
-public:
-	DUCKDB_API unique_ptr<ArrowPayload> Copy() const;
-
-public:
-	//! This payload's view over the shared buffers, handed to a consumer with MoveTo
-	ArrowArrayWrapper array;
-
-private:
-	shared_ptr<ArrowArrayWrapper> owner;
-};
+//! An appender's finalized array, never mutated once shared because every export borrows its buffers
+using ArrowArrayOwner = shared_ptr<const ArrowArrayWrapper>;
+using ArrowArrayCollection = vector<ArrowArrayOwner>;
 
 //! Per-query Arrow state, built at submission. The schema and the extension type map are resolved once
 //! and shared by every array. Resolving them needs the client context the properties carry
@@ -73,9 +59,11 @@ private:
 };
 
 //! Turns chunks into Arrow arrays of at most batch_size rows, one appender per producer
-class ArrowFormat : public ResultFormatBase<ArrowFormat> {
+class ArrowFormat : public ResultFormat {
 public:
-	using T = ArrowPayload;
+	using T = ArrowArrayWrapper;
+	using C = ArrowArrayCollection;
+	using Collection = ArrowRetainedCollection;
 	using GlobalState = ArrowFormatGlobalState;
 	static constexpr const char *NAME = "arrow";
 
@@ -91,14 +79,32 @@ public:
 	DUCKDB_API bool IsUnitFinished(ResultFormatLocalState &lstate) override;
 	DUCKDB_API unique_ptr<ResultUnit> FinishUnit(ResultFormatGlobalState &gstate,
 	                                             ResultFormatLocalState &lstate) override;
+	DUCKDB_API unique_ptr<RetainedResultCollection>
+	CreateCollection(ClientContext &context, ResultFormatGlobalState &gstate,
+	                 const ResultFormatContext &format_context) override;
 
 public:
-	DUCKDB_API static unique_ptr<ArrowPayload> UnpackUnit(unique_ptr<ResultUnit> unit);
-	DUCKDB_API static unique_ptr<ArrowPayload> CopyPayload(const ArrowPayload &payload);
+	//! The array the appender finalized, owned by the caller from here on
+	DUCKDB_API static unique_ptr<ArrowArrayWrapper> UnpackUnit(unique_ptr<ResultUnit> unit);
+	//! An export over the owner's buffers whose every node holds the owner, so a moved-out child outlives the rest
+	DUCKDB_API static unique_ptr<ArrowArrayWrapper> ShareArray(const ArrowArrayOwner &owner);
 
 private:
 	//! The rows an array holds, except at a batch boundary and at a producer's end of input
 	idx_t batch_size;
+};
+
+//! Fetch exports with ShareArray, so the collection stays whole
+class ArrowRetainedCollection : public DefaultRetainedCollection<ArrowFormat> {
+public:
+	using DefaultRetainedCollection<ArrowFormat>::DefaultRetainedCollection;
+
+public:
+	//! An export of the next array; null at the end and forever after
+	DUCKDB_API unique_ptr<ArrowArrayWrapper> Fetch();
+
+private:
+	idx_t fetch_index = 0;
 };
 
 } // namespace duckdb

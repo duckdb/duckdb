@@ -39,11 +39,11 @@ static int NextFromMaterialized(QueryResult &res, ClientProperties properties, s
 }
 
 static int NextFromArrow(QueryResult &res, struct ArrowArray *out) {
-	auto payload = res.Fetch<ArrowFormat>();
-	if (!payload) {
+	auto array = res.Fetch<ArrowFormat>();
+	if (!array) {
 		return 0;
 	}
-	payload->array.MoveTo(*out);
+	array->MoveTo(*out);
 	return 0;
 }
 
