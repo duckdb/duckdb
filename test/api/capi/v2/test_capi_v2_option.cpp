@@ -246,9 +246,10 @@ TEST_CASE("V2 conn option: Not allowed during query", "[capi_v2][conn][option]")
 
 	REQUIRE(Query(fx.conn, "SELECT 42", &result, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	// max_execution_time is LOCAL_DEFAULT → AUTOMATIC resolves to SESSION → write succeeds.
-	REQUIRE(duckdb_v2_connection_set_option(fx.conn, Convert("max_execution_time"), Convert("5000"),
-	                                        DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
+	// The result keeps the query live, so the write is rejected.
+	auto name_str = Convert("max_execution_time");
+	auto setting_str = Convert("5000");
+	REQUIRE(duckdb_v2_connection_set_option(fx.conn, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
 	                                        nullptr) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
 	REQUIRE(ConnSetting(fx.conn, "max_execution_time") == "0");
 }
