@@ -653,7 +653,7 @@ TEST_CASE("Literal caches respect active grammar extensions", "[api][grammar_ext
 static void CheckGrammarExtensionTestSyntax(Connection &con) {
 	auto result = con.Query("ANSWER");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(42));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(42));
 }
 
 TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_extension]") {
@@ -712,17 +712,17 @@ TEST_CASE("Overriding a transform opts its rule out of collapsing", "[api][gramm
 	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['seven']"));
 	auto result = con.Query("SELECT 1");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(7));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
 
 	// the extension promised the collapse is safe, so an operand without a tail skips its transform
 	Connection collapsible_con(db);
 	REQUIRE_NO_FAIL(*collapsible_con.Query("SET active_grammar_extensions = ['collapsible_seven']"));
 	result = collapsible_con.Query("SELECT 1");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(1));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
 	result = collapsible_con.Query("SELECT 1 + 1");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(7));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
 }
 
 struct MatchProcessLifetimeState {
@@ -1301,6 +1301,6 @@ TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_
 	auto result = con.Query("SET active_grammar_extensions = ['invalid_grammar_extension']");
 	REQUIRE_FAIL(result);
 	CheckGrammarExtensionTestSyntax(con);
-	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->GetValue(0, 0);
+	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
 	REQUIRE(ListValue::GetChildren(setting).size() == 2);
 }

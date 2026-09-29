@@ -142,7 +142,7 @@ TEST_CASE("Logical plan SQL export copies owned chunk data and selected columns"
 	REQUIRE((exported.GetIssues()[0].facts[0] == pair<string, Value> {"guard", Value("borrowed_chunk_collection")}));
 	auto native = connection.Query(make_uniq<LogicalPlanStatement>(std::move(borrowed)));
 	REQUIRE_NO_FAIL(*native);
-	REQUIRE(native->GetValue(0, 0) == Value::BIGINT(42));
+	REQUIRE(native->Collection().GetValue(0, 0) == Value::BIGINT(42));
 	connection.Rollback();
 }
 
@@ -200,7 +200,7 @@ TEST_CASE("Owned chunk export preserves observable execution groups",
 			auto native = connection.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
 			REQUIRE_NO_FAIL(*native);
 			REQUIRE(native->RowCount() == count * 2);
-			REQUIRE(native->GetValue(2, 0) ==
+			REQUIRE(native->Collection().GetValue(2, 0) ==
 			        Value::BIGINT(combined ? count : MinValue<idx_t>(count * 2, STANDARD_VECTOR_SIZE)));
 			connection.Rollback();
 			REQUIRE_NO_FAIL(connection.Query("PRAGMA enable_optimizer"));
@@ -251,8 +251,8 @@ TEST_CASE("Owned chunk SQL export retains delivered rows before conversion error
 		auto pure_result = connection.Query(pure.GetValue().query->ToString());
 		REQUIRE_NO_FAIL(*pure_result);
 		REQUIRE(pure_result->RowCount() == count * 2);
-		REQUIRE(pure_result->GetValue(0, count - 1) == Value("1"));
-		REQUIRE(pure_result->GetValue(0, count) == Value("bad"));
+		REQUIRE(pure_result->Collection().GetValue(0, count - 1) == Value("1"));
+		REQUIRE(pure_result->Collection().GetValue(0, count) == Value("bad"));
 		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *plan);
 		if (count == STANDARD_VECTOR_SIZE) {
 			REQUIRE(exported.IsSuccess());
@@ -264,9 +264,9 @@ TEST_CASE("Owned chunk SQL export retains delivered rows before conversion error
 		QueryParameters parameters;
 		parameters.result_eagerness = ResultEagerness::AUTO;
 		auto drain = [&](unique_ptr<QueryResult> result) {
-			unique_ptr<QueryResultStream> stream;
+			unique_ptr<QueryResultStream<>> stream;
 			if (!result->HasError()) {
-				stream = make_uniq<QueryResultStream>(std::move(result));
+				stream = make_uniq<QueryResultStream<>>(std::move(result));
 			}
 
 			idx_t rows = 0;
@@ -374,7 +374,7 @@ TEST_CASE("Owned chunk SQL export requires an explicit consumer evaluation contr
 		auto native = connection.Query(make_uniq<LogicalPlanStatement>(std::move(op)));
 		REQUIRE_NO_FAIL(*native);
 		REQUIRE(native->RowCount() == 2);
-		REQUIRE(native->GetValue(2, 0) == Value::BIGINT(combined ? 1 : 2));
+		REQUIRE(native->Collection().GetValue(2, 0) == Value::BIGINT(combined ? 1 : 2));
 		connection.Rollback();
 		REQUIRE_NO_FAIL(connection.Query("PRAGMA enable_optimizer"));
 		if (!combined) {
@@ -444,9 +444,9 @@ TEST_CASE("Owned chunk SQL export accounts for intrinsic SINGLE join errors",
 				QueryParameters parameters;
 				parameters.result_eagerness = ResultEagerness::AUTO;
 				auto drain = [&](unique_ptr<QueryResult> result) {
-					unique_ptr<QueryResultStream> stream;
+					unique_ptr<QueryResultStream<>> stream;
 					if (!result->HasError()) {
-						stream = make_uniq<QueryResultStream>(std::move(result));
+						stream = make_uniq<QueryResultStream<>>(std::move(result));
 					}
 
 					idx_t rows = 0;

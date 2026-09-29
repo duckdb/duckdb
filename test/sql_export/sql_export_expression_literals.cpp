@@ -172,7 +172,7 @@ TEST_CASE("Nested SQL cast reconstruction distinguishes collation and error sema
 					auto rebound = connection.Query("SELECT " + exported.GetValue()->ToString());
 					REQUIRE_NO_FAIL(*rebound);
 					REQUIRE(rebound->GetTypes()[0].EqualsIncludingCollation(target));
-					REQUIRE(rebound->GetValue(0, 0).IsNull());
+					REQUIRE(rebound->Collection().GetValue(0, 0).IsNull());
 				}
 			}
 		}
