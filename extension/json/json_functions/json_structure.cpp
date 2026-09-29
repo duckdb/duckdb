@@ -244,8 +244,11 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], const idx
 				auto it = key_map.find({key_ptr, key_len});
 				D_ASSERT(it != key_map.end());
 				const auto child_idx = it->second;
+				if (found_keys[child_idx]) {
+					continue; // Duplicate key: the first value is used, like in JSONTransform::TransformObject
+				}
 				child_vals[child_idx][i] = child_val;
-				found_key_count += !found_keys[child_idx];
+				found_key_count++;
 				found_keys[child_idx] = true;
 			}
 

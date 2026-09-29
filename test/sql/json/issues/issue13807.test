@@ -129,3 +129,20 @@ SELECT * FROM read_json('{DATA_DIR}/json/13807_multi/*.ndjson', ignore_case=true
 1	a	{'Key': 1, 'List': [{'Leaf': 10}]}
 2	b	{'Key': 2, 'List': [{'Leaf': 20}]}
 3	c	{'Key': 3, 'List': [{'Leaf': 30}]}
+
+# type detection uses the first of two keys that only differ in case, like reading does
+query II
+SELECT d, typeof(d) FROM read_json('{DATA_DIR}/json/13807_duplicate_refine.ndjson', ignore_case=true, ignore_errors=true);
+----
+hello	VARCHAR
+
+# keys that only differ in case are also merged in objects that are inferred as MAP
+statement error
+FROM read_json('{DATA_DIR}/json/13807_map.ndjson');
+----
+<REGEX>:Not implemented Error:.*Duplicate name.*
+
+query I
+SELECT column_type FROM (DESCRIBE FROM read_json('{DATA_DIR}/json/13807_map.ndjson', ignore_case=true));
+----
+MAP(VARCHAR, STRUCT(x BIGINT))
