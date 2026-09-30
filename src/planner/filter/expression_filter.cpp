@@ -84,6 +84,27 @@ unique_ptr<ExpressionFilter> ExpressionFilter::CreateComparisonFilter(Expression
 	return make_uniq<ExpressionFilter>(std::move(comparison));
 }
 
+bool ExpressionFilter::IsSimpleFilterColumnRef(const Expression &expr) {
+	return expr.GetExpressionClass() == ExpressionClass::BOUND_REF ||
+	       expr.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+}
+
+optional_ptr<const BoundConstantExpression>
+ExpressionFilter::TryGetColumnConstantComparison(const BoundFunctionExpression &comparison,
+                                                 ExpressionType &comparison_type) {
+	auto &left = BoundComparisonExpression::Left(comparison);
+	auto &right = BoundComparisonExpression::Right(comparison);
+	comparison_type = comparison.GetExpressionType();
+	if (IsSimpleFilterColumnRef(left) && right.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return right.Cast<BoundConstantExpression>();
+	}
+	if (IsSimpleFilterColumnRef(right) && left.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		comparison_type = FlipComparisonExpression(comparison_type);
+		return left.Cast<BoundConstantExpression>();
+	}
+	return nullptr;
+}
+
 static bool IsOptionalInternalFunction(const BoundFunctionExpression &func) {
 	return func.Function().GetName() == OptionalFilterScalarFun::NAME ||
 	       func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME;

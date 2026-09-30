@@ -52,6 +52,10 @@ public:
 	                                                        ExpressionType expression_type);
 	//! Build a single-column filter comparing against a constant.
 	static unique_ptr<ExpressionFilter> CreateComparisonFilter(ExpressionType comparison_type, Value constant);
+	static bool IsSimpleFilterColumnRef(const Expression &expr);
+	//! Flips comparison_type for a constant on the left
+	static optional_ptr<const BoundConstantExpression>
+	TryGetColumnConstantComparison(const BoundFunctionExpression &comparison, ExpressionType &comparison_type);
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats);

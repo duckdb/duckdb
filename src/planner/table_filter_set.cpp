@@ -85,9 +85,7 @@ static bool IsSupportedConstantComparison(ExpressionType type) {
 }
 
 static bool TryExtractLegacySubject(const Expression &expr, vector<StructExtractPathEntry> &struct_path) {
-	auto &subject = PeelStructExtractPath(expr, struct_path);
-	return subject.GetExpressionClass() == ExpressionClass::BOUND_REF ||
-	       subject.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
+	return ExpressionFilter::IsSimpleFilterColumnRef(PeelStructExtractPath(expr, struct_path));
 }
 
 static unique_ptr<TableFilter> WrapStructFilterPath(unique_ptr<TableFilter> filter,
