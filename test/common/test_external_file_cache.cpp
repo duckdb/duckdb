@@ -84,53 +84,6 @@ private:
 	idx_t read_count DUCKDB_GUARDED_BY(lock) = 0;
 };
 
-//! Records the ranges of positional reads.
-class ReadRecordingFileSystem : public SimpleTrackingFileSystem {
-public:
-	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
-		{
-			annotated_lock_guard<annotated_mutex> guard(lock);
-			reads.emplace_back(location, NumericCast<idx_t>(nr_bytes));
-		}
-		SimpleTrackingFileSystem::Read(handle, buffer, nr_bytes, location);
-	}
-
-	//! Recorded reads sorted by location, clears them
-	vector<pair<idx_t, idx_t>> TakeReads() {
-		annotated_lock_guard<annotated_mutex> guard(lock);
-		auto result = std::move(reads);
-		reads.clear();
-		std::sort(result.begin(), result.end());
-		return result;
-	}
-
-private:
-	annotated_mutex lock;
-	vector<pair<idx_t, idx_t>> reads DUCKDB_GUARDED_BY(lock);
-};
-
-const string REMOTE_PREFIX = "s3://efc-test/";
-
-//! Serves REMOTE_PREFIX + local path from the local file, so the cache treats it as a remote file.
-class RemotePathFileSystem : public ReadRecordingFileSystem {
-public:
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
-		return ReadRecordingFileSystem::OpenFile(path.substr(REMOTE_PREFIX.size()), flags, opener);
-	}
-};
-
-//! Opens local files under REMOTE_PREFIX + local path, so their handles look like remote files.
-class RemoteNamedFileSystem : public SimpleTrackingFileSystem {
-public:
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
-		auto handle = SimpleTrackingFileSystem::OpenFile(path, flags, opener);
-		handle->path = REMOTE_PREFIX + path;
-		return handle;
-	}
-};
-
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
@@ -204,7 +157,7 @@ void EvictObjectCache(ObjectCache &object_cache) {
 TEST_CASE("Reads cache exactly the requested bytes", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t FILE_SIZE = 65536;
 	auto content = MakeTestContent(FILE_SIZE);
@@ -233,7 +186,7 @@ TEST_CASE("Reads cache exactly the requested bytes", "[external_file_cache]") {
 TEST_CASE("Large reads are split at the cache block size", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
@@ -264,7 +217,7 @@ TEST_CASE("Large reads are split at the cache block size", "[external_file_cache
 TEST_CASE("Uncached reads are split at the cache block size", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
@@ -294,7 +247,7 @@ TEST_CASE("Uncached reads are split at the cache block size", "[external_file_ca
 TEST_CASE("Reads of files the cache does not handle are not split", "[external_file_cache]") {
 	DuckDB db(nullptr);
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 4096;
 	const idx_t FILE_SIZE = BLOCK_SIZE * 3 + 100;
@@ -322,10 +275,9 @@ TEST_CASE("Compressed remote files are read in chunks of up to the file size", "
 	             ->HasError());
 
 	GZipFileSystem gzip_fs;
-	SimpleTrackingFileSystem local_fs;
-	RemoteNamedFileSystem remote_fs;
-	auto open_compressed = [&](FileSystem &fs) {
-		auto child = fs.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ);
+	SimpleTrackingFileSystem tracking_fs;
+	auto open_compressed = [&](const string &path) {
+		auto child = tracking_fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 		return gzip_fs.OpenCompressedFile(*con.context, std::move(child), false);
 	};
 	auto read_all = [](FileHandle &handle) {
@@ -339,12 +291,12 @@ TEST_CASE("Compressed remote files are read in chunks of up to the file size", "
 	};
 
 	SECTION("local files keep the buffer size of the compression") {
-		auto local = open_compressed(local_fs);
+		auto local = open_compressed(test_file.GetPath());
 		REQUIRE(local->Cast<CompressedFile>().stream_data.in_buf_size == gzip_fs.InBufferSize());
 	}
 	SECTION("remote files smaller than a chunk are read whole") {
-		auto local = open_compressed(local_fs);
-		auto remote = open_compressed(remote_fs);
+		auto local = open_compressed(test_file.GetPath());
+		auto remote = open_compressed(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath());
 		REQUIRE(remote->GetFileSize() > gzip_fs.InBufferSize());
 		REQUIRE(remote->Cast<CompressedFile>().stream_data.in_buf_size == remote->GetFileSize());
 		REQUIRE(read_all(*remote) == read_all(*local));
@@ -352,7 +304,7 @@ TEST_CASE("Compressed remote files are read in chunks of up to the file size", "
 	SECTION("the buffers count toward the memory limit") {
 		auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
 		const auto used_before = buffer_manager.GetUsedMemory();
-		auto remote = open_compressed(remote_fs);
+		auto remote = open_compressed(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath());
 		auto &stream_data = remote->Cast<CompressedFile>().stream_data;
 		REQUIRE(buffer_manager.GetUsedMemory() >= used_before + stream_data.in_buf_size + stream_data.out_buf_size);
 		remote.reset();
@@ -363,7 +315,7 @@ TEST_CASE("Compressed remote files are read in chunks of up to the file size", "
 TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	// larger than the default local block size, so the file is not fetched whole
 	const idx_t FILE_SIZE = 20480;
@@ -387,7 +339,7 @@ TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[
 TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 65536;
 	const idx_t ABSORB_SIZE = BLOCK_SIZE / 8;
@@ -422,7 +374,7 @@ TEST_CASE("Small cached ranges between gaps are fetched with the gaps", "[extern
 TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves no request", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t BLOCK_SIZE = 65536;
 	Connection con(db);
@@ -449,7 +401,7 @@ TEST_CASE("Small cached ranges are kept when fetching them with the gaps saves n
 TEST_CASE("Cached ranges of local files between gaps are kept at the default block size", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	// larger than the default local block size, so the file is not fetched whole
 	const idx_t FILE_SIZE = 20480;
@@ -473,7 +425,7 @@ TEST_CASE("Cached ranges of local files between gaps are kept at the default blo
 TEST_CASE("A file no larger than the block size is fetched whole on the first read", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t FILE_SIZE = 3000;
 	auto content = MakeTestContent(FILE_SIZE);
@@ -496,7 +448,7 @@ TEST_CASE("A file no larger than the block size is fetched whole on the first re
 TEST_CASE("Reads of remote files are rounded out to the minimum blocks around them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto remote_fs = make_uniq<RemotePathFileSystem>();
+	auto remote_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t MAX_BLOCK_SIZE = 16384;
 	Connection con(db);
@@ -507,7 +459,8 @@ TEST_CASE("Reads of remote files are rounded out to the minimum blocks around th
 	EFCTestFileGuard test_file("test_efc_min_block.bin", content);
 
 	CachingFileSystem cfs(*remote_fs, db_instance);
-	auto handle = cfs.OpenFile(MakeTestOpenFileInfo(REMOTE_PREFIX + test_file.GetPath()), ReaderSizedFlags());
+	auto handle =
+	    cfs.OpenFile(MakeTestOpenFileInfo(CACHING_TEST_REMOTE_PREFIX + test_file.GetPath()), ReaderSizedFlags());
 
 	REQUIRE(ReadFull(*handle, 1, 5000) == content.substr(5000, 1));
 	REQUIRE(remote_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{MIN_BLOCK_SIZE, MIN_BLOCK_SIZE}});
@@ -530,7 +483,7 @@ TEST_CASE("Reads of remote files are rounded out to the minimum blocks around th
 TEST_CASE("Short reads of local files are not widened", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 
 	const idx_t FILE_SIZE = 65636;
 	auto content = MakeTestContent(FILE_SIZE);
@@ -546,7 +499,7 @@ TEST_CASE("Short reads of local files are not widened", "[external_file_cache]")
 TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 	auto &cache = db_instance.GetExternalFileCache();
 
 	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
@@ -579,7 +532,7 @@ TEST_CASE("Reads sized by the cache fetch the cache blocks around them", "[exter
 TEST_CASE("Reads past the end of the file fetch only the bytes in it", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &db_instance = *db.instance;
-	auto recording_fs = make_uniq<ReadRecordingFileSystem>();
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
 	auto &cache = db_instance.GetExternalFileCache();
 
 	const idx_t BLOCK_SIZE = cache.GetCacheMaxBlockSize(TestDirectoryPath());
