@@ -71,6 +71,8 @@ private:
 	DuckTransaction &transaction;
 	UndoBufferAllocator allocator;
 	ActiveTransactionState active_transaction_state = ActiveTransactionState::UNSET;
+	//! Number of entries already cleaned up, so that a cleanup that threw part-way can be resumed
+	idx_t cleaned_up_entries = 0;
 
 private:
 	template <class T>
