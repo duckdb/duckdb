@@ -3,6 +3,8 @@
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/main/extension_manager.hpp"
+#include "duckdb/parser/peg/sql_formatter.hpp"
 
 namespace duckdb {
 
@@ -51,10 +53,14 @@ unique_ptr<LogicalOperator> LogicalExplain::CreateSQLResult(ClientContext &conte
 	auto collection =
 	    make_uniq<ColumnDataCollection>(context, result_types, ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 	if (exported.IsSuccess()) {
+		auto sql = exported.GetValue().query->ToString();
+		if (ExtensionManager::Get(context).ExtensionIsLoaded("autocomplete")) {
+			sql = FormatSQL(sql);
+		}
 		DataChunk chunk;
 		chunk.Initialize(Allocator::Get(context), result_types);
 		chunk.data[0].Append(Value("sql"));
-		chunk.data[1].Append(Value(exported.GetValue().query->ToString()));
+		chunk.data[1].Append(Value(sql));
 		collection->Append(chunk);
 	}
 	return make_uniq<LogicalColumnDataGet>(table_index, std::move(result_types), std::move(collection));
