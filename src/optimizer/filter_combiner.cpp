@@ -138,14 +138,7 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 		auto &col = col_ref.get();
 		auto set_id = equivalence_set_map.find(col)->second;
 		for (auto &item : equivalence_map[set_id]) {
-			auto copy = filter.Copy();
-			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-			    copy, [&](BoundColumnRefExpression &cref, unique_ptr<Expression> &child) {
-				    if (cref.Equals(col)) {
-					    child = item.get().Copy();
-				    }
-			    });
-			callback(std::move(copy));
+			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
 		}
 	}
 }
