@@ -575,17 +575,12 @@ idx_t BufferPool::GetAllocatorBulkDeallocationFlushThreshold() {
 	return allocator_bulk_deallocation_flush_threshold;
 }
 
-idx_t BufferPool::GetAllocatorFlushCount() const {
-	return allocator_flush_count.load(std::memory_order_relaxed);
-}
-
 idx_t BufferPool::GetBulkDeallocationFlushThreshold() const {
 	// freed memory that the allocator still holds must stay a small fraction of the memory limit
 	return maximum_memory.load(std::memory_order_relaxed) / BULK_DEALLOCATION_FLUSH_DIVISOR;
 }
 
 void BufferPool::FlushAllocator(const optional_idx extra_memory) {
-	allocator_flush_count.fetch_add(1, std::memory_order_relaxed);
 	block_allocator.FlushAll(extra_memory);
 }
 
@@ -600,9 +595,7 @@ void BufferPool::FlushOnBulkDeallocation() {
 	if (used_memory + deallocated <= maximum_memory.load(std::memory_order_relaxed)) {
 		return;
 	}
-	if (block_allocator.TryFlushDeallocated(threshold)) {
-		allocator_flush_count.fetch_add(1, std::memory_order_relaxed);
-	}
+	block_allocator.TryFlushDeallocated(threshold);
 }
 
 vector<EvictionQueueInformation> BufferPool::GetEvictionQueueInfo() const {
