@@ -85,7 +85,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreate(const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreate(const string &key, ARGS &&...args) {
 		const lock_guard<mutex> lock(lock_mutex);
 
 		// Check non-evictable entries first
@@ -108,7 +108,7 @@ public:
 		}
 
 		// Create new entry while holding lock
-		auto value = make_shared_ptr<T>(args...);
+		auto value = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 		const auto estimated_memory = value->GetEstimatedCacheMemory();
 		const bool is_evictable = estimated_memory.IsValid();
 		if (!is_evictable) {
@@ -159,7 +159,7 @@ public:
 	}
 
 	template <class T, class... ARGS>
-	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&... args) {
+	shared_ptr<T> GetOrCreateWithTypePrefix(const string &key, ARGS &&...args) {
 		return GetOrCreate<T>(MakeCacheKey<T>(key), std::forward<ARGS>(args)...);
 	}
 
