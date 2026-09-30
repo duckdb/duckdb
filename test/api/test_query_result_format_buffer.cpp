@@ -93,7 +93,7 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t AS SELECT range i FROM range(400000)"));
-	// Below one 300-row unit, so every hand-over after the first parks while the append still owes units
+	// Below one 300-row unit, so no unit fits beside another that is still queued
 	REQUIRE_NO_FAIL(con.Query("SET max_streaming_buffer_size='2KB'"));
 
 	SECTION("the simple store") {
@@ -103,12 +103,12 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 		auto report = Drain(stream);
 		RequireAscending(report.rows, 20000);
 		REQUIRE(report.unit_count >= 20000 / 300);
-		// Only an append that owes several units parks before the consumer drains the buffer
+		// A chunk of at least two units makes every append finish several units, so below that a park is down to timing
 		if (STANDARD_VECTOR_SIZE >= 2 * 300) {
 			REQUIRE(report.saw_blocked_sink);
-			// A re-delivered chunk resumes the drain, so a producer never carries one append's units into the next
 			REQUIRE(stream.FormatState().max_pending_units > 1);
 		}
+		// A re-delivered chunk resumes the drain, so a producer never carries one append's units into the next
 		REQUIRE(stream.FormatState().max_pending_units <= STANDARD_VECTOR_SIZE / 300 + 1);
 	}
 	SECTION("the batched store, with several producers") {

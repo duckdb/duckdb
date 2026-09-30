@@ -50,6 +50,9 @@ static const TransformFrameOps ALTER_TABLE_STMT_OPS = {"AlterTableStmt",
 static const TransformFrameOps ALTER_SCHEMA_STMT_OPS = {"AlterSchemaStmt",
                                                         &PEGTransformerFactory::InitializeAlterSchemaStmtTrampoline,
                                                         &PEGTransformerFactory::FinalizeAlterSchemaStmtTrampoline};
+static const TransformFrameOps ALTER_SCHEMA_OPTIONS_OPS = {
+    "AlterSchemaOptions", &PEGTransformerFactory::InitializeAlterSchemaOptionsTrampoline,
+    &PEGTransformerFactory::FinalizeAlterSchemaOptionsTrampoline};
 static const TransformFrameOps ALTER_TABLE_OPTIONS_OPS = {"AlterTableOptions",
                                                           &PEGTransformerFactory::InitializeAlterTableOptionsTrampoline,
                                                           &PEGTransformerFactory::FinalizeAlterTableOptionsTrampoline};
@@ -726,6 +729,9 @@ static const TransformFrameOps TABLE_MACRO_DEFINITION_OPS = {
 static const TransformFrameOps CREATE_SCHEMA_STMT_OPS = {"CreateSchemaStmt",
                                                          &PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline,
                                                          &PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline};
+static const TransformFrameOps WITH_OPTION_LIST_OPS = {"WithOptionList",
+                                                       &PEGTransformerFactory::InitializeWithOptionListTrampoline,
+                                                       &PEGTransformerFactory::FinalizeWithOptionListTrampoline};
 static const TransformFrameOps CREATE_SECRET_STMT_OPS = {"CreateSecretStmt",
                                                          &PEGTransformerFactory::InitializeCreateSecretStmtTrampoline,
                                                          &PEGTransformerFactory::FinalizeCreateSecretStmtTrampoline};
@@ -3027,6 +3033,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"AlterOptions", &ALTER_OPTIONS_OPS},
 	    {"AlterTableStmt", &ALTER_TABLE_STMT_OPS},
 	    {"AlterSchemaStmt", &ALTER_SCHEMA_STMT_OPS},
+	    {"AlterSchemaOptions", &ALTER_SCHEMA_OPTIONS_OPS},
 	    {"AlterTableOptions", &ALTER_TABLE_OPTIONS_OPS},
 	    {"AddConstraint", &ADD_CONSTRAINT_OPS},
 	    {"DropConstraint", &DROP_CONSTRAINT_OPS},
@@ -3267,6 +3274,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ScalarMacroDefinition", &SCALAR_MACRO_DEFINITION_OPS},
 	    {"TableMacroDefinition", &TABLE_MACRO_DEFINITION_OPS},
 	    {"CreateSchemaStmt", &CREATE_SCHEMA_STMT_OPS},
+	    {"WithOptionList", &WITH_OPTION_LIST_OPS},
 	    {"CreateSecretStmt", &CREATE_SECRET_STMT_OPS},
 	    {"SecretStorageSpecifier", &SECRET_STORAGE_SPECIFIER_OPS},
 	    {"SecretName", &SECRET_NAME_OPS},
@@ -4182,7 +4190,7 @@ void PEGTransformerFactory::InitializeAlterSchemaStmtTrampoline(PEGTransformer &
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(3);
-	process.PushChild({transformer.GetRule("RenameAlter"), list_pr.GetChild(3)}, 2);
+	process.PushChild({transformer.GetRule("AlterSchemaOptions"), list_pr.GetChild(3)}, 2);
 	process.PushChild({transformer.GetRule("QualifiedName"), list_pr.GetChild(2)}, 1);
 	auto &if_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_exists_opt.HasResult()) {
@@ -4198,9 +4206,30 @@ PEGTransformerFactory::FinalizeAlterSchemaStmtTrampoline(PEGTransformer &transfo
 		if_exists = process.TakeResult<bool>(0);
 	}
 	auto qualified_name = process.TakeResult<QualifiedName>(1);
-	auto rename_alter = process.TakeResult<unique_ptr<AlterTableInfo>>(2);
-	auto result = TransformAlterSchemaStmt(transformer, if_exists, qualified_name, std::move(rename_alter));
+	auto alter_schema_options = process.TakeResult<unique_ptr<AlterTableInfo>>(2);
+	auto result = TransformAlterSchemaStmt(transformer, if_exists, qualified_name, std::move(alter_schema_options));
 	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeAlterSchemaOptionsTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeAlterSchemaOptionsTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<AlterTableInfo>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAlterTableOptionsTrampoline(PEGTransformer &transformer,
@@ -8741,7 +8770,11 @@ PEGTransformerFactory::FinalizeTableMacroDefinitionTrampoline(PEGTransformer &tr
 void PEGTransformerFactory::InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
+	process.ReserveChildSlots(3);
+	auto &with_option_list_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (with_option_list_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("WithOptionList"), with_option_list_opt.GetResult()}, 2);
+	}
 	process.PushChild({transformer.GetRule("QualifiedName"), list_pr.GetChild(2)}, 1);
 	auto &if_not_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_not_exists_opt.HasResult()) {
@@ -8757,8 +8790,27 @@ PEGTransformerFactory::FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transf
 		if_not_exists = process.TakeResult<bool>(0);
 	}
 	auto qualified_name = process.TakeResult<QualifiedName>(1);
-	auto result = TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name);
+	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_option_list {};
+	if (process.child_results[2]) {
+		with_option_list = process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(2);
+	}
+	auto result = TransformCreateSchemaStmt(transformer, if_not_exists, qualified_name, std::move(with_option_list));
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeWithOptionListTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("RelOptionList"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeWithOptionListTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto rel_option_list = process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(0);
+	auto result = TransformWithOptionList(transformer, std::move(rel_option_list));
+	return make_uniq<TypedTransformResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeCreateSecretStmtTrampoline(PEGTransformer &transformer,

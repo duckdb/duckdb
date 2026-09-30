@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -127,8 +128,22 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
                                                                       const optional<bool> &if_exists,
                                                                       const QualifiedName &qualified_name,
-                                                                      unique_ptr<AlterTableInfo> rename_alter) {
-	throw NotImplementedException("Altering schemas is not yet supported");
+                                                                      unique_ptr<AlterTableInfo> alter_schema_options) {
+	// the new schema is stored in the Schema() slot, matching the layout used by CreateSchemaInfo
+	auto if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	AlterEntryData data(QualifiedName(qualified_name.Path(), Identifier()), if_not_found);
+	switch (alter_schema_options->alter_table_type) {
+	case AlterTableType::SET_TABLE_OPTIONS: {
+		auto &set_options = alter_schema_options->Cast<SetTableOptionsInfo>();
+		return make_uniq<SetSchemaOptionsInfo>(data, std::move(set_options.table_options));
+	}
+	case AlterTableType::RESET_TABLE_OPTIONS: {
+		auto &reset_options = alter_schema_options->Cast<ResetTableOptionsInfo>();
+		return make_uniq<ResetSchemaOptionsInfo>(data, std::move(reset_options.table_options));
+	}
+	default:
+		throw NotImplementedException("Altering schemas is not yet supported");
+	}
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
