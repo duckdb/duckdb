@@ -936,8 +936,12 @@ public:
 		if (data.size() != 2) {
 			return;
 		}
-		out.Print(data[1]);
 		auto plan = data[1].GetString();
+		if (data[0].GetString() == "sql") {
+			out.PrintSQL(plan);
+		} else {
+			out.Print(data[1]);
+		}
 		if (!plan.empty() && plan.back() != '\n') {
 			out.Print("\n");
 		}
@@ -964,24 +968,30 @@ public:
 		// load the (materialized) result so we can measure the rendered tree height
 		while (result.TryConvertChunk()) {
 		}
+		bool sql_result = false;
+		WidthMeasuringStream sql_width(state);
 		idx_t row_count = 0;
-		for (auto &chunk : result.chunks) {
-			auto &plan_vector = chunk->data[1];
-			auto string_data = duckdb::FlatVector::GetData<duckdb::string_t>(plan_vector);
-			for (idx_t r = 0; r < chunk->size(); r++) {
-				if (duckdb::FlatVector::IsNull(plan_vector, r)) {
-					continue;
+		for (auto &row : result) {
+			if (row.is_null[1]) {
+				continue;
+			}
+			auto plan = row.data[1].GetString();
+			for (auto c : plan) {
+				if (c == '\n') {
+					row_count++;
 				}
-				for (idx_t s_idx = 0; s_idx < string_data[r].GetSize(); s_idx++) {
-					auto c = string_data[r].GetData()[s_idx];
-					if (c == '\n') {
-						row_count++;
-					}
+			}
+			if (row.data[0].GetString() == "sql") {
+				sql_result = true;
+				RenderRow(sql_width, result.metadata, row);
+				if (!plan.empty() && plan.back() != '\n') {
+					row_count++;
 				}
 			}
 		}
+		auto render_width = sql_result ? sql_width.max_width : state.last_explain_width;
 		// page the tree when it does not fit on the screen (too tall, or too wide for the terminal)
-		return state.ShouldUsePagerForSize(row_count, state.last_explain_width);
+		return state.ShouldUsePagerForSize(row_count, render_width);
 	}
 };
 
