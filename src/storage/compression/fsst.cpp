@@ -553,13 +553,8 @@ struct FSSTScanState : public SegmentScanState {
 	//! The returned range borrows the decoding buffer and is valid until the next ValidateRange call.
 	ValidatedStringRange ValidateRange(idx_t start, idx_t count);
 
-	explicit FSSTScanState(BufferHandle handle_p, ColumnSegment &segment)
-	    : duckdb_fsst_decoder(make_buffer<duckdb_fsst_decoder_t>()), handle(std::move(handle_p)),
-	      layout(ParseFSSTSegmentHeader(CompressionSegmentReader::FromSegment(handle, segment, "FSST"),
-	                                    segment.count.load())) {
-		if (!ImportSymbolTable(layout, reinterpret_cast<duckdb_fsst_decoder_t *>(duckdb_fsst_decoder.get()))) {
-			duckdb_fsst_decoder = nullptr;
-		}
+	explicit FSSTScanState(BufferHandle handle_p, SegmentLayout layout_p, buffer_ptr<void> decoder_p)
+	    : duckdb_fsst_decoder(std::move(decoder_p)), handle(std::move(handle_p)), layout(std::move(layout_p)) {
 		ResetStoredDelta();
 	}
 
@@ -605,7 +600,13 @@ struct FSSTScanState : public SegmentScanState {
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
 	auto handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-	auto state = make_uniq<FSSTScanState>(std::move(handle), segment);
+	auto layout = FSSTScanState::ParseFSSTSegmentHeader(CompressionSegmentReader::FromSegment(handle, segment, "FSST"),
+	                                                    segment.count.load());
+	auto decoder = make_buffer<duckdb_fsst_decoder_t>();
+	if (!FSSTScanState::ImportSymbolTable(layout, decoder.get())) {
+		decoder = nullptr;
+	}
+	auto state = make_uniq<FSSTScanState>(std::move(handle), std::move(layout), std::move(decoder));
 	state->duckdb_fsst_decoder_ptr = state->duckdb_fsst_decoder.get();
 
 	const auto &stats = segment.GetStats();
