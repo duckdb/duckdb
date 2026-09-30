@@ -55,6 +55,18 @@ Internal helper declarations live under `src/include/duckdb/planner/sql_export/`
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
 
+### Scope composition
+
+Ordering, windows and UNNEST reuse suitable plain column-reference scopes. The helpers in `sql_export_composition.cpp` also combine compatible computed stages using typed column bindings:
+
+- Semantic identity projections can disappear, and ordinary grouping over distinct column references does not need an input scope for staging keys.
+- Computed scalar inputs must be safe to move and used at most once. Volatile expressions, throwing evaluation boundaries and shared scalar computations retain their scopes.
+- Aggregate-output composition preserves the aggregate stage and retains unused computed outputs. Repeated aggregate calls can be shared by the binder, but composition is rejected when their duplication would grow the combined expression trees.
+- Ordering can reuse a computed SELECT when its keys remain source column references. Literal order keys can be positional or rejected by the binder. Group-key substitution admits NULL literals but excludes bare integers, which GROUP BY can interpret as positions.
+- Existing modifiers, sampling, conditional evaluation and incompatible grouping or CTE stages retain their boundaries. Computed composition does not currently cross expression-list or column-data sources such as VALUES; identity elimination and plain-scope reuse remain separate rules.
+
+### Verification
+
 The CI Query Verification configuration uses `debug_verify_statement='explain_sql'`.
 It executes reconstructed SQL when export succeeds and falls back for explicitly
 unsupported shapes. Errors from reconstruction and generated execution propagate normally.
