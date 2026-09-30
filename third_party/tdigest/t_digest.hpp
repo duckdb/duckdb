@@ -109,6 +109,23 @@ class TDigest {
 	static Index MinimumInt(Index a, Index b) {
 		return a < b ? a : b;
 	}
+	// Make room for `needed` elements, doubling the capacity rather than fitting exactly, up to the `full`
+	// size the buffer would have been given up front: a long run of small merges then reallocates a
+	// logarithmic number of times instead of once per merge, and never grows past the old fixed reservation.
+	template <class VECTOR>
+	static void Grow(VECTOR &vec, size_t needed, size_t full) {
+		if (needed <= vec.capacity()) {
+			return;
+		}
+		size_t target = vec.capacity() * 2;
+		if (target > full) {
+			target = full;
+		}
+		if (target < needed) {
+			target = needed;
+		}
+		vec.reserve(target);
+	}
 	class TDigestComparator {
 	public:
 		TDigestComparator() {
@@ -482,7 +499,7 @@ private:
 			total += td->unprocessed_.size();
 		}
 
-		unprocessed_.reserve(total);
+		Grow(unprocessed_, total, size_t(maxUnprocessed_ + maxProcessed_ + 1));
 		for (auto &td : tdigests) {
 			unprocessed_.insert(unprocessed_.end(), td->unprocessed_.cbegin(), td->unprocessed_.cend());
 			unprocessedWeight_ += td->unprocessedWeight_;
@@ -542,7 +559,7 @@ private:
 	void updateCumulative() {
 		const auto n = processed_.size();
 		cumulative_.clear();
-		cumulative_.reserve(n + 1);
+		Grow(cumulative_, n + 1, size_t(maxProcessed_ + 1));
 		auto previous = 0.0;
 		for (Index i = 0; i < n; i++) {
 			auto current = weight(i);

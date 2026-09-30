@@ -141,11 +141,6 @@ struct ApproxQuantileOperation {
 		target.pos += source.pos;
 	}
 
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		// the digest lives in the arena, which is released with the aggregate
-	}
-
 	static bool IgnoreNull() {
 		return true;
 	}
@@ -460,7 +455,7 @@ AggregateFunction ApproxQuantileListAggregate(const LogicalType &input_type, con
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind());
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>
