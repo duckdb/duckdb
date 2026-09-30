@@ -381,6 +381,8 @@ struct LogicalType {
 	DUCKDB_API static LogicalType NormalizeType(const LogicalType &type);
 	//! Nested type children with Parquet style names
 	DUCKDB_API static child_list_t<LogicalType> GetNamedChildTypes(const LogicalType &type);
+	//! Rebuild a nested type with new children
+	DUCKDB_API static LogicalType ConstructNestedType(const LogicalType &type, child_list_t<LogicalType> children);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;

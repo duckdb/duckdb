@@ -628,24 +628,6 @@ static child_list_t<LogicalType> GetChildList(const LogicalType &type) {
 	return child_types;
 }
 
-static LogicalType ConstructNewType(const LogicalType &original_type, child_list_t<LogicalType> new_child_types) {
-	switch (original_type.id()) {
-	case LogicalTypeId::STRUCT: {
-		return LogicalType::STRUCT(std::move(new_child_types));
-	}
-	case LogicalTypeId::LIST: {
-		D_ASSERT(new_child_types.size() == 1);
-		return LogicalType::LIST(new_child_types[0].second);
-	}
-	case LogicalTypeId::MAP: {
-		D_ASSERT(new_child_types.size() == 2);
-		return LogicalType::MAP(new_child_types[0].second, new_child_types[1].second);
-	}
-	default:
-		throw BinderException("Type '%s' not supported for ADD COLUMN", original_type.ToString());
-	}
-}
-
 Value ConstructMapping(const Identifier &name, const LogicalType &type) {
 	if (!type.IsNested()) {
 		return Value(name);
@@ -729,7 +711,7 @@ StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<Identif
 	if (!found) {
 		throw BinderException("Sub-field %s does not exist in column %s", next_component, column_path[depth]);
 	}
-	result.new_type = ConstructNewType(type, std::move(child_list));
+	result.new_type = LogicalType::ConstructNestedType(type, std::move(child_list));
 	return result;
 }
 
@@ -977,7 +959,7 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<Id
 		result.error = ErrorData(CatalogException("Cannot drop field \"%s\" - it does not exist", dropped_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
-		result.new_type = ConstructNewType(type, std::move(new_type_children));
+		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
 	}
 	return result;
 }
@@ -1077,7 +1059,7 @@ DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<
 		result.error = ErrorData(CatalogException("Cannot rename field \"%s\" - it does not exist", rename_entry));
 	} else {
 		result.mapping = Value::STRUCT(std::move(child_mapping));
-		result.new_type = ConstructNewType(type, std::move(new_type_children));
+		result.new_type = LogicalType::ConstructNestedType(type, std::move(new_type_children));
 	}
 	return result;
 }
