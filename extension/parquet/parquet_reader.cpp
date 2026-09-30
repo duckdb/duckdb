@@ -1313,44 +1313,23 @@ static void VerifyParquetSchemaChildType(const ParquetColumnDefinition &column, 
 }
 
 static void VerifyParquetSchemaChildren(const ParquetColumnDefinition &column) {
-	idx_t expected_count;
 	switch (column.type.id()) {
 	case LogicalTypeId::STRUCT:
-		expected_count = StructType::GetChildCount(column.type);
-		break;
 	case LogicalTypeId::LIST:
-		expected_count = 1;
-		break;
 	case LogicalTypeId::MAP:
-		expected_count = 2;
 		break;
 	default:
 		throw BinderException("Parquet schema column \"%s\" of type %s cannot define nested children", column.name,
 		                      column.type.ToString());
 	}
-	if (column.children.size() != expected_count) {
+	auto expected_children = LogicalType::GetNamedChildTypes(column.type);
+	if (column.children.size() != expected_children.size()) {
 		throw BinderException("Parquet schema column \"%s\" of type %s expects %d child definitions, not %d",
-		                      column.name, column.type.ToString(), expected_count, column.children.size());
+		                      column.name, column.type.ToString(), expected_children.size(), column.children.size());
 	}
-
-	switch (column.type.id()) {
-	case LogicalTypeId::STRUCT: {
-		auto &expected_children = StructType::GetChildTypes(column.type);
-		for (idx_t i = 0; i < expected_children.size(); i++) {
-			VerifyParquetSchemaChildType(column, column.children[i], expected_children[i].first.GetIdentifierName(),
-			                             expected_children[i].second);
-		}
-		break;
-	}
-	case LogicalTypeId::LIST:
-		VerifyParquetSchemaChildType(column, column.children[0], "element", ListType::GetChildType(column.type));
-		break;
-	case LogicalTypeId::MAP:
-		VerifyParquetSchemaChildType(column, column.children[0], "key", MapType::KeyType(column.type));
-		VerifyParquetSchemaChildType(column, column.children[1], "value", MapType::ValueType(column.type));
-		break;
-	default:
-		throw InternalException("Unexpected Parquet schema type with children");
+	for (idx_t i = 0; i < expected_children.size(); i++) {
+		VerifyParquetSchemaChildType(column, column.children[i], expected_children[i].first.GetIdentifierName(),
+		                             expected_children[i].second);
 	}
 }
 
