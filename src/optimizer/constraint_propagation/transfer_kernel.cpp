@@ -67,18 +67,27 @@ static void RemapUniqueFacts(const vector<UniqueFact> &facts, const vector<idx_t
 	}
 }
 
-static void RemapFKFacts(const vector<FKFact> &fks, const vector<idx_t> &map, idx_t width, ScopeFacts &props) {
+static void RemapFKFacts(const vector<FKFact> &fks, const vector<idx_t> &map, ScopeFacts &props) {
 	for (auto &fk : fks) {
-		ColumnMask c;
-		if (!RemapMaskStrict(fk.cols, map, width, c)) {
+		if (!fk.IsValid()) {
 			continue;
 		}
 		FKFact nf;
 		nf.target_schema = fk.target_schema;
 		nf.target_name = fk.target_name;
-		nf.cols = c;
 		nf.referenced_keys = fk.referenced_keys;
-		props.AddFKFact(std::move(nf));
+		nf.cols.reserve(fk.cols.size());
+		bool ok = true;
+		for (auto p : fk.cols) {
+			if (p >= map.size() || map[p] == DConstants::INVALID_INDEX) {
+				ok = false;
+				break;
+			}
+			nf.cols.push_back(map[p]);
+		}
+		if (ok) {
+			props.AddFKFact(std::move(nf));
+		}
 	}
 }
 
@@ -297,12 +306,12 @@ void TransferKernel::VisitGet(LogicalOperator &op, ScopeFacts &props) {
 						all_found = false;
 						break;
 					}
-					fact.cols.Set(pos.GetIndex());
+					fact.cols.push_back(pos.GetIndex());
 				}
 				for (auto &phys : fk.info.pk_keys) {
 					fact.referenced_keys.push_back(phys.index);
 				}
-				if (all_found && !fact.cols.IsEmpty()) {
+				if (all_found && fact.IsValid()) {
 					props.AddFKFact(std::move(fact));
 				}
 			}
@@ -322,7 +331,7 @@ void TransferKernel::VisitProjection(LogicalOperator &op, ScopeFacts &props) {
 
 	RemapUniqueFacts(child_facts.Unique(), map, width, props);
 	props.SetNotNull(RemapMaskPartial(child_facts.NotNull(), map, width));
-	RemapFKFacts(child_facts.FKs(), map, width, props);
+	RemapFKFacts(child_facts.FKs(), map, props);
 
 	props.base_table = child_facts.base_table;
 	props.base_column.assign(width, DConstants::INVALID_INDEX);
@@ -379,7 +388,7 @@ void TransferKernel::VisitAggregate(LogicalOperator &op, ScopeFacts &props) {
 	props.AddUniqueFact(std::move(group_fact));
 
 	props.SetNotNull(RemapMaskPartial(child_facts.NotNull(), map, width));
-	RemapFKFacts(child_facts.FKs(), map, width, props);
+	RemapFKFacts(child_facts.FKs(), map, props);
 
 	props.base_table = nullptr;
 	props.filter_below = child_facts.filter_below;
@@ -390,13 +399,7 @@ void TransferKernel::VisitDistinct(LogicalOperator &op, ScopeFacts &props) {
 	auto &child = *op.children[0];
 	const auto &child_facts = owner_.store_.Get(child);
 	const auto &out_bindings = owner_.store_.OutputBindings(op);
-	const auto &child_bindings = owner_.store_.OutputBindings(child);
 	idx_t width = out_bindings.size();
-
-	D_ASSERT(out_bindings.size() == child_bindings.size());
-	for (idx_t i = 0; i < width; i++) {
-		D_ASSERT(out_bindings[i] == child_bindings[i]);
-	}
 
 	props.SetNotNull(child_facts.NotNull());
 	props.SetFKFacts(child_facts.FKs());
@@ -541,8 +544,8 @@ void TransferKernel::TransferJoinValueFacts(LogicalOperator &op, JoinType join_t
 	}
 	props.SetNotNull(std::move(nn));
 
-	RemapFKFacts(f0.FKs(), map0, width, props);
-	RemapFKFacts(f1.FKs(), map1, width, props);
+	RemapFKFacts(f0.FKs(), map0, props);
+	RemapFKFacts(f1.FKs(), map1, props);
 
 	props.filter_below = f0.filter_below || f1.filter_below;
 }

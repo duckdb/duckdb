@@ -5,7 +5,6 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 
@@ -32,7 +31,13 @@ bool IsForeignKeyTo(const ConstraintPropagator &p, const LogicalOperator &scope,
 	Identifier target_schema(target.schema.name);
 	Identifier target_name(target.name);
 	for (auto &fk : f.FKs()) {
-		if (fk.cols.IsSubsetOf(cols) && fk.target_schema == target_schema && fk.target_name == target_name) {
+		if (!fk.IsValid()) {
+			continue;
+		}
+		if (fk.target_schema != target_schema || fk.target_name != target_name) {
+			continue;
+		}
+		if (fk.PositionsAllIn(cols)) {
 			return true;
 		}
 	}
@@ -52,17 +57,13 @@ bool JoinCoverage(const ConstraintPropagator &p, const LogicalComparisonJoin &jo
 	if (side > 1 || join.children.size() != 2) {
 		return false;
 	}
+
+	vector<std::pair<idx_t, idx_t>> pairs;
 	idx_t matched = 0;
-	ColumnMask key0, key1;
-	if (!CollectEquiKeys(p.Store(), join, key0, key1, &matched)) {
+	if (!CollectEquiKeyPairs(p.Store(), join, pairs, &matched)) {
 		return false;
 	}
-	if (join.conditions.empty() || matched != join.conditions.size()) {
-		return false;
-	}
-	const ColumnMask &side_key = (side == 0) ? key0 : key1;
-	const ColumnMask &other_key = (side == 0) ? key1 : key0;
-	if (side_key.IsEmpty()) {
+	if (join.conditions.empty() || matched != join.conditions.size() || pairs.empty()) {
 		return false;
 	}
 
@@ -71,65 +72,63 @@ bool JoinCoverage(const ConstraintPropagator &p, const LogicalComparisonJoin &jo
 	const ScopeFacts &side_facts = p.Facts(side_op);
 	const ScopeFacts &other_facts = p.Facts(other_op);
 
-	// A NULL FK value legally matches nothing.
-	if (!side_key.IsSubsetOf(side_facts.NotNull())) {
-		return false;
-	}
 	// The other side must be a filterless single-table pipeline.
 	if (!other_facts.base_table || other_facts.filter_below) {
 		return false;
 	}
 
-	// Map other_key positions to physical columns of the other side's base table.
-	unordered_set<idx_t> key_phys;
-	bool traceable = true;
-	other_key.ForEachPosition([&](idx_t pos) -> bool {
-		if (pos >= other_facts.base_column.size() || other_facts.base_column[pos] == DConstants::INVALID_INDEX) {
-			traceable = false;
+	// Orient the pairs: (position in the side's scope, physical column of
+	// the other side's base table).
+	vector<std::pair<idx_t, idx_t>> side_pairs;
+	side_pairs.reserve(pairs.size());
+	for (auto &kv : pairs) {
+		idx_t side_pos = side == 0 ? kv.first : kv.second;
+		idx_t other_pos = side == 0 ? kv.second : kv.first;
+		if (other_pos >= other_facts.base_column.size() ||
+		    other_facts.base_column[other_pos] == DConstants::INVALID_INDEX) {
 			return false;
 		}
-		key_phys.insert(other_facts.base_column[pos]);
-		return true;
-	});
-	if (!traceable || key_phys.size() != other_key.PopCount()) {
-		return false;
+		side_pairs.emplace_back(side_pos, other_facts.base_column[other_pos]);
 	}
 
 	const Identifier other_schema(other_facts.base_table->schema.name);
 	const Identifier other_name(other_facts.base_table->name);
 
-	// Find an FK on the side such that:
-	//   1. the join key on the side is a subset of the FK's columns,
-	//   2. the FK targets the other side's base table,
-	//   3. the join key on the other side is a subset of the FK's referenced keys.
-	const FKFact *fk = nullptr;
 	for (auto &f : side_facts.FKs()) {
-		if (!side_key.IsSubsetOf(f.cols)) {
+		if (!f.IsValid()) {
 			continue;
 		}
 		if (f.target_schema != other_schema || f.target_name != other_name) {
 			continue;
 		}
-		unordered_set ref_phys(f.referenced_keys.begin(), f.referenced_keys.end());
-		bool ref_covers = true;
-		for (auto k : key_phys) {
-			if (ref_phys.find(k) == ref_phys.end()) {
-				ref_covers = false;
+
+		bool all_pairs_covered = true;
+		for (auto &sp : side_pairs) {
+			bool pair_covered = false;
+			for (idx_t j = 0; j < f.cols.size(); j++) {
+				if (f.cols[j] == sp.first && f.referenced_keys[j] == sp.second) {
+					pair_covered = true;
+					break;
+				}
+			}
+			if (!pair_covered) {
+				all_pairs_covered = false;
 				break;
 			}
 		}
-		if (!ref_covers) {
+		if (!all_pairs_covered) {
 			continue;
 		}
-		fk = &f;
-		break;
-	}
-	if (!fk) {
-		return false;
-	}
 
-	return true;
+		if (!f.PositionsAllIn(side_facts.NotNull())) {
+			continue;
+		}
+
+		return true;
+	}
+	return false;
 }
+
 SideMultiplicity MultiplicityOf(const ConstraintPropagator &p, const LogicalComparisonJoin &join, idx_t side) {
 	if (side > 1 || join.children.size() != 2) {
 		return SideMultiplicity::UNKNOWN;

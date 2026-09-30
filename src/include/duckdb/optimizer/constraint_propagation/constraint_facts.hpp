@@ -66,8 +66,21 @@ struct UniqueFact {
 struct FKFact {
 	Identifier target_schema;
 	Identifier target_name;
-	ColumnMask cols;
+	vector<idx_t> cols;
 	vector<idx_t> referenced_keys;
+
+	bool IsValid() const {
+		return !cols.empty() && cols.size() == referenced_keys.size();
+	}
+
+	bool PositionsAllIn(const ColumnMask &mask) const {
+		for (auto pos : cols) {
+			if (!mask.Test(pos)) {
+				return false;
+			}
+		}
+		return true;
+	}
 };
 
 class ScopeFacts {
