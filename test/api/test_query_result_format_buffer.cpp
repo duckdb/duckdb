@@ -102,10 +102,11 @@ TEST_CASE("A producer parks while several sliced units are still pending in its 
 		QueryResultStream<TestFormat> stream(std::move(handle));
 		auto report = Drain(stream);
 		RequireAscending(report.rows, 20000);
-		REQUIRE(report.saw_blocked_sink);
 		REQUIRE(report.unit_count >= 20000 / 300);
-		// A re-delivered chunk resumes the drain, so a producer never carries one append's units into the next
+		// Only an append that owes several units parks before the consumer drains the buffer
 		if (STANDARD_VECTOR_SIZE >= 2 * 300) {
+			REQUIRE(report.saw_blocked_sink);
+			// A re-delivered chunk resumes the drain, so a producer never carries one append's units into the next
 			REQUIRE(stream.FormatState().max_pending_units > 1);
 		}
 		REQUIRE(stream.FormatState().max_pending_units <= STANDARD_VECTOR_SIZE / 300 + 1);

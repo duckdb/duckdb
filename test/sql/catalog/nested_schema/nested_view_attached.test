@@ -2,6 +2,13 @@
 # description: Views in an attached database referencing nested schema entries of the view's own catalog
 # group: [nested_schema]
 
+# an in-memory default database allows nested schemas under every storage version
+statement ok
+ATTACH ':memory:' AS mem;
+
+statement ok
+USE mem;
+
 statement ok
 ATTACH '{TEST_DIR}/nested_view_attached.db' AS db (STORAGE_VERSION 'v2.0.0');
 
