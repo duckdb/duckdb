@@ -137,23 +137,32 @@ unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
-static unique_ptr<CreateFunctionInfo>
-GetDefaultTableFunction(const Identifier &input_schema, const Identifier &input_name, const ParserOptions &options) {
-	for (idx_t index = 0; internal_table_macros[index].name != nullptr; index++) {
-		if (internal_table_macros[index].schema == input_schema && internal_table_macros[index].name == input_name) {
-			return DefaultTableFunctionGenerator::CreateTableMacroInfo(internal_table_macros[index], options);
+optional_ptr<const DefaultTableMacro>
+DefaultTableFunctionGenerator::FindTableMacro(const DefaultTableMacro macros[], const Identifier &name,
+                                              optional_ptr<const Identifier> schema_name) {
+	for (idx_t index = 0; macros[index].name != nullptr; index++) {
+		if ((!schema_name || macros[index].schema == *schema_name) && macros[index].name == name) {
+			return macros[index];
 		}
 	}
 	return nullptr;
+}
+
+unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateTableMacroEntry(Catalog &catalog,
+                                                                              SchemaCatalogEntry &schema,
+                                                                              const DefaultTableMacro &default_macro,
+                                                                              const ParserOptions &options) {
+	auto info = CreateTableMacroInfo(default_macro, options);
+	return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, *info);
 }
 
 unique_ptr<CatalogEntry> DefaultTableFunctionGenerator::CreateDefaultEntry(ClientContext &context,
                                                                            const Identifier &entry_name) {
 	ParserOptions options;
 	options.compiled_grammar = CompiledGrammar::Get(context);
-	auto info = GetDefaultTableFunction(schema.name, entry_name, options);
-	if (info) {
-		return make_uniq_base<CatalogEntry, TableMacroCatalogEntry>(catalog, schema, info->Cast<CreateMacroInfo>());
+	auto macro = FindTableMacro(internal_table_macros, entry_name, schema.name);
+	if (macro) {
+		return CreateTableMacroEntry(catalog, schema, *macro, options);
 	}
 	return nullptr;
 }
