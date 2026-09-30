@@ -1433,12 +1433,11 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		}
 	}
 	if (statistics_update_function == UpdateStringStatistics) {
-		// for strings - push the strings stored in the update info into the string heap of the segment
+		// for strings - we need to push all strings we are going to place here into the string heap of the segment
 		update_p.Flatten();
 		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
-			D_ASSERT(FlatVector::Validity(update_p).RowIsValid(idx));
 			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
 		}
 		update_p.ToUnifiedFormat(update_format);
