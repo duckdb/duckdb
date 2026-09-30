@@ -244,6 +244,17 @@ public:
 	                                                                 const EntryLookupInfo &schema_lookup,
 	                                                                 OnEntryNotFound if_not_found) = 0;
 
+	//! Whether schema strings can denote nested paths as well as literal schema names.
+	virtual bool SupportsNestedSchemas() const {
+		return false;
+	}
+	//! Resolve a string schema argument, preferring an existing nested entry over a literal dotted schema.
+	DUCKDB_API QualifiedName ResolveEntryName(ClientContext &context, const string &schema_arg,
+	                                          const string &entry_name, CatalogType type = CatalogType::TABLE_ENTRY,
+	                                          optional_ptr<BoundAtClause> at_clause = nullptr);
+	//! Resolve a string schema argument, with the same literal-name fallback as ResolveEntryName.
+	DUCKDB_API SchemaCatalogEntry &ResolveSchema(ClientContext &context, const string &schema_arg);
+
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup);
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup,
@@ -493,6 +504,11 @@ public:
 	DUCKDB_API virtual void OnDetach(ClientContext &context);
 
 protected:
+	//! Resolve a bound schema path, preserving time travel and error context at every level.
+	DUCKDB_API optional_ptr<SchemaCatalogEntry>
+	LookupSchemaPath(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup, OnEntryNotFound if_not_found,
+	                 const std::function<optional_ptr<CatalogEntry>(const EntryLookupInfo &)> &lookup_root);
+
 	//! Reference to the database
 	AttachedDatabase &db;
 

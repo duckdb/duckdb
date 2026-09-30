@@ -825,16 +825,9 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	}
 }
 
-//! Qualify a name stored in the WAL as [schema_path..., name] (i.e. without a catalog component) with the catalog we
-//! are replaying into, so nested schemas can be navigated. Do not use WithCatalog() here: that treats the leading
-//! component of a 3-element path as a catalog, which would drop the outermost schema of a nested path.
+//! WAL names carry schema paths without a catalog component.
 static QualifiedName ReplayEntryName(Catalog &catalog, const QualifiedName &entry_name) {
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	for (idx_t i = 0; i + 1 < entry_name.Path().size(); i++) {
-		path.push_back(entry_name.Path()[i]);
-	}
-	return QualifiedName(std::move(path), entry_name.Name());
+	return QualifiedName::FromCatalogSchema(catalog.GetName(), entry_name.Parent().Path(), entry_name.Name());
 }
 
 //! Re-qualify a serialized [catalog, schema_path..., name] entry name (as carried by a CreateInfo) for the catalog it
@@ -869,16 +862,7 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	// build the DropInfo path [catalog, schema_path..., name]; the qualified name's path is [schema_path..., name]
-	// (older WALs that only stored the immediate schema + table name are folded into it during deserialization)
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	for (auto &component : entry.qualified_name.Path()) {
-		path.push_back(component);
-	}
-	Identifier table_name = std::move(path.back());
-	path.pop_back();
-	info.SetQualifiedName(QualifiedName(std::move(path), std::move(table_name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1041,19 +1025,12 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
 	auto entry = WALCreateSchema::Deserialize(deserializer);
 	CreateSchemaInfo info;
-	// build the CreateSchemaInfo path [catalog, parent schemas..., new schema, <empty name>]
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	if (!entry.qualified_name.Path().empty()) {
-		// v2.0.0+: the qualified name's path is [parent schemas..., new schema]
-		for (auto &component : entry.qualified_name.Path()) {
-			path.push_back(component);
-		}
-	} else {
-		// legacy: only the (top-level) schema name was serialized
-		path.push_back(std::move(entry.schema));
+	auto schema_path = entry.qualified_name.Path();
+	if (schema_path.empty()) {
+		// Legacy WALs only store a top-level schema name.
+		schema_path.push_back(std::move(entry.schema));
 	}
-	info.SetQualifiedName(QualifiedName(std::move(path), Identifier()));
+	info.SetQualifiedName(QualifiedName::FromCatalogSchema(catalog.GetName(), std::move(schema_path), Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1065,22 +1042,11 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 	auto entry = WALDropSchema::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::SCHEMA_ENTRY;
-	// build the DropInfo path [catalog, parent schemas..., schema] with the schema name in the name slot
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	Identifier schema_name;
-	if (!entry.qualified_name.Path().empty()) {
-		// v2.0.0+: the qualified name's path is [parent schemas..., schema]
-		auto &qpath = entry.qualified_name.Path();
-		for (idx_t i = 0; i + 1 < qpath.size(); i++) {
-			path.push_back(qpath[i]);
-		}
-		schema_name = qpath.back();
-	} else {
-		// legacy: only the (top-level) schema name was serialized
-		schema_name = std::move(entry.schema);
-	}
-	info.SetQualifiedName(QualifiedName(std::move(path), std::move(schema_name)));
+	auto schema_name =
+	    entry.qualified_name.Path().empty() ? QualifiedName(std::move(entry.schema)) : std::move(entry.qualified_name);
+	auto path = schema_name.Path();
+	path.insert(path.begin(), catalog.GetName());
+	info.SetQualifiedName(QualifiedName::FromPath(std::move(path)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1303,13 +1269,7 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	// the qualified name holds the (possibly nested) schema path followed by the table name - prepend the catalog
-	auto path = entry.qualified_name.Path();
-	auto table_name = std::move(path.back());
-	path.pop_back();
-	path.insert(path.begin(), catalog.GetName());
-	state.current_table =
-	    &catalog.GetEntry<DuckTableEntry>(context, QualifiedName(std::move(path), std::move(table_name)));
+	state.current_table = &catalog.GetEntry<DuckTableEntry>(context, ReplayEntryName(catalog, entry.qualified_name));
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {
