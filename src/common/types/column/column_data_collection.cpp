@@ -1092,6 +1092,14 @@ void ColumnDataCollection::Append(DataChunk &input) {
 	Append(state, input);
 }
 
+void ColumnDataCollection::Append(const ColumnDataCollection &other) {
+	ColumnDataAppendState state;
+	InitializeAppend(state);
+	for (auto &chunk : other.Chunks()) {
+		Append(state, chunk);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
