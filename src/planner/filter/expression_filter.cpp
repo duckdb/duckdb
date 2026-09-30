@@ -984,12 +984,20 @@ static shared_ptr<DynamicFilterData> TryGetRootDynamicFilterData(const Expressio
 	return func.BindInfo()->Cast<DynamicFilterFunctionData>().filter_data;
 }
 
-shared_ptr<DynamicFilterData> ExpressionFilter::GetRootOptionalDynamicFilterData(const TableFilter &filter) {
-	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::GetRootOptionalDynamicFilterData");
-	if (expr_filter.expr->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+static shared_ptr<DynamicFilterData> TryGetOptionalDynamicFilterData(const Expression &expr) {
+	if (expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		for (auto &child : expr.Cast<BoundConjunctionExpression>().GetChildren()) {
+			auto filter_data = TryGetOptionalDynamicFilterData(*child);
+			if (filter_data) {
+				return filter_data;
+			}
+		}
 		return nullptr;
 	}
-	auto &func = expr_filter.expr->Cast<BoundFunctionExpression>();
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
 	if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
 		auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
 		return data.child_filter_expr ? TryGetRootDynamicFilterData(*data.child_filter_expr) : nullptr;
@@ -999,6 +1007,11 @@ shared_ptr<DynamicFilterData> ExpressionFilter::GetRootOptionalDynamicFilterData
 		return data.child_filter_expr ? TryGetRootDynamicFilterData(*data.child_filter_expr) : nullptr;
 	}
 	return nullptr;
+}
+
+shared_ptr<DynamicFilterData> ExpressionFilter::GetOptionalDynamicFilterData(const TableFilter &filter) {
+	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::GetOptionalDynamicFilterData");
+	return TryGetOptionalDynamicFilterData(*expr_filter.expr);
 }
 
 unique_ptr<ExpressionFilter> ExpressionFilter::FromTableFilter(const TableFilter &filter, const LogicalType &col_type) {
