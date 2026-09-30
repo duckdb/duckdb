@@ -601,6 +601,14 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 	return std::move(select_node.select_list);
 }
 
+unique_ptr<ParsedExpression> Parser::ParseSingleExpression(const string &expression, const ParserOptions &options) {
+	auto expressions = ParseExpressionList(expression, options);
+	if (expressions.size() != 1) {
+		throw InternalException("Expected a single expression");
+	}
+	return std::move(expressions[0]);
+}
+
 GroupByNode Parser::ParseGroupByList(const string &group_by, const ParserOptions &options) {
 	// construct a mock SELECT query with our group_by expressions
 	string mock_query = StringUtil::Format("SELECT 42 GROUP BY %s", group_by);

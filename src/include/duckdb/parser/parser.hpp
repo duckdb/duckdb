@@ -80,6 +80,9 @@ public:
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API static vector<unique_ptr<ParsedExpression>>
 	ParseExpressionList(const string &select_list, const ParserOptions &options = ParserOptions());
+	//! Parses exactly one expression, throwing an InternalException otherwise
+	DUCKDB_API static unique_ptr<ParsedExpression>
+	ParseSingleExpression(const string &expression, const ParserOptions &options = ParserOptions());
 	//! Parses a single SELECT statement into its node
 	DUCKDB_API static unique_ptr<QueryNode> ParseSelectNode(const string &query,
 	                                                        const ParserOptions &options = ParserOptions());

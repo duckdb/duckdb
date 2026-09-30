@@ -101,12 +101,9 @@ DefaultTableFunctionGenerator::CreateInternalTableMacroInfo(const DefaultTableMa
 	}
 	for (idx_t named_idx = 0; default_macro.named_parameters[named_idx].name != nullptr; named_idx++) {
 		const auto &named_param = default_macro.named_parameters[named_idx];
-		auto expr_list = Parser::ParseExpressionList(named_param.default_value);
-		if (expr_list.size() != 1) {
-			throw InternalException("Expected a single expression");
-		}
+		auto default_value = Parser::ParseSingleExpression(named_param.default_value);
 		function->parameters.push_back(make_uniq<ColumnRefExpression>(named_param.name));
-		function->default_parameters.insert(Identifier(named_param.name), std::move(expr_list[0]));
+		function->default_parameters.insert(Identifier(named_param.name), std::move(default_value));
 	}
 
 	auto type = CatalogType::TABLE_MACRO_ENTRY;
