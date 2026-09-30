@@ -207,6 +207,7 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/peg/ast/expression_chain.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/operator_matcher.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
@@ -2234,6 +2235,26 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	return static_cast<ExpressionClass>(StringUtil::StringToEnum(GetExpressionClassValues(), 40, "ExpressionClass", value));
+}
+
+const StringUtil::EnumStringLiteral *GetExpressionTailTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExpressionTailType::IS_TEST), "IS_TEST" },
+		{ static_cast<uint32_t>(ExpressionTailType::DISTINCT), "DISTINCT" },
+		{ static_cast<uint32_t>(ExpressionTailType::COMPARISON), "COMPARISON" },
+		{ static_cast<uint32_t>(ExpressionTailType::OTHER_OPERATOR), "OTHER_OPERATOR" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value) {
+	return StringUtil::EnumToString(GetExpressionTailTypeValues(), 4, "ExpressionTailType", static_cast<uint32_t>(value));
+}
+
+template<>
+ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value) {
+	return static_cast<ExpressionTailType>(StringUtil::StringToEnum(GetExpressionTailTypeValues(), 4, "ExpressionTailType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {

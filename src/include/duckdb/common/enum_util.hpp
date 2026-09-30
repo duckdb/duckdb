@@ -220,6 +220,8 @@ enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
 
+enum class ExpressionTailType : uint8_t;
+
 enum class ExpressionType : uint8_t;
 
 enum class ExtensionABIType : uint8_t;
@@ -946,6 +948,9 @@ const char* EnumUtil::ToChars<ExponentType>(ExponentType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
+
+template<>
+const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
@@ -1895,6 +1900,9 @@ ExponentType EnumUtil::FromString<ExponentType>(const char *value);
 
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
+
+template<>
+ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);

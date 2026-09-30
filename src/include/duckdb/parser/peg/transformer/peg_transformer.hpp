@@ -114,6 +114,7 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.Identifier", Iden
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.InsertColumnOrder", InsertColumnOrder);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.InsertValues", InsertValues);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.IsDistinctFromTail", IsDistinctFromTail);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.IsExpressionTail", IsExpressionTail);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinPrefix", JoinPrefix);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinQualifier", JoinQualifier);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinType", JoinType);
@@ -224,6 +225,7 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<Window
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<FunctionArgument>", vector<FunctionArgument>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<GenericCopyOption>", vector<GenericCopyOption>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<Identifier>", vector<Identifier>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<IsExpressionTail>", vector<IsExpressionTail>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<LogicalType>", vector<LogicalType>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<MacroParameter>", vector<MacroParameter>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<OrderByNode>", vector<OrderByNode>);
@@ -2557,6 +2559,26 @@ public:
 	static void InitializeIsExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeIsExpressionTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
+	static void InitializeIsExpressionContinuationTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeIsExpressionContinuationTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeIsExpressionTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsExpressionTailTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeIsTestTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsTestTailTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
+	static void InitializeIsDistinctTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsDistinctTailTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeIsComparisonTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsComparisonTailTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeIsTestTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeIsTestTrampoline(PEGTransformer &transformer,
 	                                                                 GeneratedTransformProcess &process);
@@ -5008,9 +5030,19 @@ public:
 	                                                                  unique_ptr<ParsedExpression> is_expression);
 	static vector<bool> TransformNotExpression(PEGTransformer &transformer, const vector<bool> &not_keyword);
 	static bool TransformNotKeyword(PEGTransformer &transformer);
-	static unique_ptr<ParsedExpression> TransformIsExpression(PEGTransformer &transformer,
-	                                                          unique_ptr<ParsedExpression> is_distinct_from_expression,
-	                                                          optional<vector<unique_ptr<ParsedExpression>>> is_test);
+	static unique_ptr<ParsedExpression>
+	TransformIsExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> is_distinct_from_expression,
+	                      optional<vector<IsExpressionTail>> is_expression_continuation);
+	static vector<IsExpressionTail>
+	TransformIsExpressionContinuation(PEGTransformer &transformer, unique_ptr<ParsedExpression> is_test,
+	                                  optional<vector<IsExpressionTail>> is_expression_tail);
+	static IsExpressionTail TransformIsTestTail(PEGTransformer &transformer, unique_ptr<ParsedExpression> is_test);
+	static IsExpressionTail TransformIsDistinctTail(PEGTransformer &transformer,
+	                                                IsDistinctFromTail is_distinct_from_tail);
+	static IsExpressionTail TransformIsComparisonTail(PEGTransformer &transformer,
+	                                                  ComparisonExpressionTail comparison_expression_tail);
+	static IsExpressionTail TransformIsOtherOperatorTail(PEGTransformer &transformer,
+	                                                     OtherOperatorTail other_operator_tail);
 	static unique_ptr<ParsedExpression> TransformIsLiteral(PEGTransformer &transformer, const bool &has_result,
 	                                                       const Value &is_literal_value);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer);
