@@ -26,7 +26,9 @@ struct JSONKey {
 };
 
 struct JSONKeyHash {
-	explicit JSONKeyHash(bool case_insensitive_p = false) : case_insensitive(case_insensitive_p) {
+	JSONKeyHash() : case_insensitive(false) {
+	}
+	explicit JSONKeyHash(bool case_insensitive_p) : case_insensitive(case_insensitive_p) {
 	}
 	inline std::size_t operator()(const JSONKey &k) const {
 		size_t result;
@@ -48,7 +50,9 @@ struct JSONKeyHash {
 };
 
 struct JSONKeyEquality {
-	explicit JSONKeyEquality(bool case_insensitive_p = false) : case_insensitive(case_insensitive_p) {
+	JSONKeyEquality() : case_insensitive(false) {
+	}
+	explicit JSONKeyEquality(bool case_insensitive_p) : case_insensitive(case_insensitive_p) {
 	}
 	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
 		if (a.len != b.len) {
