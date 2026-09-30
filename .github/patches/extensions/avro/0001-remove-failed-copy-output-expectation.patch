@@ -1,0 +1,18 @@
+diff --git a/test/sql/copy/nullable.test b/test/sql/copy/nullable.test
+index 936ecdb..b0fe6fe 100644
+--- a/test/sql/copy/nullable.test
++++ b/test/sql/copy/nullable.test
+@@ -38,10 +38,11 @@ COPY (
+ ----
+ <REGEX>:.*Cannot insert NULL to non-nullable field.*
+ 
+-# legacy COPY writers retain their output on failure
+-query I
++# Failed COPY removes its output
++statement error
+ select * from read_avro('{TEST_DIR}/field_ids_error.avro');
+ ----
++<REGEX>:.*No files found that match the pattern.*
+ 
+ # cannot cast foo to BOOL
+ statement error

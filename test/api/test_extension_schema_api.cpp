@@ -10,6 +10,8 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/enums/database_modification_type.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -285,4 +287,29 @@ TEST_CASE("Test ExtensionLoader schema API", "[api]") {
 		REQUIRE_NO_FAIL(conn.Query("SELECT combined_schema.fn_combined()"));
 		REQUIRE_NO_FAIL(conn.Query("SELECT fn_combined()"));
 	}
+}
+
+TEST_CASE("Test that Catalog::CreateSchema rejects unsupported options", "[api]") {
+	DuckDB db(nullptr);
+	Connection conn(db);
+	conn.BeginTransaction();
+
+	auto &catalog = Catalog::GetCatalog(*conn.context, "memory");
+	MetaTransaction::Get(*conn.context)
+	    .ModifyDatabase(catalog.GetAttached(), DatabaseModificationType::CREATE_CATALOG_ENTRY);
+
+	CreateSchemaInfo info;
+	info.SetQualifiedName(QualifiedName(vector<Identifier> {"memory", "s1"}, Identifier()));
+	info.options.emplace("location", ConstantExpression::String("s3://bucket/folder"));
+
+	// the options are not supported by the DuckDB catalog - they must be rejected instead of discarded
+	REQUIRE_THROWS(catalog.CreateSchema(*conn.context, info));
+
+	info.options.clear();
+	REQUIRE_NOTHROW(catalog.CreateSchema(*conn.context, info));
+	conn.Commit();
+
+	auto result = conn.Query("SELECT schema_name FROM information_schema.schemata WHERE schema_name = 's1'");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 1);
 }
