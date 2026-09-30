@@ -83,7 +83,8 @@ static double GlobFunctionProgress(ClientContext &context, const FunctionData *b
 }
 
 void GlobTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction glob_function("glob", {LogicalType::VARCHAR}, GlobFunction, GlobFunctionBind, GlobFunctionInit);
+	TableFunction glob_function("glob", FunctionSignature().AddPositionalOnly("pattern", LogicalType::VARCHAR),
+	                            GlobFunction, GlobFunctionBind, GlobFunctionInit);
 	glob_function.table_scan_progress = GlobFunctionProgress;
 	set.AddFunction(MultiFileReader::CreateFunctionSet(glob_function));
 }

@@ -217,10 +217,11 @@ void ParsedGrammar::ReplaceRule(const string &rule_definition, grammar_transform
 	entry->second = make_uniq<ParsedGrammarRule>(std::move(rule));
 }
 
-void ParsedGrammar::SetTransformProcess(const string &rule_name,
-                                        grammar_transform_process_function_t transform_process) {
+void ParsedGrammar::SetTransformProcess(const string &rule_name, grammar_transform_process_function_t transform_process,
+                                        bool collapsible) {
 	auto &rule = GetMutableRule(rule_name);
 	rule.transform_process = std::move(transform_process);
+	rule.collapsible = collapsible;
 }
 
 void ParsedGrammar::AddTerminalRuleOverride(const string &rule_name, terminal_rule_matcher_factory_t matcher_factory) {

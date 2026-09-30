@@ -539,6 +539,8 @@ TEST_CASE("Stable C++API: Vector SetNull recurses into nested children", "[cpp_a
 	DataChunk chunk(types);
 	auto vec = chunk.GetVector(0);
 	vec.SetSize(3);
+	REQUIRE(chunk.GetVectorCount() == 1);
+	REQUIRE(vec.GetChildCount() == 2);
 
 	auto name_vec = vec.GetChild(0);
 	auto score_vec = vec.GetChild(1);

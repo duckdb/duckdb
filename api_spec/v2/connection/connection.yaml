@@ -75,9 +75,15 @@ functions:
         description: "The connection."
       name:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: "Option name (canonical or alias)."
       setting:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: "The setting, in the textual form SQL `SET` accepts."
       scope:
         type: SETTING_SCOPE
@@ -108,6 +114,9 @@ functions:
         description: "The connection."
       name:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: "Option name (canonical or alias)."
       out_option:
         type: option

@@ -16,7 +16,11 @@ static bool DateTimestampComparisonIsInvertible(ClientContext &context, BoundFun
                                                 BoundFunctionExpression &cast_expression, const Value &constant_value,
                                                 Value &cast_constant, bool column_ref_left,
                                                 unique_ptr<Expression> &replacement) {
-	if (Timestamp::GetTime(constant_value.GetValue<timestamp_t>()) == dtime_t(0)) {
+	auto timestamp = constant_value.GetValue<timestamp_t>();
+	if (!timestamp.IsFinite()) {
+		return false;
+	}
+	if (Timestamp::GetTime(timestamp) == dtime_t(0)) {
 		return true; // it's midnight: no replacement needed
 	}
 	auto op = expr.GetExpressionType();

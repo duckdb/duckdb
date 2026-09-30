@@ -190,7 +190,7 @@ LogicalType BindEnumType(BindLogicalTypeInput &input) {
 
 void RegisterEnumConstructors(TypeConstructorSet &set) {
 	auto signature = TypeConstructor::Signature();
-	signature.AddArgsParameter("args", LogicalType::VARCHAR);
+	signature.AddArgs("args", LogicalType::VARCHAR);
 	set.AddFunction(TypeConstructor(std::move(signature), BindEnumType));
 }
 
@@ -249,7 +249,7 @@ LogicalType BindStructType(BindLogicalTypeInput &input) {
 
 void RegisterStructConstructors(TypeConstructorSet &set) {
 	auto signature = TypeConstructor::Signature();
-	signature.AddKwargsParameter("kwargs", LogicalType::TYPE());
+	signature.AddKwargs("kwargs", LogicalType::TYPE());
 	set.AddFunction(TypeConstructor(std::move(signature), BindStructType));
 }
 
@@ -267,7 +267,7 @@ LogicalType BindTupleType(BindLogicalTypeInput &input) {
 
 void RegisterTupleConstructors(TypeConstructorSet &set) {
 	auto signature = TypeConstructor::Signature();
-	signature.AddArgsParameter("args", LogicalType::TYPE());
+	signature.AddArgs("args", LogicalType::TYPE());
 	set.AddFunction(TypeConstructor(std::move(signature), BindTupleType));
 }
 
@@ -311,7 +311,7 @@ LogicalType BindUnionType(BindLogicalTypeInput &input) {
 
 void RegisterUnionConstructors(TypeConstructorSet &set) {
 	auto signature = TypeConstructor::Signature();
-	signature.AddKwargsParameter("kwargs", LogicalType::TYPE());
+	signature.AddKwargs("kwargs", LogicalType::TYPE());
 	set.AddFunction(TypeConstructor(std::move(signature), BindUnionType));
 }
 

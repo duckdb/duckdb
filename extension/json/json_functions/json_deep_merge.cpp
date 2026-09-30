@@ -31,7 +31,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 		stack.pop_back();
 
 		auto builder = nodes.builder;
-		
+
 		// Copy orig keys not in patch or where patch value is null
 		{
 			idx_t idx, max;
@@ -141,9 +141,10 @@ static void DeepMergeFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 ScalarFunctionSet JSONFunctions::GetDeepMergeFunction() {
-	ScalarFunction fun("json_deep_merge", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   DeepMergeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
-	fun.SetVarArgs(LogicalType::JSON());
+	ScalarFunction fun("json_deep_merge", {}, LogicalType::JSON(), DeepMergeFunction, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json1", LogicalType::JSON()).AddParameter("json2", LogicalType::JSON());
+	fun.GetSignature().AddArgs("args", LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 
