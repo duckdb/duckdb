@@ -1171,3 +1171,14 @@ query I
 select '2026-11-02'::TIMESTAMPTZ;
 ----
 2026-11-02 00:00:00-06
+
+# 2026e
+# Manitoba’s 2026-03-08 spring forward was its last foreseeable clockchange, 
+# as it moved to permanent -05 thereafter.  
+statement ok
+set timezone='America/Winnipeg';
+
+query I
+select '2026-11-02'::timestamptz
+----
+2026-11-02 00:00:00-05
