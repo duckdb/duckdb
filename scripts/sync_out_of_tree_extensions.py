@@ -94,7 +94,7 @@ def parse_cmake_file(cmake_path):
         # the next keyword or end-of-body
         submodules = []
         submodules_match = re.search(
-            r'\bSUBMODULES\s+((?:(?!(?:GIT_URL|GIT_TAG|DONT_LINK|DONT_BUILD|LOAD_TESTS|APPLY_PATCHES|INCLUDE_DIR|TEST_DIR|EXTENSION_VERSION|LINKED_LIBS|\))).)+)',
+            r'\bSUBMODULES\s+((?:(?!(?:GIT_URL|GIT_TAG|DONT_BUILD|LOAD_TESTS|APPLY_PATCHES|INCLUDE_DIR|TEST_DIR|EXTENSION_VERSION|LINKED_LIBS|\))).)+)',
             body,
         )
         if submodules_match:
