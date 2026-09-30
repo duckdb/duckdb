@@ -82,6 +82,7 @@ static unique_ptr<BaseStatistics> StructPackStats(ClientContext &context, Functi
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	struct_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		StructStats::SetChildStats(struct_stats, i, child_stats[i]);
 	}

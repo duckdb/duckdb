@@ -22,14 +22,14 @@ PEGTransformerFactory::TransformCopyGenericOptionList(PEGTransformer &transforme
 
 static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, unique_ptr<ParsedExpression> expression) {
 	if (expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expression->Cast<ConstantExpression>().GetValue()));
+		copy_option.children.push_back(expression->Cast<ConstantExpression>().GetLiteral().ToValue());
 	} else if (expression->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		copy_option.children.push_back(Value(expression->Cast<ColumnRefExpression>().GetColumnName()));
 	} else if (expression->GetExpressionType() == ExpressionType::PLACEHOLDER) {
 		auto &op_expr = expression->Cast<OperatorExpression>();
 		for (auto &child : op_expr.GetChildren()) {
 			if (child->GetExpressionClass() == ExpressionClass::CONSTANT) {
-				copy_option.children.push_back(Value(child->Cast<ConstantExpression>().GetValue()));
+				copy_option.children.push_back(child->Cast<ConstantExpression>().GetLiteral().ToValue());
 			} else if (child->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 				copy_option.children.push_back(Value(child->Cast<ColumnRefExpression>().GetColumnName()));
 			} else {
@@ -44,10 +44,10 @@ static void SetGenericCopyOptionExpression(GenericCopyOption &copy_option, uniqu
 	} else if (expression->GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 		auto &cast_expr = expression->Cast<CastExpression>();
 		if (cast_expr.Child().GetExpressionClass() == ExpressionClass::CONSTANT) {
-			auto &const_expr = cast_expr.Child().Cast<ConstantExpression>();
-			if (const_expr.GetValue().GetValue<string>() == "t") {
+			auto &literal = cast_expr.Child().Cast<ConstantExpression>().GetLiteral();
+			if (literal.kind == LiteralKind::STRING && literal.text == "t") {
 				copy_option.children.push_back(Value(true));
-			} else if (const_expr.GetValue().GetValue<string>() == "f") {
+			} else if (literal.kind == LiteralKind::STRING && literal.text == "f") {
 				copy_option.children.push_back(Value(false));
 			} else {
 				copy_option.expression = std::move(expression);
@@ -69,7 +69,7 @@ static unique_ptr<ParsedExpression> CreateOrderByRowFunction(const vector<OrderB
 	vector<unique_ptr<ParsedExpression>> children;
 	children.reserve(orders.size());
 	for (auto &order : orders) {
-		children.push_back(make_uniq<ConstantExpression>(Value(order.ToString())));
+		children.push_back(ConstantExpression::String(order.ToString()));
 	}
 	return CreateRowFunction(std::move(children));
 }

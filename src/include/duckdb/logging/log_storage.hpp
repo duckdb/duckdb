@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/logging/logging.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
@@ -20,6 +21,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
+struct TableFunctionBindInput;
 struct RegisteredLoggingContext;
 class ColumnDataCollection;
 struct ColumnDataScanState;

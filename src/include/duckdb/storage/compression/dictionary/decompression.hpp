@@ -7,13 +7,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-// FIXME: why is this StringScanState when we also define: `BufferHandle handle` ???
-struct CompressedStringScanState : public StringScanState {
+struct CompressedStringScanState : public SegmentScanState {
 public:
 	explicit CompressedStringScanState(BufferHandle &&handle_p)
-	    : StringScanState(), owned_handle(std::move(handle_p)), handle(owned_handle) {
+	    : owned_handle(std::move(handle_p)), handle(owned_handle) {
 	}
-	explicit CompressedStringScanState(BufferHandle &handle_p) : StringScanState(), owned_handle(), handle(handle_p) {
+	explicit CompressedStringScanState(BufferHandle &handle_p) : owned_handle(), handle(handle_p) {
 	}
 
 public:

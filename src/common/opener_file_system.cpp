@@ -1,5 +1,6 @@
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/compressed_file_system.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
 #include "duckdb/main/database.hpp"

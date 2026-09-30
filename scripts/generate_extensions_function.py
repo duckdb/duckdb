@@ -898,6 +898,13 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {{"s3/config", "h
                                                                 {"postgres/config", "postgres_scanner"}
 }; // EXTENSION_SECRET_PROVIDERS
 
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
+    {"DuckLakeMetadata", "ducklake"},
+    {"Iceberg", "iceberg"},
+}; // END_OF_EXTENSION_LOG_TYPES
+
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete",
     "avro",

@@ -355,3 +355,333 @@ from read_parquet(
 	},
 	filename=True
 ) where x = 1;
+
+# nested child schemas use the same typed MAP shape recursively
+statement ok
+COPY (
+	SELECT
+		7::INTEGER AS i,
+		struct_pack(inner := struct_pack(source_x := 42::INTEGER)) AS s,
+		[struct_pack(y := 100::INTEGER)] AS l,
+		MAP([10::INTEGER], [struct_pack(z := 200::INTEGER)]) AS m
+) TO '{TEMP_DIR}/nested_schema.parquet'
+
+query IIIIII
+SELECT i, s.inner.missing, s.inner.renamed_x, l[1].y, m[10].z, root_missing
+FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'i': {name: 'i', type: 'BIGINT', default_value: NULL},
+		's': {
+			name: 's',
+			type: 'STRUCT("inner" STRUCT(missing BIGINT, renamed_x BIGINT))',
+			default_value: NULL,
+			children: map {
+				'inner': {
+					name: 'inner',
+					type: 'STRUCT(missing BIGINT, renamed_x BIGINT)',
+					default_value: NULL,
+					children: map {
+						'missing': {name: 'missing', type: 'BIGINT', default_value: '9'},
+						'source_x': {name: 'renamed_x', type: 'BIGINT', default_value: NULL}
+					}
+				}
+			}
+		},
+		'l': {
+			name: 'l',
+			type: 'STRUCT(y BIGINT)[]',
+			default_value: NULL,
+			children: map {
+				'list': {
+					name: 'element',
+					type: 'STRUCT(y BIGINT)',
+					default_value: NULL,
+					children: map {
+						'y': {name: 'y', type: 'BIGINT', default_value: NULL}
+					}
+				}
+			}
+		},
+		'm': {
+			name: 'm',
+			type: 'MAP(BIGINT, STRUCT(z BIGINT))',
+			default_value: NULL,
+			children: map {
+				'key': {name: 'key', type: 'BIGINT', default_value: NULL},
+				'value': {
+					name: 'value',
+					type: 'STRUCT(z BIGINT)',
+					default_value: NULL,
+					children: map {
+						'z': {name: 'z', type: 'BIGINT', default_value: NULL}
+					}
+				}
+			}
+		},
+		'root_missing': {name: 'root_missing', type: 'BIGINT', default_value: '11'}
+	}
+)
+----
+7	9	42	100	200	11
+
+# nested projection pushdown preserves the recursive mapping
+query I
+SELECT s.inner.renamed_x
+FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT("inner" STRUCT(renamed_x BIGINT))',
+			default_value: NULL,
+			children: map {
+				'inner': {
+					name: 'inner',
+					type: 'STRUCT(renamed_x BIGINT)',
+					default_value: NULL,
+					children: map {
+						'source_x': {name: 'renamed_x', type: 'BIGINT', default_value: NULL}
+					}
+				}
+			}
+		}
+	}
+)
+----
+42
+
+# integer identifiers are supported recursively
+statement ok
+COPY (
+	SELECT struct_pack(f := 42::INTEGER) AS s
+) TO '{TEMP_DIR}/nested_field_ids.parquet' (
+	FIELD_IDS {s: {__duckdb_field_id: 10, f: 11}}
+)
+
+query I
+SELECT s.f
+FROM read_parquet(
+	'{TEMP_DIR}/nested_field_ids.parquet',
+	schema=map {
+		10: {
+			name: 's',
+			type: 'STRUCT(f BIGINT)',
+			default_value: NULL,
+			children: map {
+				11: {name: 'f', type: 'BIGINT', default_value: NULL}
+			}
+		}
+	}
+)
+----
+42
+
+# children may be omitted or explicitly NULL
+query II
+SELECT s.inner.source_x, i
+FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {name: 's', type: 'STRUCT("inner" STRUCT(source_x BIGINT))', default_value: NULL, children: NULL},
+		'i': {name: 'i', type: 'BIGINT', default_value: NULL}
+	}
+)
+----
+42	7
+
+# every child map must use the root map's exact key type
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT("inner" STRUCT(source_x BIGINT))',
+			default_value: NULL,
+			children: map {
+				1: {name: 'inner', type: 'STRUCT(source_x BIGINT)', default_value: NULL}
+			}
+		}
+	}
+)
+----
+Binder Error: Parquet schema 'children' key type must match the root schema key type VARCHAR, not INTEGER
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_field_ids.parquet',
+	schema=map {
+		10: {
+			name: 's',
+			type: 'STRUCT(f BIGINT)',
+			default_value: NULL,
+			children: map {
+				'11': {name: 'f', type: 'BIGINT', default_value: NULL}
+			}
+		}
+	}
+)
+----
+Binder Error: Parquet schema 'children' key type must match the root schema key type INTEGER, not VARCHAR
+
+# children must themselves be schema maps
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {name: 's', type: 'STRUCT("inner" STRUCT(source_x BIGINT))', default_value: NULL, children: {}}
+	}
+)
+----
+Binder Error: Parquet schema 'children' expects a value of type MAP, not STRUCT
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT("inner" STRUCT(source_x BIGINT))',
+			default_value: NULL,
+			children: map {'inner': 42}
+		}
+	}
+)
+----
+Binder Error: Parquet schema 'children' expects a STRUCT as the value type of the map, not INTEGER
+
+# explicitly supplied children must agree with the declared parent type
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT("inner" STRUCT(source_x BIGINT))',
+			default_value: NULL,
+			children: map {}
+		}
+	}::MAP(VARCHAR, STRUCT(name VARCHAR, type VARCHAR, default_value VARCHAR, children MAP(VARCHAR, STRUCT(name VARCHAR, type VARCHAR, default_value VARCHAR))))
+)
+----
+Binder Error: Parquet schema column "s" of type STRUCT("inner" STRUCT(source_x BIGINT)) expects 1 child definitions, not 0
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT(expected BIGINT)',
+			default_value: NULL,
+			children: map {
+				'source_x': {name: 'different', type: 'BIGINT', default_value: NULL}
+			}
+		}
+	}
+)
+----
+Binder Error: Parquet schema column "s" expects a child with name "expected" (got "different")
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT(expected BIGINT)',
+			default_value: NULL,
+			children: map {
+				'expected': {name: 'expected', type: 'VARCHAR', default_value: NULL}
+			}
+		}
+	}
+)
+----
+Binder Error: Parquet schema column "s" expects a child with name "expected" to have type "BIGINT" (got "VARCHAR")
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'l': {
+			name: 'l',
+			type: 'STRUCT(y BIGINT)[]',
+			default_value: NULL,
+			children: map {
+				'list': {name: 'item', type: 'STRUCT(y BIGINT)', default_value: NULL}
+			}
+		}
+	}
+)
+----
+Binder Error: Parquet schema column "l" expects a child with name "element" (got "item")
+
+query I
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'l': {
+			name: 'l',
+			type: 'STRUCT(y BIGINT)[]',
+			default_value: NULL,
+			children: map {
+				'list': {name: 'element', type: 'STRUCT(y BIGINT)', default_value: NULL}
+			}
+		}
+	}
+)
+----
+[{'y': 100}]
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'i': {
+			name: 'i',
+			type: 'BIGINT',
+			default_value: NULL,
+			children: map {
+				'i': {name: 'i', type: 'BIGINT', default_value: NULL}
+			}
+		}
+	}
+)
+----
+Binder Error: Parquet schema column "i" of type BIGINT cannot define nested children
+
+# schema definitions have exactly three fields, or four when children is present
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		'i': {name: 'i', type: 'BIGINT', default_value: NULL, children: NULL, extra_field: 42}
+	}
+)
+----
+Invalid Input Error: 'schema' expects the STRUCT to have 3 or 4 fields, 'name', 'type', 'default_value' and optionally 'children', not 5
+
+statement error
+SELECT * FROM read_parquet(
+	'{TEMP_DIR}/nested_schema.parquet',
+	schema=map {
+		's': {
+			name: 's',
+			type: 'STRUCT("inner" STRUCT(source_x BIGINT))',
+			default_value: NULL,
+			children: map {
+				'inner': {
+					name: 'inner',
+					type: 'STRUCT(source_x BIGINT)',
+					default_value: NULL,
+					children: NULL,
+					extra_field: 42
+				}
+			}
+		}
+	}
+)
+----
+Invalid Input Error: 'schema' expects the STRUCT to have 3 or 4 fields, 'name', 'type', 'default_value' and optionally 'children', not 5

@@ -1,0 +1,21 @@
+# name: test/sql/upsert/insert_or_replace/generated_column.test
+# description: Test INSERT OR REPLACE with generated columns
+# group: [insert_or_replace]
+
+statement ok
+CREATE TABLE tbl (
+	g AS (x + 1),
+	x INTEGER,
+	y INTEGER UNIQUE
+);
+
+statement ok
+INSERT INTO tbl VALUES (1, 10);
+
+statement ok
+INSERT OR REPLACE INTO tbl (x, y) VALUES (2, 10);
+
+query III
+SELECT * FROM tbl;
+----
+3	2	10

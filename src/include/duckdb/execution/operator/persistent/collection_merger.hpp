@@ -89,7 +89,7 @@ public:
 				}
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
 			}
-			result_collection.FinalizeAppend(TransactionData(0, 0), append_state);
+			result_collection.FinalizeAppend(TransactionData::Unversioned(), append_state);
 			writer.WriteUnflushedRowGroups(optimistic_collection);
 		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
 			writer.WriteUnflushedRowGroups(optimistic_collection);

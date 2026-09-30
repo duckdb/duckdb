@@ -1098,11 +1098,11 @@ TEST_CASE("Construct ValueRelation with RelationContextWrapper and operate on it
 		duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> row;
 
 		{
-			duckdb::ConstantExpression ce1(duckdb::Value::INTEGER(1));
+			duckdb::ConstantExpression ce1(duckdb::Literal::Integer(1));
 			row.push_back(ce1.Copy());
 		}
 		{
-			duckdb::ConstantExpression ce2(duckdb::Value::INTEGER(2));
+			duckdb::ConstantExpression ce2(duckdb::Literal::Integer(2));
 			row.push_back(ce2.Copy());
 		}
 		expressions.push_back(std::move(row));

@@ -211,16 +211,18 @@ AddColumnInfo::AddColumnInfo(ColumnDefinition new_column_p)
     : AlterTableInfo(AlterTableType::ADD_COLUMN), new_column(std::move(new_column_p)) {
 }
 
-AddColumnInfo::AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists)
+AddColumnInfo::AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists,
+                             bool add_not_null)
     : AlterTableInfo(AlterTableType::ADD_COLUMN, data), new_column(std::move(new_column)),
-      if_column_not_exists(if_column_not_exists) {
+      if_column_not_exists(if_column_not_exists), add_not_null(add_not_null) {
 }
 
 AddColumnInfo::~AddColumnInfo() {
 }
 
 unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
-	return make_uniq_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists);
+	return make_uniq_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists,
+	                                                add_not_null);
 }
 
 string AddColumnInfo::ToString() const {
@@ -236,6 +238,9 @@ string AddColumnInfo::ToString() const {
 	}
 	result += " " + SQLIdentifier(this->new_column.GetName());
 	result += " " + this->new_column.GetType().ToString();
+	if (add_not_null) {
+		result += " NOT NULL";
+	}
 	if (this->new_column.HasDefaultValue()) {
 		result += " DEFAULT ";
 		result += this->new_column.DefaultValue().ToString();

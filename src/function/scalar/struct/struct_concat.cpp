@@ -86,6 +86,7 @@ static unique_ptr<BaseStatistics> StructConcatStats(ClientContext &context, Func
 	auto &arg_exprs = input.expr.GetChildren();
 
 	auto struct_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	struct_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	idx_t struct_index = 0;
 
 	for (idx_t arg_idx = 0; arg_idx < arg_exprs.size(); arg_idx++) {

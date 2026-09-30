@@ -212,11 +212,15 @@ functions:
     description: |
       Creates a logical type from a type name plus value parameters.
 
-      The generic constructor: resolves the name in the context's catalog —
-      search path first, then the system catalog — and binds it with the given
-      parameters, exactly as SQL binds a type expression. Built-in
-      parameterized kinds and registered extension types construct through this
-      same call.
+      The generic constructor: resolves the name in the context's catalog and
+      binds it with the given parameters, exactly as SQL binds a type
+      expression. Built-in parameterized kinds and registered extension types
+      construct through this same call.
+
+      An unqualified name is resolved along the search path first and then in
+      the system catalog, which is where the built-in kinds live. A qualified
+      name is resolved exactly as written, with no system-catalog fallback, so
+      it names the type in that catalog or schema or fails.
 
       Parameters are (name, value) pairs in two parallel arrays. param_names
       may be NULL to make every parameter positional, and a {NULL, 0} entry
@@ -248,8 +252,8 @@ functions:
         type: context
         description: The context supplying the catalog and active transaction.
       name:
-        type: identifier
-        description: View of the type name to resolve. Unqualified; case-insensitive.
+        type: qname
+        description: The type name to resolve. Parts are matched case-insensitively; qualify it to name a type in a particular catalog or schema.
       param_names:
         type: identifier
         indirection: 1
@@ -413,8 +417,8 @@ functions:
         type: connection
         description: The connection supplying the catalog and active transaction.
       name:
-        type: identifier
-        description: View of the type name to resolve. Unqualified; case-insensitive.
+        type: qname
+        description: The type name to resolve. Parts are matched case-insensitively; qualify it to name a type in a particular catalog or schema.
       param_names:
         type: identifier
         indirection: 1

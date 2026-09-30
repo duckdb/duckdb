@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include <set>

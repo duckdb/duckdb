@@ -16,21 +16,7 @@ SetScope MapSettingScope(DUCKDB_V2_SETTING_SCOPE s) {
 	}
 }
 
-struct QueryProgressWrapperV2 {
-	double percentage = -1;
-	uint64_t rows_processed = 0;
-	uint64_t total_rows_to_process = 0;
-};
-
 } // namespace
-
-auto Convert(duckdb_v2_query_progress_handle progress) -> QueryProgressWrapperV2 * {
-	return reinterpret_cast<QueryProgressWrapperV2 *>(progress);
-}
-
-auto Convert(QueryProgressWrapperV2 *progress) -> duckdb_v2_query_progress_handle {
-	return reinterpret_cast<duckdb_v2_query_progress_handle>(progress);
-}
 
 } // namespace capiv2
 } // namespace duckdb
@@ -127,53 +113,17 @@ DUCKDB_V2_ERROR duckdb_v2_connection_interrupt(duckdb_v2_connection_handle conn,
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_connection_query_progress(duckdb_v2_connection_handle conn,
-                                                    duckdb_v2_query_progress_handle *out_progress,
-                                                    duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle conn, double *out_percentage,
+                                                  uint64_t *out_rows_processed, uint64_t *out_total_rows_to_process,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_progress);
-	*out_progress = nullptr;
+	DUCKDB_CHECK_ARG(out_percentage);
+	DUCKDB_CHECK_ARG(out_rows_processed);
+	DUCKDB_CHECK_ARG(out_total_rows_to_process);
 	return WithErrorHandler(err, [&]() {
 		auto progress = Convert(conn)->context->GetQueryProgress();
-		auto wrapper = duckdb::make_uniq<QueryProgressWrapperV2>();
-		wrapper->percentage = progress.GetPercentage();
-		wrapper->rows_processed = progress.GetRowsProcessed();
-		wrapper->total_rows_to_process = progress.GetTotalRowsToProcess();
-		*out_progress = Convert(wrapper.release());
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_query_progress_get_percentage(duckdb_v2_query_progress_handle progress,
-                                                        double *out_percentage, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(progress);
-	DUCKDB_CHECK_ARG(out_percentage);
-	return WithErrorHandler(err, [&]() { *out_percentage = Convert(progress)->percentage; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_query_progress_get_rows_processed(duckdb_v2_query_progress_handle progress,
-                                                            uint64_t *out_rows_processed,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(progress);
-	DUCKDB_CHECK_ARG(out_rows_processed);
-	return WithErrorHandler(err, [&]() { *out_rows_processed = Convert(progress)->rows_processed; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_query_progress_get_total_rows_to_process(duckdb_v2_query_progress_handle progress,
-                                                                   uint64_t *out_total_rows_to_process,
-                                                                   duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(progress);
-	DUCKDB_CHECK_ARG(out_total_rows_to_process);
-	return WithErrorHandler(err, [&]() { *out_total_rows_to_process = Convert(progress)->total_rows_to_process; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_progress_handle *progress) {
-	return WithErrorHandler(nullptr, [&]() {
-		if (!progress) {
-			return;
-		}
-		if (*progress) {
-			delete Convert(*progress);
-			*progress = nullptr;
-		}
+		*out_percentage = progress.GetPercentage();
+		*out_rows_processed = progress.GetRowsProcessed();
+		*out_total_rows_to_process = progress.GetTotalRowsToProcess();
 	});
 }

@@ -80,6 +80,8 @@ enum class PrintOutput { STDOUT, STDERR };
 
 enum class InputMode { STANDARD, FILE, DUCKDB_RC };
 
+enum class OutputCommand { OUTPUT, ONCE, EXCEL };
+
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
 
 /*
@@ -320,7 +322,7 @@ public:
 	bool SetOutputMode(const string &mode, const char *tbl_name);
 	bool ImportData(const vector<string> &args);
 	bool OpenDatabase(const vector<string> &args);
-	bool SetOutputFile(const vector<string> &args, char output_mode);
+	bool SetOutputFile(const vector<string> &args, OutputCommand output_command);
 	bool ReadFromFile(const string &file);
 	bool DisplaySchemas(const vector<string> &args);
 	MetadataResult DisplayEntries(const vector<string> &args, char type);

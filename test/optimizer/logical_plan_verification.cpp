@@ -11,6 +11,8 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/main/database.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 

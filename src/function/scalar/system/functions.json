@@ -1,14 +1,14 @@
 [
     {
         "name": "finalize",
-        "parameters": "col0",
+        "parameters": "state",
         "description": "",
         "example": "",
         "type": "scalar_function"
     },
     {
         "name": "combine",
-        "parameters": "col0,col1",
+        "parameters": "state1,state2",
         "description": "",
         "example": "",
         "type": "scalar_function"

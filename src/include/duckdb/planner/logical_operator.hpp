@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/main/profiler/profiler_print_format.hpp"

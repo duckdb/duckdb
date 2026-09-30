@@ -10,6 +10,12 @@
 				"test/sql/types/type/test_make_get_type.test",
 				"test/parquet/constant_dictionary_vector_parquet.test_slow"
 			]
+		},
+		{
+			"reason": "Roundtrip is not possible (MAP type)",
+			"paths": [
+				"test/parquet/test_parquet_schema.test"
+			]
 		}
 	]
 }

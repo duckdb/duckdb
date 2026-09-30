@@ -1,4 +1,6 @@
 #include "duckdb/function/macro_function.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 #include "duckdb/common/sql_identifier.hpp"
 
@@ -11,7 +13,6 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/planner/bound_expression_map.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 
@@ -73,8 +74,6 @@ MacroBindResult MacroFunction::BindMacroFunction(
 		auto arg_copy = arg.GetExpression().Copy();
 		LogicalType arg_type = LogicalType::UNKNOWN;
 		if (requires_bind) {
-			// scope for the speculative bind of the argument copy: its map entries are discarded on exit
-			BoundExpressionScope arg_scope(binder.GetBoundExpressions());
 			const auto arg_bind_result = expr_binder.BindExpression(arg_copy, depth + 1);
 			arg_type = arg_bind_result.HasError() ? LogicalType::UNKNOWN : arg_bind_result.expression->GetReturnType();
 		}

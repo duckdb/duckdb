@@ -40,6 +40,10 @@ class WindowFunction;
 class WindowFunctionSet;
 class BoundSimpleFunction;
 
+struct BoundBetweenExpression;
+struct BoundCastExpression;
+struct BetweenFunctionData;
+struct CastFunctionData;
 struct PragmaInfo;
 
 //! The default null handling is NULL in, NULL out
@@ -62,6 +66,24 @@ enum class FunctionCollationHandling : uint8_t {
 };
 
 struct FunctionData {
+public:
+	FunctionData() = default;
+	FunctionData(const FunctionData &) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData(FunctionData &&) : internal_kind(InternalKind::GENERIC) {
+	}
+	FunctionData &operator=(const FunctionData &other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
+		return *this;
+	}
+	FunctionData &operator=(FunctionData &&other) {
+		if (this != &other) {
+			internal_kind = InternalKind::GENERIC;
+		}
+		return *this;
+	}
 	DUCKDB_API virtual ~FunctionData();
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
@@ -84,6 +106,22 @@ struct FunctionData {
 	TARGET &CastNoConst() const {
 		return const_cast<TARGET &>(Cast<TARGET>()); // NOLINT: FIXME
 	}
+
+private:
+	enum InternalKind : uint8_t { GENERIC = 0, BOUND_CAST, BOUND_BETWEEN };
+
+	explicit FunctionData(InternalKind internal_kind_p) : internal_kind(internal_kind_p) {
+	}
+	InternalKind GetInternalKind() const {
+		return internal_kind;
+	}
+
+	InternalKind internal_kind = InternalKind::GENERIC;
+
+	friend struct BoundBetweenExpression;
+	friend struct BoundCastExpression;
+	friend struct BetweenFunctionData;
+	friend struct CastFunctionData;
 };
 
 struct TableFunctionData : public FunctionData {
@@ -458,6 +496,12 @@ public:
 	auto SetCaptureArgumentAliases(bool value) -> void {
 		capture_argument_aliases = value;
 	}
+	auto RequiresExpressionNames() const -> bool {
+		return requires_expression_names;
+	}
+	auto SetRequiresExpressionNames(bool value) -> void {
+		requires_expression_names = value;
+	}
 
 	auto RequiresOrderedExecution() const -> bool {
 		return requires_ordered_execution;
@@ -489,6 +533,8 @@ public:
 	//! function. This preserves the legacy behavior of functions such as struct_pack/row, which derived their
 	//! (struct field) names from argument aliases and therefore allowed positional arguments after named ones.
 	bool capture_argument_aliases = false;
+	//! Whether results depend on argument expression names or the call's result alias
+	bool requires_expression_names = false;
 	//! Whether calls to this function must follow input order
 	bool requires_ordered_execution = false;
 };

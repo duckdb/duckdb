@@ -9,6 +9,17 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
+static bool IsVolatile(LogicalAggregate &aggr, const Expression &expr) {
+	bool is_volatile = false;
+	ExpressionIterator::VisitExpression<BoundColumnRefExpression>(expr, [&](const BoundColumnRefExpression &colref) {
+		D_ASSERT(colref.Depth() == 0);
+		if (aggr.GetExpression(colref.Binding()).IsVolatile()) {
+			is_volatile = true;
+		}
+	});
+	return is_volatile;
+}
+
 static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &aggr, unique_ptr<Expression> root_expr) {
 	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
 	    root_expr, [&](BoundColumnRefExpression &colref, unique_ptr<Expression> &expr) {
@@ -69,6 +80,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 			}
 		}
 		if (!can_pushdown_filter) {
+			continue;
+		}
+		if (IsVolatile(aggr, *f.filter)) {
 			continue;
 		}
 		// no aggregate! we can push this down

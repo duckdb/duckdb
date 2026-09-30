@@ -11,6 +11,7 @@ struct AddColumnEntry {
 	LogicalType type;
 	vector<Identifier> column_path;
 	unique_ptr<ParsedExpression> default_value;
+	bool is_not_null = false;
 };
 
 } // namespace duckdb

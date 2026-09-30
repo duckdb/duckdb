@@ -118,8 +118,9 @@ static void ShellHistoryFunction(ClientContext &context, TableFunctionInput &dat
 
 void ShellExtension::Load(ExtensionLoader &loader) {
 	loader.SetDescription("Adds CLI-specific support and functionalities");
-	loader.RegisterFunction(
-	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));
+	ScalarFunction getenv_fun("getenv", {}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind);
+	getenv_fun.GetSignature().AddParameter("name", LogicalType::VARCHAR);
+	loader.RegisterFunction(getenv_fun);
 
 	TableFunction shell_history("shell_history", {}, ShellHistoryFunction, ShellHistoryBind, ShellHistoryInit);
 	loader.RegisterFunction(shell_history);

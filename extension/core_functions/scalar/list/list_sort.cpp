@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
@@ -48,6 +49,13 @@ ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_
 	// get the BoundOrderByNode
 	auto idx_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(LogicalType::USMALLINT, 0U);
 	auto lists_col_expr = make_uniq_base<Expression, BoundReferenceExpression>(child_type, 1U);
+	// Normalize the sort key without changing the sorted values (#25108): push the
+	// type's collation (for INTERVAL this wraps the expression in
+	// normalized_interval(...), the same normalization comparison operators, ORDER BY
+	// and aggregates apply) onto the key expression BEFORE constructing its
+	// BoundOrderByNode. The key then byte-compares like ORDER BY, while the list
+	// payload keeps the original (non-normalized) values.
+	ExpressionBinder::PushCollation(context, lists_col_expr, child_type);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(OrderType::ASCENDING, OrderByNullType::ORDER_DEFAULT, std::move(idx_col_expr));
 	orders.emplace_back(order_type, null_order, std::move(lists_col_expr));
@@ -354,18 +362,21 @@ static unique_ptr<FunctionData> ListReverseSortBind(BindScalarFunctionInput &inp
 
 ScalarFunctionSet ListSortFun::GetFunctions() {
 	// one parameter: list
-	ScalarFunction sort({{"list", LogicalType::LIST(LogicalType::ANY)}}, LogicalType::LIST(LogicalType::ANY),
-	                    ListSortFunction, ListNormalSortBind);
+	ScalarFunction sort({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
+	sort.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
 
 	// two parameters: list, order
-	ScalarFunction sort_order({{"list", LogicalType::LIST(LogicalType::ANY)}, {"sort_order", LogicalType::VARCHAR}},
-	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
+	ScalarFunction sort_order({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
+	sort_order.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("sort_order", LogicalType::VARCHAR);
 
 	// three parameters: list, order, null order
-	ScalarFunction sort_orders({{"list", LogicalType::LIST(LogicalType::ANY)},
-	                            {"sort_order", LogicalType::VARCHAR},
-	                            {"null_order", LogicalType::VARCHAR}},
-	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
+	ScalarFunction sort_orders({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
+	sort_orders.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("sort_order", LogicalType::VARCHAR)
+	    .AddParameter("null_order", LogicalType::VARCHAR);
 
 	ScalarFunctionSet list_sort;
 	list_sort.AddFunction(sort);
@@ -376,18 +387,21 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 
 ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 	// one parameter: list
-	ScalarFunction sort({{"list", LogicalType::LIST(LogicalType::ANY)}}, LogicalType::LIST(LogicalType::ANY),
-	                    ListSortFunction, ListGradeUpBind);
+	ScalarFunction sort({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	sort.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
 
 	// two parameters: list, order
-	ScalarFunction sort_order({{"list", LogicalType::LIST(LogicalType::ANY)}, {"sort_order", LogicalType::VARCHAR}},
-	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	ScalarFunction sort_order({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	sort_order.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("sort_order", LogicalType::VARCHAR);
 
 	// three parameters: list, order, null order
-	ScalarFunction sort_orders({{"list", LogicalType::LIST(LogicalType::ANY)},
-	                            {"sort_order", LogicalType::VARCHAR},
-	                            {"null_order", LogicalType::VARCHAR}},
-	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	ScalarFunction sort_orders({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListGradeUpBind);
+	sort_orders.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("sort_order", LogicalType::VARCHAR)
+	    .AddParameter("null_order", LogicalType::VARCHAR);
 
 	ScalarFunctionSet list_grade_up;
 	list_grade_up.AddFunction(sort);
@@ -398,13 +412,15 @@ ScalarFunctionSet ListGradeUpFun::GetFunctions() {
 
 ScalarFunctionSet ListReverseSortFun::GetFunctions() {
 	// one parameter: list
-	ScalarFunction sort_reverse({{"list", LogicalType::LIST(LogicalType::ANY)}}, LogicalType::LIST(LogicalType::ANY),
-	                            ListSortFunction, ListReverseSortBind);
+	ScalarFunction sort_reverse({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
+	sort_reverse.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
 
 	// two parameters: list, null order
-	ScalarFunction sort_reverse_null_order(
-	    {{"list", LogicalType::LIST(LogicalType::ANY)}, {"null_order", LogicalType::VARCHAR}},
-	    LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListReverseSortBind);
+	ScalarFunction sort_reverse_null_order({}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
+	                                       ListReverseSortBind);
+	sort_reverse_null_order.GetSignature()
+	    .AddParameter("list", LogicalType::LIST(LogicalType::ANY))
+	    .AddParameter("null_order", LogicalType::VARCHAR);
 
 	ScalarFunctionSet list_reverse_sort;
 	list_reverse_sort.AddFunction(sort_reverse);

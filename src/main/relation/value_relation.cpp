@@ -16,7 +16,7 @@ ValueRelation::ValueRelation(const shared_ptr<ClientContext> &context, const vec
 		auto &list = values[row_idx];
 		vector<unique_ptr<ParsedExpression>> expressions;
 		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-			expressions.push_back(make_uniq<ConstantExpression>(list[col_idx]));
+			expressions.push_back(ConstantExpression::FromValue(list[col_idx]));
 		}
 		this->expressions.push_back(std::move(expressions));
 	}
@@ -47,7 +47,7 @@ ValueRelation::ValueRelation(const shared_ptr<RelationContextWrapper> &context, 
 		auto &list = values[row_idx];
 		vector<unique_ptr<ParsedExpression>> expressions;
 		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-			expressions.push_back(make_uniq<ConstantExpression>(list[col_idx]));
+			expressions.push_back(ConstantExpression::FromValue(list[col_idx]));
 		}
 		this->expressions.push_back(std::move(expressions));
 	}

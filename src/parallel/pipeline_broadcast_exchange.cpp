@@ -616,8 +616,9 @@ PipelineBroadcastExchangeLocalState::~PipelineBroadcastExchangeLocalState() = de
 
 PipelineBroadcastExchange::PipelineBroadcastExchange(ClientContext &context, vector<LogicalType> types_p,
                                                      PipelineBroadcastExchangeCompletionMode completion_mode_p,
-                                                     OrderPreservationType source_order_p, bool use_batch_index_p)
-    : context(context), types(std::move(types_p)), completion_mode(completion_mode_p),
+                                                     OrderPreservationType source_order_p, bool use_batch_index_p,
+                                                     PipelineBroadcastExchangeBufferMode buffer_mode_p)
+    : context(context), types(std::move(types_p)), completion_mode(completion_mode_p), buffer_mode(buffer_mode_p),
       order_mode(use_batch_index_p                                   ? PipelineBroadcastExchangeOrderMode::BATCH_INDEX
                  : source_order_p == OrderPreservationType::NO_ORDER ? PipelineBroadcastExchangeOrderMode::UNORDERED
                                                                      : PipelineBroadcastExchangeOrderMode::SEQUENTIAL),
@@ -689,11 +690,6 @@ void PipelineBroadcastExchange::SelectDirectConsumer(Pipeline &pipeline, idx_t c
 	consumer.mode = PipelineBroadcastExchangeConsumerMode::DIRECT;
 	DeactivateConsumerLocked(consumer, buffer->BasePosition());
 	direct_pipelines.push_back(pipeline);
-	if (pipeline.IsStreamingResultPipeline()) {
-		for (auto &producer_pipeline : producer_pipelines) {
-			producer_pipeline.get().SetExternalStreamingResultProducer();
-		}
-	}
 }
 
 bool PipelineBroadcastExchange::TryRegisterDirectConsumer(Pipeline &pipeline, idx_t consumer_idx) {
@@ -1508,8 +1504,12 @@ SourceResultType PipelineBroadcastExchange::ReserveScanLocked(
 		auto position = consumer.position++;
 		buffer->ReserveRead(position, scan_state.spool_reader, next_chunk, batch_index, spool_read);
 		if (spool_read.IsSet()) {
+#ifdef D_ASSERT_IS_ENABLED
 			auto inserted = consumer.in_flight_reads.insert(position);
 			D_ASSERT(inserted.second);
+#else
+			consumer.in_flight_reads.insert(position);
+#endif
 		} else {
 			consumer.rows_read += next_chunk->size();
 			RetireChunksLocked();
@@ -1556,8 +1556,12 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 				scan_state.reported_batch_index = batch_range.batch_index;
 				if (spool_read.IsSet()) {
 					spool_read.batch_sequence = batch_sequence;
+#ifdef D_ASSERT_IS_ENABLED
 					auto inserted = consumer.in_flight_reads.insert(position);
 					D_ASSERT(inserted.second);
+#else
+					consumer.in_flight_reads.insert(position);
+#endif
 				} else {
 					position_entry->second++;
 					consumer.rows_read += next_chunk->size();
@@ -1616,8 +1620,12 @@ SourceResultType PipelineBroadcastExchange::ReserveBatchScanLocked(
 		if (consumer.next_batch_sequence < buffer->NextBatchSequence()) {
 			auto batch_sequence = consumer.next_batch_sequence++;
 			auto &batch_range = buffer->GetBatchRange(batch_sequence);
+#ifdef D_ASSERT_IS_ENABLED
 			auto inserted = consumer.active_batch_positions.emplace(batch_sequence, batch_range.begin_position);
 			D_ASSERT(inserted.second);
+#else
+			consumer.active_batch_positions.emplace(batch_sequence, batch_range.begin_position);
+#endif
 			scan_state.batch_sequence = batch_sequence;
 			continue;
 		}
@@ -1838,6 +1846,10 @@ bool PipelineBroadcastExchange::ShouldStopProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
+	if (buffer_mode == PipelineBroadcastExchangeBufferMode::BUFFER_ALL) {
+		// the rows are buffered until the consumer runs - the producer is never blocked
+		return false;
+	}
 	if (buffer->HasSharedSpool()) {
 		return false;
 	}
@@ -1845,8 +1857,12 @@ bool PipelineBroadcastExchange::ShouldThrottleProducerLocked() const {
 }
 
 bool PipelineBroadcastExchange::ShouldCreateSharedSpoolLocked() const {
-	return !buffer->HasSharedSpool() && (!direct_pipelines.empty() || active_consumers > 1) &&
-	       buffer->BufferedCount() >= PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS;
+	if (buffer->HasSharedSpool() || buffer->BufferedCount() < PIPELINE_BROADCAST_HIGH_WATERMARK_CHUNKS) {
+		return false;
+	}
+	// the spool holds the rows outside of the in-memory buffer, spilling to disk if required
+	return buffer_mode == PipelineBroadcastExchangeBufferMode::BUFFER_ALL || !direct_pipelines.empty() ||
+	       active_consumers > 1;
 }
 
 void PipelineBroadcastExchange::CreateSharedSpoolLocked(vector<ExchangeLogEntry> &log_entries) {

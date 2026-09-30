@@ -56,10 +56,16 @@ static void ToBaseFunction(DataChunk &args, ExpressionState &state, Vector &resu
 ScalarFunctionSet ToBaseFun::GetFunctions() {
 	ScalarFunctionSet set("to_base");
 
-	set.AddFunction(
-	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTEGER}, LogicalType::VARCHAR, ToBaseFunction, ToBaseBind));
-	set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::INTEGER, LogicalType::INTEGER},
-	                               LogicalType::VARCHAR, ToBaseFunction, ToBaseBind));
+	ScalarFunction to_base({}, LogicalType::VARCHAR, ToBaseFunction, ToBaseBind);
+	to_base.GetSignature().AddParameter("number", LogicalType::BIGINT).AddParameter("radix", LogicalType::INTEGER);
+	set.AddFunction(to_base);
+
+	ScalarFunction to_base_padded({}, LogicalType::VARCHAR, ToBaseFunction, ToBaseBind);
+	to_base_padded.GetSignature()
+	    .AddParameter("number", LogicalType::BIGINT)
+	    .AddParameter("radix", LogicalType::INTEGER)
+	    .AddParameter("min_length", LogicalType::INTEGER);
+	set.AddFunction(to_base_padded);
 
 	// throws if the number, radix or min_length are out of range
 	set.SetFallible();

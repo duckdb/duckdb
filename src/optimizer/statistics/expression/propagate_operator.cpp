@@ -31,6 +31,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 					expr.GetChildrenMutable().erase_at(i);
 					child_stats.erase_at(i);
 					i--;
+					removed_expressions = true;
 				}
 			} else if (!child_stats[i]->CanHaveNull()) {
 				// coalesce child cannot have NULL entries
@@ -40,6 +41,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 					expr.GetChildrenMutable().erase(expr.GetChildrenMutable().begin() + NumericCast<int64_t>(i + 1),
 					                                expr.GetChildrenMutable().end());
 					child_stats.erase(child_stats.begin() + NumericCast<int64_t>(i + 1), child_stats.end());
+					removed_expressions = true;
 				}
 				break;
 			}

@@ -273,6 +273,11 @@
         "id": 200,
         "name": "view_name",
         "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "pushed_filters",
+        "type": "vector<string>"
       }
     ]
   },

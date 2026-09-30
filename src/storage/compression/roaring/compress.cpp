@@ -8,7 +8,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/common/fast_mem.hpp"
 
 namespace duckdb {
 
@@ -273,7 +272,7 @@ void RoaringCompressState::InitializeContainer() {
 	// Override the pointer to write directly into the block
 	if (metadata.IsUncompressed()) {
 		data_ptr = reinterpret_cast<data_ptr_t>(AlignValue<idx_t>(reinterpret_cast<idx_t>(data_ptr)));
-		FastMemset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
+		memset(data_ptr, ~0, sizeof(validity_t) * (container_size / ValidityMask::BITS_PER_VALUE));
 		container_state.OverrideUncompressed(data_ptr);
 	} else if (metadata.IsRun()) {
 		auto number_of_runs = metadata.NumberOfRuns();

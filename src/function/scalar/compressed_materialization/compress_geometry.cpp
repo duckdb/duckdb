@@ -108,6 +108,7 @@ unique_ptr<FunctionData> CMGeometryPointDecompressDeserialize(Deserializer &dese
 ScalarFunction CMGeometryPointCompressFun::GetFunction() {
 	ScalarFunction result(Identifier("__internal_compress_geometry_point"), {LogicalType::GEOMETRY()},
 	                      LogicalType::UHUGEINT, GeometryPointCompressFunction, CMUtils::Bind);
+	result.GetSignature().GetParameter(0).SetName("value");
 	result.SetSerializeCallback(CMGeometryPointCompressSerialize);
 	result.SetDeserializeCallback(CMGeometryPointCompressDeserialize);
 	result.SetErrorMode(FunctionErrors::CANNOT_ERROR);
@@ -117,6 +118,7 @@ ScalarFunction CMGeometryPointCompressFun::GetFunction() {
 ScalarFunction CMGeometryPointDecompressFun::GetFunction() {
 	ScalarFunction result(Identifier("__internal_decompress_geometry_point"), {LogicalType::UHUGEINT},
 	                      LogicalType::GEOMETRY(), GeometryPointDecompressFunction, CMUtils::Bind);
+	result.GetSignature().GetParameter(0).SetName("value");
 	result.SetSerializeCallback(CMGeometryPointDecompressSerialize);
 	result.SetDeserializeCallback(CMGeometryPointDecompressDeserialize);
 	result.SetErrorMode(FunctionErrors::CANNOT_ERROR);

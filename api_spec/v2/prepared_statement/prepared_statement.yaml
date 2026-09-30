@@ -1,0 +1,214 @@
+module: prepared_statement
+#
+# The opt-in cached-execution path, a sibling to `statement_execute` rather than a
+# replacement for it. Both run a parsed statement and stream the same result handle
+# through the same state machine; they differ only in plan reuse. `statement_execute`
+# re-binds on every call, while a prepared statement may reuse the plan it built once.
+#
+# `prepared_statement_create` copies the statement's AST, binds and plans it once
+# (borrowing the statement, not consuming it), and returns a reusable handle.
+# `prepared_statement_execute` runs it with named or positional parameter values, as often
+# as the caller likes, and returns the same result handle `statement_execute` does.
+#
+# Reuse is reported, not assumed. Whether a prepared statement reuses its plan depends on
+# the statement: a plan is reused only when every parameter type was resolved at prepare
+# time and nothing in it must be re-bound each execution, which a table scan rules out.
+# When a plan is not reused, executing a prepared statement is no faster than
+# `statement_execute`, and `prepared_statement_reuses_plan` says so. `require_cacheable`
+# turns that into a prepare-time failure for a caller that only wants the handle if it is
+# the fast path.
+#
+# One live result per connection, as everywhere else in this API: both
+# `prepared_statement_create` and `prepared_statement_execute` refuse with
+# `ERROR_RESOURCE_IN_USE` while the connection has a live result. Open another connection
+# for concurrency; a prepared statement belongs to the connection it was prepared on.
+#
+# The handle is opaque and exposes no signature of its own: `statement_bind` already
+# returns both the output and parameter schemas for a statement, and
+# `result_get_schema` returns the output schema of a result. This module adds only
+# what neither can give -- `prepared_statement_reuses_plan`, a property of the built
+# plan rather than of the AST.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  prepared_statement:
+    description: |
+      An owned handle to a statement bound and planned once, executable repeatedly via
+      `[[prepared_statement_execute]]`. Construct with `[[prepared_statement_create]]` and destroy with
+      `[[prepared_statement_destroy]]`. It keeps its connection's session alive, so it stays usable across executions
+      and even after the connection is disconnected.
+    cleanup_with: prepared_statement_destroy
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructor
+  #---------------------------------------------------------------------------------------------------------------------
+  prepared_statement_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Prepares a parsed statement into a reusable handle. Non-consuming.
+
+      Copies the statement's AST, then binds and plans it once. Binder and catalog errors surface here, exactly as
+      they would from `[[statement_execute]]`. The statement is borrowed rather than consumed, since a copy is what
+      gets prepared, so it can be prepared again or executed directly; the caller destroys it with
+      `[[sql_statement_destroy]]`.
+
+      By default this succeeds for any preparable statement, whether or not its plan will be reused; ask
+      `[[prepared_statement_reuses_plan]]` which one you got. Setting `require_cacheable` instead fails with
+      `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup
+      finds out here rather than after silently taking the slow path.
+
+      Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that
+      result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
+    role: constructor
+    belongs_to: prepared_statement
+    parameters:
+      conn:
+        type: connection
+        description: The connection supplying the catalog, transaction, and parser state. The prepared statement belongs to it.
+      statement:
+        type: sql_statement
+        description: The statement to prepare. Borrowed and copied, not consumed; destroy it with `[[sql_statement_destroy]]`.
+      require_cacheable:
+        type: bool
+        description: |
+          When true, fail with `ERROR_INPUT_INVALID` unless the prepared plan will be reused across executions, as
+          `[[prepared_statement_reuses_plan]]` would report it.
+      out_prepared:
+        type: prepared_statement
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new prepared statement. Owned by the caller; destroy via `[[prepared_statement_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Execution
+  #---------------------------------------------------------------------------------------------------------------------
+  prepared_statement_execute:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Executes a prepared statement, streaming its result. Non-consuming.
+
+      Returns a result without executing anything: execution happens incrementally as the result is stepped or
+      drained, exactly as with `[[statement_execute]]`. The handle returned is an ordinary result, with identical
+      behaviour throughout -- streaming, draining, the changed-row count of a DML statement, the output schema, the
+      statement type, and the result type.
+
+      `parameter_values` binds the statement's parameters as constants for this execution. Binding is positional by
+      default ($1 = element 0); supply `parameter_names` to bind by name instead, where a non-empty entry binds its
+      value to that named parameter ($name, matched case-insensitively) and a {NULL, 0} entry stays positional. Pass
+      NULL for both arrays, or a count of 0, for a statement without parameters. Both arrays are borrowed and copied
+      in, so the caller still owns and destroys them. A key set that does not match the statement's parameters is
+      rejected with `ERROR_INPUT_INVALID`, with one exception: a named parameter left without a value reads the
+      session variable of the same name (`SET VARIABLE`) when one exists.
+
+      Not consumed: execute the same handle again, with the same values or different ones, as often as you like.
+      Values are bound per execution and nothing carries over between them. A catalog change since the statement was
+      prepared, or a parameter type that differs from the one the cached plan assumed, triggers a re-bind that is
+      invisible apart from its cost.
+
+      Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it
+      first, or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
+      `*out_result` is set to NULL on failure.
+    role: method
+    belongs_to: prepared_statement
+    parameters:
+      prepared:
+        type: prepared_statement
+        description: The prepared statement to execute. Borrowed; not consumed.
+      parameter_names:
+        type: identifier
+        indirection: 1
+        const: true
+        description: |
+          Optional. An array of `parameter_count` parameter names; a non-empty entry binds its value to the named
+          parameter ($name, case-insensitive), a {NULL, 0} entry keeps it positional ($1 = element 0). Pass NULL to
+          bind everything positionally.
+      parameter_values:
+        type: value
+        indirection: 1
+        const: true
+        description: |
+          Optional. An array of `parameter_count` values. Each binds by name when `parameter_names` supplies one, and
+          positionally ($1 = element 0) otherwise. Borrowed and copied in. Pass NULL for a statement without
+          parameters.
+      parameter_count:
+        type: idx
+        description: The number of entries in `parameter_names` and `parameter_values`. Pass 0 for a statement without parameters.
+      out_result:
+        type: result
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new result. Owned by the caller; destroy via `[[result_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Introspection
+  #---------------------------------------------------------------------------------------------------------------------
+  prepared_statement_reuses_plan:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Reports whether the prepared statement reuses its compiled plan across executions.
+
+      True when executions reuse the plan built at prepare time, provided the supplied values match the planned
+      parameter types and nothing the plan depends on has changed; false when the statement re-binds on every
+      execution, making it no faster than `[[statement_execute]]`. A plan is reused only when all parameter types
+      were resolved at prepare time and the plan is cacheable: `SELECT 42` reuses, `SELECT $1::INTEGER + 1` reuses,
+      a statement reading a base table does not (it re-binds so a catalog change is picked up), and `SELECT $1 + $2`
+      does not (the types are unknown until values arrive).
+
+      A static property of the built plan, fixed when the statement was prepared and independent of the values later
+      passed to `[[prepared_statement_execute]]`.
+    role: getter
+    belongs_to: prepared_statement
+    parameters:
+      prepared:
+        type: prepared_statement
+        description: The prepared statement to inspect.
+      out_reuses:
+        type: bool
+        indirection: 1
+        kind: OUT
+        description: Receives true when the compiled plan is reused across executions, false when the statement re-binds each time.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destructor
+  #---------------------------------------------------------------------------------------------------------------------
+  prepared_statement_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Destroys a prepared statement.
+
+      Null-safe: passing NULL, or a slot already set to NULL, is a no-op. A result produced by
+      `[[prepared_statement_execute]]` is independently owned and keeps the session alive itself, so the prepared
+      statement may be destroyed while results made from it are still live. On success the slot is set to NULL.
+    role: destructor
+    belongs_to: prepared_statement
+    parameters:
+      prepared:
+        type: prepared_statement
+        indirection: 1
+        description: The prepared statement to destroy.
+    return_type: ERROR

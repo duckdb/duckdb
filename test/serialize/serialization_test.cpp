@@ -3,6 +3,8 @@
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/storage/data_pointer.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 
 namespace duckdb {
 
@@ -259,6 +261,58 @@ TEST_CASE("Test deleted values", "[serialization]") {
 		REQUIRE(v2_in.p4->c2 == v2_out.p4->c2);
 		REQUIRE(v2_out.p5->c1 == 2);
 		REQUIRE(v2_out.p5->c2 == "foo");
+	}
+}
+
+static DataPointer DeserializeDataPointer(MemoryStream &stream, const LogicalType &type) {
+	BinaryDeserializer deserializer(stream);
+	deserializer.Set<const LogicalType &>(type);
+	deserializer.Begin();
+	auto result = DataPointer::Deserialize(deserializer);
+	deserializer.End();
+	return result;
+}
+
+TEST_CASE("Test DataPointer byte size storage version compatibility", "[serialization]") {
+	Allocator allocator;
+	MemoryStream stream(allocator);
+	auto type = LogicalType::INTEGER;
+	DataPointer pointer(BaseStatistics::CreateUnknown(type));
+	pointer.tuple_count = 42;
+	pointer.block_pointer = BlockPointer(7, 11);
+	pointer.compression_type = CompressionType::COMPRESSION_UNCOMPRESSED;
+	pointer.byte_size = 1234;
+
+	SerializationOptions options;
+	options.storage_compatibility.storage_version = StorageVersion::V2_0_0;
+	BinarySerializer::Serialize(pointer, stream, options);
+	stream.Rewind();
+	auto current = DeserializeDataPointer(stream, type);
+	REQUIRE(current.byte_size == pointer.byte_size);
+
+	stream.Rewind();
+	options.storage_compatibility.storage_version = StorageVersion::V1_5_0;
+	BinarySerializer::Serialize(pointer, stream, options);
+	stream.Rewind();
+	auto legacy = DeserializeDataPointer(stream, type);
+	REQUIRE(!legacy.byte_size);
+}
+
+TEST_CASE("Constraint timing survives serialization", "[serialization][deferred]") {
+	for (auto timing : {ConstraintTiming::DEFAULT, ConstraintTiming::IMMEDIATE, ConstraintTiming::DEFERRED}) {
+		for (auto primary_key : {false, true}) {
+			UniqueConstraint constraint(vector<Identifier> {Identifier("i")}, primary_key, timing);
+
+			Allocator allocator;
+			MemoryStream stream(allocator);
+			SerializationOptions options;
+			options.storage_compatibility = StorageCompatibility::Latest();
+			BinarySerializer::Serialize(constraint, stream, options);
+			stream.Rewind();
+			auto restored = BinaryDeserializer::Deserialize<Constraint>(stream);
+			REQUIRE(restored->Cast<UniqueConstraint>().timing == timing);
+			REQUIRE(restored->ToString() == constraint.ToString());
+		}
 	}
 }
 

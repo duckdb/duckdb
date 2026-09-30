@@ -141,13 +141,13 @@ SELECT '0.1'::DECIMAL(3, 4);
 statement error
 SELECT '0.1'::DECIMAL('hello');
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+<REGEX>:Binder Error.*does not accept type parameters \(VARCHAR\).*
 
-# ...or negative numbers
+# ...or negative numbers - these do not fit the UTINYINT width parameter, so no definition matches
 statement error
 SELECT '0.1'::DECIMAL((-17));
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be between 1 and 38.*
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER\).*
 
 # width/scale out of range
 statement error
@@ -158,7 +158,7 @@ SELECT '0.1'::DECIMAL(40);
 statement error
 SELECT '0.1'::DECIMAL(1, 2, 3);
 ----
-<REGEX>:Binder Error.*DECIMAL type can take at most two type modifiers, width and scale.*
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, INTEGER, INTEGER\).*
 
 statement error
 SELECT '1'::INTEGER(1000);
@@ -169,29 +169,29 @@ SELECT '1'::INTEGER(1000);
 statement error
 SELECT 1::DECIMAL(3.2);
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+<REGEX>:Binder Error.*does not accept type parameters \(DECIMAL\(2,1\)\).*
 
 statement error
 SELECT 1::DECIMAL(3.0);
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+<REGEX>:Binder Error.*does not accept type parameters \(DECIMAL\(2,1\)\).*
 
 statement error
 SELECT 1::DECIMAL('32');
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+<REGEX>:Binder Error.*does not accept type parameters \(VARCHAR\).*
 
 statement error
 SELECT 1::DECIMAL(18, 2.5);
 ----
-<REGEX>:Binder Error.*DECIMAL type scale must be an integral type.*
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, DECIMAL\(2,1\)\).*
 
 statement error
 SELECT 1::DECIMAL(18, '2');
 ----
-<REGEX>:Binder Error.*DECIMAL type scale must be an integral type.*
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER, VARCHAR\).*
 
 statement error
 SELECT 1::DECIMAL(TRUE);
 ----
-<REGEX>:Binder Error.*DECIMAL type width must be an integral type.*
+<REGEX>:Binder Error.*does not accept type parameters \(BOOLEAN\).*

@@ -140,8 +140,14 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
-		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
-		                        Execute<TA>, Bind);
+		ScalarFunction function({}, LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		function.GetSignature()
+		    .AddParameter("year", type)
+		    .AddParameter("month", type)
+		    .AddParameter("day", type)
+		    .AddParameter("hour", type)
+		    .AddParameter("minute", type)
+		    .AddParameter("seconds", LogicalType::DOUBLE);
 		function.SetFallible();
 		function.SetInitStateCallback(InitCalendarCache);
 		return function;
@@ -149,8 +155,15 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
-		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
-		                        LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		ScalarFunction function({}, LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		function.GetSignature()
+		    .AddParameter("year", type)
+		    .AddParameter("month", type)
+		    .AddParameter("day", type)
+		    .AddParameter("hour", type)
+		    .AddParameter("minute", type)
+		    .AddParameter("seconds", LogicalType::DOUBLE)
+		    .AddParameter("timezone", LogicalType::VARCHAR);
 		function.SetFallible();
 		function.SetInitStateCallback(InitCalendarCache);
 		return function;
@@ -160,7 +173,8 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
-		ScalarFunction function({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);
+		ScalarFunction function({}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);
+		function.GetSignature().AddParameter("micros", LogicalType::BIGINT);
 		function.SetFallible();
 		set.AddFunction(function);
 		loader.RegisterFunction(set);

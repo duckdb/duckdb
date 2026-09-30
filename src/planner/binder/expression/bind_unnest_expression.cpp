@@ -147,12 +147,11 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 				break;
 			}
 			auto alias = args[i].GetExpression().GetAlias();
-			expression_binder.BindChild(args[i].GetExpressionMutable(), depth, error);
+			auto const_child = expression_binder.BindChild(args[i].GetExpressionMutable(), depth, error);
 			if (error.HasError()) {
 				return BindResult(std::move(error));
 			}
-			auto &const_child = binder.GetBoundExpressions().Get(*args[i].GetExpressionMutable());
-			auto value = ExpressionExecutor::EvaluateScalar(context, const_child, true);
+			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
 				if (recursive) {
@@ -180,18 +179,10 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 	}
 	auto outer_unnest_level = unnest_level;
 	UnnestLevelGuard unnest_level_guard(unnest_level);
-	expression_binder.BindChild(args[0].GetExpressionMutable(), depth, error);
+	auto child = expression_binder.BindChild(args[0].GetExpressionMutable(), depth, error);
 	if (error.HasError()) {
-		// failed to bind
-		// try to bind correlated columns manually
-		auto result = expression_binder.BindCorrelatedColumns(args[0].GetExpressionMutable(), error);
-		if (result.HasError()) {
-			return BindResult(result.error);
-		}
-		ExpressionBinder::ExtractCorrelatedExpressions(binder,
-		                                               binder.GetBoundExpressions().Get(args[0].GetExpression()));
+		return BindResult(std::move(error));
 	}
-	auto &child = binder.GetBoundExpressions().GetMutable(*args[0].GetExpressionMutable());
 	child = BoundCastExpression::AddArrayCastToList(context, std::move(child));
 	auto &child_type = child->GetReturnType();
 

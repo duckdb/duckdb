@@ -30,6 +30,12 @@
         "name": "identifier",
         "type": "Value",
         "default": "Value()"
+      },
+      {
+        "id": 106,
+        "name": "children",
+        "type": "vector<ParquetColumnDefinition>",
+        "default": "vector<ParquetColumnDefinition>()"
       }
     ],
     "pointer_type": "none"

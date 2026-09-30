@@ -395,7 +395,7 @@ HashedSortLocalSinkState::HashedSortLocalSinkState(ExecutionContext &context, co
 	}
 }
 
-void HashedSort::Synchronize(const GlobalSinkState &source, GlobalSinkState &target) const {
+void HashedSort::Synchronize(ClientContext &client, const GlobalSinkState &source, GlobalSinkState &target) const {
 	auto &src = source.Cast<HashedSortGlobalSinkState>();
 	auto &tgt = target.Cast<HashedSortGlobalSinkState>();
 	tgt.SyncPartitioning(src);
@@ -511,9 +511,11 @@ static void BuildDirectColumnData(ClientContext &client, const vector<LogicalTyp
 	}
 }
 
+#ifdef D_ASSERT_IS_ENABLED
 static idx_t ExpectedChunkCount(idx_t count) {
 	return (count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 }
+#endif
 
 static void PackDirectColumnData(HashedSortGroup &hash_group) {
 	lock_guard<mutex> direct_guard(hash_group.scan_lock);

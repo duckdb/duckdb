@@ -94,28 +94,67 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["allow_empty"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::ParsePaths(const Value &input) {
+OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
+	if (input.IsNull()) {
+		throw ParserException("%s reader cannot take NULL input as parameter", function_name);
+	}
+	if (input.type().id() == LogicalTypeId::VARCHAR) {
+		return OpenFileInfo(StringValue::Get(input));
+	}
+	if (input.type().id() == LogicalTypeId::VARIANT) {
+		// a VARIANT lets every file carry its own set of open options - unpack it to its logical value
+		// a variant never unpacks to another variant, so this recurses at most once
+		return ParseFileEntry(VariantValue::GetValue(input));
+	}
+	if (input.type().id() != LogicalTypeId::STRUCT) {
+		throw ParserException("%s reader can only take a list of strings, structs or variants as a parameter",
+		                      function_name);
+	}
+	// a file specified as a struct holds the path in the "filename" field - every other field is an open option
+	auto &child_types = StructType::GetChildTypes(input.type());
+	auto &children = StructValue::GetChildren(input);
+	OpenFileInfo result;
+	auto extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+	bool found_path = false;
+	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+		auto &name = child_types[child_idx].first;
+		auto &child = children[child_idx];
+		if (name == MultiFileReader::FILE_PATH_FIELD) {
+			if (child.IsNull() || child.type().id() != LogicalTypeId::VARCHAR) {
+				throw ParserException("%s reader requires the \"%s\" field of a file struct to be a non-NULL VARCHAR",
+				                      function_name, MultiFileReader::FILE_PATH_FIELD);
+			}
+			result.path = StringValue::Get(child);
+			found_path = true;
+			continue;
+		}
+		if (child.IsNull()) {
+			// a NULL option is an option that was not specified - a list of structs is typed by unifying the
+			// structs of its entries, which fills the options an entry did not specify with NULL
+			continue;
+		}
+		extended_info->SetUserOption(name.GetIdentifierName(), child);
+	}
+	if (!found_path) {
+		throw ParserException("%s reader requires a file struct to have a \"%s\" field holding the path of the file",
+		                      function_name, MultiFileReader::FILE_PATH_FIELD);
+	}
+	result.extended_info = std::move(extended_info);
+	return result;
+}
+
+vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {
 	if (input.IsNull()) {
 		throw ParserException("%s cannot take NULL list as parameter", function_name);
 	}
-
-	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		return {StringValue::Get(input)};
-	} else if (input.type().id() == LogicalTypeId::LIST) {
-		vector<string> paths;
-		for (auto &val : ListValue::GetChildren(input)) {
-			if (val.IsNull()) {
-				throw ParserException("%s reader cannot take NULL input as parameter", function_name);
-			}
-			if (val.type().id() != LogicalTypeId::VARCHAR) {
-				throw ParserException("%s reader can only take a list of strings as a parameter", function_name);
-			}
-			paths.push_back(StringValue::Get(val));
-		}
-		return paths;
-	} else {
-		throw InternalException("Unsupported type for MultiFileReader::ParsePaths called with: '%s'");
+	if (input.type().id() != LogicalTypeId::LIST) {
+		return {ParseFileEntry(input)};
 	}
+	vector<OpenFileInfo> files;
+	for (auto &val : ListValue::GetChildren(input)) {
+		files.push_back(ParseFileEntry(val));
+	}
+	return files;
 }
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
@@ -127,10 +166,34 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 	return std::move(res);
 }
 
+shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, vector<OpenFileInfo> files,
+                                                          const FileGlobInput &glob_input) {
+	bool has_open_options = false;
+	for (auto &file : files) {
+		if (file.extended_info) {
+			has_open_options = true;
+			break;
+		}
+	}
+	if (!has_open_options) {
+		// no per-file open options - dispatch to the path based method so any overrides of it are used
+		vector<string> paths;
+		paths.reserve(files.size());
+		for (auto &file : files) {
+			paths.push_back(std::move(file.path));
+		}
+		return CreateFileList(context, paths, glob_input);
+	}
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(files), glob_input);
+	if (res->GetExpandResult() == FileExpandResult::NO_FILES && !glob_input.AllowsEmpty()) {
+		throw IOException("%s needs at least one file to read", function_name);
+	}
+	return std::move(res);
+}
+
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const Value &input,
                                                           const FileGlobInput &glob_input) {
-	auto paths = ParsePaths(input);
-	return CreateFileList(context, paths, glob_input);
+	return CreateFileList(context, ParseFileList(input), glob_input);
 }
 
 bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
@@ -167,6 +230,19 @@ bool MultiFileReader::ParseOption(const Identifier &key, const Value &val, Multi
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
 		}
 		options.allow_empty = BooleanValue::Get(val);
+	} else if (key == "maximum_sample_files") {
+		if (val.IsNull()) {
+			throw BinderException("Cannot use NULL as argument to key %s", key);
+		}
+		auto sample_files = val.DefaultCastAs(LogicalType::BIGINT).GetValue<int64_t>();
+		if (sample_files == -1) {
+			options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
+		} else if (sample_files > 0) {
+			options.maximum_sample_files = NumericCast<idx_t>(sample_files);
+		} else {
+			throw BinderException("\"maximum_sample_files\" parameter must be positive, or -1 to remove the limit "
+			                      "on the number of files used to determine the schema.");
+		}
 	} else if (key == "hive_types_autocast" || key == "hive_type_autocast") {
 		if (val.IsNull()) {
 			throw InvalidInputException("Cannot use NULL as argument for %s", key);
@@ -355,7 +431,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 	auto &local_columns = reader_data.reader->GetColumns();
 	auto &filename = reader_data.reader->GetFileName();
 	case_insensitive_map_t<idx_t> name_map;
-	if (file_options.union_by_name) {
+	if (file_options.SchemaIsUnion()) {
 		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 			auto &column = local_columns[col_idx];
 			name_map[column.name.GetIdentifierName()] = col_idx;
@@ -377,7 +453,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		if (IsVirtualColumn(column_id)) {
 			continue;
 		}
-		if (file_options.union_by_name) {
+		if (file_options.SchemaIsUnion()) {
 			auto &column = global_columns[column_id];
 			auto &name = column.name;
 			auto &type = column.type;
@@ -543,7 +619,14 @@ TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function
 	TableFunctionSet function_set {table_function.name};
 	function_set.AddFunction(table_function);
 	D_ASSERT(!table_function.GetArguments().empty() && table_function.GetArguments()[0] == LogicalType::VARCHAR);
-	table_function.GetArguments()[0] = LogicalType::LIST(LogicalType::VARCHAR);
+	// the list variant takes ANY as its child type: a file is either a path (VARCHAR) or a STRUCT/VARIANT
+	// holding the path together with the options to open the file with
+	auto list_function = table_function;
+	list_function.GetArguments()[0] = LogicalType::LIST(LogicalType::ANY);
+	function_set.AddFunction(std::move(list_function));
+	// a single file can also be passed as a VARIANT - without this overload it would implicitly cast to VARCHAR
+	// and the stringified variant would be read as a path
+	table_function.GetArguments()[0] = LogicalType::VARIANT();
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
 }
@@ -596,19 +679,70 @@ MultiFileReaderBindData MultiFileReader::BindReader(ClientContext &context, vect
                                                     MultiFileOptions &file_options) {
 	if (file_options.union_by_name) {
 		return BindUnionReader(context, return_types, names, files, result, options, file_options);
-	} else {
-		shared_ptr<BaseFileReader> reader;
-		reader = CreateReader(context, files.GetFirstFile(), options, file_options, *result.interface);
-		auto &columns = reader->GetColumns();
-		for (auto &column : columns) {
-			return_types.emplace_back(column.type);
-			names.emplace_back(column.name);
-		}
-		result.Initialize(std::move(reader));
-		MultiFileReaderBindData bind_data;
-		BindOptions(file_options, files, return_types, names, bind_data);
-		return bind_data;
 	}
+	if (file_options.maximum_sample_files > 1) {
+		return BindSampledReader(context, return_types, names, files, result, options, file_options);
+	}
+	return BindFirstReader(context, return_types, names, files, result, options, file_options);
+}
+
+MultiFileReaderBindData MultiFileReader::BindFirstReader(ClientContext &context, vector<LogicalType> &return_types,
+                                                         vector<Identifier> &names, MultiFileList &files,
+                                                         MultiFileBindData &result, BaseFileReaderOptions &options,
+                                                         MultiFileOptions &file_options) {
+	auto reader = CreateReader(context, files.GetFirstFile(), options, file_options, *result.interface);
+	auto &columns = reader->GetColumns();
+	for (auto &column : columns) {
+		return_types.emplace_back(column.type);
+		names.emplace_back(column.name);
+	}
+	result.Initialize(std::move(reader));
+	MultiFileReaderBindData bind_data;
+	BindOptions(file_options, files, return_types, names, bind_data);
+	return bind_data;
+}
+
+MultiFileReaderBindData MultiFileReader::BindSampledReader(ClientContext &context, vector<LogicalType> &return_types,
+                                                           vector<Identifier> &names, MultiFileList &files,
+                                                           MultiFileBindData &result, BaseFileReaderOptions &options,
+                                                           MultiFileOptions &file_options) {
+	// gather the files we want to sample - note that we deliberately do not expand the entire file list here
+	vector<OpenFileInfo> sampled_files;
+	MultiFileListScanData file_scan;
+	files.InitializeScan(file_scan);
+	OpenFileInfo file;
+	bool sampled_all_files = true;
+	while (files.Scan(file_scan, file)) {
+		if (sampled_files.size() >= file_options.maximum_sample_files) {
+			sampled_all_files = false;
+			break;
+		}
+		sampled_files.push_back(std::move(file));
+	}
+	if (sampled_files.size() <= 1) {
+		// only a single file - there is nothing to combine
+		return BindFirstReader(context, return_types, names, files, result, options, file_options);
+	}
+
+	// open the sampled files and combine their schemas into one
+	vector<Identifier> union_col_names;
+	vector<LogicalType> union_col_types;
+	auto sampled_readers = UnionByName::UnionCols(context, sampled_files, union_col_types, union_col_names, options,
+	                                              file_options, *this, *result.interface);
+	names = union_col_names;
+	return_types = union_col_types;
+
+	if (sampled_all_files) {
+		// we have opened every file - keep the readers around so they do not need to be opened again
+		std::move(sampled_readers.begin(), sampled_readers.end(), std::back_inserter(result.union_readers));
+		result.Initialize(context, *result.union_readers[0]);
+	} else {
+		// we only sampled a subset - the readers cannot be re-used, keep only the reader of the first file
+		result.Initialize(context, *sampled_readers[0]);
+	}
+	MultiFileReaderBindData bind_data;
+	BindOptions(file_options, files, return_types, names, bind_data);
+	return bind_data;
 }
 
 ReaderInitializeType MultiFileReader::InitializeReader(MultiFileReaderData &reader_data,

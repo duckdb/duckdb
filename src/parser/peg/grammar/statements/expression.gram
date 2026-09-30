@@ -1,4 +1,7 @@
-ColumnReference <- CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
+ColumnReference <- NestedSchemaTableColumnName / CatalogReservedSchemaTableColumnName / SchemaReservedTableColumnName / TableReservedColumnName / NestedColumnName
+# a column of a table in a nested schema chain - five or more components, where the qualification is deeper than
+# catalog + schema and it is no longer positional which components are schemas and which is the table
+NestedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedSchemaQualification ReservedSchemaQualification+ ReservedColumnName
 CatalogReservedSchemaTableColumnName <- CatalogQualification ReservedSchemaQualification ReservedTableQualification ReservedColumnName
 SchemaReservedTableColumnName <- SchemaQualification ReservedTableQualification ReservedColumnName
 TableReservedColumnName <- TableQualification ReservedColumnName
@@ -9,7 +12,7 @@ FunctionArgumentList <- List(FunctionArgument)
 
 FunctionIdentifier <- CatalogReservedSchemaFunctionName / SchemaReservedFunctionName / FunctionNameAsQualifiedName
 FunctionNameAsQualifiedName <- FunctionName
-CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification? ReservedFunctionName
+CatalogReservedSchemaFunctionName <- CatalogQualification ReservedSchemaQualification* ReservedFunctionName
 SchemaReservedFunctionName <- SchemaQualification ReservedFunctionName
 
 DistinctOrAll <- DistinctKeyword / AllKeyword
@@ -125,6 +128,10 @@ ListComprehensionFilter <- 'IF' Expression
 
 ParensExpression <- Parens(Expression)
 
+# RUNNING and FINAL say how much of a MATCH_RECOGNIZE match the call below them reads. They are only
+# meaningful in MEASURES, which is where the binder checks for them.
+MeasureSemanticsExpression <- MeasureSemantics FunctionExpression
+
 SingleExpression <-
     ParensExpression /
 	LiteralExpression /
@@ -139,6 +146,7 @@ SingleExpression <-
     CastExpression /
     GroupingExpression /
     MapExpression /
+    MeasureSemanticsExpression /
     FunctionExpression /
     ColumnReference /
     ListComprehensionExpression /

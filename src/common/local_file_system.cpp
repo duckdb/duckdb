@@ -5,15 +5,19 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
@@ -41,26 +45,14 @@ extern "C" WINBASEAPI BOOL QueryFullProcessImageNameW(HANDLE, DWORD, LPWSTR, PDW
 #undef FILE_CREATE // woo mingw
 #endif
 
-// includes for giving a better error message on lock conflicts
-#if defined(__linux__) || defined(__APPLE__)
-#include <pwd.h>
-#endif
-
 #if defined(__linux__)
 // See https://man7.org/linux/man-pages/man2/fallocate.2.html
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE /* See feature_test_macros(7) */
 #endif
 #include <fcntl.h>
-#include <libgen.h>
-// See e.g.:
-// https://opensource.apple.com/source/CarbonHeaders/CarbonHeaders-18.1/TargetConditionals.h.auto.html
-#elif defined(__APPLE__)
-#include <TargetConditionals.h>
-#if not(defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE == 1)
-#include <libproc.h>
-#endif
 #elif defined(_WIN32)
+// for giving a better error message on lock conflicts
 #include <restartmanager.h>
 #endif
 
@@ -201,6 +193,26 @@ bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> op
 #define O_DIRECT 0
 #endif
 
+static idx_t GetLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
+	if (!db) {
+		return 0;
+	}
+	return Settings::Get<DebugLocalFileSystemDelayMsSetting>(*db);
+}
+
+static void ApplyLocalFileSystemDelay(optional_ptr<DatabaseInstance> db) {
+#ifndef DUCKDB_NO_THREADS
+	auto delay_ms = GetLocalFileSystemDelay(db);
+	if (delay_ms > 0) {
+		ThreadUtil::SleepMs(delay_ms);
+	}
+#endif
+}
+
+static void ApplyLocalFileSystemDelay(optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(FileOpener::TryGetDatabase(opener));
+}
+
 struct UnixFileHandle : public FileHandle {
 public:
 	UnixFileHandle(FileSystem &file_system, string path, int fd, FileOpenFlags flags, optional_ptr<DatabaseInstance> db)
@@ -279,93 +291,6 @@ static FileMetadata StatsInternal(int fd, const string &path) {
 	return StatsFromStruct(s);
 }
 
-#if __APPLE__ && !TARGET_OS_IPHONE
-
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
-	}
-
-	string process_name, process_owner;
-	// macOS >= 10.7 has PROC_PIDT_SHORTBSDINFO
-#ifdef PROC_PIDT_SHORTBSDINFO
-	// try to find out more about the process holding the lock
-	struct proc_bsdshortinfo proc;
-	if (proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &proc, PROC_PIDT_SHORTBSDINFO_SIZE) ==
-	    PROC_PIDT_SHORTBSDINFO_SIZE) {
-		process_name = proc.pbsi_comm; // only a short version however, let's take it in case proc_pidpath() below fails
-		// try to get actual name of conflicting process owner
-		auto pw = getpwuid(proc.pbsi_uid);
-		if (pw) {
-			process_owner = pw->pw_name;
-		}
-	}
-#else
-	return string();
-#endif
-	// try to get a better process name (full path)
-	char full_exec_path[PROC_PIDPATHINFO_MAXSIZE];
-	if (proc_pidpath(pid, full_exec_path, PROC_PIDPATHINFO_MAXSIZE) > 0) {
-		// somehow could not get the path, lets use some sensible fallback
-		process_name = full_exec_path;
-	}
-	return StringUtil::Format("Conflicting lock is held in %s%s",
-	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
-	                                                : StringUtil::Format("PID %d", pid),
-	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
-}
-
-#elif __linux__
-
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	if (pid == getpid()) {
-		return "Lock is already held in current process, likely another DuckDB instance";
-	}
-	string process_name, process_owner;
-
-	try {
-		auto cmdline_file = fs.OpenFile(StringUtil::Format("/proc/%d/cmdline", pid), FileFlags::FILE_FLAGS_READ);
-		auto cmdline = cmdline_file->ReadLine(QueryContext());
-		process_name = basename(const_cast<char *>(cmdline.c_str())); // NOLINT: old C API does not take const
-	} catch (std::exception &) {
-		// ignore
-	}
-
-	// we would like to provide a full path to the executable if possible but we might not have rights
-	{
-		char exe_target[PATH_MAX];
-		memset(exe_target, '\0', PATH_MAX);
-		auto proc_exe_link = StringUtil::Format("/proc/%d/exe", pid);
-		auto readlink_n = readlink(proc_exe_link.c_str(), exe_target, PATH_MAX);
-		if (readlink_n > 0) {
-			process_name = exe_target;
-		}
-	}
-
-	// try to find out who created that process
-	try {
-		auto loginuid_file = fs.OpenFile(StringUtil::Format("/proc/%d/loginuid", pid), FileFlags::FILE_FLAGS_READ);
-		auto uid = std::stoi(loginuid_file->ReadLine(QueryContext()));
-		auto pw = getpwuid(uid);
-		if (pw) {
-			process_owner = pw->pw_name;
-		}
-	} catch (std::exception &) {
-		// ignore
-	}
-
-	return StringUtil::Format("Conflicting lock is held in %s%s",
-	                          !process_name.empty() ? StringUtil::Format("%s (PID %d)", process_name, pid)
-	                                                : StringUtil::Format("PID %d", pid),
-	                          !process_owner.empty() ? StringUtil::Format(" by user %s", process_owner) : "");
-}
-
-#else
-static string AdditionalProcessInfo(FileSystem &fs, pid_t pid) {
-	return "";
-}
-#endif
-
 // Apply a fcntl advisory lock per flags.Lock(); throws (and closes fd) on failure. Shared
 // by OpenFile and MemoryMapFile.
 static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileOpenFlags flags) {
@@ -405,8 +330,13 @@ static void TryAcquireFileLock(FileSystem &fs, int fd, const string &path, FileO
 		rc = fcntl(fd, F_GETLK, &fl);
 		if (rc == -1) {
 			extended_error = strerror(errno);
+		} else if (fl.l_pid == ProcessUtil::CurrentProcessId()) {
+			extended_error = "Lock is already held in current process, likely another DuckDB instance";
 		} else {
-			extended_error = AdditionalProcessInfo(fs, fl.l_pid);
+			auto process = ProcessUtil::GetProcessDescription(fs, fl.l_pid);
+			if (!process.empty()) {
+				extended_error = "Conflicting lock is held in " + process;
+			}
 		}
 		if (flags.Lock() == FileLockType::WRITE_LOCK) {
 			// could we get a read lock?
@@ -468,10 +398,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		// need Read or Write
 		D_ASSERT(flags.OpenForWriting());
 		open_flags |= O_CLOEXEC;
-		if (flags.CreateFileIfNotExists()) {
+		if (flags.CreateFileIfNotExists() || flags.OverwriteExistingFile()) {
 			open_flags |= O_CREAT;
-		} else if (flags.OverwriteExistingFile()) {
-			open_flags |= O_CREAT | O_TRUNC;
 		}
 		if (flags.OpenForAppending()) {
 			open_flags |= O_APPEND;
@@ -502,6 +430,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 
 	// Open the file
+	ApplyLocalFileSystemDelay(opener);
 	int fd = open(path.c_str(), open_flags, filesec);
 
 	if (fd == -1) {
@@ -531,6 +460,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	TryAcquireFileLock(*this, fd, path, flags);
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags, FileOpener::TryGetDatabase(opener));
+	if (flags.OverwriteExistingFile() && StatsInternal(fd, path).file_type == FileType::FILE_TYPE_REGULAR) {
+		Truncate(*file_handle, 0);
+	}
 	if (opener) {
 		file_handle->TryAddLogger(*opener);
 		DUCKDB_LOG_FILE_SYSTEM_OPEN((*file_handle));
@@ -560,6 +492,7 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto bytes_to_read = nr_bytes;
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	auto read_buffer = char_ptr_cast(buffer);
 	while (nr_bytes > 0) {
@@ -584,6 +517,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
@@ -599,6 +533,7 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 	auto write_buffer = char_ptr_cast(buffer);
 
@@ -608,7 +543,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	while (bytes_to_write > 0) {
 		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
 		                               UnsafeNumericCast<off_t>(current_location));
-		if (bytes_written < 0) {
+		if (bytes_written < 0 || bytes_written > bytes_to_write) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
@@ -627,6 +562,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	ApplyLocalFileSystemDelay(unix_handle.db);
 	int fd = unix_handle.fd;
 
 	auto bytes_to_write = nr_bytes;
@@ -634,7 +570,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 		auto bytes_to_write_this_call =
 		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
 		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
-		if (current_bytes_written <= 0) {
+		if (current_bytes_written <= 0 || idx_t(current_bytes_written) > bytes_to_write_this_call) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}
@@ -700,6 +636,8 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
+	ApplyLocalFileSystemDelay(opener);
+
 	if (!directory.empty()) {
 		auto normalized_dir = ExpandPath(directory, opener);
 		if (access(normalized_dir.c_str(), 0) == 0) {
@@ -730,6 +668,7 @@ bool LocalFileSystem::CreateDirectoryExtended(const string &directory, const Cre
 	if (options.mode != CreateDirectoryMode::SINGLE) {
 		throw InternalException("Unknown CreateDirectoryMode");
 	}
+	ApplyLocalFileSystemDelay(opener);
 	auto normalized_dir = ExpandPath(directory, opener);
 	if (mkdir(normalized_dir.c_str(), 0755) == 0) {
 		return true;
@@ -1424,7 +1363,7 @@ static int64_t FSWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t n
 	while (nr_bytes > 0) {
 		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
 		DWORD current_bytes_written = FSInternalWrite(handle, hFile, buffer, bytes_to_write, location);
-		if (current_bytes_written <= 0) {
+		if (current_bytes_written <= 0 || current_bytes_written > bytes_to_write) {
 			throw IOException({{"errno", std::to_string(errno)}}, "Could not write file \"%s\": %s", handle.path,
 			                  strerror(errno));
 		}

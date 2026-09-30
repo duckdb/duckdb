@@ -7,6 +7,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
+#include "duckdb/optimizer/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -330,6 +331,8 @@ unique_ptr<CompressExpression> CMHelper::CreateIntegralFunctionCompress(unique_p
                                                                         const LogicalType &target_type,
                                                                         const Value &min, const Value &range_value,
                                                                         const BaseStatistics &stats) {
+	// the compression functions are registered for (de)serialization only - their bind throws, so they are
+	// constructed and specialized here rather than resolved through the catalog
 	auto compress_function = CMIntegralCompressFun::GetFunction(source_type, target_type);
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(std::move(input));
@@ -961,12 +964,9 @@ unique_ptr<Expression> CompressedMaterialization::GetDecompressExpression(unique
 	}
 	if (type.id() == LogicalTypeId::BLOB && stats.GetType().id() == LogicalTypeId::VARIANT) {
 		auto variant = GetVariantDecompress(std::move(input), LogicalType::VARIANT(), stats);
-		auto comparator_function = VariantComparatorFun::GetFunction();
-		BoundScalarFunction bound_function(comparator_function);
-		bound_function.SetReturnType(LogicalType::BLOB);
 		vector<unique_ptr<Expression>> arguments;
 		arguments.push_back(std::move(variant));
-		return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+		return BindBuiltinScalarFunction(context, VariantComparatorFun::Name, std::move(arguments));
 	}
 	if (type.id() == LogicalTypeId::GEOMETRY) {
 		return GetGeometryDecompress(std::move(input), result_type, stats);

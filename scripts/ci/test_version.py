@@ -10,11 +10,12 @@ import version
 
 class TestVersion(unittest.TestCase):
     def test_development_version(self):
-        with patch("version.commit_count", return_value=42):
+        with patch("version.release_version", return_value="2.0"), patch("version.commit_count", return_value=42):
             self.assertEqual(version.resolve_version(), "v2.0.0-dev42")
 
     def test_alpha_version(self):
-        self.assertEqual(version.resolve_version(alpha_run_number="123"), "v2.0.0-alpha123")
+        with patch("version.release_version", return_value="2.0"):
+            self.assertEqual(version.resolve_version(alpha_run_number="123"), "v2.0.0-alpha123")
 
     def test_explicit_versions(self):
         for explicit_version in ["v2.0.0", "v2.0.0-dev42", "v2.0.0-alpha42", "v2.0.0-rc1"]:

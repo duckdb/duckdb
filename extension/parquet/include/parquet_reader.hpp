@@ -249,7 +249,12 @@ public:
 
 struct ParquetColumnDefinition {
 public:
-	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
+	static vector<ParquetColumnDefinition> FromSchemaMap(ClientContext &context, const Value &schema_value);
+	MultiFileColumnDefinition ToMultiFileColumnDefinition() const;
+	bool operator==(const ParquetColumnDefinition &other) const {
+		return field_id == other.field_id && name == other.name && type == other.type &&
+		       default_value == other.default_value && identifier == other.identifier && children == other.children;
+	}
 
 public:
 	// DEPRECATED, use 'identifier' instead
@@ -258,6 +263,7 @@ public:
 	LogicalType type;
 	Value default_value;
 	Value identifier;
+	vector<ParquetColumnDefinition> children;
 
 public:
 	void Serialize(Serializer &serializer) const;

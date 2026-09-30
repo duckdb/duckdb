@@ -383,6 +383,22 @@ struct RoundFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct RoundEvenFun {
+	static constexpr const char *Name = "round_even";
+	static constexpr const char *Parameters = "x,precision";
+	static constexpr const char *Description = "Rounds x to s decimal places, rounding halfway cases to the nearest even digit";
+	static constexpr const char *Example = "round_even(24.5, 0)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct RoundbankersFun {
+	using ALIAS = RoundEvenFun;
+
+	static constexpr const char *Name = "roundbankers";
+};
+
 struct SignFun {
 	static constexpr const char *Name = "sign";
 	static constexpr const char *Parameters = "x";

@@ -14,6 +14,7 @@
 #include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/function/scalar/tablefilter_functions.hpp"
+#include "duckdb/function/window/match_recognize_functions.hpp"
 #include "duckdb/function/window/ranking_functions.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window/value_functions.hpp"
@@ -102,6 +103,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(IsNotDistinctFromFun),
 	DUCKDB_SCALAR_FUNCTION(BetweenFun),
 	DUCKDB_SCALAR_FUNCTION(CastFun),
+	DUCKDB_SCALAR_FUNCTION(BarrierFun),
 	DUCKDB_SCALAR_FUNCTION(InternalCompressGeometryPointFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUbigintFun),
 	DUCKDB_SCALAR_FUNCTION_SET(InternalCompressIntegralUintegerFun),
@@ -198,6 +200,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_SCALAR_FUNCTION(ListZipFun),
 	DUCKDB_SCALAR_FUNCTION(LowerFun),
 	DUCKDB_SCALAR_FUNCTION(MapContainsFun),
+	DUCKDB_WINDOW_FUNCTION(MatchRecognizeFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(MaxFun),
 	DUCKDB_SCALAR_FUNCTION_SET(MD5Fun),
 	DUCKDB_SCALAR_FUNCTION_SET(MD5NumberFun),

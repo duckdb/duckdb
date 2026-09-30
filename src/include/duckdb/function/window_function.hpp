@@ -176,7 +176,7 @@ public:
 	//! The streaming evaluation function
 	window_stream_function_t stream = nullptr;
 
-	//! Serialization specialization. Not yet implemented
+	//! Serialization of the bind data. Both have to be set for a bound plan to round-trip.
 	window_serialize_t serialize = nullptr;
 	window_deserialize_t deserialize = nullptr;
 };
@@ -283,7 +283,7 @@ public: // Callbacks
 	auto GetStreamingDataCallback() const -> window_stream_function_t { return callbacks.stream; }
 	auto SetStreamingDataCallback(window_stream_function_t callback) -> void { callbacks.stream = callback; }
 
-	auto HasSerializationCallbacks() const -> bool { return false; } // TODO: implement this
+	auto HasSerializationCallbacks() const -> bool { return callbacks.serialize != nullptr && callbacks.deserialize != nullptr; }
 	auto SetSerializeCallback(window_serialize_t callback) -> void { callbacks.serialize = callback; }
 	auto SetDeserializeCallback(window_deserialize_t callback) -> void { callbacks.deserialize = callback; }
 	auto GetSerializeCallback() const -> window_serialize_t { return callbacks.serialize; }
@@ -378,9 +378,14 @@ public:
 	const shared_ptr<const WindowFunction> &GetDefinition() const {
 		return definition;
 	}
-	//! Restore the definition after the bound function has been replaced wholesale
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const WindowFunction> definition_p) {
 		definition = std::move(definition_p);
+		if (definition) {
+			schema_name = definition->GetSchemaName();
+			catalog_name = definition->GetCatalogName();
+		}
 	}
 
 public:

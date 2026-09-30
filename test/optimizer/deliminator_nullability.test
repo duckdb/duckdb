@@ -23,6 +23,24 @@ CREATE TABLE ev(id INTEGER NOT NULL, wh INTEGER NOT NULL);
 statement ok
 INSERT INTO ev VALUES (1, 6), (2, 7), (3, 9);
 
+statement ok
+CREATE TABLE nested_outer(s STRUCT(x INTEGER, y INTEGER));
+
+statement ok
+INSERT INTO nested_outer VALUES ({'x': NULL, 'y': 1}), ({'x': 1, 'y': 2}), ({'x': 9, 'y': 9});
+
+statement ok
+CREATE TABLE nested_inner(s STRUCT(x INTEGER, y INTEGER));
+
+statement ok
+INSERT INTO nested_inner VALUES ({'x': NULL, 'y': 1}), ({'x': 1, 'y': 2});
+
+statement ok
+CREATE TABLE lateral_nested(a STRUCT(x INTEGER, y INTEGER), k INTEGER);
+
+statement ok
+INSERT INTO lateral_nested VALUES ({'x': 1, 'y': 2}, 1), ({'x': NULL, 'y': 1}, 2), (NULL, 3), ({'x': 5, 'y': 5}, 4);
+
 foreach cte_mode true false
 
 statement ok
@@ -175,5 +193,76 @@ FROM ids
 JOIN nn ON ids.id = nn.k;
 ----
 logical_opt	<REGEX>:.*Join Type: MARK.*wh IS DISTINCT FROM wh.*
+
+# Nested equality follows PostgreSQL composite semantics: NULL children compare equal.
+# Delimiter join elimination must preserve those semantics.
+query I
+SELECT count(*) FROM nested_outer
+WHERE EXISTS (SELECT 1 FROM nested_inner WHERE nested_inner.s = nested_outer.s);
+----
+2
+
+query I
+SELECT count(*) FROM nested_outer
+WHERE NOT EXISTS (SELECT 1 FROM nested_inner WHERE nested_inner.s = nested_outer.s);
+----
+1
+
+# Null-safe nested equality has the same child-NULL semantics.
+query I
+SELECT count(*) FROM nested_outer
+WHERE EXISTS (
+    SELECT 1 FROM nested_inner
+    WHERE nested_inner.s IS NOT DISTINCT FROM nested_outer.s
+);
+----
+2
+
+query I
+SELECT count(*) FROM nested_outer
+WHERE NOT EXISTS (
+    SELECT 1 FROM nested_inner
+    WHERE nested_inner.s IS NOT DISTINCT FROM nested_outer.s
+);
+----
+1
+
+# The same child-NULL semantics apply to LIST values.
+query I
+SELECT count(*) FROM (VALUES ([NULL]::INTEGER[]), ([1]), ([2])) nested_list_outer(v)
+WHERE EXISTS (
+    SELECT 1 FROM (VALUES ([NULL]::INTEGER[]), ([1])) nested_list_inner(v)
+    WHERE nested_list_inner.v = nested_list_outer.v
+);
+----
+2
+
+query I
+SELECT count(*) FROM (VALUES ([NULL]::INTEGER[]), ([1]), ([2])) nested_list_outer(v)
+WHERE NOT EXISTS (
+    SELECT 1 FROM (VALUES ([NULL]::INTEGER[]), ([1])) nested_list_inner(v)
+    WHERE nested_list_inner.v = nested_list_outer.v
+);
+----
+1
+
+# Generated-domain cleanup also eliminates joins on nested correlation columns.
+# LATERAL decorrelation routes through RemoveGeneratedDedupJoin, whose rewritten
+# equality must retain PostgreSQL nested comparison semantics.
+query ITT
+SELECT k, a, b FROM lateral_nested, LATERAL (SELECT lateral_nested.a) t2(b) ORDER BY k;
+----
+1	{'x': 1, 'y': 2}	{'x': 1, 'y': 2}
+2	{'x': NULL, 'y': 1}	{'x': NULL, 'y': 1}
+3	NULL	NULL
+4	{'x': 5, 'y': 5}	{'x': 5, 'y': 5}
+
+# Regular equality accepts equal child-NULL values but still rejects top-level NULL.
+query IT
+SELECT k, b FROM lateral_nested, LATERAL (SELECT lateral_nested.a) t2(b) WHERE b = b ORDER BY k;
+----
+1	{'x': 1, 'y': 2}
+2	{'x': NULL, 'y': 1}
+4	{'x': 5, 'y': 5}
 
 endloop

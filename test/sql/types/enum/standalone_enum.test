@@ -28,12 +28,12 @@ ENUM type requires at least one argument
 statement error
 SELECT 'hello'::ENUM(42);
 ----
-ENUM type requires a set of VARCHAR arguments
+<REGEX>:Binder Error.*does not accept type parameters \(INTEGER\).*
 
 statement error
 SELECT 'hello'::ENUM('zzz', 42);
 ----
-ENUM type requires a set of VARCHAR arguments
+<REGEX>:Binder Error.*does not accept type parameters \(VARCHAR, INTEGER\).*
 
 statement error
 SELECT 'hello'::ENUM(foobar 42);

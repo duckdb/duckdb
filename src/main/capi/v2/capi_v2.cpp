@@ -352,8 +352,7 @@ static void PopulateOptionAliases(const unique_ptr<CV2Option> &out, const Identi
 		if (!alias) {
 			continue;
 		}
-		auto aliased = DBConfig::GetOptionByIndex(alias->option_index);
-		if (aliased && canonical_name == aliased->name) {
+		if (canonical_name == alias->setting_name) {
 			out->aliases.emplace_back(alias->alias);
 		}
 	}

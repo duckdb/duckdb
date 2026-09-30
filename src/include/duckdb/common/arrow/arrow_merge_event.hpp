@@ -15,7 +15,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/chunk_scan_state/batched_data_collection.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/common/unique_ptr.hpp"

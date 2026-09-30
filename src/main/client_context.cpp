@@ -36,6 +36,7 @@
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
@@ -407,6 +408,14 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	auto &scheduler = TaskScheduler::GetScheduler(*this);
 	scheduler.RelaunchThreads();
 
+	if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
+		// Record the streaming buffer peak while the profiler is still running
+		auto &stream_result = static_cast<StreamQueryResult &>(*result);
+		if (stream_result.HasBufferedData()) {
+			QueryProfiler::Get(*this).SetStreamingPeakBufferSize(stream_result.GetBufferedData().PeakBufferedBytes());
+		}
+	}
+
 	optional_ptr<ErrorData> passed_error = nullptr;
 	if (result && result->HasError()) {
 		passed_error = result->GetErrorObject();
@@ -443,10 +452,8 @@ unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lo
 	D_ASSERT(active_query->IsOpenResult(pending));
 	D_ASSERT(active_query->prepared);
 	auto &executor = GetExecutor();
-	auto &prepared = *active_query->prepared;
-	bool create_stream_result =
-	    prepared.properties.output_type == QueryResultOutputType::ALLOW_STREAMING && pending.allow_stream_result;
-	const bool keep_result_open = create_stream_result || executor.HasStreamingResultCollector();
+	// A streaming request always plans a streaming sink, so the collector alone decides
+	const bool keep_result_open = executor.HasStreamingResultCollector();
 	unique_ptr<QueryResult> result;
 	D_ASSERT(executor.HasResultCollector());
 	// we have a result collector - fetch the result directly from the result collector
@@ -679,7 +686,12 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock,
 }
 
 void ClientContext::WaitForTask(ClientContextLock &lock, BaseQueryResult &result) {
-	active_query->executor->WaitForTask();
+	auto &executor = *active_query->executor;
+	if (executor.HasTaskInProgress()) {
+		// This thread is holding a partially processed task, the next step resumes it without waiting.
+		return;
+	}
+	executor.WaitForTask();
 }
 
 bool ClientContext::ErrorInvalidatesTransaction(ExceptionType type) {
@@ -1599,16 +1611,16 @@ SettingLookupResult ClientContext::TryGetCurrentUserSetting(idx_t setting_index,
 	return config.user_settings.TryGetSetting(db_config.user_settings, setting_index, result);
 }
 
-ParserOptions ClientContext::GetParserOptions() const {
+ParserOptions ClientContext::GetParserOptions() {
 	ParserOptions options;
 	options.identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(*this);
 	options.integer_division = Settings::Get<IntegerDivisionSetting>(*this);
-	options.debug_heap_based_parser = Settings::Get<DebugHeapBasedParserSetting>(*this);
+	options.heap_based_parser = Settings::Get<HeapBasedParserSetting>(*this);
 	options.regex_match_operator_semantics = Settings::Get<RegexMatchOperatorSemanticsSetting>(*this);
 	options.max_expression_depth = Settings::Get<MaxExpressionDepthSetting>(*this);
 	options.extensions = DBConfig::GetConfig(*this).GetCallbackManager();
 	options.parser_override_setting = Settings::Get<AllowParserOverrideExtensionSetting>(*this);
-	options.parser_cache = &db->GetParserCache();
+	options.compiled_grammar = CompiledGrammar::Get(*this);
 	return options;
 }
 

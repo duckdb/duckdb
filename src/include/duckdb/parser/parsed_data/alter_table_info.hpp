@@ -181,13 +181,16 @@ private:
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
 struct AddColumnInfo : public AlterTableInfo {
-	AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists);
+	AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists,
+	              bool add_not_null);
 	~AddColumnInfo() override;
 
 	//! New column
 	ColumnDefinition new_column;
 	//! Whether or not an error should be thrown if the column exist
 	bool if_column_not_exists;
+	//! Whether to add a NOT NULL constraint after adding the column
+	bool add_not_null = false;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

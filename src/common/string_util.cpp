@@ -392,11 +392,13 @@ string StringUtil::TryParseFormattedBytes(const string &arg, idx_t &result) {
 	constexpr double max_value = static_cast<double>(NumericLimits<idx_t>::Maximum());
 	const double double_multiplier = static_cast<double>(multiplier);
 
-	if (limit > (max_value / double_multiplier)) {
+	// double(idx_max) rounds up to 2^64, so the product itself has to be strictly below it
+	const double bytes = double_multiplier * limit;
+	if (!(bytes < max_value)) {
 		return "Memory value out of range: value is too large";
 	}
 
-	result = LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
+	result = LossyNumericCast<idx_t>(bytes);
 	return string();
 }
 

@@ -403,17 +403,16 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	auto expr = minmax_func.Bind(context, std::move(arguments));
 	arguments = std::move(expr->GetChildrenMutable());
 
-	auto definition = function.GetDefinition();
-	function = std::move(expr->FunctionMutable());
-	// the specialized implementation is not the function we were bound from
-	function.SetDefinition(std::move(definition));
+	function.ReplaceImplementation(expr->Function());
 	return std::move(expr->BindInfoMutable());
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 AggregateFunction GetMinMaxOperator(const string &name) {
-	return AggregateFunction(Identifier(name), {LogicalType::ANY}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr,
-	                         nullptr, nullptr, BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	AggregateFunction fun(Identifier(name), {}, LogicalType::ANY, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      BindMinMax<OP, OP_STRING, OP_VECTOR>);
+	fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
+	return fun;
 }
 
 } // namespace
@@ -479,7 +478,6 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 
 		// Initialize the heap if necessary and add the input to the heap
 		if (!state.is_initialized) {
-			static constexpr int64_t MAX_N = 1000000;
 			const auto nidx = n_format.sel->get_index(i);
 			if (!n_format.validity.RowIsValid(nidx)) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value cannot be NULL");
@@ -488,8 +486,8 @@ void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t input_
 			if (nval <= 0) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value must be > 0");
 			}
-			if (nval >= MAX_N) {
-				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MAX_N);
+			if (nval >= MIN_MAX_N_MAX_VALUE) {
+				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MIN_MAX_N_MAX_VALUE);
 			}
 			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}
@@ -565,10 +563,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 			auto expr =
 			    function_binder.BindAggregateFunction(std::move(collated_function), std::move(collated_arguments));
 			arguments = std::move(expr->GetChildrenMutable());
-			auto definition = function.GetDefinition();
-			function = std::move(expr->FunctionMutable());
-			// the collated implementation is not the function we were bound from
-			function.SetDefinition(std::move(definition));
+			function.ReplaceImplementation(expr->Function());
 			return std::move(expr->BindInfoMutable());
 		}
 	}
@@ -584,9 +579,10 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 
 template <class COMPARATOR>
 AggregateFunction GetMinMaxNFunction() {
-	return AggregateFunction({LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::ANY), nullptr,
-	                         nullptr, nullptr, nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
-	                         MinMaxNBind<COMPARATOR>, nullptr);
+	AggregateFunction fun({}, LogicalType::LIST(LogicalType::ANY), nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, MinMaxNBind<COMPARATOR>, nullptr);
+	fun.GetSignature().AddParameter("arg", LogicalTypeId::ANY).AddParameter("n", LogicalType::BIGINT);
+	return fun;
 }
 
 } // namespace

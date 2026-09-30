@@ -878,7 +878,7 @@ static void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_da
 //===--------------------------------------------------------------------===//
 // Desired Batch Size
 //===--------------------------------------------------------------------===//
-static idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_data_p) {
+static optional_idx ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	return bind_data.row_group_size;
 }
@@ -902,7 +902,7 @@ static unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, Repla
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {

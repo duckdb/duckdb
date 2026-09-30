@@ -9,19 +9,21 @@ namespace duckdb {
 BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	// first try to bind the children of the case expression
 	ErrorData error;
+	vector<pair<unique_ptr<Expression>, unique_ptr<Expression>>> checks;
 	for (auto &check : expr.CaseChecksMutable()) {
-		BindChild(check.when_expr, depth, error);
-		BindChild(check.then_expr, depth, error);
+		auto when_expr = BindChild(check.when_expr, depth, error);
+		auto then_expr = BindChild(check.then_expr, depth, error);
+		checks.emplace_back(std::move(when_expr), std::move(then_expr));
 	}
-	BindChild(expr.ElseMutable(), depth, error);
+	auto else_expr = BindChild(expr.ElseMutable(), depth, error);
 	if (error.HasError()) {
 		return BindResult(std::move(error));
 	}
 	// the children have been successfully resolved
 	// figure out the result type of the CASE expression
-	auto return_type = ExpressionBinder::GetExpressionReturnType(GetBoundExpressions().Get(*expr.ElseMutable()));
-	for (auto &check : expr.CaseChecksMutable()) {
-		auto then_type = ExpressionBinder::GetExpressionReturnType(GetBoundExpressions().Get(*check.then_expr));
+	auto return_type = ExpressionBinder::GetExpressionReturnType(*else_expr);
+	for (auto &check : checks) {
+		auto then_type = ExpressionBinder::GetExpressionReturnType(*check.second);
 		if (!LogicalType::TryGetMaxLogicalType(context, return_type, then_type, return_type)) {
 			throw BinderException(
 			    expr, "Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",
@@ -31,16 +33,13 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 
 	// bind all the individual components of the CASE statement
 	auto result = make_uniq<BoundCaseExpression>(return_type);
-	for (auto &check : expr.CaseChecksMutable()) {
-		auto when_expr = GetBoundExpressions().Consume(*check.when_expr);
-		auto then_expr = GetBoundExpressions().Consume(*check.then_expr);
+	for (auto &check : checks) {
 		BoundCaseCheck result_check;
 		result_check.when_expr =
-		    BoundCastExpression::AddCastToType(context, std::move(when_expr), LogicalType::BOOLEAN);
-		result_check.then_expr = BoundCastExpression::AddCastToType(context, std::move(then_expr), return_type);
+		    BoundCastExpression::AddCastToType(context, std::move(check.first), LogicalType::BOOLEAN);
+		result_check.then_expr = BoundCastExpression::AddCastToType(context, std::move(check.second), return_type);
 		result->CaseChecksMutable().push_back(std::move(result_check));
 	}
-	auto else_expr = GetBoundExpressions().Consume(*expr.ElseMutable());
 	result->ElseMutable() = BoundCastExpression::AddCastToType(context, std::move(else_expr), return_type);
 	return BindResult(std::move(result));
 }

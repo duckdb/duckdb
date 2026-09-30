@@ -40,6 +40,14 @@ PRAGMA threads=4
 statement ok
 PRAGMA verify_parallelism
 
+statement ok
+CREATE TABLE large_integers AS SELECT * FROM range(1000000) tbl(i)
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM large_integers
+----
+1000000	0	999999
+
 query II
 SELECT MIN(i), MAX(i) FROM integers
 ----

@@ -19,6 +19,7 @@
 namespace duckdb {
 
 class BufferManager;
+class FunctionBinder;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
@@ -841,6 +842,7 @@ public:
 
 	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
+	void ReplaceImplementation(const BoundAggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
@@ -854,11 +856,21 @@ public:
 	const shared_ptr<const AggregateFunction> &GetDefinition() const {
 		return definition;
 	}
-	//! Restore the definition after the bound function has been replaced wholesale
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
 		definition = std::move(definition_p);
+		if (definition) {
+			schema_name = definition->GetSchemaName();
+			catalog_name = definition->GetCatalogName();
+		}
 	}
-
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -873,7 +885,18 @@ public:
 	}
 
 private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
 	shared_ptr<const AggregateFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionSerializer;
+	friend class FunctionBinder;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

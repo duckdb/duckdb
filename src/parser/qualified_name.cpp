@@ -18,10 +18,7 @@ QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
-	if (path.empty()) {
-		return string();
-	}
+string QualifiedName::QualificationToString(QualifiedNameToStringMode mode) const {
 	string result;
 	// render every qualification component (the path can hold a nested schema chain)
 	for (idx_t i = 0; i + 1 < path.size(); i++) {
@@ -36,8 +33,14 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 		}
 		result += SQLIdentifier(component) + ".";
 	}
-	result += SQLIdentifier(Name());
 	return result;
+}
+
+string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
+	if (path.empty()) {
+		return string();
+	}
+	return QualificationToString(mode) + SQLIdentifier(Name());
 }
 
 //! This parses a superset of the strings that the actual SQL parser accepts: it allows whitespace, most special
@@ -131,14 +134,10 @@ bool QualifiedName::operator!=(const QualifiedName &rhs) const {
 
 QualifiedName QualifiedName::Parse(const string &input) {
 	auto entries = ParseComponents(input);
-	if (entries.size() > 3) {
-		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found (input: %s)",
-		                      input);
-	}
 	if (entries.empty()) {
 		return QualifiedName();
 	}
-	// the last component is the name, anything before it is the schema path (at most [catalog, schema])
+	// the last component is the name, anything before it is the (possibly nested) catalog/schema path
 	Identifier name = std::move(entries.back());
 	entries.pop_back();
 	return QualifiedName(std::move(entries), std::move(name));
@@ -193,6 +192,21 @@ string QualifiedColumnName::ToString() const {
 		result += SQLIdentifier(table) + ".";
 	}
 	result += SQLIdentifier(column);
+	return result;
+}
+
+string QualifiedColumnName::ToDisplayString() const {
+	string result;
+	if (!catalog.empty()) {
+		result += SQLQuotedIdentifier::ToString(catalog) + ".";
+	}
+	if (!schema.empty()) {
+		result += SQLQuotedIdentifier::ToString(schema) + ".";
+	}
+	if (!table.empty()) {
+		result += SQLQuotedIdentifier::ToString(table) + ".";
+	}
+	result += SQLQuotedIdentifier::ToString(column);
 	return result;
 }
 

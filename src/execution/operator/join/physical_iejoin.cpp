@@ -1417,8 +1417,7 @@ void IEJoinLocalSourceState::SplitPayloads(DataChunk &chunk) {
 
 const SelectionVector *IEJoinLocalSourceState::ApplyArbitraryPredicate(DataChunk &chunk) {
 	//	Apply any arbitrary predicate
-	auto &op = gsource.op;
-	D_ASSERT(op.predicate);
+	D_ASSERT(gsource.op.predicate);
 
 	const auto result_count = pred_executor.SelectExpression(chunk, pred_matches);
 	chunk.Slice(pred_matches, result_count);

@@ -414,7 +414,7 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().GetParameter(0).SetName("x");
-	fun.GetSignature().AddParameter("quantile", LogicalType::FLOAT);
+	fun.GetSignature().AddParameter("pos", LogicalType::FLOAT);
 	return fun;
 }
 
@@ -538,8 +538,9 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
+	fun.GetSignature().GetParameter(0).SetName("x");
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
-	fun.GetSignature().AddParameter(list_of_float);
+	fun.GetSignature().AddParameter("pos", list_of_float);
 	return fun;
 }
 
@@ -557,8 +558,9 @@ unique_ptr<FunctionData> ApproxQuantileDecimalDeserialize(Deserializer &deserial
 
 AggregateFunction GetApproxQuantileDecimal() {
 	// stub function - the actual function is set during bind or deserialize
-	AggregateFunction fun({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL, nullptr, nullptr,
-	                      nullptr, nullptr, nullptr, nullptr, BindApproxQuantileDecimal);
+	AggregateFunction fun({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      BindApproxQuantileDecimal);
+	fun.GetSignature().AddParameter("x", LogicalTypeId::DECIMAL).AddParameter("pos", LogicalType::FLOAT);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproxQuantileDecimalDeserialize);
 	return fun;
@@ -566,9 +568,11 @@ AggregateFunction GetApproxQuantileDecimal() {
 
 AggregateFunction GetApproxQuantileDecimalList() {
 	// stub function - the actual function is set during bind or deserialize
-	AggregateFunction fun({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::FLOAT)},
-	                      LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr, nullptr, nullptr,
+	AggregateFunction fun({}, LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      nullptr, BindApproxQuantileDecimalList);
+	fun.GetSignature()
+	    .AddParameter("x", LogicalTypeId::DECIMAL)
+	    .AddParameter("pos", LogicalType::LIST(LogicalType::FLOAT));
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproxQuantileDecimalDeserialize);
 	return fun;

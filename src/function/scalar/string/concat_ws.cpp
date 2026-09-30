@@ -167,8 +167,9 @@ ScalarFunction ConcatWsFun::GetFunction() {
 	// concat_ws(',', NULL, NULL) = ""
 	// concat_ws(',', '', '') = ","
 
-	ScalarFunction concat_ws = ScalarFunction("concat_ws", {LogicalType::VARCHAR, LogicalType::ANY},
-	                                          LogicalType::VARCHAR, ConcatWSFunction, BindConcatWSFunction);
+	ScalarFunction concat_ws =
+	    ScalarFunction("concat_ws", {}, LogicalType::VARCHAR, ConcatWSFunction, BindConcatWSFunction);
+	concat_ws.GetSignature().AddParameter("separator", LogicalType::VARCHAR).AddParameter("string", LogicalType::ANY);
 	concat_ws.SetVarArgs(LogicalType::ANY);
 	concat_ws.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return ScalarFunction(concat_ws);

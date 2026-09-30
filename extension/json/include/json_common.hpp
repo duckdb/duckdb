@@ -31,7 +31,7 @@ struct JSONKeyHash {
 			memcpy(&result, k.ptr + k.len - sizeof(size_t), sizeof(size_t));
 		} else {
 			result = 0;
-			FastMemcpy(&result, k.ptr, k.len);
+			memcpy(&result, k.ptr, k.len);
 		}
 		return result;
 	}
@@ -42,7 +42,7 @@ struct JSONKeyEquality {
 		if (a.len != b.len) {
 			return false;
 		}
-		return FastMemcmp(a.ptr, b.ptr, a.len) == 0;
+		return memcmp(a.ptr, b.ptr, a.len) == 0;
 	}
 };
 
@@ -92,6 +92,8 @@ private:
 //! Common JSON functionality for most JSON functions
 struct JSONCommon {
 public:
+	//! Maximum recursion depth for recursive functions
+	static constexpr idx_t MAX_RECURSION_DEPTH = 128;
 	//! Read/Write flags
 	static constexpr auto READ_FLAG =
 	    YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS | YYJSON_READ_BIGNUM_AS_RAW;

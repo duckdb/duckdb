@@ -196,6 +196,9 @@ protected:
 class GlobMultiFileList : public LazyMultiFileList {
 public:
 	GlobMultiFileList(ClientContext &context, vector<string> globs, FileGlobInput input);
+	//! Entries that carry explicit open options (i.e. an ExtendedOpenFileInfo) are emitted as-is instead of
+	//! being glob-expanded - they refer to a file the caller already knows the exact identity of
+	GlobMultiFileList(ClientContext &context, vector<OpenFileInfo> globs, FileGlobInput input);
 
 	vector<OpenFileInfo> GetDisplayFileList(optional_idx max_files = optional_idx()) const override;
 
@@ -206,7 +209,7 @@ protected:
 	//! The ClientContext for globbing
 	ClientContext &context;
 	//! The list of globs to expand
-	const vector<string> globs;
+	const vector<OpenFileInfo> globs;
 	//! Glob input
 	const FileGlobInput glob_input;
 	//! The current glob to expand

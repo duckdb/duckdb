@@ -173,7 +173,7 @@ UndoBufferProperties UndoBuffer::GetProperties() {
 	return properties;
 }
 
-void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
+void UndoBuffer::Cleanup(VisibilityBound lowest_visibility_bound) {
 	// garbage collect everything in the Undo Chunk
 	// this should only happen if
 	//  (1) the transaction this UndoBuffer belongs to has successfully
@@ -182,7 +182,7 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	//      the chunks)
 	//  (2) there is no active transaction with start_id < commit_id of this
 	//  transaction
-	CleanupState state(transaction, lowest_active_transaction, active_transaction_state);
+	CleanupState state(transaction, lowest_visibility_bound, active_transaction_state);
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 }

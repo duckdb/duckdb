@@ -79,13 +79,12 @@ public:
 	}
 	shared_ptr<CompiledGrammar> GetCompiledGrammar() override {
 		if (!compiled_grammar) {
-			compiled_grammar = cache.GetMatcher(nullptr);
+			compiled_grammar = CompiledGrammar::Create();
 		}
 		return compiled_grammar;
 	}
 
 private:
-	ParserCache cache;
 	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 

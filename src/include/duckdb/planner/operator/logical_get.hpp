@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/row_group_order_options.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
 class DynamicTableFilterSet;
 
 //! LogicalGet represents a scan operation from a data source

@@ -1,0 +1,37 @@
+# name: test/sql/json/issues/internal_issue1035.test
+# description: Test internal issue 1035 - Unbounded recursion in DeepMerge() causes native stack overflow and process crash on deeply nested JSON in json_deep_merge(), Unbounded recursion in ComputeDiff causes stack-overflow crash on deeply nested JSON objects in json_merge_patch_diff, Stack exhaustion (segfault) in json_normalize via unbounded recursion in SortKeys on deeply nested JSON arrays, Stack exhaustion (unbounded recursion) in json_merge_patch via yyjson_mut_merge_patch on deeply nested matching JSON objects, Stack overflow (SIGSEGV) in json_strip_nulls via unbounded recursive descent on deeply nested JSON array, Unbounded recursion in ParsedExpression/FunctionExpression::Deserialize via json_deserialize_sql causes stack overflow (SIGSEGV)
+# group: [issues]
+
+require json
+
+# Vuln151: json_deep_merge()
+query I
+SELECT json(json_deep_merge(x, x)) = json(x)
+FROM (SELECT repeat('{"a":', 20000) || '1' || repeat('}', 20000) AS x)
+----
+true
+
+# Vuln152: json_merge_patch_diff
+query I
+SELECT json_merge_patch_diff(
+  (repeat('{"a":', 200000) || '1' || repeat('}', 200000))::JSON,
+  (repeat('{"a":', 200000) || '1' || repeat('}', 200000))::JSON
+)
+----
+{}
+
+# Vuln153: json_normalize()
+query I
+SELECT length(
+  json_normalize(
+    (repeat('{"a":', 200000) || '1' || repeat('}', 200000))::JSON
+  )
+)
+----
+1200001
+
+# Vuln154: json_merge_patch()
+
+# Vuln155: json_strip_nulls()
+
+# Vuln157: json_deserialize_sql()

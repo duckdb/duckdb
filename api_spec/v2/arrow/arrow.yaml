@@ -1,0 +1,477 @@
+module: arrow
+#
+# Arrow C Data Interface interop: convert between DuckDB and Arrow in both directions, and
+# export a streaming result as an ArrowArrayStream.
+#
+# The three standard Arrow structs -- ArrowSchema, ArrowArray and ArrowArrayStream -- are
+# emitted into the generated header under the same ARROW_C_DATA_INTERFACE /
+# ARROW_C_STREAM_INTERFACE guards the Arrow specification prescribes, so the definitions
+# coexist with a consumer's own Arrow headers (first definition wins; the layouts are
+# byte-identical by spec). They keep their upstream names and are not wrapped in opaque
+# duckdb_v2_arrow_* handles: the ownership contract is caller-allocates / library-fills, so a
+# binding must be able to declare an ArrowSchema on the stack with only this header in hand.
+#
+# Two handles cover the two directions:
+#
+#   arrow_importer   created from an ArrowSchema, converts ArrowArrays into data chunks
+#   arrow_exporter   created from DuckDB column types, converts data chunks into ArrowArrays
+#
+# Both work the same way: append one input, take outputs until none is left, repeat. The
+# `batch_size` given at creation caps the rows per output. A long input is split across several
+# outputs. Rows left over that do not fill a batch are held back and joined with the next input,
+# so an output may span two inputs. The converter cannot tell when the input ends, so the append
+# call takes a `flush` flag that releases the held rows as a final short output.
+# `[[result_to_arrow_stream]]` owns its source and needs no flush. A `batch_size` of 0 means no
+# maximum: each input becomes one output and nothing is held back.
+#
+# Resolving the type mapping happens once, at creation, so a table function can create a
+# converter at bind time and pay nothing per batch. Creation reads the catalog for extension
+# types and ENUM dictionaries, so it needs a context with an active transaction; a callback
+# context has one.
+#
+# An exporter also captures the session's Arrow settings at creation, so the schema it reports
+# and the arrays it produces always agree, even if a setting changes afterwards.
+#
+# Ownership differs between the directions because the mechanics do. Importing is zero-copy: the
+# chunks point into the Arrow buffers, so something has to keep those buffers alive. Exporting
+# copies into freshly allocated Arrow buffers, so nothing needs to be retained. Both appends take
+# a `consume` flag; each documents what it means there.
+#
+# Out of scope, left to language bindings or to later work:
+#   - Registering an Arrow stream as a SQL table. A binding can keep its own name-to-stream
+#     registry and expose it through a table function or a replacement scan, built from the
+#     general function API and these converters.
+#   - Arrow IPC, the serialized wire format. Provided by the arrow extension as SQL functions.
+#   - A parallel, buffered Arrow collector. `[[result_to_arrow_stream]]` converts on the
+#     consumer's thread as it pulls. A pipelined collector has to be installed before execution
+#     starts, which needs a query entry point that does not exist yet.
+#   - Database-level registration of custom Arrow type extensions (the engine's
+#     ArrowTypeExtension).
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  arrow_importer:
+    description: |
+      Converts Arrow arrays into DuckDB data chunks, against one resolved ArrowSchema. Create it with
+      `[[arrow_importer_create]]`, which resolves every column's DuckDB type once, so the same importer serves any
+      number of arrays of that shape. `[[arrow_importer_get_schema]]` reports the resolved DuckDB schema.
+      `[[arrow_importer_append]]` takes an array, `[[arrow_importer_next_chunk]]` produces chunks from it, and
+      `[[arrow_importer_destroy]]` frees the importer.
+
+      The importer borrows the context it was created with and must not outlive it. One array is in flight at a
+      time, and an importer must not be used from two threads at once.
+  arrow_exporter:
+    description: |
+      Converts DuckDB data chunks into Arrow arrays, for one fixed list of columns. Create it with
+      `[[arrow_exporter_create]]`, which captures the session's Arrow settings and resolves the extension types once.
+      `[[arrow_exporter_get_schema]]` reports the Arrow schema. `[[arrow_exporter_append]]` takes a chunk,
+      `[[arrow_exporter_next_array]]` produces arrays from it, and `[[arrow_exporter_destroy]]` frees the exporter.
+
+      An exporter must not be used from two threads at once.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Streaming a result
+  #---------------------------------------------------------------------------------------------------------------------
+  result_to_arrow_stream:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Exports a result as a lazy ArrowArrayStream. Consuming.
+
+      Takes ownership of the result, sets the slot to NULL, and fills the caller-allocated `out_stream`. The stream
+      owns the result from then on. Releasing the stream, with `out_stream->release(out_stream)`, does not drain the
+      result, but closes the query and frees the connection's live-result slot as `[[result_destroy]]` would, so the
+      connection can run its next query.
+
+      The stream's `get_next` drives the result, waiting internally until a batch is ready, and gathers DuckDB chunks
+      into one Arrow array of up to `batch_size` rows. The Arrow schema and the extension type map are built and
+      cached here, while the query's transaction is still active, because building them can run extension
+      populate-schema callbacks and read ENUM dictionaries. `get_schema` returns a copy of the cached schema and never
+      touches the catalog.
+
+      A result that has already yielded some chunks is allowed and produces a stream over the remaining rows.
+
+      If the statement expanded into a group whose row-producing fragment has not started yet, this call steps the
+      result far enough to cache the schema, which may block briefly. No rows are lost, since none are produced
+      before that fragment is prepared. For an ordinary statement nothing executes here.
+
+      The result is consumed on every path that reaches the engine, including failures. Only a null-argument
+      rejection leaves it intact. `out_stream` is untouched unless the call succeeds.
+    role: method
+    belongs_to: result
+    parameters:
+      result:
+        type: result
+        indirection: 1
+        kind: IN_TRANSFER
+        description: The result to export. Consumed and set to NULL, except when the call rejects a null argument.
+      batch_size:
+        type: idx
+        description: |
+          Maximum rows per Arrow array. Pass 0 for the default of 131072, which is 64 vectors in a default build.
+      out_stream:
+        type: ArrowArrayStream
+        indirection: 1
+        kind: OUT
+        description: Caller-allocated stream the library fills. Release it with `out_stream->release(out_stream)`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Importing: Arrow arrays -> data chunks
+  #---------------------------------------------------------------------------------------------------------------------
+  arrow_importer_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Resolves an Arrow schema into a reusable importer.
+
+      Works out every column's DuckDB logical type and the Arrow type information the conversion needs, once, so any
+      number of arrays of that shape can be imported without re-reading the schema. `schema` is read, not consumed:
+      the caller keeps ownership and still releases it.
+
+      `batch_size` caps the rows per produced chunk. A long array is split across several chunks. Rows left over that
+      do not fill a batch are held back and joined with the next array, unless the append asked to flush. Pass 0 for
+      no maximum: each array becomes one chunk, however long it is.
+
+      Resolving reads the catalog for extension types, so `context` must have an active transaction. The importer
+      keeps using that context for every conversion and must not outlive it. Within one connection the context is
+      the same throughout, so an importer created in a bind callback is usable from the matching exec callback.
+      `*out_importer` is set to NULL on failure.
+    role: constructor
+    belongs_to: arrow_importer
+    parameters:
+      context:
+        type: context
+        description: The context used to resolve the Arrow types, extension types included.
+      schema:
+        type: ArrowSchema
+        indirection: 1
+        description: The schema to resolve. Read, not consumed; the caller keeps ownership.
+      batch_size:
+        type: idx
+        description: Maximum rows per produced chunk, or 0 for no maximum.
+      out_importer:
+        type: arrow_importer
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new importer. Owned by the caller; destroy via `[[arrow_importer_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_importer_get_schema:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the resolved DuckDB schema.
+
+      Writes an owned schema handle with the DuckDB name and logical type of every column the importer resolved.
+      This is how a caller learns the DuckDB shape of an ArrowSchema, to declare a table function's result columns
+      for instance, without reimplementing the mapping from Arrow format strings to logical types.
+
+      The fields were resolved at creation, so this reads no catalog and needs no transaction. `*out_schema` is set
+      to NULL on failure.
+    role: getter
+    belongs_to: arrow_importer
+    parameters:
+      importer:
+        type: arrow_importer
+        description: The importer to read.
+      out_schema:
+        type: schema
+        indirection: 1
+        kind: OUT
+        description: On success, receives an owned schema. Destroy via `[[schema_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_importer_append:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Gives the importer one array to convert.
+
+      Take the chunks with `[[arrow_importer_next_chunk]]` until that returns NULL. Appending while the previous array
+      still has rows left is rejected with `ERROR_INPUT_INVALID`. An array whose shape does not match the resolved
+      schema -- a different child count, a child whose length differs from the array's, a null or already-released
+      child -- is rejected the same way, before anything is read.
+
+      `flush` marks the end of the input: rows that do not fill a batch then come out as a final short chunk instead
+      of being held back for the next array. Pass NULL for `array` with `flush` set to release the held rows without
+      supplying more input.
+
+      `consume` decides what happens to the caller's array.
+
+      When true, the importer takes over the array and sets its `release` to NULL; the caller must not release it
+      afterwards. The produced chunks reference the Arrow buffers directly, without copying, and keep them alive, so
+      the chunks stay valid after the importer is destroyed. Prefer this path.
+
+      When false, the caller keeps the array and must keep it valid until the drain finishes. The produced chunks are
+      copies, so they do not depend on the array, at the cost of one copy per chunk.
+
+      Either way, a chunk that joins rows held back from the previous array is a copy, since it cannot reference two
+      arrays.
+
+      Only the default, dictionary-encoded and run-end-encoded Arrow layouts are supported. Any other layout reports
+      `ERROR_QUERY_NOT_IMPLEMENTED` when the column is converted.
+    role: method
+    belongs_to: arrow_importer
+    parameters:
+      importer:
+        type: arrow_importer
+        description: The importer to feed.
+      array:
+        type: ArrowArray
+        indirection: 1
+        description: The array to convert. Its `release` is set to NULL when `consume` is true.
+      consume:
+        type: bool
+        description: |
+          True to hand the array over for a zero-copy import; false to keep it, in which case every produced chunk is
+          a copy.
+      flush:
+        type: bool
+        description: |
+          True to mark the end of the input, releasing held rows as a final short chunk. Pass NULL for `array` with
+          this set to flush without supplying more input.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_importer_next_chunk:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Produces the next chunk of the appended array, or NULL once the array is drained.
+
+      Call it in a loop until `*out_chunk` is NULL. An importer with no array appended also returns NULL. Each chunk
+      holds at most the importer's `batch_size` rows, or the whole array when that is 0. A chunk may start with rows
+      held back from the previous array, and rows that do not fill a batch are held back in turn unless the append
+      asked to flush. So NULL means the array has been read, not that all of its rows have come out.
+
+      The conversion runs under the context the importer was created with, which must still be alive. `*out_chunk`
+      is set to NULL on failure.
+    role: method
+    belongs_to: arrow_importer
+    parameters:
+      importer:
+        type: arrow_importer
+        description: The importer to drain.
+      out_chunk:
+        type: data_chunk
+        indirection: 1
+        kind: OUT
+        description: On success, receives the next chunk, or NULL once the array is drained. Destroy via `[[data_chunk_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_importer_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Destroys an importer.
+
+      Null-safe: passing NULL, or a slot already set to NULL, is a no-op. Chunks already produced stay valid,
+      including the zero-copy ones, which keep the Arrow buffers alive themselves. An array appended with `consume`
+      true and not fully drained is released here. Rows held back for a next array are dropped. On success the slot
+      is set to NULL.
+    role: destructor
+    belongs_to: arrow_importer
+    parameters:
+      importer:
+        type: arrow_importer
+        indirection: 1
+        description: The importer to destroy.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Exporting: data chunks -> Arrow arrays
+  #---------------------------------------------------------------------------------------------------------------------
+  arrow_exporter_create:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Creates an exporter for one fixed list of columns.
+
+      Resolves the extension types and captures the session's Arrow settings, so every array this exporter produces
+      matches the schema `[[arrow_exporter_get_schema]]` reports, even if a setting changes afterwards.
+
+      `batch_size` caps the rows per produced array. A long chunk is split across several arrays. Rows left over that
+      do not fill a batch are held back and joined with the next chunk, unless the append asked to flush. Pass 0 for
+      no maximum: each chunk becomes one array, however long it is.
+
+      `types` and `names` are parallel arrays of `count` entries, borrowed and copied; they may be NULL only when
+      `count` is 0. Resolving reads the catalog, so `context` must have an active transaction. `*out_exporter` is
+      set to NULL on failure.
+    role: constructor
+    belongs_to: arrow_exporter
+    parameters:
+      context:
+        type: context
+        description: The context whose Arrow settings are captured and whose transaction resolves the types.
+      types:
+        type: logical_type
+        indirection: 1
+        const: true
+        description: An array of `count` column types. May be NULL only when `count` is 0.
+      names:
+        type: str
+        indirection: 1
+        const: true
+        description: An array of `count` column names, parallel to `types`. May be NULL only when `count` is 0.
+      count:
+        type: idx
+        description: The number of columns, being the length of both `types` and `names`.
+      batch_size:
+        type: idx
+        description: Maximum rows per produced array, or 0 for no maximum.
+      out_exporter:
+        type: arrow_exporter
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new exporter. Owned by the caller; destroy via `[[arrow_exporter_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_exporter_get_schema:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the Arrow schema of the arrays this exporter produces.
+
+      Fills the caller-allocated `out_schema`. The caller owns the result and releases it with
+      `out_schema->release(out_schema)`. Callable at any point, and always returns the same schema, since it is built
+      from the settings captured at creation.
+    role: getter
+    belongs_to: arrow_exporter
+    parameters:
+      exporter:
+        type: arrow_exporter
+        description: The exporter to read.
+      out_schema:
+        type: ArrowSchema
+        indirection: 1
+        kind: OUT
+        description: Caller-allocated schema the library fills. Release it with `out_schema->release(out_schema)`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_exporter_append:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Gives the exporter one chunk to convert.
+
+      The chunk is converted in full before this returns. The conversion copies into freshly allocated Arrow buffers,
+      so nothing of the caller's is retained. Every array completed by this chunk becomes available from
+      `[[arrow_exporter_next_array]]`; rows that do not complete a batch are held back and finished by the next
+      chunk. Completed arrays queue up, so appending again before they are taken is allowed.
+
+      `flush` marks the end of the input: the held rows are then finished as a final short array. Pass NULL for
+      `chunk` with `flush` set to release the held rows without supplying more input.
+
+      The chunk's types must match the ones the exporter was created with, or the call is rejected with
+      `ERROR_INPUT_INVALID` before anything is read.
+
+      `consume` decides only what happens to the caller's handle, since the data is copied either way. When true the
+      chunk is destroyed and the slot set to NULL, saving a `[[data_chunk_destroy]]` for a chunk the caller owns.
+      When false the chunk is left untouched, which is what a chunk borrowed from a callback needs, such as the output
+      chunk of a table function's exec callback, which the caller does not own and must not destroy.
+    role: method
+    belongs_to: arrow_exporter
+    parameters:
+      exporter:
+        type: arrow_exporter
+        description: The exporter to feed.
+      chunk:
+        type: data_chunk
+        indirection: 1
+        description: The chunk to convert. Destroyed and set to NULL only when `consume` is true.
+      consume:
+        type: bool
+        description: True to hand the chunk over, destroying it; false to leave the caller's handle untouched.
+      flush:
+        type: bool
+        description: |
+          True to mark the end of the input, releasing the held rows as a final short array. Pass NULL for `chunk`
+          with this set to flush without supplying more input.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_exporter_next_array:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Takes the next completed array, or reports that none is ready.
+
+      Call it in a loop after every `[[arrow_exporter_append]]` until `out_array->release` is NULL, which is how the
+      Arrow C Data Interface signals "no array" and what a stream's `get_next` does at end of input. Rows held back
+      towards an unfinished batch are not an array yet; they come out after a further append or a flush.
+
+      Each array is owned by the caller and released with `out_array->release(out_array)`, independently of the
+      exporter and of every other array.
+    role: method
+    belongs_to: arrow_exporter
+    parameters:
+      exporter:
+        type: arrow_exporter
+        description: The exporter to drain.
+      out_array:
+        type: ArrowArray
+        indirection: 1
+        kind: OUT
+        description: |
+          Caller-allocated array the library fills. Left released -- `release` NULL -- when none is ready. Release a
+          filled one with `out_array->release(out_array)`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  arrow_exporter_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Destroys an exporter.
+
+      Null-safe: passing NULL, or a slot already set to NULL, is a no-op. Arrays already taken stay valid. Arrays
+      still queued inside are released here, and rows held back towards an unfinished batch are dropped. On success
+      the slot is set to NULL.
+    role: destructor
+    belongs_to: arrow_exporter
+    parameters:
+      exporter:
+        type: arrow_exporter
+        indirection: 1
+        description: The exporter to destroy.
+    return_type: ERROR

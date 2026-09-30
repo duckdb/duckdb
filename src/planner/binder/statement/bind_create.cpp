@@ -114,8 +114,14 @@ void Binder::BindSchemaOrCatalog(Identifier &catalog, Identifier &schema) {
 }
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, QualifiedName &qualified_name) {
-	auto catalog = qualified_name.Catalog();
-	auto schema = qualified_name.Schema();
+	auto &path = qualified_name.Path();
+	if (path.size() != 2) {
+		// only a lone qualifier ("x.name") can be either a schema or a catalog - any deeper qualification is
+		// positional and is resolved by ResolveCatalog
+		return;
+	}
+	Identifier catalog;
+	Identifier schema = path[0];
 	BindSchemaOrCatalog(retriever, catalog, schema);
 	qualified_name = QualifiedName(std::move(catalog), std::move(schema), qualified_name.Name());
 }
@@ -460,16 +466,18 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		}
 
 		// Constant-fold all default parameter expressions
+		identifier_map_t<Value> default_values;
 		identifier_set_t integer_literal_defaults;
 		for (auto &it : function->default_parameters) {
 			auto &param_name = it.first;
 			auto &param_expr = it.second;
 
 			if (param_expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				auto &value = param_expr->Cast<ConstantExpression>().GetValue();
+				auto value = param_expr->Cast<ConstantExpression>().GetLiteral().ToValue();
 				if (value.type().IsIntegral() && !value.IsNull()) {
 					integer_literal_defaults.insert(param_name);
 				}
+				default_values[param_name] = std::move(value);
 				continue;
 			}
 
@@ -485,9 +493,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			auto default_val = ExpressionExecutor::EvaluateScalar(context, *bound_default);
 
 			// Save this back as a constant expression
-			auto const_expr = make_uniq<ConstantExpression>(default_val);
+			auto const_expr = ConstantExpression::FromValue(default_val);
 			const_expr->SetAlias(param_name);
 			it.second = std::move(const_expr);
+			default_values[param_name] = std::move(default_val);
 		}
 
 		// Resolve any user type arguments
@@ -500,17 +509,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 				BindLogicalType(type);
 			}
 			const auto &param_name = function->parameters[param_idx]->Cast<ColumnRefExpression>().GetColumnName();
-			auto it = function->default_parameters.find(param_name);
-			if (it != function->default_parameters.end()) {
-				auto &value = it->second->Cast<ConstantExpression>().GetValue();
+			auto it = default_values.find(param_name);
+			if (it != default_values.end()) {
+				auto &value = it->second;
 				auto val_type = value.type();
 				if (integer_literal_defaults.find(param_name) != integer_literal_defaults.end()) {
 					val_type = LogicalType::INTEGER_LITERAL(value);
 				}
 				if (CastFunctionSet::ImplicitCastCost(context, val_type, type) < 0) {
-					auto msg =
-					    StringUtil::Format("Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
-					                       it->second->ToString(), param_name, type.ToString());
+					auto msg = StringUtil::Format(
+					    "Default value '%s' for parameter '%s' cannot be implicitly cast to '%s'.",
+					    function->default_parameters[param_name]->ToString(), param_name, type.ToString());
 					throw BinderException(msg + " Please add an explicit type cast.");
 				}
 			}
@@ -557,11 +566,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 			// create a copy of the expression because we do not want to alter the original
 			auto expression = function->Cast<ScalarMacroFunction>().expression->Copy();
 			ExpressionBinder::QualifyColumnNames(*this, expression);
-			// scope for the map entries of this bind: the bound result is only used for verification
-			BoundExpressionScope verify_scope(GetBoundExpressions());
 			try {
-				error = binder.Bind(expression, 0, false);
-				if (error.HasError()) {
+				auto bind_result = binder.Bind(expression, 0, false);
+				if (bind_result.HasError()) {
+					error = std::move(bind_result.error);
 					error.Throw();
 				}
 			} catch (const std::exception &ex) {
@@ -596,17 +604,17 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-LogicalType Binder::BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr) {
+LogicalType Binder::BindLogicalType(const ParsedExpression &type_expr) {
 	ConstantBinder binder(*this, context, "Type binding");
-	auto copy = type_expr->Copy();
+	auto copy = type_expr.Copy();
 	auto expr = binder.Bind(copy);
 
 	if (!expr->IsFoldable()) {
-		throw BinderException(*type_expr, "Type expression is not constant");
+		throw BinderException(type_expr, "Type expression is not constant");
 	}
 
 	if (expr->GetReturnType() != LogicalTypeId::TYPE) {
-		throw BinderException(*type_expr, "Expected a type returning expression, but got expression of type '%s'",
+		throw BinderException(type_expr, "Expected a type returning expression, but got expression of type '%s'",
 		                      expr->GetReturnType().ToString());
 	}
 
@@ -634,7 +642,7 @@ void Binder::BindLogicalType(LogicalType &type) {
 	type = TypeVisitor::VisitReplace(type, [&](const LogicalType &ty) {
 		if (ty.id() == LogicalTypeId::UNBOUND) {
 			auto &type_expr = UnboundType::GetTypeExpression(ty);
-			return BindLogicalTypeInternal(type_expr);
+			return BindLogicalType(*type_expr);
 		}
 
 		return ty;
@@ -649,9 +657,6 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 		throw BinderException("Temporary triggers are not supported");
 	}
 	// Resolve the base table first — triggers inherit catalog/schema from their table (like Postgres).
-	// Promote a catalog-qualified base table (e.g. attached_db.tbl) so downstream lookups carry the resolved
-	// catalog instead of a bare schema (matches the DROP TRIGGER path).
-	BindSchemaOrCatalog(create_trigger_info.base_table->GetQualifiedNameMutable());
 	TableDescription table_description(create_trigger_info.base_table->GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
@@ -779,7 +784,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 			body_copy->cte_map.map[alias] = MakeTriggerValidationCTE(table);
 		}
 	}
-	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so BindCorrelatedColumns can
+	// For FOR EACH ROW: register NEW (INSERT) or OLD (DELETE) as a generic binding so that scope resolution can
 	// resolve NEW.col / OLD.col references.
 	unique_ptr<ExpressionBinder> row_scope_binder;
 	if (create_trigger_info.for_each == TriggerForEach::ROW) {
@@ -803,7 +808,7 @@ SchemaCatalogEntry &Binder::BindCreateTriggerInfo(CreateTriggerInfo &create_trig
 	if (row_scope_binder) {
 		auto body_binder = Binder::CreateBinder(context, validation_binder.get());
 		auto bound_body = body_binder->Bind(*body_copy);
-		validation_binder->GetActiveBinders().pop_back();
+		validation_binder->PopScope();
 		if (body_binder->correlated_columns.empty()) {
 			throw BinderException("FOR EACH ROW trigger %s on table %s must reference at least one NEW or OLD "
 			                      "column in the trigger body (use FOR EACH STATEMENT if row data is not needed)",

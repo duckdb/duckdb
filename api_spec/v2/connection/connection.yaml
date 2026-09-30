@@ -1,11 +1,4 @@
 module: connection
-handles:
-  query_progress:
-    description: |
-      An opaque, owned handle to a snapshot of a query's execution progress,
-      taken by connection_query_progress at call time. Read it with the
-      query_progress_get_* accessors; destroy it via query_progress_destroy.
-    cleanup_with: query_progress_destroy
 
 functions:
   connect:
@@ -199,94 +192,38 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
-  connection_query_progress:
+  connection_progress_get:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
       Captures a snapshot of the active query's execution progress.
 
-      Writes the progress of the query currently executing on the connection
-      into an owned snapshot handle; read it with the query_progress_get_*
-      accessors and destroy it via query_progress_destroy. Safe to call from
-      any thread, including while another thread steps the query's result.
+      Reads the percentage and row counts from one consistent snapshot
+      of the query currently executing on the connection. Safe to call
+      from any thread, including while another thread steps the query's
+      result.
 
-      Progress is published only while the enable_progress_bar option is set;
-      this call does not enable tracking itself. A percentage of -1, with both
-      row counts 0, means no information is available: tracking is disabled, no
-      query is active, or nothing has been published yet.
-    role: constructor
-    belongs_to: query_progress
+      Progress is published only when the enable_progress_bar option is
+      set; the bridge does not enable tracking itself. Both row counts
+      are 0 when no information is available. The percentage is -1 when
+      tracking is disabled, no query is active, or no progress has been
+      published yet.
+    role: getter
+    belongs_to: connection
     parameters:
       conn:
         type: connection
-        description: "The connection."
-      out_progress:
-        type: query_progress
-        indirection: 1
-        kind: OUT
-        description: "Receives the new progress snapshot handle."
-      err:
-        type: error_info
-        indirection: 1
-        kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
-    return_type: ERROR
-  query_progress_get_percentage:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-04" ]
-    description: |
-      Returns the snapshot's percentage complete.
-
-      A percentage in [0, 100], or -1 when no progress information was
-      available at capture time.
-    role: getter
-    belongs_to: query_progress
-    parameters:
-      progress:
-        type: query_progress
-        description: "The progress snapshot."
+        description: "The connection handle."
       out_percentage:
         type: f64
         indirection: 1
         kind: OUT
-        description: "Receives the percentage."
-      err:
-        type: error_info
-        indirection: 1
-        kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
-    return_type: ERROR
-  query_progress_get_rows_processed:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-04" ]
-    description: "Returns the snapshot's processed row count."
-    role: getter
-    belongs_to: query_progress
-    parameters:
-      progress:
-        type: query_progress
-        description: "The progress snapshot."
+        description: "Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active, or no progress has been published yet."
       out_rows_processed:
         type: u64
         indirection: 1
         kind: OUT
         description: "Receives the number of rows processed so far."
-      err:
-        type: error_info
-        indirection: 1
-        kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
-    return_type: ERROR
-  query_progress_get_total_rows_to_process:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-04" ]
-    description: "Returns the snapshot's total row count."
-    role: getter
-    belongs_to: query_progress
-    parameters:
-      progress:
-        type: query_progress
-        description: "The progress snapshot."
       out_total_rows_to_process:
         type: u64
         indirection: 1
@@ -297,20 +234,4 @@ functions:
         indirection: 1
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
-    return_type: ERROR
-  query_progress_destroy:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-04" ]
-    description: |
-      Destroys a progress snapshot handle.
-
-      Null-safe: passing nullptr or a slot already set to nullptr is a
-      no-op. On success the slot is set to nullptr.
-    role: destructor
-    belongs_to: query_progress
-    parameters:
-      progress:
-        type: query_progress
-        indirection: 1
-        description: "The progress snapshot to destroy."
     return_type: ERROR

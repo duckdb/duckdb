@@ -196,6 +196,7 @@ ScalarFunctionSet JSONFunctions::GetSerializePlanFunction() {
 
 	ScalarFunction func({}, LogicalType::JSON(), JsonSerializePlanFunction, JsonSerializePlanBind, nullptr,
 	                    JSONFunctionLocalState::Init);
+	func.GetProperties().SetRequiresExpressionNames(true);
 
 	func.GetSignature()
 	    .AddParameter("sql", LogicalType::VARCHAR)

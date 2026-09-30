@@ -130,7 +130,8 @@ public:
 	      maxUnprocessed_(unprocessedSize(unmergedSize, compression)), processed_(allocator), unprocessed_(allocator),
 	      cumulative_(allocator) {
 		processed_.reserve(maxProcessed_);
-		unprocessed_.reserve(maxUnprocessed_ + 1);
+		unprocessed_.reserve(maxUnprocessed_ + maxProcessed_ + 1);
+		cumulative_.reserve(maxProcessed_ + 1);
 	}
 
 	TDigest(duckdb::arena_vector<Centroid> &&processed, duckdb::arena_vector<Centroid> &&unprocessed, Value compression,

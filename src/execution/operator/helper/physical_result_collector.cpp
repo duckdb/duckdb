@@ -1,9 +1,7 @@
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
-#include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
-#include "duckdb/execution/operator/helper/physical_buffered_batch_collector.hpp"
-#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
-#include "duckdb/execution/operator/helper/physical_buffered_collector.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/operator/helper/physical_result_sink.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
@@ -27,27 +25,15 @@ unique_ptr<PhysicalOperator> PhysicalResultCollector::GetResultCollector(ClientC
 	auto &physical_plan = *data.physical_plan;
 	auto &root = physical_plan.Root();
 
+	const auto lifetime = data.output_type == QueryResultOutputType::ALLOW_STREAMING ? ResultLifetime::UNDECIDED
+	                                                                                 : ResultLifetime::RETAINED;
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, root)) {
-		// Not an order-preserving plan: use the parallel materialized collector.
-		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
-			return make_uniq<PhysicalBufferedCollector>(physical_plan, data, true);
-		}
-		return make_uniq<PhysicalMaterializedCollector>(physical_plan, data, true);
+		return make_uniq<PhysicalResultSink>(physical_plan, data, lifetime, ResultOrdering::UNORDERED);
 	}
-
 	if (!PhysicalPlanGenerator::UseBatchIndex(context, root)) {
-		// Order-preserving plan, and we cannot use the batch index: use single-threaded result collector.
-		if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
-			return make_uniq<PhysicalBufferedCollector>(physical_plan, data, false);
-		}
-		return make_uniq<PhysicalMaterializedCollector>(physical_plan, data, false);
+		return make_uniq<PhysicalResultSink>(physical_plan, data, lifetime, ResultOrdering::SOURCE_ORDERED);
 	}
-
-	// Order-preserving plan, and we can use the batch index: use a batch collector.
-	if (data.output_type == QueryResultOutputType::ALLOW_STREAMING) {
-		return make_uniq<PhysicalBufferedBatchCollector>(physical_plan, data);
-	}
-	return make_uniq<PhysicalBatchCollector>(physical_plan, data);
+	return make_uniq<PhysicalResultSink>(physical_plan, data, lifetime, ResultOrdering::BATCH_INDEX_ORDERED);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalResultCollector::GetChildren() const {

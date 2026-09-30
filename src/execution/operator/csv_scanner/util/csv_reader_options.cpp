@@ -456,6 +456,11 @@ bool CSVReaderOptions::SetBaseOption(const Identifier &loption, const Value &val
 			if (!children) {
 				children = &ListValue::GetChildren(value);
 			}
+			if (children->empty()) {
+				throw BinderException("CSV Reader function option %s requires a non-empty list of possible null "
+				                      "strings (varchar) as input",
+				                      loption);
+			}
 			for (auto &child : *children) {
 				if (child.IsNull()) {
 					throw BinderException(

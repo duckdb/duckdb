@@ -22,7 +22,7 @@ class TokenIterator {
 public:
 	DUCKDB_API explicit TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens);
 	DUCKDB_API explicit TokenIterator(vector<MatcherToken> &tokens);
-	DUCKDB_API TokenIterator(TokenIterator &other);
+	DUCKDB_API TokenIterator(const TokenIterator &other);
 	DUCKDB_API TokenIterator(TokenIterator &&other) noexcept;
 	TokenIterator &operator=(const TokenIterator &) = delete;
 	TokenIterator &operator=(TokenIterator &&) = delete;

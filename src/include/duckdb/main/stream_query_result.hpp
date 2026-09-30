@@ -51,6 +51,16 @@ public:
 
 	DUCKDB_API bool IsOpen();
 
+	//! The buffer backing this stream result
+	BufferedData &GetBufferedData() {
+		D_ASSERT(buffered_data);
+		return *buffered_data;
+	}
+	//! False for an error result, which never had a buffer
+	bool HasBufferedData() const {
+		return buffered_data != nullptr;
+	}
+
 	//! Closes the StreamQueryResult
 	DUCKDB_API void Close();
 
@@ -63,6 +73,8 @@ protected:
 private:
 	StreamExecutionResult ExecuteTaskInternal(ClientContextLock &lock);
 	unique_ptr<DataChunk> FetchNextInternal(ClientContextLock &lock);
+	//! The materialize of a stream a fetch already chose: the remainder is copied out under the cap
+	unique_ptr<MaterializedQueryResult> MaterializeByDraining();
 	unique_ptr<ClientContextLock> LockContext();
 	void CheckExecutableInternal(ClientContextLock &lock);
 	bool IsOpenInternal(ClientContextLock &lock);

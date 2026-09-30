@@ -12,6 +12,7 @@
 #include "duckdb/planner/bound_constraint.hpp"
 
 namespace duckdb {
+struct CreateInfo;
 class TableCatalogEntry;
 
 class LogicalDelete : public LogicalOperator {

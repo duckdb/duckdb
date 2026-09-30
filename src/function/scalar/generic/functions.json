@@ -8,7 +8,7 @@
     },
     {
         "name": "getvariable",
-        "parameters": "",
+        "parameters": "variable_name",
         "description": "",
         "example": "",
         "type": "scalar_function",
@@ -19,6 +19,14 @@
         "parameters": "message",
         "description": "Throws the given error message",
         "example": "error('access_mode')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "__internal_barrier",
+        "struct": "BarrierFun",
+        "parameters": "arg",
+        "description": "Returns arg unchanged, and marks it as an optimizer barrier: the expression is never evaluated on rows removed by the operators around it",
+        "example": "__internal_barrier(s::INTEGER = 42)",
         "type": "scalar_function"
     },
     {

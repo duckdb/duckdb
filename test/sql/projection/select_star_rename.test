@@ -32,6 +32,17 @@ SELECT renamed_col FROM (SELECT integers.* RENAME integers.i AS renamed_col FROM
 ----
 1
 
+# dots in quoted identifiers are not qualification separators
+query II
+SELECT d, c FROM (SELECT * RENAME ("a.b" AS d) FROM (SELECT 1 AS "a.b", 2 AS c))
+----
+1	2
+
+query II
+SELECT d, c FROM (SELECT * RENAME ("table.with.dot"."column.with.dot" AS d) FROM (SELECT 1 AS "column.with.dot", 2 AS c) AS "table.with.dot")
+----
+1	2
+
 # multiple renames
 query II
 SELECT r1, r2 FROM (SELECT * RENAME (integers.i AS r1, j AS r2) FROM integers)

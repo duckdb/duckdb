@@ -1,30 +1,32 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/common/swar.hpp"
 
 #include "utf8proc.hpp"
 
 namespace duckdb {
 
-bool IsAscii(const char *input, idx_t n) {
-	static constexpr uint64_t MASK = 0x8080808080808080U;
-
+idx_t FirstNonAscii(const char *input, idx_t n) {
 	// Check 8 bytes at a time
 	idx_t i = 0;
-	for (; i + sizeof(uint64_t) <= n; i += sizeof(uint64_t)) {
-		if ((Load<uint64_t>(const_data_ptr_cast(input + i)) & MASK)) {
+	for (; i + SwarWord::SIZE <= n; i += SwarWord::SIZE) {
+		if (!SwarWord::IsAscii(Load<uint64_t>(const_data_ptr_cast(input + i)))) {
 			// non-ascii character in the next 8 bytes
-			return false;
+			break;
 		}
 	}
 
-	// Less than 8 bytes remain
+	// Less than 8 bytes remain, or a non-ascii byte was found
 	for (; i < n; i++) {
 		if (input[i] & 0x80) {
-			// non-ascii character
-			return false;
+			return i;
 		}
 	}
-	return true;
+	return n;
+}
+
+bool IsAscii(const char *input, idx_t n) {
+	return FirstNonAscii(input, n) == n;
 }
 
 namespace {
@@ -55,7 +57,9 @@ void StripAccentsFunction(DataChunk &args, ExpressionState &state, Vector &resul
 } // namespace
 
 ScalarFunction StripAccentsFun::GetFunction() {
-	return ScalarFunction("strip_accents", {LogicalType::VARCHAR}, LogicalType::VARCHAR, StripAccentsFunction);
+	ScalarFunction fun("strip_accents", {}, LogicalType::VARCHAR, StripAccentsFunction);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

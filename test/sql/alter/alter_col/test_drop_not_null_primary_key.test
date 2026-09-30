@@ -1,0 +1,11 @@
+# name: test/sql/alter/alter_col/test_drop_not_null_primary_key.test
+# description: DROP NOT NULL on a PRIMARY KEY column should fail because the column is in a primary key
+# group: [alter_col]
+
+statement ok
+CREATE TABLE pk_col(i INTEGER PRIMARY KEY, j INTEGER);
+
+statement error
+ALTER TABLE pk_col ALTER COLUMN i DROP NOT NULL
+----
+<REGEX>:Catalog Error.*column "i" is in a primary key.*

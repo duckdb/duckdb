@@ -98,15 +98,38 @@ functions:
       Drops all buffered rows, keeping the column types.
 
       Drops all buffered rows and releases their memory. The column types are
-      unchanged and the collection is immediately appendable again. Outstanding
-      append and scan states are invalidated; create new ones. Must not be
-      called while a live result executes over the collection, because that
-      result's scan borrows the collection's buffers.
+      unchanged and the collection is immediately appendable again. Existing
+      append and scan states are invalidated. Use
+      `[[column_data_collection_clear]]` instead to keep the memory for the
+      next appends.
     belongs_to: column_data_collection
     parameters:
       collection:
         type: column_data_collection
         description: The collection to reset.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
+  column_data_collection_clear:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-02" ]
+    description: |
+      Drops all buffered rows, keeping the column types and the memory.
+
+      Like `[[column_data_collection_reset]]`, but the buffers are retained
+      rather than released, so the next appends write into memory that is
+      already allocated. Use this when the collection is refilled repeatedly.
+      The column types are unchanged and the collection is immediately
+      appendable again. Existing append and scan states are invalidated.
+    belongs_to: column_data_collection
+    parameters:
+      collection:
+        type: column_data_collection
+        description: The collection to clear.
       err:
         type: error_info
         indirection: 1
