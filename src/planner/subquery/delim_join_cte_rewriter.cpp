@@ -67,16 +67,9 @@ static BindingReplacementGraph CreateConstructedBindingReplacements(const vector
 
 static unique_ptr<LogicalOperator> CreateIdentityProjection(Binder &binder, unique_ptr<LogicalOperator> child,
                                                             BindingReplacementGraph &replacements) {
-	child->ResolveOperatorTypes();
-	auto bindings = child->GetColumnBindings();
-	vector<unique_ptr<Expression>> expressions;
-	expressions.reserve(bindings.size());
-	for (idx_t i = 0; i < bindings.size(); i++) {
-		expressions.push_back(make_uniq<BoundColumnRefExpression>(child->types[i], bindings[i]));
-	}
-	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-	projection->children.push_back(std::move(child));
+	auto projection = LogicalProjection::CreateIdentity(binder.GenerateTableIndex(), std::move(child));
 	projection->ResolveOperatorTypes();
+	auto bindings = projection->children[0]->GetColumnBindings();
 	replacements = CreateConstructedBindingReplacements(bindings, projection->GetColumnBindings());
 	return std::move(projection);
 }
@@ -2642,9 +2635,7 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 	// Only RHS partitions are removed; ordinary filter pushdown handles the producer.
 	const bool can_restrict_input = requires_left_row && CanRestrictCorrelationDomain(*plan->children[1], local_ctes);
 
-	plan->children[0]->ResolveOperatorTypes();
 	auto left_bindings = plan->children[0]->GetColumnBindings();
-	auto left_types = plan->children[0]->types;
 	auto visible_left_column_count = left_bindings.size();
 
 	vector<idx_t> dedup_column_indices;
@@ -2672,20 +2663,12 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 
 	if (!extra_left_expressions.empty()) {
 		auto old_left_bindings = left_bindings;
-		vector<unique_ptr<Expression>> expressions;
-		expressions.reserve(left_bindings.size() + extra_left_expressions.size());
-		for (idx_t i = 0; i < left_bindings.size(); i++) {
-			expressions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
-		}
+		auto projection = LogicalProjection::CreateIdentity(binder.GenerateTableIndex(), std::move(plan->children[0]));
 		for (auto &expr : extra_left_expressions) {
-			expressions.push_back(std::move(expr));
+			projection->expressions.push_back(std::move(expr));
 		}
-		auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
-		projection->children.push_back(std::move(plan->children[0]));
 		plan->children[0] = std::move(projection);
-		plan->children[0]->ResolveOperatorTypes();
 		left_bindings = plan->children[0]->GetColumnBindings();
-		left_types = plan->children[0]->types;
 		vector<ColumnBinding> projected_left_bindings(
 		    left_bindings.begin(),
 		    left_bindings.begin() + NumericCast<vector<ColumnBinding>::difference_type>(old_left_bindings.size()));
@@ -2705,15 +2688,9 @@ BindingReplacementGraph DelimJoinCTERewriter::MaterializeDelimJoinAsCTE(unique_p
 
 	auto left_column_count = left_bindings.size();
 	auto cte_source_bindings = left_bindings;
-	vector<unique_ptr<Expression>> cte_source_expressions;
-	cte_source_expressions.reserve(left_column_count);
-	for (idx_t i = 0; i < left_column_count; i++) {
-		cte_source_expressions.push_back(make_uniq<BoundColumnRefExpression>(left_types[i], left_bindings[i]));
-	}
-	auto cte_source = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(cte_source_expressions));
-	cte_source->children.push_back(std::move(plan->children[0]));
+	auto cte_source = LogicalProjection::CreateIdentity(binder.GenerateTableIndex(), std::move(plan->children[0]));
 	cte_source->ResolveOperatorTypes();
-	left_types = cte_source->types;
+	auto left_types = cte_source->types;
 
 	auto cte_index = binder.GenerateTableIndex();
 	auto cte_name = Identifier("__duckdb_delim_" + to_string(cte_index.index));

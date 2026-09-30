@@ -1243,20 +1243,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownSetOperatio
 	}
 	for (idx_t i = 0; i < plan->children.size(); i++) {
 		if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-			auto proj_index = binder.GenerateTableIndex();
-			auto bindings = plan->children[i]->GetColumnBindings();
-			plan->children[i]->ResolveOperatorTypes();
-			auto types = plan->children[i]->types;
-			vector<unique_ptr<Expression>> expressions;
-			expressions.reserve(bindings.size());
-			D_ASSERT(bindings.size() == types.size());
-
-			for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
-				expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
-			}
-			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
-			proj->children.push_back(std::move(plan->children[i]));
-			plan->children[i] = std::move(proj);
+			plan->children[i] =
+			    LogicalProjection::CreateIdentity(binder.GenerateTableIndex(), std::move(plan->children[i]));
 		}
 	}
 
