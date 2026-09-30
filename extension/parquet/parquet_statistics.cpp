@@ -29,7 +29,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/constants.hpp"
@@ -655,10 +654,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			//! field is missing)
 			return nullptr;
 		}
-		auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-			return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
-		});
-		auto variant_stats = VariantStats::CreateShredded(shredding_type);
+		auto variant_stats = VariantStats::CreateShredded(VariantStats::GetShreddingType(logical_type));
 
 		//! Take the root stats
 		auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
