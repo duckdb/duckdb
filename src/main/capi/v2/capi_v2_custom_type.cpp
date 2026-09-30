@@ -112,7 +112,7 @@ DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_extension(duckdb_v2_extension_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_custom_type_set_name(duckdb_v2_custom_type_handle type, duckdb_v2_identifier_t name,
+DUCKDB_V2_ERROR duckdb_v2_custom_type_set_name(duckdb_v2_custom_type_handle type, const duckdb_v2_identifier_t *name,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(type);
 	DUCKDB_CHECK_ARG(name);

@@ -90,12 +90,48 @@ public:
 		}
 		state.token_iterator.SetPosition(list_state.token_iterator);
 		DiscardSuggestions();
+		if (matcher.IsCollapsible()) {
+			auto collapsible = FindCollapsibleResult();
+			if (collapsible) {
+				collapsible->collapsed = true;
+				return MatchStep::Complete(MatcherResult::Success(collapsible));
+			}
+		}
 		auto list_name = matcher.HasName() ? matcher.GetName() : string();
 		return MatchStep::Complete(
 		    state.AllocateParseResult<ListParseResult>(std::move(results), std::move(list_name), start_offset));
 	}
 
 private:
+	//! The child that can stand in for this rule's own result, or nullptr when the rule has to build one
+	optional_ptr<ParseResult> FindCollapsibleResult() const {
+		optional_ptr<ParseResult> collapsible;
+		for (auto &child : results) {
+			auto &child_result = child.get();
+			// an optional that matched nothing carries no value, so it does not stop the rule from collapsing
+			if (child_result.type == ParseResultType::OPTIONAL &&
+			    !child_result.Cast<OptionalParseResult>().HasResult()) {
+				continue;
+			}
+
+			// a second child with a result means the rule combines them rather than forwarding one of them
+			if (collapsible) {
+				return nullptr;
+			}
+
+			collapsible = child_result;
+		}
+
+		// only results that carry a rule of their own are collapsible into this one, since the result is
+		// transformed by that rule
+		if (collapsible && !collapsible->GetRule()) {
+			return nullptr;
+		}
+
+		// null when no child produced a result, so a rule that matched empty still gets a result of its own
+		return collapsible;
+	}
+
 	void DiscardSuggestions() {
 		if (!matcher.suppress_suggestions) {
 			return;

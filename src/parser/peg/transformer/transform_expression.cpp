@@ -1064,16 +1064,10 @@ static unique_ptr<ParsedExpression> TransformRegexAnyAllList(unique_ptr<ParsedEx
 	return std::move(result);
 }
 
-unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transformer,
-                                                        unique_ptr<ParsedExpression> other_operator_expression,
-                                                        optional<BetweenInLikeOperator> between_in_like_op) {
-	auto expr = std::move(other_operator_expression);
-	if (!between_in_like_op) {
-		return expr;
-	}
-	auto between_in_like_expr = std::move(between_in_like_op->expression);
-	bool has_not = between_in_like_op->has_not;
+static unique_ptr<ParsedExpression> ApplyBetweenInLikeOperator(unique_ptr<ParsedExpression> expr,
+                                                               BetweenInLikeOperator &predicate) {
+	auto between_in_like_expr = std::move(predicate.expression);
+	bool has_not = predicate.has_not;
 	if (between_in_like_expr->GetExpressionClass() == ExpressionClass::BETWEEN) {
 		auto between_expr = unique_ptr_cast<ParsedExpression, BetweenExpression>(std::move(between_in_like_expr));
 		between_expr->InputMutable() = std::move(expr);
@@ -1127,13 +1121,38 @@ PEGTransformerFactory::TransformBetweenInLikeExpression(PEGTransformer &transfor
 	return expr;
 }
 
+unique_ptr<ParsedExpression> PEGTransformerFactory::TransformBetweenInLikeExpression(
+    PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+    optional<vector<BetweenInLikeOperator>> in_predicate, optional<BetweenInLikeOperator> between_like_op) {
+	auto expr = std::move(other_operator_expression);
+	if (!in_predicate && !between_like_op) {
+		return expr;
+	}
+	auto predicate_count = in_predicate ? in_predicate->size() : 0;
+	if (between_like_op) {
+		predicate_count++;
+	}
+	auto depth_guard = transformer.StackCheck(predicate_count);
+	if (in_predicate) {
+		for (auto &predicate : *in_predicate) {
+			expr = ApplyBetweenInLikeOperator(std::move(expr), predicate);
+		}
+	}
+	if (between_like_op) {
+		expr = ApplyBetweenInLikeOperator(std::move(expr), *between_like_op);
+	}
+	return expr;
+}
+
+BetweenInLikeOperator PEGTransformerFactory::TransformInPredicate(PEGTransformer &transformer, const bool &has_result,
+                                                                  unique_ptr<ParsedExpression> in_clause) {
+	return {has_result, std::move(in_clause)};
+}
+
 BetweenInLikeOperator
-PEGTransformerFactory::TransformBetweenInLikeOp(PEGTransformer &transformer, const bool &has_result,
-                                                unique_ptr<ParsedExpression> between_in_like_op_expression) {
-	BetweenInLikeOperator result;
-	result.has_not = has_result;
-	result.expression = std::move(between_in_like_op_expression);
-	return result;
+PEGTransformerFactory::TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
+                                              unique_ptr<ParsedExpression> between_like_op_expression) {
+	return {has_result, std::move(between_like_op_expression)};
 }
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformInClause(PEGTransformer &transformer,
@@ -1217,8 +1236,8 @@ PEGTransformerFactory::TransformLikeClause(PEGTransformer &transformer, const st
 
 unique_ptr<ParsedExpression>
 PEGTransformerFactory::TransformEscapeClause(PEGTransformer &transformer,
-                                             unique_ptr<ParsedExpression> comparison_expression) {
-	return comparison_expression;
+                                             unique_ptr<ParsedExpression> other_operator_expression) {
+	return other_operator_expression;
 }
 
 string PEGTransformerFactory::TransformLikeToken(PEGTransformer &transformer) {
@@ -2268,6 +2287,9 @@ PEGTransformerFactory::TransformBetweenFrameExtent(PEGTransformer &transformer, 
 
 vector<WindowBoundaryExpression>
 PEGTransformerFactory::TransformSingleFrameExtent(PEGTransformer &transformer, WindowBoundaryExpression frame_bound) {
+	if (frame_bound.boundary == WindowBoundary::EXPR_FOLLOWING_RANGE) {
+		throw ParserException("Frame starting from following row cannot end with current row");
+	}
 	vector<WindowBoundaryExpression> result;
 	result.push_back(std::move(frame_bound));
 	WindowBoundaryExpression end_current_row;

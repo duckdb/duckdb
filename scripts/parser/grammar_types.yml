@@ -225,6 +225,7 @@ AlterTableInfo:
   by_value: true
   rules:
     - AlterTableOptions
+    - AlterSchemaOptions
     - AddColumn
     - DropConstraint
     - DropColumn
@@ -401,7 +402,7 @@ Expression:
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
-    - BetweenInLikeOpExpression
+    - BetweenLikeOpExpression
     - InClause
     - InExpression
     - InContainsExpression
@@ -1568,6 +1569,7 @@ RelOptionMap:
   by_value: true
   rules:
     - WithList
+    - WithOptionList
     - RelOptionOrOids
     - RelOptionList
     - Oids
@@ -1653,7 +1655,10 @@ overrides:
   IsOtherOperatorTail:
     type: "IsExpressionTail"
     by_value: true
-  BetweenInLikeOp:
+  BetweenLikeOp:
+    type: "BetweenInLikeOperator"
+    by_value: true
+  InPredicate:
     type: "BetweenInLikeOperator"
     by_value: true
   OtherOperator:
@@ -1828,6 +1833,37 @@ matcher_rule_overrides:
   AnyOperatorLiteral:
     allow_type_overlap: true
     matcher: all_operators
+
+# collapsible_rules: see ParsedGrammar::SetTransformProcess. Every rule below has a transformer that returns its
+# operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that stops being
+# true. The flag is attached to the default transform, so an extension that replaces the transform of
+# one of these rules does not inherit it.
+collapsible_rules:
+  - Expression
+  - ColumnDefaultExpr
+  - LambdaArrowExpression
+  - LogicalOrExpression
+  - ColDefOrExpr
+  - LogicalAndExpression
+  - ColDefAndExpr
+  - LogicalNotExpression
+  - IsExpression
+  - IsDistinctFromExpression
+  - ComparisonExpression
+  - BetweenInLikeExpression
+  - OtherOperatorExpression
+  - InfixOtherOperatorExpression
+  - BitwiseExpression
+  - AdditiveExpression
+  - MultiplicativeExpression
+  - ExponentiationExpression
+  - CollateExpression
+  - AtTimeZoneExpression
+  - PrefixExpression
+  - BaseExpression
+  - SelectSetOpChain
+  - IntersectChain
+  - TableRef
 
 packrat_memoized_rules:
   - Expression
