@@ -69,7 +69,7 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 	this->context = context;
 	this->write = write;
 	stream_data.in_buf_size = compressed_fs.InBufferSize();
-	if (!write && !child_handle->OnDiskFile()) {
+	if (!write && FileSystem::IsRemoteFile(child_handle->path)) {
 		stream_data.in_buf_size = MaxValue<idx_t>(
 		    stream_data.in_buf_size, MinValue<idx_t>(REMOTE_READ_IN_BUF_SIZE, child_handle->GetFileSize()));
 	}

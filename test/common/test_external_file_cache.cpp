@@ -120,11 +120,14 @@ public:
 	}
 };
 
-//! Local files whose handles report that they are not on disk, like files read over the network.
-class NotOnDiskFileSystem : public SimpleTrackingFileSystem {
+//! Opens local files under REMOTE_PREFIX + local path, so their handles look like remote files.
+class RemoteNamedFileSystem : public SimpleTrackingFileSystem {
 public:
-	bool OnDiskFile(FileHandle &handle) override {
-		return false;
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override {
+		auto handle = SimpleTrackingFileSystem::OpenFile(path, flags, opener);
+		handle->path = REMOTE_PREFIX + path;
+		return handle;
 	}
 };
 
@@ -320,7 +323,7 @@ TEST_CASE("Compressed remote files are read in chunks of up to the file size", "
 
 	GZipFileSystem gzip_fs;
 	SimpleTrackingFileSystem local_fs;
-	NotOnDiskFileSystem remote_fs;
+	RemoteNamedFileSystem remote_fs;
 	auto open_compressed = [&](FileSystem &fs) {
 		auto child = fs.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ);
 		return gzip_fs.OpenCompressedFile(*con.context, std::move(child), false);
