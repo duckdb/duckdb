@@ -623,6 +623,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	if (table.temporary) {
 		// Temporary inserts still need a catalog dependency so prepared statements are rebound if the table is dropped.
 		GetStatementProperties().RegisterDBRead(table.catalog, context);
+		GetStatementProperties().writes_temporary = true;
 	} else {
 		// inserting into a non-temporary table: alters underlying database
 		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;

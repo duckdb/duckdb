@@ -54,3 +54,26 @@ TEST_CASE("Test polling a pending statement that the workers already finished", 
 	result = tester.Query("SELECT count(*) FROM polled");
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 10);
 }
+
+TEST_CASE("Test destroying an unfinished pending insert leaves no rows", "[capi]") {
+	CAPITester tester;
+	CAPIPrepared prepared;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	// Without worker threads the insert only advances when this thread steps it
+	REQUIRE_NO_FAIL(tester.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t(i BIGINT)"));
+	REQUIRE(prepared.Prepare(tester, "INSERT INTO t SELECT i FROM range(1000000) t(i)"));
+	{
+		CAPIPending pending;
+		REQUIRE(pending.Pending(prepared));
+		for (idx_t step = 0; step < 5; step++) {
+			auto state = pending.ExecuteTask();
+			REQUIRE(state != DUCKDB_PENDING_ERROR);
+			REQUIRE(!duckdb_pending_execution_is_finished(state));
+		}
+	}
+
+	auto result = tester.Query("SELECT count(*) FROM t");
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+}

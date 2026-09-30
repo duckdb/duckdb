@@ -162,6 +162,14 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	D_ASSERT(!active_query);
 }
 
+void ClientContext::AbortInternal(ClientContextLock &lock) {
+	D_ASSERT(active_query);
+	auto &prepared = active_query->prepared;
+	// No savepoint isolates a single statement, so partial writes can only be dropped with the whole transaction
+	const bool may_write = !prepared || prepared->properties.MayWrite();
+	CleanupInternal(lock, nullptr, may_write);
+}
+
 Executor &ClientContext::GetExecutor() {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->executor);

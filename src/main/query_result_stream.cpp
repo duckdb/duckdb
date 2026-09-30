@@ -102,10 +102,9 @@ QueryResultState ResultStreamBase::TryFetchUnit(unique_ptr<ResultUnit> &out_unit
 		if (state == QueryResultState::READY) {
 			out_unit = buffer.Scan();
 		}
-		if (out_unit && out_unit->row_count != 0) {
+		if (out_unit) {
 			return QueryResultState::READY;
 		}
-		out_unit.reset();
 		if (state == QueryResultState::FINISHED) {
 			// The buffer is drained and execution is done: this is the end of the stream
 			buffer.AssertNoBlockedSinks();
@@ -133,7 +132,9 @@ unique_ptr<ResultUnit> ResultStreamBase::FetchUnitInternal(ClientContextLock &lo
 			return nullptr;
 		}
 		auto unit = buffer.Scan();
-		if (!unit || unit->row_count == 0) {
+		if (!unit) {
+			// READY is only reported with a unit queued, so an empty scan means execution finished
+			D_ASSERT(state == QueryResultState::FINISHED);
 			handle->EndQuery(lock);
 			return nullptr;
 		}
@@ -158,7 +159,7 @@ unique_ptr<ResultUnit> ResultStreamBase::FetchUnit() {
 		handle->CheckExecutableInternal(*lock);
 		unit = FetchUnitInternal(*lock);
 	}
-	if (!unit || unit->row_count == 0) {
+	if (!unit) {
 		if (!HasError()) {
 			handle->buffer->AssertNoBlockedSinks();
 		}
