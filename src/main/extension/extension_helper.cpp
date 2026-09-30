@@ -454,6 +454,18 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 	}
 }
 
+void ExtensionHelper::AutoLoadExtensionForPath(DatabaseInstance &db, const string &path, const string &path_kind) {
+	string extension_name;
+	if (!FileSystem::IsRemoteFile(path, extension_name) || db.ExtensionIsLoaded(extension_name)) {
+		return;
+	}
+	if (!CanAutoloadExtension(extension_name) || !Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
+		auto error_message = path_kind + " " + path + " requires the extension " + extension_name + " to be loaded";
+		throw MissingExtensionException(AddExtensionInstallHintToErrorMsg(db, error_message, extension_name));
+	}
+	AutoLoadExtension(db, extension_name);
+}
+
 // typos:off
 static const char *const public_keys[] = {
     R"(
