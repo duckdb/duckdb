@@ -156,17 +156,17 @@ COPY decimal_test TO '{TEST_DIR}/decimal_test.parquet' (RETURN_STATS);
 query IIIIIII
 COPY floating_point_test TO '{TEST_DIR}/fp.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*fp.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=false, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, null_count=250, num_values=2500}}	NULL	{row_group_count=1}
+<REGEX>:.*fp.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=false, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=0, null_count=250, num_values=2500}}	NULL	{row_group_count=1}
 
 query IIIIIII
 COPY floating_point_nan TO '{TEST_DIR}/fp_nan.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*fp_nan.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, null_count=500, num_values=2500}}	NULL	{row_group_count=1}
+<REGEX>:.*fp_nan.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=250, null_count=500, num_values=2500}}	NULL	{row_group_count=1}
 
 query IIIIIII
 COPY fp_nan_only TO '{TEST_DIR}/fp_nan_only.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*fp_nan_only.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, null_count=0, num_values=1}}	NULL	{row_group_count=1}
+<REGEX>:.*fp_nan_only.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, nan_count=1, null_count=0, num_values=1}}	NULL	{row_group_count=1}
 
 # large strings are truncated to the nearest valid UTF8 string
 query IIIIIII
@@ -269,3 +269,21 @@ query IIIIIII
 COPY decimal128_multi_rg TO '{TEST_DIR}/decimal128_multi_rg.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, RETURN_STATS);
 ----
 <REGEX>:.*decimal128_multi_rg.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"c"'={column_size_bytes=\d+, max=126619, max_is_exact=true, min=19308, min_is_exact=true, null_count=0, num_values=4096}}	NULL	{row_group_count=2}
+
+# NaN stats are accumulated over row groups: a NaN that is only in the first row group
+# must still be reported, and NaN counts from different row groups are added up
+statement ok
+CREATE TABLE nan_first_rg AS SELECT CASE WHEN i = 0 THEN 'nan'::double ELSE i::double END AS d FROM range(4096) t(i);
+
+query IIIIIII
+COPY nan_first_rg TO '{TEST_DIR}/nan_first_rg.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, RETURN_STATS);
+----
+<REGEX>:.*nan_first_rg.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"d"'={column_size_bytes=\d+, has_nan=true, max=4095.0, max_is_exact=true, min=1.0, min_is_exact=true, nan_count=1, null_count=0, num_values=4096}}	NULL	{row_group_count=2}
+
+statement ok
+CREATE TABLE nan_every_rg AS SELECT CASE WHEN i % 1000 = 0 THEN 'nan'::float ELSE i::float END AS f FROM range(4096) t(i);
+
+query IIIIIII
+COPY nan_every_rg TO '{TEST_DIR}/nan_every_rg.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, RETURN_STATS);
+----
+<REGEX>:.*nan_every_rg.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"f"'={column_size_bytes=\d+, has_nan=true, max=4095.0, max_is_exact=true, min=1.0, min_is_exact=true, nan_count=5, null_count=0, num_values=4096}}	NULL	{row_group_count=2}
