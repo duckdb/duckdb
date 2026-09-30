@@ -143,9 +143,10 @@ struct ContextProbe {
 	Toks tokens;
 } context_probe;
 
-// Tokenizes "SELECT ANSWER" through the bind context. No REQUIRE here: a callback must not throw.
+// Tokenizes "SELECT ANSWER" through the bind context. Binding may repeat, so each bind overwrites the probe.
 void ContextTokenizeBind(duckdb_v2_function_bind_info_handle, duckdb_v2_scalar_function_bind_info_handle,
                          duckdb_v2_context_handle context, duckdb_v2_error_info_handle *) {
+	context_probe = {};
 	auto sql = Convert("SELECT ANSWER");
 	duckdb_v2_token_iterator_handle it = nullptr;
 	context_probe.rc = duckdb_v2_tokenize_sql_from_context(context, &sql, &it, nullptr);
