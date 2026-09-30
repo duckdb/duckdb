@@ -725,7 +725,8 @@ static void TableFunctionMultiFileGetMetrics(TableFunctionGetMetricsInput &input
 		// collect what the files that are still open have counted so far
 		lock_guard<mutex> guard(gstate.lock);
 		for (auto &reader_data : gstate.readers) {
-			if (!reader_data || !reader_data->reader) {
+			// a file that is still being opened has its reader assigned under its own lock - skip it until it is open
+			if (!reader_data || reader_data->file_state != MultiFileFileState::OPEN || !reader_data->reader) {
 				continue;
 			}
 			reader_data->reader->Cast<TableFunctionFileReader>().CollectMetrics(input.context, scan_state);
