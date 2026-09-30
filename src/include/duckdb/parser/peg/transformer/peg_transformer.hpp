@@ -2630,13 +2630,16 @@ public:
 	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
 	FinalizeBetweenInLikeExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static void InitializeBetweenInLikeOpTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeBetweenInLikeOpTrampoline(PEGTransformer &transformer,
-	                                                                          GeneratedTransformProcess &process);
-	static void InitializeBetweenInLikeOpExpressionTrampoline(PEGTransformer &transformer,
-	                                                          GeneratedTransformProcess &process);
+	static void InitializeInPredicateTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeInPredicateTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
+	static void InitializeBetweenLikeOpTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeBetweenLikeOpTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeBetweenLikeOpExpressionTrampoline(PEGTransformer &transformer,
+	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
-	FinalizeBetweenInLikeOpExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	FinalizeBetweenLikeOpExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeLikeClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeLikeClauseTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
@@ -5036,17 +5039,18 @@ public:
 	static ExpressionType TransformOperatorGreaterThan(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorLessThanEquals(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorGreaterThanEquals(PEGTransformer &transformer);
-	static unique_ptr<ParsedExpression>
-	TransformBetweenInLikeExpression(PEGTransformer &transformer,
-	                                 unique_ptr<ParsedExpression> other_operator_expression,
-	                                 optional<BetweenInLikeOperator> between_in_like_op);
-	static BetweenInLikeOperator TransformBetweenInLikeOp(PEGTransformer &transformer, const bool &has_result,
-	                                                      unique_ptr<ParsedExpression> between_in_like_op_expression);
+	static unique_ptr<ParsedExpression> TransformBetweenInLikeExpression(
+	    PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+	    optional<vector<BetweenInLikeOperator>> in_predicate, optional<BetweenInLikeOperator> between_like_op);
+	static BetweenInLikeOperator TransformInPredicate(PEGTransformer &transformer, const bool &has_result,
+	                                                  unique_ptr<ParsedExpression> in_clause);
+	static BetweenInLikeOperator TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
+	                                                    unique_ptr<ParsedExpression> between_like_op_expression);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer, const string &like_variations,
 	                                                        unique_ptr<ParsedExpression> other_operator_expression,
 	                                                        optional<unique_ptr<ParsedExpression>> escape_clause);
 	static unique_ptr<ParsedExpression> TransformEscapeClause(PEGTransformer &transformer,
-	                                                          unique_ptr<ParsedExpression> comparison_expression);
+	                                                          unique_ptr<ParsedExpression> other_operator_expression);
 	static string TransformLikeToken(PEGTransformer &transformer);
 	static string TransformILikeToken(PEGTransformer &transformer);
 	static string TransformGlobToken(PEGTransformer &transformer);

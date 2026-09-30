@@ -402,7 +402,7 @@ Expression:
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
-    - BetweenInLikeOpExpression
+    - BetweenLikeOpExpression
     - InClause
     - InExpression
     - InContainsExpression
@@ -1637,7 +1637,10 @@ overrides:
   ComparisonExpressionTail:
     type: "ComparisonExpressionTail"
     by_value: true
-  BetweenInLikeOp:
+  BetweenLikeOp:
+    type: "BetweenInLikeOperator"
+    by_value: true
+  InPredicate:
     type: "BetweenInLikeOperator"
     by_value: true
   OtherOperator:
