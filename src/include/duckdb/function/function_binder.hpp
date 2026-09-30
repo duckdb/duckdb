@@ -128,6 +128,12 @@ public:
 	                                                     bool is_operator = false,
 	                                                     optional_ptr<Binder> binder = nullptr);
 
+	//! Throws the binding error instead of returning nullptr
+	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const Identifier &schema, const Identifier &name,
+	                                                     vector<unique_ptr<Expression>> children,
+	                                                     bool is_operator = false,
+	                                                     optional_ptr<Binder> binder = nullptr);
+
 	DUCKDB_API unique_ptr<Expression> BindScalarFunction(const ScalarFunctionCatalogEntry &function,
 	                                                     vector<unique_ptr<Expression>> children, ErrorData &error,
 	                                                     bool is_operator = false,
