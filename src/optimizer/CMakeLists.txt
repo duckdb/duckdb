@@ -13,6 +13,7 @@ add_library_unity(
   aggregate_rewrite.cpp
   aggregate_function_rewriter.cpp
   aggregate_reuse.cpp
+  apply_functional_dependencies.cpp
   materialized_aggregate_reuse.cpp
   aggregate_rewrite_helper.cpp
   build_probe_side_optimizer.cpp
