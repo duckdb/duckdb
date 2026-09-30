@@ -140,7 +140,7 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 	idx_t pos = location;
 	while (pos < end) {
 		if (it != blocks.end() && it->first <= pos) {
-			if (!IsDroppedBlock(*it->second)) {
+			if (!IsDroppedBlock(*it->second) || it->second.use_count() > 1) {
 				result.push_back(it->second);
 				pos = it->first + it->second->size;
 				++it;

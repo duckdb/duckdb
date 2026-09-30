@@ -84,6 +84,46 @@ private:
 	idx_t read_count DUCKDB_GUARDED_BY(lock) = 0;
 };
 
+class LocationBlockingFileSystem : public SimpleTrackingFileSystem {
+public:
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+		{
+			annotated_unique_lock<annotated_mutex> guard(lock);
+			if (block_reads && location == blocked_location) {
+				read_blocked = true;
+				read_started.notify_all();
+				read_released.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return !block_reads; });
+			}
+		}
+		SimpleTrackingFileSystem::Read(handle, buffer, nr_bytes, location);
+	}
+
+	void BlockReadsAt(idx_t location) {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		blocked_location = location;
+		block_reads = true;
+	}
+
+	void WaitForBlockedRead() {
+		annotated_unique_lock<annotated_mutex> guard(lock);
+		read_started.wait(guard, [&]() DUCKDB_REQUIRES(lock) { return read_blocked; });
+	}
+
+	void ReleaseReads() {
+		annotated_lock_guard<annotated_mutex> guard(lock);
+		block_reads = false;
+		read_released.notify_all();
+	}
+
+private:
+	annotated_mutex lock;
+	std::condition_variable read_started DUCKDB_GUARDED_BY(lock);
+	std::condition_variable read_released DUCKDB_GUARDED_BY(lock);
+	idx_t blocked_location DUCKDB_GUARDED_BY(lock) = 0;
+	bool block_reads DUCKDB_GUARDED_BY(lock) = false;
+	bool read_blocked DUCKDB_GUARDED_BY(lock) = false;
+};
+
 OpenFileInfo MakeTestOpenFileInfo(const string &path) {
 	OpenFileInfo info(path);
 	info.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
@@ -1121,6 +1161,44 @@ TEST_CASE("Waiter on a loading block refetches when the response prohibits shari
 	// Reader B must not consume reader A's response: each reader issues its own request.
 	REQUIRE(policy_fs->GetReadCount() == 2);
 	REQUIRE(CountCachedBlocks(cache) == 0);
+}
+
+TEST_CASE("An evicted block held by an in-flight read is fetched once", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	Connection con(db);
+	REQUIRE(!con.Query("SET threads=1")->HasError());
+	REQUIRE(!con.Query("SET async_threads=0")->HasError());
+	const idx_t BLOCK_SIZE = 2097152;
+	const idx_t SMALL_READ = 4096;
+	REQUIRE(
+	    !con.Query(StringUtil::Format("SET external_file_cache_local_max_block_size=%llu", BLOCK_SIZE))->HasError());
+
+	auto content = MakeTestContent(BLOCK_SIZE * 3);
+	EFCTestFileGuard test_file("test_efc_held_evicted_block.bin", content);
+	auto blocking_fs = make_uniq<LocationBlockingFileSystem>();
+	CachingFileSystem cfs(*blocking_fs, *db.instance);
+	auto handle_a = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+	auto handle_b = cfs.OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), FileFlags::FILE_FLAGS_READ);
+
+	REQUIRE(ReadFull(*handle_b, 100, BLOCK_SIZE) == content.substr(BLOCK_SIZE, 100));
+	REQUIRE(blocking_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{BLOCK_SIZE, BLOCK_SIZE}});
+
+	blocking_fs->BlockReadsAt(BLOCK_SIZE - SMALL_READ);
+	string result_a;
+	std::thread reader_a([&]() { result_a = ReadFull(*handle_a, SMALL_READ + 100, BLOCK_SIZE - SMALL_READ); });
+	blocking_fs->WaitForBlockedRead();
+	auto evict = con.Query("SET memory_limit='2MB'");
+	auto restore = con.Query("SET memory_limit='1GB'");
+	auto result_b = ReadFull(*handle_b, 100, BLOCK_SIZE);
+	blocking_fs->ReleaseReads();
+	reader_a.join();
+
+	REQUIRE(!evict->HasError());
+	REQUIRE(!restore->HasError());
+	REQUIRE(result_a == content.substr(BLOCK_SIZE - SMALL_READ, SMALL_READ + 100));
+	REQUIRE(result_b == content.substr(BLOCK_SIZE, 100));
+	REQUIRE(blocking_fs->TakeReads() ==
+	        vector<pair<idx_t, idx_t>> {{BLOCK_SIZE - SMALL_READ, SMALL_READ}, {BLOCK_SIZE, BLOCK_SIZE}});
 }
 
 TEST_CASE("Content response can prohibit cache reuse", "[external_file_cache]") {
