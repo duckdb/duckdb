@@ -47,9 +47,9 @@ static optional<bool> GetConstantOrNullBoolean(Expression &expr) {
 	return optional<bool>();
 }
 
-//! Whether every input that can still turn the result into NULL is provably NOT NULL.
-static bool ConstantOrNullInputsAreNotNull(LogicalOperator &input, BoundFunctionExpression &func,
-                                           NotNullExpressionAnalyzer &analyzer) {
+//! Whether every input that can still turn the result into NULL is provably NOT NULL,
+//! according to the injected proof.
+static bool ConstantOrNullInputsAreNotNull(BoundFunctionExpression &func, const NotNullProof &proof) {
 	auto &children = func.GetChildren();
 	D_ASSERT(children.size() >= 2);
 
@@ -62,7 +62,7 @@ static bool ConstantOrNullInputsAreNotNull(LogicalOperator &input, BoundFunction
 			}
 		}
 
-		if (!analyzer.IsNotNull(input, *children[child_idx])) {
+		if (!proof(*children[child_idx])) {
 			return false;
 		}
 	}
@@ -80,53 +80,11 @@ static bool ConstantOrNullInputsAreVolatile(BoundFunctionExpression &func) {
 	return false;
 }
 
-//! Push NOT into a constant_or_null (or into a plain constant) on a single expression node.
-//! Pure rewrite that keeps per-row NULL checks - also valid for side-effecting plans.
-static unique_ptr<Expression> ApplyNotPushdown(ClientContext &context, unique_ptr<Expression> expr) {
-	if (expr->GetExpressionType() != ExpressionType::OPERATOR_NOT) {
-		return expr;
-	}
-
-	auto &not_expr = expr->Cast<BoundOperatorExpression>();
-	D_ASSERT(not_expr.GetChildren().size() == 1);
-
-	auto value = GetBooleanConstant(*not_expr.GetChildren()[0]);
-	if (value.has_value()) {
-		return make_uniq<BoundConstantExpression>(Value::BOOLEAN(!value.value()));
-	}
-
-	value = GetConstantOrNullBoolean(*not_expr.GetChildren()[0]);
-	if (!value.has_value()) {
-		return expr;
-	}
-
-	auto &func = not_expr.GetChildren()[0]->Cast<BoundFunctionExpression>();
-	auto &func_children = func.GetChildrenMutable();
-	D_ASSERT(func_children.size() >= 2);
-
-	vector<unique_ptr<Expression>> children;
-	children.reserve(func_children.size());
-	for (idx_t child_idx = 1; child_idx < func_children.size(); ++child_idx) {
-		children.push_back(std::move(func_children[child_idx]));
-	}
-
-	return ExpressionRewriter::ConstantOrNull(context, std::move(children), Value::BOOLEAN(!value.value()));
-}
-
-//! Whether every NULL-sensitive input of the constant_or_null is provably NOT NULL on the output
-//! of the join child that binds it. Join conditions are evaluated per pair of child rows (before
-//! any NULL extension), so the proof must be taken from the owning child, not from the join output.
-static bool JoinConditionInputsAreNotNull(LogicalOperator &join_op, BoundFunctionExpression &func,
-                                          NotNullExpressionAnalyzer &analyzer) {
-	auto &children = func.GetChildren();
-	for (idx_t child_idx = 1; child_idx < children.size(); ++child_idx) {
-		auto &input = *children[child_idx];
-		if (input.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
-			auto &constant = input.Cast<BoundConstantExpression>().GetValue();
-			if (!constant.IsNull()) {
-				continue;
-			}
-		}
+//! Nullability proof for join conditions: a condition is evaluated per pair of child rows
+//! (before any NULL extension), so the proof must come from the join child that owns the
+//! column, not from the join output.
+static NotNullProof JoinConditionProof(LogicalOperator &join_op, NotNullExpressionAnalyzer &analyzer) {
+	return [&join_op, &analyzer](Expression &input) {
 		// Only bare column references can be proven non-NULL
 		if (input.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			return false;
@@ -153,19 +111,14 @@ static bool JoinConditionInputsAreNotNull(LogicalOperator &join_op, BoundFunctio
 		if (!side.IsValid()) {
 			return false;
 		}
-		if (!analyzer.IsNotNull(*join_op.children[side.GetIndex()], input)) {
-			return false;
-		}
-	}
-	return true;
+		return analyzer.IsNotNull(*join_op.children[side.GetIndex()], input);
+	};
 }
 
-unique_ptr<Expression> ConstantOrNullSimplification::SimplifyExpression(LogicalOperator &input,
-                                                                        unique_ptr<Expression> expr,
-                                                                        NotNullExpressionAnalyzer &analyzer,
-                                                                        bool allow_folding) {
+unique_ptr<Expression> ConstantOrNullSimplification::SimplifyExpression(unique_ptr<Expression> expr,
+                                                                        const NotNullProof &proof, bool allow_folding) {
 	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		child = SimplifyExpression(input, std::move(child), analyzer, allow_folding);
+		child = SimplifyExpression(std::move(child), proof, allow_folding);
 	});
 
 	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
@@ -178,42 +131,42 @@ unique_ptr<Expression> ConstantOrNullSimplification::SimplifyExpression(LogicalO
 		}
 
 		auto &func = expr->Cast<BoundFunctionExpression>();
-		if (!ConstantOrNullInputsAreVolatile(func) && ConstantOrNullInputsAreNotNull(input, func, analyzer)) {
+		if (!ConstantOrNullInputsAreVolatile(func) && ConstantOrNullInputsAreNotNull(func, proof)) {
 			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(value.value()));
 		}
 
 		return expr;
 	}
 
-	return ApplyNotPushdown(context, std::move(expr));
-}
-
-unique_ptr<Expression> ConstantOrNullSimplification::SimplifyJoinCondition(LogicalOperator &join_op,
-                                                                           NotNullExpressionAnalyzer &analyzer,
-                                                                           unique_ptr<Expression> expr,
-                                                                           bool allow_folding) {
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		child = SimplifyJoinCondition(join_op, analyzer, std::move(child), allow_folding);
-	});
-
-	if (expr->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
-		if (!allow_folding) {
-			return expr;
-		}
-		auto value = GetConstantOrNullBoolean(*expr);
-		if (!value.has_value()) {
-			return expr;
-		}
-
-		auto &func = expr->Cast<BoundFunctionExpression>();
-		if (!ConstantOrNullInputsAreVolatile(func) && JoinConditionInputsAreNotNull(join_op, func, analyzer)) {
-			return make_uniq<BoundConstantExpression>(Value::BOOLEAN(value.value()));
-		}
-
+	if (expr->GetExpressionType() != ExpressionType::OPERATOR_NOT) {
 		return expr;
 	}
 
-	return ApplyNotPushdown(context, std::move(expr));
+	// Push NOT into constant_or_null without dropping per-row NULL checks.
+	auto &not_expr = expr->Cast<BoundOperatorExpression>();
+	D_ASSERT(not_expr.GetChildren().size() == 1);
+
+	auto value = GetBooleanConstant(*not_expr.GetChildren()[0]);
+	if (value.has_value()) {
+		return make_uniq<BoundConstantExpression>(Value::BOOLEAN(!value.value()));
+	}
+
+	value = GetConstantOrNullBoolean(*not_expr.GetChildren()[0]);
+	if (!value.has_value()) {
+		return expr;
+	}
+
+	auto &func = not_expr.GetChildren()[0]->Cast<BoundFunctionExpression>();
+	auto &func_children = func.GetChildrenMutable();
+	D_ASSERT(func_children.size() >= 2);
+
+	vector<unique_ptr<Expression>> children;
+	children.reserve(func_children.size());
+	for (idx_t child_idx = 1; child_idx < func_children.size(); ++child_idx) {
+		children.push_back(std::move(func_children[child_idx]));
+	}
+
+	return ExpressionRewriter::ConstantOrNull(this->context, std::move(children), Value::BOOLEAN(!value.value()));
 }
 
 unique_ptr<LogicalOperator> ConstantOrNullSimplification::OptimizeFilter(unique_ptr<LogicalOperator> op,
@@ -228,10 +181,13 @@ unique_ptr<LogicalOperator> ConstantOrNullSimplification::OptimizeFilter(unique_
 	const bool allow_folding = !plan_has_side_effects;
 
 	NotNullExpressionAnalyzer analyzer(context);
+	auto proof = [&filter, &analyzer](Expression &input_expr) {
+		return analyzer.IsNotNull(*filter.children[0], input_expr);
+	};
 	vector<unique_ptr<Expression>> remaining_expressions;
 	remaining_expressions.reserve(filter.expressions.size());
 	for (auto &expr : filter.expressions) {
-		expr = SimplifyExpression(*filter.children[0], std::move(expr), analyzer, allow_folding);
+		expr = SimplifyExpression(std::move(expr), proof, allow_folding);
 		auto value = GetBooleanConstant(*expr);
 		if (!value.has_value()) {
 			remaining_expressions.push_back(std::move(expr));
@@ -271,7 +227,8 @@ unique_ptr<LogicalOperator> ConstantOrNullSimplification::OptimizeInternal(uniqu
 	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &any_join = op->Cast<LogicalAnyJoin>();
 		NotNullExpressionAnalyzer analyzer(context);
-		any_join.condition = SimplifyJoinCondition(*op, analyzer, std::move(any_join.condition), !plan_has_side_effects);
+		any_join.condition = SimplifyExpression(std::move(any_join.condition), JoinConditionProof(*op, analyzer),
+		                                        !plan_has_side_effects);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -280,15 +237,14 @@ unique_ptr<LogicalOperator> ConstantOrNullSimplification::OptimizeInternal(uniqu
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		NotNullExpressionAnalyzer analyzer(context);
 		const bool allow_folding = !plan_has_side_effects;
+		auto proof = JoinConditionProof(*op, analyzer);
 		for (auto &cond : join.conditions) {
 			if (cond.IsComparison()) {
-				cond.LeftReference() =
-				    SimplifyJoinCondition(*op, analyzer, std::move(cond.LeftReference()), allow_folding);
-				cond.RightReference() =
-				    SimplifyJoinCondition(*op, analyzer, std::move(cond.RightReference()), allow_folding);
+				cond.LeftReference() = SimplifyExpression(std::move(cond.LeftReference()), proof, allow_folding);
+				cond.RightReference() = SimplifyExpression(std::move(cond.RightReference()), proof, allow_folding);
 			} else {
 				cond.JoinExpressionReference() =
-				    SimplifyJoinCondition(*op, analyzer, std::move(cond.JoinExpressionReference()), allow_folding);
+				    SimplifyExpression(std::move(cond.JoinExpressionReference()), proof, allow_folding);
 			}
 		}
 		break;
