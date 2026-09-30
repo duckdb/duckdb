@@ -80,6 +80,9 @@ public:
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API static vector<unique_ptr<ParsedExpression>>
 	ParseExpressionList(const string &select_list, const ParserOptions &options = ParserOptions());
+	//! Parses a single SELECT statement into its node
+	DUCKDB_API static unique_ptr<QueryNode> ParseSelectNode(const string &query,
+	                                                        const ParserOptions &options = ParserOptions());
 	//! Parses a list of GROUP BY expressions
 	static GroupByNode ParseGroupByList(const string &group_by, const ParserOptions &options = ParserOptions());
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)

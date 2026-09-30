@@ -555,6 +555,15 @@ vector<ParserKeyword> Parser::KeywordList() {
 	return keyword_helper.KeywordList();
 }
 
+unique_ptr<QueryNode> Parser::ParseSelectNode(const string &query, const ParserOptions &options) {
+	Parser parser(options);
+	parser.ParseQuery(query);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		throw InternalException("Expected a single select statement");
+	}
+	return std::move(parser.statements[0]->Cast<SelectStatement>().node);
+}
+
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list,
                                                                  const ParserOptions &options) {
 	// construct a mock query prefixed with SELECT

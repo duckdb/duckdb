@@ -4,7 +4,6 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -126,14 +125,7 @@ DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &def
 
 unique_ptr<CreateMacroInfo> DefaultTableFunctionGenerator::CreateTableMacroInfo(const DefaultTableMacro &default_macro,
                                                                                 const ParserOptions &options) {
-	Parser parser(options);
-	parser.ParseQuery(default_macro.macro);
-	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
-		throw InternalException("Expected a single select statement in CreateTableMacroInfo internal");
-	}
-	auto node = std::move(parser.statements[0]->Cast<SelectStatement>().node);
-
-	auto result = make_uniq<TableMacroFunction>(std::move(node));
+	auto result = make_uniq<TableMacroFunction>(Parser::ParseSelectNode(default_macro.macro, options));
 	return CreateInternalTableMacroInfo(default_macro, std::move(result));
 }
 
