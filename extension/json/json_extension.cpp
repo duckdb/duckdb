@@ -92,6 +92,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	}
 }
 
+// LCOV_EXCL_START
 void JsonExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
@@ -107,6 +108,7 @@ std::string JsonExtension::Version() const {
 	return "";
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 

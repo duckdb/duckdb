@@ -463,6 +463,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(cal_names);
 }
 
+// LCOV_EXCL_START
 void IcuExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
@@ -478,6 +479,7 @@ std::string IcuExtension::Version() const {
 	return "";
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 
