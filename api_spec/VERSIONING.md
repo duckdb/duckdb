@@ -52,7 +52,7 @@ Deprecation is relative to the target, a symbol deprecated in v1.5.6 is still vi
 Defaults to `0`. Set to `1` to show symbols that have not been stabilized yet, accepting that they may change.
 This requires targeting the newest version, see below.
 
-For backwards compatability, the older `DUCKDB_API_NO_DEPRECATED` and `DUCKDB_EXTENSION_API_VERSION_UNSTABLE` macros
+For backwards compatibility, the older `DUCKDB_API_NO_DEPRECATED` and `DUCKDB_EXTENSION_API_VERSION_UNSTABLE` macros
 still work, and just set the new `DUCKDB_API_ALLOW_DEPRECATED`/`DUCKDB_API_ALLOW_UNSTABLE` macros accordingly.
 
 ### Unstable is a version of its own
