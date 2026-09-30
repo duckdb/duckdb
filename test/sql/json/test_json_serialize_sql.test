@@ -127,6 +127,32 @@ SELECT * FROM json_execute_serialized_sql('{ "statements": [ {"expression_class"
 ----
 Parser Error: Error parsing json: no select node found in json
 
+# Deserialization reports missing properties and container/type mismatches
+statement error
+SELECT json_deserialize_sql('{"statements":[{"node":{}}]}');
+----
+Parser Error: Expected but did not find property 'type' in json object: '{}'
+
+statement error
+SELECT json_deserialize_sql('{"statements":[{"node":{"type":42}}]}');
+----
+Parser Error: property 'type' expected type 'string', but got type: 'uint'
+
+statement error
+SELECT json_deserialize_sql('{"statements":[{"node":42}]}');
+----
+Parser Error: property 'node' expected type 'object', but got type: 'uint'
+
+statement error
+SELECT json_deserialize_sql('{"statements":[{"node":{"type":"SELECT_NODE","modifiers":{}}}]}');
+----
+Parser Error: property 'modifiers' expected type 'array', but got type: 'object'
+
+statement error
+SELECT json_deserialize_sql('{"statements":[{"node":{"type":"SELECT_NODE","modifiers":[42]}}]}');
+----
+Parser Error: Sequence expect child of type 'object', but got type: uint
+
 # json_deserialize_sql can throw and should not be pushed down before the JSON shape guard
 statement ok
 CREATE TEMP TABLE json_deserialize_filter_pushdown(j JSON);
