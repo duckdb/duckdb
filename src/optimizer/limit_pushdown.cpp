@@ -5,6 +5,7 @@
 #include "duckdb/optimizer/constraint_propagation/constraint_propagator.hpp"
 #include "duckdb/optimizer/constraint_propagation/queries.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 
 namespace duckdb {

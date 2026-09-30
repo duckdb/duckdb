@@ -516,11 +516,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		partitioned_execution.Optimize(plan);
 	});
 
-	RunOptimizer(OptimizerType::JOIN_ELIMINATION, [&]() {
-		JoinElimination join_elimination;
-		plan = join_elimination.Optimize(std::move(plan));
-	});
-
 	// perform join filter pushdown after the dust has settled
 	RunOptimizer(OptimizerType::JOIN_FILTER_PUSHDOWN, [&]() {
 		JoinFilterPushdownOptimizer join_filter_pushdown(*this);
