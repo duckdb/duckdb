@@ -360,6 +360,8 @@ public:
 
 		if (total_size >= info.GetCompactionFlushLimit()) {
 			// the block is full enough, don't bother moving around the dictionary
+			// NOTE: We forgot to call SetDictionary here, so dict_size on disk is stale.
+			// not worth fixing as it's a legacy encoder, the reader can be bounded by dict_end
 			return info.GetBlockSize();
 		}
 
@@ -510,9 +512,9 @@ struct FSSTScanState : public SegmentScanState {
 		bitpacking_width_t width;
 		//! Bitpacked string lengths (bounded by the row count and width, before decoding individual lengths)
 		CompressionSegmentReader lengths;
-		//! Serialized FSST symbol table (between the length stream and dictionary)
+		//! Serialized FSST symbol table (bounded by dict_end, narrowed to the imported size on success)
 		CompressionSegmentReader symbol_table;
-		//! Compressed string bytes (within the validated dictionary range)
+		//! Compressed string bytes (starts after the symbol table once imported, ends at dict_end)
 		CompressionSegmentReader dictionary;
 	};
 
@@ -546,7 +548,7 @@ struct FSSTScanState : public SegmentScanState {
 	};
 
 	static SegmentLayout ParseFSSTSegmentHeader(CompressionSegmentReader reader, const idx_t segment_count);
-	static bool TryImportSymbolTable(const SegmentLayout &layout, duckdb_fsst_decoder_t *decoder_out);
+	static bool TryImportSymbolTable(SegmentLayout &layout, duckdb_fsst_decoder_t *decoder_out);
 	static ValidatedStringRange DecodeAndValidateOffsets(const SegmentLayout &layout, const uint32_t *lengths,
 	                                                     uint32_t *dictionary_offsets, idx_t decode_count,
 	                                                     uint32_t preceding_offset, bool have_symbol_table);
@@ -870,23 +872,18 @@ FSSTScanState::SegmentLayout FSSTScanState::ParseFSSTSegmentHeader(CompressionSe
 	if (header.fsst_symbol_table_offset != reader.Position()) {
 		ThrowInvalidFSSTSegment("bitpacking width did not match the stored layout");
 	}
-	StringDictionaryContainer container;
-	container.size = header.dict_size;
-	container.end = header.dict_end;
-	if (container.size > container.end || container.end - container.size < header.fsst_symbol_table_offset) {
+	if (header.dict_end < reader.Position()) {
 		ThrowInvalidFSSTSegment("dictionary was out of range");
 	}
 
-	// the symbol table occupies [symbol_table_offset, string_container_start), so its bytes end where the string
-	// dictionary container begins. Bound duckdb_fsst_import to that size so it can never read out of bounds.
-	const auto container_start = (container.end - container.size);
-	const auto expected_symbol_table_size = container_start - header.fsst_symbol_table_offset;
-	auto symbol_table = reader.ReadSubReader(expected_symbol_table_size, "FSST symbol table");
-	auto dictionary = reader.ReadSubReader(container.size, "FSST dictionary");
+	// Non-compacted blocks leave dict_size at zero, even when they contain strings.
+	// Bound the symbol table input by dict_end. Importing it establishes the dictionary's lower bound.
+	auto symbol_table = reader.ReadSubReader(header.dict_end - reader.Position(), "FSST symbol table");
+	auto dictionary = symbol_table.GetSubReader(0, symbol_table.Size(), "FSST dictionary");
 	return {width, lengths, symbol_table, dictionary};
 }
 
-bool FSSTScanState::TryImportSymbolTable(const SegmentLayout &layout, duckdb_fsst_decoder_t *decoder_out) {
+bool FSSTScanState::TryImportSymbolTable(SegmentLayout &layout, duckdb_fsst_decoder_t *decoder_out) {
 	auto symbol_table_data = layout.symbol_table.GetBytes(0, layout.symbol_table.Size());
 	const auto consumed = duckdb_fsst_import(decoder_out, symbol_table_data.data(), symbol_table_data.size());
 	// an inconsistent header is corruption; a version mismatch just means there is no symbol table (all strings are
@@ -896,9 +893,16 @@ bool FSSTScanState::TryImportSymbolTable(const SegmentLayout &layout, duckdb_fss
 	}
 
 	// Currently, we allow an empty symbol table for a row group all strings are of length 0.
-	// This case is detected by reading a symbol table of size 0, which will fail on VERSION_MISMATCH
+	// This case is detected by reading a zeroed symbol table, which will fail on VERSION_MISMATCH
 	// as the data we are reading is not really a fsst symbol table.
-	return consumed != DUCKDB_FSST_IMPORT_VERSION_MISMATCH;
+	if (consumed == DUCKDB_FSST_IMPORT_VERSION_MISMATCH) {
+		return false;
+	}
+	// Dictionary offsets count backwards from dict_end and must not reach into the symbol table.
+	layout.dictionary =
+	    layout.dictionary.GetSubReader(consumed, layout.dictionary.Size() - consumed, "FSST dictionary");
+	layout.symbol_table = layout.symbol_table.GetSubReader(0, consumed, "FSST symbol table");
+	return true;
 }
 
 // The calculation of offsets and counts while scanning or fetching is a bit tricky, for two reasons:
