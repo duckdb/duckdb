@@ -22,10 +22,14 @@ public:
 	}
 
 	void Register() {
+		CheckCanRegister();
 		RegisterToCatalog(Build());
 	}
 
 	virtual ~CV2CustomType() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterToCatalog(LogicalType type) = 0;
 
 public:
@@ -36,6 +40,11 @@ public:
 class CV2ConnectionCustomType : public CV2CustomType {
 public:
 	explicit CV2ConnectionCustomType(Connection &connection) : connection(connection) {
+	}
+
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a custom type");
 	}
 
 	void RegisterToCatalog(LogicalType type) override {

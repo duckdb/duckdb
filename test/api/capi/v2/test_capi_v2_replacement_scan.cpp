@@ -565,6 +565,18 @@ TEST_CASE("V2 replacement scan: registration refusals", "[capi_v2][replacement_s
 		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_replacement_scan_destroy(&scan);
 	}
+	// Registering on a connection with a live result; the refused handle can be registered once it is gone.
+	{
+		duckdb_v2_result_handle result = nullptr;
+		REQUIRE(Query(fx.conn, "SELECT 42", &result) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_replacement_scan_handle scan = nullptr;
+		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplDecline, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+		duckdb_v2_result_destroy(&result);
+		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		duckdb_v2_replacement_scan_destroy(&scan);
+	}
 }
 
 TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_v2][replacement_scan]") {

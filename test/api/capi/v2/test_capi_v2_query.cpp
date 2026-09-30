@@ -80,11 +80,8 @@ TEST_CASE("V2: user BEGIN / INSERT / COMMIT keeps the inserted row", "[capi_v2][
 // surface as CANCELLED.
 // ---------------------------------------------------------------------------
 
-// A timeout can land in either the pending or streaming phase, depending on
-// scheduling; [!mayfail] absorbs the rare run where the bounded step loop
-// exits before the timeout fires under heavy load.
-TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED",
-          "[capi_v2][query_execution][!mayfail]") {
+// A timeout can land in either the pending or streaming phase, depending on scheduling.
+TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED", "[capi_v2][query_execution]") {
 	EnvFixture fx;
 
 	// 50ms timeout on a slow cross product, mirroring max_execution_time.test.
@@ -100,7 +97,10 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 	DUCKDB_V2_ERROR rc = DUCKDB_V2_ERROR_NONE;
 	duckdb_v2_error_info_handle err = nullptr;
 	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
-	for (int i = 0; i < 1000000; i++) {
+	// Bounded by time, not step count: how many steps fit before the timeout depends on the machine.
+	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+	bool terminated = false;
+	while (std::chrono::steady_clock::now() < deadline) {
 		duckdb_v2_data_chunk_handle chunk = nullptr;
 		status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
 		rc = duckdb_v2_result_step(r, &chunk, &status, &err);
@@ -111,14 +111,17 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 		// (the bug), or a finish (should not happen at this scale).
 		if (rc != DUCKDB_V2_ERROR_NONE || status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED ||
 		    status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED) {
+			terminated = true;
 			break;
+		}
+		if (status == DUCKDB_V2_RESULT_STEP_STATUS_WAITING) {
+			duckdb_v2_result_wait(r, nullptr);
 		}
 	}
 
-	// The timeout must never be reported as a cancellation. CHECK, not REQUIRE:
-	// a REQUIRE aborts the case on the rare run where the timeout did not land,
-	// which would make this [!mayfail] case contribute a varying number of
-	// assertions to the suite total.
+	REQUIRE(terminated);
+
+	// The timeout must never be reported as a cancellation.
 	std::string msg;
 	if (err) {
 		duckdb_v2_str text = {nullptr, 0};

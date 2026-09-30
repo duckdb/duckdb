@@ -56,6 +56,8 @@ DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn
 	DUCKDB_CHECK_ARG(setting);
 	return WithErrorHandler(err, [&]() {
 		auto &client = *Convert(conn)->context;
+		// The live result's execution reads the session config, so refuse while one is live.
+		ThrowIfConnectionBusy(client, "setting an option");
 		duckdb::PhysicalSet::SetVariable(client, duckdb::Identifier(ConvertIdentifierName(name)),
 		                                 MapSettingScope(scope), duckdb::Value(duckdb::string(Convert(setting))));
 	});

@@ -1846,6 +1846,9 @@ functions:
       and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction the
       function does not implement fails with an error. The caller still owns the handle after registration and must
       destroy it with `[[copy_function_destroy]]`, which does not affect the registered function.
+
+      A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result.
+      The handle is left unchanged; drain or destroy that result first, then register the same handle again.
     parameters:
       function:
         type: copy_function

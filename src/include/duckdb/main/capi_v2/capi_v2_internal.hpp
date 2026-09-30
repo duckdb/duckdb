@@ -609,9 +609,52 @@ struct ConnectionBusySlotV2 : public ClientContextState {
 	std::atomic<bool> cancel_requested {false};
 };
 
+constexpr auto BUSY_SLOT_STATE_KEY = "v2_connection_busy_slot";
+
 inline shared_ptr<ConnectionBusySlotV2> GetBusySlot(ClientContext &context) {
-	constexpr auto BUSY_SLOT_STATE_KEY = "v2_connection_busy_slot";
 	return context.registered_state->GetOrCreate<ConnectionBusySlotV2>(BUSY_SLOT_STATE_KEY);
+}
+
+//! Refuses with RESOURCE_IN_USE while the connection has a live result; `action` completes "before ...".
+inline void ThrowIfConnectionBusy(ClientContext &context, const char *action) {
+	// Get, not GetOrCreate: a connection that never ran a V2 query has no slot and is not busy.
+	auto slot = context.registered_state->Get<ConnectionBusySlotV2>(BUSY_SLOT_STATE_KEY);
+	if (slot && slot->owner.load() != nullptr) {
+		throw ResourceInUseException("connection has a live result; drain or destroy it before %s", action);
+	}
+}
+
+//! Runs read-only `fun` in a transaction; a non-fatal error is rethrown without invalidating a live result's query.
+template <class FUN>
+void RunReadOnlyInTransaction(ClientContext &context, FUN &&fun) {
+	ErrorData error;
+	context.RunFunctionInTransaction([&]() {
+		try {
+			fun();
+		} catch (const std::exception &ex) {
+			ErrorData data(ex);
+			if (Exception::InvalidatesDatabase(data.Type())) {
+				throw;
+			}
+			error = std::move(data);
+		}
+	});
+	if (error.HasError()) {
+		error.Throw();
+	}
+}
+
+//! Claims the slot for `owner`, refusing with RESOURCE_IN_USE while another result holds it.
+inline shared_ptr<ConnectionBusySlotV2> ClaimBusySlot(ClientContext &context, void *owner) {
+	auto slot = GetBusySlot(context);
+	void *expected = nullptr;
+	if (!slot->owner.compare_exchange_strong(expected, owner)) {
+		throw ResourceInUseException("connection has a live result; drain or destroy it before starting a new query "
+		                             "(or open another connection)");
+	}
+	// A fresh query starts uncancelled, as the engine clears interrupt_state at query begin.
+	slot->cancel_requested.store(false, std::memory_order_relaxed);
+	return slot;
 }
 
 //----------------------------------------------------------------------------------------------------------------------

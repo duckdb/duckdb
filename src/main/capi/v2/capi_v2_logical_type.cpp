@@ -263,7 +263,7 @@ DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_id(duckdb_v2_connection_ha
 	DUCKDB_CHECK_ARG(out_type);
 	return WithErrorHandler(err, [&]() {
 		auto &context = *Convert(conn)->context;
-		context.RunFunctionInTransaction([&]() {
+		RunReadOnlyInTransaction(context, [&]() {
 			CreateLogicalTypeFromIdV2(context, type_id, param_names, param_values, param_count, out_type, fn);
 		});
 	});
@@ -298,7 +298,7 @@ DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_
 	DUCKDB_CHECK_ARG(text);
 	return WithErrorHandler(err, [&]() {
 		auto &context = *Convert(conn)->context;
-		context.RunFunctionInTransaction([&]() { CreateLogicalTypeFromTextV2(context, text, out_type); });
+		RunReadOnlyInTransaction(context, [&]() { CreateLogicalTypeFromTextV2(context, text, out_type); });
 	});
 }
 
@@ -341,8 +341,9 @@ DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(duckdb_v2_connection_
 	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() {
 		auto &context = *Convert(conn)->context;
-		context.RunFunctionInTransaction(
-		    [&]() { CreateLogicalTypeFromArgsV2(context, name, param_names, param_values, param_count, out_type); });
+		RunReadOnlyInTransaction(context, [&]() {
+			CreateLogicalTypeFromArgsV2(context, name, param_names, param_values, param_count, out_type);
+		});
 	});
 }
 

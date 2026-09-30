@@ -616,6 +616,7 @@ static auto CV2TableGetPartitionInfo(ClientContext &context, TableFunctionPartit
 class CV2TableFunction {
 public:
 	void Register() {
+		CheckCanRegister();
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -665,6 +666,9 @@ public:
 	}
 
 	virtual ~CV2TableFunction() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterToCatalog(TableFunction function) = 0;
 
 public:
@@ -676,6 +680,11 @@ public:
 class CV2ConnectionTableFunction : public CV2TableFunction {
 public:
 	explicit CV2ConnectionTableFunction(Connection &connection) : connection(connection) {
+	}
+
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a table function");
 	}
 
 	void RegisterToCatalog(TableFunction function) override {

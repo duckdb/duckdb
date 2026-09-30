@@ -144,6 +144,9 @@ functions:
       The type is registered on the target given at creation: the connection's database or the loading extension.
       Registration requires a name and a complete base type. The caller still owns the handle after registration
       and must destroy it with `[[custom_type_destroy]]`, which does not affect the registered type.
+
+      A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result.
+      The handle is left unchanged; drain or destroy that result first, then register the same handle again.
     parameters:
       type:
         type: custom_type

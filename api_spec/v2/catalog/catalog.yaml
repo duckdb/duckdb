@@ -42,6 +42,9 @@ functions:
       does, and is rejected when both readings exist. A name that resolves to nothing is rejected with the engine's
       missing-table error; a name that resolves to a view is rejected with the engine's not-a-table error, since a
       description snapshots a base table.
+
+      Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result: the lookup runs in a transaction, and
+      a failure there would abort that result's query. Drain or destroy that result first.
     role: constructor
     belongs_to: table_description
     parameters:

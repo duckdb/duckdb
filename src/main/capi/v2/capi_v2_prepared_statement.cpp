@@ -51,11 +51,7 @@ DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_connection_handle 
 		// Preparing runs the engine's query cleanup, which would cancel a live stream, so
 		// refuse first. Unlike execute this only checks the slot is free: preparing
 		// produces no result, so it never claims it.
-		if (GetBusySlot(*connection->context)->owner.load() != nullptr) {
-			throw duckdb::ResourceInUseException(
-			    "connection has a live result; drain, destroy, or interrupt it before preparing a statement "
-			    "(or open another connection)");
-		}
+		ThrowIfConnectionBusy(*connection->context, "preparing a statement");
 		// Borrowed, not consumed: prepare a copy so the caller keeps the original.
 		auto prepared = connection->context->Prepare(Convert(statement)->Copy());
 		if (prepared->HasError()) {
