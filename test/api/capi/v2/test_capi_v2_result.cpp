@@ -836,12 +836,28 @@ TEST_CASE("V2: result_get_schema outlives the result", "[capi_v2][query_result]"
 TEST_CASE("V2: statement_execute null-arg rejection", "[capi_v2][query_result]") {
 	EnvFixture fx;
 
-	// Exercise the real duckdb_v2_str signature. A {NULL, 0} sql is a valid
-	// empty view; the malformed case is a null pointer with a nonzero length.
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(Query(nullptr, "SELECT 1", &r, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(Query(fx.conn, nullptr, &r, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(Query(fx.conn, "SELECT 1", nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	// A failing parse_sql resets the out slot. A {NULL, 0} sql is a valid empty view; {NULL, n} is malformed.
+	auto stale = reinterpret_cast<duckdb_v2_statement_iterator_handle>(uintptr_t(0xdead));
+	auto sql = Convert("SELECT 1");
+	auto iter = stale;
+	REQUIRE(duckdb_v2_parse_sql(nullptr, &sql, &iter, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(iter == nullptr);
+	iter = stale;
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, nullptr, &iter, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(iter == nullptr);
+	iter = stale;
+	auto malformed = duckdb_v2_str {nullptr, 3};
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, &malformed, &iter, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(iter == nullptr);
+	auto empty = duckdb_v2_str {nullptr, 0};
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, &empty, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(iter != nullptr);
+	duckdb_v2_statement_iterator_destroy(&iter);
 }
 
 TEST_CASE("V2: result_destroy is null-safe", "[capi_v2][query_result]") {

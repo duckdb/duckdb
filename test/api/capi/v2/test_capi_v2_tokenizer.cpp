@@ -1,3 +1,4 @@
+#include "duckdb_v2.h"
 #include "test_capi_v2.hpp"
 
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
@@ -9,7 +10,7 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-// V2 tokenizer tests: tokenize_sql and the token iterator. Every test pins the
+// V2 tokenizer tests: tokenize_sql_from_* and the token iterator. Every test pins the
 // exact (type, start, length) triples the engine tokenizer produces, so a
 // tokenizer change is visible here.
 // ---------------------------------------------------------------------------
@@ -33,7 +34,7 @@ std::ostream &operator<<(std::ostream &os, const Tok &tok) {
 
 using Toks = std::vector<Tok>;
 
-// What tokenize_sql produces for one input: the tokens up to END_OF_INPUT, and the ends_unterminated flag.
+// What tokenizing produces for one input: the tokens up to END_OF_INPUT, and the ends_unterminated flag.
 struct Lexed {
 	Toks tokens;
 	bool ends_unterminated;
@@ -135,6 +136,43 @@ public:
 		return changes;
 	}
 };
+
+// What the probe function's bind callback tokenized through its context.
+struct ContextProbe {
+	DUCKDB_V2_ERROR rc = DUCKDB_V2_ERROR_API;
+	Toks tokens;
+} context_probe;
+
+// Tokenizes "SELECT ANSWER" through the bind context. No REQUIRE here: a callback must not throw.
+void ContextTokenizeBind(duckdb_v2_scalar_function_bind_info_handle, duckdb_v2_context_handle context,
+                         duckdb_v2_error_info_handle *) {
+	auto sql = Convert("SELECT ANSWER");
+	duckdb_v2_token_iterator_handle it = nullptr;
+	context_probe.rc = duckdb_v2_tokenize_sql_from_context(context, &sql, &it, nullptr);
+	Tok tok {};
+	while (it &&
+	       duckdb_v2_token_iterator_next(it, &tok.type, &tok.start, &tok.length, nullptr) == DUCKDB_V2_ERROR_NONE &&
+	       tok.type != END) {
+		context_probe.tokens.push_back(tok);
+	}
+	duckdb_v2_token_iterator_destroy(&it);
+}
+
+void ContextTokenizeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle,
+                         duckdb_v2_error_info_handle *err) {
+	duckdb_v2_vector_handle out = nullptr;
+	idx_t count = 0;
+	void *raw = nullptr;
+	if (duckdb_v2_scalar_function_exec_get_result(info, &out, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_scalar_function_exec_get_row_count(info, &count, err) != DUCKDB_V2_ERROR_NONE ||
+	    duckdb_v2_vector_get_data_mutable(out, &raw, err) != DUCKDB_V2_ERROR_NONE) {
+		return;
+	}
+	auto *out_data = static_cast<int32_t *>(raw);
+	for (idx_t i = 0; i < count; i++) {
+		out_data[i] = 0;
+	}
+}
 
 } // namespace
 
@@ -403,11 +441,45 @@ TEST_CASE("V2 tokenizer: the keyword set is the connection's grammar", "[capi_v2
 	REQUIRE(TokenizeAll(fx.conn, "ANSWER") == Complete({{IDENTIFIER, 0, 6}}));
 }
 
+TEST_CASE("V2 tokenizer: tokenize_sql_from_context uses the context's grammar", "[capi_v2][tokenizer]") {
+	EnvFixture fx;
+	auto &instance = *duckdb::capiv2::Convert(fx.instance)->GetDatabase().instance;
+	duckdb::GrammarExtension::Register(instance, duckdb::make_shared_ptr<TokenizerTestKeywordExtension>());
+
+	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	duckdb_v2_scalar_function_handle function = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto name = Convert("tokenize_probe");
+	REQUIRE(duckdb_v2_scalar_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_function_signature_handle sig = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, ContextTokenizeBind, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, ContextTokenizeExec, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_scalar_function_destroy(&function);
+	duckdb_v2_logical_type_destroy(&integer);
+
+	context_probe = {};
+	ExecSQL(fx.conn, "SELECT tokenize_probe()");
+	REQUIRE(context_probe.rc == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(context_probe.tokens == Toks {{KEYWORD, 0, 6}, {IDENTIFIER, 7, 6}});
+
+	// The context sees the connection's grammar extensions.
+	ExecSQL(fx.conn, "SET active_grammar_extensions = ['tokenizer_test_keyword']");
+	context_probe = {};
+	ExecSQL(fx.conn, "SELECT tokenize_probe()");
+	REQUIRE(context_probe.rc == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(context_probe.tokens == Toks {{KEYWORD, 0, 6}, {KEYWORD, 7, 6}});
+}
+
 // ===========================================================================
 // Argument checking and destruction
 // ===========================================================================
 
-TEST_CASE("V2 tokenizer: tokenize_sql argument checks", "[capi_v2][tokenizer]") {
+TEST_CASE("V2 tokenizer: tokenize_sql_from_* argument checks", "[capi_v2][tokenizer]") {
 	EnvFixture fx;
 	auto stale = reinterpret_cast<duckdb_v2_token_iterator_handle>(uintptr_t(STALE_IDX));
 	auto sql = Convert("SELECT 1");
@@ -415,6 +487,9 @@ TEST_CASE("V2 tokenizer: tokenize_sql argument checks", "[capi_v2][tokenizer]") 
 	// A null connection or a null view with a non-zero length is an input error, and the slot is reset.
 	auto it = stale;
 	REQUIRE(duckdb_v2_tokenize_sql_from_connection(nullptr, &sql, &it, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(it == nullptr);
+	it = stale;
+	REQUIRE(duckdb_v2_tokenize_sql_from_context(nullptr, &sql, &it, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(it == nullptr);
 	it = stale;
 	duckdb_v2_error_info_handle err = nullptr;

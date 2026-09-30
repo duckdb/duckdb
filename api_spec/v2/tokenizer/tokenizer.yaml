@@ -1,7 +1,7 @@
 module: tokenizer
 #
-# Lexical tokenization of SQL text, in the context of whatever grammar extensions are loaded on the given connection.
-# The connection is not used for anything else and `[[token_iterator]]` can outlive the connection. Offsets are byte
+# Lexical tokenization of SQL text, in the context of whatever grammar extensions are loaded on the given connection or
+# client context. It is not used for anything else and `[[token_iterator]]` can outlive it. Offsets are byte
 # offsets into the input exactly as given, the input is not normalized or validated.
 #
 # The iterator yields one token per `[[token_iterator_next]]` call and reports the end of input as a
@@ -10,7 +10,7 @@ module: tokenizer
 handles:
   token_iterator:
     description: |
-      An opaque, owned handle to an iterator over the tokens of a SQL string, produced by tokenize_sql.
+      An opaque, owned handle to an iterator over the tokens of a SQL string, produced by tokenize_sql_from_connection or tokenize_sql_from_context.
     cleanup_with: token_iterator_destroy
 
 enums:
@@ -85,12 +85,13 @@ functions:
 
   tokenize_sql_from_context:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-11" ]
+      - [ "stable", "v2.0.0", "2026-09-29" ]
     description: |
       Tokenizes a SQL string into an iterator over its tokens.
 
-      Lexical tokenization, in the context of whatever grammar extensions are loaded on the given connection. Closing
-      the context or changing settings afterwards does not affect the tokens. The SQL string is borrowed for the call
+      Lexical tokenization, in the context of whatever grammar extensions are active in the given client context, e.g.
+      the one passed to a function callback. The iterator may outlive the context, and changing settings afterwards
+      does not affect the tokens. The SQL string is borrowed for the call
       only, the caller may free it once this call returns. Whitespace is not a token. Malformed input is not an error;
       `[[token_iterator_ends_unterminated]]` reports whether the input ended inside an open token.
 
@@ -98,7 +99,7 @@ functions:
     role: constructor
     belongs_to: token_iterator
     parameters:
-      conn:
+      context:
         type: context
         description: The context supplying the grammar.
       sql:

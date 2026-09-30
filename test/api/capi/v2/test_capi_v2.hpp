@@ -284,8 +284,9 @@ inline DUCKDB_V2_ERROR Query(duckdb_v2_connection_handle conn, const char *sql, 
 		*out_result = nullptr;
 	}
 	duckdb_v2_statement_iterator_handle iter = nullptr;
+	// A null sql reaches parse_sql as a null pointer, not as the empty view.
 	auto sql_str = Convert(sql);
-	auto rc = duckdb_v2_parse_sql(conn, &sql_str, &iter, err);
+	auto rc = duckdb_v2_parse_sql(conn, sql ? &sql_str : nullptr, &iter, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return rc;
 	}

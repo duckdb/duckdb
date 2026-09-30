@@ -137,7 +137,7 @@ functions:
         indirection: 1
         const: true
         kind: IN
-        description: Null-terminated SQL string; may contain any number of statements.
+        description: The SQL text; may contain any number of statements. Copied by the call.
       out_iterator:
         type: statement_iterator
         indirection: 1

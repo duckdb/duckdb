@@ -1327,9 +1327,6 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql_from_connection)
 	(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql_from_context)
-	(duckdb_v2_context_handle conn, const duckdb_v2_str *sql, duckdb_v2_token_iterator_handle *out_iterator,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_attach_options_create)
 	(duckdb_v2_instance_handle instance, duckdb_v2_attach_options_handle *out_options,
 	 duckdb_v2_error_info_handle *err);
@@ -1389,6 +1386,9 @@ typedef struct {
 	DUCKDB_V2_ERROR (*duckdb_v2_validate_utf8)(const duckdb_v2_str *text, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_order_preservation)
 	(duckdb_v2_table_function_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql_from_context)
+	(duckdb_v2_context_handle context, const duckdb_v2_str *sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -1990,7 +1990,6 @@ typedef struct {
 #define duckdb_v2_token_iterator_ends_unterminated       duckdb_ext_api.duckdb_v2_token_iterator_ends_unterminated
 #define duckdb_v2_token_iterator_next                    duckdb_ext_api.duckdb_v2_token_iterator_next
 #define duckdb_v2_tokenize_sql_from_connection           duckdb_ext_api.duckdb_v2_tokenize_sql_from_connection
-#define duckdb_v2_tokenize_sql_from_context              duckdb_ext_api.duckdb_v2_tokenize_sql_from_context
 #define duckdb_v2_attach_options_create                  duckdb_ext_api.duckdb_v2_attach_options_create
 #define duckdb_v2_attach_options_destroy                 duckdb_ext_api.duckdb_v2_attach_options_destroy
 #define duckdb_v2_attach_options_set                     duckdb_ext_api.duckdb_v2_attach_options_set
@@ -2035,6 +2034,7 @@ typedef struct {
 #define duckdb_v2_validate_utf8 duckdb_ext_api.duckdb_v2_validate_utf8
 #define duckdb_v2_table_function_bind_set_order_preservation                                                           \
 	duckdb_ext_api.duckdb_v2_table_function_bind_set_order_preservation
+#define duckdb_v2_tokenize_sql_from_context duckdb_ext_api.duckdb_v2_tokenize_sql_from_context
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 
