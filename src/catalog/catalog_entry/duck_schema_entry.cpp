@@ -7,13 +7,12 @@
 #include "duckdb/catalog/catalog_entry/copy_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/table_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/window_function_catalog_entry.hpp"
@@ -214,13 +213,8 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 		                                                                    info.Cast<CreateTableFunctionInfo>());
 		break;
 	case CatalogType::MACRO_ENTRY:
-		// create a macro function
-		function = make_uniq_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, *this, info.Cast<CreateMacroInfo>());
-		break;
-
 	case CatalogType::TABLE_MACRO_ENTRY:
-		// create a macro table function
-		function = make_uniq_base<StandardEntry, TableMacroCatalogEntry>(catalog, *this, info.Cast<CreateMacroInfo>());
+		function = MacroCatalogEntry::Create(catalog, *this, info.Cast<CreateMacroInfo>());
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
