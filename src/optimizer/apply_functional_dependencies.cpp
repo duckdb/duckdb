@@ -275,7 +275,7 @@ void ApplyFunctionalDependencies::VisitWindowExpression(BoundWindowExpression &w
 	//	so there is only one peer group, which is the same as having no ORDER BY clause.
 	auto &partition_bys = wexpr.Partitions();
 	auto &order_bys = wexpr.OrderByMutable();
-	if (!read_only || !partition_bys.empty() && order_bys.size() == 1) {
+	if (!read_only && !partition_bys.empty() && order_bys.size() == 1) {
 		vector<reference<Expression>> refs;
 		for (auto &arg : partition_bys) {
 			refs.emplace_back(*arg);

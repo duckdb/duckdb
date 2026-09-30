@@ -5,7 +5,7 @@
 namespace duckdb {
 
 void RemoveRedundantOrderKeys::Optimize(LogicalOperator &op) {
-	ApplyFunctionalDependencies visitor(true);
+	ApplyFunctionalDependencies visitor;
 	visitor.VisitOperator(op);
 }
 

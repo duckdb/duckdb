@@ -18,14 +18,13 @@ class BoundOrderByNode;
 
 class ApplyFunctionalDependencies : public LogicalOperatorVisitor {
 public:
-	explicit ApplyFunctionalDependencies(bool read_only) : read_only(read_only) {
+	explicit ApplyFunctionalDependencies(bool read_only = false) : read_only(read_only) {
 	}
 
 	static vector<column_binding_set_t> GetUniqueColumnCombinations(LogicalOperator &op) {
-		ApplyFunctionalDependencies visitor(false);
+		ApplyFunctionalDependencies visitor(true);
 		visitor.VisitOperator(op);
 		return visitor.result;
-
 	}
 
 	void VisitOperator(LogicalOperator &op) override;
