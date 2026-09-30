@@ -1138,16 +1138,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();
 
-	bool has_not_null = false;
-	for (auto &constraint : table_info.constraints) {
-		if (constraint->type == ConstraintType::NOT_NULL) {
-			auto &not_null = constraint->Cast<NotNullConstraint>();
-			if (not_null.index == not_null_idx) {
-				has_not_null = true;
-				break;
-			}
-		}
-	}
+	bool has_not_null = table_info.FindNotNullConstraint(not_null_idx).IsValid();
 	if (!has_not_null) {
 		table_info.constraints.push_back(make_uniq<NotNullConstraint>(not_null_idx));
 	}
@@ -1183,15 +1174,9 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 	auto &table_info = create_info->Cast<CreateTableInfo>();
 
 	// Remove the NOT NULL constraint for the specified column
-	for (idx_t i = 0; i < table_info.constraints.size(); i++) {
-		auto &constraint = table_info.constraints[i];
-		if (constraint->type == ConstraintType::NOT_NULL) {
-			auto &not_null = constraint->Cast<NotNullConstraint>();
-			if (not_null.index == not_null_idx) {
-				table_info.constraints.erase(table_info.constraints.begin() + static_cast<ptrdiff_t>(i));
-				break;
-			}
-		}
+	auto not_null_constraint = table_info.FindNotNullConstraint(not_null_idx);
+	if (not_null_constraint.IsValid()) {
+		table_info.constraints.erase_at(not_null_constraint.GetIndex());
 	}
 
 	auto binder = Binder::CreateBinder(context);
