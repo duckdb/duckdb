@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-//! Compressed data is read in chunks of at least this size, so remote files take few requests
-static constexpr idx_t MINIMUM_READ_IN_BUF_SIZE = 16777216;
+//! Compressed data of remote files is read in chunks of this size, so they take few requests
+static constexpr idx_t REMOTE_READ_IN_BUF_SIZE = 16777216;
 
 StreamWrapper::~StreamWrapper() {
 }
@@ -68,13 +68,18 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 
 	this->context = context;
 	this->write = write;
-	stream_data.in_buf_size =
-	    write ? compressed_fs.InBufferSize() : MaxValue<idx_t>(compressed_fs.InBufferSize(), MINIMUM_READ_IN_BUF_SIZE);
+	stream_data.in_buf_size = compressed_fs.InBufferSize();
+	if (!write && !child_handle->OnDiskFile()) {
+		stream_data.in_buf_size = MaxValue<idx_t>(
+		    stream_data.in_buf_size, MinValue<idx_t>(REMOTE_READ_IN_BUF_SIZE, child_handle->GetFileSize()));
+	}
 	stream_data.out_buf_size = compressed_fs.OutBufferSize();
-	stream_data.in_buff = make_unsafe_uniq_array<data_t>(stream_data.in_buf_size);
+	auto &allocator =
+	    context.Valid() ? BufferAllocator::Get(*context.GetClientContext()) : Allocator::DefaultAllocator();
+	stream_data.in_buff = allocator.Allocate(stream_data.in_buf_size);
 	stream_data.in_buff_start = stream_data.in_buff.get();
 	stream_data.in_buff_end = stream_data.in_buff.get();
-	stream_data.out_buff = make_unsafe_uniq_array<data_t>(stream_data.out_buf_size);
+	stream_data.out_buff = allocator.Allocate(stream_data.out_buf_size);
 	stream_data.out_buff_start = stream_data.out_buff.get();
 	stream_data.out_buff_end = stream_data.out_buff.get();
 
@@ -165,8 +170,8 @@ void CompressedFile::Clear() {
 }
 
 void CompressedFile::ResetStreamData() {
-	stream_data.in_buff.reset();
-	stream_data.out_buff.reset();
+	stream_data.in_buff.Reset();
+	stream_data.out_buff.Reset();
 	stream_data.out_buff_start = nullptr;
 	stream_data.out_buff_end = nullptr;
 	stream_data.in_buff_start = nullptr;
