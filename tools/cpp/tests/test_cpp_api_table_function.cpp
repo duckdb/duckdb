@@ -60,7 +60,7 @@ struct RangeGlobal {
 };
 
 void RangeBind_(TableFunction::BindInput &input) {
-	const auto count = input.GetArgument(0).Get<int64_t>();
+	const auto count = input.GetConstantArgument(0).Get<int64_t>();
 	input.AddResultColumn("i", input.GetContext().ParseType("BIGINT"));
 	input.SetCardinality(static_cast<idx_t>(count), true);
 	input.SetBindData<RangeBind>(RangeBind {count});
@@ -113,7 +113,7 @@ void RegisterRange(Connection &conn, const std::string &name) {
 // ---------------------------------------------------------------------------
 
 void PairsBind_(TableFunction::BindInput &input) {
-	const auto count = input.GetArgument(0).Get<int64_t>();
+	const auto count = input.GetConstantArgument(0).Get<int64_t>();
 	auto ctx = input.GetContext();
 	input.AddResultColumn("a", ctx.ParseType("INTEGER"));
 	input.AddResultColumn("b", ctx.ParseType("VARCHAR"));
@@ -160,8 +160,24 @@ void ArgsBind_(TableFunction::BindInput &input) {
 	ArgsBind bind;
 	for (idx_t i = 0; i < input.GetArgCount(); i++) {
 		REQUIRE(input.GetArgType(i).GetTypeId() == LogicalTypeId::BIGINT);
-		bind.values.push_back(input.GetArgument(i).Get<int64_t>());
+		bind.values.push_back(input.GetConstantArgument(i).Get<int64_t>());
 	}
+	input.AddResultColumn("v", input.GetContext().ParseType("BIGINT"));
+	input.SetBindData<ArgsBind>(std::move(bind));
+}
+
+// cpp_kwargs(n, *, step := 1, **opts): reports every argument in list order, and latches the argument names.
+std::vector<std::string> arg_names;
+ArgumentCounts arg_counts;
+
+void KwargsBind_(TableFunction::BindInput &input) {
+	ArgsBind bind;
+	arg_names.clear();
+	for (idx_t i = 0; i < input.GetArgCount(); i++) {
+		arg_names.push_back(input.GetArgName(i));
+		bind.values.push_back(input.GetConstantArgument(i).Get<int64_t>());
+	}
+	arg_counts = input.GetArgumentCounts();
 	input.AddResultColumn("v", input.GetContext().ParseType("BIGINT"));
 	input.SetBindData<ArgsBind>(std::move(bind));
 }
@@ -347,7 +363,7 @@ std::string RenderExpression(const TableFunction::FilterPushdownInput &input, co
 }
 
 void ClaimBind_(TableFunction::BindInput &input) {
-	const auto count = input.GetArgument(0).Get<int64_t>();
+	const auto count = input.GetConstantArgument(0).Get<int64_t>();
 	input.AddResultColumn("i", input.GetContext().ParseType("BIGINT"));
 	input.SetBindData<ClaimBind>(ClaimBind {count, -1});
 }
@@ -529,7 +545,7 @@ TEST_CASE("Stable C++API: table function parameter defaults, named arguments and
 	function.WithSignature([&](FunctionSignature &sig) {
 		sig.AddParameter("a", bigint);
 		sig.AddParameter("b", bigint, Value::Create(conn, int64_t {7}));
-		sig.SetVarArgs(bigint);
+		sig.AddArgs("rest", bigint);
 	});
 	function.SetBindCallback(ArgsBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(ArgsExec);
 	function.Register();
@@ -540,6 +556,35 @@ TEST_CASE("Stable C++API: table function parameter defaults, named arguments and
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_args(1, b => 5)")) == std::vector<int64_t> {1, 5});
 	// Positional arguments fill the slots in order, as in Python: b takes 30, and the variadic tail takes the rest.
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_args(1, 30, 40)")) == std::vector<int64_t> {1, 30, 40});
+}
+
+TEST_CASE("Stable C++API: table function named-only parameters and kwargs", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto bigint = conn.ParseType("BIGINT");
+
+	auto function = TableFunction::Create(conn);
+	function.SetName("cpp_kwargs");
+	function.WithSignature([&](FunctionSignature &sig) {
+		sig.AddParameter("n", bigint);
+		sig.AddParameter("step", bigint, Value::Create(conn, int64_t {1}), FunctionParameterKind::NAMED_ONLY);
+		sig.AddKwargs("opts", bigint);
+	});
+	function.SetBindCallback(KwargsBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(ArgsExec);
+	function.Register();
+
+	// The omitted named-only parameter carries its default.
+	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_kwargs(5)")) == std::vector<int64_t> {5, 1});
+	REQUIRE(arg_names == std::vector<std::string> {"n", "step"});
+	REQUIRE(arg_counts.named_variadic == 0);
+	// The standard parameter passed by name stays in the args list; named-only parameters lead the kwargs list,
+	// followed by "**kwargs" in call order.
+	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_kwargs(extra => 9, n => 5, step => 3, more => 8)")) ==
+	        std::vector<int64_t> {5, 3, 9, 8});
+	REQUIRE(arg_names == std::vector<std::string> {"n", "step", "extra", "more"});
+	REQUIRE(arg_counts.named_fixed == 1);
+	REQUIRE(arg_counts.named_variadic == 2);
 }
 
 TEST_CASE("Stable C++API: table function user data, global and local state", "[cpp_api]") {
@@ -695,7 +740,7 @@ void PartBind_(TableFunction::BindInput &input) {
 	auto bigint = input.GetContext().ParseType("BIGINT");
 	input.AddResultColumn("part_col", bigint);
 	input.AddResultColumn("val", bigint);
-	input.SetBindData<PartBind>(PartBind {input.GetArgument(0).Get<int64_t>()});
+	input.SetBindData<PartBind>(PartBind {input.GetConstantArgument(0).Get<int64_t>()});
 }
 
 void PartInitGlobal(TableFunction::InitGlobalInput &input) {
@@ -816,7 +861,7 @@ void ProjPartBind(TableFunction::BindInput &input) {
 	input.AddResultColumn("pad", input.GetContext().ParseType("INTEGER"));
 	input.AddResultColumn("part_col", bigint);
 	input.AddResultColumn("val", bigint);
-	input.SetBindData<PartBind>(PartBind {input.GetArgument(0).Get<int64_t>()});
+	input.SetBindData<PartBind>(PartBind {input.GetConstantArgument(0).Get<int64_t>()});
 }
 
 void ProjPartExec(TableFunction::ExecInput &input) {

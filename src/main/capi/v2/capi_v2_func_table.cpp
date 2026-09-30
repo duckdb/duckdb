@@ -1,4 +1,5 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_function_internal.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
@@ -124,12 +125,8 @@ private:
 
 class CV2TableBindInfo {
 public:
-	void *in_user_data = nullptr;
-	const vector<Value> *in_args = nullptr;
-
 	vector<LogicalType> out_column_types;
 	vector<Identifier> out_column_names;
-	duckdb_v2_opaque out_bind_data = {};
 	idx_t out_cardinality = 0;
 	bool out_cardinality_is_exact = false;
 	bool out_cardinality_set = false;
@@ -427,22 +424,19 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
                          vector<Identifier> &names) -> unique_ptr<FunctionData> {
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
 
-	CV2TableBindInfo args = {};
-	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	// the binder places every argument in its signature slot, defaults included, so the call reads them as-is
-	args.in_args = &input.inputs;
+	CV2ConstantBindInfo bind_info(input.table_function, info.user_data ? info.user_data->GetData() : nullptr,
+	                              input.inputs, input.named_parameters);
+	CV2TableBindInfo args = {};
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.bind_cb(Convert(&args), Convert(&context), &err_ptr);
+	info.bind_cb(Convert(&bind_info), Convert(&args), Convert(&context), &err_ptr);
 
 	// Take ownership of whatever the callback set before reporting an error, so it is destroyed either way.
 	auto result = make_uniq<CV2TableFunctionData>();
 	result->info = &info;
-	if (args.out_bind_data.ptr) {
-		result->handle =
-		    make_shared_ptr<CV2UserData>(args.out_bind_data.ptr, args.out_bind_data.destroy, args.out_bind_data.equals);
-	}
+	result->handle = std::move(bind_info.out_bind_data);
 	result->cardinality = args.out_cardinality;
 	result->cardinality_is_exact = args.out_cardinality_is_exact;
 	result->cardinality_set = args.out_cardinality_set;
@@ -855,9 +849,6 @@ public:
 		if (info.partitioning_cb) {
 			function.get_partition_info = CV2TableGetPartitionInfo;
 		}
-		if (info.claim_batch_cb) {
-			function.claim_batch = CV2TableClaimBatch;
-		}
 		function.projection_pushdown = info.projection_pushdown;
 
 		info.name = name;
@@ -933,7 +924,14 @@ public:
 		if (!file_extension.empty()) {
 			settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, file_extension);
 		}
-		auto function = TableFunctionMultiFileWrapper::CreateFunctionSet(GetSingleFileFunction(), name, settings);
+		auto single_file = GetSingleFileFunction();
+		if (single_file.function == CV2TableExec && single_file.function_info) {
+			// the multi-file scan claims the batches of a C API function that scans one batch at a time
+			if (single_file.function_info->Cast<CV2TableFunctionInfo>().claim_batch_cb) {
+				settings.claim_batch = CV2TableClaimBatch;
+			}
+		}
+		auto function = TableFunctionMultiFileWrapper::CreateFunctionSet(std::move(single_file), name, settings);
 		RegisterToCatalog(std::move(function));
 	}
 
@@ -952,7 +950,7 @@ protected:
 		}
 		for (auto &function : entry->Cast<TableFunctionCatalogEntry>().functions.functions) {
 			auto &signature = function->GetSignature();
-			if (signature.GetRequiredParameterCount() == 1 && signature.GetPositionalParameterCount() >= 1 &&
+			if (signature.GetRequiredParameterCount() == 1 && signature.GetParameter(0).AcceptsPosition() &&
 			    signature.GetParameter(0).GetType() == LogicalType::VARCHAR) {
 				return *function;
 			}
@@ -1151,57 +1149,6 @@ duckdb_v2_table_function_set_partitioning_callback(duckdb_v2_table_function_hand
                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	return WithErrorHandler(err, [&]() { Convert(function)->info.partitioning_cb = callback; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_user_data(duckdb_v2_table_function_bind_info_handle info, void **data,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_bind_data(duckdb_v2_table_function_bind_info_handle info,
-                                                            duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_bind_data = *data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_count(duckdb_v2_table_function_bind_info_handle info,
-                                                            idx_t *count, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(count);
-	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_args->size(); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_type(duckdb_v2_table_function_bind_info_handle info, idx_t index,
-                                                           duckdb_v2_logical_type_handle *type,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(type);
-	*type = nullptr;
-	return WithErrorHandler(err, [&]() {
-		const auto &arguments = *Convert(info)->in_args;
-		if (index >= arguments.size()) {
-			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_table_function_bind_get_arg_type");
-		}
-		*type = Convert(new duckdb::LogicalType(arguments[index].type()));
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_v2_table_function_bind_info_handle info, idx_t index,
-                                                            duckdb_v2_value_handle *value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(value);
-	*value = nullptr;
-	return WithErrorHandler(err, [&]() {
-		const auto &arguments = *Convert(info)->in_args;
-		if (index >= arguments.size()) {
-			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_table_function_bind_get_arg_value");
-		}
-		*value = Convert(new duckdb::Value(arguments[index]));
-	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_function_bind_info_handle info,

@@ -56,9 +56,17 @@ string Register(duckdb_extension_describe_t describe) {
 		return "extension '" + description.name + "' is registered by two different describe functions";
 	}
 	state.registered.push_back({description.name, describe});
-	state.extensions.push_back({description.name, [describe](DuckDB &db) {
-		                            db.LoadStaticExtension(describe);
-	                            }});
+	LinkedExtension linked;
+	linked.name = description.name;
+	if (description.descriptor.database_callback) {
+		linked.database_callback =
+		    reinterpret_cast<void (*)(DatabaseInstance &)>(description.descriptor.database_callback);
+	} else {
+		linked.load = [describe](DuckDB &db) {
+			db.LoadStaticExtension(describe);
+		};
+	}
+	state.extensions.push_back(std::move(linked));
 	return string();
 }
 
@@ -94,7 +102,14 @@ string LinkedExtensionRegistry::Describe(duckdb_extension_describe_t describe, S
 	if (result.name.empty()) {
 		return "an extension describe function did not set a name";
 	}
-	if (!descriptor.entry_cpp && !descriptor.entry_capi_v1 && !descriptor.entry_capi_v2) {
+	if (descriptor.version < 2) {
+		descriptor.database_callback = nullptr;
+	}
+	auto has_entry = descriptor.entry_cpp || descriptor.entry_capi_v1 || descriptor.entry_capi_v2;
+	if (descriptor.database_callback && has_entry) {
+		return subject + " set both an entry point and a database callback";
+	}
+	if (!has_entry && !descriptor.database_callback) {
 		return subject + " did not set an entry point";
 	}
 	return string();

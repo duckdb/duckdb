@@ -12,11 +12,15 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
+#include "duckdb/main/result_format.hpp"
+#include "duckdb/main/result_unit.hpp"
+#include "duckdb/main/retained_result_collection.hpp"
+
+#include <type_traits>
 
 namespace duckdb {
 class BoxRendererContext;
@@ -24,8 +28,8 @@ struct BoxRendererConfig;
 class BufferedData;
 class ClientContext;
 class ClientContextLock;
-class ColumnDataRowCollection;
 class PreparedStatementData;
+class QueryResult;
 
 enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, ARROW_RESULT };
 
@@ -77,22 +81,28 @@ private:
 	ErrorData error;
 };
 
-//! A query result. Calling Materialize, Collection, TakeCollection, Fetch, RowCount, and GetValue will materialize the
-//! result's data into a ColumnDataCollection. If instead the caller wants a streaming interface, it can be moved into
-//! a QueryResultStream.
+//! A query result. The format is fixed at submission; calling Materialize, Collection, TakeCollection, Fetch or
+//! RowCount will materialize the result's data into that format's collection. If instead the caller wants a
+//! streaming interface, it can be moved into a QueryResultStream<FORMAT>.
+//! An accessor taking FORMAT throws InvalidInputException when FORMAT is not the result's format
 class QueryResult : public BaseQueryResult {
 	friend class BufferedData;
 	friend class ClientContext;
-	friend class QueryResultStream;
+	friend class ResultStreamBase;
 
 public:
 	//! Creates the handle of a freshly submitted query
 	DUCKDB_API QueryResult(shared_ptr<ClientContext> context, PreparedStatementData &statement,
 	                       vector<LogicalType> types, ClientProperties client_properties,
 	                       shared_ptr<BufferedData> buffer);
-	//! Creates a detached result over an existing collection
+	//! Creates a detached result over an existing, finalized collection
 	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<Identifier> names,
 	                       unique_ptr<ColumnDataCollection> collection, ClientProperties client_properties);
+	//! Creates a detached result over an existing, finalized retained collection of any format
+	DUCKDB_API QueryResult(StatementType statement_type, StatementProperties properties, vector<LogicalType> types,
+	                       vector<Identifier> names, unique_ptr<RetainedResultCollection> collection,
+	                       shared_ptr<ResultFormat> format, shared_ptr<ResultFormatGlobalState> format_state,
+	                       ClientProperties client_properties);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API explicit QueryResult(ErrorData error);
 	//! Creates a successful query result of a subclass with the specified names and types
@@ -138,24 +148,31 @@ public:
 	DUCKDB_API QueryResultState ExecuteTask();
 	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task.
 	DUCKDB_API void WaitForTask();
-	//! Non-blocking. Tells the engine to fully materialize the result into a CDC. Call Collection(), Fetch[Raw](), or
+	DUCKDB_API const ResultFormat &Format() const;
+	//! Non-blocking. Tells the engine to fully materialize the result. Call Collection(), Fetch[Raw](), or
 	//! ExecuteTask() to execute tasks, or (if multithreaded) Poll until the result is complete.
 	DUCKDB_API void Materialize();
-	//! Blocking. Tells the engine to fully materialize the result into a CDC. Participates in execution of the query.
+	//! Blocking. Tells the engine to fully materialize the result. Participates in execution of the query.
 	DUCKDB_API void Complete();
-	//! Blocking. Same as Complete(), but will return a reference to the CDC when done.
-	DUCKDB_API ColumnDataCollection &Collection();
-	//! Blocking. Same as Collection() but takes ownership of the collection. The QueryResult is empty afterward.
-	DUCKDB_API unique_ptr<ColumnDataCollection> TakeCollection();
-	//! Gets the value of the field at [ column_idx, row_idx ]. Very slow, scanning the collection is much faster.
-	//! Will materialize the full result into a CDC if it hadn't yet.
-	DUCKDB_API Value GetValue(idx_t column_idx, idx_t row_idx);
-	template <class T>
-	T GetValue(idx_t column, idx_t index) {
-		auto value = GetValue(column, index);
-		return (T)value.GetValue<int64_t>();
+	template <class FORMAT = ChunkFormat>
+	RetainedPayloadsOf<FORMAT> &Collection() {
+		PrepareCollected(FORMAT::NAME);
+		return collection->Cast<RetainedCollectionOf<FORMAT>>().Get();
 	}
-	//! Get the rowcount of the result. Will materialize the full result into a CDC if it hadn't yet.
+	//! Blocking. Same as Collection() but takes ownership of the collection. The QueryResult is empty afterward.
+	template <class FORMAT = ChunkFormat>
+	unique_ptr<RetainedPayloadsOf<FORMAT>> TakeCollection() {
+		PrepareCollected(FORMAT::NAME);
+		auto taken = collection->Cast<RetainedCollectionOf<FORMAT>>().Take();
+		collection.reset();
+		return taken;
+	}
+	//! Throws when FORMAT is not the result's format
+	template <class FORMAT>
+	const typename FORMAT::GlobalState &FormatState() const {
+		return CheckedFormatState(FORMAT::NAME).template Cast<typename FORMAT::GlobalState>();
+	}
+	//! Get the rowcount of the result. Will materialize the full result if it hadn't yet.
 	DUCKDB_API idx_t RowCount();
 	//! Ends the query if it is still open. Idempotent.
 	DUCKDB_API void Close();
@@ -164,11 +181,24 @@ public:
 
 	//! Returns the name of the column for the given index
 	DUCKDB_API const Identifier &ColumnName(idx_t index) const;
-	//! A cursor over the collection: fetches the next chunk of normalized (flat) vectors, or null
-	//! at the end. Will materialize the full result into a CDC if it hadn't yet.
-	DUCKDB_API unique_ptr<DataChunk> Fetch();
+	//! Copies the next unit, leaving the collection intact, and materializes the result first if needed
+	template <class FORMAT = ChunkFormat>
+	unique_ptr<typename FORMAT::T> Fetch() {
+		// Through the virtual FetchInternal, which ArrowQueryResult overrides
+		if constexpr (std::is_same<FORMAT, ChunkFormat>::value) {
+			auto chunk = FetchRaw();
+			if (!chunk) {
+				return nullptr;
+			}
+			chunk->Flatten();
+			return chunk;
+		} else {
+			PrepareCollected(FORMAT::NAME);
+			return collection->Cast<RetainedCollectionOf<FORMAT>>().Fetch();
+		}
+	}
 	//! Fetches a DataChunk from the query result. The vectors are not normalized and hence any vector types can be
-	//! returned. Will materialize the full result into a CDC if it hadn't yet.
+	//! returned. Will materialize the full result into a CDC if it hadn't yet. Chunk format only
 	DUCKDB_API unique_ptr<DataChunk> FetchRaw();
 	//! Converts the QueryResult to a string
 	DUCKDB_API virtual string ToString();
@@ -218,20 +248,29 @@ private:
 	//! Ends the query and records a commit failure on this result without throwing
 	void EndQuery(ClientContextLock &lock, bool invalidate_transaction = false);
 	[[noreturn]] void ThrowNoCollection() const;
+	bool IsCollected() const {
+		return collection != nullptr;
+	}
+	//! A result without a buffer is in the chunk format, with a state built from its own metadata
+	void InitializeChunkFormatState();
+	//! Takes the rows only: the handle already holds the format and state its buffer settled at submission
+	void AdoptCollected(QueryResult &produced);
+	DUCKDB_API void PrepareCollected(const char *expected);
+	DUCKDB_API const ResultFormatGlobalState &CheckedFormatState(const char *expected) const;
+	[[noreturn]] void ThrowFormatMismatch(const char *expected) const;
 
 private:
 	//! The client context this result belongs to. Null once the query has ended
 	shared_ptr<ClientContext> context;
 	//! The buffer created for this query at submission. It carries the retention decision and, for
-	//! a stream, the chunks (null for a detached or an error result)
+	//! a stream, the units (null for a detached or an error result)
 	shared_ptr<BufferedData> buffer;
-	//! The retained storage (may be null)
-	unique_ptr<ColumnDataCollection> collection;
-	//! Row collection, only created if GetValue is called
-	unique_ptr<ColumnDataRowCollection> row_collection;
-	//! Scan state for Fetch calls
-	ColumnDataScanState scan_state;
-	bool scan_initialized = false;
+	//! Set at construction; never null for a non-error result
+	shared_ptr<ResultFormat> format;
+	//! Set at construction; never null for a non-error result
+	shared_ptr<ResultFormatGlobalState> format_state;
+	//! In the format's own storage, which also holds the fetch cursor
+	unique_ptr<RetainedResultCollection> collection;
 
 private:
 	class QueryResultIterator;

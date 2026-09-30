@@ -121,6 +121,9 @@ public:
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
 	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
 	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
+	//! Where automatic installs go: autoinstall_extension_repository, else custom_extension_repository, else
+	//! DBConfigOptions::default_autoinstall_repository, else the core repository
+	DUCKDB_API static ExtensionRepository GetAutoinstallRepository(DatabaseInstance &db);
 
 	//! Autoload an extension, only if available locally
 	DUCKDB_API static bool TryAutoLoadAvailableExtension(DatabaseInstance &instance,
@@ -240,19 +243,17 @@ public:
 	template <idx_t N>
 	static void TryAutoloadFromEntry(DatabaseInstance &db, const Identifier &entry,
 	                                 const ExtensionEntry (&entries)[N]) {
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 		if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 			auto extension_name = ExtensionHelper::FindExtensionInEntries(entry, entries);
-			if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			if (ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 				ExtensionHelper::AutoLoadExtension(db, extension_name);
 			}
 		}
-#endif
 	}
 
 	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
 	//! extension_entries.hpp)
-	static bool CanAutoloadExtension(const string &ext_name);
+	static bool CanAutoloadExtension(DatabaseInstance &db, const string &ext_name);
 
 	//! Utility functions for creating meaningful error messages regarding missing extensions
 	static string WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,

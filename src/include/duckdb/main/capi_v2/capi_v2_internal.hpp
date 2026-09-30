@@ -34,10 +34,6 @@
 #include "duckdb/main/database.hpp"
 
 // V2 C API header -- all types use duckdb_v2_ prefix, no collision with V1.
-// The engine implements the whole surface, including the unstable part.
-#ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
-#define DUCKDB_V2_API_ALLOW_UNSTABLE 1
-#endif
 #include "duckdb_v2.h"
 
 #include <new>
@@ -183,8 +179,9 @@ DUCKDB_V2_ASSERT_STATEMENT_TYPE(MERGE_INTO);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(CONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(DISCONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXTERNAL_RESOURCE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(PASSTHROUGH);
 #undef DUCKDB_V2_ASSERT_STATEMENT_TYPE
-static_assert(static_cast<uint8_t>(StatementType::ENUM_SIZE) == DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE + 1,
+static_assert(static_cast<uint8_t>(StatementType::ENUM_SIZE) == DUCKDB_V2_STATEMENT_TYPE_PASSTHROUGH + 1,
               "a StatementType was added: give it a DUCKDB_V2_STATEMENT_TYPE id in the v2 spec and pin it above");
 inline auto Convert(StatementType type) -> DUCKDB_V2_STATEMENT_TYPE {
 	return static_cast<DUCKDB_V2_STATEMENT_TYPE>(type);

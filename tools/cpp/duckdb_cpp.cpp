@@ -2642,24 +2642,111 @@ FunctionSignature::~FunctionSignature() {
 	// The signature is borrowed from its function, so we don't destroy the handle here
 }
 
-auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type) -> FunctionSignature & {
-	auto name_str = ToStr(name);
-	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), &name_str, type.handle(),
-	               static_cast<duckdb_v2_value_handle>(nullptr));
-	return *this;
-}
-
-auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type, const Value &default_value)
+auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type, FunctionParameterKind kind)
     -> FunctionSignature & {
 	auto name_str = ToStr(name);
 	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), &name_str, type.handle(),
-	               default_value.handle());
+	               static_cast<duckdb_v2_value_handle>(nullptr), static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(kind));
 	return *this;
 }
 
-auto FunctionSignature::SetVarArgs(const LogicalType &type) -> FunctionSignature & {
-	CheckedAPICall(duckdb_v2_function_signature_set_varargs, handle(), type.handle());
+auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type, const Value &default_value,
+                                     FunctionParameterKind kind) -> FunctionSignature & {
+	auto name_str = ToStr(name);
+	CheckedAPICall(duckdb_v2_function_signature_add_parameter, handle(), &name_str, type.handle(),
+	               default_value.handle(), static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(kind));
 	return *this;
+}
+
+auto FunctionSignature::AddArgs(const std::string &name, const LogicalType &type) -> FunctionSignature & {
+	return AddParameter(name, type, FunctionParameterKind::POSITIONAL_VARIADIC);
+}
+
+auto FunctionSignature::AddKwargs(const std::string &name, const LogicalType &type) -> FunctionSignature & {
+	return AddParameter(name, type, FunctionParameterKind::NAMED_VARIADIC);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Function Bind Input
+//----------------------------------------------------------------------------------------------------------------------
+
+static auto BindInfo(void *args) -> duckdb_v2_function_bind_info_handle {
+	return static_cast<duckdb_v2_function_bind_info_handle>(args);
+}
+
+void *FunctionBindInput::GetFunctionInfo() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_function_bind_get_user_data, BindInfo(args), &user_data);
+	return user_data;
+}
+
+void FunctionBindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, equals};
+	CheckedAPICall(duckdb_v2_function_bind_set_bind_data, BindInfo(args), &opaque);
+}
+
+static auto ToArgumentCounts(idx_t positional_fixed, idx_t positional_variadic, idx_t named_fixed, idx_t named_variadic)
+    -> ArgumentCounts {
+	ArgumentCounts counts;
+	counts.positional_fixed = positional_fixed;
+	counts.positional_variadic = positional_variadic;
+	counts.named_fixed = named_fixed;
+	counts.named_variadic = named_variadic;
+	return counts;
+}
+
+auto FunctionBindInput::GetArgumentCounts() const -> ArgumentCounts {
+	idx_t counts[4] = {};
+	CheckedAPICall(duckdb_v2_function_bind_get_arg_count, BindInfo(args), &counts[0], &counts[1], &counts[2],
+	               &counts[3]);
+	return ToArgumentCounts(counts[0], counts[1], counts[2], counts[3]);
+}
+
+auto FunctionBindInput::GetArgCount() const -> idx_t {
+	return GetArgumentCounts().Total();
+}
+
+auto FunctionBindInput::GetArgType(idx_t index) const -> LogicalType {
+	duckdb_v2_logical_type_handle type = nullptr;
+	CheckedAPICall(duckdb_v2_function_bind_get_arg_type, BindInfo(args), index, &type);
+	return detail::Factory::Make<LogicalType>(type);
+}
+
+auto FunctionBindInput::GetConstantArgument(idx_t index) const -> Value {
+	duckdb_v2_value_handle value = nullptr;
+	CheckedAPICall(duckdb_v2_function_bind_get_arg_value, BindInfo(args), index, &value);
+	return detail::Factory::Make<Value>(value);
+}
+
+auto FunctionBindInput::TryGetConstantArgument(idx_t index) const -> std::optional<Value> {
+	duckdb_v2_value_handle value = nullptr;
+	// No error slot: an argument without a constant value is absence here, not a failure to report.
+	const auto code = duckdb_v2_function_bind_get_arg_value(BindInfo(args), index, &value, nullptr);
+	if (code != DUCKDB_V2_ERROR_NONE) {
+		return std::nullopt;
+	}
+	return detail::Factory::Make<Value>(value);
+}
+
+auto FunctionBindInput::GetArgName(idx_t index) const -> std::string {
+	duckdb_v2_identifier_t name = {nullptr, 0};
+	CheckedAPICall(duckdb_v2_function_bind_get_arg_name, BindInfo(args), index, &name);
+	return std::string(FromStr(name));
+}
+
+auto FunctionBindInput::FindArg(const std::string &name) const -> std::optional<idx_t> {
+	idx_t index = 0;
+	bool found = false;
+	auto name_str = ToStr(name);
+	CheckedAPICall(duckdb_v2_function_bind_get_arg_index, BindInfo(args), &name_str, &index, &found);
+	if (!found) {
+		return std::nullopt;
+	}
+	return index;
+}
+
+auto FunctionBindInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
 }
 
 auto FunctionSignature::SetReturnType(const LogicalType &type) -> FunctionSignature & {
@@ -2841,14 +2928,16 @@ auto ScalarFunction::SetBindCallback(BindCallback callback) & -> ScalarFunction 
 
 	// The C-side callback is one shared trampoline; the user's callback is looked
 	// up through the info table riding the user_data slot (set by Register).
-	static auto trampoline = [](duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info,
+	                            duckdb_v2_scalar_function_bind_info_handle result, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_scalar_function_bind_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_function_bind_get_user_data, info, &user_data);
 			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
 
-			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(result),
+			                                              static_cast<void *>(context));
 			function.bind_callback(input);
 		});
 	};
@@ -2945,59 +3034,13 @@ auto ScalarFunction::Register() -> void {
 }
 
 void *ScalarFunction::BindInput::GetUserDataInternal() const {
-	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_scalar_function_bind_get_user_data,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), &user_data);
-	const auto &function = *static_cast<const ScalarFunctionInfo *>(user_data);
+	const auto &function = *static_cast<const ScalarFunctionInfo *>(GetFunctionInfo());
 	return RequireUserData(function.user_data);
-}
-
-void ScalarFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
-                                                    void (*destructor)(void *)) {
-	duckdb_v2_opaque opaque {data, destructor, equals};
-	CheckedAPICall(duckdb_v2_scalar_function_bind_set_bind_data,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), &opaque);
-}
-
-auto ScalarFunction::BindInput::GetArgCount() const -> idx_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_scalar_function_bind_get_arg_count,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), &count);
-	return count;
-}
-
-auto ScalarFunction::BindInput::GetArgType(idx_t index) const -> LogicalType {
-	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_scalar_function_bind_get_arg_type,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), index, &type);
-	return detail::Factory::Make<LogicalType>(type);
-}
-
-auto ScalarFunction::BindInput::GetConstantArgument(idx_t index) const -> Value {
-	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_scalar_function_bind_get_arg_value,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), index, &value);
-	return detail::Factory::Make<Value>(value);
-}
-
-auto ScalarFunction::BindInput::TryGetConstantArgument(idx_t index) const -> std::optional<Value> {
-	duckdb_v2_value_handle value = nullptr;
-	// No error slot: an argument without a constant value is absence here, not a failure to report.
-	const auto code = duckdb_v2_scalar_function_bind_get_arg_value(
-	    static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), index, &value, nullptr);
-	if (code != DUCKDB_V2_ERROR_NONE) {
-		return std::nullopt;
-	}
-	return detail::Factory::Make<Value>(value);
 }
 
 auto ScalarFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
 	CheckedAPICall(duckdb_v2_scalar_function_bind_set_return_type,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(args), type.handle());
-}
-
-auto ScalarFunction::BindInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(result), type.handle());
 }
 
 void *ScalarFunction::InitInput::GetBindDataInternal() const {
@@ -3054,18 +3097,22 @@ auto ScalarFunction::ExecInput::GetRowCount() const -> idx_t {
 	return count;
 }
 
-auto ScalarFunction::ExecInput::GetArgCount() const -> idx_t {
-	uint32_t count = 0;
+auto ScalarFunction::ExecInput::GetArgumentCounts() const -> ArgumentCounts {
+	idx_t counts[4] = {};
 	CheckedAPICall(duckdb_v2_scalar_function_exec_get_arg_count,
-	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &count);
-	return count;
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), &counts[0], &counts[1], &counts[2],
+	               &counts[3]);
+	return ToArgumentCounts(counts[0], counts[1], counts[2], counts[3]);
+}
+
+auto ScalarFunction::ExecInput::GetArgCount() const -> idx_t {
+	return GetArgumentCounts().Total();
 }
 
 auto ScalarFunction::ExecInput::GetArg(idx_t index) const -> Vector {
 	duckdb_v2_vector_handle vector = nullptr;
 	CheckedAPICall(duckdb_v2_scalar_function_exec_get_arg,
-	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), static_cast<uint32_t>(index),
-	               &vector);
+	               static_cast<duckdb_v2_scalar_function_exec_info_handle>(args), index, &vector);
 	return detail::Factory::Make<Vector>(vector);
 }
 
@@ -3183,14 +3230,16 @@ auto AggregateFunction::SetBindCallback(BindCallback callback) & -> AggregateFun
 
 	// The C-side callback is one shared trampoline; the user's callback is looked
 	// up through the info table riding the user_data slot (set by Register).
-	static auto trampoline = [](duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info,
+	                            duckdb_v2_aggregate_function_bind_info_handle result, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_aggregate_function_bind_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_function_bind_get_user_data, info, &user_data);
 			const auto &function = *static_cast<AggregateFunctionInfo *>(user_data);
 
-			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(result),
+			                                              static_cast<void *>(context));
 			function.bind_callback(input);
 		});
 	};
@@ -3394,59 +3443,13 @@ auto AggregateFunction::Register() -> void {
 }
 
 void *AggregateFunction::BindInput::GetUserDataInternal() const {
-	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_user_data,
-	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), &user_data);
-	const auto &function = *static_cast<const AggregateFunctionInfo *>(user_data);
-	return RequireAggregateUserData(function.user_data);
-}
-
-void AggregateFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
-                                                       void (*destructor)(void *)) {
-	duckdb_v2_opaque opaque {data, destructor, equals};
-	CheckedAPICall(duckdb_v2_aggregate_function_bind_set_bind_data,
-	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), &opaque);
-}
-
-auto AggregateFunction::BindInput::GetArgCount() const -> idx_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_arg_count,
-	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), &count);
-	return count;
-}
-
-auto AggregateFunction::BindInput::GetArgType(idx_t index) const -> LogicalType {
-	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_arg_type,
-	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), index, &type);
-	return detail::Factory::Make<LogicalType>(type);
-}
-
-auto AggregateFunction::BindInput::GetConstantArgument(idx_t index) const -> Value {
-	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_aggregate_function_bind_get_arg_value,
-	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), index, &value);
-	return detail::Factory::Make<Value>(value);
-}
-
-auto AggregateFunction::BindInput::TryGetConstantArgument(idx_t index) const -> std::optional<Value> {
-	duckdb_v2_value_handle value = nullptr;
-	// No error slot: an argument without a constant value is absence here, not a failure to report.
-	const auto code = duckdb_v2_aggregate_function_bind_get_arg_value(
-	    static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), index, &value, nullptr);
-	if (code != DUCKDB_V2_ERROR_NONE) {
-		return std::nullopt;
-	}
-	return detail::Factory::Make<Value>(value);
+	const auto &function = *static_cast<const AggregateFunctionInfo *>(GetFunctionInfo());
+	return RequireUserData(function.user_data);
 }
 
 auto AggregateFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
 	CheckedAPICall(duckdb_v2_aggregate_function_bind_set_return_type,
-	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(args), type.handle());
-}
-
-auto AggregateFunction::BindInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+	               static_cast<duckdb_v2_aggregate_function_bind_info_handle>(result), type.handle());
 }
 
 void *AggregateFunction::SizeInput::GetBindDataInternal() const {
@@ -3520,18 +3523,22 @@ auto AggregateFunction::UpdateInput::GetRowCount() const -> idx_t {
 	return count;
 }
 
-auto AggregateFunction::UpdateInput::GetArgCount() const -> idx_t {
-	uint32_t count = 0;
+auto AggregateFunction::UpdateInput::GetArgumentCounts() const -> ArgumentCounts {
+	idx_t counts[4] = {};
 	CheckedAPICall(duckdb_v2_aggregate_function_update_get_arg_count,
-	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), &count);
-	return count;
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), &counts[0], &counts[1],
+	               &counts[2], &counts[3]);
+	return ToArgumentCounts(counts[0], counts[1], counts[2], counts[3]);
+}
+
+auto AggregateFunction::UpdateInput::GetArgCount() const -> idx_t {
+	return GetArgumentCounts().Total();
 }
 
 auto AggregateFunction::UpdateInput::GetArg(idx_t index) const -> Vector {
 	duckdb_v2_vector_handle vector = nullptr;
 	CheckedAPICall(duckdb_v2_aggregate_function_update_get_arg,
-	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), static_cast<uint32_t>(index),
-	               &vector);
+	               static_cast<duckdb_v2_aggregate_function_update_info_handle>(args), index, &vector);
 	return detail::Factory::Make<Vector>(vector);
 }
 
@@ -3778,14 +3785,16 @@ auto TableFunction::SetBindCallback(BindCallback callback) & -> TableFunction & 
 
 	// The C-side callback is one shared trampoline; the user's callback is looked
 	// up through the info table riding the user_data slot (set by Register).
-	static auto trampoline = [](duckdb_v2_table_function_bind_info_handle info, duckdb_v2_context_handle context,
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info,
+	                            duckdb_v2_table_function_bind_info_handle result, duckdb_v2_context_handle context,
 	                            duckdb_v2_error_info_handle *err) {
 		WithExceptionGuard(err, [&]() {
 			void *user_data = nullptr;
-			CheckedAPICall(duckdb_v2_table_function_bind_get_user_data, info, &user_data);
+			CheckedAPICall(duckdb_v2_function_bind_get_user_data, info, &user_data);
 			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
 
-			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(context));
+			auto input = detail::Factory::Make<BindInput>(static_cast<void *>(info), static_cast<void *>(result),
+			                                              static_cast<void *>(context));
 			function.bind_callback(input);
 		});
 	};
@@ -4016,48 +4025,17 @@ auto TableFunction::Register() -> void {
 auto TableFunction::BindInput::AddResultColumn(const std::string &name, const LogicalType &type) -> void {
 	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
 	CheckedAPICall(duckdb_v2_table_function_bind_add_result_column,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &name_str, type.handle());
-}
-
-void TableFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
-                                                   void (*destructor)(void *)) {
-	duckdb_v2_opaque opaque {data, destructor, equals};
-	CheckedAPICall(duckdb_v2_table_function_bind_set_bind_data,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &opaque);
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &name_str, type.handle());
 }
 
 void *TableFunction::BindInput::GetUserDataInternal() const {
-	void *user_data = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_bind_get_user_data,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &user_data);
-	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
-	return RequireTableUserData(function.user_data);
-}
-
-auto TableFunction::BindInput::GetArgCount() const -> idx_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_table_function_bind_get_arg_count,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &count);
-	return count;
-}
-
-auto TableFunction::BindInput::GetArgType(idx_t index) const -> LogicalType {
-	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_bind_get_arg_type,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), index, &type);
-	return detail::Factory::Make<LogicalType>(type);
-}
-
-auto TableFunction::BindInput::GetArgument(idx_t index) const -> Value {
-	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_bind_get_arg_value,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), index, &value);
-	return detail::Factory::Make<Value>(value);
+	const auto &function = *static_cast<const TableFunctionInfo *>(GetFunctionInfo());
+	return RequireUserData(function.user_data);
 }
 
 auto TableFunction::BindInput::SetCardinality(idx_t cardinality, bool is_exact) -> void {
 	CheckedAPICall(duckdb_v2_table_function_bind_set_cardinality,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), cardinality, is_exact);
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), cardinality, is_exact);
 }
 
 static_assert(static_cast<uint8_t>(OrderPreservation::NO_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_NO_ORDER,
@@ -4069,31 +4047,27 @@ static_assert(static_cast<uint8_t>(OrderPreservation::FIXED_ORDER) == DUCKDB_V2_
 
 auto TableFunction::BindInput::SetOrderPreservation(OrderPreservation order) -> void {
 	CheckedAPICall(duckdb_v2_table_function_bind_set_order_preservation,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args),
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result),
 	               static_cast<DUCKDB_V2_ORDER_PRESERVATION>(order));
 }
 
 auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void {
 	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), column_index,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index,
 	               static_cast<const idx_t *>(nullptr), static_cast<idx_t>(0), identifier.handle());
 }
 
 auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path,
                                                    const Value &identifier) -> void {
 	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), column_index, child_path.data(),
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index, child_path.data(),
 	               static_cast<idx_t>(child_path.size()), identifier.handle());
 }
 
 auto TableFunction::BindInput::AddFileMetadata(const std::string &key, const Value &value) -> void {
 	auto view = ToStr(key);
 	CheckedAPICall(duckdb_v2_table_function_bind_add_file_metadata,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(args), &view, value.handle());
-}
-
-auto TableFunction::BindInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &view, value.handle());
 }
 
 void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {

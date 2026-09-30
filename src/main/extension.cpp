@@ -3,10 +3,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
-// the engine fills the whole function table, including the unstable part
-#ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
-#define DUCKDB_V2_API_ALLOW_UNSTABLE 1
-#endif
 #include "duckdb/main/capi_v2/extension_api_v2.hpp"
 #include "duckdb/main/extension_helper.hpp"
 

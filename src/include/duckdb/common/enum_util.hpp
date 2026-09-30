@@ -66,6 +66,8 @@ enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
 
+enum class AlterSchemaType : uint8_t;
+
 enum class AlterTableFunctionType : uint8_t;
 
 enum class AlterTableType : uint8_t;
@@ -486,6 +488,8 @@ enum class RemoveUnusedColumnsMode : uint8_t;
 
 enum class RenderMode : uint8_t;
 
+enum class RequestSizing : uint8_t;
+
 enum class RequestType : uint8_t;
 
 enum class ResultEagerness : uint8_t;
@@ -711,6 +715,9 @@ const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
+
+template<>
+const char* EnumUtil::ToChars<AlterSchemaType>(AlterSchemaType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterTableFunctionType>(AlterTableFunctionType value);
@@ -1343,6 +1350,9 @@ template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
+const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
+
+template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
 
 template<>
@@ -1654,6 +1664,9 @@ AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value)
 
 template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
+
+template<>
+AlterSchemaType EnumUtil::FromString<AlterSchemaType>(const char *value);
 
 template<>
 AlterTableFunctionType EnumUtil::FromString<AlterTableFunctionType>(const char *value);
@@ -2284,6 +2297,9 @@ RemoveUnusedColumnsMode EnumUtil::FromString<RemoveUnusedColumnsMode>(const char
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
+
+template<>
+RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);
