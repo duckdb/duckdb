@@ -244,6 +244,16 @@ public:
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
+	//! Typed variant, leaves result untouched if not found
+	template <class TYPE>
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, TYPE &result) const {
+		Value output;
+		auto lookup_result = TryGetCurrentSetting(key, output);
+		if (lookup_result) {
+			result = output.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
 	//! Returns the value of the current setting set by the user - if the user has set it.
 	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 

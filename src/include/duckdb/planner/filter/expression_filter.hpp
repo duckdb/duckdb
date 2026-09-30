@@ -50,6 +50,8 @@ public:
 	//! Build an IS NULL/IS NOT NULL expression over a single-column filter subject.
 	static unique_ptr<Expression> CreateNullCheckExpression(unique_ptr<Expression> column,
 	                                                        ExpressionType expression_type);
+	//! Build a single-column filter comparing against a constant.
+	static unique_ptr<ExpressionFilter> CreateComparisonFilter(ExpressionType comparison_type, Value constant);
 
 	//! Enhanced CheckStatistics that recognizes standard expression patterns
 	static FilterPropagateResult CheckExpressionStatistics(const Expression &expr, const BaseStatistics &stats);

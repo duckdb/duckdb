@@ -35,6 +35,12 @@ void BaseQueryResult::ThrowError(const string &prepended_message) const {
 	error.Throw(prepended_message);
 }
 
+void BaseQueryResult::ThrowIfError(const string &prepended_message) const {
+	if (HasError()) {
+		error.Throw(prepended_message);
+	}
+}
+
 void BaseQueryResult::SetError(ErrorData error) {
 	success = !error.HasError();
 	this->error = std::move(error);
@@ -335,9 +341,7 @@ unique_ptr<ColumnDataCollection> QueryResult::TakeCollection() {
 
 Value QueryResult::GetValue(idx_t column_idx, idx_t row_idx) {
 	Complete();
-	if (HasError()) {
-		ThrowError();
-	}
+	ThrowIfError();
 	if (!row_collection) {
 		if (!collection) {
 			ThrowNoCollection();

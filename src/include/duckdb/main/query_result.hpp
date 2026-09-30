@@ -53,6 +53,7 @@ public:
 	DUCKDB_API idx_t ColumnCount() const;
 
 	[[noreturn]] DUCKDB_API void ThrowError(const string &prepended_message = "") const;
+	DUCKDB_API void ThrowIfError(const string &prepended_message = "") const;
 	DUCKDB_API void SetError(ErrorData error);
 	DUCKDB_API bool HasError() const;
 	DUCKDB_API const ExceptionType &GetErrorType() const;

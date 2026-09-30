@@ -572,9 +572,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		string init_query = queries["init"];
 		result = state->con.Query(init_query);
 		while (result) {
-			if (result->HasError()) {
-				result->ThrowError();
-			}
+			result->ThrowIfError();
 			result = std::move(result->next);
 		}
 	}
@@ -608,9 +606,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 			// If tables exist, it's a good indication that the database is fine
 			// If they don't load the database
 			auto result = state->con.Query("SHOW TABLES;");
-			if (result->HasError()) {
-				result->ThrowError();
-			}
+			result->ThrowIfError();
 			if (result->RowCount() > 0) {
 				in_memory_db_has_data = true;
 			}
@@ -624,9 +620,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 	}
 	while (result) {
-		if (result->HasError()) {
-			result->ThrowError();
-		}
+		result->ThrowIfError();
 		result = std::move(result->next);
 	}
 
@@ -676,9 +670,7 @@ void InterpretedBenchmark::Assert(BenchmarkState *state_p) {
 	for (auto &assert_query : assert_queries) {
 		auto &query = assert_query.query;
 		auto result = state.con.Query(query);
-		if (result->HasError()) {
-			result->ThrowError();
-		}
+		result->ThrowIfError();
 		auto verify_result = VerifyInternal(state_p, assert_query, *result);
 		if (!verify_result.empty()) {
 			throw InvalidInputException("Assertion query failed:\n%s", verify_result);
@@ -747,9 +739,7 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 		string cleanup_query = queries["cleanup"];
 		result = state.con.Query(cleanup_query);
 		while (result) {
-			if (result->HasError()) {
-				result->ThrowError();
-			}
+			result->ThrowIfError();
 			result = std::move(result->next);
 		}
 	}

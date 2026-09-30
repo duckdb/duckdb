@@ -77,6 +77,13 @@ unique_ptr<Expression> ExpressionFilter::CreateNullCheckExpression(unique_ptr<Ex
 	return std::move(result);
 }
 
+unique_ptr<ExpressionFilter> ExpressionFilter::CreateComparisonFilter(ExpressionType comparison_type, Value constant) {
+	auto column = make_uniq<BoundReferenceExpression>(constant.type(), 0ULL);
+	auto comparison = BoundComparisonExpression::Create(comparison_type, std::move(column),
+	                                                    make_uniq<BoundConstantExpression>(std::move(constant)));
+	return make_uniq<ExpressionFilter>(std::move(comparison));
+}
+
 static bool IsOptionalInternalFunction(const BoundFunctionExpression &func) {
 	return func.Function().GetName() == OptionalFilterScalarFun::NAME ||
 	       func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME;

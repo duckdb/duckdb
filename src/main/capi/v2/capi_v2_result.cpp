@@ -36,11 +36,7 @@ DUCKDB_V2_RESULT_TYPE MapResultType(StatementReturnType t) {
 // ---------------------------------------------------------------------------
 
 void ResultWrapperV2::BeginPending(unique_ptr<QueryResult> next_handle, bool is_principal) {
-	if (next_handle->HasError()) {
-		// Re-throw the typed ErrorData so the exception's ExceptionType is
-		// preserved and routed through GetErrorCodeFromExceptionType.
-		next_handle->GetErrorObject().Throw();
-	}
+	next_handle->ThrowIfError();
 	principal_active = is_principal;
 	if (is_principal) {
 		types = next_handle->GetTypes();

@@ -19,20 +19,10 @@ struct ICUTableRange {
 		      calendar(other.calendar->Copy()), cardinality(other.cardinality) {
 		}
 
-		explicit ICURangeBindData(ClientContext &context, const vector<Value> &inputs) {
-			Value tz_value;
-			if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-				tz_setting = tz_value.ToString();
-			}
+		explicit ICURangeBindData(ClientContext &context, const vector<Value> &inputs) : cal_setting("gregorian") {
+			context.TryGetCurrentSetting("TimeZone", tz_setting);
+			context.TryGetCurrentSetting("Calendar", cal_setting);
 			auto tz = TimeZone::TryCreate(tz_setting);
-
-			Value cal_value;
-			if (context.TryGetCurrentSetting("Calendar", cal_value)) {
-				cal_setting = cal_value.ToString();
-			} else {
-				cal_setting = "gregorian";
-			}
-
 			calendar = Calendar::TryCreate(cal_setting, tz ? std::move(tz) : TimeZone::TryCreate("UTC"));
 			if (!calendar) {
 				throw InternalException("Unable to create calendar.");
