@@ -16,8 +16,6 @@ module: arrow
 #   arrow_importer   created from an ArrowSchema, converts ArrowArrays into data chunks
 #   arrow_exporter   created from DuckDB column types, converts data chunks into ArrowArrays
 #
-# A third handle, arrow_result, is a query result that produces ArrowArrays instead of data chunks.
-#
 # Both work the same way: append one input, take outputs until none is left, repeat. The
 # `batch_size` given at creation caps the rows per output. A long input is split across several
 # outputs. Rows left over that do not fill a batch are held back and joined with the next input,
@@ -37,6 +35,8 @@ module: arrow
 # chunks point into the Arrow buffers, so something has to keep those buffers alive. Exporting
 # copies into freshly allocated Arrow buffers, so nothing needs to be retained. Both appends take
 # a `consume` flag; each documents what it means there.
+#
+# A third handle, arrow_result, is a query result that produces ArrowArrays instead of data chunks.
 #
 # Out of scope, left to language bindings or to later work:
 #   - Registering an Arrow stream as a SQL table. A binding can keep its own name-to-stream

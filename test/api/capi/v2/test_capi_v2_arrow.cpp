@@ -1243,13 +1243,15 @@ bool IsValidAt(const ArrowArray &batch, idx_t column, idx_t row) {
 	return !bits || ((bits[index / 8] >> (index % 8)) & 1);
 }
 
-//! A column in the "u" format: 32-bit offsets.
-std::string StringAt(const ArrowArray &batch, idx_t column, idx_t row) {
-	auto &child = *batch.children[column];
-	auto offsets = static_cast<const int32_t *>(child.buffers[1]);
-	auto data = static_cast<const char *>(child.buffers[2]);
-	auto index = RowIndex(batch, column, row);
+//! An array in the "u" format: 32-bit offsets.
+std::string StringValue(const ArrowArray &strings, idx_t index) {
+	auto offsets = static_cast<const int32_t *>(strings.buffers[1]);
+	auto data = static_cast<const char *>(strings.buffers[2]);
 	return std::string(data + offsets[index], static_cast<size_t>(offsets[index + 1] - offsets[index]));
+}
+
+std::string StringAt(const ArrowArray &batch, idx_t column, idx_t row) {
+	return StringValue(*batch.children[column], RowIndex(batch, column, row));
 }
 
 //! Whether column 0, a BIGINT, counts up from `first` across all arrays.
@@ -1279,6 +1281,26 @@ std::vector<std::string> ChildNames(const ArrowSchema &schema) {
 		names.emplace_back(schema.children[i]->name);
 	}
 	return names;
+}
+
+bool SameText(const char *a, const char *b) {
+	return (!a && !b) || (a && b && std::strcmp(a, b) == 0);
+}
+
+bool SameSchema(const ArrowSchema &a, const ArrowSchema &b) {
+	if (!SameText(a.format, b.format) || !SameText(a.name, b.name) || a.flags != b.flags ||
+	    a.n_children != b.n_children || !a.dictionary != !b.dictionary || !a.metadata != !b.metadata) {
+		return false;
+	}
+	for (int64_t i = 0; i < a.n_children; i++) {
+		if (!SameSchema(*a.children[i], *b.children[i])) {
+			return false;
+		}
+	}
+	return !a.dictionary || SameSchema(*a.dictionary, *b.dictionary);
+}
+
+void UnusedStreamRelease(ArrowArrayStream *) {
 }
 
 std::string ErrorText(duckdb_v2_error_info_handle err) {
@@ -1487,6 +1509,9 @@ TEST_CASE("V2 arrow result: an INSERT reports its changed rows, DDL reports noth
 	REQUIRE(QueryArrow(fx.conn, "CREATE TABLE u (x INTEGER)", 0, &ddl) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_arrow_result_get_result_type(ddl, &result_type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(result_type == DUCKDB_V2_RESULT_TYPE_NOTHING);
+	OwnedSchema ddl_schema;
+	REQUIRE(duckdb_v2_arrow_result_get_schema(ddl, &ddl_schema.schema, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ddl_schema.schema.n_children == 1);
 	REQUIRE(duckdb_v2_arrow_result_drain(ddl, &rows_changed, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(rows_changed == 0);
 	duckdb_v2_arrow_result_destroy(&ddl);
@@ -1504,6 +1529,9 @@ TEST_CASE("V2 arrow result: a statement that completes before its result is retu
 	auto statement_type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
 	REQUIRE(duckdb_v2_arrow_result_get_statement_type(r, &statement_type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(statement_type == DUCKDB_V2_STATEMENT_TYPE_CALL);
+	OwnedSchema schema;
+	REQUIRE(duckdb_v2_arrow_result_get_schema(r, &schema.schema, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ChildFormats(schema.schema) == std::vector<std::string> {"l"});
 
 	ArrowBatches batches;
 	StepAll(r, batches);
@@ -1616,8 +1644,13 @@ TEST_CASE("V2 arrow result: an interrupted C stream fails get_next", "[capi_v2][
 #endif
 
 TEST_CASE("V2 arrow result: arrays and schemas outlive the result and the database", "[capi_v2][arrow]") {
+	struct LifetimeCase {
+		const char *sql;
+		int64_t columns;
+	};
 	// SELECT streams its arrays; CALL completes first and hands out shared exports of retained arrays.
-	for (auto sql : {"SELECT i, 'v' || i AS s FROM range(3000) t(i)", "CALL range(3000)"}) {
+	for (auto &lifetime_case :
+	     {LifetimeCase {"SELECT i, 'v' || i AS s FROM range(3000) t(i)", 2}, LifetimeCase {"CALL range(3000)", 1}}) {
 		duckdb_v2_environment_handle env = nullptr;
 		duckdb_v2_instance_handle instance = nullptr;
 		duckdb_v2_connection_handle conn = nullptr;
@@ -1629,7 +1662,7 @@ TEST_CASE("V2 arrow result: arrays and schemas outlive the result and the databa
 		OwnedSchema schema;
 		{
 			ArrowResult r;
-			REQUIRE(QueryArrow(conn, sql, 1000, &r) == DUCKDB_V2_ERROR_NONE);
+			REQUIRE(QueryArrow(conn, lifetime_case.sql, 1000, &r) == DUCKDB_V2_ERROR_NONE);
 			REQUIRE(duckdb_v2_arrow_result_get_schema(r, &schema.schema, nullptr) == DUCKDB_V2_ERROR_NONE);
 			FetchAll(r, batches);
 		}
@@ -1637,10 +1670,11 @@ TEST_CASE("V2 arrow result: arrays and schemas outlive the result and the databa
 		duckdb_v2_instance_destroy(&instance);
 		REQUIRE(duckdb_v2_environment_destroy(&env) == DUCKDB_V2_ERROR_NONE);
 
+		REQUIRE(schema.schema.n_children == lifetime_case.columns);
 		REQUIRE(ChildFormats(schema.schema)[0] == "l");
 		REQUIRE(batches.RowCount() == 3000);
 		REQUIRE(CountsUpFrom(batches, 0));
-		if (schema.schema.n_children == 2) {
+		if (lifetime_case.columns == 2) {
 			bool strings_match = true;
 			idx_t i = 0;
 			for (auto &array : batches.arrays) {
@@ -1763,6 +1797,162 @@ TEST_CASE("V2 arrow result: an unfinished result survives disconnect", "[capi_v2
 	duckdb_v2_environment_destroy(&env);
 }
 
+TEST_CASE("V2 arrow result: a result without rows ends without an array", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	const char *sql = "SELECT i FROM range(100) t(i) WHERE i < 0";
+
+	ArrowResult fetched;
+	REQUIRE(QueryArrow(fx.conn, sql, 0, &fetched) == DUCKDB_V2_ERROR_NONE);
+	OwnedSchema schema;
+	REQUIRE(duckdb_v2_arrow_result_get_schema(fetched, &schema.schema, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ChildFormats(schema.schema) == std::vector<std::string> {"l"});
+	ArrowBatches fetched_batches;
+	FetchAll(fetched, fetched_batches);
+	REQUIRE(fetched_batches.arrays.empty());
+	duckdb_v2_arrow_result_destroy(&fetched);
+
+	ArrowResult stepped;
+	REQUIRE(QueryArrow(fx.conn, sql, 0, &stepped) == DUCKDB_V2_ERROR_NONE);
+	ArrowBatches stepped_batches;
+	StepAll(stepped, stepped_batches);
+	REQUIRE(stepped_batches.arrays.empty());
+	duckdb_v2_arrow_result_destroy(&stepped);
+
+	ArrowResult streamed;
+	REQUIRE(QueryArrow(fx.conn, sql, 0, &streamed) == DUCKDB_V2_ERROR_NONE);
+	OwnedStream stream;
+	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&streamed, &stream.stream, nullptr) == DUCKDB_V2_ERROR_NONE);
+	OwnedSchema stream_schema;
+	REQUIRE(stream.stream.get_schema(&stream.stream, &stream_schema.schema) == 0);
+	REQUIRE(SameSchema(schema.schema, stream_schema.schema));
+	ArrowBatches streamed_batches;
+	StreamAll(stream.stream, streamed_batches);
+	REQUIRE(streamed_batches.arrays.empty());
+}
+
+TEST_CASE("V2 arrow result: nested, dictionary and decimal columns keep their structure", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')");
+	ArrowResult r;
+	REQUIRE(QueryArrow(fx.conn,
+	                   "SELECT [i, i + 1] AS l, {'a': i, 'b': 'x' || i} AS s, "
+	                   "(['sad', 'ok', 'happy'][i % 3 + 1])::mood AS m, (i / 4)::DECIMAL(18, 3) AS d "
+	                   "FROM range(100) t(i)",
+	                   0, &r) == DUCKDB_V2_ERROR_NONE);
+
+	OwnedSchema schema;
+	REQUIRE(duckdb_v2_arrow_result_get_schema(r, &schema.schema, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ChildNames(schema.schema) == std::vector<std::string> {"l", "s", "m", "d"});
+	auto &list = *schema.schema.children[0];
+	REQUIRE(std::string(list.format) == "+l");
+	REQUIRE(ChildFormats(list) == std::vector<std::string> {"l"});
+	auto &record = *schema.schema.children[1];
+	REQUIRE(std::string(record.format) == "+s");
+	REQUIRE(ChildNames(record) == std::vector<std::string> {"a", "b"});
+	REQUIRE(ChildFormats(record) == std::vector<std::string> {"l", "u"});
+	auto &mood = *schema.schema.children[2];
+	REQUIRE(std::string(mood.format) == "C");
+	REQUIRE(mood.dictionary != nullptr);
+	REQUIRE(std::string(mood.dictionary->format) == "u");
+	REQUIRE(std::string(schema.schema.children[3]->format).rfind("d:18,3", 0) == 0);
+
+	// The stream's schema is a second copy: the same structure, none of the same nodes.
+	OwnedStream stream;
+	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&r, &stream.stream, nullptr) == DUCKDB_V2_ERROR_NONE);
+	OwnedSchema stream_schema;
+	REQUIRE(stream.stream.get_schema(&stream.stream, &stream_schema.schema) == 0);
+	REQUIRE(SameSchema(schema.schema, stream_schema.schema));
+	REQUIRE(stream_schema.schema.children[2]->dictionary != mood.dictionary);
+
+	ArrowBatches batches;
+	StreamAll(stream.stream, batches);
+	REQUIRE(batches.RowCount() == 100);
+	bool values_match = true;
+	idx_t i = 0;
+	for (auto &array : batches.arrays) {
+		auto &lists = *array.children[0];
+		auto list_offsets = static_cast<const int32_t *>(lists.buffers[1]);
+		auto &elements = *lists.children[0];
+		auto element_values = static_cast<const int64_t *>(elements.buffers[1]);
+		auto &records = *array.children[1];
+		auto &record_a = *records.children[0];
+		auto a_values = static_cast<const int64_t *>(record_a.buffers[1]);
+		auto &moods = *array.children[2];
+		auto mood_indexes = static_cast<const uint8_t *>(moods.buffers[1]);
+		for (idx_t row = 0; row < static_cast<idx_t>(array.length); row++, i++) {
+			auto list_index = static_cast<idx_t>(array.offset + lists.offset) + row;
+			auto first = static_cast<idx_t>(list_offsets[list_index] + elements.offset);
+			values_match = values_match && list_offsets[list_index + 1] - list_offsets[list_index] == 2 &&
+			               element_values[first] == static_cast<int64_t>(i) &&
+			               element_values[first + 1] == static_cast<int64_t>(i + 1);
+			auto a_index = static_cast<idx_t>(array.offset + records.offset + record_a.offset) + row;
+			values_match = values_match && a_values[a_index] == static_cast<int64_t>(i);
+			auto mood_index = static_cast<idx_t>(array.offset + moods.offset) + row;
+			values_match = values_match && mood_indexes[mood_index] == i % 3;
+		}
+	}
+	REQUIRE(values_match);
+	auto &dictionary = *batches.arrays[0].children[2]->dictionary;
+	REQUIRE(dictionary.length == 3);
+	REQUIRE(StringValue(dictionary, 0) == "sad");
+	REQUIRE(StringValue(dictionary, 2) == "happy");
+}
+
+TEST_CASE("V2 arrow result: a prepared Arrow result honours its batch size and converts to a stream",
+          "[capi_v2][arrow]") {
+	EnvFixture fx;
+	auto statement = ParseOne(fx.conn, "SELECT i FROM range(5000) t(i)");
+	duckdb_v2_prepared_statement_handle prepared = nullptr;
+	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, statement, false, &prepared, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_sql_statement_destroy(&statement);
+	{
+		ArrowResult r;
+		REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, nullptr, 0, 700, &r, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		ArrowResult busy;
+		REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, nullptr, 0, 700, &busy, nullptr) ==
+		        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+		REQUIRE(busy.handle == nullptr);
+		ArrowBatches batches;
+		FetchAll(r, batches);
+		REQUIRE(batches.RowCount() == 5000);
+		REQUIRE(batches.MaxLength() <= 700);
+		REQUIRE(CountsUpFrom(batches, 0));
+	}
+	{
+		ArrowResult r;
+		REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, nullptr, 0, 700, &r, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
+		OwnedStream stream;
+		REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&r, &stream.stream, nullptr) == DUCKDB_V2_ERROR_NONE);
+		ArrowBatches streamed;
+		StreamAll(stream.stream, streamed);
+		REQUIRE(streamed.RowCount() == 5000);
+		REQUIRE(streamed.MaxLength() <= 700);
+		REQUIRE(CountsUpFrom(streamed, 0));
+	}
+	duckdb_v2_prepared_statement_destroy(&prepared);
+}
+
+TEST_CASE("V2 arrow result: drain discards unread rows and frees the connection", "[capi_v2][arrow]") {
+	EnvFixture fx;
+	ArrowResult r;
+	REQUIRE(QueryArrow(fx.conn, "SELECT i FROM range(100000) t(i)", 1000, &r) == DUCKDB_V2_ERROR_NONE);
+	ArrowArray first {};
+	REQUIRE(duckdb_v2_arrow_result_fetch_array(r, &first, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(first.release != nullptr);
+	first.release(&first);
+
+	idx_t rows_changed = 7;
+	REQUIRE(duckdb_v2_arrow_result_drain(r, &rows_changed, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(rows_changed == 0);
+	ArrowArray after_drain {};
+	REQUIRE(duckdb_v2_arrow_result_fetch_array(r, &after_drain, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(after_drain.release == nullptr);
+	QueryResult next;
+	REQUIRE(Query(fx.conn, "SELECT 1", &next) == DUCKDB_V2_ERROR_NONE);
+}
+
 TEST_CASE("V2 arrow result: functions guard null arguments", "[capi_v2][arrow]") {
 	EnvFixture fx;
 	auto statement = ParseOne(fx.conn, "SELECT 1");
@@ -1795,7 +1985,10 @@ TEST_CASE("V2 arrow result: functions guard null arguments", "[capi_v2][arrow]")
 	REQUIRE(duckdb_v2_arrow_result_get_statement_type(nullptr, &statement_type, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_arrow_result_get_schema(nullptr, &schema, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	stream.release = UnusedStreamRelease;
 	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(nullptr, &stream, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(stream.release == nullptr);
+	stream.release = UnusedStreamRelease;
 	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&out, &stream, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(stream.release == nullptr);
 

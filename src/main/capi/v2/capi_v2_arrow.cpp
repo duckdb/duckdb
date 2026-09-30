@@ -287,8 +287,8 @@ struct CV2ArrowResultStream {
 };
 
 //! No exception may cross the C ABI, so a failure becomes an errno code and the message waits for get_last_error.
-template <class CALLBACK>
-int CallArrowResultStream(ArrowArrayStream *stream, CALLBACK callback) {
+template <class FUNC>
+int CallArrowResultStream(ArrowArrayStream *stream, FUNC callback) {
 	if (!stream || !stream->release || !stream->private_data) {
 		return EINVAL;
 	}
@@ -709,9 +709,10 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_result_get_schema(duckdb_v2_arrow_result_handle 
 DUCKDB_V2_ERROR duckdb_v2_arrow_result_to_arrow_c_stream(duckdb_v2_arrow_result_handle *result,
                                                          struct ArrowArrayStream *out_stream,
                                                          duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_stream);
+	out_stream->release = nullptr;
 	DUCKDB_CHECK_ARG(result);
 	DUCKDB_CHECK_ARG(*result);
-	DUCKDB_CHECK_ARG(out_stream);
 	return WithErrorHandler(err, [&]() {
 		auto self = duckdb::make_uniq<CV2ArrowResultStream>();
 		self->wrapper = duckdb::unique_ptr<ResultWrapperV2>(Convert(*result));
