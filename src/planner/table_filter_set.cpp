@@ -24,11 +24,6 @@
 
 namespace duckdb {
 
-struct LegacyStructPathEntry {
-	idx_t child_idx;
-	Identifier child_name;
-};
-
 static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
@@ -89,35 +84,14 @@ static bool IsSupportedConstantComparison(ExpressionType type) {
 	}
 }
 
-static bool TryExtractLegacySubject(const Expression &expr, vector<LegacyStructPathEntry> &struct_path) {
-	switch (expr.GetExpressionClass()) {
-	case ExpressionClass::BOUND_REF:
-	case ExpressionClass::BOUND_COLUMN_REF:
-		return true;
-	case ExpressionClass::BOUND_FUNCTION: {
-		auto &func = expr.Cast<BoundFunctionExpression>();
-		idx_t child_idx;
-		if (!TryGetStructExtractChildIndex(func, child_idx) || func.GetChildren().empty()) {
-			return false;
-		}
-		if (!TryExtractLegacySubject(*func.GetChildren()[0], struct_path)) {
-			return false;
-		}
-		Identifier child_name;
-		if (func.GetChildren()[0]->GetReturnType().id() == LogicalTypeId::STRUCT &&
-		    !StructType::IsUnnamed(func.GetChildren()[0]->GetReturnType())) {
-			child_name = StructType::GetChildName(func.GetChildren()[0]->GetReturnType(), child_idx);
-		}
-		struct_path.push_back({child_idx, std::move(child_name)});
-		return true;
-	}
-	default:
-		return false;
-	}
+static bool TryExtractLegacySubject(const Expression &expr, vector<StructExtractPathEntry> &struct_path) {
+	auto &subject = PeelStructExtractPath(expr, struct_path);
+	return subject.GetExpressionClass() == ExpressionClass::BOUND_REF ||
+	       subject.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
 }
 
 static unique_ptr<TableFilter> WrapStructFilterPath(unique_ptr<TableFilter> filter,
-                                                    const vector<LegacyStructPathEntry> &struct_path) {
+                                                    const vector<StructExtractPathEntry> &struct_path) {
 	for (auto it = struct_path.rbegin(); it != struct_path.rend(); ++it) {
 		filter = make_uniq<LegacyStructFilter>(it->child_idx, it->child_name, std::move(filter));
 	}
@@ -149,7 +123,7 @@ static unique_ptr<TableFilter> TrySerializeComparisonToLegacyFilter(const BoundF
 		comparison_type = FlipComparisonType(comparison_type);
 	}
 
-	vector<LegacyStructPathEntry> struct_path;
+	vector<StructExtractPathEntry> struct_path;
 	if (!TryExtractLegacySubject(subject, struct_path)) {
 		return nullptr;
 	}
@@ -176,7 +150,7 @@ static unique_ptr<TableFilter> TrySerializeOperatorToLegacyFilter(const BoundOpe
 		if (op.GetChildren().size() != 1) {
 			return nullptr;
 		}
-		vector<LegacyStructPathEntry> struct_path;
+		vector<StructExtractPathEntry> struct_path;
 		if (!TryExtractLegacySubject(*op.GetChildren()[0], struct_path)) {
 			return nullptr;
 		}
@@ -189,7 +163,7 @@ static unique_ptr<TableFilter> TrySerializeOperatorToLegacyFilter(const BoundOpe
 		if (op.GetChildren().empty()) {
 			return nullptr;
 		}
-		vector<LegacyStructPathEntry> struct_path;
+		vector<StructExtractPathEntry> struct_path;
 		if (!TryExtractLegacySubject(*op.GetChildren()[0], struct_path)) {
 			return nullptr;
 		}
