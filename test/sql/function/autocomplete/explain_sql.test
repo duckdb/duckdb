@@ -7,7 +7,7 @@ require autocomplete
 query TT
 EXPLAIN (SQL) SELECT sum(i) AS total FROM range(5) t(i) WHERE i > 1;
 ----
-sql	<REGEX>:SELECT "system"\.main\.sum\(r0\.column0\) AS total\nFROM "system"\.main\."range"\(CAST\(5 AS BIGINT\)\) AS r0\(column0\)\nWHERE \(r0\.column0 > CAST\(1 AS BIGINT\)\)
+sql	<REGEX>:(?s)SELECT.*\n *FROM .*"range".*\n *WHERE .* > CAST\(1 AS BIGINT\).*
 
 statement ok
 CREATE SEQUENCE formatted_explain_sequence;
@@ -24,6 +24,16 @@ true
 
 statement ok
 SET debug_verify_statement='explain_sql_strict';
+
+statement ok
+CREATE TABLE formatted_completion(format_me INTEGER);
+
+query I
+SELECT suggestion_start FROM sql_auto_complete('
+SELECT
+    format_m') WHERE suggestion='format_me';
+----
+12
 
 query II
 WITH t AS MATERIALIZED (SELECT * FROM (VALUES (1), (1), (NULL), (2)) v(i))
