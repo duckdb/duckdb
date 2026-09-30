@@ -1367,6 +1367,33 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_order_preservation)
 	(duckdb_v2_table_function_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_arrow_result_destroy)(duckdb_v2_arrow_result_handle *result);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_drain)
+	(duckdb_v2_arrow_result_handle result, idx_t *out_rows_changed, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_fetch_array)
+	(duckdb_v2_arrow_result_handle result, struct ArrowArray *out_array, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_get_result_type)
+	(duckdb_v2_arrow_result_handle result, DUCKDB_V2_RESULT_TYPE *out_type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_get_schema)
+	(duckdb_v2_arrow_result_handle result, struct ArrowSchema *out_schema, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_get_statement_type)
+	(duckdb_v2_arrow_result_handle result, DUCKDB_V2_STATEMENT_TYPE *out_type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_step)
+	(duckdb_v2_arrow_result_handle result, struct ArrowArray *out_array, DUCKDB_V2_RESULT_STEP_STATUS *out_status,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_to_arrow_c_stream)
+	(duckdb_v2_arrow_result_handle *result, struct ArrowArrayStream *out_stream, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_wait)
+	(duckdb_v2_arrow_result_handle result, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_prepared_statement_execute_arrow)
+	(duckdb_v2_prepared_statement_handle prepared, const duckdb_v2_identifier_t *parameter_names,
+	 const duckdb_v2_value_handle *parameter_values, idx_t parameter_count, idx_t batch_size,
+	 duckdb_v2_arrow_result_handle *out_result, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_statement_execute_arrow)
+	(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement,
+	 const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
+	 idx_t parameter_count, idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
+	 duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -2001,6 +2028,17 @@ typedef struct {
 #define duckdb_v2_function_bind_set_bind_data duckdb_ext_api.duckdb_v2_function_bind_set_bind_data
 #define duckdb_v2_table_function_bind_set_order_preservation                                                           \
 	duckdb_ext_api.duckdb_v2_table_function_bind_set_order_preservation
+#define duckdb_v2_arrow_result_destroy             duckdb_ext_api.duckdb_v2_arrow_result_destroy
+#define duckdb_v2_arrow_result_drain               duckdb_ext_api.duckdb_v2_arrow_result_drain
+#define duckdb_v2_arrow_result_fetch_array         duckdb_ext_api.duckdb_v2_arrow_result_fetch_array
+#define duckdb_v2_arrow_result_get_result_type     duckdb_ext_api.duckdb_v2_arrow_result_get_result_type
+#define duckdb_v2_arrow_result_get_schema          duckdb_ext_api.duckdb_v2_arrow_result_get_schema
+#define duckdb_v2_arrow_result_get_statement_type  duckdb_ext_api.duckdb_v2_arrow_result_get_statement_type
+#define duckdb_v2_arrow_result_step                duckdb_ext_api.duckdb_v2_arrow_result_step
+#define duckdb_v2_arrow_result_to_arrow_c_stream   duckdb_ext_api.duckdb_v2_arrow_result_to_arrow_c_stream
+#define duckdb_v2_arrow_result_wait                duckdb_ext_api.duckdb_v2_arrow_result_wait
+#define duckdb_v2_prepared_statement_execute_arrow duckdb_ext_api.duckdb_v2_prepared_statement_execute_arrow
+#define duckdb_v2_statement_execute_arrow          duckdb_ext_api.duckdb_v2_statement_execute_arrow
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

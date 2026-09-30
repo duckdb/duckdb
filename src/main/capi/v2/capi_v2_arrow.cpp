@@ -1,11 +1,13 @@
-#include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_result_internal.hpp"
 
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/common/arrow/arrow_format.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
+#include <cerrno>
 #include <deque>
 
 namespace duckdb::capiv2 {
@@ -251,7 +253,100 @@ void CV2ValidateArrowArray(CV2ArrowImporter &importer, ArrowArray &array) {
 	}
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+// arrow_result
+//----------------------------------------------------------------------------------------------------------------------
+
+//! 64 vectors in a default build.
+constexpr idx_t DEFAULT_ARROW_RESULT_BATCH_SIZE = 131072;
+
+//! The wrapper behind an Arrow result, as the chunk functions that do not depend on the format take it.
+auto AsResult(duckdb_v2_arrow_result_handle result) -> duckdb_v2_result_handle {
+	return Convert(Convert(result));
+}
+
+void FetchArrowArray(ResultWrapperV2 &wrapper, ArrowArray &out) {
+	out.release = nullptr;
+	auto array = wrapper.FetchBlocking<ArrowFormat>();
+	if (array) {
+		array->MoveTo(out);
+	}
+}
+
+void CopyResultSchema(ResultWrapperV2 &wrapper, ArrowSchema &out) {
+	out.release = nullptr;
+	wrapper.RequireMetadata();
+	CopyArrowSchema(wrapper.arrow_schema.arrow_schema, out);
+}
+
+//! The private_data of an ArrowArrayStream made from an Arrow result.
+struct CV2ArrowResultStream {
+	unique_ptr<ResultWrapperV2> wrapper;
+	//! What get_last_error returns, kept until the next call.
+	string last_error;
+};
+
+//! No exception may cross the C ABI, so a failure becomes an errno code and the message waits for get_last_error.
+template <class CALLBACK>
+int CallArrowResultStream(ArrowArrayStream *stream, CALLBACK callback) {
+	if (!stream || !stream->release || !stream->private_data) {
+		return EINVAL;
+	}
+	auto &self = *static_cast<CV2ArrowResultStream *>(stream->private_data);
+	try {
+		callback(*self.wrapper);
+		self.last_error.clear();
+		return 0;
+	} catch (std::exception &ex) {
+		try {
+			self.last_error = ErrorData(ex).Message();
+		} catch (...) { // NOLINT: the code is what the consumer relies on
+			self.last_error.clear();
+		}
+	} catch (...) { // NOLINT: the code is what the consumer relies on
+		self.last_error.clear();
+	}
+	return EIO;
+}
+
+int ArrowResultStreamGetSchema(ArrowArrayStream *stream, ArrowSchema *out) {
+	return CallArrowResultStream(stream, [&](ResultWrapperV2 &wrapper) {
+		wrapper.AdvanceToMetadata<ArrowFormat>();
+		CopyResultSchema(wrapper, *out);
+	});
+}
+
+int ArrowResultStreamGetNext(ArrowArrayStream *stream, ArrowArray *out) {
+	return CallArrowResultStream(stream, [&](ResultWrapperV2 &wrapper) { FetchArrowArray(wrapper, *out); });
+}
+
+const char *ArrowResultStreamGetLastError(ArrowArrayStream *stream) {
+	if (!stream || !stream->release || !stream->private_data) {
+		return nullptr;
+	}
+	auto &self = *static_cast<CV2ArrowResultStream *>(stream->private_data);
+	return self.last_error.empty() ? nullptr : self.last_error.c_str();
+}
+
+void ArrowResultStreamRelease(ArrowArrayStream *stream) {
+	if (!stream || !stream->release) {
+		return;
+	}
+	unique_ptr<CV2ArrowResultStream> self(static_cast<CV2ArrowResultStream *>(stream->private_data));
+	stream->release = nullptr;
+	stream->private_data = nullptr;
+	try {
+		self->wrapper->Finalize();
+	} catch (...) { // NOLINT: release has no error channel
+	}
+}
+
 } // namespace
+
+auto ArrowResultFormat(idx_t batch_size) -> shared_ptr<ResultFormat> {
+	return make_shared_ptr<ArrowFormat>(batch_size == 0 ? DEFAULT_ARROW_RESULT_BATCH_SIZE : batch_size);
+}
+
 } // namespace duckdb::capiv2
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -512,5 +607,119 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_destroy(duckdb_v2_arrow_exporter_handle
 			delete Convert(*exporter);
 			*exporter = nullptr;
 		}
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// arrow_result
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR duckdb_v2_statement_execute_arrow(duckdb_v2_connection_handle conn,
+                                                  duckdb_v2_sql_statement_handle statement,
+                                                  const duckdb_v2_identifier_t *parameter_names,
+                                                  const duckdb_v2_value_handle *parameter_values, idx_t parameter_count,
+                                                  idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_result);
+	*out_result = nullptr;
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(statement);
+	if (parameter_count > 0 && !parameter_values) {
+		return NullArgumentError(err, __func__, "parameter_values");
+	}
+	return WithErrorHandler(err, [&]() {
+		*out_result = ConvertArrowResult(ExecuteStatementV2(Convert(conn)->context, *Convert(statement),
+		                                                    parameter_names, parameter_values, parameter_count,
+		                                                    __func__, ArrowResultFormat(batch_size))
+		                                     .release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_destroy(duckdb_v2_arrow_result_handle *result) {
+	return WithErrorHandler(nullptr, [&]() {
+		if (!result || !*result) {
+			return;
+		}
+		duckdb::unique_ptr<ResultWrapperV2> wrapper(Convert(*result));
+		*result = nullptr;
+		wrapper->Finalize();
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_step(duckdb_v2_arrow_result_handle result, struct ArrowArray *out_array,
+                                            DUCKDB_V2_RESULT_STEP_STATUS *out_status,
+                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_array);
+	DUCKDB_CHECK_ARG(out_status);
+	out_array->release = nullptr;
+	return WithErrorHandler(err, [&]() {
+		duckdb::unique_ptr<duckdb::ArrowArrayWrapper> array;
+		*out_status = Convert(result)->Step<duckdb::ArrowFormat>(array);
+		if (array) {
+			array->MoveTo(*out_array);
+		}
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_fetch_array(duckdb_v2_arrow_result_handle result, struct ArrowArray *out_array,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_array);
+	out_array->release = nullptr;
+	return WithErrorHandler(err, [&]() { FetchArrowArray(*Convert(result), *out_array); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_wait(duckdb_v2_arrow_result_handle result, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	return duckdb_v2_result_wait(AsResult(result), err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_drain(duckdb_v2_arrow_result_handle result, idx_t *out_rows_changed,
+                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_rows_changed);
+	return WithErrorHandler(err, [&]() { *out_rows_changed = Convert(result)->Drain<duckdb::ArrowFormat>(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_get_result_type(duckdb_v2_arrow_result_handle result,
+                                                       DUCKDB_V2_RESULT_TYPE *out_type,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_type);
+	return duckdb_v2_result_get_result_type(AsResult(result), out_type, err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_get_statement_type(duckdb_v2_arrow_result_handle result,
+                                                          DUCKDB_V2_STATEMENT_TYPE *out_type,
+                                                          duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_type);
+	return duckdb_v2_result_get_statement_type(AsResult(result), out_type, err);
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_get_schema(duckdb_v2_arrow_result_handle result, struct ArrowSchema *out_schema,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(out_schema);
+	out_schema->release = nullptr;
+	return WithErrorHandler(err, [&]() { CopyResultSchema(*Convert(result), *out_schema); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_arrow_result_to_arrow_c_stream(duckdb_v2_arrow_result_handle *result,
+                                                         struct ArrowArrayStream *out_stream,
+                                                         duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(result);
+	DUCKDB_CHECK_ARG(*result);
+	DUCKDB_CHECK_ARG(out_stream);
+	return WithErrorHandler(err, [&]() {
+		auto self = duckdb::make_uniq<CV2ArrowResultStream>();
+		self->wrapper = duckdb::unique_ptr<ResultWrapperV2>(Convert(*result));
+		*result = nullptr;
+		out_stream->get_schema = ArrowResultStreamGetSchema;
+		out_stream->get_next = ArrowResultStreamGetNext;
+		out_stream->get_last_error = ArrowResultStreamGetLastError;
+		out_stream->release = ArrowResultStreamRelease;
+		out_stream->private_data = self.release();
 	});
 }

@@ -84,7 +84,7 @@ enums:
         description: No chunk yet; step again, or block in result_wait.
       RESULT_STEP_STATUS_CHUNK:
         value: 1
-        description: A caller-owned chunk was written to *out_chunk.
+        description: A caller-owned chunk was written to *out_chunk, or an array to *out_array.
       RESULT_STEP_STATUS_FINISHED:
         value: 2
         description: Stream exhausted. Sticky.
