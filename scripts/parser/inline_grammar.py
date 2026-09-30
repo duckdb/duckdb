@@ -425,11 +425,13 @@ def main():
 
 namespace duckdb {
 
+// clang-format off
 const unsigned char INLINED_PEG_GRAMMAR[] = {
 '''
             + get_grammar_bytes(contents)
             + '''
 };
+// clang-format on
 
 } // namespace duckdb
 '''
