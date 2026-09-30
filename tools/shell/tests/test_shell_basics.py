@@ -395,6 +395,49 @@ def test_recursive_read(shell, tmp_path):
     result = ShellTest(shell).statement(f".read {sql_file.as_posix()}").run()
     result.check_stderr("recursive .read")
 
+@pytest.mark.parametrize("entry_point", ["read", "file", "init"])
+@pytest.mark.parametrize("quit_child", [False, True])
+def test_nested_read_restores_input(shell, tmp_path, entry_point, quit_child):
+    child = tmp_path / "child.sql"
+    child.write_text("SELECT 'child';\n" + (".quit\nSELECT 'unreachable';\n" if quit_child else ""))
+    parent = tmp_path / "parent.sql"
+    parent.write_text(
+        ".mode list\n.headers off\nSELECT 'parent_before';\n"
+        f'.read "{child.as_posix()}"\n'
+        "SELECT 'parent_after';\n"
+    )
+    if entry_point == "file":
+        test = ShellTest(shell, ['--no-init', '-f', parent.as_posix(), '-c', "SELECT 'after_file'"])
+    elif entry_point == "init":
+        test = ShellTest(shell, ['-init', parent.as_posix()]).statement("SELECT 'after_file'")
+    else:
+        test = (
+            ShellTest(shell, ['--no-init'])
+            .statement(f'.read "{parent.as_posix()}"')
+            .statement("SELECT 'after_file'")
+        )
+    result = test.run()
+    result.check_stdout("parent_before\nchild\nparent_after\nafter_file")
+    result.check_not_exist("unreachable")
+
+def test_read_after_error_restores_input(shell, tmp_path):
+    sql_file = tmp_path / "failed_read.sql"
+    sql_file.write_text("SELECT error('read failure');\nSELECT 'unreachable';\n")
+    result = (
+        ShellTest(shell, ['--no-init'])
+        .statement(".mode list")
+        .statement(".headers off")
+        .statement(f'.read "{sql_file.as_posix()}"')
+        .statement("SELECT 'after_first'")
+        .statement(f'.read "{sql_file.as_posix()}"')
+        .statement("SELECT 'after_second'")
+        .run()
+    )
+    assert result.status_code == 1
+    assert result.stdout == "after_first\nafter_second"
+    result.check_stderr("read failure")
+    assert "recursive .read" not in result.stderr
+
 @pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
 def test_execute_file(shell, generated_file):
     test = (

@@ -2111,6 +2111,31 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 	return true;
 }
 
+namespace {
+class ShellInputStateGuard {
+public:
+	explicit ShellInputStateGuard(ShellState &state_p, optional_ptr<const string> active_file_p = nullptr) noexcept
+	    : state(state_p), saved_input(state_p.in), saved_lineno(state_p.lineno), active_file(active_file_p) {
+	}
+	ShellInputStateGuard(const ShellInputStateGuard &) = delete;
+	ShellInputStateGuard &operator=(const ShellInputStateGuard &) = delete;
+
+	~ShellInputStateGuard() noexcept {
+		state.in = saved_input.get();
+		state.lineno = saved_lineno;
+		if (active_file) {
+			state.active_read_files.erase(*active_file);
+		}
+	}
+
+private:
+	ShellState &state;
+	optional_ptr<FILE> saved_input;
+	int32_t saved_lineno;
+	optional_ptr<const string> active_file;
+};
+} // namespace
+
 bool ShellState::ReadFromFile(const string &file) {
 	if (safe_mode) {
 		PrintF(PrintOutput::STDERR, ".read cannot be used in -safe mode\n");
@@ -2118,24 +2143,19 @@ bool ShellState::ReadFromFile(const string &file) {
 	}
 	duckdb::LocalFileSystem lfs;
 	auto canonical_file = lfs.CanonicalizePath(file, nullptr);
+	unique_ptr<FILE, decltype(&fclose)> input_file(nullptr, &fclose);
 	if (!active_read_files.insert(canonical_file).second) {
 		PrintF(PrintOutput::STDERR, "Error: recursive .read of \"%s\"\n", file);
 		return false;
 	}
-	FILE *inSaved = in;
-	int savedLineno = lineno;
-	int rc;
-	if (notNormalFile(file.c_str()) || (in = fopen(file.c_str(), "rb")) == 0) {
+	ShellInputStateGuard input_state(*this, canonical_file);
+	input_file.reset(notNormalFile(file.c_str()) ? nullptr : fopen(file.c_str(), "rb"));
+	if (!input_file) {
 		PrintF(PrintOutput::STDERR, "Error: cannot open \"%s\"\n", file.c_str());
-		rc = 1;
-	} else {
-		rc = ProcessInput(InputMode::FILE);
-		fclose(in);
+		return false;
 	}
-	active_read_files.erase(canonical_file);
-	in = inSaved;
-	lineno = savedLineno;
-	return rc == 0;
+	in = input_file.get();
+	return ProcessInput(InputMode::FILE) == 0;
 }
 
 bool ShellState::DisplaySchemas(const vector<string> &args) {
@@ -3200,13 +3220,11 @@ string ShellState::ReadFileContents(FILE *f) {
 }
 
 string ShellState::ReadFileContents(const string &filename) {
-	FILE *f = fopen(filename.c_str(), "rb");
+	unique_ptr<FILE, decltype(&fclose)> f(fopen(filename.c_str(), "rb"), &fclose);
 	if (!f) {
 		throw duckdb::IOException("cannot open '%s' for reading: %s\n", filename.c_str(), strerror(errno));
 	}
-	string result = ReadFileContents(f);
-	fclose(f);
-	return result;
+	return ReadFileContents(f.get());
 }
 
 /*
@@ -3217,22 +3235,19 @@ string ShellState::ReadFileContents(const string &filename) {
 */
 
 bool ShellState::ProcessFile(const string &file, InputMode input_mode, bool default_duckdb_rc) {
-	FILE *inSaved = in;
-	int savedLineno = lineno;
+	unique_ptr<FILE, decltype(&fclose)> input_file(fopen(file.c_str(), "rb"), &fclose);
+	ShellInputStateGuard input_state(*this);
 	int rc = 0;
 
-	in = fopen(file.c_str(), "rb");
+	in = input_file.get();
 	if (in) {
 		rc = ProcessInput(input_mode);
-		fclose(in);
 	} else if (input_mode != InputMode::DUCKDB_RC || !default_duckdb_rc) {
 		// we always error in regular file reading mode
 		// when reading the init file we only error if the file is explicitly specified by the user
 		PrintDatabaseError("IO Error: Failed to open file \"" + file + "\"");
 		rc = 1;
 	}
-	in = inSaved;
-	lineno = savedLineno;
 	return rc == 0;
 }
 
