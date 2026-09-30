@@ -438,9 +438,17 @@ hash_t BoundSimpleFunction::Hash() const {
 	return hash;
 }
 
+idx_t BoundSimpleFunction::GetStandardArgumentCount(const FunctionSignature &signature) const {
+	return positional_arguments - GetVarArgsCount(signature);
+}
+
 idx_t BoundSimpleFunction::GetVarArgsCount(const FunctionSignature &signature) const {
 	const auto standard_count = signature.GetPositionalParameterCount();
 	return positional_arguments > standard_count ? positional_arguments - standard_count : 0;
+}
+
+idx_t BoundSimpleFunction::GetKeywordOnlyArgumentCount(const FunctionSignature &signature) const {
+	return named_arguments.size() - GetKwargsCount(signature);
 }
 
 idx_t BoundSimpleFunction::GetKwargsCount(const FunctionSignature &signature) const {
