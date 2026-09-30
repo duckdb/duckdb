@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/compressed_read_size.test
-# description: A compressed file is read in large chunks, so a scan issues few reads
+# description: A compressed local file is read in the small chunks of its compression, not in the large chunks of remote files
 # group: [csv]
 
 require parquet
@@ -28,16 +28,16 @@ SELECT count(*), sum(i) FROM '{TEST_DIR}/read_size.csv.zst'
 ----
 200000	19999900000
 
-query II
-SELECT count(*) < 50, max(bytes) > 1048576
+query I
+SELECT max(bytes) <= 262144
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%read_size.csv.gz' AND op = 'READ'
 ----
-true	true
+true
 
-query II
-SELECT count(*) < 50, max(bytes) > 1048576
+query I
+SELECT max(bytes) <= 262144
 FROM duckdb_logs_parsed('FileSystem')
 WHERE path LIKE '%read_size.csv.zst' AND op = 'READ'
 ----
-true	true
+true

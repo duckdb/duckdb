@@ -3,10 +3,12 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/external_file_cache/caching_file_system.hpp"
 #include "duckdb/storage/object_cache.hpp"
 
@@ -115,6 +117,14 @@ public:
 	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                optional_ptr<FileOpener> opener = nullptr) override {
 		return ReadRecordingFileSystem::OpenFile(path.substr(REMOTE_PREFIX.size()), flags, opener);
+	}
+};
+
+//! Local files whose handles report that they are not on disk, like files read over the network.
+class NotOnDiskFileSystem : public SimpleTrackingFileSystem {
+public:
+	bool OnDiskFile(FileHandle &handle) override {
+		return false;
 	}
 };
 
@@ -297,6 +307,54 @@ TEST_CASE("Reads of files the cache does not handle are not split", "[external_f
 	// Local files are not cached by default, so their reads stay whole
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
+}
+
+TEST_CASE("Compressed remote files are read in chunks of up to the file size", "[external_file_cache]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	EFCTestFileGuard test_file("test_compressed_read_chunks.csv.gz", "");
+	REQUIRE(!con.Query(StringUtil::Format("COPY (SELECT i, md5(i::VARCHAR) AS h FROM range(20000) t(i)) TO '%s' "
+	                                      "(FORMAT csv, COMPRESSION gzip)",
+	                                      test_file.GetPath()))
+	             ->HasError());
+
+	GZipFileSystem gzip_fs;
+	SimpleTrackingFileSystem local_fs;
+	NotOnDiskFileSystem remote_fs;
+	auto open_compressed = [&](FileSystem &fs) {
+		auto child = fs.OpenFile(test_file.GetPath(), FileFlags::FILE_FLAGS_READ);
+		return gzip_fs.OpenCompressedFile(*con.context, std::move(child), false);
+	};
+	auto read_all = [](FileHandle &handle) {
+		string result;
+		vector<char> buffer(65536);
+		int64_t read;
+		while ((read = handle.Read(buffer.data(), buffer.size())) > 0) {
+			result.append(buffer.data(), NumericCast<idx_t>(read));
+		}
+		return result;
+	};
+
+	SECTION("local files keep the buffer size of the compression") {
+		auto local = open_compressed(local_fs);
+		REQUIRE(local->Cast<CompressedFile>().stream_data.in_buf_size == gzip_fs.InBufferSize());
+	}
+	SECTION("remote files smaller than a chunk are read whole") {
+		auto local = open_compressed(local_fs);
+		auto remote = open_compressed(remote_fs);
+		REQUIRE(remote->GetFileSize() > gzip_fs.InBufferSize());
+		REQUIRE(remote->Cast<CompressedFile>().stream_data.in_buf_size == remote->GetFileSize());
+		REQUIRE(read_all(*remote) == read_all(*local));
+	}
+	SECTION("the buffers count toward the memory limit") {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db.instance);
+		const auto used_before = buffer_manager.GetUsedMemory();
+		auto remote = open_compressed(remote_fs);
+		auto &stream_data = remote->Cast<CompressedFile>().stream_data;
+		REQUIRE(buffer_manager.GetUsedMemory() >= used_before + stream_data.in_buf_size + stream_data.out_buf_size);
+		remote.reset();
+		REQUIRE(buffer_manager.GetUsedMemory() == used_before);
+	}
 }
 
 TEST_CASE("A read spanning cached ranges only fetches the gaps between them", "[external_file_cache]") {
