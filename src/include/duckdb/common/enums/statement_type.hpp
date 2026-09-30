@@ -76,7 +76,8 @@ class ClientContext;
 struct StatementProperties {
 	StatementProperties()
 	    : requires_valid_transaction(true), result_eagerness(ResultEagerness::FORCED), bound_all_parameters(true),
-	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false) {
+	      return_type(StatementReturnType::QUERY_RESULT), parameter_count(0), always_require_rebind(false),
+	      writes_temporary(false) {
 	}
 
 	struct CatalogIdentity {
@@ -115,9 +116,14 @@ struct StatementProperties {
 	idx_t parameter_count;
 	//! Whether or not the statement ALWAYS requires a rebind
 	bool always_require_rebind;
+	//! Whether or not the statement writes into temp storage
+	bool writes_temporary;
 
 	bool IsReadOnly() {
 		return modified_databases.empty();
+	}
+	bool MayWrite() {
+		return !IsReadOnly() || writes_temporary;
 	}
 
 	void RegisterDBRead(Catalog &catalog, ClientContext &context);

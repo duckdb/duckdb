@@ -41,6 +41,8 @@ BoundStatement Binder::BindNode(DeleteQueryNode &node) {
 		// delete from persistent table: not read only!
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::DELETE_DATA);
+	} else {
+		GetStatementProperties().writes_temporary = true;
 	}
 
 	// plan any tables from the various using clauses

@@ -327,6 +327,8 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBModify(schema_obj.catalog, context, DatabaseModificationType::CREATE_CATALOG_ENTRY);
+	} else {
+		GetStatementProperties().writes_temporary = true;
 	}
 	return schema_obj;
 }

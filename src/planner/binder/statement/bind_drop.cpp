@@ -102,6 +102,8 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 		if (!entry->temporary) {
 			// we can only drop temporary schema entries in read-only mode
 			properties.RegisterDBModify(entry->ParentCatalog(), context, DatabaseModificationType::DROP_CATALOG_ENTRY);
+		} else {
+			properties.writes_temporary = true;
 		}
 		break;
 	}

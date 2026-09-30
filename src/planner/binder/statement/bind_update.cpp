@@ -194,6 +194,8 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		// update of persistent table: not read only!
 		auto &properties = GetStatementProperties();
 		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
+	} else {
+		GetStatementProperties().writes_temporary = true;
 	}
 	auto update = make_uniq<LogicalUpdate>(table);
 
