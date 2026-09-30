@@ -93,15 +93,23 @@ public:
 	virtual optional_ptr<CatalogEntry> CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) = 0;
 	//! Create a table function within the given schema
 	virtual optional_ptr<CatalogEntry> CreateTableFunction(CatalogTransaction transaction,
-	                                                       CreateTableFunctionInfo &info) = 0;
+	                                                       CreateTableFunctionInfo &info) {
+		throw NotImplementedException("Table functions are not supported in schema %s", name);
+	}
 	//! Create a copy function within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCopyFunction(CatalogTransaction transaction,
-	                                                      CreateCopyFunctionInfo &info) = 0;
+	                                                      CreateCopyFunctionInfo &info) {
+		throw NotImplementedException("Copy functions are not supported in schema %s", name);
+	}
 	//! Create a pragma function within the given schema
 	virtual optional_ptr<CatalogEntry> CreatePragmaFunction(CatalogTransaction transaction,
-	                                                        CreatePragmaFunctionInfo &info) = 0;
+	                                                        CreatePragmaFunctionInfo &info) {
+		throw NotImplementedException("Pragma functions are not supported in schema %s", name);
+	}
 	//! Create a collation within the given schema
-	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) = 0;
+	virtual optional_ptr<CatalogEntry> CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
+		throw NotImplementedException("Collations are not supported in schema %s", name);
+	}
 	//! Create a coordinate system within the given schema
 	virtual optional_ptr<CatalogEntry> CreateCoordinateSystem(CatalogTransaction transaction,
 	                                                          CreateCoordinateSystemInfo &info) {
