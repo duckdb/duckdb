@@ -50,7 +50,6 @@ struct HistogramStringFunctorBase {
 		string_t histogram_str(char_ptr_cast(string_memory), input_str_size);
 		return histogram_str;
 	}
-
 };
 
 struct HistogramStringFunctor : HistogramStringFunctorBase {
