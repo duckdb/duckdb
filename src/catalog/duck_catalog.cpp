@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/catalog/default/default_schemas.hpp"
 #include "duckdb/function/built_in_functions.hpp"
@@ -91,6 +92,17 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction 
 		}
 	}
 	return parent_entry->Cast<DuckSchemaEntry>().CreateSchema(transaction, info);
+}
+
+void DuckCatalog::AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema, AlterSchemaInfo &info) {
+	switch (info.alter_schema_type) {
+	case AlterSchemaType::SET_SCHEMA_OPTIONS:
+		throw NotImplementedException("SET (<options>) is not supported for DuckDB schemas");
+	case AlterSchemaType::RESET_SCHEMA_OPTIONS:
+		throw NotImplementedException("RESET (<options>) is not supported for DuckDB schemas");
+	default:
+		throw InternalException("Unrecognized alter schema type!");
+	}
 }
 
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {

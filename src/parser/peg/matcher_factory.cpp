@@ -166,6 +166,9 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
+	if (compiled_rule.collapsible) {
+		matcher.SetCollapsible();
+	}
 	if (no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}

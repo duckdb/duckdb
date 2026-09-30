@@ -112,6 +112,9 @@ functions:
         description: "The error info handle to set. On success, updated with the provided text."
       text:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: "The error text to set in the info."
     return_type: ERROR
 

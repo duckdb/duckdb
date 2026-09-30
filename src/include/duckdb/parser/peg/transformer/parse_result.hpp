@@ -77,6 +77,7 @@ enum class ParseResultType : uint8_t {
 	NUMBER,
 	STRING,
 	END_OF_INPUT,
+	TOKEN,
 	INVALID
 };
 
@@ -108,6 +109,8 @@ inline const char *ParseResultToString(ParseResultType type) {
 		return "STRING";
 	case ParseResultType::END_OF_INPUT:
 		return "END_OF_INPUT";
+	case ParseResultType::TOKEN:
+		return "TOKEN";
 	case ParseResultType::INVALID:
 		return "INVALID";
 	}
@@ -136,6 +139,9 @@ public:
 	ParseResultType type;
 	string name;
 	optional_ptr<const CompiledGrammarRule> rule;
+	//! Set when a collapsible rule handed this result out in place of its own, so the transformer runs this
+	//! result's rule rather than the one the parent asked for
+	bool collapsed = false;
 	optional_idx offset;
 	//! Source length: for leaf tokens the token length; for composite results the enclosing extent of children
 	optional_idx length;
@@ -196,6 +202,22 @@ struct IdentifierParseResult : ParseResult {
 	                      const std::string &indent, bool is_last) const override {
 		ParseResult::ToStringInternal(ss, visited, indent, is_last);
 		ss << ": " << identifier.GetIdentifierName() << "\n";
+	}
+};
+
+//! A single token consumed without interpreting it; carries its text for debugging only
+struct TokenParseResult : ParseResult {
+	static constexpr ParseResultType TYPE = ParseResultType::TOKEN;
+	string text;
+
+	TokenParseResult(string text_p, optional_idx offset, optional_idx length)
+	    : ParseResult(TYPE, offset, length), text(std::move(text_p)) {
+	}
+
+	void ToStringInternal(std::stringstream &ss, std::unordered_set<const ParseResult *> &visited,
+	                      const std::string &indent, bool is_last) const override {
+		ParseResult::ToStringInternal(ss, visited, indent, is_last);
+		ss << ": " << text << "\n";
 	}
 };
 

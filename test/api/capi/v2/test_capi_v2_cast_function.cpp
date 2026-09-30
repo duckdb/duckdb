@@ -27,7 +27,8 @@ DUCKDB_V2_CAST_MODE last_cast_mode = DUCKDB_V2_CAST_MODE_MAX_ENUM;
 
 void FailCast(duckdb_v2_error_info_handle *err, DUCKDB_V2_ERROR code, const std::string &message) {
 	duckdb_v2_error_info_set_code(*err, code);
-	duckdb_v2_error_info_set_text(*err, Convert(message));
+	auto text_str = Convert(message);
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 // Clears the output vector's validity bit for row `index`.
@@ -160,14 +161,15 @@ duckdb_v2_logical_type_handle RegisterTemperatureType(duckdb_v2_connection_handl
                                                       duckdb_v2_logical_type_handle integer) {
 	duckdb_v2_custom_type_handle custom = nullptr;
 	REQUIRE(duckdb_v2_custom_type_create_with_connection(conn, &custom, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_custom_type_set_name(custom, CastIdent("TEMPERATURE"), nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto name_str = CastIdent("TEMPERATURE");
+	REQUIRE(duckdb_v2_custom_type_set_name(custom, &name_str, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_custom_type_set_base_type(custom, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_custom_type_register(custom, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_custom_type_destroy(&custom);
 
 	duckdb_v2_logical_type_handle temperature = nullptr;
-	REQUIRE(duckdb_v2_connection_create_type_with_alias(conn, integer, CastIdent("TEMPERATURE"), &temperature,
-	                                                    nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create_type_with_alias(conn, integer, &name_str, &temperature, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	return temperature;
 }
 
@@ -280,8 +282,10 @@ void RegisterReading(duckdb_v2_connection_handle conn, duckdb_v2_logical_type_ha
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, CastIdent("t"), temperature, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	auto name_str = CastIdent("t");
+	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, temperature, nullptr,
+	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
+	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, IdentityExec, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);

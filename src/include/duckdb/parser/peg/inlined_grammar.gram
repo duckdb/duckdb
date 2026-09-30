@@ -731,7 +731,8 @@ AlterStatement <- 'ALTER' AlterOptions
 AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt / AlterDatabaseStmt / AlterSchemaStmt
 
 AlterTableStmt <- 'TABLE' IfExists? BaseTableName List(AlterTableOptions)
-AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName RenameAlter
+AlterSchemaStmt <- 'SCHEMA' IfExists? QualifiedName AlterSchemaOptions
+AlterSchemaOptions <- RenameAlter / SetOptions / ResetOptions
 
 AlterTableOptions <- AddColumn / DropConstraint / DropColumn / AlterColumn / AddConstraint / ChangeNullability /
         RenameColumn / RenameAlter / SetPartitionedBy / ResetPartitionedBy / SetSortedBy / ResetSortedBy / SetOptions / ResetOptions
@@ -931,7 +932,10 @@ SimpleParameter <- TypeFuncName Type?
 ScalarMacroDefinition <- Expression
 TableMacroDefinition <- 'TABLE' SelectStatementInternal
 
-CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName
+CreateSchemaStmt <- 'SCHEMA' IfNotExists? QualifiedName WithOptionList?
+
+WithOptionList <- 'WITH' RelOptionList
+
 CreateSecretStmt <- 'SECRET' IfNotExists? SecretName? SecretStorageSpecifier? GenericCopyOptionList
 
 SecretStorageSpecifier <- 'IN' Identifier
@@ -1430,11 +1434,12 @@ OperatorGreaterThan <- '>'
 OperatorLessThanEquals <- '<='
 OperatorGreaterThanEquals <- '>='
 # LEVEL 7
-BetweenInLikeExpression <- OtherOperatorExpression BetweenInLikeOp?
-BetweenInLikeOp <- 'NOT'? BetweenInLikeOpExpression
-BetweenInLikeOpExpression <- BetweenClause / InClause / LikeClause
+BetweenInLikeExpression <- OtherOperatorExpression InPredicate* BetweenLikeOp?
+InPredicate <- 'NOT'? InClause
+BetweenLikeOp <- 'NOT'? BetweenLikeOpExpression
+BetweenLikeOpExpression <- BetweenClause / LikeClause
 LikeClause <- LikeVariations OtherOperatorExpression EscapeClause?
-EscapeClause <- 'ESCAPE' ComparisonExpression
+EscapeClause <- 'ESCAPE' OtherOperatorExpression
 
 LikeVariations <- SimilarToToken / RegexInsensitiveMatchToken / RegexMatchToken / ILikeToken / LikeToken / GlobToken / NotILikeOp / NotLikeOp / NotRegexInsensitiveMatchOp / NotSimilarToOp
 LikeToken      <- 'LIKE' / '~~'
@@ -1473,9 +1478,11 @@ SubqueryAll <- 'ALL'
 QualifiedOperator <- 'OPERATOR' Parens(QualifiedOperatorContents)
 QualifiedOperatorContents <- ColIdDot* AnyOperatorLiteral
 # LEVEL 9
-BitwiseExpression <- AdditiveExpression BitwiseExpressionTail*
-BitwiseExpressionTail <- BitOperator AdditiveExpression
+BitwiseExpression <- TildeExpression BitwiseExpressionTail*
+BitwiseExpressionTail <- BitOperator TildeExpression
 BitOperator <- '&' / '|' / '<<' / '>>'
+# LEVEL 9.5
+TildeExpression <- TildePrefixOperator* AdditiveExpression
 # LEVEL 10
 AdditiveExpression <- MultiplicativeExpression AdditiveExpressionTail*
 AdditiveExpressionTail <- Term MultiplicativeExpression
@@ -1498,7 +1505,7 @@ AtTimeZoneExpressionTail <- AtTimeZoneOperator PrefixExpression
 AtTimeZoneOperator <- 'AT' 'TIME' 'ZONE'
 # LEVEL 15
 PrefixExpression <- PrefixOperator* BaseExpression
-PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator / TildePrefixOperator
+PrefixOperator <- QualifiedOperator / MinusPrefixOperator / PlusPrefixOperator
 MinusPrefixOperator <- '-'
 PlusPrefixOperator <- '+'
 TildePrefixOperator <- '~'

@@ -66,6 +66,8 @@ enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
 
+enum class AlterSchemaType : uint8_t;
+
 enum class AlterTableFunctionType : uint8_t;
 
 enum class AlterTableType : uint8_t;
@@ -338,6 +340,12 @@ enum class LogicalOperatorRepeatability : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
 
+enum class LogicalPlanVerificationIssueCode : int32_t;
+
+enum class LogicalPlanVerificationPathComponentType : int32_t;
+
+enum class LogicalPlanVerificationPhase : int32_t;
+
 enum class LogicalTypeId : uint8_t;
 
 enum class LookupResultType : uint8_t;
@@ -479,6 +487,8 @@ enum class RemoteCapability : uint8_t;
 enum class RemoveUnusedColumnsMode : uint8_t;
 
 enum class RenderMode : uint8_t;
+
+enum class RequestSizing : uint8_t;
 
 enum class RequestType : uint8_t;
 
@@ -705,6 +715,9 @@ const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
+
+template<>
+const char* EnumUtil::ToChars<AlterSchemaType>(AlterSchemaType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterTableFunctionType>(AlterTableFunctionType value);
@@ -1115,6 +1128,15 @@ template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
 
 template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationIssueCode>(LogicalPlanVerificationIssueCode value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPathComponentType>(LogicalPlanVerificationPathComponentType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPhase>(LogicalPlanVerificationPhase value);
+
+template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
 
 template<>
@@ -1326,6 +1348,9 @@ const char* EnumUtil::ToChars<RemoveUnusedColumnsMode>(RemoveUnusedColumnsMode v
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
+
+template<>
+const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
@@ -1639,6 +1664,9 @@ AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value)
 
 template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
+
+template<>
+AlterSchemaType EnumUtil::FromString<AlterSchemaType>(const char *value);
 
 template<>
 AlterTableFunctionType EnumUtil::FromString<AlterTableFunctionType>(const char *value);
@@ -2049,6 +2077,15 @@ template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
 
 template<>
+LogicalPlanVerificationIssueCode EnumUtil::FromString<LogicalPlanVerificationIssueCode>(const char *value);
+
+template<>
+LogicalPlanVerificationPathComponentType EnumUtil::FromString<LogicalPlanVerificationPathComponentType>(const char *value);
+
+template<>
+LogicalPlanVerificationPhase EnumUtil::FromString<LogicalPlanVerificationPhase>(const char *value);
+
+template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value);
 
 template<>
@@ -2260,6 +2297,9 @@ RemoveUnusedColumnsMode EnumUtil::FromString<RemoveUnusedColumnsMode>(const char
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
+
+template<>
+RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);

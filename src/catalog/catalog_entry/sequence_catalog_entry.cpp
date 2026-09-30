@@ -56,14 +56,15 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	lock_guard<mutex> seqlock(lock);
 	int64_t result;
 	result = data.counter;
-	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);
+	int64_t next_counter;
+	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, next_counter);
 	if (data.cycle) {
 		if (overflow) {
-			data.counter = data.increment < 0 ? data.max_value : data.min_value;
-		} else if (data.counter < data.min_value) {
-			data.counter = data.max_value;
-		} else if (data.counter > data.max_value) {
-			data.counter = data.min_value;
+			next_counter = data.increment < 0 ? data.max_value : data.min_value;
+		} else if (next_counter < data.min_value) {
+			next_counter = data.max_value;
+		} else if (next_counter > data.max_value) {
+			next_counter = data.min_value;
 		}
 	} else {
 		if (result < data.min_value || (overflow && data.increment < 0)) {
@@ -73,6 +74,7 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name, data.max_value);
 		}
 	}
+	data.counter = next_counter;
 	data.last_value = result;
 	data.usage_count++;
 	if (!temporary) {

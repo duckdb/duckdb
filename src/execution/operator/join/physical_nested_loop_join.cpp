@@ -19,11 +19,10 @@ PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(PhysicalPlan &physical_plan, Logi
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(conds), join_type,
                              estimated_cardinality) {
 	filter_pushdown = std::move(pushdown_info_p);
+	D_ASSERT(join_type != JoinType::MARK || (conditions.size() == 1 && !predicate));
 	track_unknown =
-	    join_type == JoinType::MARK &&
-	    (predicate || conditions.size() > 1 ||
-	     (conditions.size() == 1 && (conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE ||
-	                                 conditions[0].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM)));
+	    join_type == JoinType::MARK && (conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE ||
+	                                    conditions[0].GetComparisonType() == ExpressionType::COMPARE_DISTINCT_FROM);
 	children.push_back(left);
 	children.push_back(right);
 	if (join_type == JoinType::MARK) {
@@ -460,13 +459,14 @@ OperatorResultType PhysicalNestedLoopJoin::ExecuteInternal(ExecutionContext &con
 	}
 }
 
-static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, JoinType join_type, DataChunk &input,
+static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, DataChunk &input,
                                        PhysicalNestedLoopJoinState &state, NestedLoopJoinGlobalState &gstate,
-                                       bool found_match[], bool found_unknown[]) {
+                                       bool found_match[]) {
+	D_ASSERT(conditions.size() == 1);
 	gstate.right_condition_data.InitializeScan(state.condition_scan_state);
 	gstate.right_payload_data.InitializeScan(state.payload_scan_state);
 	Vector comparison(LogicalType::BOOLEAN);
-	MarkJoinRowComparison comparer(state.left_condition);
+	Vector left_reference(state.left_condition.data[0].GetType());
 	VectorCache predicate_cache(state.pred_executor.GetAllocator(), LogicalType::BOOLEAN);
 	Vector predicate_result(predicate_cache);
 	while (gstate.right_condition_data.Scan(state.condition_scan_state, state.right_condition)) {
@@ -478,12 +478,15 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 			if (found_match[left_row]) {
 				continue;
 			}
-			comparer.CompareConjunction(state.left_condition, left_row, state.right_condition, conditions, comparison);
+			ConstantVector::Reference(left_reference, count_t(state.right_condition.size()),
+			                          state.left_condition.data[0], left_row, state.left_condition.size());
+			MarkJoinRowComparison::Compare(left_reference, state.right_condition.data[0],
+			                               conditions[0].GetComparisonType(), comparison);
 			auto comparisons = comparison.Values<bool>();
 			idx_t candidate_count = 0;
 			for (idx_t right_row = 0; right_row < state.right_condition.size(); right_row++) {
 				auto entry = comparisons[right_row];
-				if (entry.IsValid() ? entry.GetValue() : join_type == JoinType::MARK) {
+				if (entry.IsValid() && entry.GetValue()) {
 					state.pred_matches.set_index(candidate_count++, right_row);
 				}
 			}
@@ -502,14 +505,10 @@ static void ResolveSimpleJoinPredicate(const vector<JoinCondition> &conditions, 
 			auto predicates = predicate_result.Values<bool>();
 			for (idx_t candidate = 0; candidate < candidate_count; candidate++) {
 				auto predicate = predicates[candidate];
-				if (predicate.IsValid() && !predicate.GetValue()) {
-					continue;
-				}
-				if (predicate.IsValid() && comparisons[state.pred_matches.get_index(candidate)].IsValid()) {
+				if (predicate.IsValid() && predicate.GetValue()) {
 					found_match[left_row] = true;
 					break;
 				}
-				found_unknown[left_row] = true;
 			}
 		}
 	}
@@ -528,7 +527,8 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	bool found_unknown[STANDARD_VECTOR_SIZE] = {false};
 
 	if (predicate) {
-		ResolveSimpleJoinPredicate(conditions, join_type, input, state, gstate, found_match, found_unknown);
+		D_ASSERT(join_type == JoinType::SEMI || join_type == JoinType::ANTI);
+		ResolveSimpleJoinPredicate(conditions, input, state, gstate, found_match);
 	} else {
 		NestedLoopJoinMark::Perform(state.left_condition, gstate.right_condition_data, found_match, conditions,
 		                            track_unknown ? optional_ptr<bool>(found_unknown) : nullptr);
