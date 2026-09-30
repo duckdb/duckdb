@@ -22,7 +22,6 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -700,24 +699,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	return row_group_stats;
 }
 
-// Optional filters store the expression used for pruning in their bind data.
-static optional_ptr<const Expression> GetOptionalFilterChild(const Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return nullptr;
-	}
-	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (!func.BindInfo()) {
-		return nullptr;
-	}
-	if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-		return func.BindInfo()->Cast<OptionalFilterFunctionData>().child_filter_expr.get();
-	}
-	if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-		return func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>().child_filter_expr.get();
-	}
-	return nullptr;
-}
-
 static bool UsesNormalizedIntervalHash(ParquetBloomFilterHashStrategy hash_strategy) {
 	return hash_strategy == ParquetBloomFilterHashStrategy::NORMALIZED_INTERVAL_V1;
 }
@@ -800,7 +781,7 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (GetBloomFilterInExpression(expr, hash_strategy)) {
 		return true;
 	}
-	auto optional_filter_child = GetOptionalFilterChild(expr);
+	auto optional_filter_child = ExpressionFilter::GetOptionalFilterChild(expr);
 	if (optional_filter_child) {
 		return HasFilterConstants(*optional_filter_child, hash_strategy);
 	}
@@ -1036,7 +1017,7 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 		}
 		return true;
 	}
-	auto optional_filter_child = GetOptionalFilterChild(expr);
+	auto optional_filter_child = ExpressionFilter::GetOptionalFilterChild(expr);
 	if (optional_filter_child) {
 		return ApplyBloomFilter(*optional_filter_child, bloom_filter, schema, hash_strategy);
 	}

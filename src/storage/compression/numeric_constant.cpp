@@ -135,14 +135,8 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		return true;
 	}
 	if (function_name == SelectivityOptionalFilterScalarFun::NAME) {
-		if (!func_expr->BindInfo()) {
-			return false;
-		}
-		auto &data = func_expr->BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-		if (!data.child_filter_expr) {
-			return false;
-		}
-		return TryExpressionFiltersNullValues(*data.child_filter_expr, filters_nulls, filters_valid_values);
+		auto optional_child = ExpressionFilter::GetOptionalFilterChild(*func_expr);
+		return optional_child && TryExpressionFiltersNullValues(*optional_child, filters_nulls, filters_valid_values);
 	}
 	if (function_name == PrefixRangeScalarFun::NAME) {
 		if (!func_expr->BindInfo()) {

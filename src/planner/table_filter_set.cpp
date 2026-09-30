@@ -30,17 +30,9 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;
 		}
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
-				return true;
-			}
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
-				return true;
-			}
+		auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+		if (optional_child && ContainsInternalTableFilterFunction(*optional_child)) {
+			return true;
 		}
 	}
 	bool found = false;
@@ -195,20 +187,8 @@ static unique_ptr<TableFilter> SerializeOptionalChild(const optional_ptr<const E
 
 static unique_ptr<TableFilter> SerializeInternalFunctionToLegacyFilter(const BoundFunctionExpression &func_expr) {
 	auto &func_name = func_expr.Function().GetName();
-	if (func_name == OptionalFilterScalarFun::NAME) {
-		unique_ptr<TableFilter> child_filter;
-		if (func_expr.BindInfo()) {
-			auto &data = func_expr.BindInfo()->Cast<OptionalFilterFunctionData>();
-			child_filter = SerializeOptionalChild(data.child_filter_expr.get());
-		}
-		return make_uniq<LegacyOptionalFilter>(std::move(child_filter));
-	}
-	if (func_name == SelectivityOptionalFilterScalarFun::NAME) {
-		unique_ptr<TableFilter> child_filter;
-		if (func_expr.BindInfo()) {
-			auto &data = func_expr.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			child_filter = SerializeOptionalChild(data.child_filter_expr.get());
-		}
+	if (ExpressionFilter::IsRootOptionalExpression(func_expr)) {
+		auto child_filter = SerializeOptionalChild(ExpressionFilter::GetOptionalFilterChild(func_expr));
 		return make_uniq<LegacyOptionalFilter>(std::move(child_filter));
 	}
 	if (func_name == DynamicFilterScalarFun::NAME) {

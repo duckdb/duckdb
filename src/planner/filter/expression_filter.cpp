@@ -143,17 +143,9 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;
 		}
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
-				return true;
-			}
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalTableFilterFunction(*data.child_filter_expr)) {
-				return true;
-			}
+		auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+		if (optional_child && ContainsInternalTableFilterFunction(*optional_child)) {
+			return true;
 		}
 	}
 	bool found = false;
@@ -168,15 +160,10 @@ static bool ContainsInternalTableFilterFunction(const Expression &expr) {
 static unique_ptr<Expression> UnwrapOptionalFiltersForConstantEvaluation(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			return data.child_filter_expr ? UnwrapOptionalFiltersForConstantEvaluation(*data.child_filter_expr)
-			                              : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			return data.child_filter_expr ? UnwrapOptionalFiltersForConstantEvaluation(*data.child_filter_expr)
-			                              : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
+		if (IsOptionalInternalFunction(func) && func.BindInfo()) {
+			auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+			return optional_child ? UnwrapOptionalFiltersForConstantEvaluation(*optional_child)
+			                      : make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));
 		}
 	}
 	auto result = expr.Copy();
@@ -928,17 +915,9 @@ bool ExpressionFilter::ContainsInternalFunction(const Expression &expr, const st
 		if (func.Function().GetName() == func_name) {
 			return true;
 		}
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
-				return true;
-			}
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			if (data.child_filter_expr && ContainsInternalFunction(*data.child_filter_expr, func_name)) {
-				return true;
-			}
+		auto optional_child = GetOptionalFilterChild(func);
+		if (optional_child && ContainsInternalFunction(*optional_child, func_name)) {
+			return true;
 		}
 	}
 	bool found = false;
@@ -956,6 +935,23 @@ bool ExpressionFilter::IsOptionalExpression(const Expression &expr) {
 
 bool ExpressionFilter::IsRootOptionalExpression(const Expression &expr) {
 	return IsOptionalExpressionInternal(expr, false, true);
+}
+
+optional_ptr<const Expression> ExpressionFilter::GetOptionalFilterChild(const Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return nullptr;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	if (!func.BindInfo()) {
+		return nullptr;
+	}
+	if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+		return func.BindInfo()->Cast<OptionalFilterFunctionData>().child_filter_expr.get();
+	}
+	if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+		return func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>().child_filter_expr.get();
+	}
+	return nullptr;
 }
 
 bool ExpressionFilter::IsOptionalFilter(const TableFilter &filter) {
@@ -994,19 +990,8 @@ static shared_ptr<DynamicFilterData> TryGetOptionalDynamicFilterData(const Expre
 		}
 		return nullptr;
 	}
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return nullptr;
-	}
-	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (func.Function().GetName() == OptionalFilterScalarFun::NAME && func.BindInfo()) {
-		auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-		return data.child_filter_expr ? TryGetRootDynamicFilterData(*data.child_filter_expr) : nullptr;
-	}
-	if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME && func.BindInfo()) {
-		auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-		return data.child_filter_expr ? TryGetRootDynamicFilterData(*data.child_filter_expr) : nullptr;
-	}
-	return nullptr;
+	auto optional_child = ExpressionFilter::GetOptionalFilterChild(expr);
+	return optional_child ? TryGetRootDynamicFilterData(*optional_child) : nullptr;
 }
 
 shared_ptr<DynamicFilterData> ExpressionFilter::GetOptionalDynamicFilterData(const TableFilter &filter) {
@@ -1040,22 +1025,11 @@ string ExpressionFilter::InternalFunctionToString(const BoundFunctionExpression 
 		const auto has_filter_data =
 		    func_expr.BindInfo() && func_expr.BindInfo()->Cast<DynamicFilterFunctionData>().filter_data;
 		return DynamicFilterScalarFun::ToString(column_name, has_filter_data);
-	} else if (func_name == OptionalFilterScalarFun::NAME) {
-		string child_filter_string;
-		if (func_expr.BindInfo()) {
-			auto &data = func_expr.BindInfo()->Cast<OptionalFilterFunctionData>();
-			if (data.child_filter_expr) {
-				child_filter_string = ExpressionToFriendlyString(*data.child_filter_expr, column_name);
-			}
-		}
-		return OptionalFilterScalarFun::ToString(child_filter_string);
-	} else if (func_name == SelectivityOptionalFilterScalarFun::NAME) {
-		string child_filter_string;
-		if (func_expr.BindInfo()) {
-			auto &data = func_expr.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			if (data.child_filter_expr) {
-				child_filter_string = ExpressionToFriendlyString(*data.child_filter_expr, column_name);
-			}
+	} else if (IsOptionalInternalFunction(func_expr)) {
+		auto optional_child = GetOptionalFilterChild(func_expr);
+		auto child_filter_string = optional_child ? ExpressionToFriendlyString(*optional_child, column_name) : string();
+		if (func_name == OptionalFilterScalarFun::NAME) {
+			return OptionalFilterScalarFun::ToString(child_filter_string);
 		}
 		return SelectivityOptionalFilterScalarFun::ToString(child_filter_string);
 	}

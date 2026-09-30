@@ -77,6 +77,8 @@ public:
 	static bool IsOptionalExpression(const Expression &expr);
 	//! Check if the root of an expression tree is an optional filter wrapper
 	static bool IsRootOptionalExpression(const Expression &expr);
+	//! Child of a root optional filter wrapper
+	static optional_ptr<const Expression> GetOptionalFilterChild(const Expression &expr);
 	//! Check if a table filter tree is entirely optional filter semantics
 	static bool IsOptionalFilter(const TableFilter &filter);
 	//! Check if the root of a table filter tree is an optional filter wrapper
