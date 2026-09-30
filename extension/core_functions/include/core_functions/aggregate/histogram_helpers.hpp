@@ -31,10 +31,6 @@ struct HistogramFunctor {
 	static T ExtractValue(UnifiedVectorFormat &bin_data, idx_t offset, AggregateInputData &) {
 		return UnifiedVectorFormat::GetData<T>(bin_data)[bin_data.sel->get_index(offset)];
 	}
-
-	static bool RequiresExtract() {
-		return false;
-	}
 };
 
 struct HistogramStringFunctorBase {
@@ -55,9 +51,6 @@ struct HistogramStringFunctorBase {
 		return histogram_str;
 	}
 
-	static bool RequiresExtract() {
-		return true;
-	}
 };
 
 struct HistogramStringFunctor : HistogramStringFunctorBase {
