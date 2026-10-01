@@ -343,6 +343,9 @@ MethodArguments PEGTransformerFactory::TransformFunctionExpressionArgumentList(
     PEGTransformer &transformer, const optional<bool> &distinct_or_all,
     optional<vector<FunctionArgument>> function_argument_list, optional<vector<OrderByNode>> order_by_clause,
     const optional<bool> &ignore_or_respect_nulls) {
+	if (distinct_or_all && !function_argument_list) {
+		throw ParserException("%s requires at least one argument", *distinct_or_all ? "DISTINCT" : "ALL");
+	}
 	MethodArguments result;
 	if (distinct_or_all) {
 		result.distinct = *distinct_or_all;
