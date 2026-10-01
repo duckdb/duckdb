@@ -1,7 +1,3 @@
-# The engine implements the whole V2 C API function table, including the
-# unstable surface that extensions pinned to this build can use
-add_definitions(-DDUCKDB_V2_API_ALLOW_UNSTABLE=1)
-
 if(NOT CLANG_TIDY)
   add_subdirectory(capi)
 endif()

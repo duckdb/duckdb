@@ -33,6 +33,10 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
 
+// The engine implements the whole V2 C API, including the unstable surface
+#ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
+#define DUCKDB_V2_API_ALLOW_UNSTABLE 1
+#endif
 // V2 C API header -- all types use duckdb_v2_ prefix, no collision with V1.
 #include "duckdb_v2.h"
 

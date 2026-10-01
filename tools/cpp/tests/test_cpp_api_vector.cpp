@@ -791,8 +791,9 @@ TEST_CASE("Stable C++API: MAP entries are written through its entries child", "[
 	auto *key_data = keys.GetDataMutable<int32_t>();
 	key_data[0] = 1;
 	key_data[1] = 2;
-	values.AssignString(0, "one");
-	values.AssignString(1, "two");
+	// Longer than blob_t::INLINE_LENGTH: an engine built with DUCKDB_DEBUG_NO_INLINE reads the pointer of any string
+	values.AssignString(0, "the first value");
+	values.AssignString(1, "the second value");
 	map_vec.GetDataMutable<duckdb_v2_list_entry>()[0] = {0, 2};
 	appender.AppendChunk(chunk);
 	appender.Flush();
@@ -800,7 +801,7 @@ TEST_CASE("Stable C++API: MAP entries are written through its entries child", "[
 	auto result = conn.Execute("SELECT m::VARCHAR FROM maps");
 	auto out = result.FetchChunk();
 	REQUIRE(out);
-	REQUIRE(out.GetVector(0).GetValue(0).Get<varchar_t>().view() == "{1=one, 2=two}");
+	REQUIRE(out.GetVector(0).GetValue(0).Get<varchar_t>().view() == "{1=the first value, 2=the second value}");
 	REQUIRE_THROWS_MATCHES(map_vec.GetChild(1), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 
