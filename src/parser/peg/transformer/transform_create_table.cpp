@@ -224,6 +224,24 @@ string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, 
 	return col_label;
 }
 
+LogicalType PEGTransformerFactory::ApplyColumnCollation(const LogicalType &type,
+                                                        unique_ptr<ParsedExpression> collation) {
+	if (!type.IsUnbound()) {
+		throw InternalException("Expected only unbound types here");
+	}
+	auto &expr = UnboundType::GetTypeExpression(type);
+	if (expr->GetExpressionClass() != ExpressionClass::TYPE) {
+		throw InternalException("Expected a type expression");
+	}
+	auto &type_expr = expr->Cast<TypeExpression>();
+	if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
+		throw ParserException("Only VARCHAR columns can have collations!");
+	}
+	vector<unique_ptr<ParsedExpression>> type_children;
+	type_children.push_back(std::move(collation));
+	return LogicalType::UNBOUND(make_uniq<TypeExpression>(Identifier("VARCHAR"), std::move(type_children)));
+}
+
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
     PEGTransformer &transformer, const vector<string> &dotted_identifier, const optional<LogicalType> &type,
     optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
@@ -267,22 +285,8 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 				if (column_type.id() == LogicalTypeId::ANY) {
 					throw ParserException("Specify the VARCHAR type for column \"%s\" with collation.",
 					                      qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
-				} else if (column_type.IsUnbound()) {
-					auto &expr = UnboundType::GetTypeExpression(column_type);
-					if (expr->GetExpressionClass() != ExpressionClass::TYPE) {
-						throw InternalException("Expected a type expression");
-					}
-					auto &type_expr = expr->Cast<TypeExpression>();
-					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
-						throw ParserException("Only VARCHAR columns can have collations!");
-					}
-				} else {
-					throw InternalException("Expected only unbound types here");
 				}
-				vector<unique_ptr<ParsedExpression>> type_children;
-				type_children.push_back(std::move(cc_entry.expression));
-				column_type =
-				    LogicalType::UNBOUND(make_uniq<TypeExpression>(Identifier("VARCHAR"), std::move(type_children)));
+				column_type = ApplyColumnCollation(column_type, std::move(cc_entry.expression));
 			} else {
 				accumulated_constraints.constraints.push_back(std::move(cc_entry.constraint));
 			}

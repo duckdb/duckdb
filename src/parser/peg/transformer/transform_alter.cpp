@@ -409,14 +409,19 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEG
 	}
 }
 
-unique_ptr<AlterTableInfo>
-PEGTransformerFactory::TransformAlterType(PEGTransformer &transformer, const bool &has_result,
-                                          const optional<LogicalType> &type,
-                                          optional<unique_ptr<ParsedExpression>> using_expression) {
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(
+    PEGTransformer &transformer, const bool &has_result, const optional<LogicalType> &type,
+    optional<ColumnConstraintEntry> column_collation, optional<unique_ptr<ParsedExpression>> using_expression) {
 	if (!type && !using_expression) {
 		throw ParserException("Omitting the type is only possible in combination with USING");
 	}
+	if (!type && column_collation) {
+		throw ParserException("Specify the VARCHAR type to alter a column collation");
+	}
 	auto alter_type = type ? *type : LogicalType::UNKNOWN;
+	if (column_collation) {
+		alter_type = ApplyColumnCollation(alter_type, std::move(column_collation->expression));
+	}
 	unique_ptr<ParsedExpression> expression;
 	if (using_expression) {
 		expression = std::move(*using_expression);
