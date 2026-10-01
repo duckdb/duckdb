@@ -83,6 +83,30 @@ statement ok
 CREATE TABLE array_test AS SELECT [i, i + 1, i + 2]::INT[3] AS array_val FROM range(2500) t(i)
 
 statement ok
+CREATE TABLE struct_nan_test AS SELECT case when i%10=0 then null else {'x': case when i%10=5 then 'nan'::double else i/10.0 end, 'y': (i/10.0)::float} end struct_val FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE list_nan_test AS SELECT case when i%10=0 then null else [i/10.0, case when i%10=5 then 'nan'::double else null end] end l1, [case when i%5=0 then 'nan'::float else (i/10.0)::float end] l2 FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE map_nan_test AS SELECT MAP {'key'||i: case when i%10=5 then 'nan'::float else (i/10.0)::float end} map_val, MAP {case when i%5=0 then 'nan'::double else i/10.0 end: case when i%2=0 then 'nan'::double else i/10.0 end} fp_map FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE array_nan_test AS SELECT [i/10.0, case when i%10=5 then 'nan'::double else null end, i/10.0]::DOUBLE[3] AS array_val FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE nested_nan_test AS SELECT {'s': {'x': case when i%10=5 then 'nan'::double else i/10.0 end}, 'l': [case when i%5=0 then 'nan'::float else (i/10.0)::float end]} n, [{'a': case when i%2=0 then 'nan'::double else i/10.0 end}] ls FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE variant_nan_test AS SELECT case when i%10=5 then 'nan'::double::variant when i%10=3 then 'nan'::float::variant when i%10=7 then 'text'::variant else (i/10.0)::variant end v FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE variant_struct_nan_test AS SELECT {'a': case when i%10=5 then 'nan'::double else i/10.0 end, 'b': case when i%5=0 then 'nan'::float else (i/10.0)::float end}::variant v FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE variant_list_nan_test AS SELECT [i/10.0, case when i%10=5 then 'nan'::double else null end]::variant v FROM range(2500) t(i)
+
+statement ok
 CREATE TABLE partitioned_test AS SELECT range%2 as partition_key, range val FROM range(2500)
 
 statement ok
@@ -228,6 +252,54 @@ COPY array_test TO '{TEST_DIR}/array_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*array_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"array_val"."element"'={column_size_bytes=\d+, max=2501, max_is_exact=true, min=0, min_is_exact=true, null_count=0, num_values=7500}}	NULL	{row_group_count=1}
 
+# struct with NaN
+query IIIIIII
+COPY struct_nan_test TO '{TEST_DIR}/struct_nan_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*struct_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"struct_val"."x"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=250, null_count=250, num_values=2500}, '"struct_val"."y"'={column_size_bytes=\d+, has_nan=false, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=0, null_count=250, num_values=2500}}	NULL	{row_group_count=1}
+
+# list with NaN
+query IIIIIII
+COPY list_nan_test TO '{TEST_DIR}/list_nan_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*list_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"l1"."element"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=250, null_count=2250, num_values=4750}, '"l2"."element"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=500, null_count=0, num_values=2500}}	NULL	{row_group_count=1}
+
+# map with NaN keys and values
+query IIIIIII
+COPY map_nan_test TO '{TEST_DIR}/map_nan_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*map_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp_map"."key"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=500, null_count=0, num_values=2500}, '"fp_map"."value"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=1250, null_count=0, num_values=2500}, '"map_val"."key"'={column_size_bytes=\d+, max=key999, max_is_exact=true, min=key0, min_is_exact=true, null_count=0, num_values=2500}, '"map_val"."value"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.0, min_is_exact=true, nan_count=250, null_count=0, num_values=2500}}	NULL	{row_group_count=1}
+
+# array with NaN
+query IIIIIII
+COPY array_nan_test TO '{TEST_DIR}/array_nan_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*array_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"array_val"."element"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.0, min_is_exact=true, nan_count=250, null_count=2250, num_values=7500}}	NULL	{row_group_count=1}
+
+# nested struct and list with NaN
+query IIIIIII
+COPY nested_nan_test TO '{TEST_DIR}/nested_nan_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*nested_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"ls"."element"."a"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=1250, null_count=0, num_values=2500}, '"n"."l"."element"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=500, null_count=0, num_values=2500}, '"n"."s"."x"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.0, min_is_exact=true, nan_count=250, null_count=0, num_values=2500}}	NULL	{row_group_count=1}
+
+# VARIANT shredded on DOUBLE
+query IIIIIII
+COPY variant_nan_test TO '{TEST_DIR}/variant_nan_test.parquet' (SHREDDING {v: 'DOUBLE'}, RETURN_STATS);
+----
+<REGEX>:.*variant_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"v"."metadata"'={column_size_bytes=\d+, max=010000, max_is_exact=true, min=010000, min_is_exact=true, null_count=0, num_values=2500, variant_type='STRUCT\(metadata BLOB, "value" BLOB, typed_value DOUBLE\)'}, '"v"."typed_value"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.0, min_is_exact=true, nan_count=250, null_count=500, num_values=2500}, '"v"."value"'={column_size_bytes=\d+, max=380000C07F, max_is_exact=true, min=1174657874, min_is_exact=true, null_count=2000, num_values=2500}}	NULL	{row_group_count=1}
+
+# VARIANT shredded on an object with NaN
+query IIIIIII
+COPY variant_struct_nan_test TO '{TEST_DIR}/variant_struct_nan_test.parquet' (SHREDDING {v: 'STRUCT(a DOUBLE, b FLOAT)'}, RETURN_STATS);
+----
+<REGEX>:.*variant_struct_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"v"."metadata"'={column_size_bytes=\d+, max=01020001026162, max_is_exact=true, min=01020001026162, min_is_exact=true, null_count=0, num_values=2500, variant_type='STRUCT\(metadata BLOB, "value" BLOB, typed_value STRUCT\(a STRUCT\("value" BLOB, typed_value DOUBLE\), b STRUCT\("value" BLOB, typed_value FLOAT\)\)\)'}, '"v"."typed_value"."a"."typed_value"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.0, min_is_exact=true, nan_count=250, null_count=0, num_values=2500}, '"v"."typed_value"."a"."value"'={column_size_bytes=\d+, null_count=2500, num_values=2500}, '"v"."typed_value"."b"."typed_value"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.1, min_is_exact=true, nan_count=500, null_count=0, num_values=2500}, '"v"."typed_value"."b"."value"'={column_size_bytes=\d+, null_count=2500, num_values=2500}, '"v"."value"'={column_size_bytes=\d+, null_count=2500, num_values=2500}}	NULL	{row_group_count=1}
+
+# VARIANT shredded on a list with NaN
+query IIIIIII
+COPY variant_list_nan_test TO '{TEST_DIR}/variant_list_nan_test.parquet' (SHREDDING {v: 'DOUBLE[]'}, RETURN_STATS);
+----
+<REGEX>:.*variant_list_nan_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"v"."metadata"'={column_size_bytes=\d+, max=010000, max_is_exact=true, min=010000, min_is_exact=true, null_count=0, num_values=2500, variant_type='STRUCT\(metadata BLOB, "value" BLOB, typed_value STRUCT\("value" BLOB, typed_value DOUBLE\)\[\]\)'}, '"v"."typed_value"."element"."typed_value"'={column_size_bytes=\d+, has_nan=true, max=249.9, max_is_exact=true, min=0.0, min_is_exact=true, nan_count=250, null_count=2250, num_values=5000}, '"v"."typed_value"."element"."value"'={column_size_bytes=\d+, max=00, max_is_exact=true, min=00, min_is_exact=true, null_count=2750, num_values=5000}, '"v"."value"'={column_size_bytes=\d+, null_count=2500, num_values=2500}}	NULL	{row_group_count=1}
+
 endloop
 
 # partition_by
@@ -287,3 +359,13 @@ query IIIIIII
 COPY nan_every_rg TO '{TEST_DIR}/nan_every_rg.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, RETURN_STATS);
 ----
 <REGEX>:.*nan_every_rg.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"f"'={column_size_bytes=\d+, has_nan=true, max=4095.0, max_is_exact=true, min=1.0, min_is_exact=true, nan_count=5, null_count=0, num_values=4096}}	NULL	{row_group_count=2}
+
+# the NaN stats of nested and shredded VARIANT fields are accumulated over row groups too: s.x and v only have NaNs
+# in the first row group, l has NaNs in both
+statement ok
+CREATE TABLE nested_nan_rg AS SELECT {'x': CASE WHEN i = 0 THEN 'nan'::double ELSE i::double END} s, [CASE WHEN i % 1000 = 0 THEN 'nan'::float ELSE i::float END] l, (CASE WHEN i IN (1, 2) THEN 'nan'::double ELSE i::double END)::VARIANT v FROM range(4096) t(i);
+
+query IIIIIII
+COPY nested_nan_rg TO '{TEST_DIR}/nested_nan_rg.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048, SHREDDING {v: 'DOUBLE'}, RETURN_STATS);
+----
+<REGEX>:.*nested_nan_rg.parquet	4096	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"l"."element"'={column_size_bytes=\d+, has_nan=true, max=4095.0, max_is_exact=true, min=1.0, min_is_exact=true, nan_count=5, null_count=0, num_values=4096}, '"s"."x"'={column_size_bytes=\d+, has_nan=true, max=4095.0, max_is_exact=true, min=1.0, min_is_exact=true, nan_count=1, null_count=0, num_values=4096}, '"v"."metadata"'={column_size_bytes=\d+, max=010000, max_is_exact=true, min=010000, min_is_exact=true, null_count=0, num_values=4096, variant_type='STRUCT\(metadata BLOB, "value" BLOB, typed_value DOUBLE\)'}, '"v"."typed_value"'={column_size_bytes=\d+, has_nan=true, max=4095.0, max_is_exact=true, min=0.0, min_is_exact=true, nan_count=2, null_count=0, num_values=4096}, '"v"."value"'={column_size_bytes=\d+, null_count=4096, num_values=4096}}	NULL	{row_group_count=2}
