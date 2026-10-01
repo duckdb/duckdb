@@ -3,20 +3,20 @@
 # group: [collate]
 
 statement ok
-CREATE TABLE tuples AS SELECT * FROM (VALUES (('a' COLLATE NOCASE, 0)), (('B', 0))) v(s)
+CREATE TABLE tuples AS SELECT * FROM (VALUES ('a' COLLATE NOCASE, 0), ('B', 0)) v(s, i)
 
 query I
-SELECT s FROM tuples ORDER BY s DESC LIMIT 1
+SELECT (s, i) FROM tuples ORDER BY (s, i) DESC LIMIT 1
 ----
 (B, 0)
 
 query I
-SELECT max(s) FROM tuples
+SELECT max((s, i)) FROM tuples
 ----
 (B, 0)
 
 query I
-SELECT min(s) FROM tuples
+SELECT min((s, i)) FROM tuples
 ----
 (a, 0)
 
