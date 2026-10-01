@@ -61,6 +61,11 @@
 			"description": "Peak size of the temporary directory",
 			"unit": "bytes"
 		},
+		"total_bytes_spilled": {
+			"metric_type": "uint64",
+			"description": "Cumulative bytes written to the temporary (spill) directory",
+			"unit": "bytes"
+		},
 		"total_memory_allocated": {
 			"metric_type": "uint64",
 			"description": "The total memory allocated by the buffer manager",

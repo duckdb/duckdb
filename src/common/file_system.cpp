@@ -289,6 +289,16 @@ string FileSystem::GetWorkingDirectory() {
 #endif
 
 string FileSystem::JoinPath(const string &a, const string &b) {
+	// A remote URL may carry a "?query" suffix (object version, requester-pays, an SSE-C key, ...).
+	// Appending a path segment after it would bury the query mid-path and corrupt both the query and
+	// the object path, so join onto the path without the query and keep the query at the very end.
+	auto scheme = a.find("://");
+	if (scheme != string::npos) {
+		auto query = a.find('?', scheme + 3);
+		if (query != string::npos) {
+			return Path::FromString(a.substr(0, query)).Join(b).ToString() + a.substr(query);
+		}
+	}
 	return Path::FromString(a).Join(b).ToString();
 }
 

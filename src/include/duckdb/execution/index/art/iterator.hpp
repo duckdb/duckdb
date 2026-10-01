@@ -17,10 +17,10 @@ namespace duckdb {
 
 //! Keeps track of the byte leading to the currently active child of the node.
 struct IteratorEntry {
-	IteratorEntry(NodePtr node, uint8_t byte) : node(node), byte(byte) {
+	IteratorEntry(NodePtr node_ptr, uint8_t byte) : node_ptr(node_ptr), byte(byte) {
 	}
 
-	NodePtr node;
+	NodePtr node_ptr;
 	uint8_t byte = 0;
 };
 
@@ -164,10 +164,10 @@ public:
 	ARTScanProgress Scan(const ARTKey &upper_bound, Output &output, bool equal);
 
 	//! Finds the minimum (leaf) of the current subtree.
-	void FindMinimum(NodePtr current);
+	void FindMinimum(NodePtr current_ptr);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
 	//! bound exceeds the maximum value of the ART.
-	bool LowerBound(NodePtr current, const ARTKey &key, const bool equal);
+	bool LowerBound(NodePtr current_ptr, const ARTKey &key, const bool equal);
 
 	//! Returns the nested depth.
 	uint8_t GetNestedDepth() const {
@@ -180,7 +180,7 @@ private:
 	//! Stack of nodes from the root to the currently active node.
 	stack<IteratorEntry> nodes;
 	//! Last visited leaf node.
-	NodePtr last_leaf = NodePtr();
+	NodePtr last_leaf_ptr = NodePtr();
 	//! Holds the row ID of nested leaves.
 	uint8_t row_id[ROW_ID_SIZE];
 	//! True, if we passed a gate.
@@ -204,7 +204,7 @@ private:
 	ResumeScanState resume_state;
 
 private:
-	//! Goes to the next leaf in the ART and sets it as last_leaf,
+	//! Goes to the next leaf in the ART and sets it as last_leaf_ptr,
 	//! returns false if there is no next leaf.
 	bool Next();
 	//! Pop the top node from the stack of iterator entries and adjust the current key.

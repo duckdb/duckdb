@@ -96,6 +96,12 @@
       ]
     },
     {
+      "reason": "Asserts that commits keep failing after a failed WAL fsync; force_restart reopens the database between statements, clearing that state.",
+      "paths": [
+        "test/sql/storage/wal/wal_fsync_failure.test"
+      ]
+    },
+    {
       "reason": "Tests transient segment structure before checkpoint. force_restart checkpoints after every statement, merging segments.",
       "paths": [
         "test/sql/storage/adaptive_segment_allocation.test"

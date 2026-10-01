@@ -616,6 +616,19 @@ struct DebugCheckpointAbortSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct DebugCheckpointScanSleepMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_checkpoint_scan_sleep_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep after a checkpoint has written a table's row groups, before it installs them";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct DebugCheckpointSleepMsSetting {
 	using RETURN_TYPE = idx_t;
 	static constexpr const char *Name = "debug_checkpoint_sleep_ms";
@@ -778,6 +791,19 @@ struct ForceVariantShredding {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct DebugForceWalFsyncFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_force_wal_fsync_failure";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: makes every WAL fsync fail, used for testing durability error handling";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "false";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct DebugLocalFileSystemDelayMsSetting {
@@ -954,6 +980,19 @@ struct DebugVerifyVectorSetting {
 	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
+struct DebugWalFsyncSleepMsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "debug_wal_fsync_sleep_ms";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: time to sleep during each WAL fsync, emulating high-latency durable storage";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "0";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct DebugWindowModeSetting {
@@ -1822,6 +1861,21 @@ struct LoggingStorage {
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);
+};
+
+struct MatchRecognizeMaxStatesSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "match_recognize_max_states";
+	static constexpr const char *Description =
+	    "The maximum number of pattern states MATCH_RECOGNIZE explores for a single match, before it refuses the "
+	    "pattern (0 = no limit). A match is never refused below what matching the pattern without backtracking would "
+	    "take.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "1000000";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
 struct MaxExecutionTimeSetting {

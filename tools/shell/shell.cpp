@@ -2002,24 +2002,19 @@ MetadataResult ShellState::SetSeparator(ShellState &state, const vector<string> 
 	return MetadataResult::SUCCESS;
 }
 
-bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
+bool ShellState::SetOutputFile(const vector<string> &args, OutputCommand output_command) {
 	if (safe_mode) {
 		PrintF(PrintOutput::STDERR, ".output/.once/.excel cannot be used in -safe mode\n");
 		return false;
 	}
 	string zFile;
 	int bTxtMode = 0;
-	int eMode = 0;
+	enum class OutputFileMode { DEFAULT, TEXT_EDITOR, SPREADSHEET };
+	auto file_mode = OutputFileMode::DEFAULT;
 	bool bBOM = false;
-	int bOnce = 0; /* 0: .output, 1: .once, 2: .excel */
 
-	if (output_mode == 'e') {
-		// .excel
-		eMode = 'x';
-		bOnce = 2;
-	} else if (output_mode == 'o') {
-		// .once
-		bOnce = 1;
+	if (output_command == OutputCommand::EXCEL) {
+		file_mode = OutputFileMode::SPREADSHEET;
 	}
 	for (idx_t i = 1; i < args.size(); i++) {
 		const char *z = args[i].c_str();
@@ -2029,10 +2024,10 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 			}
 			if (strcmp(z, "-bom") == 0) {
 				bBOM = true;
-			} else if (output_mode != 'e' && strcmp(z, "-x") == 0) {
-				eMode = 'x'; /* spreadsheet */
-			} else if (output_mode != 'e' && strcmp(z, "-e") == 0) {
-				eMode = 'e'; /* text editor */
+			} else if (output_command != OutputCommand::EXCEL && strcmp(z, "-x") == 0) {
+				file_mode = OutputFileMode::SPREADSHEET;
+			} else if (output_command != OutputCommand::EXCEL && strcmp(z, "-e") == 0) {
+				file_mode = OutputFileMode::TEXT_EDITOR;
 			} else {
 				PrintF("ERROR: unknown option: \"%s\".  Usage:\n", args[i].c_str());
 				PrintHelp(args[0].c_str());
@@ -2049,17 +2044,17 @@ bool ShellState::SetOutputFile(const vector<string> &args, char output_mode) {
 	if (zFile.empty()) {
 		zFile = "stdout";
 	}
-	if (bOnce) {
+	if (output_command != OutputCommand::OUTPUT) {
 		outCount = 2;
 	} else {
 		outCount = 0;
 	}
 	ResetOutput();
 #ifndef SQLITE_NOHAVE_SYSTEM
-	if (eMode == 'e' || eMode == 'x') {
+	if (file_mode != OutputFileMode::DEFAULT) {
 		doXdgOpen = 1;
 		PushOutputMode();
-		if (eMode == 'x') {
+		if (file_mode == OutputFileMode::SPREADSHEET) {
 			/* spreadsheet mode.  Output as CSV. */
 			NewTempFile("csv");
 			ShellClearFlag(ShellFlags::SHFLG_Echo);

@@ -16,7 +16,6 @@
 #include "duckdb/common/enums/active_transaction_state.hpp"
 
 namespace duckdb {
-class CheckpointLock;
 class CommitDropState;
 class DuckTableEntry;
 class RowGroupCollection;
@@ -24,13 +23,14 @@ class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
 class StorageCommitState;
-struct DataTableInfo;
 struct UndoBufferProperties;
 
 struct CommitInfo {
 	transaction_t commit_id;
 	ActiveTransactionState active_transactions = ActiveTransactionState::UNSET;
 	optional_ptr<CommitDropState> drop_state;
+	//! WAL offset covering the commit's flush marker (0 if no WAL was written)
+	idx_t wal_sync_offset = 0;
 };
 
 class DuckTransaction : public Transaction {
@@ -45,6 +45,11 @@ public:
 	SnapshotView view;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
+	//! WAL offset covering the commit's flush marker, set when the commit is published; the commit
+	//! is durable once the WAL is synced up to it (0 while uncommitted or when nothing was written)
+	idx_t wal_sync_offset = 0;
+	//! The committed catalog version just before this commit published
+	idx_t catalog_version_before_commit = 0;
 
 	atomic<idx_t> catalog_version;
 
@@ -65,6 +70,10 @@ public:
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
 	ErrorData PreFlushOptimisticBlocks(AttachedDatabase &db) noexcept;
+	//! Appends the local storage to the tables; with a WAL, the commit state records the optimistically written blocks
+	ErrorData AppendLocalStorage(ClientContext &context, AttachedDatabase &db,
+	                             unique_ptr<StorageCommitState> &commit_state) noexcept;
+	//! Writes the undo buffer to the WAL, with the commit state of AppendLocalStorage
 	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
@@ -100,9 +109,6 @@ public:
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 
-	//! Get a shared lock on a table
-	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
-
 	void SetIsCheckpointTransaction() {
 		is_checkpoint_transaction = true;
 	}
@@ -121,14 +127,6 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
-	//! Lock for the active_locks map
-	mutex active_locks_lock;
-	struct ActiveTableLock {
-		mutex checkpoint_lock_mutex; // protects access to the checkpoint_lock field in this class
-		weak_ptr<CheckpointLock> checkpoint_lock;
-	};
-	//! Active locks on tables
-	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
 };

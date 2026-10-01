@@ -101,6 +101,13 @@ struct MetricSystemPeakTempDirSize {
 	static constexpr const char *Unit = "bytes";
 	static constexpr const char *TypeStr = "uint64";
 };
+struct MetricSystemTotalBytesSpilled {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "system.total_bytes_spilled";
+	static constexpr const char *Description = "Cumulative bytes written to the temporary (spill) directory";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricSystemTotalMemoryAllocated {
 	using METRIC_TYPE = uint64_t;
 	static constexpr const char *Name = "system.total_memory_allocated";

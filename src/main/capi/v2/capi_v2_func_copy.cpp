@@ -1,3 +1,4 @@
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
@@ -143,7 +144,7 @@ public:
 	void *in_user_data = nullptr;
 	void *in_bind_data = nullptr;
 
-	idx_t out_target = 0;
+	optional_idx out_target;
 };
 
 static auto Convert(duckdb_v2_copy_to_batch_size_info_handle info) -> CV2CopyToBatchSizeInfo * {
@@ -363,7 +364,7 @@ static auto CV2CopyToBind(ClientContext &context, CopyFunctionBindInput &input, 
 	return std::move(result);
 }
 
-static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) -> idx_t {
+static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) -> optional_idx {
 	const auto &info = GetFunctionInfo(bind_data);
 
 	CV2CopyToBatchSizeInfo args = {};
@@ -377,7 +378,7 @@ static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) 
 	if (err.HasError()) {
 		err.ThrowAsException();
 	}
-	if (args.out_target == 0) {
+	if (args.out_target.IsValid() && args.out_target == 0) {
 		throw InvalidInputException("The batch size callback must set a target greater than 0.");
 	}
 	return args.out_target;

@@ -1057,7 +1057,6 @@ void DataTable::AppendLock(DuckTransaction &transaction, TableAppendState &state
 		                           "a different transaction",
 		                           GetTableName(), TableModification());
 	}
-	state.table_lock = transaction.SharedLockTable(*info);
 	state.row_start = NumericCast<row_t>(row_groups->GetNextRowId());
 	state.current_row = state.row_start;
 	auto &transaction_manager = transaction.GetTransactionManager();
@@ -1221,7 +1220,6 @@ void DataTable::RevertAppendInternal(idx_t start_row) {
 
 void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
-	auto table_lock = transaction.SharedLockTable(*info);
 
 	// revert any appends to indexes
 	if (!info->indexes.Empty()) {
@@ -1310,7 +1308,6 @@ void DataTable::VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage,
 
 unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &table, ClientContext &context,
                                                          const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-	auto &transaction = DuckTransaction::Get(context, db);
 	// Bind all indexes.
 	info->BindIndexes(context);
 
@@ -1327,7 +1324,6 @@ unique_ptr<TableDeleteState> DataTable::InitializeDelete(TableCatalogEntry &tabl
 		result->verify_chunk.Initialize(Allocator::Get(context), types);
 		result->constraint_state = make_uniq<ConstraintState>(table, bound_constraints);
 	}
-	result->checkpoint_lock = transaction.SharedLockTable(*info);
 	return result;
 }
 
@@ -1576,16 +1572,20 @@ unique_ptr<BlockingSample> DataTable::GetSample() {
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-unique_ptr<StorageLockKey> DataTable::GetCheckpointLock() {
-	return info->checkpoint_lock.GetExclusiveLock();
-}
-
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
-	writer.SetRowGroupCount(info->CheckpointRowGroupCount(writer.GetCheckpointOptions()));
-	// checkpoint each individual row group
 	TableStatistics global_stats;
-	row_groups->Checkpoint(writer, global_stats);
-	row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
+	CollectionCheckpointSnapshot snapshot;
+	{
+		lock_guard<mutex> lock(append_lock);
+		snapshot = row_groups->SnapshotForCheckpoint(writer);
+	}
+	// checkpoint each individual row group
+	auto result = row_groups->Checkpoint(writer, global_stats, snapshot);
+	{
+		lock_guard<mutex> lock(append_lock);
+		row_groups->InstallCheckpoint(std::move(result), global_stats);
+		row_groups->SetRowGroupAppendMode(RowGroupAppendMode::SUGGEST_NEW);
+	}
 	if (writer.GetRebuildIndexes()) {
 		MetricsTimer timer;
 		auto context = writer.TryGetClientContext();
@@ -1595,17 +1595,13 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 		RebuildIndexes();
 		timer.EndTimer();
 	}
-
-	const auto storage_version = serializer.GetOptions().storage_compatibility.storage_version;
-	const auto index_writer = writer.GetTableIndexWriter(storage_version);
-	vector<shared_ptr<const IndexStorageInfo>> index_infos;
-	if (index_writer) {
-		// Only checkpoint indexes when we write to disk
-		index_infos = info->GetIndexes().CheckPoint(*index_writer);
-	}
-
-	writer.FinalizeTable(global_stats, *info, *row_groups, index_infos, serializer);
-	row_groups->SetStats(global_stats);
+	// The row group payload data has been written. Now write:
+	//   sample
+	//   column stats
+	//   row-group pointers
+	//   table pointer
+	//   index data
+	writer.FinalizeTable(global_stats, *info, *row_groups, serializer);
 }
 
 void DataTable::CommitDropColumn(const idx_t column_index, CommitDropState &drop_state) {

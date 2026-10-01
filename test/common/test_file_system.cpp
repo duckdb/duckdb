@@ -1382,3 +1382,18 @@ TEST_CASE("compression filesystem registration and lookup", "[file_system]") {
 
 	fs->RemoveFile(filepath);
 }
+
+TEST_CASE("JoinPath keeps a remote URL's query string at the end of the path", "[file_system]") {
+	LocalFileSystem fs;
+	// A query string rides at the end, not buried before the appended segment.
+	REQUIRE(fs.JoinPath("s3://bucket/dir?s3_sse_c_key=abc", "file.parquet") ==
+	        "s3://bucket/dir/file.parquet?s3_sse_c_key=abc");
+	// Nested appends (a hive directory, then the file) keep it at the end -- the partitioned COPY case.
+	auto hive_dir = fs.JoinPath("s3://bucket/dir?s3_sse_c_key=abc", "part=7");
+	REQUIRE(hive_dir == "s3://bucket/dir/part=7?s3_sse_c_key=abc");
+	REQUIRE(fs.JoinPath(hive_dir, "data_0.parquet") == "s3://bucket/dir/part=7/data_0.parquet?s3_sse_c_key=abc");
+	// A URL without a query is unchanged.
+	REQUIRE(fs.JoinPath("s3://bucket/dir", "file.parquet") == "s3://bucket/dir/file.parquet");
+	// A '?' in a plain (non-URL) path is a literal character, not a query delimiter.
+	REQUIRE(fs.JoinPath("/tmp/weird?name", "file.parquet") == "/tmp/weird?name/file.parquet");
+}

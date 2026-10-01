@@ -128,6 +128,10 @@ ListComprehensionFilter <- 'IF' Expression
 
 ParensExpression <- Parens(Expression)
 
+# RUNNING and FINAL say how much of a MATCH_RECOGNIZE match the call below them reads. They are only
+# meaningful in MEASURES, which is where the binder checks for them.
+MeasureSemanticsExpression <- MeasureSemantics FunctionExpression
+
 SingleExpression <-
     ParensExpression /
 	LiteralExpression /
@@ -142,6 +146,7 @@ SingleExpression <-
     CastExpression /
     GroupingExpression /
     MapExpression /
+    MeasureSemanticsExpression /
     FunctionExpression /
     ColumnReference /
     ListComprehensionExpression /

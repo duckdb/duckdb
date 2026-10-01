@@ -237,6 +237,8 @@ public:
 	                   vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
 	                   vector<LogicalType> &order_types, vector<LogicalType> &arg_order_types);
 
+	DUCKDB_API unique_ptr<Expression> BindScalarWindowFunction(BoundWindowExpression &wexpr);
+
 	//! Turn a function into a BoundScalarFunction bound to the given arguments. The function is kept as the
 	//! definition of the resulting bound function - see BoundScalarFunction::GetDefinition().
 	pair<BoundScalarFunction, unique_ptr<FunctionData>>

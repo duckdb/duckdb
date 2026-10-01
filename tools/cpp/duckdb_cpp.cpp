@@ -755,20 +755,9 @@ auto Connection::Interrupt() -> void {
 }
 
 auto Connection::GetQueryProgress() const -> Connection::QueryProgress {
-	// Flatten the C snapshot object into the POD struct: capture, read the
-	// accessors, destroy.
-	duckdb_v2_query_progress_handle snapshot = nullptr;
-	CheckedAPICall(duckdb_v2_connection_query_progress, handle(), &snapshot);
 	QueryProgress progress {};
-	try {
-		CheckedAPICall(duckdb_v2_query_progress_get_percentage, snapshot, &progress.percentage);
-		CheckedAPICall(duckdb_v2_query_progress_get_rows_processed, snapshot, &progress.rows_processed);
-		CheckedAPICall(duckdb_v2_query_progress_get_total_rows_to_process, snapshot, &progress.total_rows_to_process);
-	} catch (...) {
-		duckdb_v2_query_progress_destroy(&snapshot);
-		throw;
-	}
-	duckdb_v2_query_progress_destroy(&snapshot);
+	CheckedAPICall(duckdb_v2_connection_progress_get, handle(), &progress.percentage, &progress.rows_processed,
+	               &progress.total_rows_to_process);
 	return progress;
 }
 

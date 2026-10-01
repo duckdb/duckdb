@@ -5337,14 +5337,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_description_destroy(duckdb_v2_colu
 
 /* --- Types for connection --- */
 
-/*!
- * An opaque, owned handle to a snapshot of a query's execution progress, taken by connection_query_progress at call
- * time. Read it with the query_progress_get_* accessors; destroy it via query_progress_destroy.
- */
-typedef struct _duckdb_v2_query_progress {
-	void *internal_ptr;
-} * duckdb_v2_query_progress_handle;
-
 /* --- Constants for connection --- */
 
 /* --- Function pointer typedefs for connection --- */
@@ -5486,84 +5478,28 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_interrupt(duckdb_v2_connection
 /*!
  * Captures a snapshot of the active query's execution progress.
  *
- * Writes the progress of the query currently executing on the connection into an owned snapshot handle; read it with
- * the query_progress_get_* accessors and destroy it via query_progress_destroy. Safe to call from any thread, including
- * while another thread steps the query's result.
+ * Reads the percentage and row counts from one consistent snapshot of the query currently executing on the connection.
+ * Safe to call from any thread, including while another thread steps the query's result.
  *
- * Progress is published only while the enable_progress_bar option is set; this call does not enable tracking itself. A
- * percentage of -1, with both row counts 0, means no information is available: tracking is disabled, no query is
- * active, or nothing has been published yet.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection.
- * @param out_progress Receives the new progress snapshot handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_query_progress(duckdb_v2_connection_handle conn,
-                                                                 duckdb_v2_query_progress_handle *out_progress,
-                                                                 duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the snapshot's percentage complete.
- *
- * A percentage in [0, 100], or -1 when no progress information was available at capture time.
+ * Progress is published only when the enable_progress_bar option is set; the bridge does not enable tracking itself.
+ * Both row counts are 0 when no information is available. The percentage is -1 when tracking is disabled, no query is
+ * active, or no progress has been published yet.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param progress The progress snapshot.
- * @param out_percentage Receives the percentage.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_percentage(duckdb_v2_query_progress_handle progress,
-                                                                     double *out_percentage,
-                                                                     duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the snapshot's processed row count.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param progress The progress snapshot.
+ * @param conn The connection handle.
+ * @param out_percentage Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active,
+ * or no progress has been published yet.
  * @param out_rows_processed Receives the number of rows processed so far.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_rows_processed(duckdb_v2_query_progress_handle progress,
-                                                                         uint64_t *out_rows_processed,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the snapshot's total row count.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param progress The progress snapshot.
  * @param out_total_rows_to_process Receives the total number of rows the query will process.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_total_rows_to_process(
-    duckdb_v2_query_progress_handle progress, uint64_t *out_total_rows_to_process, duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys a progress snapshot handle.
- *
- * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. On success the slot is set to nullptr.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param progress The progress snapshot to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_progress_handle *progress);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle conn, double *out_percentage,
+                                                               uint64_t *out_rows_processed,
+                                                               uint64_t *out_total_rows_to_process,
+                                                               duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for connection --- */
 

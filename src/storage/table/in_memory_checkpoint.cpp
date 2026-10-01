@@ -7,7 +7,10 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/transaction/duck_transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -22,6 +25,23 @@ InMemoryCheckpointer::InMemoryCheckpointer(QueryContext context, AttachedDatabas
 }
 
 void InMemoryCheckpointer::CreateCheckpoint() {
+	auto &transaction_manager = DuckTransactionManager::Get(db);
+	// appends that run alongside the checkpoint start new row groups, index changes go to the checkpoint deltas
+	ActiveCheckpointWrapper active_checkpoint(context, db, transaction_manager);
+	{
+		unique_lock<mutex> commit_lock;
+		if (!options.commit_lock) {
+			// a checkpoint instead of a WAL write already holds the commit lock
+			commit_lock = storage_manager.GetCommitLock();
+		}
+		if (options.type == CheckpointType::FULL_CHECKPOINT &&
+		    transaction_manager.GetLastCommit() >= transaction_manager.LowestVisibilityBound()) {
+			// an active snapshot still needs state a full checkpoint would vacuum away
+			options.type = CheckpointType::CONCURRENT_CHECKPOINT;
+		}
+		active_checkpoint.Begin(options);
+	}
+
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
@@ -47,7 +67,13 @@ void InMemoryCheckpointer::CreateCheckpoint() {
 			throw IOException("In-memory checkpoint aborted because of PRAGMA debug_checkpoint_abort flag");
 		}
 	}
+	for (auto &table : tables) {
+		// index entries added or removed while the checkpoint ran went to delta indexes
+		auto &index_list = table.get().GetStorage().GetDataTableInfo()->GetIndexes();
+		index_list.MergeCheckpointDeltas(options.checkpoint_id);
+	}
 	storage_manager.SetWALSize(0);
+	active_checkpoint.Commit();
 }
 
 MetadataWriter &InMemoryCheckpointer::GetMetadataWriter() {
@@ -64,10 +90,7 @@ void InMemoryCheckpointer::WriteTable(TableCatalogEntry &table, Serializer &seri
 	InMemoryTableDataWriter data_writer(*this, table);
 
 	// Write the table data
-	auto table_lock = table.GetStorage().GetCheckpointLock();
 	table.GetStorage().Checkpoint(data_writer, serializer);
-	// flush any partial blocks BEFORE releasing the table lock
-	// flushing partial blocks updates where data lives and is not thread-safe
 	partial_block_manager.FlushPartialBlocks();
 }
 
