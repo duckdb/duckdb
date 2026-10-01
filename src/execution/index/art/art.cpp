@@ -175,8 +175,8 @@ ART::ART(const Identifier &name, const IndexConstraintType index_constraint_type
 ART::ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr)
     : BoundIndex(src.name, ART::TYPE_NAME, src.index_constraint_type, src.column_ids, src.table_io_manager,
                  src.unbound_expressions, src.db),
-      tree(src.tree), allocators(std::move(allocators_ptr)), owns_data(true), storage_version(src.storage_version),
-      prefix_count(src.prefix_count) {
+      root_ptr(src.root_ptr), allocators(std::move(allocators_ptr)), owns_data(true),
+      storage_version(src.storage_version), prefix_count(src.prefix_count) {
 	D_ASSERT(allocators);
 }
 
@@ -925,8 +925,8 @@ ARTSearchResult ART::ScanRange(ARTIndexScanState &scan_state, RowIdVectorOutput 
 
 	auto upper_bound = ARTKey::CreateKey(arena_allocator, scan_state.values[1], storage_version);
 
-	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
-	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+	bool left_equal = scan_state.expressions[0] == ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+	bool right_equal = scan_state.expressions[1] == ExpressionType::COMPARE_LESSTHANOREQUALTO;
 	return SearchCloseRange(key, upper_bound, left_equal, right_equal, row_ids);
 }
 
@@ -1137,7 +1137,6 @@ IndexStorageInfo ART::PrepareSerialize(const ARTSerializationFormat target_forma
 
 	IndexStorageInfo info(name);
 	info.root = root_ptr.Get();
-	info.options = options;
 
 	// It never hurts to serialize the storage version, even to older formats
 	if (storage_version != StorageVersion::INVALID) {
