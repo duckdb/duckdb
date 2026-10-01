@@ -196,6 +196,9 @@ functions:
         description: The options to set the value on.
       name:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The name of the value. Borrowed and copied.
       value:
         type: value
@@ -246,6 +249,9 @@ functions:
         description: The file system to open the file through.
       file_path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path of the file to open. Borrowed for the call only.
       options:
         type: file_open_options

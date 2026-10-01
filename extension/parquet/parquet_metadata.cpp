@@ -1173,7 +1173,8 @@ double ParquetMetaDataOperator::Progress(ClientContext &context, const FunctionD
 }
 
 ParquetMetaDataFunction::ParquetMetaDataFunction()
-    : TableFunction("parquet_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::META_DATA>) {
@@ -1182,7 +1183,8 @@ ParquetMetaDataFunction::ParquetMetaDataFunction()
 }
 
 ParquetSchemaFunction::ParquetSchemaFunction()
-    : TableFunction("parquet_schema", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_schema", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::SCHEMA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::SCHEMA>) {
@@ -1191,7 +1193,8 @@ ParquetSchemaFunction::ParquetSchemaFunction()
 }
 
 ParquetKeyValueMetadataFunction::ParquetKeyValueMetadataFunction()
-    : TableFunction("parquet_kv_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_kv_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::KEY_VALUE_META_DATA>) {
@@ -1200,7 +1203,8 @@ ParquetKeyValueMetadataFunction::ParquetKeyValueMetadataFunction()
 }
 
 ParquetFileMetadataFunction::ParquetFileMetadataFunction()
-    : TableFunction("parquet_file_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_file_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::FILE_META_DATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::FILE_META_DATA>) {
@@ -1209,7 +1213,11 @@ ParquetFileMetadataFunction::ParquetFileMetadataFunction()
 }
 
 ParquetBloomProbeFunction::ParquetBloomProbeFunction()
-    : TableFunction("parquet_bloom_probe", {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
+    : TableFunction("parquet_bloom_probe",
+                    FunctionSignature()
+                        .AddPositionalOnly("path", LogicalType::VARCHAR)
+                        .AddPositionalOnly("column_name", LogicalType::VARCHAR)
+                        .AddPositionalOnly("value", LogicalType::ANY),
                     ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::BLOOM_PROBE>,
                     ParquetMetaDataOperator::InitGlobal,
@@ -1219,7 +1227,8 @@ ParquetBloomProbeFunction::ParquetBloomProbeFunction()
 }
 
 ParquetFullMetadataFunction::ParquetFullMetadataFunction()
-    : TableFunction("parquet_full_metadata", {LogicalType::VARCHAR}, ParquetMetaDataOperator::Function,
+    : TableFunction("parquet_full_metadata", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+                    ParquetMetaDataOperator::Function,
                     ParquetMetaDataOperator::Bind<ParquetMetadataOperatorType::FULL_METADATA>,
                     ParquetMetaDataOperator::InitGlobal,
                     ParquetMetaDataOperator::InitLocal<ParquetMetadataOperatorType::FULL_METADATA>) {

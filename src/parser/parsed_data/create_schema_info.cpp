@@ -12,10 +12,8 @@ const Identifier &CreateSchemaInfo::SchemaName() const {
 }
 
 const Identifier &CreateSchemaInfo::SchemaCatalog() const {
-	static const Identifier EMPTY;
-	auto &path = GetQualifiedName().Path();
 	// the catalog is the leading component once the path carries [catalog, schema, <empty name>]
-	return path.size() >= 3 ? path[0] : EMPTY;
+	return GetQualifiedName().Catalog();
 }
 
 vector<Identifier> CreateSchemaInfo::ParentSchemas() const {
@@ -49,6 +47,9 @@ bool CreateSchemaInfo::ShouldReplaceOnConflict() const {
 unique_ptr<CreateInfo> CreateSchemaInfo::Copy() const {
 	auto result = make_uniq<CreateSchemaInfo>();
 	CopyProperties(*result);
+	for (auto &option : options) {
+		result->options.emplace(option.first, option.second->Copy());
+	}
 	return std::move(result);
 }
 
@@ -56,6 +57,18 @@ string CreateSchemaInfo::ToString() const {
 	auto qualified = GetQualifiedName().Parent().ToString();
 
 	string temp = temporary ? "TEMPORARY " : "";
+	if (!options.empty()) {
+		qualified += " WITH (";
+		idx_t i = 0;
+		for (auto &entry : options) {
+			if (i > 0) {
+				qualified += ", ";
+			}
+			qualified += SQLString(entry.first) + "=" + entry.second->ToString();
+			i++;
+		}
+		qualified += ")";
+	}
 
 	string ret = "";
 	switch (on_conflict) {

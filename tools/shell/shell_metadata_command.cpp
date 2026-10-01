@@ -315,9 +315,10 @@ MetadataResult PrintHistory(ShellState &state, const vector<string> &args) {
 			start = row_count - limit;
 		}
 	}
+	auto rows = result->Collection().GetRows();
 	for (idx_t row = start; row < row_count; row++) {
-		auto id = result->GetValue(0, row).GetValue<int64_t>();
-		auto sql = result->GetValue(1, row).GetValue<string>();
+		auto id = rows.GetValue(0, row).GetValue<int64_t>();
+		auto sql = rows.GetValue(1, row).GetValue<string>();
 		state.HighlightSQL(sql);
 		// prefix each entry with its index - align any continuation lines (from multi-line
 		// statements) underneath the SQL by padding them with spaces to the prefix width

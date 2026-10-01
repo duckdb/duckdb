@@ -891,7 +891,7 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
 		}
-		gsource.rows_scanned += count;
+		gsource.rows_scanned.fetch_add(count, std::memory_order_relaxed);
 		if (result_count > 0) {
 			break;
 		}

@@ -540,6 +540,13 @@ TEST_CASE("V2: statement_execute rejects a malformed parameter name", "[capi_v2]
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(r == nullptr);
+	names[0] = Convert("\x80");
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_str message = {nullptr, 0};
+	REQUIRE(duckdb_v2_error_info_get_text(err, &message) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Convert(message).find("UTF-8") != std::string::npos);
+	duckdb_v2_error_info_destroy(&err);
 
 	duckdb_v2_value_destroy(&v);
 	duckdb_v2_sql_statement_destroy(&stmt);

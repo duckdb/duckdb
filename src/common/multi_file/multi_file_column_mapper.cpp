@@ -119,7 +119,9 @@ struct FieldIdMapper : public ColumnMapper {
 	static unique_ptr<Expression> GetDefault(ClientContext &context, const MultiFileColumnDefinition &column) {
 		auto &default_val = column.default_expression;
 		if (!default_val) {
-			throw InternalException("No default expression in FieldId Map");
+			throw InvalidInputException("Field \"%s\" (field id %d) is missing from the file schema and has no default "
+			                            "expression",
+			                            column.name, column.GetIdentifierFieldId());
 		}
 		auto binder = Binder::CreateBinder(context);
 		binder->SetCanContainNulls(true);
@@ -760,7 +762,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			// reader is responsible for converting types - perform a top-level match only
 			auto entry = mapper.Find(global_column);
 			if (!entry.IsValid()) {
-				ThrowColumnNotFoundError(global_column.name.GetIdentifierName());
+				// the file lacks the column - it takes its default value, and is an error when it has none
+				reader_data.expressions.push_back(mapper.GetDefaultExpression(context, global_column, true));
+				continue;
 			}
 			MultiFileLocalColumnId local_id(entry.GetIndex());
 			auto local_index = global_id.RemapRootIndex(local_id.GetId());

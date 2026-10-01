@@ -14,6 +14,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
@@ -36,7 +37,6 @@
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/extension_entries.hpp"
-#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -122,6 +122,10 @@ Catalog &Catalog::GetCatalog(ClientContext &context, const Identifier &catalog_n
 // Schema
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo &info) {
+	auto supports_create_schema = SupportsCreateSchema(info);
+	if (supports_create_schema.HasError()) {
+		supports_create_schema.Throw();
+	}
 	return CreateSchema(GetCatalogTransaction(context), info);
 }
 
@@ -762,31 +766,27 @@ bool Catalog::TryAutoLoad(ClientContext &context, const string &original_name) n
 	if (context.db->ExtensionIsLoaded(extension_name)) {
 		return true;
 	}
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (!Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		return false;
 	}
 	try {
-		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (ExtensionHelper::CanAutoloadExtension(*context.db, extension_name)) {
 			return ExtensionHelper::TryAutoLoadExtension(context, extension_name);
 		}
 	} catch (...) {
 		return false;
 	}
-#endif
 	return false;
 }
 
 String Catalog::AutoloadExtensionByConfigName(ClientContext &context, const Identifier &configuration_name) {
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(context)) {
 		auto extension_name = ExtensionHelper::FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
-		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (ExtensionHelper::CanAutoloadExtension(*context.db, extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
 			return extension_name;
 		}
 	}
-#endif
 
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
@@ -833,7 +833,6 @@ static bool CompareCatalogTypes(CatalogType type_a, CatalogType type_b) {
 }
 
 bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType type, const Identifier &entry_name) {
-#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	if (Settings::Get<AutoloadKnownExtensionsSetting>(db)) {
 		string extension_name;
 		if (IsAutoloadableFunction(type)) {
@@ -857,12 +856,11 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(DatabaseInstance &db, CatalogType 
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COLLATIONS);
 		}
 
-		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(db, extension_name)) {
 			ExtensionHelper::AutoLoadExtension(db, extension_name);
 			return true;
 		}
 	}
-#endif
 
 	return false;
 }
@@ -1574,6 +1572,14 @@ vector<reference<CatalogEntry>> Catalog::GetAllEntries(ClientContext &context, C
 }
 
 void Catalog::Alter(CatalogTransaction transaction, AlterInfo &info) {
+	if (info.type == AlterType::ALTER_SCHEMA) {
+		auto &schema_info = info.Cast<AlterSchemaInfo>();
+		auto schema = GetSchema(transaction, schema_info.SchemaPath(), info.if_not_found);
+		if (!schema) {
+			return;
+		}
+		return AlterSchema(transaction, *schema, schema_info);
+	}
 	if (transaction.HasContext()) {
 		CatalogEntryRetriever retriever(transaction.GetContext());
 		EntryLookupInfo lookup_info(info.GetCatalogType(), info.GetQualifiedName());
@@ -1617,6 +1623,27 @@ ErrorData Catalog::SupportsCreateTable(BoundCreateTableInfo &info) {
 		    StringUtil::Format("WITH clause is not supported for tables in a %s catalog", GetCatalogType()));
 	}
 	return ErrorData();
+}
+
+ErrorData Catalog::SupportsCreateSchema(CreateSchemaInfo &info) {
+	if (!info.options.empty()) {
+		return ErrorData(
+		    ExceptionType::CATALOG,
+		    StringUtil::Format("WITH clause is not supported for schemas in a %s catalog", GetCatalogType()));
+	}
+	return ErrorData();
+}
+
+void Catalog::AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema, AlterSchemaInfo &info) {
+	switch (info.alter_schema_type) {
+	case AlterSchemaType::SET_SCHEMA_OPTIONS:
+		throw NotImplementedException("SET (<options>) is not supported for schemas in a %s catalog", GetCatalogType());
+	case AlterSchemaType::RESET_SCHEMA_OPTIONS:
+		throw NotImplementedException("RESET (<options>) is not supported for schemas in a %s catalog",
+		                              GetCatalogType());
+	default:
+		throw InternalException("Unrecognized alter schema type!");
+	}
 }
 
 optional<Identifier> Catalog::GetDefaultSchema() const {

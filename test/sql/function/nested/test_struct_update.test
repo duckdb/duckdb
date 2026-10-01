@@ -25,7 +25,7 @@ SELECT struct_update({'a': 1, 'b': 'abc', 'c': true}, d := {'a': 'new stuff'});
 statement error
 SELECT struct_update();
 ----
-<REGEX>:Invalid Input Error.*Missing required arguments for struct_update function.*
+<REGEX>:Binder Error.*No function matches.*struct_update\(\).*
 
 statement error
 SELECT struct_update({a: 1, b: 2});

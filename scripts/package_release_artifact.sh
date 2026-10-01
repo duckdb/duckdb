@@ -89,6 +89,7 @@ else
 	stage_file "$repository_root/src/include/duckdb_v2.h"
 	stage_file "$repository_root/src/include/duckdb_extension.h"
 	stage_file "$repository_root/src/include/duckdb_extension_v2.h"
+	stage_file "$repository_root/src/include/duckdb_static_extension.h"
 fi
 
 tar -C "$staging_dir" -czf "$temporary_archive" "${members[@]}"

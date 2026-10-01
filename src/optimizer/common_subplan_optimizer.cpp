@@ -617,12 +617,12 @@ private:
 			return true;
 		case LogicalOperatorType::LOGICAL_GET: {
 			auto &get = op.Cast<LogicalGet>();
-			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty() &&
-			    get.named_parameters.empty()) {
+			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty()) {
 				// Without serialization callbacks, the serialized form carries only the call parameters
-				// (see LogicalGet::Serialize). A parameter-less scan - e.g., one created through an
-				// attached catalog - keeps its identity solely in the bind data, so equal serialized
-				// bytes cannot prove that two scans read the same table.
+				// (see LogicalGet::Serialize). A scan without positional parameters - e.g., one created through
+				// an attached catalog - keeps its identity solely in the bind data, and its options do not
+				// identify what it reads, so equal serialized bytes cannot prove that two scans read the same
+				// table.
 				return false;
 			}
 			return true;

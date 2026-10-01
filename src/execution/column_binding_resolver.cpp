@@ -232,6 +232,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.Binding() == bindings[i]) {
 			if (!types.empty()) {
+				// LCOV_EXCL_START
 				if (bindings.size() != types.size()) {
 					throw InternalException(
 					    "Failed to bind column reference %s [%d.%d]: inequal num bindings/types (%llu != %llu)",
@@ -244,6 +245,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 					                        expr.Binding().column_index, expr.GetReturnType().ToString(),
 					                        types[i].ToString());
 				}
+				// LCOV_EXCL_STOP
 			}
 			if (verify_only) {
 				// in verification mode

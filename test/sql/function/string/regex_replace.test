@@ -229,6 +229,22 @@ SELECT regexp_replace(s, pat, repl) FROM t_repl_invalid;
 ----
 Invalid replacement string for regexp_replace
 
+# Successful non-constant pattern path, with single and global replacement
+query II
+SELECT
+	regexp_replace(s, pattern, replacement),
+	regexp_replace(s, pattern, replacement, 'g')
+FROM (VALUES ('abcabc', 'b', 'X')) t(s, pattern, replacement);
+----
+aXcabc	aXcaXc
+
+# Duplicate regex expressions compare equal, including their bind data
+query I
+SELECT regexp_replace(s, 'b', 'X') || regexp_replace(s, 'b', 'X')
+FROM (VALUES ('abc')) t(s);
+----
+aXcaXc
+
 # Non-constant pattern path: invalid escape should also raise an error
 statement ok
 DELETE FROM t_repl_invalid;

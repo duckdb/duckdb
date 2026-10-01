@@ -1291,6 +1291,10 @@ ColumnDataRowCollection ColumnDataCollection::GetRows() const {
 	return ColumnDataRowCollection(*this);
 }
 
+Value ColumnDataCollection::GetValue(idx_t column, idx_t index) const {
+	return GetRows().GetValue(column, index);
+}
+
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//

@@ -48,14 +48,17 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 			throw InvalidInputException("sniff_csv function does not accept auto_detect variable set to false");
 		}
 		// otherwise remove it
-		input.named_parameters.erase("auto_detect");
+		input.named_parameters.erase(it);
 	}
 
 	// If we want to force the match of the sniffer
 	it = input.named_parameters.find("force_match");
 	if (it != input.named_parameters.end()) {
+		if (it->second.IsNull()) {
+			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+		}
 		result->force_match = it->second.GetValue<bool>();
-		input.named_parameters.erase("force_match");
+		input.named_parameters.erase(it);
 	}
 	MultiFileOptions file_options;
 	result->options.FromNamedParameters(input.named_parameters, context, file_options);
@@ -319,10 +322,13 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 void CSVSnifferFunction::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction csv_sniffer("sniff_csv", {LogicalType::VARCHAR}, CSVSniffFunction, CSVSniffBind, CSVSniffInitGlobal);
+	TableFunction csv_sniffer("sniff_csv", FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	                          CSVSniffFunction, CSVSniffBind, CSVSniffInitGlobal);
 	// Accept same options as the actual csv reader
 	ReadCSVTableFunction::ReadCSVAddNamedParameters(csv_sniffer);
-	csv_sniffer.named_parameters["force_match"] = LogicalType::BOOLEAN;
+	MultiFileReader::AddParameters(csv_sniffer);
+	csv_sniffer.GetSignature().ExtendTypedKwargs(
+	    [](TypedKwargs &options) { options.Add("force_match", LogicalType::BOOLEAN); });
 	set.AddFunction(csv_sniffer);
 }
 } // namespace duckdb

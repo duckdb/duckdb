@@ -35,9 +35,9 @@ handles:
 
   table_function_bind_info:
     description: |
-      A borrowed opaque handle to the arguments supplied to a table function during the query preparation "bind"
-      phase. The "bind" callback receives this handle and must use it to declare the columns the function returns;
-      it can also inspect the arguments given to the function, initialize some constant state and hint at the
+      A borrowed opaque handle to the result of a table function's "bind" phase. The "bind" callback receives this
+      handle next to a `[[function_bind_info]]`, which gives access to the arguments, the user data and the bind
+      data. It must use this handle to declare the columns the function returns, and can use it to hint at the
       number of rows the scan will produce.
 
   table_function_init_global_info:
@@ -90,8 +90,13 @@ callbacks:
   table_function_bind_callback:
     parameters:
       info:
+        type: function_bind_info
+        description: |
+          Borrowed opaque handle providing access to the arguments of the call site being bound, the user data and
+          the bind data.
+      result:
         type: table_function_bind_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
+        description: Borrowed opaque handle to declare the result columns and the estimated cardinality of the scan through.
       context:
         type: context
         description: Borrowed handle to the context of the query currently executing the callback.
@@ -275,8 +280,10 @@ functions:
         type: table_function
         description: The function to set the name of.
       name:
-        type: str
+        type: identifier
         indirection: 1
+        const: true
+        kind: IN
         description: The name to set. Borrowed and copied.
       err:
         type: error_info
@@ -290,13 +297,9 @@ functions:
     description: |
       Returns the function's signature so it can be configured.
 
-      Add parameters with `[[function_signature_add_parameter]]` and set a variadic tail with
-      `[[function_signature_set_varargs]]`. The signature is modified in place. A table function maps the
-      signature onto the two ways SQL passes arguments to a table function: a parameter without a default value
-      becomes a required positional argument, a parameter with a default value becomes a named argument the
-      caller may omit. The variadic tail extends the positional arguments. A table function declares the columns
-      it returns from its bind callback instead of through a return type, so registration rejects a signature
-      whose return type was set with `[[function_signature_set_return_type]]`.
+      Add parameters with `[[function_signature_add_parameter]]`. The signature is modified in place. A table
+      function declares the columns it returns from its bind callback instead of through a return type, so
+      registration rejects a signature whose return type was set with `[[function_signature_set_return_type]]`.
     parameters:
       function:
         type: table_function
@@ -321,7 +324,7 @@ functions:
       Sets arbitrary user data on the table function.
 
       Associates an opaque pointer with the function, retrievable from the callbacks via
-      `[[table_function_bind_get_user_data]]`, `[[table_function_init_global_get_user_data]]`,
+      `[[function_bind_get_user_data]]`, `[[table_function_init_global_get_user_data]]`,
       `[[table_function_exec_get_user_data]]` and their counterparts on the other phases. The opaque handle
       bundles the pointer with an optional destructor, invoked when the data is no longer needed.
     parameters:
@@ -345,9 +348,9 @@ functions:
       Sets the bind callback of the table function.
 
       The bind callback is invoked during query planning for each call site of the function. It must declare the
-      columns the function returns via `[[table_function_bind_add_result_column]]`. It can also inspect the
-      constant argument values and set "bind data" that is shared with all later callbacks. A bind callback must
-      be set before registration.
+      columns the function returns via `[[table_function_bind_add_result_column]]`. Through its
+      `[[function_bind_info]]` it can also inspect the constant argument values and set "bind data" that is shared
+      with all later callbacks. A bind callback must be set before registration.
     parameters:
       function:
         type: table_function
@@ -554,128 +557,6 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Bind Callback Functions
   #---------------------------------------------------------------------------------------------------------------------
-  table_function_bind_get_user_data:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
-    parameters:
-      info:
-        type: table_function_bind_info
-        description: The bind info handle.
-      data:
-        type: void
-        indirection: 2
-        kind: OUT
-        description: Receives the user data pointer, or null if none was set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  table_function_bind_set_bind_data:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: |
-      Sets the function's "bind data" from the bind callback.
-
-      The bind data is stored with the bound call site and retrievable from every later callback. The opaque
-      handle bundles the pointer with an optional destructor, invoked when the bind data is no longer needed,
-      and an optional equality callback used when comparing two bound call sites; without one, pointer equality
-      is used.
-    parameters:
-      info:
-        type: table_function_bind_info
-        description: The bind info handle.
-      data:
-        type: opaque
-        indirection: 1
-        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  table_function_bind_get_arg_count:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: |
-      Returns the number of arguments of the call site being bound.
-
-      The arguments are presented in signature order: one for every parameter declared with
-      `[[function_signature_add_parameter]]`, followed by any variadic tail arguments. A parameter the call site
-      omitted is still present, carrying the default value declared for it, so the count only varies with the
-      length of the variadic tail. Valid indices for `[[table_function_bind_get_arg_type]]` and
-      `[[table_function_bind_get_arg_value]]` are [0, count).
-    parameters:
-      info:
-        type: table_function_bind_info
-        description: The bind info handle.
-      count:
-        type: idx
-        indirection: 1
-        kind: OUT
-        description: Receives the number of arguments.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  table_function_bind_get_arg_type:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: |
-      Retrieves the type of the argument at the given index.
-
-      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed
-      via `[[logical_type_destroy]]`.
-    parameters:
-      info:
-        type: table_function_bind_info
-        description: The bind info handle.
-      index:
-        type: idx
-        description: The index of the argument to get the type of.
-      type:
-        type: logical_type
-        indirection: 1
-        kind: OUT
-        description: Receives the argument type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  table_function_bind_get_arg_value:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-01" ]
-    description: |
-      Retrieves the constant value of the argument at the given index.
-
-      The arguments of a table function are always constants, folded before the bind callback runs, so this
-      never fails for an index in bounds; it does fail when the index is out of bounds. The value may be NULL.
-      The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
-    parameters:
-      info:
-        type: table_function_bind_info
-        description: The bind info handle.
-      index:
-        type: idx
-        description: The index of the argument to get the value of.
-      value:
-        type: value
-        indirection: 1
-        kind: OUT
-        description: Receives the constant value. Owned by the caller; destroy via `[[value_destroy]]`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   table_function_bind_add_result_column:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-01" ]
@@ -692,6 +573,9 @@ functions:
         description: The bind info handle.
       name:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: The name of the column. Borrowed and copied.
       type:
         type: logical_type
@@ -720,6 +604,31 @@ functions:
       is_exact:
         type: bool
         description: Whether the estimate is exact, which also makes it an upper bound on the row count.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_bind_set_order_preservation:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-28" ]
+    description: |
+      Sets the order guarantee of the rows this call of the function produces. Defaults to
+      `ORDER_PRESERVATION_INSERTION_ORDER`.
+
+      With `ORDER_PRESERVATION_NO_ORDER`, a scan that reports more than one thread via
+      `[[table_function_init_global_set_max_threads]]` runs in parallel into query results, INSERT and COPY without
+      a `[[table_function_set_partition_data_callback]]`, and the rows arrive in no particular order. With
+      insertion order kept, those consumers need the partition data callback to run in parallel. Fails with
+      `ERROR_INPUT_INVALID` when order is not one of the enum's declared values.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      order:
+        type: ORDER_PRESERVATION
+        description: The order guarantee of the produced rows.
       err:
         type: error_info
         indirection: 1
@@ -1281,7 +1190,7 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-03" ]
     description: |
-      Retrieves the bind data set via `[[table_function_bind_set_bind_data]]`, or null if none was set.
+      Retrieves the bind data set via `[[function_bind_set_bind_data]]`, or null if none was set.
 
       This is the same object the init and exec callbacks later receive, so a predicate the callback accepts can be
       recorded in it for the scan to apply.

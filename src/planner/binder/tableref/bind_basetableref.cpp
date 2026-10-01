@@ -213,9 +213,7 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// Try autoloading an extension, then retry the replacement scan bind
-		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName().Catalog().GetIdentifierName(),
-		                                              ref.GetQualifiedName().Schema().GetIdentifierName(),
-		                                              ref.Table().GetIdentifierName());
+		auto full_path = ReplacementScan::GetFullPath(ref.GetQualifiedName());
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, full_path);
 		if (extension_loaded) {
 			replacement_scan_bind_result = BindWithReplacementScan(context, ref);
@@ -285,8 +283,11 @@ BoundStatement Binder::Bind(BaseTableRef &ref) {
 			virtual_columns = table.GetVirtualColumns();
 		}
 		auto logical_get =
-		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), std::move(virtual_columns));
+		    make_uniq<LogicalGet>(table_index, BoundTableFunction(scan_function), std::move(bind_data),
+		                          std::move(return_types), std::move(return_names), std::move(virtual_columns));
+		if (entry_at_clause) {
+			logical_get->at_clause = make_uniq<BoundAtClause>(entry_at_clause->Unit(), entry_at_clause->GetValue());
+		}
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {

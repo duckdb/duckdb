@@ -92,7 +92,10 @@ class JobStagesTest(unittest.TestCase):
         skip_tests: bool = False,
         changed_keys: set[str] | None = None,
         default_branch: str = "main",
+        reduced_ci_mode: str | None = None,
     ) -> job_stages.JobSelection:
+        if reduced_ci_mode is None:
+            reduced_ci_mode = "enabled" if event_name == "pull_request" else "disabled"
         return job_stages.compute_job_selection(
             job_stages.JobSelectionInput(
                 event_name=event_name,
@@ -101,6 +104,7 @@ class JobStagesTest(unittest.TestCase):
                 repository=repository,
                 skip_tests=skip_tests,
                 changed_keys=changed_keys or set(),
+                reduced_ci_mode=reduced_ci_mode,
                 runners={"linux_x64": "runner-x64", "linux_arm64": "runner-arm64"},
             )
         )
@@ -135,6 +139,9 @@ class JobStagesTest(unittest.TestCase):
         required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
         self.assertTrue(required_jobs.issubset(set(selection.enabled_jobs)))
         self.assertNotIn("osx", selection.enabled_jobs)
+        self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
+        self.assertTrue(selection.linux_release_matrix[0]["publish_static"])
+        self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
@@ -150,7 +157,7 @@ class JobStagesTest(unittest.TestCase):
             "push", "main", "duckdb/duckdb", default_branch="v2.0-cyanoptera"
         )
         self.assertNotIn("codecov", former_default_selection.enabled_jobs)
-        self.assertNotIn("osx", former_default_selection.enabled_jobs)
+        self.assertIn("osx", former_default_selection.enabled_jobs)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_adds_release_jobs(self):
@@ -184,6 +191,28 @@ class JobStagesTest(unittest.TestCase):
                 ],
                 ["amd64 optimized", "arm64 optimized"],
             )
+            self.assertEqual(
+                [config["publish_static"] for config in workflow_dispatch_selection.linux_release_matrix],
+                [False, False, True, True],
+            )
+            self.assertEqual(
+                [config["test_static"] for config in workflow_dispatch_selection.linux_release_matrix],
+                [False, False, True, True],
+            )
+            self.assertEqual(
+                [config["build_jemalloc"] for config in workflow_dispatch_selection.linux_release_matrix],
+                ["1", "1", "1", "1"],
+            )
+            self.assertEqual(
+                [config["publish_source"] for config in workflow_dispatch_selection.linux_release_matrix],
+                [True, False, False, False],
+            )
+            self.assertTrue(
+                all(
+                    "-DNATIVE_LTO_STATIC_LIBRARIES=1" in config["extra_cmake_variables"]
+                    for config in workflow_dispatch_selection.linux_release_matrix[2:]
+                )
+            )
             self.assertTrue(workflow_dispatch_selection.save_cache)
 
     def test_regular_branch_excludes_main_only_jobs(self):
@@ -192,8 +221,32 @@ class JobStagesTest(unittest.TestCase):
         self.assertNotIn("osx", selection.enabled_jobs)
         self.assertIn("linux-release-musl", selection.enabled_jobs)
         self.assertEqual([config["name"] for config in selection.linux_release_matrix], ["amd64 compatibility"])
+        self.assertTrue(selection.linux_release_matrix[0]["publish_static"])
+        self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertEqual([config["name"] for config in selection.linux_musl_matrix], ["arm64"])
         self.assertFalse(selection.save_cache)
+
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_feature_branch_push_enables_osx_for_full_extension_matrix(self):
+        selection = self._compute_job_selection("push", "feature/my-branch", "duckdb/duckdb")
+        self.assertIn("extensions-build", selection.enabled_jobs)
+        self.assertIn("osx", selection.enabled_jobs)
+
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_full_extension_ci_on_pull_request_builds_prebuilt_dependencies(self):
+        selection = self._compute_job_selection(
+            "pull_request", "feature/my-branch", "duckdb/duckdb", reduced_ci_mode="disabled"
+        )
+        self.assertEqual(selection.reduced_ci_mode, "disabled")
+        self.assertIn("osx", selection.enabled_jobs)
+        self.assertEqual(
+            [config["name"] for config in selection.linux_release_matrix],
+            ["amd64 compatibility", "arm64 compatibility"],
+        )
+        self.assertEqual(
+            [config["artifact_suffix"] for config in selection.linux_release_matrix],
+            ["linux-amd64", "linux-arm64"],
+        )
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_osx_changed_key_enables_osx(self):
@@ -208,6 +261,8 @@ class JobStagesTest(unittest.TestCase):
         selection = self._compute_job_selection("workflow_dispatch", "main", "duckdb/duckdb", skip_tests=True)
         self.assertIn("linux-release", selection.enabled_jobs)
         self.assertNotIn("linux-release-tests", selection.enabled_jobs)
+        self.assertIn("osx", selection.enabled_jobs)
+        self.assertIn("codecov", selection.enabled_jobs)
         self.assertTrue(selection.optimized_release)
         self.assertEqual(
             [config["name"] for config in selection.linux_release_matrix],
@@ -250,7 +305,9 @@ class JobStagesTest(unittest.TestCase):
             job_stages.parse_runners('{"linux_x64":"runner-x64"}')
 
     def test_writes_github_output(self):
-        selection = job_stages.JobSelection(enabled_jobs=["linux-relassert"], save_cache=False)
+        selection = job_stages.JobSelection(
+            enabled_jobs=["linux-relassert"], save_cache=False, reduced_ci_mode="enabled"
+        )
         with tempfile.NamedTemporaryFile(mode="w+", encoding="utf-8", delete=False) as tmp:
             output_path = tmp.name
         try:
@@ -264,8 +321,15 @@ class JobStagesTest(unittest.TestCase):
         self.assertEqual(lines[0], "enabled_jobs=[\"linux-relassert\"]")
         self.assertEqual(lines[1], "save_cache=false")
         self.assertEqual(lines[2], "optimized_release=false")
-        self.assertEqual(lines[3], "linux_release_matrix=[]")
-        self.assertEqual(lines[4], "linux_musl_matrix=[]")
+        self.assertEqual(lines[3], "reduced_ci_mode=enabled")
+        self.assertEqual(lines[4], "linux_release_matrix=[]")
+        self.assertEqual(lines[5], "linux_musl_matrix=[]")
+
+    def test_reduced_ci_mode_override(self):
+        self.assertEqual(job_stages.resolve_reduced_ci_mode("enabled", "disabled"), "disabled")
+        self.assertEqual(job_stages.resolve_reduced_ci_mode("disabled", "enabled"), "enabled")
+        with self.assertRaisesRegex(ValueError, "must be enabled or disabled"):
+            job_stages.resolve_reduced_ci_mode("enabled", "auto")
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_main_prints_and_writes_outputs(self):
@@ -273,9 +337,11 @@ class JobStagesTest(unittest.TestCase):
             output_path = tmp.name
 
         old_env = os.environ.get("GITHUB_OUTPUT")
+        old_reduced_ci_override = os.environ.get("OVERRIDE_REDUCED_CI_MODE")
         old_argv = sys.argv
         try:
             os.environ["GITHUB_OUTPUT"] = output_path
+            os.environ["OVERRIDE_REDUCED_CI_MODE"] = "disabled"
             sys.argv = [
                 "job_stages.py",
                 "--event",
@@ -286,6 +352,8 @@ class JobStagesTest(unittest.TestCase):
                 "v2.0-cyanoptera",
                 "--repository",
                 "duckdb/duckdb",
+                "--reduced-ci-mode",
+                "enabled",
                 "--runners",
                 '{"linux_x64":"runner-x64","linux_arm64":"runner-arm64"}',
             ]
@@ -295,6 +363,7 @@ class JobStagesTest(unittest.TestCase):
                 out = f.read()
             self.assertIn("enabled_jobs=", out)
             self.assertIn("save_cache=false", out)
+            self.assertIn("reduced_ci_mode=disabled", out)
             payload = out.splitlines()[0].split("=", 1)[1]
             selected_jobs = json.loads(payload)
             required_jobs = {"linux-relassert", "linux-release", "linux-release-tests", "tidy-check"}
@@ -308,6 +377,10 @@ class JobStagesTest(unittest.TestCase):
                 os.environ.pop("GITHUB_OUTPUT", None)
             else:
                 os.environ["GITHUB_OUTPUT"] = old_env
+            if old_reduced_ci_override is None:
+                os.environ.pop("OVERRIDE_REDUCED_CI_MODE", None)
+            else:
+                os.environ["OVERRIDE_REDUCED_CI_MODE"] = old_reduced_ci_override
             os.unlink(output_path)
 
     def test_job_selection_override_adds_prepare(self):

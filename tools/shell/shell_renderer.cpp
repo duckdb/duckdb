@@ -223,7 +223,7 @@ RenderingQueryResult::RenderingQueryResult(duckdb::QueryResult &result, ShellRen
     : result(result), renderer(renderer), metadata(result) {
 }
 
-RenderingQueryResult::RenderingQueryResult(duckdb::QueryResultStream &stream, ShellRenderer &renderer)
+RenderingQueryResult::RenderingQueryResult(duckdb::QueryResultStream<> &stream, ShellRenderer &renderer)
     : stream(stream), renderer(renderer), metadata(stream) {
 }
 
@@ -235,7 +235,7 @@ RenderingResultIterator RenderingQueryResult::end() {
 	return RenderingResultIterator(nullptr);
 }
 
-SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResultStream &stream,
+SuccessState ShellState::RenderQueryResult(ShellRenderer &renderer, duckdb::QueryResultStream<> &stream,
                                            PagerMode pager_overwrite) {
 	RenderingQueryResult render_result(stream, renderer);
 	return RenderPreparedResult(renderer, render_result, pager_overwrite);
@@ -344,7 +344,7 @@ ResultMetadata::ResultMetadata(const vector<duckdb::Identifier> &names,
 ResultMetadata::ResultMetadata(duckdb::QueryResult &result) : ResultMetadata(result.GetNames(), result.GetTypes()) {
 }
 
-ResultMetadata::ResultMetadata(duckdb::QueryResultStream &stream)
+ResultMetadata::ResultMetadata(duckdb::QueryResultStream<> &stream)
     : ResultMetadata(stream.GetNames(), stream.GetTypes()) {
 }
 
@@ -937,6 +937,10 @@ public:
 			return;
 		}
 		out.Print(data[1]);
+		auto plan = data[1].GetString();
+		if (!plan.empty() && plan.back() != '\n') {
+			out.Print("\n");
+		}
 		// after EXPLAIN ANALYZE (interactive), point users at the full (expanded) tree when the pretty tree folded
 		// low-impact operators, and always at the ".web" command which opens the profile in a browser.
 		// (skip it for EXPLAIN ANALYZE (FORMAT WEB), whose result value is empty and which already opened the profile)

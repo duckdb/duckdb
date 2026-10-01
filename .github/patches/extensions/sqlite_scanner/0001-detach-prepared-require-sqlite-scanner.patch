@@ -1,0 +1,11 @@
+--- a/test/sql/storage/detach_prepared.test
++++ b/test/sql/storage/detach_prepared.test
+@@ -2,7 +2,7 @@
+ # description: Test the behaviour of DETACH with PREPARE/EXECUTE
+ # group: [storage]
+ 
+-require mysql_scanner
++require sqlite_scanner
+ 
+ statement ok
+ ATTACH '{TEST_DIR}/detach_prepared.db' AS s (TYPE SQLITE)
