@@ -1012,11 +1012,13 @@ UniqueConstraint <- 'UNIQUE'
 PrimaryKeyConstraint <- 'PRIMARY' 'KEY'
 DefaultValue <- 'DEFAULT' ColumnDefaultExpr
 CheckConstraint <- 'CHECK' Parens(Expression)
-ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
+ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions?
 ColumnCollation <- 'COLLATE' DottedIdentifier
 ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString
 
-KeyActions <- UpdateAction? DeleteAction?
+KeyActions <- UpdateFirstKeyActions / DeleteFirstKeyActions
+UpdateFirstKeyActions <- UpdateAction DeleteAction?
+DeleteFirstKeyActions <- DeleteAction UpdateAction?
 UpdateAction <- 'ON' 'UPDATE' KeyAction
 DeleteAction <- 'ON' 'DELETE' KeyAction
 KeyAction <- NoKeyAction / RestrictKeyAction / CascadeKeyAction / SetNullKeyAction / SetDefaultKeyAction
