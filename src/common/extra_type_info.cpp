@@ -536,7 +536,7 @@ bool UnboundTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
 unique_ptr<ExtraTypeInfo> UnboundTypeInfo::Copy() const {
 	auto result = make_uniq<UnboundTypeInfo>(expr->Copy());
 	CopyBaseInfo(*result);
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb

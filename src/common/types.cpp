@@ -185,6 +185,18 @@ struct BuiltinTypeInfos {
 	const ExtraTypeInfo *infos[NumericLimits<uint8_t>::Maximum() + 1] = {};
 };
 
+//! Set by the first GetBuiltinTypeInfo call, which every LogicalType constructor makes before the type exists.
+//! Constant-initialized, so reading it never runs (possibly throwing) initialization.
+const BuiltinTypeInfos *&BuiltinTypeInfosTable() noexcept {
+	static const BuiltinTypeInfos *table = nullptr;
+	return table;
+}
+
+//! The builtin info for the id of an existing type - cannot throw, as the table already exists
+const ExtraTypeInfo &ExistingBuiltinTypeInfo(LogicalTypeId id) noexcept {
+	return *BuiltinTypeInfosTable()->infos[static_cast<uint8_t>(id)];
+}
+
 } // namespace
 
 const ExtraTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
@@ -201,6 +213,7 @@ const ExtraTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
 			info->immortal = true;
 			result->infos[i] = info.release();
 		}
+		BuiltinTypeInfosTable() = result;
 		return result;
 	}();
 	auto info = builtins->infos[static_cast<uint8_t>(id)];
@@ -217,8 +230,10 @@ LogicalType::LogicalType(LogicalTypeId id) : type_info_(&GetBuiltinTypeInfo(id))
 }
 
 LogicalType::LogicalType(LogicalTypeId id, unique_ptr<ExtraTypeInfo> type_info) {
+	// validates the id - and ensures the builtin infos exist before any type does
+	auto &builtin_type_info = GetBuiltinTypeInfo(id);
 	if (!type_info) {
-		type_info_ = &GetBuiltinTypeInfo(id);
+		type_info_ = &builtin_type_info;
 		return;
 	}
 	if (!TryGetPhysicalType(id, *type_info, type_info->physical_type)) {
@@ -231,12 +246,12 @@ LogicalType::LogicalType(LogicalTypeId id, unique_ptr<ExtraTypeInfo> type_info) 
 
 LogicalType::LogicalType(LogicalType &&other) noexcept : type_info_(other.type_info_) {
 	// the moved-from type keeps its id, but loses its parameters
-	other.type_info_ = &GetBuiltinTypeInfo(type_info_->id);
+	other.type_info_ = &ExistingBuiltinTypeInfo(type_info_->id);
 }
 
 const ExtraTypeInfo &LogicalType::ReleaseTypeInfo() && {
 	auto &result = *type_info_;
-	type_info_ = &GetBuiltinTypeInfo(result.id);
+	type_info_ = &ExistingBuiltinTypeInfo(result.id);
 	return result;
 }
 
