@@ -33,6 +33,7 @@ struct CreateSchemaInfo;
 struct DropInfo;
 struct BoundCreateTableInfo;
 struct AlterTableInfo;
+struct AlterSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
 struct CreatePragmaFunctionInfo;
@@ -395,6 +396,9 @@ public:
 		return string();
 	}
 	virtual ErrorData SupportsCreateTable(BoundCreateTableInfo &info);
+	virtual ErrorData SupportsCreateSchema(CreateSchemaInfo &info);
+	//! Alter a schema of this catalog (e.g. ALTER SCHEMA ... SET/RESET (<options>))
+	virtual void AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema, AlterSchemaInfo &info);
 
 	virtual bool Supports(RemoteCapability capability) const {
 		return false;
@@ -511,6 +515,9 @@ public:
 	                OnEntryNotFound if_not_found);
 
 private:
+	//! Look up an entry within this catalog and handle autoloading and errors
+	optional_ptr<CatalogEntry> GetEntryInCatalog(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
+	                                             OnEntryNotFound if_not_found);
 	//! Lookup an entry in the schema (taken from the lookup_info), returning the entry and schema if they exist
 	virtual CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction,
 	                                                  const EntryLookupInfo &lookup_info);

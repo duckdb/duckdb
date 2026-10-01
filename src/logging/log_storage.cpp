@@ -1,4 +1,5 @@
 #include "duckdb/logging/log_storage.hpp"
+#include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/csv_writer.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -77,6 +78,9 @@ bool LogStorage::Scan(LogStorageScanState &state, DataChunk &result) const {
 }
 void LogStorage::InitializeScan(LogStorageScanState &state) const {
 	throw NotImplementedException("Not implemented for this LogStorage: InitializeScanEntries");
+}
+optional_idx LogStorage::GetScanRowCount(LoggingTargetTable table) const {
+	return optional_idx();
 }
 void LogStorage::Truncate() {
 	throw NotImplementedException("Not implemented for this LogStorage: TruncateLogStorage");
@@ -767,6 +771,11 @@ bool InMemoryLogStorage::Scan(LogStorageScanState &state, DataChunk &result) con
 	unique_lock<mutex> lck(lock);
 	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
 	return GetBuffer(in_mem_scan_state.table).Scan(in_mem_scan_state.scan_state, result);
+}
+
+optional_idx InMemoryLogStorage::GetScanRowCount(LoggingTargetTable table) const {
+	unique_lock<mutex> lck(lock);
+	return GetBuffer(table).Count();
 }
 
 void InMemoryLogStorage::InitializeScan(LogStorageScanState &state) const {

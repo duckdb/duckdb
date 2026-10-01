@@ -150,6 +150,7 @@ ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 
 	ScalarFunction func({}, LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr,
 	                    JSONFunctionLocalState::Init);
+	func.GetProperties().SetRequiresExpressionNames(true);
 
 	func.GetSignature()
 	    .AddParameter("sql", LogicalType::VARCHAR)
@@ -240,8 +241,9 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 
 ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 	ScalarFunctionSet set("json_deserialize_sql");
-	auto function = ScalarFunction({LogicalType::JSON()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init);
+	auto function = ScalarFunction({}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr, nullptr,
+	                               JSONFunctionLocalState::Init);
+	function.GetSignature().AddParameter("json", LogicalType::JSON());
 	function.SetFallible();
 	set.AddFunction(std::move(function));
 	return set;
@@ -267,8 +269,9 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 }
 
 PragmaFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
-	return PragmaFunctionSet(PragmaFunction::PragmaCall(
-	    "json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction, {LogicalType::VARCHAR}));
+	return PragmaFunctionSet(
+	    PragmaFunction::PragmaCall("json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction,
+	                               FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR)));
 }
 
 //----------------------------------------------------------------------
@@ -320,8 +323,9 @@ struct ExecuteSqlTableFunction {
 };
 
 TableFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
-	TableFunction func("json_execute_serialized_sql", {LogicalType::VARCHAR}, ExecuteSqlTableFunction::Function,
-	                   ExecuteSqlTableFunction::Bind);
+	TableFunction func("json_execute_serialized_sql",
+	                   FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR),
+	                   ExecuteSqlTableFunction::Function, ExecuteSqlTableFunction::Bind);
 	return TableFunctionSet(func);
 }
 

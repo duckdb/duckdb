@@ -129,9 +129,10 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		}
 
 		// On error, evaluate per row
+		// CASE/COALESCE write their result at the physical row index, so the intermediate must fit that index
 		SelectionVector selvec(1);
 		DataChunk intermediate;
-		intermediate.Initialize(GetAllocator(), {result.GetType()}, 1);
+		intermediate.Initialize(GetAllocator(), {result.GetType()}, STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
 			intermediate.Reset();
 			intermediate.SetChildCardinality(1);

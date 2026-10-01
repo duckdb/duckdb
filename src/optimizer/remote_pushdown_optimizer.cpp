@@ -1187,7 +1187,7 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		// evaluating the expression raises an error (e.g. an out-of-range error)
 		return ConstantFoldResult::FOLD_ERROR;
 	}
-	auto folded = make_uniq<ConstantExpression>(std::move(fold_result));
+	auto folded = ConstantExpression::FromValue(fold_result);
 	// preserve the name DuckDB would generate for the original expression
 	folded->SetAlias(expr->GetAlias().empty() ? Identifier(expr->ToString()) : expr->GetAlias());
 	folded->SetQueryLocation(expr->GetQueryLocation());
@@ -1360,15 +1360,16 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &
 void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// Strip catalog prefix from qualified column references, normalising to exactly table.col (2 parts).
+		// Strip the catalog prefix from qualified column references, keeping everything after it.
 		// Require at least 3 names: a 2-part ref like "rpc.field" is either table.col or struct-column.field —
 		// not catalog-qualified — so stripping would be wrong.
-		// For 3-part  catalog.table.col        → table.col   (one level stripped)
-		// For 4-part  catalog.schema.table.col → table.col   (catalog + schema stripped)
+		// For 3-part  catalog.table.col        → table.col
+		// For 4-part  catalog.schema.table.col → schema.table.col
+		// Only the catalog is dropped: the parser keeps arbitrarily deep refs in a single ColumnRef, so trailing
+		// names may be struct fields (catalog.table.s.a.b → table.s.a.b) and must be preserved.
 		if (col_ref.ColumnNames().size() >= 3 && col_ref.ColumnNames()[0] == catalog_name) {
-			Identifier table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2];
-			Identifier col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1];
-			col_ref.ColumnNamesMutable() = {std::move(table_name), std::move(col_name)};
+			auto &names = col_ref.ColumnNamesMutable();
+			names.erase(names.begin());
 		}
 		return;
 	}
@@ -1404,16 +1405,10 @@ void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Ide
 		}
 		// Fall through to EnumerateChildren to strip catalog refs inside partitions/orders/children
 	} else if (expr.GetExpressionClass() == ExpressionClass::CAST) {
-		// CastExpression stores the cast target as a LogicalType, not an expression child — EnumerateChildren
-		// only visits the value being cast. For unbound (user-defined) types we must strip the catalog from the
-		// embedded TypeExpression and reconstruct the LogicalType::UNBOUND wrapper.
+		// The cast target is not an expression child, so EnumerateChildren only visits the value being cast -
+		// strip the catalog from the target type expression separately.
 		auto &cast_expr = expr.Cast<CastExpression>();
-		auto &target_type = cast_expr.TargetTypeMutable();
-		if (target_type.id() == LogicalTypeId::UNBOUND) {
-			auto type_expr = UnboundType::GetTypeExpression(target_type)->Copy();
-			StripCatalogName(*type_expr, catalog_name);
-			target_type = LogicalType::UNBOUND(std::move(type_expr));
-		}
+		StripCatalogName(cast_expr.TargetTypeMutable(), catalog_name);
 		// Fall through to EnumerateChildren to strip catalog refs inside the cast argument
 	} else if (expr.GetExpressionClass() == ExpressionClass::TYPE) {
 		// TypeExpression (used as a type argument) may carry catalog/schema qualifiers.

@@ -18,6 +18,7 @@ public:
 
 	//! Get the CastFunctionSet from the TypeManager
 	CastFunctionSet &GetCastFunctions();
+	const CastFunctionSet &GetCastFunctions() const;
 
 	//! Try to parse and bind a logical type from a string. Throws an exception if the type could not be parsed.
 	LogicalType ParseLogicalType(const string &type_str, ClientContext &context) const;

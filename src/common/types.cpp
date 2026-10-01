@@ -1962,7 +1962,7 @@ static LogicalType TryDefaultBindTypeExpression(const ParsedExpression &expr) {
 		} break;
 		case ExpressionType::VALUE_CONSTANT: {
 			auto &const_expr = arg->Cast<ConstantExpression>();
-			bound_args.emplace_back(arg->GetAlias().GetIdentifierName(), const_expr.GetValue());
+			bound_args.emplace_back(arg->GetAlias().GetIdentifierName(), const_expr.GetLiteral().ToValue());
 		} break;
 		default:
 			throw InvalidInputException("Cannot default bind unbound type with non-type, non-expression parameter");
@@ -1990,6 +1990,10 @@ LogicalType UnboundType::TryDefaultBind(const LogicalType &unbound_type) {
 	return TryDefaultBindTypeExpression(*expr);
 }
 
+LogicalType UnboundType::TryDefaultBind(const ParsedExpression &type_expr) {
+	return TryDefaultBindTypeExpression(type_expr);
+}
+
 //===--------------------------------------------------------------------===//
 // Logical Type
 //===--------------------------------------------------------------------===//
@@ -2008,6 +2012,32 @@ bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {
 		D_ASSERT(rhs.type_info_);
 		return rhs.type_info_->Equals(type_info_.get());
 	}
+}
+
+bool LogicalType::EqualsIncludingCollation(const LogicalType &rhs) const {
+	if (*this != rhs) {
+		return false;
+	}
+	vector<string> collations;
+	TypeVisitor::Contains(*this, [&](const LogicalType &child) {
+		if (child.id() == LogicalTypeId::VARCHAR) {
+			collations.push_back(StringType::GetCollation(child));
+		}
+		return false;
+	});
+	idx_t index = 0;
+	auto mismatch = TypeVisitor::Contains(rhs, [&](const LogicalType &child) {
+		if (child.id() != LogicalTypeId::VARCHAR) {
+			return false;
+		}
+		if (index >= collations.size()) {
+			return true;
+		}
+		auto collation_mismatch = collations[index] != StringType::GetCollation(child);
+		index++;
+		return collation_mismatch;
+	});
+	return !mismatch && index == collations.size();
 }
 
 bool LogicalType::operator==(const LogicalType &rhs) const {

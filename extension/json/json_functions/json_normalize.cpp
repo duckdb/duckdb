@@ -9,7 +9,7 @@ static void SortKeys(yyjson_mut_val *v) {
 		yyjson_mut_val *val;
 	};
 
-	auto stack = std::vector<stack_item>();
+	auto stack = vector<stack_item>();
 	stack.push_back(stack_item {v});
 
 	while (!stack.empty()) {
@@ -103,15 +103,15 @@ static void NormalizeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	JSONAllocator::AddBuffer(result, alc);
 }
 
-static void GetNormalizeFunctionInternal(ScalarFunctionSet &set, const LogicalType &json) {
-	set.AddFunction(ScalarFunction("json_normalize", {json}, LogicalType::VARCHAR, NormalizeFunction, nullptr, nullptr,
-	                               JSONFunctionLocalState::Init));
-}
-
 ScalarFunctionSet JSONFunctions::GetNormalizeFunction() {
 	ScalarFunctionSet set("json_normalize");
-	GetNormalizeFunctionInternal(set, LogicalType::JSON());
-	set.SetFallible();
+
+	ScalarFunction func({}, LogicalType::VARCHAR, NormalizeFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+
+	func.GetSignature().AddParameter("json", LogicalType::JSON());
+
+	set.AddFunction(std::move(func));
+
 	return set;
 }
 

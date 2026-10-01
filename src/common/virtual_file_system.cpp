@@ -259,6 +259,10 @@ FileMetadata VirtualFileSystem::Stats(FileHandle &handle) {
 	return handle.file_system.Stats(handle);
 }
 
+optional<FileMetadata> VirtualFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	return FindFileSystem(file.path, opener).GetStatsIfExists(file, opener);
+}
+
 void VirtualFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	handle.file_system.Truncate(handle, new_size);
 }
@@ -430,7 +434,7 @@ FileSystem &VirtualFileSystem::FindFileSystem(shared_ptr<FileSystemRegistry> &re
 			}
 		}
 		if (!required_extension.empty() && db_instance && !db_instance->ExtensionIsLoaded(required_extension)) {
-			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
+			if (!ExtensionHelper::CanAutoloadExtension(*db_instance, required_extension) ||
 			    !Settings::Get<AutoloadKnownExtensionsSetting>(*db_instance)) {
 				auto error_message = "File " + path + " requires the extension " + required_extension + " to be loaded";
 				error_message =

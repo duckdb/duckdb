@@ -56,6 +56,8 @@ public:
 	PreserveOrderType preserve_order = PreserveOrderType::AUTOMATIC;
 	vector<idx_t> partition_columns;
 	vector<BoundOrderByNode> order_columns;
+	//! Directory of a partition's files relative to file_path (see PhysicalCopyToFile)
+	unique_ptr<Expression> partition_path_expression;
 
 	vector<Identifier> names;
 	vector<LogicalType> expected_types;

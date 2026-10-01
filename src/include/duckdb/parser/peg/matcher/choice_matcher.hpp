@@ -15,7 +15,7 @@ public:
 	explicit ChoiceMatcher(vector<reference<Matcher>> &&matchers_p) : Matcher(TYPE), matchers(std::move(matchers_p)) {
 	}
 
-	unique_ptr<MatchProcess> StartMatch(MatchState &state) const override;
+	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const override;
 
 	SuggestionType AddSuggestionInternal(MatchState &state) const override {
 		for (auto &child_matcher : matchers) {

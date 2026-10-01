@@ -10,6 +10,7 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/parser/peg/token_type.hpp"
+#include "duckdb/parser/peg/grammar_literal_table.hpp"
 
 namespace duckdb {
 
@@ -27,6 +28,22 @@ struct MatcherToken {
 	bool unterminated = false;
 	bool preceded_by_newline = false;
 	bool preceded_by_block_comment = false;
+
+	LiteralInfo GetLiteralInfo(const GrammarLiteralTable &table) {
+		if (literal_table_id != table.CacheId()) {
+			literal_info = table.Lookup(text);
+			literal_table_id = table.CacheId();
+		}
+		return literal_info;
+	}
+
+	void ResetLiteralInfo() {
+		literal_table_id = 0;
+	}
+
+private:
+	LiteralInfo literal_info;
+	uint64_t literal_table_id = 0;
 };
 
 } // namespace duckdb

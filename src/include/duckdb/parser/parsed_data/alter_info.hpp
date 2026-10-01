@@ -13,9 +13,9 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enums/on_entry_not_found.hpp"
-#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
+class LogicalDependencyList;
 
 enum class AlterType : uint8_t {
 	INVALID = 0,
@@ -27,7 +27,8 @@ enum class AlterType : uint8_t {
 	ALTER_TABLE_FUNCTION = 6,
 	SET_COMMENT = 7,
 	SET_COLUMN_COMMENT = 8,
-	ALTER_DATABASE = 9
+	ALTER_DATABASE = 9,
+	ALTER_SCHEMA = 10
 };
 
 enum class AlterBindMode { BIND_ON_ALTER, SKIP_BINDING };

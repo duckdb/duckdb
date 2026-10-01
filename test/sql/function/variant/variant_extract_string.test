@@ -41,8 +41,8 @@ Binder Error: No function matches the given name and argument types 'variant_ext
 query I
 select variant_extract_string(a, '') from struct_cast_data();
 ----
-{"a":[{"b":"hello","c":null,"a":"1970-03-15"},{"b":null,"c":true,"a":"2020-11-03"}]}
-{"a":[{"b":"this is a long string","c":false,"a":"1953-09-16"}],"b":42,"c":{"d":"world"}}
+{"a":[{"a":"1970-03-15","b":"hello","c":null},{"a":"2020-11-03","b":null,"c":true}]}
+{"a":[{"a":"1953-09-16","b":"this is a long string","c":false}],"b":42,"c":{"d":"world"}}
 
 query I
 select variant_extract_string(a, []) from struct_cast_data();
@@ -53,8 +53,8 @@ select variant_extract_string(a, []) from struct_cast_data();
 query I
 select variant_extract_string(a, ['']) from struct_cast_data();
 ----
-['{"a":[{"b":"hello","c":null,"a":"1970-03-15"},{"b":null,"c":true,"a":"2020-11-03"}]}']
-['{"a":[{"b":"this is a long string","c":false,"a":"1953-09-16"}],"b":42,"c":{"d":"world"}}']
+['{"a":[{"a":"1970-03-15","b":"hello","c":null},{"a":"2020-11-03","b":null,"c":true}]}']
+['{"a":[{"a":"1953-09-16","b":"this is a long string","c":false}],"b":42,"c":{"d":"world"}}']
 
 # Single path supplied
 

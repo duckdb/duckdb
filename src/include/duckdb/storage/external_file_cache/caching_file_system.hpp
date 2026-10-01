@@ -13,6 +13,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/open_file_info.hpp"
+#include "duckdb/common/query_context.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/storage/external_file_cache/external_file_cache.hpp"
@@ -92,8 +93,7 @@ private:
 	//! Whether validation metadata permits using cached blocks.
 	bool CanUseCache();
 	//! Reconcile cached blocks with validation metadata observed while reading them.
-	void ReconcileCacheAfterRead(CachedFile &cached_file, idx_t first_block,
-	                             const vector<shared_ptr<CacheBlock>> &blocks);
+	void ReconcileCacheAfterRead(CachedFile &cached_file, const vector<shared_ptr<CacheBlock>> &blocks);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 
@@ -144,10 +144,11 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, const FileOpenFlags &flags,
 	                                                  optional_ptr<FileOpener> opener = nullptr);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(QueryContext context, const OpenFileInfo &path,
-	                                                  FileOpenFlags flags, optional_ptr<FileOpener> opener = nullptr);
+	                                                  const FileOpenFlags &flags,
+	                                                  optional_ptr<FileOpener> opener = nullptr);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)

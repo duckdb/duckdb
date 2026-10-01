@@ -685,7 +685,7 @@ public:
 			auto algorithm_group_index = offset / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 			D_ASSERT(algorithm_group_index < algorithm_group_count);
 			auto algorithm_group_offset = algorithm_group_index * algorithm_group_size;
-			return payload->SubArray(algorithm_group_offset, algorithm_group_size);
+			return payload.value().SubArray(algorithm_group_offset, algorithm_group_size);
 		}
 
 		//! Unpacks the algorithm group at the current row offset.

@@ -310,7 +310,7 @@ unique_ptr<Expression> MonotonePreimageRule::Apply(LogicalOperator &op, vector<r
 		if (has_infinity) {
 			return nullptr;
 		}
-		return ExpressionRewriter::ConstantOrNull(col.Copy(), Value::BOOLEAN(false));
+		return ExpressionRewriter::ConstantOrNull(GetContext(), col.Copy(), Value::BOOLEAN(false));
 	}
 
 	// emit finite-domain bounds. On infinity types both bounds are always kept so ±infinity (whose f is

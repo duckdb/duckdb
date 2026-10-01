@@ -244,13 +244,15 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 }
 
 ScalarFunction StructContainsFun::GetFunction() {
-	return ScalarFunction("struct_contains", {LogicalTypeId::TUPLE, LogicalType::ANY}, LogicalType::BOOLEAN,
-	                      StructSearchFunction<bool>, StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::BOOLEAN, StructSearchFunction<bool>, StructContainsBind);
+	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
+	return fun;
 }
 
 ScalarFunction StructPositionFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {LogicalTypeId::TUPLE, LogicalType::ANY}, LogicalType::INTEGER,
-	                   StructSearchFunction<int32_t, true>, StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::INTEGER, StructSearchFunction<int32_t, true>,
+	                   StructContainsBind);
+	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

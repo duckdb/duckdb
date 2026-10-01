@@ -372,8 +372,11 @@ dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	if (!timestamp.IsFinite()) {
 		throw ConversionException("Can't get TIME of infinite TIMESTAMP");
 	}
-	date_t date = Timestamp::GetDate(timestamp);
-	return dtime_t(timestamp.value - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
+	int64_t micros = timestamp.value % Interval::MICROS_PER_DAY;
+	if (micros < 0) {
+		micros += Interval::MICROS_PER_DAY;
+	}
+	return dtime_t(micros);
 }
 
 dtime_ns_t Timestamp::GetTimeNs(timestamp_ns_t input) {

@@ -16,7 +16,7 @@
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
-#include "json_multi_file_info.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
@@ -82,7 +82,7 @@ static unique_ptr<ParsedExpression> JSONCopyFormatExpression(unique_ptr<ParsedEx
                                                              const Identifier &function_name, const string &format) {
 	vector<unique_ptr<ParsedExpression>> args;
 	args.push_back(std::move(expr));
-	args.push_back(make_uniq<ConstantExpression>(Value(format)));
+	args.push_back(ConstantExpression::String(format));
 	return make_uniq<FunctionExpression>(function_name, std::move(args));
 }
 
@@ -157,8 +157,8 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	string timestamp_format;
 	// The column-selecting GeoJSON options are three-state: unset means "use the default", NULL means "explicitly
 	// none", and anything else names a column
-	unique_ptr<ParsedExpression> geometry_column = make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
-	unique_ptr<ParsedExpression> id_column = make_uniq<ConstantExpression>(Value(LogicalType::VARCHAR));
+	unique_ptr<ParsedExpression> geometry_column = ConstantExpression::FromValue(Value(LogicalType::VARCHAR));
+	unique_ptr<ParsedExpression> id_column = ConstantExpression::FromValue(Value(LogicalType::VARCHAR));
 	bool write_bbox = false;
 	// Partition columns are kept as separate columns (instead of being packed into the JSON object), so that the
 	// COPY writer can partition on them. By default they are excluded from the written JSON, matching the behavior
@@ -202,7 +202,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 			// An empty string marks "explicitly none", which a column name can never be
 			auto column = value.IsNull() ? Value("") : value;
 			auto &target = option_name == "geometry_column" ? geometry_column : id_column;
-			target = make_uniq<ConstantExpression>(std::move(column));
+			target = ConstantExpression::FromValue(column);
 		} else if (is_geojson && option_name == "bbox") {
 			write_bbox = GetJSONCopyBoolean(binder, format, option_name, option_values);
 		} else if (option_name == "file_extension") {
@@ -289,12 +289,12 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 		vector<unique_ptr<ParsedExpression>> geojson_args;
 		geojson_args.push_back(std::move(struct_pack));
 		geojson_args.push_back(
-		    make_uniq<ConstantExpression>(date_format.empty() ? Value(LogicalType::VARCHAR) : Value(date_format)));
-		geojson_args.push_back(make_uniq<ConstantExpression>(timestamp_format.empty() ? Value(LogicalType::VARCHAR)
+		    ConstantExpression::FromValue(date_format.empty() ? Value(LogicalType::VARCHAR) : Value(date_format)));
+		geojson_args.push_back(ConstantExpression::FromValue(timestamp_format.empty() ? Value(LogicalType::VARCHAR)
 		                                                                              : Value(timestamp_format)));
 		geojson_args.push_back(std::move(geometry_column));
 		geojson_args.push_back(std::move(id_column));
-		geojson_args.push_back(make_uniq<ConstantExpression>(Value::BOOLEAN(write_bbox)));
+		geojson_args.push_back(ConstantExpression::Boolean(write_bbox));
 		select_node.select_list.push_back(
 		    make_uniq<FunctionExpression>("__internal_json_copy_to_geojson", std::move(geojson_args)));
 	} else {
@@ -334,15 +334,22 @@ static BoundStatement CopyToGeoJSONPlan(Binder &binder, CopyStatement &stmt) {
 	return CopyToJSONPlanInternal(binder, stmt, JSONCopyToFormat::GEOJSON);
 }
 
+//! COPY ... FROM reads through the multi-file wrapper around read_single_json_file. COPY takes its columns from
+//! the target table, so the reader binds every file against those columns instead of auto-detecting a schema
+static void SetJSONCopyFromFunction(CopyFunction &function, Identifier name) {
+	function.copy_from_bind = TableFunctionMultiFileWrapper::MultiFileBindCopy;
+	function.copy_from_function = JSONFunctions::GetJSONTableFunction(
+	    std::move(name), make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT,
+	                                                   JSONRecordType::RECORDS, false));
+}
+
 CopyFunction JSONFunctions::GetGeoJSONCopyFunction() {
 	CopyFunction function("geojson");
 	function.extension = "geojson";
 
 	function.plan = CopyToGeoJSONPlan;
 
-	function.copy_from_bind = MultiFileFunction<JSONMultiFileInfo>::MultiFileBindCopy;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
-	    JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
+	SetJSONCopyFromFunction(function, "read_json");
 
 	return function;
 }
@@ -352,10 +359,7 @@ CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	function.extension = "json";
 
 	function.plan = CopyToJSONPlan;
-
-	function.copy_from_bind = MultiFileFunction<JSONMultiFileInfo>::MultiFileBindCopy;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
-	    JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
+	SetJSONCopyFromFunction(function, "read_json");
 
 	return function;
 }

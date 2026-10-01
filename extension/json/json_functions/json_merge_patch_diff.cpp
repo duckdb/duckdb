@@ -17,7 +17,7 @@ static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyj
 	};
 
 	yyjson_mut_val *result = nullptr;
-	auto stack = std::vector<stack_item>();
+	auto stack = vector<stack_item>();
 	stack.push_back(stack_item {nullptr, old_val, new_val, nullptr, nullptr, false});
 
 	while (!stack.empty()) {
@@ -134,8 +134,9 @@ static void MergePatchDiffFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 ScalarFunctionSet JSONFunctions::GetMergePatchDiffFunction() {
-	ScalarFunction fun("json_merge_patch_diff", {LogicalType::JSON(), LogicalType::JSON()}, LogicalType::JSON(),
-	                   MergePatchDiffFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	ScalarFunction fun("json_merge_patch_diff", {}, LogicalType::JSON(), MergePatchDiffFunction, nullptr, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("old", LogicalType::JSON()).AddParameter("new", LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 

@@ -1,4 +1,9 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_function_internal.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/execution/partition_info.hpp"
+#include "duckdb/function/partition_stats.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
@@ -20,8 +25,7 @@ public:
 	bool cardinality_is_exact = false;
 	bool cardinality_set = false;
 
-	// How many result columns the bind callback declared.
-	idx_t column_count = 0;
+	vector<LogicalType> column_types;
 
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		auto copy = make_uniq<CV2TableFunctionData>();
@@ -30,7 +34,7 @@ public:
 		copy->cardinality = cardinality;
 		copy->cardinality_is_exact = cardinality_is_exact;
 		copy->cardinality_set = cardinality_set;
-		copy->column_count = column_count;
+		copy->column_types = column_types;
 		return std::move(copy);
 	}
 
@@ -56,19 +60,68 @@ public:
 class CV2TableLocalState final : public LocalTableFunctionState {
 public:
 	CV2UserData handle;
+
+	// Requested partition columns as declared columns, fixed for the lifetime of the local state's pipeline.
+	const vector<column_t> &PartitionColumns(const OperatorPartitionInfo &partition_info,
+	                                         const vector<column_t> &scan_columns) {
+		if (!partition_columns_resolved) {
+			for (auto scan_position : partition_info.partition_columns) {
+				D_ASSERT(scan_position < scan_columns.size());
+				partition_columns.push_back(scan_columns[scan_position]);
+			}
+			partition_columns_resolved = true;
+		}
+		D_ASSERT(partition_columns.size() == partition_info.partition_columns.size());
+		return partition_columns;
+	}
+
+	void CheckPartitionData(const Identifier &function_name, const OperatorPartitionData &data) {
+		if (last_batch_index.IsValid()) {
+			auto last_index = last_batch_index.GetIndex();
+			// The engine would otherwise raise an InternalException, which invalidates the database.
+			if (data.batch_index < last_index) {
+				throw InvalidInputException(
+				    "The partition data callback of table function \"%s\" reported batch index %llu after "
+				    "previously reporting %llu on the same thread; the batch index must not decrease.",
+				    function_name, data.batch_index, last_index);
+			}
+			// The engine only reads the values when the batch index changes; a changed value would silently be ignored.
+			if (data.batch_index == last_index) {
+				D_ASSERT(data.partition_data.size() == last_partition_values.size());
+				for (idx_t i = 0; i < last_partition_values.size(); i++) {
+					if (Value::NotDistinctFrom(data.partition_data[i].min_val, last_partition_values[i])) {
+						continue;
+					}
+					throw InvalidInputException(
+					    "The partition data callback of table function \"%s\" reported a different partitioning "
+					    "column value at index %llu without changing the batch index.",
+					    function_name, i);
+				}
+				return;
+			}
+		}
+		last_batch_index = data.batch_index;
+		last_partition_values.clear();
+		for (auto &entry : data.partition_data) {
+			last_partition_values.push_back(entry.min_val);
+		}
+	}
+
+private:
+	bool partition_columns_resolved = false;
+	vector<column_t> partition_columns;
+	optional_idx last_batch_index;
+	vector<Value> last_partition_values;
 };
 
 class CV2TableBindInfo {
 public:
-	void *in_user_data = nullptr;
-	const vector<Value> *in_args = nullptr;
-
 	vector<LogicalType> out_column_types;
 	vector<Identifier> out_column_names;
-	duckdb_v2_opaque out_bind_data = {};
 	idx_t out_cardinality = 0;
 	bool out_cardinality_is_exact = false;
 	bool out_cardinality_set = false;
+	OrderPreservationType out_order_preservation = OrderPreservationType::INSERTION_ORDER;
 };
 
 static auto Convert(duckdb_v2_table_function_bind_info_handle info) -> CV2TableBindInfo * {
@@ -165,6 +218,79 @@ static auto Convert(CV2TableFilterPushdownInfo *info) -> duckdb_v2_table_functio
 	return reinterpret_cast<duckdb_v2_table_function_filter_pushdown_info_handle>(info);
 }
 
+class CV2TablePartitionDataInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_global_state = nullptr;
+	void *in_local_state = nullptr;
+	const OperatorPartitionInfo *in_partition_info = nullptr;
+	const vector<column_t> *in_partition_columns = nullptr;
+	const vector<LogicalType> *in_column_types = nullptr;
+
+	optional_idx out_batch_index;
+	vector<bool> out_partition_value_set;
+	vector<Value> out_partition_values;
+};
+
+static auto Convert(duckdb_v2_table_function_partition_data_info_handle info) -> CV2TablePartitionDataInfo * {
+	return reinterpret_cast<CV2TablePartitionDataInfo *>(info);
+}
+static auto Convert(CV2TablePartitionDataInfo *info) -> duckdb_v2_table_function_partition_data_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_partition_data_info_handle>(info);
+}
+
+class CV2TablePartitioningInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	const vector<column_t> *in_partition_ids = nullptr;
+
+	// Not calling the setter is not a caller error: it means "not partitioned", the conservative default.
+	TablePartitionInfo out_partition_info = TablePartitionInfo::NOT_PARTITIONED;
+};
+
+static auto Convert(duckdb_v2_table_function_partitioning_info_handle info) -> CV2TablePartitioningInfo * {
+	return reinterpret_cast<CV2TablePartitioningInfo *>(info);
+}
+static auto Convert(CV2TablePartitioningInfo *info) -> duckdb_v2_table_function_partitioning_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_partitioning_info_handle>(info);
+}
+
+static_assert(static_cast<int>(TablePartitionInfo::NOT_PARTITIONED) == DUCKDB_V2_TABLE_PARTITION_INFO_NOT_PARTITIONED,
+              "TablePartitionInfo::NOT_PARTITIONED mismatch");
+static_assert(static_cast<int>(TablePartitionInfo::SINGLE_VALUE_PARTITIONS) ==
+                  DUCKDB_V2_TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS,
+              "TablePartitionInfo::SINGLE_VALUE_PARTITIONS mismatch");
+static_assert(static_cast<int>(TablePartitionInfo::OVERLAPPING_PARTITIONS) ==
+                  DUCKDB_V2_TABLE_PARTITION_INFO_OVERLAPPING_PARTITIONS,
+              "TablePartitionInfo::OVERLAPPING_PARTITIONS mismatch");
+static_assert(static_cast<int>(TablePartitionInfo::DISJOINT_PARTITIONS) ==
+                  DUCKDB_V2_TABLE_PARTITION_INFO_DISJOINT_PARTITIONS,
+              "TablePartitionInfo::DISJOINT_PARTITIONS mismatch");
+
+static auto CV2ConvertPartitionInfo(DUCKDB_V2_TABLE_PARTITION_INFO value) -> TablePartitionInfo {
+	if (static_cast<uint32_t>(value) > DUCKDB_V2_TABLE_PARTITION_INFO_DISJOINT_PARTITIONS) {
+		throw duckdb::InvalidInputException(
+		    "Invalid value in duckdb_v2_table_function_partitioning_set_partition_info");
+	}
+	return static_cast<TablePartitionInfo>(value);
+}
+
+static_assert(static_cast<int>(OrderPreservationType::NO_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_NO_ORDER,
+              "OrderPreservationType::NO_ORDER mismatch");
+static_assert(static_cast<int>(OrderPreservationType::INSERTION_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_INSERTION_ORDER,
+              "OrderPreservationType::INSERTION_ORDER mismatch");
+static_assert(static_cast<int>(OrderPreservationType::FIXED_ORDER) == DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER,
+              "OrderPreservationType::FIXED_ORDER mismatch");
+
+static auto CV2ConvertOrderPreservation(DUCKDB_V2_ORDER_PRESERVATION value) -> OrderPreservationType {
+	if (static_cast<uint32_t>(value) > DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER) {
+		throw duckdb::InvalidInputException("Invalid value in duckdb_v2_table_function_bind_set_order_preservation");
+	}
+	return static_cast<OrderPreservationType>(value);
+}
+
 class CV2TableFunctionInfo : public TableFunctionInfo {
 public:
 	duckdb_v2_table_function_bind_callback_fn bind_cb = nullptr;
@@ -173,64 +299,31 @@ public:
 	duckdb_v2_table_function_exec_callback_fn exec_cb = nullptr;
 	duckdb_v2_table_function_progress_callback_fn progress_cb = nullptr;
 	duckdb_v2_table_function_filter_pushdown_callback_fn filter_pushdown_cb = nullptr;
+	duckdb_v2_table_function_partition_data_callback_fn partition_data_cb = nullptr;
+	duckdb_v2_table_function_partitioning_callback_fn partitioning_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 	bool projection_pushdown = false;
 
-	// The signature's slot plan, captured at registration: every parameter name in signature order, how many of them
-	// lead the positional prefix (the ones without a default), and the default of each remaining parameter. The bind
-	// wrapper assembles the argument list from it, injecting the default for a parameter the call site omitted, so
-	// the bind callback observes a value for every parameter.
-	vector<Identifier> parameter_names;
-	idx_t positional_count = 0;
-	identifier_map_t<Value> named_parameter_defaults;
+	Identifier name;
 };
-
-//! Assembles the call's arguments in signature-slot order: first the parameters without a default, taken from the
-//! positional arguments, then the parameters with one, taken from the named arguments or the declared default when
-//! the call site omitted them, then the variadic tail.
-static auto CV2TableCollectArguments(const CV2TableFunctionInfo &info, TableFunctionBindInput &input) -> vector<Value> {
-	vector<Value> arguments;
-	const auto positional_count = MinValue<idx_t>(info.positional_count, input.inputs.size());
-
-	for (idx_t i = 0; i < positional_count; i++) {
-		arguments.push_back(input.inputs[i]);
-	}
-	for (idx_t i = info.positional_count; i < info.parameter_names.size(); i++) {
-		const auto &name = info.parameter_names[i];
-		auto provided = input.named_parameters.find(name);
-		if (provided != input.named_parameters.end()) {
-			arguments.push_back(provided->second);
-		} else {
-			arguments.push_back(info.named_parameter_defaults.at(name));
-		}
-	}
-	for (idx_t i = positional_count; i < input.inputs.size(); i++) {
-		arguments.push_back(input.inputs[i]);
-	}
-	return arguments;
-}
 
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
                          vector<Identifier> &names) -> unique_ptr<FunctionData> {
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
 
-	auto arguments = CV2TableCollectArguments(info, input);
-
+	// the binder places every argument in its signature slot, defaults included, so the call reads them as-is
+	CV2ConstantBindInfo bind_info(input.table_function, info.user_data ? info.user_data->GetData() : nullptr,
+	                              input.inputs, input.named_parameters);
 	CV2TableBindInfo args = {};
-	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
-	args.in_args = &arguments;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.bind_cb(Convert(&args), Convert(&context), &err_ptr);
+	info.bind_cb(Convert(&bind_info), Convert(&args), Convert(&context), &err_ptr);
 
 	// Take ownership of whatever the callback set before reporting an error, so it is destroyed either way.
 	auto result = make_uniq<CV2TableFunctionData>();
 	result->info = &info;
-	if (args.out_bind_data.ptr) {
-		result->handle =
-		    make_shared_ptr<CV2UserData>(args.out_bind_data.ptr, args.out_bind_data.destroy, args.out_bind_data.equals);
-	}
+	result->handle = std::move(bind_info.out_bind_data);
 	result->cardinality = args.out_cardinality;
 	result->cardinality_is_exact = args.out_cardinality_is_exact;
 	result->cardinality_set = args.out_cardinality_set;
@@ -241,10 +334,13 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 
 	if (args.out_column_types.empty()) {
 		throw InvalidInputException("The bind callback of table function \"%s\" did not declare any result columns.",
-		                            input.table_function.name);
+		                            input.table_function.GetName());
 	}
 
-	result->column_count = args.out_column_types.size();
+	// The binder hands each call site its own copy of the function, so this does not leak into other calls.
+	input.table_function.order_preservation_type = args.out_order_preservation;
+
+	result->column_types = args.out_column_types;
 	return_types = std::move(args.out_column_types);
 	names = std::move(args.out_column_names);
 	return std::move(result);
@@ -258,7 +354,7 @@ static auto CV2TableScanColumns(const CV2TableFunctionData &bind_data, const Tab
 		return input.column_ids;
 	}
 	vector<column_t> columns;
-	for (idx_t i = 0; i < bind_data.column_count; i++) {
+	for (idx_t i = 0; i < bind_data.column_types.size(); i++) {
 		columns.push_back(i);
 	}
 	return columns;
@@ -304,8 +400,10 @@ static auto CV2TableInitLocal(ExecutionContext &context, TableFunctionInitInput 
 	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
 	const auto &info = *bind_data.info;
 
+	// Always produced, even without a callback: get_partition_data keeps its per-thread guard state here.
+	auto result = make_uniq<CV2TableLocalState>();
 	if (!info.init_local_cb) {
-		return nullptr;
+		return std::move(result);
 	}
 
 	auto scan_columns = CV2TableScanColumns(bind_data, input);
@@ -322,12 +420,9 @@ static auto CV2TableInitLocal(ExecutionContext &context, TableFunctionInitInput 
 	auto err_ptr = Convert(&err);
 	info.init_local_cb(Convert(&args), Convert(&context.client), &err_ptr);
 
-	unique_ptr<LocalTableFunctionState> result = nullptr;
 	if (args.out_local_state.ptr) {
-		auto set_result = make_uniq<CV2TableLocalState>();
-		set_result->handle =
+		result->handle =
 		    CV2UserData(args.out_local_state.ptr, args.out_local_state.destroy, args.out_local_state.equals);
-		result = std::move(set_result);
 	}
 
 	// Throw after taking ownership of the state, so that it is destroyed even if we error.
@@ -335,7 +430,7 @@ static auto CV2TableInitLocal(ExecutionContext &context, TableFunctionInitInput 
 		err.ThrowAsException();
 	}
 
-	return result;
+	return std::move(result);
 }
 
 static auto CV2TableExec(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void {
@@ -350,9 +445,7 @@ static auto CV2TableExec(ClientContext &context, TableFunctionInput &input, Data
 		args.in_global_state = global_state.handle.GetData();
 		args.in_scan_columns = &global_state.scan_columns;
 	}
-	if (input.local_state) {
-		args.in_local_state = input.local_state->Cast<CV2TableLocalState>().handle.GetData();
-	}
+	args.in_local_state = input.local_state->Cast<CV2TableLocalState>().handle.GetData();
 	args.output = &output;
 
 	CV2ErrorInfo err = {};
@@ -445,6 +538,81 @@ static auto CV2TableFilterPushdown(ClientContext &context, LogicalGet &get, Func
 	filters = std::move(remaining);
 }
 
+//! Batch index is required on every call, even when unrequested: the pipeline range-checks it regardless.
+static auto CV2TakePartitionData(CV2TablePartitionDataInfo &args, const Identifier &function_name)
+    -> OperatorPartitionData {
+	if (!args.out_batch_index.IsValid()) {
+		throw InvalidInputException("The partition data callback of table function \"%s\" did not set a batch index.",
+		                            function_name);
+	}
+	OperatorPartitionData result(args.out_batch_index.GetIndex());
+	result.partition_data.reserve(args.out_partition_values.size());
+	for (idx_t i = 0; i < args.out_partition_values.size(); i++) {
+		if (!args.out_partition_value_set[i]) {
+			throw InvalidInputException("The partition data callback of table function \"%s\" did not set the "
+			                            "partitioning column value at index %llu.",
+			                            function_name, i);
+		}
+		result.partition_data.emplace_back(std::move(args.out_partition_values[i]));
+	}
+	return result;
+}
+
+static auto CV2TableGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input)
+    -> OperatorPartitionData {
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+
+	auto &global_state = input.global_state->Cast<CV2TableGlobalState>();
+	auto &local_state = input.local_state->Cast<CV2TableLocalState>();
+
+	CV2TablePartitionDataInfo args = {};
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	args.in_global_state = global_state.handle.GetData();
+	args.in_local_state = local_state.handle.GetData();
+	args.in_partition_info = &input.partition_info;
+	// The planner resolves these to scan positions, unlike get_partition_info's, which it resolves to declared
+	// columns; the callback is promised declared columns in both.
+	args.in_partition_columns = &local_state.PartitionColumns(input.partition_info, global_state.scan_columns);
+	args.in_column_types = &bind_data.column_types;
+	args.out_partition_value_set.resize(args.in_partition_columns->size(), false);
+	args.out_partition_values.resize(args.in_partition_columns->size());
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	info.partition_data_cb(Convert(&args), Convert(&context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	auto result = CV2TakePartitionData(args, info.name);
+	local_state.CheckPartitionData(info.name, result);
+	return result;
+}
+
+//! Runs at plan time and must be deterministic: the optimizer may call it for a plan shape it later discards.
+static auto CV2TableGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) -> TablePartitionInfo {
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+
+	CV2TablePartitioningInfo args = {};
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	args.in_partition_ids = &input.partition_ids;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	info.partitioning_cb(Convert(&args), Convert(&context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	return args.out_partition_info;
+}
+
 class CV2TableFunction {
 public:
 	void Register() {
@@ -457,6 +625,10 @@ public:
 		if (!info.exec_cb) {
 			throw InvalidInputException("Exec callback must be set for the function.");
 		}
+		// The engine calls get_partition_data without a null check once get_partition_info claims partitions.
+		if (info.partitioning_cb && !info.partition_data_cb) {
+			throw InvalidInputException("Partition data callback must be set when the partitioning callback is set.");
+		}
 		// A table function declares the columns it returns from its bind callback, not through a return type.
 		if (signature.GetReturnType().id() != LogicalTypeId::INVALID) {
 			throw InvalidInputException("A table function signature cannot set a return type.");
@@ -464,20 +636,9 @@ public:
 
 		signature.Verify();
 
-		// Route the signature onto the two ways SQL passes arguments to a table function: a parameter without a
-		// default value is a required positional argument, a parameter with one is an optional named argument.
-		vector<LogicalType> positional;
-		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
-			const auto &param = signature.GetParameter(i);
-			if (!param.HasDefaultValue()) {
-				positional.push_back(param.GetType());
-			}
-		}
-
-		TableFunction function(name, positional, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
-		if (signature.HasVarArgs()) {
-			function.SetVarArgs(signature.GetVarArgs());
-		}
+		// A table function holds a signature of its own, so the declared one is handed over as-is
+		TableFunction function(name, {}, CV2TableExec, CV2TableBind, CV2TableInitGlobal, CV2TableInitLocal);
+		function.GetSignature() = signature;
 
 		// Always wired: it serves the estimate a bind callback may set, which is not known at registration. It
 		// reports no estimate when the bind callback sets none.
@@ -488,19 +649,16 @@ public:
 		if (info.filter_pushdown_cb) {
 			function.pushdown_complex_filter = CV2TableFilterPushdown;
 		}
+		if (info.partition_data_cb) {
+			function.get_partition_data = CV2TableGetPartitionData;
+		}
+		if (info.partitioning_cb) {
+			function.get_partition_info = CV2TableGetPartitionInfo;
+		}
 		function.projection_pushdown = info.projection_pushdown;
 
-		auto function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
-		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
-			const auto &param = signature.GetParameter(i);
-			if (param.HasDefaultValue()) {
-				function.named_parameters[param.GetName()] = param.GetType();
-				function_info->named_parameter_defaults[param.GetName()] = *param.GetDefaultValue();
-			}
-			function_info->parameter_names.push_back(param.GetName());
-		}
-		function_info->positional_count = positional.size();
-		function.function_info = std::move(function_info);
+		info.name = name;
+		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 
 		// Call the implementation to register
 		RegisterToCatalog(std::move(function));
@@ -589,12 +747,11 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duckdb_v2_extensi
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function, duckdb_v2_str *name,
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function, const duckdb_v2_str *name,
                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(*name);
-	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(Convert(*name)); });
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_signature(duckdb_v2_table_function_handle function,
@@ -666,59 +823,24 @@ duckdb_v2_table_function_set_filter_pushdown_callback(duckdb_v2_table_function_h
 	return WithErrorHandler(err, [&]() { Convert(function)->info.filter_pushdown_cb = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_user_data(duckdb_v2_table_function_bind_info_handle info, void **data,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_set_partition_data_callback(duckdb_v2_table_function_handle function,
+                                                     duckdb_v2_table_function_partition_data_callback_fn callback,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.partition_data_cb = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_bind_data(duckdb_v2_table_function_bind_info_handle info,
-                                                            duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_bind_data = *data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_count(duckdb_v2_table_function_bind_info_handle info,
-                                                            idx_t *count, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(count);
-	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_args->size(); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_type(duckdb_v2_table_function_bind_info_handle info, idx_t index,
-                                                           duckdb_v2_logical_type_handle *type,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(type);
-	*type = nullptr;
-	return WithErrorHandler(err, [&]() {
-		const auto &arguments = *Convert(info)->in_args;
-		if (index >= arguments.size()) {
-			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_table_function_bind_get_arg_type");
-		}
-		*type = Convert(new duckdb::LogicalType(arguments[index].type()));
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_v2_table_function_bind_info_handle info, idx_t index,
-                                                            duckdb_v2_value_handle *value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(value);
-	*value = nullptr;
-	return WithErrorHandler(err, [&]() {
-		const auto &arguments = *Convert(info)->in_args;
-		if (index >= arguments.size()) {
-			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_table_function_bind_get_arg_value");
-		}
-		*value = Convert(new duckdb::Value(arguments[index]));
-	});
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_set_partitioning_callback(duckdb_v2_table_function_handle function,
+                                                   duckdb_v2_table_function_partitioning_callback_fn callback,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.partitioning_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_function_bind_info_handle info,
-                                                                duckdb_v2_identifier_t name,
+                                                                const duckdb_v2_identifier_t *name,
                                                                 duckdb_v2_logical_type_handle type,
                                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
@@ -731,7 +853,7 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_
 			throw duckdb::InvalidInputException("Result column type must be a fully defined concrete type");
 		}
 		auto &bind_info = *Convert(info);
-		bind_info.out_column_names.emplace_back(Convert(name));
+		bind_info.out_column_names.emplace_back(ConvertIdentifierName(name));
 		bind_info.out_column_types.push_back(column_type);
 	});
 }
@@ -746,6 +868,13 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_cardinality(duckdb_v2_table_fu
 		bind_info.out_cardinality_is_exact = is_exact;
 		bind_info.out_cardinality_set = true;
 	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_order_preservation(duckdb_v2_table_function_bind_info_handle info,
+                                                                     DUCKDB_V2_ORDER_PRESERVATION order,
+                                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_order_preservation = CV2ConvertOrderPreservation(order); });
 }
 
 DUCKDB_V2_ERROR
@@ -1024,6 +1153,165 @@ duckdb_v2_table_function_filter_pushdown_get_column_index(duckdb_v2_table_functi
 		// A function registered here declares no virtual columns, so every entry is a declared column.
 		*column_index = columns[index].GetPrimaryIndex();
 	});
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partition_data_get_user_data(duckdb_v2_table_function_partition_data_info_handle info,
+                                                      void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partition_data_get_bind_data(duckdb_v2_table_function_partition_data_info_handle info,
+                                                      void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partition_data_get_global_state(duckdb_v2_table_function_partition_data_info_handle info,
+                                                         void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partition_data_get_local_state(duckdb_v2_table_function_partition_data_info_handle info,
+                                                        void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_local_state; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partition_data_requires_batch_index(duckdb_v2_table_function_partition_data_info_handle info,
+                                                             bool *required, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(required);
+	return WithErrorHandler(err, [&]() { *required = Convert(info)->in_partition_info->RequiresBatchIndex(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_requires_partition_columns(
+    duckdb_v2_table_function_partition_data_info_handle info, bool *required, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(required);
+	return WithErrorHandler(err, [&]() { *required = Convert(info)->in_partition_info->RequiresPartitionColumns(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_count(
+    duckdb_v2_table_function_partition_data_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(count);
+	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_partition_columns->size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partition_column_index(
+    duckdb_v2_table_function_partition_data_info_handle info, idx_t index, idx_t *column_index,
+    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column_index);
+	return WithErrorHandler(err, [&]() {
+		const auto &columns = *Convert(info)->in_partition_columns;
+		if (index >= columns.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_table_function_partition_data_get_partition_column_index");
+		}
+		*column_index = columns[index];
+	});
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partition_data_set_batch_index(duckdb_v2_table_function_partition_data_info_handle info,
+                                                        idx_t batch_index, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() {
+		// ToPipelinePartitionData adds base + 1 and throws an InternalException from BATCH_INCREMENT - 1 on.
+		if (batch_index >= duckdb::PipelineBuildState::BATCH_INCREMENT - 2) {
+			throw duckdb::InvalidInputException(
+			    "duckdb_v2_table_function_partition_data_set_batch_index: batch_index %llu must be less than "
+			    "%llu",
+			    batch_index, duckdb::PipelineBuildState::BATCH_INCREMENT - 2);
+		}
+		Convert(info)->out_batch_index = batch_index;
+	});
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partition_data_set_partition_value(duckdb_v2_table_function_partition_data_info_handle info,
+                                                            idx_t index, duckdb_v2_value_handle value,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(value);
+	return WithErrorHandler(err, [&]() {
+		auto &args = *Convert(info);
+		if (index >= args.out_partition_values.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_table_function_partition_data_set_partition_value");
+		}
+		const auto &expected_type = (*args.in_column_types)[(*args.in_partition_columns)[index]];
+		const auto &actual = *Convert(value);
+		if (actual.type() != expected_type) {
+			throw duckdb::InvalidInputException(
+			    "duckdb_v2_table_function_partition_data_set_partition_value: expected type %s for the "
+			    "partitioning column at index %llu, got %s",
+			    expected_type.ToString(), index, actual.type().ToString());
+		}
+		args.out_partition_values[index] = actual;
+		args.out_partition_value_set[index] = true;
+	});
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partitioning_get_user_data(duckdb_v2_table_function_partitioning_info_handle info, void **data,
+                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partitioning_get_bind_data(duckdb_v2_table_function_partitioning_info_handle info, void **data,
+                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partitioning_get_partition_column_count(duckdb_v2_table_function_partitioning_info_handle info,
+                                                                 idx_t *count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(count);
+	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_partition_ids->size(); });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partitioning_get_partition_column_index(duckdb_v2_table_function_partitioning_info_handle info,
+                                                                 idx_t index, idx_t *column_index,
+                                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column_index);
+	return WithErrorHandler(err, [&]() {
+		const auto &columns = *Convert(info)->in_partition_ids;
+		if (index >= columns.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_table_function_partitioning_get_partition_column_index");
+		}
+		*column_index = columns[index];
+	});
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_partitioning_set_partition_info(duckdb_v2_table_function_partitioning_info_handle info,
+                                                         DUCKDB_V2_TABLE_PARTITION_INFO partition_info,
+                                                         duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err,
+	                        [&]() { Convert(info)->out_partition_info = CV2ConvertPartitionInfo(partition_info); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_register(duckdb_v2_table_function_handle function,

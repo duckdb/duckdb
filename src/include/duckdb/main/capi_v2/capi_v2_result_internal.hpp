@@ -8,7 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/query_result_stream.hpp"
+#include "duckdb/main/result_format.hpp"
 
 //! The result state machine, shared by the modules that build a result or consume one wholesale.
 //! Not part of any public surface: only the V2 bridge's own translation units include this.
@@ -23,16 +26,19 @@ struct ResultWrapperV2 {
 	~ResultWrapperV2() {
 		// Finalize() (engine cleanup) runs in duckdb_v2_result_destroy, not here:
 		// a destructor must not drive locked engine state behind a catch-all.
-		pending.reset();
-		result.reset();
+		stream.reset();
+		handle.reset();
 		ReleaseBusySlot();
 	}
 
 	State state = State::PENDING;
-	//! Live while state == PENDING.
-	unique_ptr<PendingQueryResult> pending;
-	//! Live while state == STREAMING.
-	unique_ptr<QueryResult> result;
+	//! The handle of the running query. Live while state == PENDING, and afterwards for a result
+	//! that is retained rather than streamed.
+	unique_ptr<QueryResult> handle;
+	//! Live while state == STREAMING, for a statement whose result can be streamed. A QueryResultStream in `format`.
+	unique_ptr<ResultStreamBase> stream;
+	//! Every fragment is submitted in this format; null is the chunk format.
+	shared_ptr<ResultFormat> format;
 
 	//! Keeps the ClientContext alive for starting subsequent fragments and
 	//! preserves the guarantee that an undrained result survives disconnect:
@@ -75,6 +81,8 @@ struct ResultWrapperV2 {
 	vector<Identifier> names;
 	StatementType statement_type = StatementType::INVALID_STATEMENT;
 	StatementProperties properties;
+	//! Set with the metadata when `format` is Arrow: a copy of the format's schema, which is gone once the query ends.
+	ArrowSchemaWrapper arrow_schema;
 
 	//! Sticky error, recorded when state == ERRORED.
 	ErrorData error;
@@ -92,7 +100,7 @@ struct ResultWrapperV2 {
 		if (context->transaction.HasActiveTransaction()) {
 			// Mirrors Connection::Rollback (Query("ROLLBACK") + throw on error),
 			// driven through the retained context so it works after disconnect.
-			auto result = context->Query("ROLLBACK", QueryResultOutputType::FORCE_MATERIALIZED);
+			auto result = context->Query("ROLLBACK", QueryParameters());
 			if (result->HasError()) {
 				result->ThrowError();
 			}
@@ -104,10 +112,10 @@ struct ResultWrapperV2 {
 	//! then roll back an injected group transaction. May throw; the terminal
 	//! states leave pending/result null, so this is then a no-op.
 	void Finalize() {
-		if (pending) {
-			pending->Close();
-		} else if (result && result->GetResultType() == QueryResultType::STREAM_RESULT) {
-			result->Cast<StreamQueryResult>().Close();
+		if (stream) {
+			stream->Close();
+		} else if (handle) {
+			handle->Close();
 		}
 		RollbackIncompleteGroup();
 	}
@@ -127,22 +135,31 @@ struct ResultWrapperV2 {
 	// them throw DuckDB exceptions on failure (callers wrap in
 	// WithErrorHandler) and record sticky errors before throwing.
 
-	//! Adopts an already-produced pending query into the state machine: the single
-	//! seam both the stateless (fragment) and prepared paths reach. When is_principal,
-	//! captures its metadata and surfaces its chunks. Throws on a pending prepare error.
-	void BeginPending(unique_ptr<PendingQueryResult> pending, bool is_principal);
+	//! Adopts an already-submitted query into the state machine: the single seam both the
+	//! stateless (fragment) and prepared paths reach. When is_principal, captures its metadata and
+	//! surfaces its chunks. Throws on a submission error.
+	void BeginPending(unique_ptr<QueryResult> handle, bool is_principal);
 	//! Starts the pending query for the next fragment, selecting it as
 	//! principal per the engine-mirrored rule and adopting it via BeginPending.
 	//! Throws on prepare errors.
 	void StartNextFragment();
-	//! Drives one unit of work; never blocks. On CHUNK, out_chunk holds the
-	//! produced chunk; on every other status it is reset.
-	DUCKDB_V2_RESULT_STEP_STATUS Step(unique_ptr<DataChunk> &out_chunk);
+	//! Drives one unit of work; never blocks. On CHUNK, out_unit holds the
+	//! produced unit; on every other status it is reset. FORMAT must be `format`.
+	template <class FORMAT>
+	DUCKDB_V2_RESULT_STEP_STATUS Step(unique_ptr<typename FORMAT::T> &out_unit);
 	//! Blocks until Step can make progress. No-op on terminal states.
 	void Wait();
-	//! Blocking convenience: steps/waits until a chunk is produced (returned)
+	//! Blocking convenience: steps/waits until a unit is produced (returned)
 	//! or the stream ends (nullptr). Cancellation throws InterruptException.
-	unique_ptr<DataChunk> FetchChunkBlocking();
+	template <class FORMAT>
+	unique_ptr<typename FORMAT::T> FetchBlocking();
+	//! Steps an expanding statement until its principal fragment's metadata is available. Stops early when the
+	//! result ends without one.
+	template <class FORMAT>
+	void AdvanceToMetadata();
+	//! Runs to the end. Returns the changed-row count of a CHANGED_ROWS result, 0 otherwise.
+	template <class FORMAT>
+	idx_t Drain();
 	//! Throws unless the principal fragment's metadata is available.
 	void RequireMetadata() const;
 
@@ -155,11 +172,24 @@ private:
 
 auto Convert(ResultWrapperV2 *wrapper) -> duckdb_v2_result_handle;
 auto Convert(duckdb_v2_result_handle handle) -> ResultWrapperV2 *;
+auto ConvertArrowResult(ResultWrapperV2 *wrapper) -> duckdb_v2_arrow_result_handle;
+auto Convert(duckdb_v2_arrow_result_handle handle) -> ResultWrapperV2 *;
 
+//! Preprocesses and submits a borrowed statement in `format`, claiming the connection's live-result slot first.
+//! Throws ResourceInUseException when the connection already has a live result.
+auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLStatement &statement,
+                        const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
+                        idx_t parameter_count, const char *function_name, shared_ptr<ResultFormat> format)
+    -> unique_ptr<ResultWrapperV2>;
 //! Runs a prepared statement as a single-statement result, claiming the connection's
 //! live-result slot first. `context` is the session the result holds on to, so it survives
 //! disconnect. Throws ResourceInUseException when the connection already has a live result.
 auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, PreparedStatement &prepared,
-                                identifier_map_t<BoundParameterData> &values) -> duckdb_v2_result_handle;
+                                identifier_map_t<BoundParameterData> &values, shared_ptr<ResultFormat> format)
+    -> unique_ptr<ResultWrapperV2>;
+//! A deep copy the caller owns. `out` is left released on failure.
+void CopyArrowSchema(const ArrowSchema &source, ArrowSchema &out);
+//! The format of an Arrow result; a batch size of 0 selects the default.
+auto ArrowResultFormat(idx_t batch_size) -> shared_ptr<ResultFormat>;
 
 } // namespace duckdb::capiv2
