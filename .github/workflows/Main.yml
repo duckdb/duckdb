@@ -953,6 +953,8 @@ jobs:
         FORCE_WARN_UNUSED: 1
       with:
         build: make
+        bundle: make release-artifact
+        upload-name: ${{ matrix.config.build_artifact }}
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: linux-cli-${{ matrix.config.cache_suffix }}
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}

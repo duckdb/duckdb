@@ -249,6 +249,7 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
                 "image": "alpine_amd64_main",
                 "name": "amd64",
                 "artifact_suffix": "linux-amd64-musl",
+                "build_artifact": "linux-release-musl-amd64-build",
                 "cache_suffix": "amd64-musl",
             }
         )
@@ -259,6 +260,7 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
             "image": "alpine_arm64_main",
             "name": "arm64",
             "artifact_suffix": "linux-arm64-musl",
+            "build_artifact": "linux-release-musl-arm64-build",
             "cache_suffix": "arm64-musl",
         }
     )

@@ -224,6 +224,10 @@ class JobStagesTest(unittest.TestCase):
         self.assertTrue(selection.linux_release_matrix[0]["publish_static"])
         self.assertTrue(selection.linux_release_matrix[0]["test_static"])
         self.assertEqual([config["name"] for config in selection.linux_musl_matrix], ["arm64"])
+        self.assertEqual(
+            [config["build_artifact"] for config in selection.linux_musl_matrix],
+            ["linux-release-musl-arm64-build"],
+        )
         self.assertFalse(selection.save_cache)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
