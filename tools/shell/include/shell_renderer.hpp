@@ -57,6 +57,8 @@ struct RenderingQueryResult {
 	bool TryConvertChunk();
 	//! Runs the result to completion without rendering it. Stops early on an interrupt
 	void Drain(ShellState &state);
+	//! Whether the query failed while its rows were streamed: Fetch then returns null, like a clean end
+	bool HasError() const;
 
 public:
 	RenderingResultIterator begin(); // NOLINT: match stl API
