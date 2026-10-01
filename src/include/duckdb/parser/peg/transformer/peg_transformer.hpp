@@ -4586,15 +4586,13 @@ public:
 	static ColumnConstraintEntry TransformForeignKeyConstraint(PEGTransformer &transformer,
 	                                                           unique_ptr<BaseTableRef> base_table_name,
 	                                                           const optional<vector<string>> &column_list,
-	                                                           const KeyActions &key_actions);
+	                                                           const optional<vector<KeyActions>> &key_action_clause);
 	static ColumnConstraintEntry TransformColumnCollation(PEGTransformer &transformer,
 	                                                      const vector<string> &dotted_identifier);
 	static ColumnConstraintEntry TransformColumnCompression(PEGTransformer &transformer,
 	                                                        const Identifier &col_id_or_string);
-	static KeyActions TransformKeyActions(PEGTransformer &transformer, const optional<string> &update_action,
-	                                      const optional<string> &delete_action);
-	static string TransformUpdateAction(PEGTransformer &transformer, const string &key_action);
-	static string TransformDeleteAction(PEGTransformer &transformer, const string &key_action);
+	static KeyActions TransformUpdateAction(PEGTransformer &transformer, const string &key_action);
+	static KeyActions TransformDeleteAction(PEGTransformer &transformer, const string &key_action);
 	static string TransformNoKeyAction(PEGTransformer &transformer);
 	static string TransformRestrictKeyAction(PEGTransformer &transformer);
 	static string TransformCascadeKeyAction(PEGTransformer &transformer);
