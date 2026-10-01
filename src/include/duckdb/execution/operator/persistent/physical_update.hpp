@@ -24,14 +24,18 @@ public:
 
 public:
 	PhysicalUpdate(PhysicalPlan &physical_plan, vector<LogicalType> types, DuckTableEntry &tableref, DataTable &table,
-	               vector<PhysicalIndex> columns, vector<unique_ptr<Expression>> expressions,
-	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<BoundConstraint>> bound_constraints,
-	               idx_t estimated_cardinality, bool return_chunk, bool capture_old_rows, vector<idx_t> old_row_columns,
+	               vector<PhysicalIndex> referenced_columns, vector<PhysicalIndex> columns_to_update,
+	               vector<unique_ptr<Expression>> expressions, vector<unique_ptr<Expression>> bound_defaults,
+	               vector<unique_ptr<BoundConstraint>> bound_constraints, idx_t estimated_cardinality,
+	               bool return_chunk, bool capture_old_rows, vector<idx_t> old_row_columns,
 	               RowIdHandling row_id_handling);
 
 	DuckTableEntry &tableref;
 	DataTable &table;
-	vector<PhysicalIndex> columns;
+	//! Columns materialized for constraint checks, RETURNING, or reinsertion
+	vector<PhysicalIndex> referenced_columns;
+	//! Columns targeted by the SET clause
+	vector<PhysicalIndex> columns_to_update;
 	vector<unique_ptr<Expression>> expressions;
 	vector<unique_ptr<Expression>> bound_defaults;
 	vector<unique_ptr<BoundConstraint>> bound_constraints;

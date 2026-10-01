@@ -65,7 +65,7 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 		return;
 	}
 	auto needs_reinsert = false;
-	for (auto &col_idx : update.columns) {
+	for (auto &col_idx : update.columns_to_update) {
 		auto &column = update.table.GetColumns().GetColumn(col_idx);
 		if (!column.Type().SupportsRegularUpdate()) {
 			needs_reinsert = true;
@@ -150,11 +150,11 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 
 	idx_t found_column_count = 0;
 	physical_index_set_t found_columns;
-	for (idx_t i = 0; i < update.columns.size(); i++) {
-		if (all_columns.find(update.columns[i]) != all_columns.end()) {
+	for (idx_t i = 0; i < update.referenced_columns.size(); i++) {
+		if (all_columns.find(update.referenced_columns[i]) != all_columns.end()) {
 			// this column is referenced already
 			found_column_count++;
-			found_columns.insert(update.columns[i]);
+			found_columns.insert(update.referenced_columns[i]);
 		}
 	}
 
@@ -198,7 +198,7 @@ void LogicalUpdate::RewriteInPlaceUpdates(LogicalOperator &update_op) {
 			}
 
 			// Finally, add the column to the UPDATE operator too
-			update.columns.push_back(physical_id);
+			update.referenced_columns.push_back(physical_id);
 			update.expressions.push_back(
 			    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(prev_tbl_idx, prev_col_idx)));
 		}

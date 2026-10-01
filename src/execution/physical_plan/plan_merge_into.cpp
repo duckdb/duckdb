@@ -66,12 +66,12 @@ unique_ptr<MergeIntoOperator> PlanMergeIntoAction(ClientContext &context, Logica
 			defaults.push_back(def->Copy());
 		}
 		auto &action_input = PlanMergeActionSource(planner, plan, condition, *result);
-		result->op = planner.Make<PhysicalUpdate>(std::move(return_types), op.table.Cast<DuckTableEntry>(),
-		                                          op.table.GetStorage(), std::move(action.columns),
-		                                          std::move(action.expressions), std::move(defaults),
-		                                          std::move(bound_constraints), cardinality, op.return_chunk,
-		                                          /*capture_old_rows=*/false, /*old_row_columns=*/vector<idx_t>(),
-		                                          /*row_id_handling=*/RowIdHandling::ASSUME_UNIQUE);
+		result->op = planner.Make<PhysicalUpdate>(
+		    std::move(return_types), op.table.Cast<DuckTableEntry>(), op.table.GetStorage(),
+		    std::move(action.referenced_columns), std::move(action.columns_to_update), std::move(action.expressions),
+		    std::move(defaults), std::move(bound_constraints), cardinality, op.return_chunk, /*capture_old_rows=*/false,
+		    /*old_row_columns=*/vector<idx_t>(),
+		    /*row_id_handling=*/RowIdHandling::ASSUME_UNIQUE);
 		auto &cast_update = result->op->Cast<PhysicalUpdate>();
 		cast_update.update_is_del_and_insert = action.update_is_del_and_insert;
 		result->op->children.push_back(action_input);
@@ -219,7 +219,7 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 		// that layout so that we can plan the update exactly like a regular update
 		vector<unique_ptr<Expression>> select_list;
 		vector<unique_ptr<Expression>> update_expressions;
-		CastActionExpressionsToColumnTypes(context, op.table, action.expressions, action.columns);
+		CastActionExpressionsToColumnTypes(context, op.table, action.expressions, action.referenced_columns);
 		for (auto &expr : action.expressions) {
 			update_expressions.push_back(
 			    make_uniq<BoundReferenceExpression>(expr->GetReturnType(), select_list.size()));
@@ -232,7 +232,8 @@ static unique_ptr<MergeIntoOperator> PlanGenericMergeIntoAction(ClientContext &c
 		auto &action_input = PlanMergeActionSource(planner, plan, condition, *result);
 
 		LogicalUpdate update(op.table);
-		update.columns = std::move(action.columns);
+		update.referenced_columns = std::move(action.referenced_columns);
+		update.columns_to_update = std::move(action.columns_to_update);
 		update.expressions = std::move(update_expressions);
 		update.update_is_del_and_insert = action.update_is_del_and_insert;
 		update.bound_constraints = CopyBoundConstraints(op);

@@ -1,0 +1,43 @@
+commit bf7d92bf69869659185d78993a2f5269f35f2d85
+Author: dentinyhao <dentinyhao@gmail.com>
+Date:   Sun Sep 13 02:29:02 2026 -0700
+
+    update API sync
+
+diff --git a/src/storage/postgres_merge_into.cpp b/src/storage/postgres_merge_into.cpp
+index 16d1421..fa9bc28 100644
+--- a/src/storage/postgres_merge_into.cpp
++++ b/src/storage/postgres_merge_into.cpp
+@@ -34,7 +34,7 @@ unique_ptr<MergeIntoOperator> PostgresPlanMergeIntoAction(PostgresCatalog &catal
+ 
+ 	switch (action.action_type) {
+ 	case MergeActionType::MERGE_UPDATE: {
+-		if (action.columns.empty()) {
++		if (action.columns_to_update.empty()) {
+ 			// not updating any columns
+ 			result->action_type = MergeActionType::MERGE_DO_NOTHING;
+ 			break;
+@@ -45,7 +45,8 @@ unique_ptr<MergeIntoOperator> PostgresPlanMergeIntoAction(PostgresCatalog &catal
+ 		}
+ 		update.bound_constraints = std::move(bound_constraints);
+ 		update.expressions = std::move(action.expressions);
+-		update.columns = std::move(action.columns);
++		update.referenced_columns = std::move(action.referenced_columns);
++		update.columns_to_update = std::move(action.columns_to_update);
+ 		update.update_is_del_and_insert = action.update_is_del_and_insert;
+ 		result->op = catalog.PlanUpdate(context, planner, update, child_plan);
+ 		auto &pg_update = result->op->Cast<PostgresUpdate>();
+diff --git a/src/storage/postgres_update.cpp b/src/storage/postgres_update.cpp
+index 95ab2e8..3808c93 100644
+--- a/src/storage/postgres_update.cpp
++++ b/src/storage/postgres_update.cpp
+@@ -214,7 +214,8 @@ PhysicalOperator &PostgresCatalog::PlanUpdate(ClientContext &context, PhysicalPl
+ 	}
+ 
+ 	PostgresCatalog::MaterializePostgresScans(plan);
+-	auto &update = planner.Make<PostgresUpdate>(op, op.table, std::move(op.columns), std::move(op.expressions));
++	auto &update =
++	    planner.Make<PostgresUpdate>(op, op.table, std::move(op.columns_to_update), std::move(op.expressions));
+ 	update.children.push_back(plan);
+ 	return update;
+ }

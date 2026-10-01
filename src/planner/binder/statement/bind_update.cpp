@@ -231,9 +231,10 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	D_ASSERT(node.set_info->columns.size() == node.set_info->expressions.size());
 
 	auto proj_tmp = BindUpdateSet(*update, std::move(root), *node.set_info, table, update->bound_defaults,
-	                              update->columns, node.prioritize_table_when_binding);
+	                              update->referenced_columns, node.prioritize_table_when_binding);
 	D_ASSERT(proj_tmp->type == LogicalOperatorType::LOGICAL_PROJECTION);
 	auto proj = unique_ptr_cast<LogicalOperator, LogicalProjection>(std::move(proj_tmp));
+	update->columns_to_update = update->referenced_columns;
 
 	// bind any extra columns necessary for CHECK constraints or indexes
 	table.BindUpdateConstraints(*this, *get, *proj, *update, context);

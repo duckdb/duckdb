@@ -1,0 +1,50 @@
+commit 523be5ca8d8922ae215543a0a8c4bf207e699b5a
+Author: dentinyhao <dentinyhao@gmail.com>
+Date:   Sun Sep 13 00:31:24 2026 -0700
+
+    update API sync
+
+diff --git a/src/execution/operator/iceberg_update.cpp b/src/execution/operator/iceberg_update.cpp
+index e6183220..71c8f770 100644
+--- a/src/execution/operator/iceberg_update.cpp
++++ b/src/execution/operator/iceberg_update.cpp
+@@ -57,16 +57,17 @@ IcebergUpdate &IcebergUpdate::PlanUpdateOperator(ClientContext &context, Physica
+ 	// build update expressions (physical columns only, no partition cols, no casts)
+ 	vector<unique_ptr<Expression>> expressions;
+ 	unordered_map<idx_t, idx_t> expression_map;
+-	for (idx_t i = 0; i < op.columns.size(); i++) {
+-		expression_map[op.columns[i].index] = i;
++	for (idx_t i = 0; i < op.referenced_columns.size(); i++) {
++		expression_map[op.referenced_columns[i].index] = i;
+ 	}
+-	for (idx_t i = 0; i < op.columns.size(); i++) {
++	for (idx_t i = 0; i < op.referenced_columns.size(); i++) {
+ 		expressions.push_back(op.expressions[expression_map[i]]->Copy());
+ 	}
+ 
+ 	// Create the IcebergUpdate intermediate operator
+ 	auto &update_op = planner
+-	                      .Make<IcebergUpdate>(table, op.columns, child_plan, delete_op, std::move(expressions),
++	                      .Make<IcebergUpdate>(table, op.referenced_columns, child_plan, delete_op,
++	                                           std::move(expressions),
+ 	                                           std::move(op.bound_defaults))
+ 	                      .Cast<IcebergUpdate>();
+ 
+@@ -265,7 +266,7 @@ void IcebergTableSchemaVersion::BindUpdateConstraints(Binder &binder, LogicalGet
+ 	for (auto &column : columns.Physical()) {
+ 		auto physical_index = column.Physical();
+ 		bool found = false;
+-		for (auto &col : update.columns) {
++		for (auto &col : update.referenced_columns) {
+ 			if (col == physical_index) {
+ 				found = true;
+ 				break;
+@@ -294,7 +295,7 @@ void IcebergTableSchemaVersion::BindUpdateConstraints(Binder &binder, LogicalGet
+ 		proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+ 		    column.Type(), ColumnBinding(get.table_index, ProjectionIndex(column_id_index.GetIndex()))));
+ 		get.AddColumnId(physical_index.index);
+-		update.columns.push_back(physical_index);
++		update.referenced_columns.push_back(physical_index);
+ 	}
+ }
+ 

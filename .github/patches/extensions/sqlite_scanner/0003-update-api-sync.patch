@@ -1,0 +1,19 @@
+commit 2052bbea95dace4a08fcae467047ec9deee5d354
+Author: dentinyhao <dentinyhao@gmail.com>
+Date:   Sun Sep 13 01:27:19 2026 -0700
+
+    update API sync
+
+diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
+index d2f6ebe..bf0f6ad 100644
+--- a/src/storage/sqlite_update.cpp
++++ b/src/storage/sqlite_update.cpp
+@@ -117,7 +117,7 @@ PhysicalOperator &SQLiteCatalog::PlanUpdate(ClientContext &context, PhysicalPlan
+ 			throw BinderException("SET DEFAULT is not yet supported for updates of a SQLite table");
+ 		}
+ 	}
+-	auto &update = planner.Make<SQLiteUpdate>(op, op.table, std::move(op.columns));
++	auto &update = planner.Make<SQLiteUpdate>(op, op.table, std::move(op.columns_to_update));
+ 	update.children.push_back(plan);
+ 	return update;
+ }
