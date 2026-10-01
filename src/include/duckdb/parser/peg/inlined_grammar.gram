@@ -907,7 +907,7 @@ IndexElement <- Expression DescOrAsc? NullsFirstOrLast?
 UniqueIndex <- 'UNIQUE'
 IndexType <- 'USING' Identifier
 RelOption <- RelOptionName RelOptionArgumentOpt?
-RelOptionName <- DottedIdentifierString / StringLiteral
+RelOptionName <- DottedIdentifierString / StringLiteral / ColLabel
 DottedIdentifierString <- DottedIdentifier
 RelOptionArgumentOpt <- '=' DefArg
 DefArg <- DefArgNull / DefArgStringLiteral / NumberLiteral / NoneLiteral / Expression / DefArgKeyword
@@ -915,7 +915,6 @@ DefArgNull <- NullLiteral
 DefArgKeyword <- ReservedKeyword
 DefArgStringLiteral <- StringLiteral
 NoneLiteral <- 'NONE'
-
 CreateMacroStmt <- MacroOrFunction IfNotExists? QualifiedName List(MacroDefinition)
 
 MacroOrFunction <- MacroKeyword / FunctionKeyword

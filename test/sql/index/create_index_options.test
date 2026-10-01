@@ -13,3 +13,18 @@ statement error
 CREATE INDEX i3 ON t1 USING random_index_method (foo) WITH (my_option = getenv('some_env_variable'), is_cool);
 ----
 <REGEX>:.*Invalid Input Error.*Create index option must be a constant value.*
+
+statement ok
+CREATE INDEX i1 ON t1(foo) WITH (deferrable);
+
+statement ok
+CREATE INDEX i2 ON t1(foo) WITH (default);
+
+statement ok
+CREATE INDEX i3 ON t1(foo) WITH (where);
+
+statement ok
+CREATE INDEX i4 ON t1(foo) WITH (default = 5);
+
+statement ok
+CREATE INDEX i5 ON t1(foo) WITH (default = 5, deferrable);

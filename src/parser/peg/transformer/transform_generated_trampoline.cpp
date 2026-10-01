@@ -8431,8 +8431,8 @@ void PEGTransformerFactory::InitializeRelOptionNameTrampoline(PEGTransformer &tr
 	    choice_result.type == ParseResultType::KEYWORD || choice_result.type == ParseResultType::STRING) {
 		return;
 	}
-	if (!has_transform_process &&
-	    (choice_result.name == "DottedIdentifierString" || choice_result.name == "StringLiteral")) {
+	if (!has_transform_process && (choice_result.name == "DottedIdentifierString" ||
+	                               choice_result.name == "StringLiteral" || choice_result.name == "ColLabel")) {
 		return;
 	}
 	if (!has_transform_process &&
