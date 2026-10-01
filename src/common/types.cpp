@@ -234,6 +234,16 @@ LogicalType::LogicalType(LogicalType &&other) noexcept : type_info_(other.type_i
 	other.type_info_ = &GetBuiltinTypeInfo(type_info_->id);
 }
 
+const ExtraTypeInfo &LogicalType::ReleaseTypeInfo() && {
+	auto &result = *type_info_;
+	type_info_ = &GetBuiltinTypeInfo(result.id);
+	return result;
+}
+
+LogicalType LogicalType::AdoptTypeInfo(const ExtraTypeInfo &type_info) {
+	return LogicalType(type_info);
+}
+
 LogicalType LogicalType::CreateImmortal(LogicalTypeId id, unique_ptr<ExtraTypeInfo> type_info) {
 	type_info->immortal = true;
 	return LogicalType(id, std::move(type_info));

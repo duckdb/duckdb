@@ -383,6 +383,11 @@ struct LogicalType {
 	inline bool IsUnbound() const {
 		return id() == LogicalTypeId::UNBOUND;
 	}
+	//! Gives up this type's reference to its info without releasing it - the reference must be taken back with
+	//! AdoptTypeInfo. Used to hand types across an ABI boundary (e.g. the C API) without copying them.
+	DUCKDB_API const ExtraTypeInfo &ReleaseTypeInfo() &&;
+	//! Creates a type that takes over a reference given up by ReleaseTypeInfo
+	DUCKDB_API static LogicalType AdoptTypeInfo(const ExtraTypeInfo &type_info);
 	//! Whether this type carries the type info its id is parameterized by (e.g. the child type of a LIST). Does not
 	//! look at child types - false for a bare LogicalTypeId::LIST, true for LIST(ANY).
 	DUCKDB_API bool HasParameters() const;
@@ -478,6 +483,10 @@ struct LogicalType {
 	bool SupportsRegularUpdate() const;
 
 private:
+	//! Takes over a reference to "type_info"
+	explicit LogicalType(const ExtraTypeInfo &type_info) : type_info_(&type_info) {
+	}
+
 	//! Never null
 	const ExtraTypeInfo *type_info_; // NOLINT: allow this naming for legacy reasons
 

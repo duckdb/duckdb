@@ -847,7 +847,8 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(type);
 	return WithErrorHandler(err, [&]() {
-		const auto &column_type = *Convert(type);
+		auto column_type_ref = Convert(type);
+		const auto &column_type = *column_type_ref;
 		// A result column carries data, so a wildcard or otherwise incomplete type has no meaning here.
 		if (!column_type.IsComplete()) {
 			throw duckdb::InvalidInputException("Result column type must be a fully defined concrete type");
