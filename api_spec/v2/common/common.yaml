@@ -129,11 +129,12 @@ handles:
       DuckDB. Handed out within DuckDB-managed scopes — function bind / init /
       exec callbacks, replacement scans, and the extension entrypoint — and
       valid only for the duration of that scope; the caller never destroys it.
-      A context is the scope for reading (settings, the file system) and for
-      constructing values and types, not for registration: catalog entries and
-      instance-level hooks are installed through an extension or a connection.
-      A transaction is always active while a context is handed out, which is
-      what the context-scoped constructors assume.
+      A context is the scope for reading (settings, the file system), and its
+      factory (`[[context_get_factory]]`) the scope for constructing values and
+      types; it is not for registration: catalog entries and instance-level
+      hooks are installed through an extension or a connection. A transaction
+      is always active while a context is handed out, which is what the
+      context's factory relies on.
 structs:
   str:
     description: |

@@ -305,6 +305,53 @@ inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
 	return reinterpret_cast<duckdb_v2_context_handle>(ctx);
 }
 
+//! The scope values and types are constructed through. A connection's factory runs each construction in a transaction
+//! of its own, taking the context lock; a context's factory runs it directly, since a context is only handed out with
+//! the lock held and a transaction active.
+class CV2Factory {
+public:
+	CV2Factory(ClientContext &context, bool transaction_active)
+	    : context(context), transaction_active(transaction_active) {
+	}
+
+public:
+	template <class FUN>
+	void Construct(FUN &&fun) {
+		if (transaction_active) {
+			fun(context);
+			return;
+		}
+		context.RunFunctionInTransaction([&]() { fun(context); });
+	}
+
+private:
+	ClientContext &context;
+	bool transaction_active;
+};
+
+inline auto Convert(duckdb_v2_factory_handle factory) -> CV2Factory * {
+	return reinterpret_cast<CV2Factory *>(factory);
+}
+
+inline auto Convert(CV2Factory *factory) -> duckdb_v2_factory_handle {
+	return reinterpret_cast<duckdb_v2_factory_handle>(factory);
+}
+
+//! Both factories of a client context, kept alive as long as the context is.
+struct FactorySlotV2 : public ClientContextState {
+	explicit FactorySlotV2(ClientContext &context)
+	    : connection_factory(context, false), context_factory(context, true) {
+	}
+
+	CV2Factory connection_factory;
+	CV2Factory context_factory;
+};
+
+inline shared_ptr<FactorySlotV2> GetFactorySlot(ClientContext &context) {
+	constexpr auto FACTORY_SLOT_KEY = "c_api_v2_factory";
+	return context.registered_state->GetOrCreate<FactorySlotV2>(FACTORY_SLOT_KEY, context);
+}
+
 //! The extension handle's backing struct is the load state in capi_v2_extension.cpp, not an ExtensionLoader, so it
 //! cannot be Convert'ed with a cast: the loader is resolved through the state instead. Valid only while the
 //! extension's entrypoint is running.

@@ -332,10 +332,10 @@ typedef struct _duckdb_v2_arena {
 /*!
  * A borrowed handle to a client context: a connection seen from inside DuckDB. Handed out within DuckDB-managed scopes
  * — function bind / init / exec callbacks, replacement scans, and the extension entrypoint — and valid only for the
- * duration of that scope; the caller never destroys it. A context is the scope for reading (settings, the file system)
- * and for constructing values and types, not for registration: catalog entries and instance-level hooks are installed
- * through an extension or a connection. A transaction is always active while a context is handed out, which is what the
- * context-scoped constructors assume.
+ * duration of that scope; the caller never destroys it. A context is the scope for reading (settings, the file system),
+ * and its factory (`duckdb_v2_context_get_factory()`) the scope for constructing values and types; it is not for
+ * registration: catalog entries and instance-level hooks are installed through an extension or a connection. A
+ * transaction is always active while a context is handed out, which is what the context's factory relies on.
  */
 typedef struct _duckdb_v2_context {
 	void *internal_ptr;
@@ -2293,6 +2293,75 @@ struct duckdb_v2_extension_input {
 	 */
 	duckdb_v2_error_info_handle *err;
 };
+
+/* ============================================================================
+ * MODULE: factory
+ * ============================================================================ */
+
+/* --- Enums for factory --- */
+
+/* --- Struct forward declarations for factory --- */
+
+/* --- Types for factory --- */
+
+/*!
+ * A borrowed opaque handle to the scope values and types are constructed through. Obtained from
+ * `duckdb_v2_connection_get_factory()` or `duckdb_v2_context_get_factory()`. Borrowed: the handle belongs to the
+ * connection or context it came from, is valid only for as long as that is, and must not be destroyed. The values and
+ * types it creates are owned by the caller and may outlive it.
+ */
+typedef struct _duckdb_v2_factory {
+	void *internal_ptr;
+} * duckdb_v2_factory_handle;
+
+/* --- Constants for factory --- */
+
+/* --- Function pointer typedefs for factory --- */
+
+/* --- Functions for factory --- */
+
+/*!
+ * Borrows the factory of a connection.
+ *
+ * Use this from outside DuckDB, where a connection is in hand. Constructors that look something up in the catalog run
+ * in a transaction of their own through this factory, so do not use it from inside a callback running on the same
+ * connection; take the factory of the callback's context instead. The returned handle is borrowed: it is valid only for
+ * as long as the connection is, and must not be destroyed.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection to take the factory from.
+ * @param factory Receives the borrowed factory.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_factory(duckdb_v2_connection_handle connection,
+                                                              duckdb_v2_factory_handle *factory,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Borrows the factory of a context.
+ *
+ * Use this from inside a callback, where a context is in hand. Constructors that look something up in the catalog run
+ * in the transaction the context already holds. The returned handle is borrowed: it is valid only for as long as the
+ * context is, and must not be destroyed.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param context The context to take the factory from.
+ * @param factory Receives the borrowed factory.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_factory(duckdb_v2_context_handle context,
+                                                           duckdb_v2_factory_handle *factory,
+                                                           duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for factory --- */
 
 /* ============================================================================
  * MODULE: file system
@@ -7472,10 +7541,7 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
 	//! ANY — used for functions that accept any type.
 	DUCKDB_V2_LOGICAL_TYPE_ID_ANY = 3,
 
-	/*!
-	 * A type carried as a value (type parameters). Values of this type are built via value_create_type_with_context /
-	 * _with_connection.
-	 */
+	//! A type carried as a value (type parameters). Values of this type are built via value_create_type.
 	DUCKDB_V2_LOGICAL_TYPE_ID_TYPE = 6,
 	DUCKDB_V2_LOGICAL_TYPE_ID_BOOLEAN = 10,
 	DUCKDB_V2_LOGICAL_TYPE_ID_TINYINT = 11,
@@ -7560,7 +7626,7 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
 /*!
  * Creates a logical type from a type id plus value parameters.
  *
- * The id-keyed twin of context_create_type_from_name: the type id names the kind, and the parameters bind it. With
+ * The id-keyed twin of logical_type_create_from_name: the type id names the kind, and the parameters bind it. With
  * param_count 0 it instantiates a primitive directly, without touching the catalog: BOOLEAN, TINYINT..BIGINT,
  * UTINYINT..UBIGINT, HUGEINT, UHUGEINT, FLOAT, DOUBLE, DATE, every TIME and TIMESTAMP variant, INTERVAL, VARCHAR, BLOB,
  * BIT, BIGNUM, and UUID. ANY is accepted as well.
@@ -7571,18 +7637,18 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
  * custom type registration.
  *
  * With parameters, the id resolves to its canonical type name and binds through the same path as
- * context_create_type_from_name, so the parameterized kinds construct here too: decimal(width, scale); list(T);
+ * logical_type_create_from_name, so the parameterized kinds construct here too: decimal(width, scale); list(T);
  * array(T, size); map(K, V); struct(fields); union(members); enum(entries); and varchar with a named "collation"
- * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for context_create_type_from_name.
+ * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for logical_type_create_from_name.
  *
  * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
  * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
- * context_create_type_from_text — and for INVALID.
+ * logical_type_create_from_text — and for INVALID.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context supplying the catalog and active transaction.
+ * @param factory The factory to create the type with.
  * @param type_id The type id to instantiate.
  * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
  * all-positional parameters.
@@ -7592,15 +7658,15 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_id(
-    duckdb_v2_context_handle ctx, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const duckdb_v2_identifier_t *param_names,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_create_from_id(
+    duckdb_v2_factory_handle factory, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const duckdb_v2_identifier_t *param_names,
     const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
     duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a logical type from a type name plus value parameters.
  *
- * The generic constructor: resolves the name in the context's catalog and binds it with the given parameters, exactly
+ * The generic constructor: resolves the name in the factory's catalog and binds it with the given parameters, exactly
  * as SQL binds a type expression. Built-in parameterized kinds and registered extension types construct through this
  * same call.
  *
@@ -7610,16 +7676,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_id(
  *
  * Parameters are (name, value) pairs in two parallel arrays. param_names may be NULL to make every parameter
  * positional, and a {NULL, 0} entry makes that one parameter positional. Child types cross as TYPE values, built with
- * value_create_type_with_context / _with_connection. The built-in shapes are: decimal(width, scale); list(T); array(T,
- * size); map(K, V); struct(fields, as named or all-positional TYPE values); union(members, as named TYPE values);
- * enum(entries, as VARCHAR values); and varchar with a named "collation" VARCHAR parameter.
+ * value_create_type. The built-in shapes are: decimal(width, scale); list(T); array(T, size); map(K, V); struct(fields,
+ * as named or all-positional TYPE values); union(members, as named TYPE values); enum(entries, as VARCHAR values); and
+ * varchar with a named "collation" VARCHAR parameter.
  *
  * A name that resolves to a type with no bind function takes no parameters, and passing any fails. Bind errors —
  * unknown name, wrong parameter count or types — surface from the call.
  *
- * Runs in the caller's context scope, as create_type_from_text does: reach it from a bind-phase callback or another
- * context-holding scope, not from an exec-phase worker callback. External callers holding only a connection use
- * connection_create_type_from_name instead.
+ * Looks the name up in the catalog, as logical_type_create_from_text does: through a factory obtained from a context,
+ * call it from a bind-phase callback or another context-holding scope, not from an exec-phase worker callback.
  *
  * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
  * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database. This is
@@ -7628,7 +7693,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_id(
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context supplying the catalog and active transaction.
+ * @param factory The factory to create the type with.
  * @param name The type name to resolve. Parts are matched case-insensitively; qualify it to name a type in a particular
  * catalog or schema.
  * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
@@ -7639,24 +7704,24 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_id(
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(
-    duckdb_v2_context_handle ctx, duckdb_v2_qname_handle name, const duckdb_v2_identifier_t *param_names,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_create_from_name(
+    duckdb_v2_factory_handle factory, duckdb_v2_qname_handle name, const duckdb_v2_identifier_t *param_names,
     const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
     duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a logical type by parsing SQL text.
  *
- * Parses a SQL type expression in the given context and returns the bound logical type. It accepts primitives
+ * Parses a SQL type expression through the given factory and returns the bound logical type. It accepts primitives
  * ("INTEGER"), parameterized kinds ("DECIMAL(18,3)", "INTEGER[]", "STRUCT(a INTEGER, b VARCHAR)", "MAP(VARCHAR,
  * INTEGER)", "INTEGER[3]", "UNION(i INTEGER, s VARCHAR)", "ENUM('a', 'b')"), and catalog-registered type names, both
  * user-defined and from extensions. A catalog type name binds to its structural type, and the name is not preserved as
  * an alias. Names are case-insensitive. Parse and bind errors surface from the call.
  *
- * Runs in the caller's context scope: a context handle arrives with the context lock held and a transaction active, as
- * in a function bind callback or custom type registration. Catalog-touching context calls belong in bind-phase
- * callbacks and other context-holding scopes, not in exec-phase worker callbacks. External callers holding only a
- * connection use connection_create_type_from_text instead.
+ * Resolves names in the catalog. A factory obtained from a connection runs the lookup in a transaction of its own; one
+ * obtained from a context runs it in the transaction the context already holds, as in a function bind callback or
+ * custom type registration. Catalog-touching calls through a context's factory belong in bind-phase callbacks and other
+ * context-holding scopes, not in exec-phase worker callbacks.
  *
  * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
  * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database. This is
@@ -7665,112 +7730,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context supplying the catalog and active transaction.
+ * @param factory The factory to create the type with.
  * @param text View of the SQL type expression to parse.
  * @param out_type Receives the new logical type handle.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_create_from_text(duckdb_v2_factory_handle factory,
                                                                      const duckdb_v2_str *text,
                                                                      duckdb_v2_logical_type_handle *out_type,
                                                                      duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a logical type from a type id plus value parameters.
- *
- * The id-keyed twin of connection_create_type_from_name: the type id names the kind, and the parameters bind it. With
- * param_count 0 it instantiates a primitive directly, without touching the catalog: BOOLEAN, TINYINT..BIGINT,
- * UTINYINT..UBIGINT, HUGEINT, UHUGEINT, FLOAT, DOUBLE, DATE, every TIME and TIMESTAMP variant, INTERVAL, VARCHAR, BLOB,
- * BIT, BIGNUM, and UUID. ANY is accepted as well.
- *
- * ANY is a function-signature wildcard, constructible here so it can be passed to the function parameter and varargs
- * setters, as a fixed-arity ANY parameter or an ANY varargs type. Data-creating surfaces reject it: value and data
- * chunk creation, scalar and aggregate return types, table function result columns, cast source and target types, and
- * custom type registration.
- *
- * With parameters, the id resolves to its canonical type name and binds through the same path as
- * connection_create_type_from_name, so the parameterized kinds construct here too: decimal(width, scale); list(T);
- * array(T, size); map(K, V); struct(fields); union(members); enum(entries); and varchar with a named "collation"
- * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for
- * connection_create_type_from_name.
- *
- * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
- * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
- * connection_create_type_from_text — and for INVALID.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection supplying the catalog and active transaction.
- * @param type_id The type id to instantiate.
- * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
- * all-positional parameters.
- * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
- * @param param_count The number of parameters. 0 instantiates a parameterless primitive.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_id(
-    duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID type_id, const duckdb_v2_identifier_t *param_names,
-    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
-    duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a logical type from a type name plus value parameters, using a connection.
- *
- * The same as context_create_type_from_name, except that the catalog and transaction come from a connection: the bind
- * runs in its own transaction on that connection's context. Use it from outside DuckDB, where a connection — but no
- * context — is in hand.
- *
- * Parameters are (name, value) pairs in two parallel arrays, exactly as for context_create_type_from_name.
- *
- * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
- * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection supplying the catalog and active transaction.
- * @param name The type name to resolve. Parts are matched case-insensitively; qualify it to name a type in a particular
- * catalog or schema.
- * @param param_names Optional. An array of param_count parameter names; a {NULL, 0} entry is positional. Pass NULL for
- * all-positional parameters.
- * @param param_values An array of param_count parameter values. Borrowed (copied in). Pass NULL when param_count is 0.
- * @param param_count The number of parameters.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(
-    duckdb_v2_connection_handle conn, duckdb_v2_qname_handle name, const duckdb_v2_identifier_t *param_names,
-    const duckdb_v2_value_handle *param_values, idx_t param_count, duckdb_v2_logical_type_handle *out_type,
-    duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a logical type by parsing SQL text, using a connection.
- *
- * The same as context_create_type_from_text, except that the catalog and transaction come from a connection: the parse
- * and bind run in their own transaction on that connection's context. Use it from outside DuckDB, where a connection —
- * but no context — is in hand.
- *
- * The returned logical type is caller-owned and must be destroyed via logical_type_destroy. A type resolved from the
- * catalog shares database-owned storage, such as an ENUM dictionary, so destroy it before closing the database.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection supplying the catalog and active transaction.
- * @param text View of the SQL type expression to parse.
- * @param out_type Receives the new logical type handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn,
-                                                                        const duckdb_v2_str *text,
-                                                                        duckdb_v2_logical_type_handle *out_type,
-                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a copy of a logical type.
@@ -7842,8 +7811,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_id(duckdb_v2_logical_typ
  *
  * The alias when one is set — an extension or user-defined name such as "POINT_2D" — otherwise the canonical name of
  * the type id, such as "INTEGER", "DECIMAL", or "TIMESTAMP WITH TIME ZONE". Never the empty view. This is exactly the
- * name vocabulary create_type_from_name accepts. The view is valid until the logical type is destroyed; a canonical
- * name points at static storage.
+ * name vocabulary logical_type_create_from_name accepts. The view is valid until the logical type is destroyed; a
+ * canonical name points at static storage.
  *
  * history:
  * - stable: v2.0.0
@@ -7860,10 +7829,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_t
 /*!
  * Renders a logical type as SQL text.
  *
- * An aliased type renders as its alias, and create_type_from_text resolves that spelling only when the name is
- * registered in the connection's catalog. The text round-trips through create_type_from_text for every constructible
- * kind, with one exception: ANY renders as "ANY", but create_type_from_text cannot parse it back, since ANY is a
- * signature wildcard rather than a parseable SQL type.
+ * An aliased type renders as its alias, and logical_type_create_from_text resolves that spelling only when the name is
+ * registered in the connection's catalog. The text round-trips through logical_type_create_from_text for every
+ * constructible kind, with one exception: ANY renders as "ANY", but logical_type_create_from_text cannot parse it back,
+ * since ANY is a signature wildcard rather than a parseable SQL type.
  *
  * Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be freed.
  * Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length, and
@@ -7892,11 +7861,12 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_to_text(duckdb_v2_logical_ty
 /*!
  * Returns the number of value parameters of a logical type.
  *
- * The inspection dual of create_type_from_name: these are the parameters that reconstruct the type through it. Per
- * kind: DECIMAL 2 (width, scale); LIST 1 (element type); ARRAY 2 (element type, size); MAP 2 (key type, value type);
- * STRUCT and TUPLE one per field; UNION one per member; ENUM one per dictionary entry; VARCHAR 1 when a collation is
- * set, else 0; GEOMETRY 1 when a coordinate system is set, else 0; everything else 0. A bound type reports only what it
- * actually carries, so a bind-time modifier that is not retained — an ignored VARCHAR length, say — does not reappear.
+ * The inspection dual of logical_type_create_from_name: these are the parameters that reconstruct the type through it.
+ * Per kind: DECIMAL 2 (width, scale); LIST 1 (element type); ARRAY 2 (element type, size); MAP 2 (key type, value
+ * type); STRUCT and TUPLE one per field; UNION one per member; ENUM one per dictionary entry; VARCHAR 1 when a
+ * collation is set, else 0; GEOMETRY 1 when a coordinate system is set, else 0; everything else 0. A bound type reports
+ * only what it actually carries, so a bind-time modifier that is not retained — an ignored VARCHAR length, say — does
+ * not reappear.
  *
  * history:
  * - stable: v2.0.0
@@ -7941,13 +7911,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param(duckdb_v2_logical_
  * remaining logically distinct from the base type. Intended for custom type bind callbacks, where both the base type
  * and the name come from the bind info.
  *
- * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the context.
- * An empty alias name returns ERROR_INPUT_INVALID.
+ * Scoped like the rest of the logical_type_create family: the alias is resolved against the catalog reachable from the
+ * factory. An empty alias name returns ERROR_INPUT_INVALID.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to resolve the alias against.
+ * @param factory The factory to create the type with.
  * @param base_type The logical type to alias. Typically the base type supplied in the custom type bind info.
  * @param alias_name The name for the resulting type. Typically the name of the custom type being constructed, also
  * available from the bind info.
@@ -7955,38 +7925,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param(duckdb_v2_logical_
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handle ctx,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_create_with_alias(duckdb_v2_factory_handle factory,
                                                                       duckdb_v2_logical_type_handle base_type,
                                                                       const duckdb_v2_identifier_t *alias_name,
                                                                       duckdb_v2_logical_type_handle *out_type,
                                                                       duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a logical type that is an alias of another logical type.
- *
- * The alias keeps the base type's internal representation, so executing against it needs no special handling, while
- * remaining logically distinct from the base type. Intended for custom type bind callbacks, where both the base type
- * and the name come from the bind info.
- *
- * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the
- * connection. An empty alias name returns ERROR_INPUT_INVALID.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to resolve the alias against.
- * @param base_type The logical type to alias. Typically the base type supplied in the custom type bind info.
- * @param alias_name The name for the resulting type. Typically the name of the custom type being constructed, also
- * available from the bind info.
- * @param out_type Receives the new type: the base type's internal representation under the given alias name.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_logical_type_handle base_type,
-                                                                         const duckdb_v2_identifier_t *alias_name,
-                                                                         duckdb_v2_logical_type_handle *out_type,
-                                                                         duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for logical_type --- */
 
@@ -9143,23 +9086,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_iterator_destroy(duckdb_v2_stat
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_destroy(duckdb_v2_value_handle *value);
 
 /*!
- * Creates a NULL value of the given logical type.
- *
- * The logical type is borrowed and copied into the value, so the caller can destroy it independently.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param type The borrowed logical type to attach to the NULL value.
- * @param out_value Receives the new NULL value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_null(duckdb_v2_logical_type_handle type,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err);
-
-/*!
  * Returns the value as a BOOLEAN.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
@@ -9694,16 +9620,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_type(duckdb_v2_value_handle val
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param type The borrowed logical type to attach to the NULL value.
  * @param out_value Receives the new NULL value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_null_with_context(duckdb_v2_context_handle ctx,
-                                                                      duckdb_v2_logical_type_handle type,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_null(duckdb_v2_factory_handle factory,
+                                                         duckdb_v2_logical_type_handle type,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a BOOLEAN value from a bool.
@@ -9713,15 +9639,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_null_with_context(duckdb_v2_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The bool to wrap.
  * @param out_value Receives the new BOOLEAN value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bool_with_context(duckdb_v2_context_handle ctx, bool in_value,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bool(duckdb_v2_factory_handle factory, bool in_value,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a UTINYINT value from a uint8_t.
@@ -9731,16 +9657,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bool_with_context(duckdb_v2_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The uint8_t to wrap.
  * @param out_value Receives the new UTINYINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_utinyint_with_context(duckdb_v2_context_handle ctx,
-                                                                          uint8_t in_value,
-                                                                          duckdb_v2_value_handle *out_value,
-                                                                          duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_utinyint(duckdb_v2_factory_handle factory, uint8_t in_value,
+                                                             duckdb_v2_value_handle *out_value,
+                                                             duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a USMALLINT value from a uint16_t.
@@ -9750,16 +9675,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_utinyint_with_context(duckdb
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The uint16_t to wrap.
  * @param out_value Receives the new USMALLINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_usmallint_with_context(duckdb_v2_context_handle ctx,
-                                                                           uint16_t in_value,
-                                                                           duckdb_v2_value_handle *out_value,
-                                                                           duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_usmallint(duckdb_v2_factory_handle factory, uint16_t in_value,
+                                                              duckdb_v2_value_handle *out_value,
+                                                              duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a UINTEGER value from a uint32_t.
@@ -9769,15 +9693,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_usmallint_with_context(duckd
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The uint32_t to wrap.
  * @param out_value Receives the new UINTEGER value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uint_with_context(duckdb_v2_context_handle ctx, uint32_t in_value,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uint(duckdb_v2_factory_handle factory, uint32_t in_value,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a UBIGINT value from a uint64_t.
@@ -9787,16 +9711,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uint_with_context(duckdb_v2_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The uint64_t to wrap.
  * @param out_value Receives the new UBIGINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_context(duckdb_v2_context_handle ctx,
-                                                                         uint64_t in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint(duckdb_v2_factory_handle factory, uint64_t in_value,
+                                                            duckdb_v2_value_handle *out_value,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a UHUGEINT value from a uint128_t.
@@ -9806,16 +9729,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_context(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The uint128_t to wrap.
  * @param out_value Receives the new UHUGEINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_context(duckdb_v2_context_handle ctx,
-                                                                          const duckdb_v2_uhugeint_t *in_value,
-                                                                          duckdb_v2_value_handle *out_value,
-                                                                          duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint(duckdb_v2_factory_handle factory,
+                                                             const duckdb_v2_uhugeint_t *in_value,
+                                                             duckdb_v2_value_handle *out_value,
+                                                             duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TINYINT value from an int8_t.
@@ -9825,15 +9748,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_context(duckdb
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The int8_t to wrap.
  * @param out_value Receives the new TINYINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tinyint_with_context(duckdb_v2_context_handle ctx, int8_t in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tinyint(duckdb_v2_factory_handle factory, int8_t in_value,
+                                                            duckdb_v2_value_handle *out_value,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a SMALLINT value from an int16_t.
@@ -9843,16 +9766,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tinyint_with_context(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The int16_t to wrap.
  * @param out_value Receives the new SMALLINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_smallint_with_context(duckdb_v2_context_handle ctx,
-                                                                          int16_t in_value,
-                                                                          duckdb_v2_value_handle *out_value,
-                                                                          duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_smallint(duckdb_v2_factory_handle factory, int16_t in_value,
+                                                             duckdb_v2_value_handle *out_value,
+                                                             duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates an INTEGER value from an int32_t.
@@ -9862,15 +9784,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_smallint_with_context(duckdb
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The int32_t to wrap.
  * @param out_value Receives the new INTEGER value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_int_with_context(duckdb_v2_context_handle ctx, int32_t in_value,
-                                                                     duckdb_v2_value_handle *out_value,
-                                                                     duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_int(duckdb_v2_factory_handle factory, int32_t in_value,
+                                                        duckdb_v2_value_handle *out_value,
+                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a BIGINT value from an int64_t.
@@ -9880,15 +9802,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_int_with_context(duckdb_v2_c
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The int64_t to wrap.
  * @param out_value Receives the new BIGINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                        duckdb_v2_value_handle *out_value,
-                                                                        duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                           duckdb_v2_value_handle *out_value,
+                                                           duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a HUGEINT value from an int128_t.
@@ -9898,16 +9820,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_context(duckdb_v
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The int128_t to wrap.
  * @param out_value Receives the new HUGEINT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_context(duckdb_v2_context_handle ctx,
-                                                                         const duckdb_v2_hugeint_t *in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint(duckdb_v2_factory_handle factory,
+                                                            const duckdb_v2_hugeint_t *in_value,
+                                                            duckdb_v2_value_handle *out_value,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a VARCHAR value from a UTF-8 string.
@@ -9917,16 +9839,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_context(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The UTF-8 string to wrap. May be null only when len is 0 (empty string).
  * @param out_value Receives the new VARCHAR value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_context(duckdb_v2_context_handle ctx,
-                                                                         const duckdb_v2_str *in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar(duckdb_v2_factory_handle factory,
+                                                            const duckdb_v2_str *in_value,
+                                                            duckdb_v2_value_handle *out_value,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a BLOB value from a byte string.
@@ -9936,16 +9858,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_context(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The byte string to wrap. May be null only when len is 0 (empty string).
  * @param out_value Receives the new BLOB value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_context(duckdb_v2_context_handle ctx,
-                                                                      const duckdb_v2_str *in_value,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob(duckdb_v2_factory_handle factory,
+                                                         const duckdb_v2_str *in_value,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a FLOAT value from a float.
@@ -9955,15 +9877,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_context(duckdb_v2_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The float to wrap.
  * @param out_value Receives the new FLOAT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_float_with_context(duckdb_v2_context_handle ctx, float in_value,
-                                                                       duckdb_v2_value_handle *out_value,
-                                                                       duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_float(duckdb_v2_factory_handle factory, float in_value,
+                                                          duckdb_v2_value_handle *out_value,
+                                                          duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a DOUBLE value from a double.
@@ -9973,15 +9895,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_float_with_context(duckdb_v2
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The double to wrap.
  * @param out_value Receives the new DOUBLE value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_double_with_context(duckdb_v2_context_handle ctx, double in_value,
-                                                                        duckdb_v2_value_handle *out_value,
-                                                                        duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_double(duckdb_v2_factory_handle factory, double in_value,
+                                                           duckdb_v2_value_handle *out_value,
+                                                           duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TYPE value from a logical type.
@@ -9991,340 +9913,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_double_with_context(duckdb_v
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_type The borrowed logical type to wrap.
  * @param out_value Receives the new TYPE value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_type_with_context(duckdb_v2_context_handle ctx,
-                                                                      duckdb_v2_logical_type_handle in_type,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a NULL value of the given logical type.
- *
- * The logical type is borrowed and copied into the value, so the caller can destroy it independently.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param type The borrowed logical type to attach to the NULL value.
- * @param out_value Receives the new NULL value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_null_with_connection(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_logical_type_handle type,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a BOOLEAN value from a bool.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The bool to wrap.
- * @param out_value Receives the new BOOLEAN value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bool_with_connection(duckdb_v2_connection_handle conn,
-                                                                         bool in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a UTINYINT value from a uint8_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The uint8_t to wrap.
- * @param out_value Receives the new UTINYINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_utinyint_with_connection(duckdb_v2_connection_handle conn,
-                                                                             uint8_t in_value,
-                                                                             duckdb_v2_value_handle *out_value,
-                                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a USMALLINT value from a uint16_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The uint16_t to wrap.
- * @param out_value Receives the new USMALLINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_usmallint_with_connection(duckdb_v2_connection_handle conn,
-                                                                              uint16_t in_value,
-                                                                              duckdb_v2_value_handle *out_value,
-                                                                              duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a UINTEGER value from a uint32_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The uint32_t to wrap.
- * @param out_value Receives the new UINTEGER value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uint_with_connection(duckdb_v2_connection_handle conn,
-                                                                         uint32_t in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a UBIGINT value from a uint64_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The uint64_t to wrap.
- * @param out_value Receives the new UBIGINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_connection(duckdb_v2_connection_handle conn,
-                                                                            uint64_t in_value,
-                                                                            duckdb_v2_value_handle *out_value,
-                                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a UHUGEINT value from a uint128_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The uint128_t to wrap.
- * @param out_value Receives the new UHUGEINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                                             const duckdb_v2_uhugeint_t *in_value,
-                                                                             duckdb_v2_value_handle *out_value,
-                                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TINYINT value from an int8_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The int8_t to wrap.
- * @param out_value Receives the new TINYINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tinyint_with_connection(duckdb_v2_connection_handle conn,
-                                                                            int8_t in_value,
-                                                                            duckdb_v2_value_handle *out_value,
-                                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a SMALLINT value from an int16_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The int16_t to wrap.
- * @param out_value Receives the new SMALLINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_smallint_with_connection(duckdb_v2_connection_handle conn,
-                                                                             int16_t in_value,
-                                                                             duckdb_v2_value_handle *out_value,
-                                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates an INTEGER value from an int32_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The int32_t to wrap.
- * @param out_value Receives the new INTEGER value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_int_with_connection(duckdb_v2_connection_handle conn,
-                                                                        int32_t in_value,
-                                                                        duckdb_v2_value_handle *out_value,
-                                                                        duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a BIGINT value from an int64_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The int64_t to wrap.
- * @param out_value Receives the new BIGINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_connection(duckdb_v2_connection_handle conn,
-                                                                           int64_t in_value,
-                                                                           duckdb_v2_value_handle *out_value,
-                                                                           duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a HUGEINT value from an int128_t.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The int128_t to wrap.
- * @param out_value Receives the new HUGEINT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                                            const duckdb_v2_hugeint_t *in_value,
-                                                                            duckdb_v2_value_handle *out_value,
-                                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a VARCHAR value from a UTF-8 string.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The UTF-8 string to wrap. May be null only when len is 0 (empty string).
- * @param out_value Receives the new VARCHAR value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_connection(duckdb_v2_connection_handle conn,
-                                                                            const duckdb_v2_str *in_value,
-                                                                            duckdb_v2_value_handle *out_value,
-                                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a BLOB value from a byte string.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The byte string to wrap. May be null only when len is 0 (empty string).
- * @param out_value Receives the new BLOB value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_connection(duckdb_v2_connection_handle conn,
-                                                                         const duckdb_v2_str *in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a FLOAT value from a float.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The float to wrap.
- * @param out_value Receives the new FLOAT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_float_with_connection(duckdb_v2_connection_handle conn,
-                                                                          float in_value,
-                                                                          duckdb_v2_value_handle *out_value,
-                                                                          duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a DOUBLE value from a double.
- *
- * The input is copied in. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The double to wrap.
- * @param out_value Receives the new DOUBLE value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_double_with_connection(duckdb_v2_connection_handle conn,
-                                                                           double in_value,
-                                                                           duckdb_v2_value_handle *out_value,
-                                                                           duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TYPE value wrapping the given logical type.
- *
- * The input logical type is borrowed; the value internally copies the type so the caller can destroy the logical type
- * independently.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param type The borrowed logical type to wrap.
- * @param out_value Receives the new value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_type_with_connection(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_logical_type_handle type,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_type(duckdb_v2_factory_handle factory,
+                                                         duckdb_v2_logical_type_handle in_type,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a DATE value.
@@ -10335,35 +9933,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_type_with_connection(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new DATE value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_date_with_context(duckdb_v2_context_handle ctx, int32_t in_value,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a DATE value.
- *
- * The payload is days since 1970-01-01, the same unit value_get_date reports. It is not range-checked here; value_cast
- * is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new DATE value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_date_with_connection(duckdb_v2_connection_handle conn,
-                                                                         int32_t in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_date(duckdb_v2_factory_handle factory, int32_t in_value,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIME value.
@@ -10374,35 +9952,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_date_with_connection(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIME value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIME value.
- *
- * The payload is microseconds since midnight, the same unit value_get_time reports. It is not range-checked here;
- * value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIME value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_with_connection(duckdb_v2_connection_handle conn,
-                                                                         int64_t in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIME_NS value.
@@ -10413,35 +9971,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_with_connection(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIME_NS value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_ns_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIME_NS value.
- *
- * The payload is nanoseconds since midnight, the same unit value_get_time_ns reports. It is not range-checked here;
- * value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIME_NS value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_ns_with_connection(duckdb_v2_connection_handle conn,
-                                                                            int64_t in_value,
-                                                                            duckdb_v2_value_handle *out_value,
-                                                                            duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_ns(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                            duckdb_v2_value_handle *out_value,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIME_TZ value.
@@ -10453,37 +9991,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_ns_with_connection(duck
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIME_TZ value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_tz_with_context(duckdb_v2_context_handle ctx,
-                                                                         uint64_t in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIME_TZ value.
- *
- * The payload packs the time of day and the UTC offset into one integer, in the committed layout: micros in the high 40
- * bits, a biased offset in the low 24. The same form value_get_time_tz reports. It is not range-checked here;
- * value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIME_TZ value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_tz_with_connection(duckdb_v2_connection_handle conn,
-                                                                            uint64_t in_value,
-                                                                            duckdb_v2_value_handle *out_value,
-                                                                            duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_tz(duckdb_v2_factory_handle factory, uint64_t in_value,
+                                                            duckdb_v2_value_handle *out_value,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIMESTAMP value.
@@ -10494,36 +10010,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_time_tz_with_connection(duck
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIMESTAMP value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_with_context(duckdb_v2_context_handle ctx,
-                                                                           int64_t in_value,
-                                                                           duckdb_v2_value_handle *out_value,
-                                                                           duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIMESTAMP value.
- *
- * The payload is microseconds since 1970-01-01, the same unit value_get_timestamp reports. It is not range-checked
- * here; value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIMESTAMP value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_with_connection(duckdb_v2_connection_handle conn,
-                                                                              int64_t in_value,
-                                                                              duckdb_v2_value_handle *out_value,
-                                                                              duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                              duckdb_v2_value_handle *out_value,
+                                                              duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIMESTAMP_SEC value.
@@ -10534,36 +10029,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_with_connection(du
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIMESTAMP_SEC value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec_with_context(duckdb_v2_context_handle ctx,
-                                                                               int64_t in_value,
-                                                                               duckdb_v2_value_handle *out_value,
-                                                                               duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIMESTAMP_SEC value.
- *
- * The payload is seconds since 1970-01-01, the same unit value_get_timestamp_sec reports. It is not range-checked here;
- * value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIMESTAMP_SEC value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec_with_connection(duckdb_v2_connection_handle conn,
-                                                                                  int64_t in_value,
-                                                                                  duckdb_v2_value_handle *out_value,
-                                                                                  duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                                  duckdb_v2_value_handle *out_value,
+                                                                  duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIMESTAMP_MS value.
@@ -10574,36 +10048,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec_with_connectio
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIMESTAMP_MS value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms_with_context(duckdb_v2_context_handle ctx,
-                                                                              int64_t in_value,
-                                                                              duckdb_v2_value_handle *out_value,
-                                                                              duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIMESTAMP_MS value.
- *
- * The payload is milliseconds since 1970-01-01, the same unit value_get_timestamp_ms reports. It is not range-checked
- * here; value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIMESTAMP_MS value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms_with_connection(duckdb_v2_connection_handle conn,
-                                                                                 int64_t in_value,
-                                                                                 duckdb_v2_value_handle *out_value,
-                                                                                 duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                                 duckdb_v2_value_handle *out_value,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIMESTAMP_NS value.
@@ -10614,36 +10067,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms_with_connection
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIMESTAMP_NS value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns_with_context(duckdb_v2_context_handle ctx,
-                                                                              int64_t in_value,
-                                                                              duckdb_v2_value_handle *out_value,
-                                                                              duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIMESTAMP_NS value.
- *
- * The payload is nanoseconds since 1970-01-01, the same unit value_get_timestamp_ns reports. It is not range-checked
- * here; value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIMESTAMP_NS value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns_with_connection(duckdb_v2_connection_handle conn,
-                                                                                 int64_t in_value,
-                                                                                 duckdb_v2_value_handle *out_value,
-                                                                                 duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                                 duckdb_v2_value_handle *out_value,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIMESTAMP_TZ value.
@@ -10655,37 +10087,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns_with_connection
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIMESTAMP_TZ value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_with_context(duckdb_v2_context_handle ctx,
-                                                                              int64_t in_value,
-                                                                              duckdb_v2_value_handle *out_value,
-                                                                              duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIMESTAMP_TZ value.
- *
- * The payload is microseconds since 1970-01-01, in UTC, the same unit value_get_timestamp_tz reports. It is not
- * range-checked here; value_cast is the validating path. The returned value is caller-owned; destroy it via
- * value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIMESTAMP_TZ value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_with_connection(duckdb_v2_connection_handle conn,
-                                                                                 int64_t in_value,
-                                                                                 duckdb_v2_value_handle *out_value,
-                                                                                 duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                                 duckdb_v2_value_handle *out_value,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TIMESTAMP_TZ_NS value.
@@ -10697,37 +10107,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_with_connection
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new TIMESTAMP_TZ_NS value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_context(duckdb_v2_context_handle ctx,
-                                                                                 int64_t in_value,
-                                                                                 duckdb_v2_value_handle *out_value,
-                                                                                 duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TIMESTAMP_TZ_NS value.
- *
- * The payload is nanoseconds since 1970-01-01, in UTC, the same unit value_get_timestamp_tz_ns reports. It is not
- * range-checked here; value_cast is the validating path. The returned value is caller-owned; destroy it via
- * value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new TIMESTAMP_TZ_NS value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_connection(duckdb_v2_connection_handle conn,
-                                                                                    int64_t in_value,
-                                                                                    duckdb_v2_value_handle *out_value,
-                                                                                    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns(duckdb_v2_factory_handle factory, int64_t in_value,
+                                                                    duckdb_v2_value_handle *out_value,
+                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a INTERVAL value.
@@ -10738,36 +10126,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_connect
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The payload to wrap.
  * @param out_value Receives the new INTERVAL value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_context(duckdb_v2_context_handle ctx,
-                                                                          const duckdb_v2_interval_t *in_value,
-                                                                          duckdb_v2_value_handle *out_value,
-                                                                          duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a INTERVAL value.
- *
- * The payload is the (months, days, micros) triple, the same unit value_get_interval reports. It is not range-checked
- * here; value_cast is the validating path. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The payload to wrap.
- * @param out_value Receives the new INTERVAL value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duckdb_v2_connection_handle conn,
-                                                                             const duckdb_v2_interval_t *in_value,
-                                                                             duckdb_v2_value_handle *out_value,
-                                                                             duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval(duckdb_v2_factory_handle factory,
+                                                             const duckdb_v2_interval_t *in_value,
+                                                             duckdb_v2_value_handle *out_value,
+                                                             duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a DECIMAL value from its backing integer.
@@ -10780,7 +10148,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duc
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The backing integer, scaled by 10^scale.
  * @param width Total digit count, 1..38.
  * @param scale Digits after the decimal point; must not exceed width.
@@ -10788,36 +10156,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duc
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_context(duckdb_v2_context_handle ctx,
-                                                                         const duckdb_v2_hugeint_t *in_value,
-                                                                         uint8_t width, uint8_t scale,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a DECIMAL value from its backing integer.
- *
- * The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is the total digit count and must be 1..38; scale
- * is the number of digits after the point and must not exceed width. Violating either returns ERROR_INPUT_INVALID, as
- * does a value too wide for the storage tier the width selects. The value itself is not range-checked against the
- * width; value_cast is the validating path.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The backing integer, scaled by 10^scale.
- * @param width Total digit count, 1..38.
- * @param scale Digits after the decimal point; must not exceed width.
- * @param out_value Receives the new DECIMAL value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_connection(duckdb_v2_connection_handle conn,
-                                                                            const duckdb_v2_hugeint_t *in_value,
-                                                                            uint8_t width, uint8_t scale,
-                                                                            duckdb_v2_value_handle *out_value,
-                                                                            duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal(duckdb_v2_factory_handle factory,
+                                                            const duckdb_v2_hugeint_t *in_value, uint8_t width,
+                                                            uint8_t scale, duckdb_v2_value_handle *out_value,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a UUID value from its internal 128-bit form.
@@ -10829,37 +10171,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_connection(duck
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The internal 128-bit storage form.
  * @param out_value Receives the new UUID value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_context(duckdb_v2_context_handle ctx,
-                                                                      const duckdb_v2_hugeint_t *in_value,
-                                                                      duckdb_v2_value_handle *out_value,
-                                                                      duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a UUID value from its internal 128-bit form.
- *
- * The payload is the storage form a vector element holds, not the canonical byte order: the high bit is flipped so the
- * integer sorts. To build one from canonical text, cast a VARCHAR with value_cast instead, which is also how a UUID
- * renders back.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The internal 128-bit storage form.
- * @param out_value Receives the new UUID value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_connection(duckdb_v2_connection_handle conn,
-                                                                         const duckdb_v2_hugeint_t *in_value,
-                                                                         duckdb_v2_value_handle *out_value,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid(duckdb_v2_factory_handle factory,
+                                                         const duckdb_v2_hugeint_t *in_value,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a BIT value from its wire bytes.
@@ -10871,37 +10192,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_connection(duckdb_
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The wire bytes, a padding header byte followed by data. Must be at least 1 byte.
  * @param out_value Receives the new BIT value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_context(duckdb_v2_context_handle ctx,
-                                                                     const duckdb_v2_str *in_value,
-                                                                     duckdb_v2_value_handle *out_value,
-                                                                     duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a BIT value from its wire bytes.
- *
- * The wire form is a mandatory padding-header byte — the count of leading bits in the first data byte that are not part
- * of the bit string — followed by the data bytes, so the input must be at least 1 byte. These are the same bytes
- * value_get_blob reports back.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The wire bytes, a padding header byte followed by data. Must be at least 1 byte.
- * @param out_value Receives the new BIT value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_connection(duckdb_v2_connection_handle conn,
-                                                                        const duckdb_v2_str *in_value,
-                                                                        duckdb_v2_value_handle *out_value,
-                                                                        duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit(duckdb_v2_factory_handle factory, const duckdb_v2_str *in_value,
+                                                        duckdb_v2_value_handle *out_value,
+                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a BIGNUM value from its storage bytes.
@@ -10913,37 +10212,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_connection(duckdb_v
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param in_value The opaque storage bytes from bignum_encode. Must exceed 3 bytes.
  * @param out_value Receives the new BIGNUM value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_context(duckdb_v2_context_handle ctx,
-                                                                        const duckdb_v2_str *in_value,
-                                                                        duckdb_v2_value_handle *out_value,
-                                                                        duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a BIGNUM value from its storage bytes.
- *
- * The bytes are opaque storage, as produced by bignum_encode from a magnitude and a sign flag; a negative is stored
- * bit-inverted behind a header, so these are not the magnitude bytes. The header plus at least one magnitude byte means
- * the input must exceed 3 bytes. These are the same bytes value_get_blob reports back, for bignum_decode to translate.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param in_value The opaque storage bytes from bignum_encode. Must exceed 3 bytes.
- * @param out_value Receives the new BIGNUM value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_connection(duckdb_v2_connection_handle conn,
-                                                                           const duckdb_v2_str *in_value,
-                                                                           duckdb_v2_value_handle *out_value,
-                                                                           duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum(duckdb_v2_factory_handle factory,
+                                                           const duckdb_v2_str *in_value,
+                                                           duckdb_v2_value_handle *out_value,
+                                                           duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a LIST value from its elements.
@@ -10959,7 +10237,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_connection(duckd
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param child_type Optional. The element type. Pass NULL to resolve it from the elements.
  * @param children An array of child_count elements. Borrowed (copied in). Pass NULL when child_count is 0.
  * @param child_count The number of elements.
@@ -10967,35 +10245,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_connection(duckd
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_context(
-    duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle child_type, const duckdb_v2_value_handle *children,
-    idx_t child_count, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a LIST value from its elements.
- *
- * The child type is the common type of the elements, resolved by the same rule a SQL list literal follows, and every
- * element is cast to it; a set with no common type surfaces the cast error. Pass child_type to name the type instead,
- * which is also how an empty list is built: with child_type NULL, an empty element array has no type to resolve and
- * returns ERROR_INPUT_INVALID.
- *
- * The elements are borrowed and copied in, and a NULL element becomes a typed NULL. The type is rebuilt from its child,
- * so an alias on the outer LIST type is not preserved; value_cast is the alias-preserving path.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param child_type Optional. The element type. Pass NULL to resolve it from the elements.
- * @param children An array of child_count elements. Borrowed (copied in). Pass NULL when child_count is 0.
- * @param child_count The number of elements.
- * @param out_value Receives the new composite value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_connection(
-    duckdb_v2_connection_handle conn, duckdb_v2_logical_type_handle child_type, const duckdb_v2_value_handle *children,
-    idx_t child_count, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list(duckdb_v2_factory_handle factory,
+                                                         duckdb_v2_logical_type_handle child_type,
+                                                         const duckdb_v2_value_handle *children, idx_t child_count,
+                                                         duckdb_v2_value_handle *out_value,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates an ARRAY value from its elements, sized by their count.
@@ -11008,7 +10262,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_connection(
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param child_type Optional. The element type. Pass NULL to resolve it from the elements.
  * @param children An array of child_count elements. Borrowed (copied in). Pass NULL when child_count is 0.
  * @param child_count The number of elements.
@@ -11016,32 +10270,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_connection(
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_context(
-    duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle child_type, const duckdb_v2_value_handle *children,
-    idx_t child_count, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates an ARRAY value from its elements, sized by their count.
- *
- * The child type is resolved exactly as for value_create_list, and child_type names it explicitly the same way. The
- * minimum array size is 1, so an empty element array returns ERROR_INPUT_INVALID whether or not child_type is given.
- *
- * The elements are borrowed and copied in, and a NULL element becomes a typed NULL.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param child_type Optional. The element type. Pass NULL to resolve it from the elements.
- * @param children An array of child_count elements. Borrowed (copied in). Pass NULL when child_count is 0.
- * @param child_count The number of elements.
- * @param out_value Receives the new composite value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_connection(
-    duckdb_v2_connection_handle conn, duckdb_v2_logical_type_handle child_type, const duckdb_v2_value_handle *children,
-    idx_t child_count, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array(duckdb_v2_factory_handle factory,
+                                                          duckdb_v2_logical_type_handle child_type,
+                                                          const duckdb_v2_value_handle *children, idx_t child_count,
+                                                          duckdb_v2_value_handle *out_value,
+                                                          duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a STRUCT value from named fields, in order.
@@ -11055,7 +10288,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_connection(
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param names An array of field_count field names. Pass NULL when field_count is 0.
  * @param children An array of field_count field values. Borrowed (copied in). Pass NULL when field_count is 0.
  * @param field_count The number of fields.
@@ -11063,33 +10296,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_connection(
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct_with_context(
-    duckdb_v2_context_handle ctx, const duckdb_v2_identifier_t *names, const duckdb_v2_value_handle *children,
-    idx_t field_count, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a STRUCT value from named fields, in order.
- *
- * Each field keeps its own child's type, so there is nothing to resolve across them; names and children are parallel
- * arrays of field_count entries. An empty field list builds the empty struct, which is a real type.
- *
- * The names and children are borrowed and copied in, and a NULL child becomes a typed NULL. Duplicate field names are
- * rejected.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param names An array of field_count field names. Pass NULL when field_count is 0.
- * @param children An array of field_count field values. Borrowed (copied in). Pass NULL when field_count is 0.
- * @param field_count The number of fields.
- * @param out_value Receives the new composite value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct_with_connection(
-    duckdb_v2_connection_handle conn, const duckdb_v2_identifier_t *names, const duckdb_v2_value_handle *children,
-    idx_t field_count, duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_factory_handle factory,
+                                                           const duckdb_v2_identifier_t *names,
+                                                           const duckdb_v2_value_handle *children, idx_t field_count,
+                                                           duckdb_v2_value_handle *out_value,
+                                                           duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a TUPLE value from positional fields.
@@ -11102,42 +10313,17 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_struct_with_connection(
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param children An array of field_count field values. Borrowed (copied in). Pass NULL when field_count is 0.
  * @param field_count The number of fields.
  * @param out_value Receives the new composite value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tuple_with_context(duckdb_v2_context_handle ctx,
-                                                                       const duckdb_v2_value_handle *children,
-                                                                       idx_t field_count,
-                                                                       duckdb_v2_value_handle *out_value,
-                                                                       duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a TUPLE value from positional fields.
- *
- * TUPLE is the unnamed struct: the same positional children as value_create_struct, under a distinct type id and with
- * no names. Each field keeps its own child's type. An empty field list builds the empty tuple, which is a real type.
- *
- * The children are borrowed and copied in, and a NULL child becomes a typed NULL.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param children An array of field_count field values. Borrowed (copied in). Pass NULL when field_count is 0.
- * @param field_count The number of fields.
- * @param out_value Receives the new composite value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tuple_with_connection(duckdb_v2_connection_handle conn,
-                                                                          const duckdb_v2_value_handle *children,
-                                                                          idx_t field_count,
-                                                                          duckdb_v2_value_handle *out_value,
-                                                                          duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tuple(duckdb_v2_factory_handle factory,
+                                                          const duckdb_v2_value_handle *children, idx_t field_count,
+                                                          duckdb_v2_value_handle *out_value,
+                                                          duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a MAP value from parallel key and value arrays.
@@ -11152,7 +10338,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tuple_with_connection(duckdb
  * history:
  * - stable: v2.0.0
  *
- * @param ctx The context to use for the construction.
+ * @param factory The factory to create the value with.
  * @param key_type Optional. The key type. Pass NULL to resolve it from the keys.
  * @param value_type Optional. The value type. Pass NULL to resolve it from the values.
  * @param keys An array of entry_count keys. Borrowed (copied in). Pass NULL when entry_count is 0.
@@ -11163,37 +10349,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tuple_with_connection(duckdb
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_map_with_context(
-    duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle key_type, duckdb_v2_logical_type_handle value_type,
-    const duckdb_v2_value_handle *keys, const duckdb_v2_value_handle *values, idx_t entry_count,
-    duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a MAP value from parallel key and value arrays.
- *
- * The key and value types are the common types of the keys and of the values, resolved as for value_create_list, and
- * every entry is cast to them. Pass key_type and value_type to name them instead, which is also how an empty map is
- * built: with both NULL, empty key and value arrays have no types to resolve and return ERROR_INPUT_INVALID.
- *
- * Keys and values are borrowed and copied in, and the two arrays must be the same length. Keys must be non-NULL and
- * unique; both are enforced.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to use for the construction.
- * @param key_type Optional. The key type. Pass NULL to resolve it from the keys.
- * @param value_type Optional. The value type. Pass NULL to resolve it from the values.
- * @param keys An array of entry_count keys. Borrowed (copied in). Pass NULL when entry_count is 0.
- * @param values An array of entry_count values, parallel to keys. Borrowed (copied in). Pass NULL when entry_count is
- * 0.
- * @param entry_count The number of entries.
- * @param out_value Receives the new composite value.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_map_with_connection(
-    duckdb_v2_connection_handle conn, duckdb_v2_logical_type_handle key_type, duckdb_v2_logical_type_handle value_type,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_map(
+    duckdb_v2_factory_handle factory, duckdb_v2_logical_type_handle key_type, duckdb_v2_logical_type_handle value_type,
     const duckdb_v2_value_handle *keys, const duckdb_v2_value_handle *values, idx_t entry_count,
     duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
 
@@ -11243,63 +10400,31 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_child(duckdb_v2_value_handle va
                                                        duckdb_v2_error_info_handle *err);
 
 /*!
- * Casts a value to a target type, using a connection.
- *
- * The same as value_cast_with_context, except that the cast function set comes from a connection: the cast runs in its
- * own transaction on that connection's context. Use it from outside DuckDB, where a connection — but no context — is in
- * hand.
+ * Casts a value to a target type.
  *
  * The conversion is the SQL-faithful, non-strict one, registered custom casts included, and a cast failure surfaces
- * from the call. Together with a VARCHAR built through value_create_varchar_with_context / _with_connection, this
- * constructs any value from text, extension values included; casting a member value to a union type, or a VARCHAR to an
- * enum type, is the sanctioned way to build UNION and ENUM values.
+ * from the call. Together with a VARCHAR built through value_create_varchar, this constructs any value from text,
+ * extension values included; casting a member value to a union type, or a VARCHAR to an enum type, is the sanctioned
+ * way to build UNION and ENUM values.
+ *
+ * Looks the cast up in the catalog, as logical_type_create_from_text does: through a factory obtained from a context,
+ * call it from a bind-phase callback or another context-holding scope, not from an exec-phase worker callback.
  *
  * The input value and target type are borrowed. The returned value is caller-owned; destroy it via value_destroy.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param conn The connection whose context supplies the cast function set.
+ * @param factory The factory to create the value with.
  * @param value The borrowed value to cast.
  * @param target_type The borrowed target logical type.
  * @param out_value Receives the owned cast result.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_cast_with_connection(duckdb_v2_connection_handle conn,
-                                                                  duckdb_v2_value_handle value,
-                                                                  duckdb_v2_logical_type_handle target_type,
-                                                                  duckdb_v2_value_handle *out_value,
-                                                                  duckdb_v2_error_info_handle *err);
-
-/*!
- * Casts a value to a target type, using a context.
- *
- * The conversion is the SQL-faithful, non-strict one, registered custom casts included, and a cast failure surfaces
- * from the call. Together with a VARCHAR built through value_create_varchar_with_context / _with_connection, this
- * constructs any value from text, extension values included; casting a member value to a union type, or a VARCHAR to an
- * enum type, is the sanctioned way to build UNION and ENUM values.
- *
- * Runs in the caller's context scope, as create_type_from_text does: reach it from a bind-phase callback or another
- * context-holding scope, not from an exec-phase worker callback. From outside DuckDB use value_cast_with_connection.
- *
- * The input value and target type are borrowed. The returned value is caller-owned; destroy it via value_destroy.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param ctx The context supplying the cast function set.
- * @param value The borrowed value to cast.
- * @param target_type The borrowed target logical type.
- * @param out_value Receives the owned cast result.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_cast_with_context(duckdb_v2_context_handle ctx,
-                                                               duckdb_v2_value_handle value,
-                                                               duckdb_v2_logical_type_handle target_type,
-                                                               duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_cast(duckdb_v2_factory_handle factory, duckdb_v2_value_handle value,
+                                                  duckdb_v2_logical_type_handle target_type,
+                                                  duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns whether the value is NULL.

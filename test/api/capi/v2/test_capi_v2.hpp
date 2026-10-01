@@ -488,36 +488,53 @@ inline DUCKDB_V2_ERROR V2VectorAssignString(duckdb_v2_vector_handle vec, idx_t i
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+// Factory Helpers
+//----------------------------------------------------------------------------------------------------------------------
+
+// The factory of a connection or a context, or nullptr if it cannot be had. No assertions here: the context form runs
+// inside callbacks, possibly on worker threads, and a nullptr factory fails the constructor it is passed to anyway.
+inline duckdb_v2_factory_handle Factory(duckdb_v2_connection_handle conn) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_connection_get_factory(conn, &factory, nullptr);
+	return factory;
+}
+inline duckdb_v2_factory_handle Factory(duckdb_v2_context_handle context) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
+	return factory;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // Value Helpers
 //----------------------------------------------------------------------------------------------------------------------
 
-// The typed constructors, in their connection form: the tests hold a
+// The typed constructors, through a connection's factory: the tests hold a
 // connection, not a live context.
 inline duckdb_v2_value_handle MakeBoolValue(duckdb_v2_connection_handle conn, bool payload) {
 	duckdb_v2_value_handle value = nullptr;
-	REQUIRE(duckdb_v2_value_create_bool_with_connection(conn, payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_bool(Factory(conn), payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeInt32Value(duckdb_v2_connection_handle conn, int32_t payload) {
 	duckdb_v2_value_handle value = nullptr;
-	REQUIRE(duckdb_v2_value_create_int_with_connection(conn, payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_int(Factory(conn), payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeInt64Value(duckdb_v2_connection_handle conn, int64_t payload) {
 	duckdb_v2_value_handle value = nullptr;
-	REQUIRE(duckdb_v2_value_create_bigint_with_connection(conn, payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_bigint(Factory(conn), payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeVarcharValue(duckdb_v2_connection_handle conn, const char *s) {
 	duckdb_v2_value_handle value = nullptr;
 	auto value_str = Convert(s);
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(conn, &value_str, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_varchar(Factory(conn), &value_str, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeBlobValue(duckdb_v2_connection_handle conn, const void *data, idx_t len) {
 	duckdb_v2_value_handle value = nullptr;
 	duckdb_v2_str bytes = {static_cast<const char *>(data), len};
-	REQUIRE(duckdb_v2_value_create_blob_with_connection(conn, &bytes, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_blob(Factory(conn), &bytes, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 
@@ -528,7 +545,7 @@ inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_connection_handle conn
                                                 const char *text) {
 	auto varchar = MakeVarcharValue(conn, text);
 	duckdb_v2_value_handle value = nullptr;
-	auto rc = duckdb_v2_value_cast_with_connection(conn, varchar, type, &value, nullptr);
+	auto rc = duckdb_v2_value_cast(Factory(conn), varchar, type, &value, nullptr);
 	duckdb_v2_value_destroy(&varchar);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(value != nullptr);
@@ -538,7 +555,7 @@ inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_connection_handle conn
 inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID id,
                                                 const char *text) {
 	duckdb_v2_logical_type_handle type = nullptr;
-	REQUIRE(duckdb_v2_connection_create_type_from_id(conn, id, nullptr, nullptr, 0, &type, nullptr) ==
+	REQUIRE(duckdb_v2_logical_type_create_from_id(Factory(conn), id, nullptr, nullptr, 0, &type, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	auto value = MakeValueFromText(conn, type, text);
 	duckdb_v2_logical_type_destroy(&type);
@@ -623,20 +640,20 @@ inline std::string ConsumeBlob(duckdb_v2_value_handle &value) {
 
 inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID id) {
 	duckdb_v2_logical_type_handle t = nullptr;
-	REQUIRE(duckdb_v2_connection_create_type_from_id(conn, id, nullptr, nullptr, 0, &t, nullptr) ==
+	REQUIRE(duckdb_v2_logical_type_create_from_id(Factory(conn), id, nullptr, nullptr, 0, &t, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	return t;
 }
 
 inline duckdb_v2_value_handle MakeTypeValue(duckdb_v2_connection_handle conn, duckdb_v2_logical_type_handle t) {
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_value_create_type_with_connection(conn, t, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_type(Factory(conn), t, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return v;
 }
 
 inline duckdb_v2_value_handle MakeTypeValue(duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID id) {
 	duckdb_v2_logical_type_handle t = nullptr;
-	duckdb_v2_connection_create_type_from_id(conn, id, nullptr, nullptr, 0, &t, nullptr);
+	duckdb_v2_logical_type_create_from_id(Factory(conn), id, nullptr, nullptr, 0, &t, nullptr);
 	auto v = MakeTypeValue(conn, t);
 	duckdb_v2_logical_type_destroy(&t);
 	return v;
@@ -657,9 +674,9 @@ inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_connection_handle conn, 
 	DUCKDB_V2_ERROR rc = duckdb_v2_qname_create(parts, 1, &qname, nullptr);
 	duckdb_v2_logical_type_handle t = nullptr;
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_connection_create_type_from_name(conn, qname, names ? name_views.data() : nullptr,
-		                                                values.empty() ? nullptr : values.data(), values.size(), &t,
-		                                                nullptr);
+		rc = duckdb_v2_logical_type_create_from_name(Factory(conn), qname, names ? name_views.data() : nullptr,
+		                                             values.empty() ? nullptr : values.data(), values.size(), &t,
+		                                             nullptr);
 	}
 	duckdb_v2_qname_destroy(&qname);
 	for (auto &v : values) {
