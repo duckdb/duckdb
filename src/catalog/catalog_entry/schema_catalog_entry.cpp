@@ -95,7 +95,7 @@ static void ScanSchemaTreeInternal(SchemaCatalogEntry &root, SCAN scan,
 		callback(schema);
 		auto child_start = pending.size();
 		scan(schema, [&](CatalogEntry &entry) { pending.emplace_back(entry.Cast<SchemaCatalogEntry>()); });
-		std::reverse(pending.begin() + child_start, pending.end());
+		std::reverse(pending.begin() + NumericCast<int64_t>(child_start), pending.end());
 	}
 }
 
