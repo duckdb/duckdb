@@ -87,6 +87,15 @@ public:
 		return unsafe_array_ptr<const uint8_t>(data + position, length);
 	}
 
+	//! Returns a view over the next count aligned elements and advances the position.
+	template <class T>
+	unsafe_array_ptr<const T> ReadArray(idx_t count) {
+		static_assert(std::is_trivially_copyable_v<T>, "ReadArray element must be a trivially copyable data type");
+		auto result = GetArray<T>(position, count);
+		position += count * sizeof(T);
+		return result;
+	}
+
 	//! Returns a view over the preceding count aligned elements and moves the position backward.
 	template <class T>
 	unsafe_array_ptr<const T> ReadArrayBackward(idx_t count) {
