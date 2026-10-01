@@ -300,7 +300,8 @@ public:
 			buffer_collection.SetCurrentBuffer(buffer.slot);
 			auto &buffer_handle = buffer_collection.BufferHandleMutable();
 			if (!buffer_handle.IsValid()) {
-				buffer_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, &block_manager);
+				buffer_handle = buffer_manager.Allocate(partial_block_manager.GetClientContext(),
+				                                        MemoryTag::OVERFLOW_STRINGS, &block_manager);
 			}
 			return;
 		}
@@ -541,7 +542,8 @@ public:
 		stats_writer.Clear();
 
 		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
-		buffer_collection.segment_handle = buffer_manager.Pin(buffer_collection.segment->GetBlockHandle());
+		buffer_collection.segment_handle =
+		    buffer_manager.Pin(partial_block_manager.GetClientContext(), buffer_collection.segment->GetBlockHandle());
 	}
 
 	void FlushSegment() {
@@ -705,13 +707,13 @@ public:
 //===--------------------------------------------------------------------===//
 struct ZSTDScanState : public SegmentScanState {
 public:
-	explicit ZSTDScanState(ColumnSegment &segment)
+	explicit ZSTDScanState(const QueryContext &context, ColumnSegment &segment)
 	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
 	      block_manager(segment.GetBlockHandle()->GetBlockManager()),
 	      buffer_manager(BufferManager::GetBufferManager(segment.GetDatabase())),
-	      segment_block_offset(segment.GetBlockOffset()), segment(segment) {
+	      segment_block_offset(segment.GetBlockOffset()), segment(segment), context(context) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
-		segment_handle = buffer_manager.Pin(segment.GetBlockHandle());
+		segment_handle = buffer_manager.Pin(context, segment.GetBlockHandle());
 
 		auto data = segment_handle.GetDataMutable() + segment.GetBlockOffset();
 		idx_t offset = 0;
@@ -798,7 +800,7 @@ public:
 		} else {
 			// Data lives on an extra page, have to load the block first
 			auto block = LoadPage(metadata.block_id);
-			auto data_handle = buffer_manager.Pin(block);
+			auto data_handle = buffer_manager.Pin(context, block);
 			handle_start = data_handle.GetDataMutable();
 			scan_state.buffer_handles.push_back(std::move(data_handle));
 		}
@@ -850,7 +852,7 @@ public:
 
 		// Load the next page
 		auto block = LoadPage(next_id);
-		auto handle = buffer_manager.Pin(block);
+		auto handle = buffer_manager.Pin(context, block);
 		auto ptr = handle.GetDataMutable();
 		scan_state.buffer_handles.push_back(std::move(handle));
 		scan_state.current_buffer_ptr = ptr;
@@ -970,6 +972,7 @@ public:
 	UncompressedStringSegmentState &state;
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
+	const QueryContext context;
 
 	duckdb_zstd::ZSTD_DCtx *decompression_context = nullptr;
 
@@ -998,7 +1001,7 @@ public:
 };
 
 unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
-	auto result = make_uniq<ZSTDScanState>(segment);
+	auto result = make_uniq<ZSTDScanState>(context, segment);
 	return std::move(result);
 }
 
@@ -1022,7 +1025,7 @@ void ZSTDStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx
 //===--------------------------------------------------------------------===//
 void ZSTDStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
-	ZSTDScanState scan_state(segment);
+	ZSTDScanState scan_state(state.context, segment);
 	scan_state.ScanPartial(UnsafeNumericCast<idx_t>(row_id), result, result_idx, 1);
 }
 
