@@ -3629,7 +3629,8 @@ static void CollectScanEstimates(duckdb::ClientContext &context, duckdb::Logical
 		auto &get = op.Cast<duckdb::LogicalGet>();
 		ScanEstimate scan;
 		auto table = get.GetTable();
-		scan.name = table ? table->name.GetIdentifierName() : StringUtil::Lower(get.function.name.GetIdentifierName());
+		scan.name =
+		    table ? table->name.GetIdentifierName() : StringUtil::Lower(get.function.GetName().GetIdentifierName());
 		scan.rows = get.EstimateCardinality(context);
 		scans.push_back(std::move(scan));
 	}
