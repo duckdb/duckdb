@@ -23,9 +23,10 @@
 namespace duckdb {
 
 static string SQLFunctionCallGuard(const LogicalGet &get, bool has_input) {
-	const auto argument_count = get.function.GetArguments().size();
+	const auto &signature = get.function.GetSignature();
+	const auto argument_count = signature.GetPositionalParameterCount();
 	const bool has_expected_parameters =
-	    get.function.HasVarArgs() ? get.parameters.size() >= argument_count : get.parameters.size() == argument_count;
+	    signature.GetArgs() ? get.parameters.size() >= argument_count : get.parameters.size() == argument_count;
 	if (!has_input && !has_expected_parameters) {
 		return "positional_parameters";
 	}

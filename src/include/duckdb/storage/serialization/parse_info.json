@@ -462,6 +462,46 @@
     ]
   },
   {
+    "class": "AlterSchemaInfo",
+    "base": "AlterInfo",
+    "enum": "ALTER_SCHEMA",
+    "class_type": "alter_schema_type",
+    "includes": [
+      "duckdb/parser/parsed_data/alter_schema_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 300,
+        "name": "alter_schema_type",
+        "type": "AlterSchemaType"
+      }
+    ]
+  },
+  {
+    "class": "SetSchemaOptionsInfo",
+    "base": "AlterSchemaInfo",
+    "enum": "SET_SCHEMA_OPTIONS",
+    "members": [
+      {
+        "id": 400,
+        "name": "options",
+        "type": "case_insensitive_map_t<ParsedExpression*>"
+      }
+    ]
+  },
+  {
+    "class": "ResetSchemaOptionsInfo",
+    "base": "AlterSchemaInfo",
+    "enum": "RESET_SCHEMA_OPTIONS",
+    "members": [
+      {
+        "id": 400,
+        "name": "options",
+        "type": "identifier_set_t"
+      }
+    ]
+  },
+  {
     "class": "AttachInfo",
     "base": "ParseInfo",
     "enum": "ATTACH_INFO",

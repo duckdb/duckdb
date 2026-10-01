@@ -46,6 +46,9 @@ functions:
     parameters:
       text:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The name text to parse. Borrowed for the call only.
       name:
         type: qname
@@ -75,6 +78,7 @@ functions:
         type: identifier
         indirection: 1
         const: true
+        kind: IN
         description: An array of `part_count` non-empty identifier views, outermost first.
       part_count:
         type: idx

@@ -60,7 +60,7 @@ static void RequirePivotStreamingEffects(Connection &connection) {
 		REQUIRE_FALSE(stream.HasError());
 		auto effect = connection.Query("SELECT currval('" + sequence + "')");
 		REQUIRE_NO_FAIL(*effect);
-		REQUIRE(effect->GetValue(0, 0) == Value::BIGINT(5000));
+		REQUIRE(effect->Collection().GetValue(0, 0) == Value::BIGINT(5000));
 	}
 }
 
@@ -255,8 +255,9 @@ TEST_CASE("Logical plan SQL export validates noncanonical PIVOT defaults and lis
 			REQUIRE_NO_FAIL(*direct);
 			REQUIRE(direct->RowCount() == 1);
 			REQUIRE(direct->ColumnCount() == test.expected.size());
+			auto direct_rows = direct->Collection().GetRows();
 			for (idx_t column_idx = 0; column_idx < test.expected.size(); column_idx++) {
-				REQUIRE(Value::NotDistinctFrom(direct->GetValue(column_idx, 0), test.expected[column_idx]));
+				REQUIRE(Value::NotDistinctFrom(direct_rows.GetValue(column_idx, 0), test.expected[column_idx]));
 			}
 			for (bool binary : {false, true}) {
 				CAPTURE(binary);

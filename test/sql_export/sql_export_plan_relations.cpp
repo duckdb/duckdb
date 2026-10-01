@@ -93,8 +93,8 @@ TEST_CASE("Logical plan SQL export preserves qualified identities through binary
 	auto result = receiving_connection.Query(owned_query->ToString());
 	REQUIRE_FALSE(result->HasError());
 	REQUIRE(result->GetTypes() == vector<LogicalType> {LogicalType::INTEGER});
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(7));
-	REQUIRE(result->GetValue(0, 1) == Value::INTEGER(2));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+	REQUIRE(result->Collection().GetValue(0, 1) == Value::INTEGER(2));
 }
 
 TEST_CASE("Logical plan field types follow expression SQL type admission", "[sql_export][logical_plan_sql_export]") {
@@ -158,21 +158,21 @@ TEST_CASE("Logical plan SQL export applies requested output names", "[sql_export
 	REQUIRE(first->GetNames() == vector<Identifier> {"explain_key", "explain_value"});
 	REQUIRE(first->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR, LogicalType::VARCHAR});
 	REQUIRE(first->RowCount() == 1);
-	REQUIRE(first->GetValue(0, 0) == Value("sql"));
-	auto sql = first->GetValue(1, 0).GetValue<string>();
+	REQUIRE(first->Collection().GetValue(0, 0) == Value("sql"));
+	auto sql = first->Collection().GetValue(1, 0).GetValue<string>();
 	auto explained = connection.Query(sql);
 	REQUIRE_NO_FAIL(*explained);
 	REQUIRE(explained->GetNames() == vector<Identifier> {"same name", "same name"});
 	REQUIRE(explained->GetTypes() == vector<LogicalType> {LogicalType::INTEGER, LogicalType::BIGINT});
 	auto repeated = execute_explain();
 	REQUIRE_NO_FAIL(*repeated);
-	REQUIRE(repeated->GetValue(1, 0) == Value(sql));
+	REQUIRE(repeated->Collection().GetValue(1, 0) == Value(sql));
 	REQUIRE_NO_FAIL(connection.Query("DROP TABLE explain_names"));
 	REQUIRE(prepared->Execute()->HasError());
 	REQUIRE_NO_FAIL(connection.Query("CREATE TABLE explain_names(i VARCHAR)"));
 	auto rebound = execute_explain();
 	REQUIRE_NO_FAIL(*rebound);
-	auto rebound_query = connection.Query(rebound->GetValue(1, 0).GetValue<string>());
+	auto rebound_query = connection.Query(rebound->Collection().GetValue(1, 0).GetValue<string>());
 	REQUIRE_NO_FAIL(*rebound_query);
 	REQUIRE(rebound_query->GetTypes() == vector<LogicalType> {LogicalType::VARCHAR, LogicalType::BIGINT});
 	Parser parser;
@@ -383,8 +383,8 @@ TEST_CASE("Copied UNION SQL outlives its plan and original exported AST",
 	auto result = connection.Query(std::move(statement));
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->RowCount() == 1);
-	REQUIRE(result->GetValue(0, 0) == Value::BIGINT(1));
-	REQUIRE(result->GetValue(1, 0) == Value::BIGINT(3));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(1));
+	REQUIRE(result->Collection().GetValue(1, 0) == Value::BIGINT(3));
 	connection.Rollback();
 }
 
@@ -475,9 +475,9 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 						statement->node = std::move(exported.GetValue().query);
 						result = SubmitSQLExportResult(*connection.context, std::move(statement), parameters);
 					}
-					unique_ptr<QueryResultStream> stream;
+					unique_ptr<QueryResultStream<>> stream;
 					if (!result->HasError()) {
-						stream = make_uniq<QueryResultStream>(std::move(result));
+						stream = make_uniq<QueryResultStream<>>(std::move(result));
 					}
 					vector<string> rows;
 					while (stream && !stream->HasError()) {
@@ -507,12 +507,12 @@ TEST_CASE("Logical plan SQL export retains sampling errors and partial consumpti
 					REQUIRE_NO_FAIL(*sequence);
 					if (route == 0) {
 						expected_rows = std::move(rows);
-						expected_sequence = sequence->GetValue(0, 0);
+						expected_sequence = sequence->Collection().GetValue(0, 0);
 						expected_error = has_error;
 					} else {
 						REQUIRE(rows == expected_rows);
 						REQUIRE(has_error == expected_error);
-						REQUIRE(sequence->GetValue(0, 0) == expected_sequence);
+						REQUIRE(sequence->Collection().GetValue(0, 0) == expected_sequence);
 					}
 				}
 			}
