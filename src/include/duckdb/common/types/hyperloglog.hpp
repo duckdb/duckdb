@@ -64,6 +64,14 @@ public:
 		return k[i];
 	}
 
+	//! The raw registers, for exporting the sketch as an aggregate state and importing it back
+	const uint8_t *GetRegisters() const {
+		return k;
+	}
+	void SetRegisters(const uint8_t *registers) {
+		memcpy(k, registers, sizeof(k));
+	}
+
 	idx_t Count() const {
 		uint32_t c[Q + 2] = {0};
 		ExtractCounts(c);

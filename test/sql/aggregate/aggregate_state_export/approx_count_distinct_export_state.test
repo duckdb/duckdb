@@ -1,0 +1,54 @@
+# name: test/sql/aggregate/aggregate_state_export/approx_count_distinct_export_state.test
+# description: Test approx_count_distinct aggregate state export
+# group: [aggregate_state_export]
+
+# the exported state is the sketch itself, so finalizing it gives exactly the direct estimate
+query II
+SELECT finalize(approx_count_distinct(i) EXPORT_STATE) = approx_count_distinct(i), approx_count_distinct(i) FROM range(100000) r(i);
+----
+true	99467
+
+# merging partial sketches takes the per-register maximum, which is what the direct sketch holds too
+query I
+SELECT finalize(combine_aggr(s)) FROM (SELECT approx_count_distinct(i) EXPORT_STATE AS s FROM range(100000) r(i) GROUP BY i % 7);
+----
+99467
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (SELECT approx_count_distinct('v' || (i % 500)::VARCHAR) EXPORT_STATE AS s FROM range(5000) r(i) GROUP BY i % 3);
+----
+498
+
+# an empty sketch (no non-NULL input) exports and finalizes to zero
+query I
+SELECT finalize(approx_count_distinct(x) EXPORT_STATE) FROM (SELECT NULL::INTEGER AS x FROM range(10));
+----
+0
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (SELECT approx_count_distinct(x) EXPORT_STATE AS s FROM (SELECT NULL::INTEGER AS x FROM range(10)) GROUP BY x);
+----
+0
+
+require parquet
+
+# a state written as a BLOB (e.g. through Parquet) is re-typed with to_aggregate_state and merges as before
+statement ok
+COPY (SELECT i % 7 AS g, approx_count_distinct(i) EXPORT_STATE AS s FROM range(100000) r(i) GROUP BY g) TO '__TEST_DIR__/approx_count_distinct_states.parquet' (FORMAT PARQUET);
+
+query I
+SELECT finalize(combine_aggr(to_aggregate_state(s, 'approx_count_distinct', ['BIGINT']))) FROM '__TEST_DIR__/approx_count_distinct_states.parquet';
+----
+99467
+
+query II
+SELECT g, finalize(to_aggregate_state(s, 'approx_count_distinct', ['BIGINT'])) FROM '__TEST_DIR__/approx_count_distinct_states.parquet' ORDER BY g LIMIT 3;
+----
+0	13844
+1	14708
+2	13965
+
+statement error
+SELECT finalize(to_aggregate_state('short'::BLOB, 'approx_count_distinct', ['BIGINT']));
+----
+expected 1024 registers
