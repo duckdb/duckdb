@@ -152,7 +152,7 @@ jobs:
             extensions:
               - .github/config/**
               - .github/patches/**
-              - extensions/**
+              - extension/**
             tests:
               - test/**/*.test
             tests_slow:

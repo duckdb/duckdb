@@ -261,6 +261,14 @@ class JobStagesTest(unittest.TestCase):
             self.assertIn("osx", selection.enabled_jobs)
 
     @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
+    def test_extension_changes_enable_osx(self):
+        for event_name in ["push", "pull_request"]:
+            selection = self._compute_job_selection(
+                event_name, "feature/my-branch", "duckdb/duckdb", changed_keys={"extensions"}
+            )
+            self.assertIn("osx", selection.enabled_jobs)
+
+    @unittest.skipIf(os.getenv("OVERRIDE_JOBS") is not None, SKIP_IF_OVERRIDE)
     def test_workflow_dispatch_with_skipped_tests_includes_optimized_release(self):
         selection = self._compute_job_selection("workflow_dispatch", "main", "duckdb/duckdb", skip_tests=True)
         self.assertIn("linux-release", selection.enabled_jobs)

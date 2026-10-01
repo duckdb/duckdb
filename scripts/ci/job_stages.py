@@ -121,7 +121,10 @@ def enabled_jobs(selection_input: JobSelectionInput, reduced_ci_mode: str) -> li
 
     extensions_need_osx = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
     osx_changed = selection_input.event_name in {"push", "pull_request"} and "osx" in selection_input.changed_keys
-    if (extensions_need_osx or osx_changed) and "osx" not in selected_jobs:
+    extensions_changed = (
+        selection_input.event_name in {"push", "pull_request"} and "extensions" in selection_input.changed_keys
+    )
+    if (extensions_need_osx or osx_changed or extensions_changed) and "osx" not in selected_jobs:
         selected_jobs.append("osx")
 
     override = parse_job_selection_override(os.getenv("OVERRIDE_JOBS"))
