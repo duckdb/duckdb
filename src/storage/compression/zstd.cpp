@@ -8,6 +8,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
+#include "duckdb/storage/compression/compression_segment_reader.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 
@@ -707,38 +708,29 @@ public:
 //===--------------------------------------------------------------------===//
 struct ZSTDScanState : public SegmentScanState {
 public:
+	//! ZSTD segment layout on disk.
+	struct SegmentLayout {
+		//! Vector metadata
+		unsafe_array_ptr<const page_id_t> page_ids;
+		unsafe_array_ptr<const page_offset_t> page_offsets;
+		unsafe_array_ptr<const uncompressed_size_t> uncompressed_sizes;
+		unsafe_array_ptr<const compressed_size_t> compressed_sizes;
+		//! String lengths and compressed strings.
+		CompressionSegmentReader data;
+		//! Offset of data from the start of the segment.
+		idx_t data_offset;
+	};
+
+	static SegmentLayout ReadLayout(const BufferHandle &handle, const ColumnSegment &segment);
+
 	explicit ZSTDScanState(const QueryContext &context, ColumnSegment &segment)
 	    : state(segment.GetSegmentState()->Cast<UncompressedStringSegmentState>()),
 	      block_manager(segment.GetBlockHandle()->GetBlockManager()),
-	      buffer_manager(BufferManager::GetBufferManager(segment.GetDatabase())),
-	      segment_block_offset(segment.GetBlockOffset()), segment(segment), context(context) {
+	      buffer_manager(BufferManager::GetBufferManager(segment.GetDatabase())), context(context),
+	      segment_block_offset(segment.GetBlockOffset()),
+	      segment_handle(buffer_manager.Pin(context, segment.GetBlockHandle())),
+	      layout(ReadLayout(segment_handle, segment)), segment_count(segment.count.load()), segment(segment) {
 		decompression_context = duckdb_zstd::ZSTD_createDCtx();
-		segment_handle = buffer_manager.Pin(context, segment.GetBlockHandle());
-
-		auto data = segment_handle.GetDataMutable() + segment.GetBlockOffset();
-		idx_t offset = 0;
-
-		segment_count = segment.count.load();
-		idx_t amount_of_vectors = (segment_count / ZSTD_VECTOR_SIZE) + ((segment_count % ZSTD_VECTOR_SIZE) != 0);
-
-		// Set pointers to the Vector Metadata
-		offset = AlignValue<idx_t, sizeof(page_id_t)>(offset);
-		page_ids = reinterpret_cast<page_id_t *>(data + offset);
-		offset += (sizeof(page_id_t) * amount_of_vectors);
-
-		offset = AlignValue<idx_t, sizeof(page_offset_t)>(offset);
-		page_offsets = reinterpret_cast<page_offset_t *>(data + offset);
-		offset += (sizeof(page_offset_t) * amount_of_vectors);
-
-		offset = AlignValue<idx_t, sizeof(uncompressed_size_t)>(offset);
-		uncompressed_sizes = reinterpret_cast<uncompressed_size_t *>(data + offset);
-		offset += (sizeof(uncompressed_size_t) * amount_of_vectors);
-
-		offset = AlignValue<idx_t, sizeof(compressed_size_t)>(offset);
-		compressed_sizes = reinterpret_cast<compressed_size_t *>(data + offset);
-		offset += (sizeof(compressed_size_t) * amount_of_vectors);
-
-		scanned_count = 0;
 	}
 	~ZSTDScanState() override {
 		duckdb_zstd::ZSTD_freeDCtx(decompression_context);
@@ -752,14 +744,15 @@ public:
 	}
 
 	ZSTDVectorScanMetadata GetVectorMetadata(idx_t vector_idx) {
+		D_ASSERT(vector_idx < layout.page_ids.size());
 		idx_t previous_value_count = vector_idx * ZSTD_VECTOR_SIZE;
 		idx_t value_count = MinValue<idx_t>(segment_count - previous_value_count, ZSTD_VECTOR_SIZE);
 
 		return ZSTDVectorScanMetadata {/* vector_idx = */ vector_idx,
-		                               /* block_id = */ page_ids[vector_idx],
-		                               /* block_offset = */ page_offsets[vector_idx],
-		                               /* uncompressed_size = */ uncompressed_sizes[vector_idx],
-		                               /* compressed_size = */ compressed_sizes[vector_idx],
+		                               /* block_id = */ layout.page_ids[vector_idx],
+		                               /* block_offset = */ layout.page_offsets[vector_idx],
+		                               /* uncompressed_size = */ layout.uncompressed_sizes[vector_idx],
+		                               /* compressed_size = */ layout.compressed_sizes[vector_idx],
 		                               /* count = */ value_count};
 	}
 
@@ -979,13 +972,7 @@ public:
 	idx_t segment_block_offset;
 	BufferHandle segment_handle;
 
-	//===--------------------------------------------------------------------===//
-	// Vector metadata
-	//===--------------------------------------------------------------------===//
-	page_id_t *page_ids;
-	page_offset_t *page_offsets;
-	uncompressed_size_t *uncompressed_sizes;
-	compressed_size_t *compressed_sizes;
+	SegmentLayout layout;
 
 	//! Cache of (the scan state of) the current vector being read
 	unique_ptr<ZSTDVectorScanState> current_vector;
@@ -999,6 +986,27 @@ public:
 	//! Buffer for skipping data
 	AllocatedData skip_buffer;
 };
+
+ZSTDScanState::SegmentLayout ZSTDScanState::ReadLayout(const BufferHandle &handle, const ColumnSegment &segment) {
+	auto reader = CompressionSegmentReader::FromSegment(handle, segment, "ZSTD segment");
+	const auto vector_count = GetVectorCount(segment.count.load());
+
+	reader.Align(sizeof(page_id_t));
+	auto page_ids = reader.ReadArray<page_id_t>(vector_count);
+
+	reader.Align(sizeof(page_offset_t));
+	auto page_offsets = reader.ReadArray<page_offset_t>(vector_count);
+
+	reader.Align(sizeof(uncompressed_size_t));
+	auto uncompressed_sizes = reader.ReadArray<uncompressed_size_t>(vector_count);
+
+	reader.Align(sizeof(compressed_size_t));
+	auto compressed_sizes = reader.ReadArray<compressed_size_t>(vector_count);
+
+	auto data_offset = reader.Position();
+	auto data = reader.ReadSubReader(reader.Remaining(), "ZSTD segment data");
+	return {page_ids, page_offsets, uncompressed_sizes, compressed_sizes, data, data_offset};
+}
 
 unique_ptr<SegmentScanState> ZSTDStorage::StringInitScan(const QueryContext &context, ColumnSegment &segment) {
 	auto result = make_uniq<ZSTDScanState>(context, segment);
