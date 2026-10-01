@@ -399,9 +399,9 @@ DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_type_handle ty
 	DUCKDB_CHECK_ARG(out_name);
 	return WithErrorHandler(err, [&]() {
 		auto *lt = Convert(type);
-		auto info = lt->AuxInfo();
-		if (info && !info->alias.empty()) {
-			*out_name = Convert(info->alias);
+		auto &info = lt->AuxInfo();
+		if (!info.alias.empty()) {
+			*out_name = Convert(info.alias);
 			return;
 		}
 		// Canonical fixed name of the id: static storage, so the borrowed

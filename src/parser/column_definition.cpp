@@ -133,20 +133,11 @@ string ColumnDefinition::ToSQLString() const {
 	if (column_type.id() != LogicalTypeId::ANY) {
 		result += Type().ToString();
 	}
-	auto extra_type_info = column_type.AuxInfo();
-	if (extra_type_info) {
-		if (extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
-			auto &string_info = extra_type_info->Cast<StringTypeInfo>();
-			if (!string_info.collation.empty()) {
-				result += " COLLATE " + string_info.collation;
-			}
-		}
-		if (extra_type_info->type == ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
-			// TODO
-			// auto &colllation = UnboundType::GetCollation(column_type);
-			// if (!colllation.empty()) {
-			//	ss << " COLLATE " + colllation;
-			//}
+	auto &extra_type_info = column_type.AuxInfo();
+	if (extra_type_info.type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = extra_type_info.Cast<StringTypeInfo>();
+		if (!string_info.collation.empty()) {
+			result += " COLLATE " + string_info.collation;
 		}
 	}
 	if (Generated()) {

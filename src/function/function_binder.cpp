@@ -1037,7 +1037,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	// Otherwise, recurse downwards into nested types, and try to infer nested type members
 	// This only works if the source and target types are completely defined (excluding templates),
 	// i.e. they have aux info.
-	if (!(source.IsNested() && target.IsNested() && source.AuxInfo() && target.AuxInfo())) {
+	if (!(source.IsNested() && target.IsNested() && source.HasParameters() && target.HasParameters())) {
 		return;
 	}
 

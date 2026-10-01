@@ -407,9 +407,9 @@ string ChangeColumnTypeInfo::ToString() const {
 	if (target_type.IsValid()) {
 		result += target_type.ToString();
 	}
-	auto extra_type_info = target_type.AuxInfo();
-	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
-		auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+	auto &extra_type_info = target_type.AuxInfo();
+	if (extra_type_info.type == ExtraTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = extra_type_info.Cast<StringTypeInfo>();
 		if (!string_info.collation.empty()) {
 			result += " COLLATE " + string_info.collation;
 		}
