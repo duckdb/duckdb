@@ -52,7 +52,7 @@ public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 
 	//! The parent schema if this is a nested schema, or nullptr for a top-level schema
-	optional_ptr<SchemaCatalogEntry> GetParentSchema() const {
+	virtual optional_ptr<SchemaCatalogEntry> GetParentSchema() const {
 		return parent_schema;
 	}
 

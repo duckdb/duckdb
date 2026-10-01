@@ -994,6 +994,14 @@ static shared_ptr<DynamicFilterData> TryGetOptionalDynamicFilterData(const Expre
 	return optional_child ? TryGetRootDynamicFilterData(*optional_child) : nullptr;
 }
 
+shared_ptr<DynamicFilterData> ExpressionFilter::GetRootOptionalDynamicFilterData(const TableFilter &filter) {
+	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::GetRootOptionalDynamicFilterData");
+	if (expr_filter.expr->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		return nullptr;
+	}
+	return TryGetOptionalDynamicFilterData(*expr_filter.expr);
+}
+
 shared_ptr<DynamicFilterData> ExpressionFilter::GetOptionalDynamicFilterData(const TableFilter &filter) {
 	auto &expr_filter = GetExpressionFilter(filter, "ExpressionFilter::GetOptionalDynamicFilterData");
 	return TryGetOptionalDynamicFilterData(*expr_filter.expr);
