@@ -29,12 +29,16 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformDeleteStatement(
 
 unique_ptr<BaseTableRef> PEGTransformerFactory::TransformTargetOptAlias(PEGTransformer &transformer,
                                                                         unique_ptr<BaseTableRef> base_table_name,
-                                                                        const bool &has_result,
-                                                                        const optional<Identifier> &col_id) {
-	if (col_id && !col_id->empty()) {
-		base_table_name->alias = Identifier(*col_id);
+                                                                        const optional<Identifier> &target_alias) {
+	if (target_alias && !target_alias->empty()) {
+		base_table_name->alias = Identifier(*target_alias);
 	}
 	return base_table_name;
+}
+
+Identifier PEGTransformerFactory::TransformTargetAlias(PEGTransformer &transformer, const bool &has_result,
+                                                        const Identifier &col_id) {
+	return col_id;
 }
 
 vector<unique_ptr<TableRef>> PEGTransformerFactory::TransformDeleteUsingClause(PEGTransformer &transformer,

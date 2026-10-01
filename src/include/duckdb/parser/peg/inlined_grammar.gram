@@ -1105,7 +1105,8 @@ DeallocatePrepare <- 'PREPARE'
 
 DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
 TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
-TargetOptAlias <- BaseTableName 'AS'? ColId?
+TargetOptAlias <- BaseTableName TargetAlias?
+TargetAlias <- 'AS'? ColId
 DeleteUsingClause <- 'USING' List(TableRef)
 
 DescribeStatement <- ShowTables / ShowDeprecatedSelect / DescribeSelect / ShowAllTables / ShowByName / DescribeByName
