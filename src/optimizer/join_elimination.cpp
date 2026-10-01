@@ -43,6 +43,35 @@ static bool SideIsUnusedAbove(LogicalComparisonJoin &join, idx_t side, const uno
 	return true;
 }
 
+//! Do both join-key masks resolve to the same physical columns of the base table?
+static bool SamePhysicalColumns(const ColumnMask &keep_key, const ColumnMask &drop_key, const ScopeFacts &keep_facts,
+                                const ScopeFacts &drop_facts) {
+	unordered_set<idx_t> keep_phys, drop_phys;
+	bool traceable = true;
+
+	keep_key.ForEachPosition([&](idx_t p) -> bool {
+		if (p >= keep_facts.base_column.size() || keep_facts.base_column[p] == DConstants::INVALID_INDEX) {
+			traceable = false;
+			return false;
+		}
+		keep_phys.insert(keep_facts.base_column[p]);
+		return true;
+	});
+	if (!traceable) {
+		return false;
+	}
+
+	drop_key.ForEachPosition([&](idx_t p) -> bool {
+		if (p >= drop_facts.base_column.size() || drop_facts.base_column[p] == DConstants::INVALID_INDEX) {
+			traceable = false;
+			return false;
+		}
+		drop_phys.insert(drop_facts.base_column[p]);
+		return true;
+	});
+	return traceable && keep_phys == drop_phys;
+}
+
 static bool TrySelfJoinElimination(LogicalComparisonJoin &join, idx_t keep, idx_t drop,
                                    const ConstraintPropagator &propagator) {
 	const auto &keep_facts = propagator.Facts(*join.children[keep]);
@@ -52,7 +81,7 @@ static bool TrySelfJoinElimination(LogicalComparisonJoin &join, idx_t keep, idx_
 		return false;
 	}
 
-	if (drop_facts.filter_below) {
+	if (drop_facts.rows_dropped_below) {
 		return false;
 	}
 
@@ -66,6 +95,11 @@ static bool TrySelfJoinElimination(LogicalComparisonJoin &join, idx_t keep, idx_
 		return false;
 	}
 
+	// The join must be on the same physical columns on both sides
+	if (!SamePhysicalColumns(keep_key, drop_key, keep_facts, drop_facts)) {
+		return false;
+	}
+
 	if (!IsUniqueOn(propagator, *join.children[drop], drop_key, false)) {
 		return false;
 	}
@@ -74,25 +108,8 @@ static bool TrySelfJoinElimination(LogicalComparisonJoin &join, idx_t keep, idx_
 		return false;
 	}
 
-	unordered_set<idx_t> keep_phys, drop_phys;
-	bool traceable = true;
-	keep_key.ForEachPosition([&](idx_t p) -> bool {
-		if (p >= keep_facts.base_column.size() || keep_facts.base_column[p] == DConstants::INVALID_INDEX) {
-			traceable = false;
-			return false;
-		}
-		keep_phys.insert(keep_facts.base_column[p]);
-		return true;
-	});
-	drop_key.ForEachPosition([&](idx_t p) -> bool {
-		if (p >= drop_facts.base_column.size() || drop_facts.base_column[p] == DConstants::INVALID_INDEX) {
-			traceable = false;
-			return false;
-		}
-		drop_phys.insert(drop_facts.base_column[p]);
-		return true;
-	});
-	if (!traceable || keep_phys != drop_phys) {
+	// Drop's filters are implied by keep's on the same physical columns
+	if (!DropFilterEffectsAreRedundant(keep_facts, drop_facts)) {
 		return false;
 	}
 	return true;
