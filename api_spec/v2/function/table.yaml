@@ -621,7 +621,7 @@ functions:
       `[[table_function_init_global_set_max_threads]]` runs in parallel into query results, INSERT and COPY without
       a `[[table_function_set_partition_data_callback]]`, and the rows arrive in no particular order. With
       insertion order kept, those consumers need the partition data callback to run in parallel. Fails with
-      `ERROR_INPUT_INVALID` when order is not one of the enum's declared values.
+      an error when order is not one of the enum's declared values.
     parameters:
       info:
         type: table_function_bind_info
@@ -1528,7 +1528,7 @@ functions:
       meaningful, must be less than roughly `10^13`, and, when
       partitioning column values are also being reported, must change whenever those values change: the engine
       only re-reads them when the batch index changes, so reporting a new value under an unchanged batch index
-      is treated as a caller error rather than applied. Fails with `ERROR_INPUT_INVALID` for an out-of-range
+      is treated as a caller error rather than applied. Fails with an error for an out-of-range
       value; a decreasing value or an unchanged value paired with changed partitioning columns fails the query
       once the callback returns.
     parameters:
@@ -1558,7 +1558,7 @@ functions:
       it again for the same index overwrites the previous value. The reported value only takes effect
       together with a changed `[[table_function_partition_data_set_batch_index]]`: reporting a different
       value under an unchanged batch index fails the query once the callback returns. Fails with
-      `ERROR_INPUT_INVALID` when the index is out of bounds or the value's type does not match.
+      an error when the index is out of bounds or the value's type does not match.
     parameters:
       info:
         type: table_function_partition_data_info
@@ -1674,7 +1674,7 @@ functions:
 
       Only `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS` unlocks the partitioned aggregate optimization; any
       other value keeps the regular hash aggregate. A callback that never calls this is treated as reporting
-      `TABLE_PARTITION_INFO_NOT_PARTITIONED`. Fails with `ERROR_INPUT_INVALID` when partition_info is not one of the
+      `TABLE_PARTITION_INFO_NOT_PARTITIONED`. Fails with an error when partition_info is not one of the
       enum's declared values.
     parameters:
       info:

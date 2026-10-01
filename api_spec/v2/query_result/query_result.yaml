@@ -24,7 +24,7 @@ module: query_result
 #
 # A connection runs one result at a time. While a live result exists — one
 # that is not finished, cancelled, errored, or destroyed — statement_execute
-# refuses with ERROR_RESOURCE_IN_USE. For concurrent queries, open another
+# refuses with an error. For concurrent queries, open another
 # connection.
 #
 # The result handle carries the schema (column names and types), the statement
@@ -39,7 +39,7 @@ module: query_result
 # follows the same rule DuckDB applies internally: the caller sees the first
 # row-producing statement of the group, or the last statement when none
 # produces rows, and the output of the others is discarded. For an expanding
-# statement the metadata getters fail with ERROR_INPUT_INVALID until stepping
+# statement the metadata getters fail with an error until stepping
 # has prepared the result-producing statement; for every other statement the
 # metadata is available from statement_execute on, as described above.
 #
@@ -121,10 +121,10 @@ functions:
       destroys them. Pass NULL for both, or a count of 0, for an
       unparameterized statement. A key set that does not match the statement's
       parameters — names for a positional statement, or the reverse — is
-      rejected with ERROR_INPUT_INVALID, and named and positional parameters
+      rejected with an error, and named and positional parameters
       cannot be mixed within one statement. Parameters and statement expansion
       are mutually exclusive: passing values for a statement that preprocesses
-      into a group is rejected with ERROR_INPUT_INVALID.
+      into a group is rejected with an error.
 
       Preprocessing can expand one statement into a group — a dynamic PIVOT, or
       statement-expanding DDL such as ALTER ... ADD COLUMN with a non-constant
@@ -132,9 +132,9 @@ functions:
       stream surfaces the first row-producing statement of the group, or the
       last statement when none produces rows. An expansion with more than one
       row-producing statement cannot be streamed as a single result and reports
-      ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
+      an error; no known expansion produces one.
 
-      One live result per connection: this refuses with ERROR_RESOURCE_IN_USE
+      One live result per connection: this refuses with an error
       while the connection already has a live result. Drain, destroy, or
       interrupt that one first, or open another connection.
 
@@ -217,7 +217,7 @@ functions:
       - FINISHED: stream exhausted. Sticky.
       - CANCELLED: query interrupted via connection_interrupt. Sticky.
         Cancellation is a status here, not an error; result_fetch_chunk, which
-        has no status out-param, reports it as ERROR_RUNTIME_INTERRUPT.
+        has no status out-param, reports it as an error.
 
       Execution errors come back as the return code plus err, never as a
       status; out_status is then unspecified and *out_chunk is nullptr. Errors
@@ -255,7 +255,7 @@ functions:
       via data_chunk_destroy), or nullptr at end-of-stream. End-of-stream is
       sticky, so later calls keep succeeding with *out_chunk set to nullptr.
 
-      An interrupted query returns ERROR_RUNTIME_INTERRUPT — the same event
+      An interrupted query returns an error — the same event
       result_step reports as status CANCELLED, carried on the error channel
       because this function has no status out-param.
 
@@ -388,7 +388,7 @@ functions:
       The result type (result_get_result_type) is prepare-time metadata, so a
       caller can choose between consuming rows and draining without inspecting
       the SQL. Draining an already FINISHED result succeeds. Cancellation
-      surfaces as ERROR_RUNTIME_INTERRUPT; errors are sticky, and on failure
+      surfaces as an error; errors are sticky, and on failure
       *out_rows_changed is unspecified.
     role: method
     belongs_to: result
@@ -419,7 +419,7 @@ functions:
 
       Prepare-time metadata: available from statement_execute on, except for a
       statement that preprocessing expands into a group, where it fails with
-      ERROR_INPUT_INVALID until stepping has prepared the row-producing
+      an error until stepping has prepared the row-producing
       fragment.
     role: getter
     belongs_to: result
@@ -446,7 +446,7 @@ functions:
 
       Prepare-time metadata: available from statement_execute on, except for a
       statement that preprocessing expands into a group, where it fails with
-      ERROR_INPUT_INVALID until stepping has prepared the row-producing
+      an error until stepping has prepared the row-producing
       fragment.
     role: getter
     belongs_to: result

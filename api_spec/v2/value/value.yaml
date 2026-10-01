@@ -40,7 +40,7 @@ module: value
 # destroyed; each function documents which.
 #
 # NULL handling: the payload readers (value_get_<kind>, value_get_type) return
-# ERROR_INPUT_INVALID for a NULL value, which has no typed payload to hand
+# an error for a NULL value, which has no typed payload to hand
 # back. Check with value_is_null first, or use value_get_logical_type or
 # value_to_string, both of which accept NULL values.
 
@@ -100,7 +100,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -127,7 +127,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -154,7 +154,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -181,7 +181,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -208,7 +208,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -235,7 +235,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -262,7 +262,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -289,7 +289,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -316,7 +316,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -343,7 +343,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -370,7 +370,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -398,7 +398,7 @@ functions:
       The string is borrowed from the value and stays valid until the value is
       destroyed. That borrow is why this getter does not convert: a converted
       copy would not outlive the call. A value of any other type id, and a NULL
-      value, return ERROR_INPUT_INVALID.
+      value, return an error.
     role: getter
     belongs_to: value
     parameters:
@@ -427,7 +427,7 @@ functions:
       The string is borrowed from the value and stays valid until the value is
       destroyed. That borrow is why this getter does not convert: a converted
       copy would not outlive the call. A value of any other type id, and a NULL
-      value, return ERROR_INPUT_INVALID.
+      value, return an error.
     role: getter
     belongs_to: value
     parameters:
@@ -454,7 +454,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -481,7 +481,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -511,7 +511,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -541,7 +541,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -571,7 +571,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -602,7 +602,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -632,7 +632,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -662,7 +662,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -692,7 +692,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -722,7 +722,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -752,7 +752,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -782,7 +782,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -812,7 +812,7 @@ functions:
 
       A value of a different type is converted through the default cast set, on
       a copy, so reading never alters the value. An unsupported conversion
-      returns ERROR_INPUT_INVALID, as does a NULL value.
+      returns an error, as does a NULL value.
     role: getter
     belongs_to: value
     parameters:
@@ -840,7 +840,7 @@ functions:
       The dual of value_create_uuid: the storage form a vector element holds,
       with the high bit flipped so the integer sorts, rather than the canonical
       byte order. A value of any other type id, and a NULL value, return
-      ERROR_INPUT_INVALID.
+      an error.
     role: getter
     belongs_to: value
     parameters:
@@ -872,7 +872,7 @@ functions:
       value_get_bigint is its numeric value with the fraction dropped; this one
       always reports storage instead, together with the scale needed to
       interpret it. A value of any other type id, and a NULL value, return
-      ERROR_INPUT_INVALID.
+      an error.
     role: getter
     belongs_to: value
     parameters:
@@ -907,7 +907,7 @@ functions:
     description: |
       Unwraps the logical type carried by a TYPE value.
 
-      Returns ERROR_INPUT_INVALID unless the value is a non-NULL TYPE value.
+      Returns an error unless the value is a non-NULL TYPE value.
       The returned logical type is caller-owned and must be destroyed via
       logical_type_destroy.
     role: getter
@@ -2624,7 +2624,7 @@ functions:
       The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is
       the total digit count and must be 1..38; scale is the number of digits
       after the point and must not exceed width. Violating either returns
-      ERROR_INPUT_INVALID, as does a value too wide for the storage tier the
+      an error, as does a value too wide for the storage tier the
       width selects. The value itself is not range-checked against the width;
       value_cast is the validating path.
     role: constructor
@@ -2665,7 +2665,7 @@ functions:
       The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is
       the total digit count and must be 1..38; scale is the number of digits
       after the point and must not exceed width. Violating either returns
-      ERROR_INPUT_INVALID, as does a value too wide for the storage tier the
+      an error, as does a value too wide for the storage tier the
       width selects. The value itself is not range-checked against the width;
       value_cast is the validating path.
     role: constructor
@@ -2915,7 +2915,7 @@ functions:
       with no common type surfaces the cast error. Pass child_type to name the
       type instead, which is also how an empty list is built: with child_type
       NULL, an empty element array has no type to resolve and returns
-      ERROR_INPUT_INVALID.
+      an error.
 
       The elements are borrowed and copied in, and a NULL element becomes a
       typed NULL. The type is rebuilt from its child, so an alias on the outer
@@ -2959,7 +2959,7 @@ functions:
       with no common type surfaces the cast error. Pass child_type to name the
       type instead, which is also how an empty list is built: with child_type
       NULL, an empty element array has no type to resolve and returns
-      ERROR_INPUT_INVALID.
+      an error.
 
       The elements are borrowed and copied in, and a NULL element becomes a
       typed NULL. The type is rebuilt from its child, so an alias on the outer
@@ -3000,7 +3000,7 @@ functions:
 
       The child type is resolved exactly as for value_create_list, and
       child_type names it explicitly the same way. The minimum array size is 1,
-      so an empty element array returns ERROR_INPUT_INVALID whether or not
+      so an empty element array returns an error whether or not
       child_type is given.
 
       The elements are borrowed and copied in, and a NULL element becomes a
@@ -3041,7 +3041,7 @@ functions:
 
       The child type is resolved exactly as for value_create_list, and
       child_type names it explicitly the same way. The minimum array size is 1,
-      so an empty element array returns ERROR_INPUT_INVALID whether or not
+      so an empty element array returns an error whether or not
       child_type is given.
 
       The elements are borrowed and copied in, and a NULL element becomes a
@@ -3248,7 +3248,7 @@ functions:
       values, resolved as for value_create_list, and every entry is cast to
       them. Pass key_type and value_type to name them instead, which is also
       how an empty map is built: with both NULL, empty key and value arrays
-      have no types to resolve and return ERROR_INPUT_INVALID.
+      have no types to resolve and return an error.
 
       Keys and values are borrowed and copied in, and the two arrays must be
       the same length. Keys must be non-NULL and unique; both are enforced.
@@ -3298,7 +3298,7 @@ functions:
       values, resolved as for value_create_list, and every entry is cast to
       them. Pass key_type and value_type to name them instead, which is also
       how an empty map is built: with both NULL, empty key and value arrays
-      have no types to resolve and return ERROR_INPUT_INVALID.
+      have no types to resolve and return an error.
 
       Keys and values are borrowed and copied in, and the two arrays must be
       the same length. Keys must be non-NULL and unique; both are enforced.
@@ -3382,7 +3382,7 @@ functions:
       and so exposes [0] = tag and [1..N] = ALL members. Code written to
       descend generically over both must account for that difference.
 
-      An out-of-range index returns ERROR_INPUT_INVALID, as does any index on a
+      An out-of-range index returns an error, as does any index on a
       non-composite or NULL value. The returned value is caller-owned; destroy
       it via value_destroy.
     role: getter
@@ -3552,7 +3552,7 @@ functions:
       Pass out_string = NULL to size the buffer without rendering into it:
       out_length then receives the length, and out_capacity is ignored. With
       out_string != NULL, out_capacity must be at least out_length + 1, or the
-      call returns ERROR_INPUT_OBJECT_SIZE with out_length set to the required
+      call returns an error with out_length set to the required
       length and out_string left untouched.
 
       out_length never counts the terminator, but a successful write always
@@ -3575,7 +3575,7 @@ functions:
         type: idx
         indirection: 1
         kind: OUT
-        description: Receives the text length excluding the null terminator — written on success and on ERROR_INPUT_OBJECT_SIZE.
+        description: Receives the text length excluding the null terminator — written on success and when the buffer is too small.
       err:
         type: error_info
         indirection: 1

@@ -231,7 +231,7 @@ functions:
     description: |
       Borrows the alias name at the given index.
 
-      An out-of-range index returns ERROR_INPUT_INVALID.
+      An out-of-range index returns an error.
     role: getter
     belongs_to: option
     parameters:
@@ -263,7 +263,7 @@ functions:
       same cascade `[[connection_get_option_by_name]]` does: the LOCAL override if the
       connection set one, otherwise the GLOBAL value, otherwise the static
       default. Aliases resolve transparently, and an unknown name returns
-      ERROR_INPUT_INVALID. The caller destroys the returned option. A context
+      an error. The caller destroys the returned option. A context
       is a read scope: options are written through an instance or connection.
     role: getter
     belongs_to: context
@@ -323,7 +323,7 @@ functions:
 
       Index space: [0, core_count) addresses core options, [core_count, total)
       the extension options visible from this context's instance. An
-      out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the
+      out-of-range index returns an error. The caller destroys the
       returned option.
     role: getter
     belongs_to: context

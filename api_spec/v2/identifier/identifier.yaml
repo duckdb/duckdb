@@ -22,7 +22,7 @@ functions:
       Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be
       freed. Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length,
       and out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call
-      returns ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+      returns an error with out_length set to the required length and out_text left untouched.
 
       out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as
       a C string.
@@ -45,7 +45,7 @@ functions:
         type: idx
         indirection: 1
         kind: OUT
-        description: Receives the text length excluding the null terminator — written on success and on ERROR_INPUT_OBJECT_SIZE.
+        description: Receives the text length excluding the null terminator — written on success and when the buffer is too small.
       err:
         type: error_info
         indirection: 1

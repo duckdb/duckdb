@@ -187,18 +187,6 @@ struct HandleTraits<FileOpenOptions> {
 } // namespace detail
 
 //----------------------------------------------------------------------------------------------------------------------
-// Exceptions
-//----------------------------------------------------------------------------------------------------------------------
-
-InvalidInputException::InvalidInputException(const std::string &message, std::string raw_message)
-    : Exception(DUCKDB_V2_ERROR_INPUT_INVALID, message, std::move(raw_message)) {
-}
-
-InterruptException::InterruptException(const std::string &message, std::string raw_message)
-    : Exception(DUCKDB_V2_ERROR_RUNTIME_INTERRUPT, message, std::move(raw_message)) {
-}
-
-//----------------------------------------------------------------------------------------------------------------------
 // Error Handling Helpers
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -219,15 +207,7 @@ auto CheckedAPICall(F &&func, ARGS &&... args) -> void {
 		std::string message = message_view.ptr ? std::string(message_view.ptr, message_view.len) : "unknown error";
 		std::string raw = raw_view.ptr ? std::string(raw_view.ptr, raw_view.len) : "";
 		duckdb_v2_error_info_destroy(&err);
-		// Map error codes with a dedicated exception type to that type so callers can catch it directly.
-		switch (code) {
-		case DUCKDB_V2_ERROR_INPUT_INVALID:
-			throw InvalidInputException(message, std::move(raw));
-		case DUCKDB_V2_ERROR_RUNTIME_INTERRUPT:
-			throw InterruptException(message, std::move(raw));
-		default:
-			throw Exception(code, std::move(message), std::move(raw));
-		}
+		throw Exception(message, std::move(raw));
 	}
 }
 
@@ -312,14 +292,11 @@ auto WithExceptionGuard(duckdb_v2_error_info_handle *err, T callback) -> DUCKDB_
 	try {
 		// Invoke the callback
 		callback();
-	} catch (const Exception &ex) {
-		code = static_cast<DUCKDB_V2_ERROR>(ex.GetCode());
-		text = ex.what();
 	} catch (const std::exception &ex) {
-		code = DUCKDB_V2_ERROR_API;
+		code = DUCKDB_V2_ERROR_GENERIC;
 		text = ex.what();
 	} catch (...) {
-		code = DUCKDB_V2_ERROR_API;
+		code = DUCKDB_V2_ERROR_GENERIC;
 		text = "An unknown error occurred.";
 	}
 
@@ -763,7 +740,7 @@ auto Connection::Execute(const std::string &sql) -> QueryResult {
 	auto statements = ParseSQL(sql);
 	auto statement = statements.Next();
 	if (!statement || statements.Next()) {
-		throw InvalidInputException("Execute expects exactly one statement; use ParseSQL for multi-statement input");
+		throw Exception("Execute expects exactly one statement; use ParseSQL for multi-statement input");
 	}
 	return Execute(statement);
 }
@@ -1677,9 +1654,9 @@ void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
 	uint8_t actual_scale = 0;
 	CheckedAPICall(duckdb_v2_value_get_decimal, handle(), &payload, &actual_width, &actual_scale);
 	if (actual_width != width || actual_scale != scale) {
-		throw InvalidInputException("Get<width, scale>: value is DECIMAL(" + std::to_string(actual_width) + ", " +
-		                            std::to_string(actual_scale) + "), not DECIMAL(" + std::to_string(width) + ", " +
-		                            std::to_string(scale) + ")");
+		throw Exception("Get<width, scale>: value is DECIMAL(" + std::to_string(actual_width) + ", " +
+		                std::to_string(actual_scale) + "), not DECIMAL(" + std::to_string(width) + ", " +
+		                std::to_string(scale) + ")");
 	}
 	out = FromC(payload);
 }
@@ -1982,8 +1959,8 @@ auto Arena::Allocate(idx_t byte_len) -> uint8_t * {
 }
 
 auto Arena::ThrowStringTooLong(idx_t size) -> void {
-	throw Exception(DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE, "Out of Range Error: string length " + std::to_string(size) +
-	                                                        " exceeds the maximum a duckdb_v2_bytes can hold");
+	throw Exception("Out of Range Error: string length " + std::to_string(size) +
+	                " exceeds the maximum a duckdb_v2_bytes can hold");
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2100,7 +2077,7 @@ auto Vector::CheckWriteRange(idx_t start, idx_t count) const -> void {
 	}
 	// A CONSTANT vector's data array holds a single slot; only index 0 is writable.
 	if (GetVectorType() == VectorType::CONSTANT && (start != 0 || count > 1)) {
-		throw InvalidInputException("Invalid Input Error: cannot assign a string to a CONSTANT vector at index != 0");
+		throw Exception("Invalid Input Error: cannot assign a string to a CONSTANT vector at index != 0");
 	}
 }
 
@@ -2524,7 +2501,7 @@ ArrowExporter::ArrowExporter(const Context &context, const std::vector<LogicalTy
 		name_views.push_back(ToStr(name));
 	}
 	if (type_handles.size() != name_views.size()) {
-		throw InvalidInputException("ArrowExporter: one name is required per column type");
+		throw Exception("ArrowExporter: one name is required per column type");
 	}
 	duckdb_v2_arrow_exporter_handle exporter = nullptr;
 	CheckedAPICall(duckdb_v2_arrow_exporter_create, context.handle(),
@@ -2788,7 +2765,7 @@ struct ScalarFunctionInfo {
 void *RequireUserData(const detail::UserData &user_data) {
 	auto ptr = user_data.get();
 	if (!ptr) {
-		throw InvalidInputException("no user data was set; call ScalarFunction::SetUserData before Register");
+		throw Exception("no user data was set; call ScalarFunction::SetUserData before Register");
 	}
 	return ptr;
 }
@@ -2796,7 +2773,7 @@ void *RequireUserData(const detail::UserData &user_data) {
 // Guard for the inputs' GetBindData: a clear error instead of a null deref.
 void *RequireBindData(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException("no bind data was set; call BindInput::SetBindData in the bind callback");
+		throw Exception("no bind data was set; call BindInput::SetBindData in the bind callback");
 	}
 	return ptr;
 }
@@ -2804,7 +2781,7 @@ void *RequireBindData(void *ptr) {
 // Guard for ExecInput::GetInitData: a clear error instead of a null deref.
 void *RequireInitData(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException("no init data was set; call InitInput::SetInitData in the init callback");
+		throw Exception("no init data was set; call InitInput::SetInitData in the init callback");
 	}
 	return ptr;
 }
@@ -3098,7 +3075,7 @@ struct AggregateFunctionInfo {
 void *RequireAggregateUserData(const detail::UserData &user_data) {
 	auto ptr = user_data.get();
 	if (!ptr) {
-		throw InvalidInputException("no user data was set; call AggregateFunction::SetUserData before Register");
+		throw Exception("no user data was set; call AggregateFunction::SetUserData before Register");
 	}
 	return ptr;
 }
@@ -3106,7 +3083,7 @@ void *RequireAggregateUserData(const detail::UserData &user_data) {
 // Guard for the inputs' GetBindData: a clear error instead of a null deref.
 void *RequireAggregateBindData(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException("no bind data was set; call BindInput::SetBindData in the bind callback");
+		throw Exception("no bind data was set; call BindInput::SetBindData in the bind callback");
 	}
 	return ptr;
 }
@@ -3631,7 +3608,7 @@ struct TableFunctionInfo {
 void *RequireTableUserData(const detail::UserData &user_data) {
 	auto ptr = user_data.get();
 	if (!ptr) {
-		throw InvalidInputException("no user data was set; call TableFunction::SetUserData before Register");
+		throw Exception("no user data was set; call TableFunction::SetUserData before Register");
 	}
 	return ptr;
 }
@@ -3639,7 +3616,7 @@ void *RequireTableUserData(const detail::UserData &user_data) {
 // Guard for the inputs' GetBindData: a clear error instead of a null deref.
 void *RequireTableBindData(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException("no bind data was set; call BindInput::SetBindData in the bind callback");
+		throw Exception("no bind data was set; call BindInput::SetBindData in the bind callback");
 	}
 	return ptr;
 }
@@ -3647,8 +3624,7 @@ void *RequireTableBindData(void *ptr) {
 // Guard for the inputs' GetGlobalState: a clear error instead of a null deref.
 void *RequireGlobalState(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException(
-		    "no global state was set; call InitGlobalInput::SetGlobalState in the global init callback");
+		throw Exception("no global state was set; call InitGlobalInput::SetGlobalState in the global init callback");
 	}
 	return ptr;
 }
@@ -3656,8 +3632,7 @@ void *RequireGlobalState(void *ptr) {
 // Guard for ExecInput::GetLocalState: a clear error instead of a null deref.
 void *RequireLocalState(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException(
-		    "no local state was set; call InitLocalInput::SetLocalState in the local init callback");
+		throw Exception("no local state was set; call InitLocalInput::SetLocalState in the local init callback");
 	}
 	return ptr;
 }
@@ -4464,7 +4439,7 @@ struct CopyFunctionInfo {
 void *RequireCopyUserData(const detail::UserData &user_data) {
 	auto ptr = user_data.get();
 	if (!ptr) {
-		throw InvalidInputException("no user data was set; call CopyFunction::SetUserData before Register");
+		throw Exception("no user data was set; call CopyFunction::SetUserData before Register");
 	}
 	return ptr;
 }
@@ -4472,7 +4447,7 @@ void *RequireCopyUserData(const detail::UserData &user_data) {
 // Guard for the inputs' GetBindData: a clear error instead of a null deref.
 void *RequireCopyBindData(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException("no bind data was set; call the bind input's SetBindData in the bind callback");
+		throw Exception("no bind data was set; call the bind input's SetBindData in the bind callback");
 	}
 	return ptr;
 }
@@ -4480,7 +4455,7 @@ void *RequireCopyBindData(void *ptr) {
 // Guard for the inputs' GetInitData: a clear error instead of a null deref.
 void *RequireCopyInitData(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException("no init data was set; call CopyToInitInput::SetInitData in the init callback");
+		throw Exception("no init data was set; call CopyToInitInput::SetInitData in the init callback");
 	}
 	return ptr;
 }
@@ -4488,7 +4463,7 @@ void *RequireCopyInitData(void *ptr) {
 // Guard for the inputs' GetBatchData: a clear error instead of a null deref.
 void *RequireCopyBatchData(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException("no batch data was set; call CopyToBatchInput::SetBatchData in the batch callback");
+		throw Exception("no batch data was set; call CopyToBatchInput::SetBatchData in the batch callback");
 	}
 	return ptr;
 }
@@ -4496,7 +4471,7 @@ void *RequireCopyBatchData(void *ptr) {
 // Guard for the inputs' GetGlobalState: a clear error instead of a null deref.
 void *RequireCopyGlobalState(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException(
+		throw Exception(
 		    "no global state was set; call CopyFromInitGlobalInput::SetGlobalState in the global init callback");
 	}
 	return ptr;
@@ -4505,7 +4480,7 @@ void *RequireCopyGlobalState(void *ptr) {
 // Guard for the inputs' GetLocalState: a clear error instead of a null deref.
 void *RequireCopyLocalState(void *ptr) {
 	if (!ptr) {
-		throw InvalidInputException(
+		throw Exception(
 		    "no local state was set; call CopyFromInitLocalInput::SetLocalState in the local init callback");
 	}
 	return ptr;
@@ -5287,7 +5262,7 @@ struct CastFunctionInfo {
 void *RequireCastUserData(const detail::UserData &user_data) {
 	auto ptr = user_data.get();
 	if (!ptr) {
-		throw InvalidInputException("no user data was set; call CastFunction::SetUserData before Register");
+		throw Exception("no user data was set; call CastFunction::SetUserData before Register");
 	}
 	return ptr;
 }
@@ -5646,7 +5621,7 @@ struct ReplacementScanInfo {
 void *RequireReplacementUserData(const detail::UserData &user_data) {
 	auto ptr = user_data.get();
 	if (!ptr) {
-		throw InvalidInputException("no user data was set; call ReplacementScan::SetUserData before Register");
+		throw Exception("no user data was set; call ReplacementScan::SetUserData before Register");
 	}
 	return ptr;
 }
@@ -5809,10 +5784,10 @@ auto ParseSingleStatement(Connection &conn, const std::string &sql) -> SqlStatem
 	auto statements = conn.ParseSQL(sql);
 	auto first = statements.Next();
 	if (!first) {
-		throw InvalidInputException("the appender's query contains no statement");
+		throw Exception("the appender's query contains no statement");
 	}
 	if (statements.Next()) {
-		throw InvalidInputException("the appender's query must contain exactly one statement");
+		throw Exception("the appender's query must contain exactly one statement");
 	}
 	return first;
 }
@@ -5832,7 +5807,7 @@ void Appender::Initialize(Connection &conn, const std::string &query, std::vecto
 	connection = &conn;
 	types = std::move(column_types);
 	if (types.empty()) {
-		throw InvalidInputException("an appender needs at least one column type");
+		throw Exception("an appender needs at least one column type");
 	}
 
 	buffer = std::make_shared<Buffer>();
@@ -5882,7 +5857,7 @@ AppenderTablePlan PlanTableAppender(Connection &conn, std::string_view table) {
 	auto signature = conn.Bind(probe);
 	auto &schema = signature.output;
 	if (schema.GetFieldCount() == 0) {
-		throw InvalidInputException("table " + std::string(table) + " has no columns to append to");
+		throw Exception("table " + std::string(table) + " has no columns to append to");
 	}
 
 	std::string columns;
@@ -5928,17 +5903,22 @@ void Appender::ResetBuffer() {
 
 void Appender::AppendChunk(DataChunk &chunk) {
 	if (broken) {
-		throw InvalidInputException("the appender is broken after a failed buffer operation; Clear or destroy it");
+		throw Exception("the appender is broken after a failed buffer operation; Clear or destroy it");
+	}
+	// Refuse a mismatch up front: it leaves the buffer untouched, whereas a failed append may have copied part of it.
+	if (chunk.GetVectorCount() != types.size()) {
+		throw Exception("the chunk has " + std::to_string(chunk.GetVectorCount()) + " columns, but the appender has " +
+		                std::to_string(types.size()));
+	}
+	for (idx_t i = 0; i < types.size(); i++) {
+		duckdb_v2_logical_type_handle type = nullptr;
+		CheckedAPICall(duckdb_v2_vector_get_logical_type, chunk.GetVector(i).handle(), &type);
+		if (detail::Factory::Make<LogicalType>(type) != types[i]) {
+			throw Exception("the chunk's column " + std::to_string(i) + " does not match the appender's column type");
+		}
 	}
 	try {
-		// The append validates the chunk's columns against the buffer and refuses a mismatch before copying.
 		buffer->collection->Append(*append_state, chunk);
-	} catch (const Exception &ex) {
-		// A validation refusal leaves the buffer untouched; anything else may have copied part of the chunk.
-		if (ex.GetCode() != DUCKDB_V2_ERROR_INPUT_INVALID) {
-			broken = true;
-		}
-		throw;
 	} catch (...) {
 		broken = true;
 		throw;
@@ -5947,24 +5927,13 @@ void Appender::AppendChunk(DataChunk &chunk) {
 
 void Appender::Flush() {
 	if (broken) {
-		throw InvalidInputException("the appender is broken after a failed buffer operation; Clear or destroy it");
+		throw Exception("the appender is broken after a failed buffer operation; Clear or destroy it");
 	}
 	if (buffer->collection->GetRowCount() == 0) {
 		return;
 	}
-	try {
-		connection->Execute(*statement).Drain();
-	} catch (const Exception &ex) {
-		// A busy connection or an interrupted run keeps the rows so the flush can be retried; any other failure drops
-		// them, so a retry does not re-run the same failing statement over the same rows.
-		if (ex.GetCode() != DUCKDB_V2_ERROR_RESOURCE_IN_USE && ex.GetCode() != DUCKDB_V2_ERROR_RUNTIME_INTERRUPT) {
-			ResetBuffer();
-		}
-		throw;
-	} catch (...) {
-		ResetBuffer();
-		throw;
-	}
+	// A failed run throws before the reset and keeps the rows, so the flush can be retried; Clear drops them.
+	connection->Execute(*statement).Drain();
 	ResetBuffer();
 }
 

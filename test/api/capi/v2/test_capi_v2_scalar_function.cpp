@@ -140,9 +140,8 @@ void VarargSumExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_co
 	}
 	// The count is the exclusive bound: index `count` is refused.
 	duckdb_v2_vector_handle past_the_end = nullptr;
-	if (duckdb_v2_scalar_function_exec_get_arg(info, arg_count, &past_the_end, nullptr) !=
-	    DUCKDB_V2_ERROR_INPUT_INVALID) {
-		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_API);
+	if (duckdb_v2_scalar_function_exec_get_arg(info, arg_count, &past_the_end, nullptr) != DUCKDB_V2_ERROR_GENERIC) {
+		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_GENERIC);
 		auto text_str = Convert("past-the-end argument vector index was not refused");
 		duckdb_v2_error_info_set_text(*err, &text_str);
 	}
@@ -154,7 +153,7 @@ void NoopExec(duckdb_v2_scalar_function_exec_info_handle, duckdb_v2_context_hand
 // Fails the query through the callback's error slot.
 void FailingExec(duckdb_v2_scalar_function_exec_info_handle, duckdb_v2_context_handle,
                  duckdb_v2_error_info_handle *err) {
-	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
+	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_GENERIC);
 	auto text_str = Convert("scalar exec failed on purpose");
 	duckdb_v2_error_info_set_text(*err, &text_str);
 }
@@ -413,7 +412,7 @@ TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2
 	auto name_str = Ident("\x80");
 	REQUIRE(duckdb_v2_function_signature_add_parameter(sig, &name_str, integer, nullptr,
 	                                                   DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD,
-	                                                   nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                                   nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	SigParam(sig, "first", integer);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, VarargSumExec, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -499,8 +498,8 @@ TEST_CASE("V2 scalar: bind reads argument count, types and constants", "[capi_v2
 	REQUIRE(arg_probe.arg_types[0] == DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	REQUIRE(arg_probe.arg_types[1] == DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	REQUIRE(arg_probe.constant == 21);
-	REQUIRE(arg_probe.oob_type_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(arg_probe.oob_value_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(arg_probe.oob_type_rc == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(arg_probe.oob_value_rc == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(arg_probe.oob_type_cleared);
 	REQUIRE(arg_probe.oob_value_cleared);
 
@@ -513,8 +512,7 @@ TEST_CASE("V2 scalar: bind reads argument count, types and constants", "[capi_v2
 	// A column reference is not: the binder error surfaces from the bind callback.
 	arg_probe = {};
 	duckdb_v2_result_handle result = nullptr;
-	REQUIRE(Query(fx.conn, "SELECT arg_probe('hello', i) FROM (VALUES (21)) t(i)", &result) ==
-	        DUCKDB_V2_ERROR_QUERY_BINDER);
+	REQUIRE(Query(fx.conn, "SELECT arg_probe('hello', i) FROM (VALUES (21)) t(i)", &result) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_result_destroy(&result);
 }
 
@@ -552,8 +550,8 @@ TEST_CASE("V2 scalar: exec error propagates to the result", "[capi_v2][scalar_fu
 		}
 	}
 	duckdb_v2_result_destroy(&result);
-	// The callback's code round-trips through the engine's exception machinery.
-	REQUIRE(rc == DUCKDB_V2_ERROR_IO_GENERAL);
+	// The callback's error fails the query.
+	REQUIRE(rc == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
@@ -568,7 +566,7 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		auto sig = SigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -577,7 +575,7 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		auto function = MakeScalar(fx.conn, "no_exec");
 		auto sig = SigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -585,7 +583,7 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 	{
 		auto function = MakeScalar(fx.conn, "no_return");
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -595,7 +593,7 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		auto sig = SigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -607,7 +605,7 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		SigParam(sig, "x", integer);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -621,7 +619,7 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		duckdb_v2_value_destroy(&five);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -633,19 +631,17 @@ TEST_CASE("V2 scalar: null arguments and destroy null-safety", "[capi_v2][scalar
 	EnvFixture fx;
 
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(nullptr, &function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_create_with_connection(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(function == nullptr);
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_set_name(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_set_name(function, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto invalid_name = Convert("\x80");
-	REQUIRE(duckdb_v2_scalar_function_set_name(function, &invalid_name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_set_name(function, &invalid_name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_function_signature_handle sig = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_scalar_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_scalar_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_scalar_function_destroy(&function);
 
@@ -708,19 +704,19 @@ TEST_CASE("V2 scalar: function properties", "[capi_v2][scalar_function]") {
 	// A value that does not belong to the key.
 	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
 	                                               DUCKDB_V2_FUNCTION_PROPERTY_NULL_HANDLING_SPECIAL,
-	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                               nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	// An aggregate-only key on a scalar function.
 	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT,
 	                                               DUCKDB_V2_FUNCTION_PROPERTY_AGG_ORDER_DEPENDENT_NO,
-	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                               nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	// An unknown key in the COMMON group.
 	REQUIRE(duckdb_v2_scalar_function_set_property(function, static_cast<DUCKDB_V2_FUNCTION_PROPERTY_KEY>(0x01FF00),
 	                                               static_cast<DUCKDB_V2_FUNCTION_PROPERTY_VALUE>(0x01FF00),
-	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                               nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	// A null function handle.
 	REQUIRE(duckdb_v2_scalar_function_set_property(nullptr, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
 	                                               DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_VOLATILE,
-	                                               nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                               nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 }
@@ -739,7 +735,7 @@ struct KindProbe {
 	idx_t named_fixed = 0;
 	idx_t named_variadic = 0;
 	// Every out-parameter of the count is optional
-	DUCKDB_V2_ERROR null_counts_rc = DUCKDB_V2_ERROR_API;
+	DUCKDB_V2_ERROR null_counts_rc = DUCKDB_V2_ERROR_GENERIC;
 	std::vector<std::string> names;
 	idx_t scale_index = 0;
 	bool missing_found = true;
@@ -793,7 +789,7 @@ void KindBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_funct
 		return;
 	}
 	if (!found) {
-		SetErrorInfo(err, DUCKDB_V2_ERROR_API, "the named-only parameter was not found");
+		SetErrorInfo(err, DUCKDB_V2_ERROR_GENERIC, "the named-only parameter was not found");
 		return;
 	}
 	idx_t missing_index = 0;
@@ -890,8 +886,8 @@ void KindExecCb(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_conte
 		return;
 	}
 	duckdb_v2_vector_handle past_the_end = nullptr;
-	kind_probe.exec_oob_refused = duckdb_v2_scalar_function_exec_get_arg(info, arg_count, &past_the_end, nullptr) ==
-	                              DUCKDB_V2_ERROR_INPUT_INVALID;
+	kind_probe.exec_oob_refused =
+	    duckdb_v2_scalar_function_exec_get_arg(info, arg_count, &past_the_end, nullptr) == DUCKDB_V2_ERROR_GENERIC;
 }
 
 void AddKindParam(duckdb_v2_function_signature_handle sig, const char *name, duckdb_v2_logical_type_handle type,
@@ -951,9 +947,9 @@ TEST_CASE("V2 scalar: parameter kinds lay out the argument list", "[capi_v2][sca
 		REQUIRE(kind_probe.scale_type == DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 		REQUIRE(kind_probe.scale_is_constant);
 		REQUIRE(kind_probe.scale_constant == 1);
-		REQUIRE(kind_probe.oob_name_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(kind_probe.oob_type_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(kind_probe.oob_value_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(kind_probe.oob_name_rc == DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(kind_probe.oob_type_rc == DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(kind_probe.oob_value_rc == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(ExecCounts() == Counts {1, 0, 1, 0});
 		REQUIRE(kind_probe.exec_oob_refused);
 	}
@@ -1002,7 +998,7 @@ TEST_CASE("V2 scalar: parameter kind refusals", "[capi_v2][scalar_function]") {
 		auto a_ident = Ident("a");
 		REQUIRE(duckdb_v2_function_signature_add_parameter(SigOf(function), &a_ident, integer, nullptr,
 		                                                   static_cast<DUCKDB_V2_FUNCTION_PARAMETER_KIND>(42),
-		                                                   nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		                                                   nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 	SECTION("a default on *args") {
@@ -1035,16 +1031,16 @@ TEST_CASE("V2 function bind: null arguments", "[capi_v2][scalar_function]") {
 	duckdb_v2_identifier_t name {};
 	bool found = false;
 	void *data = nullptr;
-	REQUIRE(duckdb_v2_function_bind_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_bind_set_bind_data(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_bind_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_function_bind_set_bind_data(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_function_bind_get_arg_count(nullptr, &count, &count, &count, &count, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_bind_get_arg_type(nullptr, 0, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_bind_get_arg_value(nullptr, 0, &value, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_function_bind_get_arg_name(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_function_bind_get_arg_type(nullptr, 0, &type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_function_bind_get_arg_value(nullptr, 0, &value, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_function_bind_get_arg_name(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto a_ident = Ident("a");
 	REQUIRE(duckdb_v2_function_bind_get_arg_index(nullptr, &a_ident, &count, &found, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 }
 
 } // namespace test_capi_v2

@@ -44,7 +44,7 @@ functions:
 
       out_name and out_type are valid only until the schema is destroyed, and
       out_type must not be destroyed. An out-of-range index is rejected with
-      ERROR_INPUT_INVALID.
+      an error.
     role: getter
     belongs_to: schema
     parameters:

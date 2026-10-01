@@ -146,7 +146,7 @@ TEST_CASE("V2 db option: get unknown name errors", "[capi_v2][db][option]") {
 	duckdb_v2_option_handle out = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
 	auto name_str = Convert("this_option_does_not_exist");
-	REQUIRE(duckdb_v2_instance_get_option_by_name(fx.instance, &name_str, &out, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_get_option_by_name(fx.instance, &name_str, &out, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
@@ -173,7 +173,7 @@ TEST_CASE("V2 db option: get_option_count and get_option_by_index", "[capi_v2][d
 	duckdb_v2_option_handle out_of_range = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
 	REQUIRE(duckdb_v2_instance_get_option_by_index(fx.instance, count + 100, &out_of_range, &err) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_error_info_destroy(&err);
 }
 
@@ -187,8 +187,7 @@ TEST_CASE("V2 db option: set rejects an unparseable setting and a LOCAL_ONLY opt
 	duckdb_v2_error_info_destroy(&err);
 	// A malformed setting view (null ptr, nonzero len) is caught up front.
 	auto setting_str2 = duckdb_v2_str {nullptr, 1};
-	REQUIRE(duckdb_v2_instance_set_option(fx.instance, &name_str, &setting_str2, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_set_option(fx.instance, &name_str, &setting_str2, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 conn option: set LOCAL is invisible to other connections", "[capi_v2][conn][option]") {
@@ -235,7 +234,7 @@ TEST_CASE("V2 conn option: scope enforcement matches SQL", "[capi_v2][conn][opti
 	auto name_str = Convert("allow_community_extensions");
 	auto setting_str = Convert("false");
 	REQUIRE(duckdb_v2_connection_set_option(fx.conn, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_LOCAL, &err) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_error_info_destroy(&err);
 }
 
@@ -259,7 +258,7 @@ TEST_CASE("V2 conn option: unknown name errors", "[capi_v2][conn][option]") {
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 	duckdb_v2_option_handle opt = nullptr;
-	REQUIRE(duckdb_v2_connection_get_option_by_name(fx.conn, &name_str, &opt, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_get_option_by_name(fx.conn, &name_str, &opt, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(opt == nullptr);
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -334,8 +333,7 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 
 		// Once running, access_mode can no longer change: the same error SET GLOBAL gives.
 		auto setting_str3 = Convert("READ_WRITE");
-		REQUIRE(duckdb_v2_instance_set_option(instance, &name_str2, &setting_str3, &err) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_instance_set_option(instance, &name_str2, &setting_str3, &err) == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(err != nullptr);
 		duckdb_v2_error_info_destroy(&err);
 
@@ -352,8 +350,7 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		REQUIRE(duckdb_v2_instance_set_option(instance, &name_str3, &setting_str4, nullptr) == DUCKDB_V2_ERROR_NONE);
 		// Reading it back is not possible until an extension defines it.
 		duckdb_v2_option_handle opt = nullptr;
-		REQUIRE(duckdb_v2_instance_get_option_by_name(instance, &name_str3, &opt, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_instance_get_option_by_name(instance, &name_str3, &opt, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 		duckdb_v2_error_info_handle err = nullptr;
 		auto path_str3 = duckdb_v2_str {nullptr, 0};
@@ -394,7 +391,7 @@ TEST_CASE("V2 context option: read through a context inside a callback", "[capi_
 	idx_t count = 0;
 	duckdb_v2_connection_get_option_count(fx.conn, &count, nullptr);
 	REQUIRE(option_probe.count == count);
-	REQUIRE(option_probe.unknown_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(option_probe.unknown_rc == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(option_probe.by_index_rc == DUCKDB_V2_ERROR_NONE);
 }
 
@@ -422,7 +419,7 @@ TEST_CASE("V2 option: descriptor accessors", "[capi_v2][option]") {
 	SECTION("get_alias out-of-range surfaces a descriptive error") {
 		duckdb_v2_str alias = {nullptr, 0};
 		duckdb_v2_error_info_handle err = nullptr;
-		REQUIRE(duckdb_v2_option_get_alias(opt, 99, &alias, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_alias(opt, 99, &alias, &err) == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(alias.ptr == nullptr);
 		REQUIRE(err != nullptr);
 		duckdb_v2_str msg = {nullptr, 0};
@@ -430,7 +427,7 @@ TEST_CASE("V2 option: descriptor accessors", "[capi_v2][option]") {
 		REQUIRE(Convert(msg).find("out of range") != std::string::npos);
 		duckdb_v2_error_info_destroy(&err);
 		// err == nullptr is tolerated on the failure path.
-		REQUIRE(duckdb_v2_option_get_alias(opt, 99, &alias, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_alias(opt, 99, &alias, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 
 	SECTION("destroy nulls the slot and is safe to repeat") {
@@ -462,57 +459,55 @@ TEST_CASE("V2 option: accessor null-arg validation", "[capi_v2][option]") {
 
 	SECTION("get_name rejects null option") {
 		duckdb_v2_str out = {nullptr, 0};
-		REQUIRE(duckdb_v2_option_get_name(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_name(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_name rejects null out_name") {
-		REQUIRE(duckdb_v2_option_get_name(opt, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_name(opt, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_setting rejects null option") {
 		duckdb_v2_str out = {nullptr, 0};
-		REQUIRE(duckdb_v2_option_get_setting(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_setting(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_setting rejects null out_setting") {
-		REQUIRE(duckdb_v2_option_get_setting(opt, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_setting(opt, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_default_setting rejects null option") {
 		duckdb_v2_str out = {nullptr, 0};
-		REQUIRE(duckdb_v2_option_get_default_setting(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_default_setting(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_description rejects null option") {
 		duckdb_v2_str out = {nullptr, 0};
-		REQUIRE(duckdb_v2_option_get_description(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_description(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_target_scope rejects null option") {
 		DUCKDB_V2_OPTION_TARGET_SCOPE s;
-		REQUIRE(duckdb_v2_option_get_target_scope(nullptr, &s, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_target_scope(nullptr, &s, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_target_scope rejects null out_target_scope") {
-		REQUIRE(duckdb_v2_option_get_target_scope(opt, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_target_scope(opt, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_alias_count rejects null option") {
 		idx_t c;
-		REQUIRE(duckdb_v2_option_get_alias_count(nullptr, &c, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_alias_count(nullptr, &c, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("get_alias rejects null option") {
 		duckdb_v2_str out = {nullptr, 0};
-		REQUIRE(duckdb_v2_option_get_alias(nullptr, 0, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_option_get_alias(nullptr, 0, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("set_option / get_option reject null and malformed arguments") {
 		auto setting_str = Convert("1");
-		REQUIRE(duckdb_v2_instance_set_option(nullptr, &name_str, &setting_str, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_instance_set_option(nullptr, &name_str, &setting_str, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		auto name_str2 = duckdb_v2_str {nullptr, 1};
 		REQUIRE(duckdb_v2_instance_set_option(fx.instance, &name_str2, &setting_str, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		        DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_option_handle out = nullptr;
 		REQUIRE(duckdb_v2_instance_get_option_by_name(fx.instance, &name_str, nullptr, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		        DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(duckdb_v2_connection_set_option(nullptr, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
-		                                        nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		                                        nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(duckdb_v2_connection_get_option_by_name(fx.conn, &name_str, nullptr, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_context_get_option_by_name(nullptr, &name_str, &out, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		        DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(duckdb_v2_context_get_option_by_name(nullptr, &name_str, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 
 	duckdb_v2_option_destroy(&opt);

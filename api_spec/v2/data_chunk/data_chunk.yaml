@@ -259,7 +259,7 @@ functions:
       Borrows the vector at the given index in a data chunk.
 
       The returned handle is borrowed and valid until the chunk is destroyed;
-      do not destroy it. An out-of-range index returns ERROR_INPUT_INVALID.
+      do not destroy it. An out-of-range index returns an error.
     role: getter
     belongs_to: data_chunk
     parameters:

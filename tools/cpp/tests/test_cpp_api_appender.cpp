@@ -180,7 +180,7 @@ TEST_CASE("Stable C++API: appender refuses a mismatching chunk", "[cpp_api]") {
 	wrong.push_back(conn.ParseType("VARCHAR"));
 	DataChunk chunk(wrong);
 	chunk.GetVector(0).SetSize(0);
-	REQUIRE_THROWS_MATCHES(appender.AppendChunk(chunk), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(appender.AppendChunk(chunk), Exception);
 
 	// A refused chunk leaves the appender usable.
 	AppendValues(appender, {3});
@@ -194,13 +194,11 @@ TEST_CASE("Stable C++API: appender construction refusals", "[cpp_api]") {
 	auto conn = db.Connect();
 
 	// No columns.
-	REQUIRE_THROWS_MATCHES(Appender(conn, "SELECT 1", {}, "buf"), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(Appender(conn, "SELECT 1", {}, "buf"), Exception);
 	// More than one statement.
 	std::vector<LogicalType> types;
 	types.push_back(conn.ParseType("BIGINT"));
-	REQUIRE_THROWS_MATCHES(Appender(conn, "SELECT 1; SELECT 2", std::move(types), "buf"), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(Appender(conn, "SELECT 1; SELECT 2", std::move(types), "buf"), Exception);
 	// A table that does not exist.
 	REQUIRE_THROWS_AS(Appender(conn, "no_such_table"), Exception);
 }

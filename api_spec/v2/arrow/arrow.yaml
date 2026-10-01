@@ -164,7 +164,7 @@ functions:
       Gives the importer one array to convert.
 
       Take the chunks with `[[arrow_importer_next_chunk]]` until that returns NULL. Appending while the previous array
-      still has rows left is rejected with `ERROR_INPUT_INVALID`. An array whose shape does not match the resolved
+      still has rows left is rejected with an error. An array whose shape does not match the resolved
       schema -- a different child count, a child whose length differs from the array's, a null or already-released
       child -- is rejected the same way, before anything is read.
 
@@ -185,7 +185,7 @@ functions:
       arrays.
 
       Only the default, dictionary-encoded and run-end-encoded Arrow layouts are supported. Any other layout reports
-      `ERROR_QUERY_NOT_IMPLEMENTED` when the column is converted.
+      an error when the column is converted.
     role: method
     belongs_to: arrow_importer
     parameters:
@@ -357,7 +357,7 @@ functions:
       `chunk` with `flush` set to release the held rows without supplying more input.
 
       The chunk's types must match the ones the exporter was created with, or the call is rejected with
-      `ERROR_INPUT_INVALID` before anything is read.
+      an error before anything is read.
 
       `consume` decides only what happens to the caller's handle, since the data is copied either way. When true the
       chunk is destroyed and the slot set to NULL, saving a `[[data_chunk_destroy]]` for a chunk the caller owns.

@@ -20,7 +20,7 @@
 /// The remaining types (`Exception`, `Signature`, the primitive value types, and the like) are ordinary copyable
 /// values.
 ///
-/// Errors are reported by throwing; no function returns an error code. Everything thrown derives from `Exception`.
+/// Errors are reported by throwing; no function returns an error code. Everything thrown is an `Exception`.
 /// Failures that are part of a function's contract are documented with `\@throws`; any other failure surfaces as a
 /// plain `Exception`.
 ///
@@ -267,24 +267,16 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // Exceptions
 //----------------------------------------------------------------------------------------------------------------------
-// Every failure in this API is reported by throwing. Catch `Exception` to handle any of them; the subclasses single
-// out the cases worth reacting to on their own.
-// TODO: add more exception types!
+// Every failure in this API is reported by throwing an `Exception`.
 
-/// Base class of all errors thrown by DuckDB. For errors raised by the database engine, `what()` carries the fully
-/// formatted message, prefix included, e.g. "Parser Error: ...".
+/// The error thrown by DuckDB. For errors raised by the database engine, `what()` carries the fully formatted
+/// message, prefix included, e.g. "Parser Error: ...".
 class Exception : public std::runtime_error {
 public:
-	/// @param code The numeric error code.
 	/// @param message The full message, as later returned by `what()`.
 	/// @param raw_message The message body without the error-type prefix, when available.
-	Exception(const int code, const std::string &message, std::string raw_message = {})
-	    : std::runtime_error(message), code(code), raw_message(std::move(raw_message)) {
-	}
-
-	/// The numeric error code identifying the kind of error. Prefer catching a typed subclass where one exists.
-	auto GetCode() const -> int {
-		return code;
+	explicit Exception(const std::string &message, std::string raw_message = {})
+	    : std::runtime_error(message), raw_message(std::move(raw_message)) {
 	}
 
 	/// The message body alone, without the "Catalog Error:" / "Parser Error:" / ... prefix that `what()` carries.
@@ -294,20 +286,7 @@ public:
 	}
 
 private:
-	int code;
 	std::string raw_message;
-};
-
-/// Invalid input: a malformed SQL string, an argument of the wrong kind, a misused handle, and the like.
-class InvalidInputException : public Exception {
-public:
-	explicit InvalidInputException(const std::string &message, std::string raw_message = {});
-};
-
-/// A running query was canceled, e.g. by `Connection::Interrupt`.
-class InterruptException : public Exception {
-public:
-	explicit InterruptException(const std::string &message, std::string raw_message = {});
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -682,13 +661,13 @@ public:
 	/// One setting with its current value on this connection.
 	/// @param name The setting's name or one of its aliases.
 	/// @return The setting.
-	/// @throws InvalidInputException When no setting goes by that name.
+	/// @throws Exception When no setting goes by that name.
 	auto GetOption(std::string_view name) const -> InstanceOption;
 
 	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
 	/// @param value The new value, in the same textual form SQL's `SET` accepts.
-	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
+	/// @throws Exception When no setting goes by that name or the value does not parse.
 	auto SetOption(std::string_view name, std::string_view value) -> void;
 
 	/// Writes a setting at an explicit scope.
@@ -740,7 +719,7 @@ public:
 
 	/// Parses and executes a single SQL statement in one call.
 	/// @param sql Exactly one SQL statement. Use `ParseSQL` for multi-statement input.
-	/// @throws InvalidInputException When `sql` does not hold exactly one statement.
+	/// @throws Exception When `sql` does not hold exactly one statement.
 	auto Execute(const std::string &sql) -> QueryResult;
 
 	/// Binds a statement without executing it, borrowing it rather than consuming it.
@@ -802,7 +781,7 @@ public:
 	auto CreateValue(T &&value) -> Value;
 
 	/// Asks the running query to stop. `QueryResult::Step` then reports CANCELLED, and `FetchChunk` / `Drain` throw
-	/// `InterruptException`. Callable from any thread, and a no-op when no query is running.
+	/// `Exception`. Callable from any thread, and a no-op when no query is running.
 	auto Interrupt() -> void;
 
 	/// Reads how far the running query has come. Callable from any thread.
@@ -856,14 +835,14 @@ public:
 	/// Detaches the database attached from `path`, like SQL `DETACH`. Connections still using it keep it alive until
 	/// they let go; if it was the default database, new sessions have no default until `SetDefault` names another.
 	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
-	/// @throws InvalidInputException When neither matches an attached database.
+	/// @throws Exception When neither matches an attached database.
 	auto Detach(const std::string &path) -> void;
 
 	/// Makes the database attached from `path` the default database for sessions opened from now on: where their
 	/// unqualified DDL and unqualified table lookups that miss the temporary catalog go, unless they `USE` another.
 	/// Sessions already open keep the default they connected with.
 	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
-	/// @throws InvalidInputException When neither matches an attached database.
+	/// @throws Exception When neither matches an attached database.
 	auto SetDefault(const std::string &path) -> void;
 
 	/// How many settings this database exposes.
@@ -876,7 +855,7 @@ public:
 	/// One setting with its current global value.
 	/// @param name The setting's name or one of its aliases; an alias resolves to the canonical setting.
 	/// @return The setting.
-	/// @throws InvalidInputException When no setting goes by that name.
+	/// @throws Exception When no setting goes by that name.
 	auto GetOption(std::string_view name) const -> InstanceOption;
 
 	/// Writes a setting globally, for this database and every session on it. Before the first `Attach` or `Connect`
@@ -884,7 +863,7 @@ public:
 	/// such as access_mode, are written; afterwards this is SQL `SET GLOBAL`.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
 	/// @param value The new value, in the same textual form SQL's `SET` accepts.
-	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
+	/// @throws Exception When no setting goes by that name or the value does not parse.
 	auto SetOption(std::string_view name, std::string_view value) -> void;
 
 	/// Opens a new session on this database, starting the instance if this is its first use.
@@ -1415,7 +1394,7 @@ struct blob_t {
 	}
 };
 
-/// Validates a byte string, throwing InvalidInputException for malformed UTF-8.
+/// Validates a byte string, throwing Exception for malformed UTF-8.
 void ValidateUTF8(std::string_view text);
 
 /// VARCHAR: like `blob_t`, but naming a string of UTF-8 text rather than of arbitrary bytes.
@@ -1564,7 +1543,7 @@ public:
 
 	/// Reads the value as a DECIMAL, e.g. `value.Get<18, 3>()`, spelled with the width and scale instead of a type.
 	/// @return The value.
-	/// @throws InvalidInputException Unless the value is a DECIMAL of exactly this width and scale; payloads are not
+	/// @throws Exception Unless the value is a DECIMAL of exactly this width and scale; payloads are not
 	/// interchangeable between widths.
 	template <int8_t WIDTH, uint8_t SCALE>
 	auto Get() const -> decimal_t<WIDTH, SCALE> {
@@ -2215,7 +2194,7 @@ public:
 	}
 
 	/// The buffer for writing, untyped.
-	/// @throws InvalidInputException Unless the vector is FLAT or CONSTANT.
+	/// @throws Exception Unless the vector is FLAT or CONSTANT.
 	auto GetDataMutable() -> void *;
 
 	/// How many child vectors this one has: 1 for LIST and ARRAY, one per field for STRUCT and TUPLE, 2 for MAP (the
@@ -2237,7 +2216,7 @@ public:
 	/// is the way to hand an already-materialized vector to an output vector without a per-row copy. Pointers and
 	/// views taken from this vector beforehand do not survive this.
 	/// @param source The vector to reference. Its data must outlive every read of this vector.
-	/// @throws InvalidInputException When the source's type does not match the vector's.
+	/// @throws Exception When the source's type does not match the vector's.
 	auto Reference(const Vector &source) -> void;
 
 	/// How many rows the vector holds.
@@ -2251,33 +2230,33 @@ public:
 	/// Reads the vector in a single call, so that the per-row work afterwards is inline.
 	/// @return A view borrowed from the vector. Taking the view of a DICTIONARY vector may flatten the vector it
 	/// selects from, which invalidates views taken from that one earlier.
-	/// @throws InvalidInputException On `VectorType::OTHER`; `Flatten` first.
+	/// @throws Exception On `VectorType::OTHER`; `Flatten` first.
 	auto GetView() const -> VectorView;
 
 	/// How the vector is laid out.
 	auto GetVectorType() const -> VectorType;
 
 	/// The validity mask for writing, allocating it if the vector does not have one yet.
-	/// @throws InvalidInputException Unless the vector is FLAT.
+	/// @throws Exception Unless the vector is FLAT.
 	auto GetValidityMutable() -> ValidityMask;
 
 	/// Sets a row NULL, including the descendant elements of a STRUCT or ARRAY row. LIST (and MAP) children are left
 	/// alone, since a NULL list has no elements to speak of. Use this rather than clearing mask bits for any nested
 	/// type.
 	/// @param row A row index within the vector's size.
-	/// @throws InvalidInputException On a non-FLAT vector or an out-of-range row.
+	/// @throws Exception On a non-FLAT vector or an out-of-range row.
 	auto SetNull(idx_t row) -> void;
 
 	/// Sets the single validity bit of a CONSTANT vector. Setting it valid writes no value: element 0 keeps whatever
 	/// was last written to it.
 	/// @param valid Whether the vector holds a value rather than NULL.
-	/// @throws InvalidInputException Unless the vector is CONSTANT.
+	/// @throws Exception Unless the vector is CONSTANT.
 	auto SetConstantValid(bool valid) -> void;
 
 	/// Rewrites the vector as a CONSTANT one: a single value standing for every row.
 	/// @param value The value every row takes.
 	/// @param count How many rows the vector then holds.
-	/// @throws InvalidInputException When the value's type does not match the vector's.
+	/// @throws Exception When the value's type does not match the vector's.
 	auto MakeConstant(const Value &value, idx_t count) -> void;
 
 	/// Rewrites the vector as the arithmetic sequence start, start + increment, ... The result reads as
@@ -2297,7 +2276,7 @@ public:
 	/// a value write per call, so fill bulk data through `GetDataMutable` instead.
 	/// @param row A row index within the vector's size.
 	/// @param value The value to write.
-	/// @throws InvalidInputException On a non-FLAT vector or an out-of-range row; flatten first.
+	/// @throws Exception On a non-FLAT vector or an out-of-range row; flatten first.
 	auto SetValue(idx_t row, const Value &value) -> void;
 
 	/// Borrows this vector's string heap, to write bytes whose placement is decided separately -- deduplicating,
@@ -2310,7 +2289,7 @@ public:
 	/// Looks the heap up per call, so flattening in between is safe.
 	/// @param index The element to write: any index within the size of a FLAT vector, only 0 for a CONSTANT one.
 	/// @param data The bytes to copy. The vector must be of a string-backed type such as VARCHAR, BLOB, BIT or BIGNUM.
-	/// @throws InvalidInputException On malformed VARCHAR text, before changing the slot.
+	/// @throws Exception On malformed VARCHAR text, before changing the slot.
 	auto AssignString(idx_t index, std::string_view data) -> void;
 
 	/// Like `AssignString`, but skips UTF-8 validation. The caller must ensure VARCHAR values contain valid UTF-8.
@@ -2325,7 +2304,7 @@ public:
 private:
 	explicit Vector(void *impl);
 
-	/// @internal Throws `InvalidInputException` if [start, start + count) is not writable: a CONSTANT vector has a
+	/// @internal Throws `Exception` if [start, start + count) is not writable: a CONSTANT vector has a
 	/// single element, so only index 0 may be written.
 	auto CheckWriteRange(idx_t start, idx_t count) const -> void;
 };
@@ -2483,7 +2462,7 @@ public:
 	/// types, and both collections must come from the same database -- the rows keep their original buffers rather
 	/// than being copied.
 	/// @param source The collection to consume. Left untouched when the merge is refused.
-	/// @throws InvalidInputException When the column types differ, or when `source` is this collection.
+	/// @throws Exception When the column types differ, or when `source` is this collection.
 	auto Combine(ColumnDataCollection &&source) -> void;
 
 	/// Starts appending: the returned state carries the append's progress between `Append` calls.
@@ -2494,7 +2473,7 @@ public:
 	/// @param chunk The rows to append. The chunk's column types must equal the collection's exactly, and the chunk is
 	/// only borrowed: it can be reused, refilled and appended again.
 	/// VARCHAR values must already be valid UTF-8; append does not validate text.
-	/// @throws InvalidInputException When the chunk's columns do not match the collection's.
+	/// @throws Exception When the chunk's columns do not match the collection's.
 	auto Append(AppendState &state, const DataChunk &chunk) -> void;
 
 	/// One-shot `Append`, creating and discarding an append state internally. Prefer keeping a state across calls when
@@ -2519,7 +2498,7 @@ public:
 	/// @param chunk The chunk to read into; its column types must equal the collection's exactly. Reset to empty once
 	/// the scan is exhausted.
 	/// @return Whether rows were produced; false once the scan is exhausted.
-	/// @throws InvalidInputException When the chunk's columns do not match the collection's.
+	/// @throws Exception When the chunk's columns do not match the collection's.
 	auto Scan(SharedScanState &shared, WorkerScanState &worker, DataChunk &chunk) const -> bool;
 
 private:
@@ -2565,7 +2544,7 @@ public:
 	/// @param buffer_name The name `query` reads the buffer under. Must be unique among the appenders on this
 	/// connection: the first one registered claims the name.
 	/// @param column_names Names for the buffer's columns; empty names them col1..colN.
-	/// @throws InvalidInputException When `column_types` is empty, or `query` is not exactly one statement.
+	/// @throws Exception When `column_types` is empty, or `query` is not exactly one statement.
 	Appender(Connection &conn, std::string_view query, std::vector<LogicalType> column_types,
 	         std::string_view buffer_name, const std::vector<std::string> &column_names = {});
 
@@ -2585,13 +2564,13 @@ public:
 
 	/// Buffers a whole chunk. Its column types must equal `ColumnTypes()` exactly; a mismatch is refused before
 	/// anything is copied. VARCHAR values must already be valid UTF-8; append does not validate text.
-	/// @throws InvalidInputException When the chunk's columns do not match, or a previous buffer operation failed.
+	/// @throws Exception When the chunk's columns do not match, or a previous buffer operation failed.
 	void AppendChunk(DataChunk &chunk);
 
 	/// Runs the statement over everything buffered and empties the buffer, keeping its memory for the next batch.
 	/// Does nothing when the buffer is empty.
-	/// @throws Exception When the statement fails. The rows are kept when the connection was busy or the run was
-	/// interrupted, so the flush can be retried; any other failure drops them.
+	/// @throws Exception When the statement fails. The rows are kept, so the flush can be retried; call `Clear` to
+	/// drop them instead.
 	void Flush();
 
 	/// Empties the buffer without running the statement, and recovers from a failed buffer operation.
@@ -2663,7 +2642,7 @@ public:
 	/// zero-copy and keep them alive. False to keep it, in which case it must stay valid until the drain finishes and
 	/// every chunk is a copy. A chunk that joins rows held back from the previous array is a copy either way.
 	/// @param flush True to mark the end of the input, releasing rows that do not fill a batch as a final short chunk.
-	/// @throws InvalidInputException When the previous array is not drained, or the array's shape does not match the
+	/// @throws Exception When the previous array is not drained, or the array's shape does not match the
 	/// resolved schema.
 	auto Append(ArrowArray &array, bool consume = true, bool flush = false) -> void;
 
@@ -2710,7 +2689,7 @@ public:
 	/// and read before this returns, since the conversion copies. Rows that do not complete a batch are held back
 	/// and finished by the next chunk.
 	/// @param flush True to mark the end of the input, releasing the held rows as a final short array.
-	/// @throws InvalidInputException When the chunk's types do not match the exporter's.
+	/// @throws Exception When the chunk's types do not match the exporter's.
 	auto Append(const DataChunk &chunk, bool flush = false) -> void;
 
 	/// Releases the held rows as a short array without supplying another chunk. Same as `Append` with `flush` set.
@@ -2781,15 +2760,15 @@ public:
 	~QueryResult() override;
 
 	/// The result's columns, their names and types, as one owned `Schema`.
-	/// @throws InvalidInputException When the schema is not available yet; step the result first.
+	/// @throws Exception When the schema is not available yet; step the result first.
 	auto GetSchema() const -> Schema;
 
 	/// The shape of the result, so a caller can decide between consuming rows and draining without inspecting the SQL.
-	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	/// @throws Exception When the shape is not available yet; step the result first.
 	auto GetResultType() const -> ResultType;
 
 	/// The kind of SQL statement this result came from.
-	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	/// @throws Exception When the kind is not available yet; step the result first.
 	auto GetStatementType() const -> StatementType;
 
 	/// Does a bounded amount of work and returns without blocking.
@@ -2804,12 +2783,12 @@ public:
 
 	/// The next chunk, blocking until it is ready.
 	/// @return The chunk, or an empty one at the end of the stream; calling it again then keeps returning empty.
-	/// @throws InterruptException When the query was canceled.
+	/// @throws Exception When the query was canceled.
 	auto FetchChunk() -> DataChunk;
 
 	/// Runs the result to the end, applying its side effects and discarding any rows.
 	/// @return The number of rows affected for a CHANGED_ROWS result, 0 otherwise.
-	/// @throws InterruptException When the query was canceled.
+	/// @throws Exception When the query was canceled.
 	auto Drain() -> idx_t;
 
 	/// Renders the result as the boxed table the CLI prints, consuming it. Whatever has not been read yet is
@@ -2865,7 +2844,7 @@ public:
 	/// @param name The parameter's name.
 	/// @param type The parameter's type.
 	/// @param kind How a caller passes the argument.
-	/// @throws InvalidInputException When the kind is not a `FunctionParameterKind`.
+	/// @throws Exception When the kind is not a `FunctionParameterKind`.
 	auto AddParameter(const std::string &name, const LogicalType &type,
 	                  FunctionParameterKind kind = FunctionParameterKind::STANDARD) -> FunctionSignature &;
 
@@ -2875,7 +2854,7 @@ public:
 	/// @param type The parameter's type.
 	/// @param default_value The value the parameter takes when the caller omits it.
 	/// @param kind How a caller passes the argument.
-	/// @throws InvalidInputException When the kind is not a `FunctionParameterKind`.
+	/// @throws Exception When the kind is not a `FunctionParameterKind`.
 	auto AddParameter(const std::string &name, const LogicalType &type, const Value &default_value,
 	                  FunctionParameterKind kind = FunctionParameterKind::STANDARD) -> FunctionSignature &;
 
@@ -2945,13 +2924,13 @@ public:
 
 	/// The resolved type of one argument. An ANY parameter reports the type the caller passed.
 	/// @param index Argument index in [0, GetArgCount()).
-	/// @throws InvalidInputException When the index is out of range.
+	/// @throws Exception When the index is out of range.
 	auto GetArgType(idx_t index) const -> LogicalType;
 
 	/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
 	/// before execution, e.g. a format string or a target type. A table function's arguments are always constant.
 	/// @param index Argument index in [0, GetArgCount()).
-	/// @throws InvalidInputException When the index is out of range.
+	/// @throws Exception When the index is out of range.
 	/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
 	auto GetConstantArgument(idx_t index) const -> Value;
 
@@ -2964,7 +2943,7 @@ public:
 	/// The name of one argument: the parameter name for a declared parameter, the name the caller passed for an
 	/// argument `**kwargs` received, and an empty name for an argument `*args` received.
 	/// @param index Argument index in [0, GetArgCount()).
-	/// @throws InvalidInputException When the index is out of range.
+	/// @throws Exception When the index is out of range.
 	auto GetArgName(idx_t index) const -> std::string;
 
 	/// The index of the argument a caller passes by the given name, matched case-insensitively, or nullopt when the
@@ -3123,7 +3102,7 @@ public:
 
 	/// Registers the function in the catalog it was created against. The function object remains valid and may be
 	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name, exec callback, or a usable return type is missing.
+	/// @throws Exception When the name, exec callback, or a usable return type is missing.
 	auto Register() -> void;
 
 private:
@@ -3143,7 +3122,7 @@ public:
 
 	public:
 		/// The user data set via `ScalarFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3176,14 +3155,14 @@ public:
 		}
 
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `ScalarFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3210,21 +3189,21 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The init data set via `InitInput::SetInitData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetInitData() const -> T & {
 			return *static_cast<T *>(GetInitDataInternal());
 		}
 
 		/// The user data set via `ScalarFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3385,7 +3364,7 @@ public:
 
 	/// Registers the function in the catalog it was created against. The function object remains valid and may be
 	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name, a required callback, or a usable return type is missing.
+	/// @throws Exception When the name, a required callback, or a usable return type is missing.
 	auto Register() -> void;
 
 private:
@@ -3409,7 +3388,7 @@ public:
 
 	public:
 		/// The user data set via `AggregateFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3434,14 +3413,14 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `AggregateFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3467,14 +3446,14 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `AggregateFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3503,14 +3482,14 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `AggregateFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3550,14 +3529,14 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `AggregateFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3590,14 +3569,14 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `AggregateFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3633,14 +3612,14 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `AggregateFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3745,27 +3724,27 @@ public:
 	/// How many child nodes the node has. Works for every type, including `ExpressionType::INVALID`.
 	auto GetChildCount() const -> idx_t;
 	/// A child node, ordered as `ExpressionType` describes.
-	/// @throws InvalidInputException When the index is out of bounds.
+	/// @throws Exception When the index is out of bounds.
 	auto GetChild(idx_t index) const -> Expression;
 	/// The value of a `VALUE_CONSTANT` node.
-	/// @throws InvalidInputException When the node is not a constant.
+	/// @throws Exception When the node is not a constant.
 	auto GetConstantValue() const -> Value;
 	/// The column a `BOUND_COLUMN_REF` node points at. The index counts the columns of the operator the predicate is
 	/// evaluated against; resolve it through whatever handed out the expression, e.g.
 	/// `TableFunction::FilterPushdownInput::GetColumnIndex`.
-	/// @throws InvalidInputException When the node is not a column reference.
+	/// @throws Exception When the node is not a column reference.
 	auto GetColumnIndex() const -> idx_t;
 	/// The name of the scalar function a function node calls: `BOUND_FUNCTION`, the comparisons, `COMPARE_BETWEEN`
 	/// and `OPERATOR_CAST`. A comparison's name is its operator, e.g. `<`; `BETWEEN` and casts carry internal names,
 	/// so dispatch on the type for those.
-	/// @throws InvalidInputException When the node is not a function call.
+	/// @throws Exception When the node is not a function call.
 	auto GetFunctionName() const -> std::string;
 	/// The qualified name of the scalar function a function node calls: the name of `GetFunctionName`, qualified with
 	/// the catalog and schema the function was resolved in where known.
-	/// @throws InvalidInputException When the node is not a function call.
+	/// @throws Exception When the node is not a function call.
 	auto GetFunctionQualifiedName() const -> QualifiedName;
 	/// Whether an `OPERATOR_CAST` node is a regular `CAST` or a `TRY_CAST`.
-	/// @throws InvalidInputException When the node is not a cast.
+	/// @throws Exception When the node is not a cast.
 	auto GetCastMode() const -> CastMode;
 
 private:
@@ -3886,7 +3865,7 @@ public:
 
 	/// Registers the function in the catalog it was created against. The function object remains valid and may be
 	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name, bind callback or exec callback is missing, the signature
+	/// @throws Exception When the name, bind callback or exec callback is missing, the signature
 	/// declares a return type, or a partitioning callback is set without a partition data callback.
 	auto Register() -> void;
 
@@ -3918,7 +3897,7 @@ public:
 		auto AddResultColumn(const std::string &name, const LogicalType &type) -> void;
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3934,7 +3913,7 @@ public:
 		/// With `OrderPreservation::NO_ORDER`, a scan that allows more than one thread runs in parallel into query
 		/// results, INSERT and COPY without a partition data callback, and the rows arrive in no particular order.
 		/// @param order The order guarantee of the produced rows.
-		/// @throws InvalidInputException When order is not a declared enum value.
+		/// @throws Exception When order is not a declared enum value.
 		auto SetOrderPreservation(OrderPreservation order) -> void;
 
 	private:
@@ -3961,14 +3940,14 @@ public:
 		}
 
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -3984,7 +3963,7 @@ public:
 		auto GetColumnCount() const -> idx_t;
 		/// Which declared column (in `BindInput::AddResultColumn` order) the scan's column at `index` stands for. The
 		/// identity without projection pushdown.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The scan's context. Borrowed, valid only for the callback duration.
@@ -4016,7 +3995,7 @@ public:
 		}
 
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
@@ -4024,14 +4003,14 @@ public:
 
 		/// The global state set via `InitGlobalInput::SetGlobalState`, typically to claim this thread's share of the
 		/// work from it. Shared with every other scanning thread; access must be synchronized.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetGlobalState() const -> T & {
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4040,7 +4019,7 @@ public:
 		/// How many columns the scan produces; see `InitGlobalInput::GetColumnCount`.
 		auto GetColumnCount() const -> idx_t;
 		/// Which declared column the scan's column at `index` stands for; see `InitGlobalInput::GetColumnIndex`.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The scan's context. Borrowed, valid only for the callback duration.
@@ -4065,7 +4044,7 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
@@ -4073,21 +4052,21 @@ public:
 
 		/// The global state set via `InitGlobalInput::SetGlobalState`. Shared with every other scanning thread;
 		/// access must be synchronized.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetGlobalState() const -> T & {
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
 		/// The local state set via `InitLocalInput::SetLocalState`, private to this thread.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetLocalState() const -> T & {
 			return *static_cast<T *>(GetLocalStateInternal());
 		}
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4103,7 +4082,7 @@ public:
 		auto GetColumnCount() const -> idx_t;
 		/// Which declared column the output chunk's vector at `index` must be filled with; see
 		/// `InitGlobalInput::GetColumnIndex`.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
@@ -4128,7 +4107,7 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
@@ -4136,14 +4115,14 @@ public:
 
 		/// The global state set via `InitGlobalInput::SetGlobalState`. This callback runs while the scan is running,
 		/// so the state must be read in a thread-safe way.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetGlobalState() const -> T & {
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4183,14 +4162,14 @@ public:
 	public:
 		/// The bind data set via `BindInput::SetBindData`, mutable: the same object the init and exec callbacks later
 		/// receive, so an accepted predicate can be recorded in it for the scan to apply.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> T & {
 			return *static_cast<T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4201,17 +4180,17 @@ public:
 		/// A predicate: a bound expression evaluating to `BOOLEAN`. Resolve the column references it contains via
 		/// `GetColumnIndex`.
 		/// @return A borrowed expression, valid only for the callback duration.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto GetFilter(idx_t index) const -> Expression;
 		/// Accepts the predicate at `index`: the function will apply it itself.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto Accept(idx_t index) -> void;
 		/// How many columns the predicates can refer to: the columns the query reads from the function, which is what
 		/// `Expression::GetColumnIndex` indexes.
 		auto GetColumnCount() const -> idx_t;
 		/// Resolves the index a column reference node reports to the declared column (in `BindInput::AddResultColumn`
 		/// order) it refers to.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The query's context. Borrowed, valid only for the callback duration.
@@ -4240,7 +4219,7 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
@@ -4248,21 +4227,21 @@ public:
 
 		/// The global state set via `InitGlobalInput::SetGlobalState`. Shared with every other scanning thread;
 		/// access must be synchronized.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetGlobalState() const -> T & {
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
 		/// The local state set via `InitLocalInput::SetLocalState`, private to this thread.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetLocalState() const -> T & {
 			return *static_cast<T *>(GetLocalStateInternal());
 		}
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4275,16 +4254,16 @@ public:
 		/// How many partitioning columns are requested; zero unless `RequiresPartitionColumns` is true.
 		auto GetPartitionColumnCount() const -> idx_t;
 		/// Which declared column (in `BindInput::AddResultColumn` order) the partitioning column at `index` stands for.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto GetPartitionColumnIndex(idx_t index) const -> idx_t;
 
 		/// Reports the batch's ordering position. Required on every call. Must not decrease across calls on the same
 		/// thread, and must change whenever the reported partition values change.
-		/// @throws InvalidInputException When the value is out of range.
+		/// @throws Exception When the value is out of range.
 		auto SetBatchIndex(idx_t batch_index) -> void;
 		/// Reports the single value every row of the batch carries for the partitioning column at `index`. The value
 		/// is copied and must be of the declared column's type.
-		/// @throws InvalidInputException When the index is out of bounds or the type does not match.
+		/// @throws Exception When the index is out of bounds or the type does not match.
 		auto SetPartitionValue(idx_t index, const Value &value) -> void;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
@@ -4314,14 +4293,14 @@ public:
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `TableFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4330,11 +4309,11 @@ public:
 		/// How many columns the candidate `GROUP BY` set holds.
 		auto GetPartitionColumnCount() const -> idx_t;
 		/// Which declared column (in `BindInput::AddResultColumn` order) the candidate column at `index` stands for.
-		/// @throws InvalidInputException When the index is out of bounds.
+		/// @throws Exception When the index is out of bounds.
 		auto GetPartitionColumnIndex(idx_t index) const -> idx_t;
 
 		/// Reports whether, and how, the scan is partitioned by the candidate column set.
-		/// @throws InvalidInputException When the value is not one of the enum's declared values.
+		/// @throws Exception When the value is not one of the enum's declared values.
 		auto SetPartitionInfo(PartitionInfo partition_info) -> void;
 
 		/// The query's context. Borrowed, valid only for the callback duration.
@@ -4386,7 +4365,7 @@ public:
 
 	/// Registers the type in the catalog it was created against. The type object remains valid and may be adjusted
 	/// and registered again.
-	/// @throws InvalidInputException When the name or the base type is missing, or the base type is not concrete.
+	/// @throws Exception When the name or the base type is missing, or the base type is not concrete.
 	auto Register() -> void;
 
 private:
@@ -4492,7 +4471,7 @@ public:
 
 	/// Registers the function in the catalog it was created against. The function object remains valid and may be
 	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name is missing, neither side is configured, a configured
+	/// @throws Exception When the name is missing, neither side is configured, a configured
 	/// `COPY ... TO` side lacks its batch or flush callback, or a configured `COPY ... FROM` side lacks its bind or
 	/// exec callback.
 	auto Register() -> void;
@@ -4531,7 +4510,7 @@ public:
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4547,12 +4526,12 @@ public:
 
 		/// One column's name.
 		/// @param index Column index in [0, GetColumnCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetColumnName(idx_t index) const -> std::string;
 
 		/// One column's type.
 		/// @param index Column index in [0, GetColumnCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetColumnType(idx_t index) const -> LogicalType;
 
 		/// How many options the statement passed to the function, ordered by name. The engine's own options (e.g.
@@ -4561,13 +4540,13 @@ public:
 
 		/// One option's name, a SQL identifier matched case-insensitively.
 		/// @param index Option index in [0, GetOptionCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetOptionName(idx_t index) const -> std::string;
 
 		/// One option's value: the value itself for `DELIM ','`, the BOOLEAN true for a bare option such as `HEADER`,
 		/// and a tuple (an unnamed STRUCT with one field per element, in order) for a parenthesized list.
 		/// @param index Option index in [0, GetOptionCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetOptionValue(idx_t index) const -> Value;
 
 		/// The binding context. Borrowed, valid only for the callback duration.
@@ -4590,14 +4569,14 @@ public:
 
 	public:
 		/// The bind data set via `CopyToBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4638,14 +4617,14 @@ public:
 		}
 
 		/// The bind data set via `CopyToBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4684,21 +4663,21 @@ public:
 		}
 
 		/// The bind data set via `CopyToBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The init data set via `CopyToInitInput::SetInitData` for the file this batch belongs to.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetInitData() const -> T & {
 			return *static_cast<T *>(GetInitDataInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4708,7 +4687,7 @@ public:
 		/// `CopyToBindInput::GetColumnCount`, in the same order. The batch can only be taken once; a batch that is
 		/// never taken is released when the callback returns. It may be kept beyond the callback, e.g. moved into the
 		/// batch data via `SetBatchData`.
-		/// @throws InvalidInputException When the batch was already taken.
+		/// @throws Exception When the batch was already taken.
 		auto TakeBatch() -> ColumnDataCollection;
 
 		/// The query context. Borrowed, valid only for the callback duration.
@@ -4733,28 +4712,28 @@ public:
 
 	public:
 		/// The bind data set via `CopyToBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The init data set via `CopyToInitInput::SetInitData` for the file this batch belongs to.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetInitData() const -> T & {
 			return *static_cast<T *>(GetInitDataInternal());
 		}
 
 		/// The batch data set via `CopyToBatchInput::SetBatchData` for the batch being flushed.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBatchData() const -> T & {
 			return *static_cast<T *>(GetBatchDataInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4782,21 +4761,21 @@ public:
 
 	public:
 		/// The bind data set via `CopyToBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The init data set via `CopyToInitInput::SetInitData` for the file being finalized.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetInitData() const -> T & {
 			return *static_cast<T *>(GetInitDataInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4832,7 +4811,7 @@ public:
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4848,12 +4827,12 @@ public:
 
 		/// One column's name.
 		/// @param index Column index in [0, GetColumnCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetColumnName(idx_t index) const -> std::string;
 
 		/// One column's type.
 		/// @param index Column index in [0, GetColumnCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetColumnType(idx_t index) const -> LogicalType;
 
 		/// How many options the statement passed to the function, ordered by name; every option other than `FORMAT`.
@@ -4862,13 +4841,13 @@ public:
 
 		/// One option's name, a SQL identifier matched case-insensitively.
 		/// @param index Option index in [0, GetOptionCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetOptionName(idx_t index) const -> std::string;
 
 		/// One option's value: the value itself for `DELIM ','`, the BOOLEAN true for a bare option such as `HEADER`,
 		/// and a tuple (an unnamed STRUCT with one field per element, in order) for a parenthesized list.
 		/// @param index Option index in [0, GetOptionCount()).
-		/// @throws InvalidInputException When the index is out of range.
+		/// @throws Exception When the index is out of range.
 		auto GetOptionValue(idx_t index) const -> Value;
 
 		/// Hints how many rows the read will produce, for the optimizer. Producing a different number of rows is not
@@ -4906,14 +4885,14 @@ public:
 		}
 
 		/// The bind data set via `CopyFromBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4953,7 +4932,7 @@ public:
 		}
 
 		/// The bind data set via `CopyFromBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
@@ -4961,14 +4940,14 @@ public:
 
 		/// The global state set via `CopyFromInitGlobalInput::SetGlobalState`, typically to claim this thread's share
 		/// of the work from it. Shared with every other reading thread; access must be synchronized.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetGlobalState() const -> T & {
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -4996,7 +4975,7 @@ public:
 
 	public:
 		/// The bind data set via `CopyFromBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
@@ -5004,21 +4983,21 @@ public:
 
 		/// The global state set via `CopyFromInitGlobalInput::SetGlobalState`. Shared with every other reading thread;
 		/// access must be synchronized.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetGlobalState() const -> T & {
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
 		/// The local state set via `CopyFromInitLocalInput::SetLocalState`, private to this thread.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetLocalState() const -> T & {
 			return *static_cast<T *>(GetLocalStateInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -5053,7 +5032,7 @@ public:
 
 	public:
 		/// The bind data set via `CopyFromBindInput::SetBindData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetBindData() const -> const T & {
 			return *static_cast<const T *>(GetBindDataInternal());
@@ -5061,14 +5040,14 @@ public:
 
 		/// The global state set via `CopyFromInitGlobalInput::SetGlobalState`. This callback runs while the read is
 		/// running, so the state must be read in a thread-safe way.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetGlobalState() const -> T & {
 			return *static_cast<T *>(GetGlobalStateInternal());
 		}
 
 		/// The user data set via `CopyFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -5163,7 +5142,7 @@ public:
 	/// Registers the cast in the database it was created against, replacing whatever cast was registered for the same
 	/// type pair. The function object remains valid and may be adjusted and registered again; user data set via
 	/// `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
+	/// @throws Exception When the source type, target type, or exec callback is missing, or either type is
 	/// not concrete.
 	auto Register() -> void;
 
@@ -5182,7 +5161,7 @@ public:
 
 	public:
 		/// The user data set via `CastFunction::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -5315,7 +5294,7 @@ public:
 
 	/// Applies one flag. Additive, and applying the same flag twice is harmless; at least one flag is required
 	/// before the options can open anything. There is no way to take a flag back -- build a fresh set instead.
-	/// @throws InvalidInputException When the value is `FileFlags::INVALID` or not a flag at all.
+	/// @throws Exception When the value is `FileFlags::INVALID` or not a flag at all.
 	auto SetFlag(FileFlags flag) & -> FileOpenOptions &;
 
 	/// Attaches a named value, a hint for whichever file system ends up handling the path. What a name means is that
@@ -5382,7 +5361,7 @@ public:
 
 	/// Builds a name from its parts, outermost first, so the last one is the object name.
 	/// @param parts Between one and three non-empty parts.
-	/// @throws InvalidInputException When there are no parts, more than three, or any is empty.
+	/// @throws Exception When there are no parts, more than three, or any is empty.
 	static auto Create(const std::vector<std::string> &parts) -> QualifiedName;
 
 	/// How many parts the name has; always at least one.
@@ -5534,7 +5513,7 @@ public:
 	/// Registers the scan on the target it was created against. Scans are consulted in registration order within
 	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
 	/// be registered only once.
-	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
+	/// @throws Exception When the callback is missing, or the scan is already registered.
 	auto Register() -> void;
 
 private:
@@ -5553,7 +5532,7 @@ public:
 
 	public:
 		/// The user data set via `ReplacementScan::SetUserData`.
-		/// @throws InvalidInputException When none was set.
+		/// @throws Exception When none was set.
 		template <class T>
 		auto GetUserData() const -> T & {
 			return *static_cast<T *>(GetUserDataInternal());
@@ -5568,7 +5547,7 @@ public:
 		/// function in a particular schema or catalog. The name is not resolved here: an unknown function fails
 		/// later, when the replacement is bound. The three claim forms, `SetFunctionName`, `SetCollection` and
 		/// `SetSubquery`, are mutually exclusive.
-		/// @throws InvalidInputException When a different claim form was already used.
+		/// @throws Exception When a different claim form was already used.
 		auto SetFunctionName(const QualifiedName &name) -> void;
 
 		/// `SetFunctionName` for the common case of an unqualified function.
@@ -5576,11 +5555,11 @@ public:
 
 		/// Appends a positional argument to the claimed table function. Positional arguments are passed in the order
 		/// they are added, before any named ones.
-		/// @throws InvalidInputException Unless `SetFunctionName` was called first.
+		/// @throws Exception Unless `SetFunctionName` was called first.
 		auto AddArgument(const Value &value) -> void;
 
 		/// Appends a named argument to the claimed table function, the equivalent of `name := value`.
-		/// @throws InvalidInputException Unless `SetFunctionName` was called first.
+		/// @throws Exception Unless `SetFunctionName` was called first.
 		auto AddNamedArgument(std::string_view name, const Value &value) -> void;
 
 		/// Claims the reference by naming a collection to read instead. The collection is borrowed: it must stay
@@ -5591,7 +5570,7 @@ public:
 		/// The three claim forms, `SetFunctionName`, `SetCollection` and `SetSubquery`, are mutually exclusive.
 		/// @param collection The collection to read.
 		/// @param column_names Names for its columns, in order; empty names them col1..colN.
-		/// @throws InvalidInputException When the names do not match the collection's columns, or a different claim
+		/// @throws Exception When the names do not match the collection's columns, or a different claim
 		/// form was already used.
 		auto SetCollection(const ColumnDataCollection &collection, const std::vector<std::string> &column_names = {})
 		    -> void;
@@ -5600,7 +5579,7 @@ public:
 		/// one SELECT statement. The three claim forms, `SetFunctionName`, `SetCollection` and `SetSubquery`, are
 		/// mutually exclusive.
 		/// @throws Exception When the text does not parse, or is not a single SELECT.
-		/// @throws InvalidInputException When a different claim form was already used.
+		/// @throws Exception When a different claim form was already used.
 		auto SetSubquery(std::string_view sql) -> void;
 
 		/// Sets the alias the claimed replacement is bound under. Optional: an alias written in the query takes
@@ -5871,13 +5850,12 @@ public:
 	/// @tparam ARGS One type per argument, in signature order; `fun` is invoked with one value of each.
 	/// @param input The exec callback's input.
 	/// @param fun The callable computing one row: `RESULT(ARGS...)`.
-	/// @throws InvalidInputException When the call carries a different number of arguments than `ARGS` lists.
+	/// @throws Exception When the call carries a different number of arguments than `ARGS` lists.
 	template <class RESULT, class... ARGS, class FUN>
 	static void Execute(ScalarFunction::ExecInput &input, FUN fun) {
 		if (input.GetArgCount() != sizeof...(ARGS)) {
-			throw InvalidInputException("ScalarExecutor::Execute: the call carries " +
-			                            std::to_string(input.GetArgCount()) + " arguments but the type list names " +
-			                            std::to_string(sizeof...(ARGS)));
+			throw Exception("ScalarExecutor::Execute: the call carries " + std::to_string(input.GetArgCount()) +
+			                " arguments but the type list names " + std::to_string(sizeof...(ARGS)));
 		}
 		auto result = input.GetResult();
 		ExecuteImpl<RESULT, ARGS...>(input, result, input.GetRowCount(), fun, std::index_sequence_for<ARGS...> {});

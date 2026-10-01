@@ -115,7 +115,7 @@ TEST_CASE("V2 custom type: registration refusals", "[capi_v2][custom_type]") {
 		duckdb_v2_custom_type_handle type = nullptr;
 		REQUIRE(duckdb_v2_custom_type_create_with_connection(fx.conn, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_custom_type_set_base_type(type, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_custom_type_destroy(&type);
 	}
 
@@ -125,14 +125,14 @@ TEST_CASE("V2 custom type: registration refusals", "[capi_v2][custom_type]") {
 		REQUIRE(duckdb_v2_custom_type_create_with_connection(fx.conn, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 		auto name_str = TypeIdent("no_base");
 		REQUIRE(duckdb_v2_custom_type_set_name(type, &name_str, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_custom_type_destroy(&type);
 	}
 
 	// ANY is a signature wildcard, not something a registered type can be built on.
 	{
 		auto type = MakeCustomType(fx.conn, "any_base", any);
-		REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_custom_type_destroy(&type);
 	}
 
@@ -145,23 +145,23 @@ TEST_CASE("V2 custom type: null arguments and destroy null-safety", "[capi_v2][c
 	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	duckdb_v2_custom_type_handle type = nullptr;
-	REQUIRE(duckdb_v2_custom_type_create_with_connection(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_custom_type_create_with_connection(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(type == nullptr);
-	REQUIRE(duckdb_v2_custom_type_create_with_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_custom_type_create_with_extension(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_custom_type_create_with_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_custom_type_create_with_extension(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	REQUIRE(duckdb_v2_custom_type_create_with_connection(fx.conn, &type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// A view with a null pointer but a non-zero length is rejected; the empty view is a legitimate (empty) name,
 	// which registration then refuses.
 	auto name_str = duckdb_v2_identifier_t {nullptr, 4};
-	REQUIRE(duckdb_v2_custom_type_set_name(type, &name_str, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_custom_type_set_name(type, &name_str, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto name_str2 = TypeIdent(nullptr);
 	REQUIRE(duckdb_v2_custom_type_set_name(type, &name_str2, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str3 = TypeIdent("x");
-	REQUIRE(duckdb_v2_custom_type_set_name(nullptr, &name_str3, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_custom_type_set_base_type(type, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_custom_type_set_base_type(nullptr, integer, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_custom_type_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_custom_type_set_name(nullptr, &name_str3, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_custom_type_set_base_type(type, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_custom_type_set_base_type(nullptr, integer, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_custom_type_register(nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_custom_type_destroy(&type) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(type == nullptr);
 

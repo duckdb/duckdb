@@ -27,7 +27,7 @@ handles:
       which instance handles are created. All instances under one environment
       share an instance cache, so file-level conflicts — the same database
       file opened twice — are detected across them. Destroying the
-      environment refuses with ERROR_RESOURCE_IN_USE while any instance
+      environment refuses with an error while any instance
       created through it is still alive; destroy those first.
     cleanup_with: environment_destroy
   instance:
@@ -97,7 +97,7 @@ handles:
 
       A result is a cursor on the connection's execution, not a box of data.
       While it is live — not finished, cancelled, errored, or destroyed — the
-      connection refuses new queries with ERROR_RESOURCE_IN_USE, and the
+      connection refuses new queries with an error, and the
       query's transaction stays open, deferring version cleanup and
       checkpointing, so drain or destroy it promptly. Side-effecting statements
       (PRAGMA, ALTER, ...) take effect only once the result is drained. Always
@@ -149,7 +149,7 @@ structs:
 
       Functions take an input view as a `const str *`, which must not be
       NULL; a NULL pointer, or a view whose `ptr` is NULL while `len` is
-      nonzero, fails with ERROR_INPUT_INVALID. Point at a `{NULL, 0}` view to
+      nonzero, fails with an error. Point at a `{NULL, 0}` view to
       pass an empty string.
 
       Text inputs, such as VARCHAR values and names, must contain valid UTF-8.
@@ -293,7 +293,7 @@ aliases:
       (config settings) canonicalize to lowercase.
 
       An identifier passed into the API must be valid UTF-8; otherwise the
-      call fails with `ERROR_INPUT_INVALID`.
+      call fails with an error.
 constants:
   BYTES_INLINE_LENGTH:
     value: 12

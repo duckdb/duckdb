@@ -984,7 +984,7 @@ TEST_CASE("V2 arrow: a top-level struct array's own validity bitmap is honored",
 		REQUIRE(arrow_toplevel_validity_observed.valid[i] == !expect_null);
 		REQUIRE(arrow_toplevel_validity_observed.dict_valid[i] == !expect_null);
 	}
-	REQUIRE(arrow_toplevel_validity_observed.missing_bitmap_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(arrow_toplevel_validity_observed.missing_bitmap_rc == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 arrow: the exporter accepts input without draining first", "[capi_v2][arrow]") {
@@ -999,7 +999,7 @@ TEST_CASE("V2 arrow: the exporter accepts input without draining first", "[capi_
 	// The exporter gathers, so it accepts more input without the produced arrays being taken first.
 	REQUIRE(arrow_split_observed.second_append_rc == DUCKDB_V2_ERROR_NONE);
 	// And a chunk whose types disagree with the exporter never reaches the conversion.
-	REQUIRE(arrow_split_observed.type_mismatch_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(arrow_split_observed.type_mismatch_rc == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 arrow: a dictionary column survives an importer split", "[capi_v2][arrow]") {
@@ -1054,25 +1054,25 @@ TEST_CASE("V2 arrow: a dictionary column survives an importer split", "[capi_v2]
 TEST_CASE("V2 arrow: functions guard null arguments", "[capi_v2][arrow]") {
 	ArrowSchema schema {};
 	duckdb_v2_arrow_importer_handle importer = nullptr;
-	REQUIRE(duckdb_v2_arrow_importer_create(nullptr, &schema, 0, &importer, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_importer_create(nullptr, &schema, 0, &importer, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(importer == nullptr);
 	duckdb_v2_schema_handle resolved = nullptr;
-	REQUIRE(duckdb_v2_arrow_importer_get_schema(nullptr, &resolved, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_importer_get_schema(nullptr, &resolved, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(resolved == nullptr);
 	ArrowArray array {};
-	REQUIRE(duckdb_v2_arrow_importer_append(nullptr, &array, true, false, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_importer_append(nullptr, &array, true, false, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	REQUIRE(duckdb_v2_arrow_importer_next_chunk(nullptr, &chunk, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_importer_next_chunk(nullptr, &chunk, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(chunk == nullptr);
 
 	duckdb_v2_arrow_exporter_handle exporter = nullptr;
 	duckdb_v2_str name = Convert("a");
 	REQUIRE(duckdb_v2_arrow_exporter_create(nullptr, nullptr, &name, 0, 0, &exporter, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(exporter == nullptr);
-	REQUIRE(duckdb_v2_arrow_exporter_get_schema(nullptr, &schema, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_exporter_append(nullptr, &chunk, false, false, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_exporter_next_array(nullptr, &array, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_exporter_get_schema(nullptr, &schema, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_exporter_append(nullptr, &chunk, false, false, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_exporter_next_array(nullptr, &array, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// Both destroys are null-safe and idempotent.
 	REQUIRE(duckdb_v2_arrow_importer_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1549,10 +1549,10 @@ TEST_CASE("V2 arrow result: an expanding statement reports its schema once stepp
 	ArrowResult r;
 	REQUIRE(QueryArrow(fx.conn, "PIVOT sales ON year USING sum(amount)", 0, &r) == DUCKDB_V2_ERROR_NONE);
 	ArrowSchema deferred {};
-	REQUIRE(duckdb_v2_arrow_result_get_schema(r, &deferred, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_result_get_schema(r, &deferred, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(deferred.release == nullptr);
 	auto result_type = DUCKDB_V2_RESULT_TYPE_NOTHING;
-	REQUIRE(duckdb_v2_arrow_result_get_result_type(r, &result_type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_result_get_result_type(r, &result_type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	ArrowBatches batches;
 	FetchAll(r, batches);
@@ -1620,7 +1620,7 @@ TEST_CASE("V2 arrow result: cancellation is a step status and a fetch_array erro
 	REQUIRE(duckdb_v2_arrow_result_step(r, &array, &status, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED);
 	REQUIRE(array.release == nullptr);
-	REQUIRE(duckdb_v2_arrow_result_fetch_array(r, &array, nullptr) == DUCKDB_V2_ERROR_RUNTIME_INTERRUPT);
+	REQUIRE(duckdb_v2_arrow_result_fetch_array(r, &array, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(array.release == nullptr);
 }
 #endif
@@ -1692,15 +1692,15 @@ TEST_CASE("V2 arrow result: a connection runs one result at a time, in either fo
 	ArrowResult arrow;
 	REQUIRE(QueryArrow(fx.conn, "SELECT i FROM range(100000) t(i)", 0, &arrow) == DUCKDB_V2_ERROR_NONE);
 	QueryResult chunks;
-	REQUIRE(Query(fx.conn, "SELECT 1", &chunks) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(Query(fx.conn, "SELECT 1", &chunks) == DUCKDB_V2_ERROR_GENERIC);
 	ArrowResult second;
-	REQUIRE(QueryArrow(fx.conn, "SELECT 1", 0, &second) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(QueryArrow(fx.conn, "SELECT 1", 0, &second) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(second.handle == nullptr);
 
 	duckdb_v2_arrow_result_destroy(&arrow);
 	REQUIRE(arrow.handle == nullptr);
 	REQUIRE(Query(fx.conn, "SELECT 1", &chunks) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(QueryArrow(fx.conn, "SELECT 1", 0, &second) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(QueryArrow(fx.conn, "SELECT 1", 0, &second) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_result_destroy(&chunks.handle);
 	REQUIRE(QueryArrow(fx.conn, "SELECT 1", 0, &second) == DUCKDB_V2_ERROR_NONE);
 }
@@ -1911,7 +1911,7 @@ TEST_CASE("V2 arrow result: a prepared Arrow result honours its batch size and c
 		        DUCKDB_V2_ERROR_NONE);
 		ArrowResult busy;
 		REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, nullptr, 0, 700, &busy, nullptr) ==
-		        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+		        DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(busy.handle == nullptr);
 		ArrowBatches batches;
 		FetchAll(r, batches);
@@ -1958,16 +1958,16 @@ TEST_CASE("V2 arrow result: functions guard null arguments", "[capi_v2][arrow]")
 	auto statement = ParseOne(fx.conn, "SELECT 1");
 	duckdb_v2_arrow_result_handle out = nullptr;
 	REQUIRE(duckdb_v2_statement_execute_arrow(nullptr, statement, nullptr, nullptr, 0, 0, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_statement_execute_arrow(fx.conn, nullptr, nullptr, nullptr, 0, 0, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_statement_execute_arrow(fx.conn, statement, nullptr, nullptr, 1, 0, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_statement_execute_arrow(fx.conn, statement, nullptr, nullptr, 0, 0, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	REQUIRE(duckdb_v2_prepared_statement_execute_arrow(nullptr, nullptr, nullptr, 0, 0, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 
 	ArrowArray array {};
@@ -1977,34 +1977,33 @@ TEST_CASE("V2 arrow result: functions guard null arguments", "[capi_v2][arrow]")
 	idx_t rows_changed = 0;
 	auto result_type = DUCKDB_V2_RESULT_TYPE_NOTHING;
 	auto statement_type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
-	REQUIRE(duckdb_v2_arrow_result_step(nullptr, &array, &status, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_fetch_array(nullptr, &array, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_wait(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_drain(nullptr, &rows_changed, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_get_result_type(nullptr, &result_type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_get_statement_type(nullptr, &statement_type, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_get_schema(nullptr, &schema, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_result_step(nullptr, &array, &status, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_fetch_array(nullptr, &array, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_wait(nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_drain(nullptr, &rows_changed, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_get_result_type(nullptr, &result_type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_get_statement_type(nullptr, &statement_type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_get_schema(nullptr, &schema, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	stream.release = UnusedStreamRelease;
-	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(nullptr, &stream, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(nullptr, &stream, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(stream.release == nullptr);
 	stream.release = UnusedStreamRelease;
-	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&out, &stream, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&out, &stream, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(stream.release == nullptr);
 
 	ArrowResult r;
 	REQUIRE(duckdb_v2_statement_execute_arrow(fx.conn, statement, nullptr, nullptr, 0, 0, &r, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_destroy(&statement);
-	REQUIRE(duckdb_v2_arrow_result_step(r, nullptr, &status, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_step(r, &array, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_fetch_array(r, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_drain(r, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_get_result_type(r, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_get_statement_type(r, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_arrow_result_get_schema(r, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_result_step(r, nullptr, &status, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_step(r, &array, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_fetch_array(r, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_drain(r, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_get_result_type(r, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_get_statement_type(r, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_arrow_result_get_schema(r, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	// A rejected conversion leaves the result with the caller.
-	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&r, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arrow_result_to_arrow_c_stream(&r, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r.handle != nullptr);
 	ArrowBatches batches;
 	FetchAll(r, batches);

@@ -414,12 +414,12 @@ TEST_CASE("V2 tokenizer: tokenize_sql argument checks", "[capi_v2][tokenizer]") 
 
 	// A null connection or a null view with a non-zero length is an input error, and the slot is reset.
 	auto it = stale;
-	REQUIRE(duckdb_v2_tokenize_sql(nullptr, &sql, &it, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_tokenize_sql(nullptr, &sql, &it, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(it == nullptr);
 	it = stale;
 	duckdb_v2_error_info_handle err = nullptr;
 	auto sql_str = duckdb_v2_str {nullptr, 3};
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(it == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_str message = {nullptr, 0};
@@ -428,7 +428,7 @@ TEST_CASE("V2 tokenizer: tokenize_sql argument checks", "[capi_v2][tokenizer]") 
 	duckdb_v2_error_info_destroy(&err);
 
 	// A null out slot is an input error.
-	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 tokenizer: next argument checks", "[capi_v2][tokenizer]") {
@@ -441,12 +441,12 @@ TEST_CASE("V2 tokenizer: next argument checks", "[capi_v2][tokenizer]") {
 	auto type = STALE_TYPE;
 	idx_t start = STALE_IDX;
 	idx_t length = STALE_IDX;
-	REQUIRE(duckdb_v2_token_iterator_next(it, nullptr, &start, &length, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_token_iterator_next(it, &type, nullptr, &length, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_token_iterator_next(it, &type, &start, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_token_iterator_next(it, nullptr, &start, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_token_iterator_next(it, &type, nullptr, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_token_iterator_next(it, &type, &start, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// A null iterator fails and resets the out-params.
-	REQUIRE(duckdb_v2_token_iterator_next(nullptr, &type, &start, &length, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_token_iterator_next(nullptr, &type, &start, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(type == DUCKDB_V2_TOKEN_TYPE_INVALID);
 	REQUIRE(start == 0);
 	REQUIRE(length == 0);
@@ -463,9 +463,9 @@ TEST_CASE("V2 tokenizer: ends_unterminated argument checks", "[capi_v2][tokenize
 	REQUIRE(duckdb_v2_tokenize_sql(fx.conn, &sql_str, &it, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// A null slot is an input error; a null iterator fails and resets the slot.
-	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(it, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(it, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	bool out = true;
-	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_token_iterator_ends_unterminated(nullptr, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE_FALSE(out);
 
 	REQUIRE(EndsUnterminated(it));

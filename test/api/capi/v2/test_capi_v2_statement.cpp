@@ -80,8 +80,7 @@ std::vector<std::string> StmtParameterNames(duckdb_v2_sql_statement_handle stmt)
 		names.push_back(Convert(name));
 	}
 	duckdb_v2_identifier_t past = {"x", 1};
-	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(stmt, count, &past, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(stmt, count, &past, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(past.ptr == nullptr);
 	REQUIRE(past.len == 0);
 	return names;
@@ -183,7 +182,7 @@ TEST_CASE("V2: parse errors surface with QUERY_PARSER", "[capi_v2][sql_statement
 		}
 		duckdb_v2_sql_statement_destroy(&stmt);
 	}
-	REQUIRE(rc == DUCKDB_V2_ERROR_QUERY_PARSER);
+	REQUIRE(rc == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(err != nullptr);
 	duckdb_v2_str msg = {nullptr, 0};
 	duckdb_v2_error_info_get_text(err, &msg);
@@ -242,7 +241,7 @@ TEST_CASE("V2: a parse error terminates iteration", "[capi_v2][sql_statement]") 
 	duckdb_v2_sql_statement_destroy(&stmt);
 
 	// The next() that reaches "SELEKT 2" reports the parse error.
-	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_QUERY_PARSER);
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(stmt == nullptr);
 
 	// Iteration is now spent: further calls report clean exhaustion, not the error.
@@ -285,8 +284,7 @@ TEST_CASE("V2: statement_execute leaves the statement intact on prepare failure"
 	auto stmt = StmtParseOne(fx.conn, "SELECT * FROM no_such_table");
 
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 	REQUIRE(stmt != nullptr); // not consumed: only the copy was
 
@@ -308,8 +306,7 @@ TEST_CASE("V2: the busy refusal leaves the statement intact", "[capi_v2][sql_sta
 	auto stmt = StmtParseOne(fx.conn, "SELECT 1");
 
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(stmt != nullptr); // intact: the engine was never reached
 
 	// Draining the live result frees the connection; the same statement
@@ -394,8 +391,7 @@ TEST_CASE("V2: statement_execute rejects parameters on a statement that expands"
 	duckdb_v2_value_handle params[1] = {v};
 
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, params, 1, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, params, 1, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 
 	// Rejected before any fragment ran: the table is untouched, the connection usable.
@@ -482,8 +478,7 @@ TEST_CASE("V2: statement_execute rejects positional binding of a named parameter
 
 	// Positional binding of a named parameter provides key "1" but the statement
 	// expects "val": a bind error.
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, values, 1, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 
 	duckdb_v2_value_destroy(&v);
@@ -500,8 +495,7 @@ TEST_CASE("V2: statement_execute rejects a wrong parameter key set", "[capi_v2][
 		duckdb_v2_str names[2] = {Convert("a"), Convert("b")};
 		duckdb_v2_value_handle values[2] = {v1, v2};
 		duckdb_v2_result_handle r = nullptr;
-		REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 2, &r, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 2, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(r == nullptr);
 		duckdb_v2_sql_statement_destroy(&stmt);
 	}
@@ -510,8 +504,7 @@ TEST_CASE("V2: statement_execute rejects a wrong parameter key set", "[capi_v2][
 		duckdb_v2_str names[1] = {Convert("nope")};
 		duckdb_v2_value_handle values[1] = {v1};
 		duckdb_v2_result_handle r = nullptr;
-		REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(r == nullptr);
 		duckdb_v2_sql_statement_destroy(&stmt);
 	}
@@ -520,8 +513,7 @@ TEST_CASE("V2: statement_execute rejects a wrong parameter key set", "[capi_v2][
 		duckdb_v2_str names[1] = {Convert("a")};
 		duckdb_v2_value_handle values[1] = {v1};
 		duckdb_v2_result_handle r = nullptr;
-		REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(r == nullptr);
 		duckdb_v2_sql_statement_destroy(&stmt);
 	}
@@ -538,11 +530,11 @@ TEST_CASE("V2: statement_execute rejects a malformed parameter name", "[capi_v2]
 	duckdb_v2_str names[1] = {duckdb_v2_str {nullptr, 5}};
 	duckdb_v2_value_handle values[1] = {v};
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 	names[0] = Convert("\x80");
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, &err) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_str message = {nullptr, 0};
 	REQUIRE(duckdb_v2_error_info_get_text(err, &message) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(Convert(message).find("UTF-8") != std::string::npos);
@@ -589,7 +581,7 @@ TEST_CASE("V2: mixing named and positional parameters fails at parse", "[capi_v2
 	duckdb_v2_sql_statement_handle stmt = nullptr;
 	auto rc = duckdb_v2_statement_iterator_next(iter, &stmt, nullptr);
 	CAPTURE(rc);
-	REQUIRE(rc == DUCKDB_V2_ERROR_QUERY_NOT_IMPLEMENTED);
+	REQUIRE(rc == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(stmt == nullptr);
 	duckdb_v2_statement_iterator_destroy(&iter);
 }
@@ -759,8 +751,7 @@ TEST_CASE("V2: sql_statement parameter names answer before the catalog can", "[c
 
 	// The table does not exist yet, so binding the INSERT fails ...
 	duckdb_v2_schema_handle out = nullptr;
-	REQUIRE(duckdb_v2_statement_bind(fx.conn, statements[1], &out, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(duckdb_v2_statement_bind(fx.conn, statements[1], &out, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	// ... while the parse tree already knows the parameter.
 	REQUIRE(StmtParameterNames(statements[1]) == std::vector<std::string> {"v"});
@@ -781,37 +772,35 @@ TEST_CASE("V2: sql_statement null-arg rejection and null-safe destroys", "[capi_
 	duckdb_v2_sql_statement_handle stmt = nullptr;
 	duckdb_v2_result_handle r = nullptr;
 
-	REQUIRE(duckdb_v2_parse_sql(nullptr, "SELECT 1", &iter, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_parse_sql(fx.conn, nullptr, &iter, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_parse_sql(fx.conn, "SELECT 1", nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_statement_iterator_next(nullptr, &stmt, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_parse_sql(nullptr, "SELECT 1", &iter, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, nullptr, &iter, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, "SELECT 1", nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_statement_iterator_next(nullptr, &stmt, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_parse_sql(fx.conn, "SELECT 1", &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_statement_iterator_next(iter, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_statement_iterator_destroy(&iter);
 
 	// statement_execute rejects a NULL statement, a NULL out_result, and a
 	// positive parameter_count paired with NULL values.
 	auto valid = StmtParseOne(fx.conn, "SELECT 1");
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, nullptr, nullptr, nullptr, 0, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, nullptr, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_statement_execute(fx.conn, valid, nullptr, nullptr, 0, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, valid, nullptr, nullptr, 2, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, valid, nullptr, nullptr, 2, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// The getters reject a NULL statement and a NULL out-slot.
 	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_SELECT;
 	duckdb_v2_str text = {nullptr, 0};
 	idx_t count = 0;
 	duckdb_v2_identifier_t name = {nullptr, 0};
-	REQUIRE(duckdb_v2_sql_statement_get_type(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_sql_statement_get_type(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_sql_statement_get_text(nullptr, &text, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_sql_statement_get_text(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_sql_statement_get_parameter_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_sql_statement_get_parameter_count(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(valid, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_sql_statement_get_type(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_sql_statement_get_type(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_sql_statement_get_text(nullptr, &text, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_sql_statement_get_text(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_count(valid, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_sql_statement_get_parameter_name(valid, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_sql_statement_destroy(&valid);
 
 	// Destroys are null-safe.

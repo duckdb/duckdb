@@ -127,7 +127,7 @@ TEST_CASE("V2: a max_execution_time timeout surfaces as an error, not CANCELLED"
 	}
 	INFO("timeout error detail: " << (!msg.empty() ? msg : "(none)"));
 	CHECK(status != DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED);
-	CHECK(rc == DUCKDB_V2_ERROR_RUNTIME_INTERRUPT);
+	CHECK(rc == DUCKDB_V2_ERROR_GENERIC);
 	CHECK(err != nullptr);
 	CHECK(msg.find("Query exceeded maximum execution time") != string::npos);
 	duckdb_v2_error_info_destroy(&err);

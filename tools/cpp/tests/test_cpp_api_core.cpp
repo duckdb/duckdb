@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "duckdb_cpp.hpp"
+#include "duckdb_v2.h"
 
 #include "test_cpp_api.hpp"
 #include "test_helpers.hpp"
@@ -30,8 +31,7 @@ TEST_CASE("Stable C++API: Instance GetOption by name and option target scope", "
 	// An alias resolves to its canonical option.
 	REQUIRE(instance.GetOption("memory_limit").GetName() == "max_memory");
 
-	REQUIRE_THROWS_MATCHES(instance.GetOption("no_such_option"), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(instance.GetOption("no_such_option"), Exception);
 }
 TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_api]") {
 	using namespace duckdb::cxx;
@@ -106,19 +106,18 @@ TEST_CASE("Stable C++API: LibraryVersion reports the engine version", "[cpp_api]
 	REQUIRE(version == std::string(raw.ptr, raw.len));
 }
 
-TEST_CASE("Stable C++API: Exception carries the code and message body", "[cpp_api]") {
+TEST_CASE("Stable C++API: Exception carries the message body", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
 	auto instance = env.Open(":memory:");
 	auto conn = instance.Connect();
 
-	// Binder error: GetCode() is the identity, GetRawMessage() the unprefixed body.
+	// Catalog error: GetRawMessage() is the unprefixed body.
 	try {
 		conn.Execute("SELECT * FROM no_such_table");
 		FAIL("expected a Catalog error");
 	} catch (const Exception &ex) {
-		REQUIRE(ex.GetCode() == DUCKDB_V2_ERROR_DATABASE_CATALOG);
 		REQUIRE(std::string(ex.GetRawMessage()).find("no_such_table") != std::string::npos);
 		REQUIRE(std::string(ex.GetRawMessage()).rfind("Catalog Error:", 0) != 0);
 		// what() is the full prefixed message and contains the body.
@@ -128,14 +127,14 @@ TEST_CASE("Stable C++API: Exception carries the code and message body", "[cpp_ap
 
 	// Parse error surfaces lazily: ParseSQL only sets up the iterator, the first
 	// Next() yields "SELECT 1", and the parse error for "SELEKT 2" surfaces from the
-	// Next() that reaches it. Same shape: Parser code, unprefixed body.
+	// Next() that reaches it. Same shape: unprefixed body.
 	try {
 		auto iter = conn.ParseSQL("SELECT 1; SELEKT 2");
 		REQUIRE(iter.Next());
 		iter.Next();
 		FAIL("expected a Parser error");
 	} catch (const Exception &ex) {
-		REQUIRE(ex.GetCode() == DUCKDB_V2_ERROR_QUERY_PARSER);
+		REQUIRE(std::string(ex.what()).rfind("Parser Error:", 0) == 0);
 		REQUIRE(std::string(ex.GetRawMessage()).rfind("Parser Error:", 0) != 0);
 	}
 }
@@ -164,8 +163,7 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	REQUIRE(std::string(seen_a) == std::string(seen_b));
 
 	// A GLOBAL_ONLY option rejects a LOCAL scope.
-	REQUIRE_THROWS_MATCHES(conn_a.SetOption("allow_community_extensions", "false", SettingScope::LOCAL), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(conn_a.SetOption("allow_community_extensions", "false", SettingScope::LOCAL), Exception);
 }
 TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOption default", "[cpp_api]") {
 	using namespace duckdb::cxx;
@@ -181,8 +179,7 @@ TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOpt
 	conn.SetOption("max_execution_time", "4242");
 	REQUIRE(conn.GetOption("max_execution_time").GetValue() == "4242");
 
-	REQUIRE_THROWS_MATCHES(conn.GetOption("no_such_option_xyz"), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(conn.GetOption("no_such_option_xyz"), Exception);
 }
 TEST_CASE("Stable C++API: Instance::Attach with a name and options", "[cpp_api]") {
 	using namespace duckdb::cxx;
@@ -255,26 +252,16 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 
 	duckdb::DeleteDatabase(path);
 }
-TEST_CASE("Stable C++API: typed exceptions carry their error code", "[cpp_api]") {
+TEST_CASE("Stable C++API: Exception carries its message", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	// Each typed exception fixes its code in the implementation; throwing one
-	// is how a callback names its error class without any code vocabulary.
-	REQUIRE(InvalidInputException("boom").GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_INPUT_INVALID));
-	REQUIRE(InterruptException("stop").GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_RUNTIME_INTERRUPT));
-
-	// They are catchable through the Exception base, preserving the code.
 	try {
-		throw InvalidInputException("bad arg");
-	} catch (const Exception &caught) {
-		REQUIRE(caught.GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_INPUT_INVALID));
+		throw Exception("bad arg");
+	} catch (const std::exception &caught) {
+		REQUIRE(std::string(caught.what()) == "bad arg");
 	}
 
-	// The base Exception with a raw code still works.
-	Exception raw(static_cast<uint32_t>(DUCKDB_V2_ERROR_QUERY_BINDER), "parse boom");
-	REQUIRE(raw.GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_QUERY_BINDER));
-
-	// A thrown-and-caught engine error classifies back correctly end to end.
+	// An engine error surfaces as an Exception with its prefixed message.
 	Environment env;
 	auto instance = env.Open(":memory:");
 	auto conn = instance.Connect();
@@ -282,6 +269,6 @@ TEST_CASE("Stable C++API: typed exceptions carry their error code", "[cpp_api]")
 		conn.Execute("SELECT * FROM no_such_table_xyz");
 		FAIL("expected a Catalog error");
 	} catch (const Exception &caught) {
-		REQUIRE(caught.GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_DATABASE_CATALOG));
+		REQUIRE(std::string(caught.what()).rfind("Catalog Error:", 0) == 0);
 	}
 }

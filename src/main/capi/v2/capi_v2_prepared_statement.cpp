@@ -59,9 +59,7 @@ DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_connection_handle 
 		// Borrowed, not consumed: prepare a copy so the caller keeps the original.
 		auto prepared = connection->context->Prepare(Convert(statement)->Copy());
 		if (prepared->HasError()) {
-			// Prepare reports failure on the returned object rather than throwing; re-throw
-			// the typed ErrorData so its ExceptionType routes through
-			// GetErrorCodeFromExceptionType instead of collapsing into a generic code.
+			// Prepare reports failure on the returned object rather than throwing; re-throw it.
 			prepared->GetErrorObject().Throw();
 		}
 		if (require_cacheable && !PreparedReusesPlanV2(prepared->GetStatementProperties())) {

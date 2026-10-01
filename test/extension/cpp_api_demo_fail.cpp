@@ -7,5 +7,5 @@ DUCKDB_CPP_EXTENSION_ENTRYPOINT(duckdb::cxx::Extension &extension, duckdb::cxx::
 	(void)extension;
 	(void)context;
 
-	throw duckdb::cxx::InvalidInputException("cpp_api_demo_fail always fails to load");
+	throw duckdb::cxx::Exception("cpp_api_demo_fail always fails to load");
 }

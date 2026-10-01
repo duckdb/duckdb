@@ -78,7 +78,7 @@ TEST_CASE("V2 qname: create and inspect", "[capi_v2][qname]") {
 
 	// Reading past the end is refused rather than silently empty.
 	duckdb_v2_identifier_t part = {nullptr, 0};
-	REQUIRE(duckdb_v2_qname_get_part(one, 1, &part, nullptr) == DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE);
+	REQUIRE(duckdb_v2_qname_get_part(one, 1, &part, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_qname_destroy(&one);
 	duckdb_v2_qname_destroy(&two);
@@ -143,26 +143,26 @@ TEST_CASE("V2 qname: construction refusals", "[capi_v2][qname]") {
 	duckdb_v2_qname_handle name = nullptr;
 
 	// Between one and three parts, none empty.
-	REQUIRE(duckdb_v2_qname_create(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_create(nullptr, 0, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(name == nullptr);
 
 	duckdb_v2_identifier_t four[4] = {Convert("a"), Convert("b"), Convert("c"), Convert("d")};
-	REQUIRE(duckdb_v2_qname_create(four, 4, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_create(four, 4, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_identifier_t with_empty[2] = {Convert("a"), Convert("")};
-	REQUIRE(duckdb_v2_qname_create(with_empty, 2, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_create(with_empty, 2, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_identifier_t with_invalid_utf8[2] = {Convert("a"), Convert("\x80")};
-	REQUIRE(duckdb_v2_qname_create(with_invalid_utf8, 2, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_create(with_invalid_utf8, 2, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_identifier_t one[1] = {Convert("a")};
-	REQUIRE(duckdb_v2_qname_create(nullptr, 1, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_create(one, 1, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_create(nullptr, 1, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_create(one, 1, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// Reject unusable text, invalid UTF-8 and excess parts.
 	auto text_str = Convert("");
-	REQUIRE(duckdb_v2_qname_parse(&text_str, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_parse(&text_str, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto text_str2 = Convert("a.\x80");
-	REQUIRE(duckdb_v2_qname_parse(&text_str2, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_parse(&text_str2, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(name == nullptr);
 	auto text_str3 = Convert("a.b.c.d");
 	REQUIRE(duckdb_v2_qname_parse(&text_str3, &name, nullptr) != DUCKDB_V2_ERROR_NONE);
@@ -178,22 +178,22 @@ TEST_CASE("V2 qname: null arguments and destroy null-safety", "[capi_v2][qname]"
 	idx_t length = 0;
 	bool result = false;
 	uint64_t hash = 0;
-	REQUIRE(duckdb_v2_qname_get_part_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_get_part_count(name, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_get_part(nullptr, 0, &part, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_get_part(name, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_render(nullptr, nullptr, 0, &length, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_render(name, nullptr, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_equals(nullptr, name, &result, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_equals(name, nullptr, &result, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_equals(name, name, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_hash(nullptr, &hash, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_qname_hash(name, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_qname_get_part_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_get_part_count(name, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_get_part(nullptr, 0, &part, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_get_part(name, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_render(nullptr, nullptr, 0, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_render(name, nullptr, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_equals(nullptr, name, &result, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_equals(name, nullptr, &result, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_equals(name, name, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_hash(nullptr, &hash, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_qname_hash(name, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// A buffer that cannot hold the text plus its terminator is refused, with the required length reported.
 	char small[2] = {'\0', '\0'};
 	length = 0;
-	REQUIRE(duckdb_v2_qname_render(name, small, 1, &length, nullptr) == DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE);
+	REQUIRE(duckdb_v2_qname_render(name, small, 1, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(length == 3);
 
 	REQUIRE(duckdb_v2_qname_destroy(&name) == DUCKDB_V2_ERROR_NONE);

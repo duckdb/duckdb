@@ -223,8 +223,8 @@ typedef struct duckdb_v2_opaque duckdb_v2_opaque;
 /*!
  * An opaque, owned handle to the V2 environment: the required root through which instance handles are created. All
  * instances under one environment share an instance cache, so file-level conflicts — the same database file opened
- * twice — are detected across them. Destroying the environment refuses with ERROR_RESOURCE_IN_USE while any instance
- * created through it is still alive; destroy those first.
+ * twice — are detected across them. Destroying the environment refuses with an error while any instance created through
+ * it is still alive; destroy those first.
  */
 typedef struct _duckdb_v2_environment {
 	void *internal_ptr;
@@ -291,10 +291,10 @@ typedef struct _duckdb_v2_value {
  * a time.
  *
  * A result is a cursor on the connection's execution, not a box of data. While it is live — not finished, cancelled,
- * errored, or destroyed — the connection refuses new queries with ERROR_RESOURCE_IN_USE, and the query's transaction
- * stays open, deferring version cleanup and checkpointing, so drain or destroy it promptly. Side-effecting statements
- * (PRAGMA, ALTER, ...) take effect only once the result is drained. Always destroy via `duckdb_v2_result_destroy()`,
- * which is safe even on a partially consumed stream.
+ * errored, or destroyed — the connection refuses new queries with an error, and the query's transaction stays open,
+ * deferring version cleanup and checkpointing, so drain or destroy it promptly. Side-effecting statements (PRAGMA,
+ * ALTER, ...) take effect only once the result is drained. Always destroy via `duckdb_v2_result_destroy()`, which is
+ * safe even on a partially consumed stream.
  */
 typedef struct _duckdb_v2_result {
 	void *internal_ptr;
@@ -368,7 +368,7 @@ typedef duckdb_v2_bytes duckdb_v2_bignum_t;
  * through the identifier-quoting entry point rather than embedding it raw. The catalog preserves casing; some
  * registries (config settings) canonicalize to lowercase.
  *
- * An identifier passed into the API must be valid UTF-8; otherwise the call fails with `ERROR_INPUT_INVALID`.
+ * An identifier passed into the API must be valid UTF-8; otherwise the call fails with an error.
  */
 typedef duckdb_v2_str duckdb_v2_identifier_t;
 
@@ -430,7 +430,7 @@ typedef void (*duckdb_v2_opaque_destroy_fn)(void *data);
  * variable-size value in a vector.
  *
  * Functions take an input view as a `const str *`, which must not be NULL; a NULL pointer, or a view whose `ptr` is
- * NULL while `len` is nonzero, fails with ERROR_INPUT_INVALID. Point at a `{NULL, 0}` view to pass an empty string.
+ * NULL while `len` is nonzero, fails with an error. Point at a `{NULL, 0}` view to pass an empty string.
  *
  * Text inputs, such as VARCHAR values and names, must contain valid UTF-8. The caller is responsible for ensuring this;
  * API functions do not necessarily validate the input. Binary inputs, such as BLOB values, do not require valid UTF-8.
@@ -478,154 +478,18 @@ struct duckdb_v2_opaque {
 
 /* --- Enums for errors --- */
 
-//! Error codes for API calls.
+/*!
+ * Error codes for API calls.
+ *
+ * Any non-zero code is an error; callers should compare against ERROR_NONE rather than against a specific failure code.
+ * More codes may be added, and the exact values of failure codes may change, in future versions.
+ */
 typedef enum DUCKDB_V2_ERROR {
 	//! Success.
 	DUCKDB_V2_ERROR_NONE = 0,
 
-	//! Generic API error.
-	DUCKDB_V2_ERROR_API = 1,
-
-	//! The specified file could not be found.
-	DUCKDB_V2_ERROR_IO_FILE_NOT_FOUND = 1001,
-
-	//! Failed to read from the storage device.
-	DUCKDB_V2_ERROR_IO_READ_FAILURE = 1002,
-
-	//! Unexpected end of file reached.
-	DUCKDB_V2_ERROR_IO_EOF = 1003,
-
-	//! A generic I/O error occurred while reading or writing data.
-	DUCKDB_V2_ERROR_IO_GENERAL = 1004,
-
-	//! A network-level failure occurred during an I/O operation.
-	DUCKDB_V2_ERROR_IO_NETWORK = 1005,
-
-	//! An HTTP request issued by the database failed.
-	DUCKDB_V2_ERROR_IO_HTTP = 1006,
-
-	//! General invalid input error.
-	DUCKDB_V2_ERROR_INPUT_INVALID = 2001,
-
-	//! A specific function parameter is malformed.
-	DUCKDB_V2_ERROR_INPUT_PARAMETER_INVALID = 2002,
-
-	//! A provided value is outside the acceptable range.
-	DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE = 2003,
-
-	//! An object exceeded its maximum permitted size.
-	DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE = 2004,
-
-	//! The requested resource is already in use.
-	DUCKDB_V2_ERROR_RESOURCE_IN_USE = 3001,
-
-	//! An allocation failed because the system ran out of memory.
-	DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY = 3002,
-
-	//! A connection-level failure occurred (e.g. the connection has been closed or invalidated).
-	DUCKDB_V2_ERROR_RESOURCE_CONNECTION = 3003,
-
-	//! An operation failed because of an unresolved dependency between catalog objects.
-	DUCKDB_V2_ERROR_RESOURCE_DEPENDENCY = 3004,
-
-	//! An extension required by the operation is not loaded.
-	DUCKDB_V2_ERROR_RESOURCE_MISSING_EXTENSION = 3005,
-
-	//! Autoloading an extension failed.
-	DUCKDB_V2_ERROR_RESOURCE_AUTOLOAD = 3006,
-
-	//! A value could not be converted to the requested type.
-	DUCKDB_V2_ERROR_TYPE_CONVERSION = 4001,
-
-	//! An unknown or unsupported type was encountered.
-	DUCKDB_V2_ERROR_TYPE_UNKNOWN = 4002,
-
-	//! A type was used in a context where it is not valid.
-	DUCKDB_V2_ERROR_TYPE_INVALID = 4003,
-
-	//! Two values or expressions have incompatible types.
-	DUCKDB_V2_ERROR_TYPE_MISMATCH = 4004,
-
-	//! A decimal value is out of range or otherwise invalid.
-	DUCKDB_V2_ERROR_TYPE_DECIMAL = 4005,
-
-	//! Division by zero was attempted.
-	DUCKDB_V2_ERROR_TYPE_DIVIDE_BY_ZERO = 4006,
-
-	//! The query could not be parsed.
-	DUCKDB_V2_ERROR_QUERY_PARSER = 5001,
-
-	//! The query contains a syntax error.
-	DUCKDB_V2_ERROR_QUERY_SYNTAX = 5002,
-
-	//! Binding the query against the catalog failed (e.g. unknown column or table).
-	DUCKDB_V2_ERROR_QUERY_BINDER = 5003,
-
-	//! The query could not be translated into a logical plan.
-	DUCKDB_V2_ERROR_QUERY_PLANNER = 5004,
-
-	//! An error occurred during query optimization.
-	DUCKDB_V2_ERROR_QUERY_OPTIMIZER = 5005,
-
-	//! An expression in the query is invalid or could not be evaluated.
-	DUCKDB_V2_ERROR_QUERY_EXPRESSION = 5006,
-
-	//! An error occurred while executing the physical plan.
-	DUCKDB_V2_ERROR_QUERY_EXECUTOR = 5007,
-
-	//! The task scheduler reported an error while running the query.
-	DUCKDB_V2_ERROR_QUERY_SCHEDULER = 5008,
-
-	//! The requested feature or operation is not implemented.
-	DUCKDB_V2_ERROR_QUERY_NOT_IMPLEMENTED = 5009,
-
-	//! A prepared-statement parameter has not been bound to a value.
-	DUCKDB_V2_ERROR_QUERY_PARAMETER_NOT_RESOLVED = 5010,
-
-	//! A prepared-statement parameter was used in a position where it is not allowed.
-	DUCKDB_V2_ERROR_QUERY_PARAMETER_NOT_ALLOWED = 5011,
-
-	//! A catalog operation failed (e.g. object not found or already exists).
-	DUCKDB_V2_ERROR_DATABASE_CATALOG = 6001,
-
-	//! A transaction-level error occurred (e.g. conflict or aborted transaction).
-	DUCKDB_V2_ERROR_DATABASE_TRANSACTION = 6002,
-
-	//! A constraint (primary key, unique, foreign key, NOT NULL, check) was violated.
-	DUCKDB_V2_ERROR_DATABASE_CONSTRAINT = 6003,
-
-	//! An index operation failed.
-	DUCKDB_V2_ERROR_DATABASE_INDEX = 6004,
-
-	//! A sequence operation failed (e.g. overflow or invalid usage).
-	DUCKDB_V2_ERROR_DATABASE_SEQUENCE = 6005,
-
-	//! An error related to catalog statistics occurred.
-	DUCKDB_V2_ERROR_DATABASE_STATISTICS = 6006,
-
-	//! Serializing or deserializing a database object failed.
-	DUCKDB_V2_ERROR_DATABASE_SERIALIZATION = 6007,
-
-	//! A settings-related error occurred (e.g. setting an unknown option).
-	DUCKDB_V2_ERROR_CONFIGURATION_SETTINGS = 7001,
-
-	//! The database configuration is invalid.
-	DUCKDB_V2_ERROR_CONFIGURATION_INVALID = 7002,
-
-	//! The operation is not permitted under the current configuration.
-	DUCKDB_V2_ERROR_CONFIGURATION_PERMISSION = 7003,
-
-	//! An internal invariant was violated; this indicates a bug in DuckDB.
-	DUCKDB_V2_ERROR_RUNTIME_INTERNAL = 8001,
-
-	//! A fatal error occurred; the database is no longer usable.
-	DUCKDB_V2_ERROR_RUNTIME_FATAL = 8002,
-
-	//! The operation was interrupted (e.g. by a cancel request).
-	DUCKDB_V2_ERROR_RUNTIME_INTERRUPT = 8003,
-
-	//! A required pointer was unexpectedly null.
-	DUCKDB_V2_ERROR_RUNTIME_NULL_POINTER = 8004,
+	//! The call failed. The error info handle, when requested, describes the failure.
+	DUCKDB_V2_ERROR_GENERIC = 1,
 	DUCKDB_V2_ERROR_MAX_ENUM = 0x7FFFFFFF,
 } DUCKDB_V2_ERROR;
 
@@ -1646,7 +1510,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias_count(duckdb_v2_option_h
 /*!
  * Borrows the alias name at the given index.
  *
- * An out-of-range index returns ERROR_INPUT_INVALID.
+ * An out-of-range index returns an error.
  *
  * history:
  * - stable: v2.0.0
@@ -1667,9 +1531,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
  *
  * The context is a connection seen from inside DuckDB, so this reads the same cascade
  * `duckdb_v2_connection_get_option_by_name()` does: the LOCAL override if the connection set one, otherwise the GLOBAL
- * value, otherwise the static default. Aliases resolve transparently, and an unknown name returns ERROR_INPUT_INVALID.
- * The caller destroys the returned option. A context is a read scope: options are written through an instance or
- * connection.
+ * value, otherwise the static default. Aliases resolve transparently, and an unknown name returns an error. The caller
+ * destroys the returned option. A context is a read scope: options are written through an instance or connection.
  *
  * history:
  * - stable: v2.0.0
@@ -1708,7 +1571,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_count(duckdb_v2_contex
  * Reads the config option at the given index visible to this context.
  *
  * Index space: [0, core_count) addresses core options, [core_count, total) the extension options visible from this
- * context's instance. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the returned option.
+ * context's instance. An out-of-range index returns an error. The caller destroys the returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -2043,7 +1906,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_vector_count(duckdb_v2_dat
  * Borrows the vector at the given index in a data chunk.
  *
  * The returned handle is borrowed and valid until the chunk is destroyed; do not destroy it. An out-of-range index
- * returns ERROR_INPUT_INVALID.
+ * returns an error.
  *
  * history:
  * - stable: v2.0.0
@@ -2093,8 +1956,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_create(duckdb_v2_environment_
 /*!
  * Destroys the environment.
  *
- * Refuses with ERROR_RESOURCE_IN_USE while any instance created through this environment is still alive; destroy those
- * instances first, then retry. On success the handle is set to null.
+ * Refuses with an error while any instance created through this environment is still alive; destroy those instances
+ * first, then retry. On success the handle is set to null.
  *
  * history:
  * - stable: v2.0.0
@@ -2107,8 +1970,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_destroy(duckdb_v2_environment
 /*!
  * Returns the number of instances currently alive under the environment.
  *
- * A diagnostic accessor, for tracking down leaked instances when `duckdb_v2_environment_destroy()` returns
- * ERROR_RESOURCE_IN_USE. The count is a snapshot and may change before the next call.
+ * A diagnostic accessor, for tracking down leaked instances when `duckdb_v2_environment_destroy()` returns an error.
+ * The count is a snapshot and may change before the next call.
  *
  * history:
  * - stable: v2.0.0
@@ -2997,8 +2860,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(
  * Sets the return type of a signature.
  *
  * Sets the signature's return type. The type is borrowed and copied. Calling this again overwrites the previous return
- * type. An INVALID type is rejected with ERROR_INPUT_INVALID. Whether a concrete return type is required, and whether
- * ANY is accepted, depends on the function family and is enforced when the signature is registered with a builder.
+ * type. An INVALID type is rejected with an error. Whether a concrete return type is required, and whether ANY is
+ * accepted, depends on the function family and is enforced when the signature is registered with a builder.
  *
  * history:
  * - stable: v2.0.0
@@ -3039,8 +2902,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_return_type(duckdb
  *
  * Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be freed.
  * Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length, and
- * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns
- * ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+ * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns an
+ * error with out_length set to the required length and out_text left untouched.
  *
  * out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as a C
  * string.
@@ -3052,8 +2915,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_return_type(duckdb
  * @param out_text Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required
  * length in out_length.
  * @param out_capacity Bytes available in out_text, terminator included. Ignored when out_text is NULL.
- * @param out_length Receives the text length excluding the null terminator — written on success and on
- * ERROR_INPUT_OBJECT_SIZE.
+ * @param out_length Receives the text length excluding the null terminator — written on success and when the buffer is
+ * too small.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
@@ -3137,8 +3000,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_destroy(duckdb_v2_instance_handl
  * BLOCK_SIZE or ENCRYPTION_KEY, and must have been created from this instance handle. `make_default` makes the attached
  * database the default for connections created afterwards, exactly as a `duckdb_v2_instance_set_default()` call right
  * after the attach would; otherwise the default is left alone. A path that is already attached on this or any other
- * instance of the environment returns ERROR_RESOURCE_IN_USE, and a name that is already attached fails. Options that
- * only apply at startup must be set before the first attach or connection.
+ * instance of the environment returns an error, and a name that is already attached fails. Options that only apply at
+ * startup must be set before the first attach or connection.
  *
  * history:
  * - stable: v2.0.0
@@ -3166,8 +3029,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle
  * new connections then start without a default until `duckdb_v2_instance_set_default()` names another, and existing
  * connections bound to it keep it alive until their transaction on it ends and fail unqualified DDL afterwards. The
  * path is matched against the attached databases as `duckdb_v2_instance_attach()` recorded it, so pass the path that
- * was passed to `duckdb_v2_instance_attach()`. Returns ERROR_INPUT_INVALID when no database attached from that path
- * exists. Connections that still reference the database keep it alive until they release it.
+ * was passed to `duckdb_v2_instance_attach()`. Returns an error when no database attached from that path exists.
+ * Connections that still reference the database keep it alive until they release it.
  *
  * history:
  * - stable: v2.0.0
@@ -3189,8 +3052,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle
  * and unqualified table lookups that miss the temporary catalog go. It stays the default for new connections until
  * another `duckdb_v2_instance_set_default()` call or until it is detached; a connection whose default has been detached
  * fails unqualified DDL with a message saying so until it selects another with `USE`. `path` is either the path that
- * was passed to `duckdb_v2_instance_attach()` or the name the database is attached under; a name match wins. Returns
- * ERROR_INPUT_INVALID when neither matches an attached database.
+ * was passed to `duckdb_v2_instance_attach()` or the name the database is attached under; a name match wins. Returns an
+ * error when neither matches an attached database.
  *
  * history:
  * - stable: v2.0.0
@@ -3268,8 +3131,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_o
  * goes into the startup configuration: this is the only way to set an option that can only be chosen at startup, such
  * as access_mode or enable_external_access. Unknown names are kept for an extension to consume at startup; if none
  * does, startup fails with the unrecognized names. After startup, this is `SET GLOBAL name = setting` and an unknown
- * name is rejected unless an extension that defines it can be autoloaded. Returns ERROR_INPUT_INVALID for an option
- * declared LOCAL_ONLY, and for a legacy option with no global setter.
+ * name is rejected unless an extension that defines it can be autoloaded. Returns an error for an option declared
+ * LOCAL_ONLY, and for a legacy option with no global setter.
  *
  * history:
  * - stable: v2.0.0
@@ -3292,8 +3155,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_ha
  * Allocates a fully populated option: canonical name, current GLOBAL setting, default setting, description, target
  * scope, and aliases. Before startup the current setting is the staged startup value, or the default. Aliases resolve
  * transparently — passing an alias returns the canonical option, with the alias listed in its alias array. An unknown
- * name returns ERROR_INPUT_INVALID; before startup that includes an option of an extension that has not loaded yet,
- * even if a setting for it has been staged. The caller destroys the returned option.
+ * name returns an error; before startup that includes an option of an extension that has not loaded yet, even if a
+ * setting for it has been staged. The caller destroys the returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -3332,8 +3195,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_count(duckdb_v2_insta
  * Reads the config option at the given index from the instance.
  *
  * Index space: [0, core_count) addresses core options, [core_count, total) extension options. The mapping is stable for
- * as long as no extension registers new options. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys
- * the returned option.
+ * as long as no extension registers new options. An out-of-range index returns an error. The caller destroys the
+ * returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -3461,8 +3324,8 @@ typedef struct _duckdb_v2_qname {
  *
  * Applies the engine's qualified-name rules: dots separate parts, and a double-quoted part may contain dots and doubled
  * interior quotes. More than three parts and an unterminated quote are rejected with the parser's own error. Invalid
- * UTF-8 and text without at least one non-empty part are rejected with `ERROR_INPUT_INVALID`. When the parts are
- * already separate, build the name with `duckdb_v2_qname_create()` rather than joining them and parsing the result.
+ * UTF-8 and text without at least one non-empty part are rejected with an error. When the parts are already separate,
+ * build the name with `duckdb_v2_qname_create()` rather than joining them and parsing the result.
  *
  * history:
  * - stable: v2.0.0
@@ -3482,7 +3345,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(const duckdb_v2_str *text, du
  * The parts are ordered outermost first, so the last one is the object name. Between one and three parts are accepted
  * -- the engine qualifies at most catalog.schema.name today -- and every part must be non-empty: partial qualification
  * is expressed by passing fewer parts, never by empty placeholders. Zero parts, more than three, and an empty part are
- * all rejected with `ERROR_INPUT_INVALID`. The parts are borrowed and copied.
+ * all rejected with an error. The parts are borrowed and copied.
  *
  * history:
  * - stable: v2.0.0
@@ -3519,8 +3382,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_get_part_count(duckdb_v2_qname_hand
  * Borrows one part of the qualified name.
  *
  * Parts are ordered outermost first, so the object name is the part at `duckdb_v2_qname_get_part_count()` - 1. The view
- * is valid until the qualified name is destroyed. An index outside [0, count) is rejected with
- * `ERROR_INPUT_OUT_OF_RANGE`.
+ * is valid until the qualified name is destroyed. An index outside [0, count) is rejected with an error.
  *
  * history:
  * - stable: v2.0.0
@@ -3543,8 +3405,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_get_part(duckdb_v2_qname_handle nam
  *
  * Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be freed.
  * Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length, and
- * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns
- * ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+ * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns an
+ * error with out_length set to the required length and out_text left untouched.
  *
  * out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as a C
  * string.
@@ -3556,8 +3418,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_get_part(duckdb_v2_qname_handle nam
  * @param out_text Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required
  * length in out_length.
  * @param out_capacity Bytes available in out_text, terminator included. Ignored when out_text is NULL.
- * @param out_length Receives the text length excluding the null terminator — written on success and on
- * ERROR_INPUT_OBJECT_SIZE.
+ * @param out_length Receives the text length excluding the null terminator — written on success and when the buffer is
+ * too small.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
@@ -3662,7 +3524,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_schema_get_count(duckdb_v2_schema_handle 
  * Borrows the name and type of the field at the given index.
  *
  * out_name and out_type are valid only until the schema is destroyed, and out_type must not be destroyed. An
- * out-of-range index is rejected with ERROR_INPUT_INVALID.
+ * out-of-range index is rejected with an error.
  *
  * history:
  * - stable: v2.0.0
@@ -4030,8 +3892,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_set_value(duckdb_v2_vector_handle 
 /*!
  * Returns a mutable pointer to the data of a FLAT or CONSTANT vector.
  *
- * Any other representation returns ERROR_INPUT_INVALID. The pointer is valid until the owning chunk is destroyed, and
- * the vector's storage shape must not change — through a flatten, say — while it is in use.
+ * Any other representation returns an error. The pointer is valid until the owning chunk is destroyed, and the vector's
+ * storage shape must not change — through a flatten, say — while it is in use.
  *
  * When writing VARCHAR values, the caller must ensure that the bytes contain valid UTF-8.
  *
@@ -4068,8 +3930,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle ve
  *
  * `vector` takes on the storage of `source`: no data moves, and the two alias the same buffers until one of them is
  * reset or re-referenced. Works for any type, including nested types. The source's logical type must equal the
- * vector's; a mismatch returns ERROR_INPUT_INVALID. The source's data must outlive every read of `vector`. Use it to
- * hand an already-materialized vector straight to an output vector without a per-row copy.
+ * vector's; a mismatch returns an error. The source's data must outlive every read of `vector`. Use it to hand an
+ * already-materialized vector straight to an output vector without a per-row copy.
  *
  * history:
  * - stable: v2.0.0
@@ -4087,7 +3949,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_reference(duckdb_v2_vector_handle 
  *
  * Afterwards the vector holds a single element that applies to every logical row; write it through
  * vector_get_data_mutable, which returns a pointer to that one element. For a STRUCT vector the change propagates to
- * every child. The value's logical type must equal the vector's; a mismatch returns ERROR_INPUT_INVALID.
+ * every child. The value's logical type must equal the vector's; a mismatch returns an error.
  *
  * history:
  * - stable: v2.0.0
@@ -4188,9 +4050,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_constant_set_valid(duckdb_v2_vecto
 /*!
  * Borrows a string-backed vector's arena for writing.
  *
- * Allocates the arena on first use. Valid for VARCHAR, BLOB, BIT, and BIGNUM vectors, and returns ERROR_INPUT_INVALID
- * for anything else. This call is the single string-ness check, which is why arena_allocate itself performs none. The
- * arena is borrowed — never destroy it — and stays valid until the vector is flattened, reallocated, or destroyed.
+ * Allocates the arena on first use. Valid for VARCHAR, BLOB, BIT, and BIGNUM vectors, and returns an error for anything
+ * else. This call is the single string-ness check, which is why arena_allocate itself performs none. The arena is
+ * borrowed — never destroy it — and stays valid until the vector is flattened, reallocated, or destroyed.
  *
  * history:
  * - stable: v2.0.0
@@ -4228,8 +4090,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_child_count(duckdb_v2_vector_h
  * its internal LIST<STRUCT(K, V)>; STRUCT and TUPLE [i] = field i; and UNION [0] = the tag with [1..N] = the members.
  * Note that value_get_child diverges on UNION, exposing only the active member.
  *
- * The returned child is borrowed and lives as long as the owning chunk. Returns ERROR_INPUT_INVALID if the vector has
- * no children, or if the index is out of range.
+ * The returned child is borrowed and lives as long as the owning chunk. Returns an error if the vector has no children,
+ * or if the index is out of range.
  *
  * history:
  * - stable: v2.0.0
@@ -4260,11 +4122,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_child(duckdb_v2_vector_handle 
  * bytes and out_is_negative the sign, and out_capacity is ignored. The size comes straight out of the storage header,
  * so the query is O(1) and exact — a size call followed by a decode call never needs a retry loop.
  *
- * With out_data != NULL, out_capacity must be at least out_length bytes, or the call returns ERROR_INPUT_OBJECT_SIZE
- * with out_length set to the required size and out_data left untouched. On success exactly out_length bytes are
- * written, and the rest of the buffer is not modified.
+ * With out_data != NULL, out_capacity must be at least out_length bytes, or the call returns an error with out_length
+ * set to the required size and out_data left untouched. On success exactly out_length bytes are written, and the rest
+ * of the buffer is not modified.
  *
- * Returns ERROR_INPUT_INVALID if in_data is NULL, or if in_length is too short to hold a bignum header.
+ * Returns an error if in_data is NULL, or if in_length is too short to hold a bignum header.
  *
  * history:
  * - stable: v2.0.0
@@ -4274,7 +4136,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_child(duckdb_v2_vector_handle 
  * @param out_data Caller-owned buffer receiving the magnitude bytes, or NULL to only report the required size in
  * out_length.
  * @param out_capacity Bytes available in out_data. Ignored when out_data is NULL.
- * @param out_length Receives the magnitude size in bytes, written on success and on ERROR_INPUT_OBJECT_SIZE.
+ * @param out_length Receives the magnitude size in bytes, written on success and when the buffer is too small.
  * @param out_is_negative Receives true if the value is negative, false otherwise.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
@@ -4293,14 +4155,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_decode(const uint8_t *in_data, idx
  * Pass out_data = NULL to size the buffer without encoding. out_length then receives the exact number of storage bytes,
  * and out_capacity is ignored. The size is a fixed function of in_length, so the query is O(1) and exact.
  *
- * With out_data != NULL, out_capacity must be at least out_length bytes, or the call returns ERROR_INPUT_OBJECT_SIZE
- * with out_length set to the required size and out_data left untouched. On success exactly out_length bytes are
- * written, and the rest of the buffer is not modified.
+ * With out_data != NULL, out_capacity must be at least out_length bytes, or the call returns an error with out_length
+ * set to the required size and out_data left untouched. On success exactly out_length bytes are written, and the rest
+ * of the buffer is not modified.
  *
  * The magnitude must be canonical, matching what bignum_decode produces: in_length >= 1 with no leading zero bytes, so
  * the value zero is the single byte 0x00 with is_negative = false. A NULL in_data, an in_length of 0, a leading zero
- * byte, or a negative zero returns ERROR_INPUT_INVALID; a magnitude beyond the maximum bignum width returns
- * ERROR_INPUT_OUT_OF_RANGE.
+ * byte, or a negative zero returns an error; a magnitude beyond the maximum bignum width returns an error.
  *
  * history:
  * - stable: v2.0.0
@@ -4311,7 +4172,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_decode(const uint8_t *in_data, idx
  * @param out_data Caller-owned buffer receiving the storage bytes, or NULL to only report the required size in
  * out_length.
  * @param out_capacity Bytes available in out_data. Ignored when out_data is NULL.
- * @param out_length Receives the storage size in bytes — written on success and on ERROR_INPUT_OBJECT_SIZE.
+ * @param out_length Receives the storage size in bytes — written on success and when the buffer is too small.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
@@ -4322,7 +4183,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx
 /*!
  * Validates all text->len bytes as UTF-8, including bytes after embedded NUL characters.
  *
- * Returns ERROR_INPUT_INVALID if any of:
+ * Returns an error if any of:
  * - text is NULL.
  * - text->ptr is NULL and text->len is nonzero.
  * - The input contains malformed UTF-8.
@@ -5373,8 +5234,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_description_get_column_count(duckdb
 /*!
  * Returns an owned description of the column at index.
  *
- * Columns are numbered in declared order, generated columns included. An out-of-range index is rejected with
- * `ERROR_INPUT_OUT_OF_RANGE`.
+ * Columns are numbered in declared order, generated columns included. An out-of-range index is rejected with an error.
  *
  * history:
  * - stable: v2.0.0
@@ -5550,9 +5410,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_h
  *   - AUTOMATIC resolves it from the option's target scope, like a bare `SET name = setting`.
  *   - GLOBAL writes through to the instance, visible to all connections, like `SET GLOBAL`.
  *   - LOCAL writes to this connection's session only, like `SET LOCAL` / `SET SESSION`.
- * A disallowed combination returns ERROR_INPUT_INVALID: GLOBAL against a LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY
- * one, and the legacy analogues. An unknown name is rejected unless an extension that defines it can be autoloaded; to
- * stage a setting for an extension before startup, use `duckdb_v2_instance_set_option()`.
+ * A disallowed combination returns an error: GLOBAL against a LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY one, and
+ * the legacy analogues. An unknown name is rejected unless an extension that defines it can be autoloaded; to stage a
+ * setting for an extension before startup, use `duckdb_v2_instance_set_option()`.
  *
  * history:
  * - stable: v2.0.0
@@ -5576,8 +5436,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connectio
  *
  * Returns the option's effective setting at the connection's scope: the LOCAL override if this connection set one,
  * otherwise the GLOBAL value, otherwise the static default. The remaining fields are populated exactly as by
- * `duckdb_v2_instance_get_option_by_name()`. Aliases resolve transparently, and an unknown name returns
- * ERROR_INPUT_INVALID. The caller destroys the returned option.
+ * `duckdb_v2_instance_get_option_by_name()`. Aliases resolve transparently, and an unknown name returns an error. The
+ * caller destroys the returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -5616,7 +5476,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option_count(duckdb_v2_con
  * Reads the config option at the given index visible to this connection.
  *
  * Index space: [0, core_count) addresses core options, [core_count, total) the extension options visible from this
- * connection's instance. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the returned option.
+ * connection's instance. An out-of-range index returns an error. The caller destroys the returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -5638,7 +5498,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option_by_index(duckdb_v2_
  * The cross-thread (but not cross-connection) cancellation entry point for streaming results: safe to call from any
  * thread within the execution of a query through a connection, including while another thread steps the query's result.
  * A no-op when no query is active. Cancellation surfaces on the consuming side as step status CANCELLED
- * (`duckdb_v2_result_step()`), or as ERROR_RUNTIME_INTERRUPT (`duckdb_v2_result_fetch_chunk()`).
+ * (`duckdb_v2_result_step()`), or as an error (`duckdb_v2_result_fetch_chunk()`).
  *
  * history:
  * - stable: v2.0.0
@@ -7575,8 +7435,8 @@ typedef enum DUCKDB_V2_LOGICAL_TYPE_ID {
  * array(T, size); map(K, V); struct(fields); union(members); enum(entries); and varchar with a named "collation"
  * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for context_create_type_from_name.
  *
- * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
- * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
+ * Returns an error when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP, ARRAY, UNION,
+ * ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
  * context_create_type_from_text — and for INVALID.
  *
  * history:
@@ -7695,8 +7555,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_c
  * parameter. Parameters are (name, value) pairs in two parallel arrays, exactly as for
  * connection_create_type_from_name.
  *
- * Returns ERROR_INPUT_INVALID when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP,
- * ARRAY, UNION, ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
+ * Returns an error when param_count is 0 and the id needs parameters (DECIMAL, LIST, STRUCT, TUPLE, MAP, ARRAY, UNION,
+ * ENUM, VARIANT, GEOMETRY), for the bind-time-only ids (SQLNULL, UNKNOWN), for TYPE — construct that via
  * connection_create_type_from_text — and for INVALID.
  *
  * history:
@@ -7867,8 +7727,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_t
  *
  * Writes into a caller-supplied buffer, so nothing is allocated on the caller's behalf and nothing has to be freed.
  * Pass out_text = NULL to size the buffer without rendering into it: out_length then receives the length, and
- * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns
- * ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_text left untouched.
+ * out_capacity is ignored. With out_text != NULL, out_capacity must be at least out_length + 1, or the call returns an
+ * error with out_length set to the required length and out_text left untouched.
  *
  * out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as a C
  * string.
@@ -7880,8 +7740,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_t
  * @param out_text Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required
  * length in out_length.
  * @param out_capacity Bytes available in out_text, terminator included. Ignored when out_text is NULL.
- * @param out_length Receives the text length excluding the null terminator — written on success and on
- * ERROR_INPUT_OBJECT_SIZE.
+ * @param out_length Receives the text length excluding the null terminator — written on success and when the buffer is
+ * too small.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
@@ -7916,7 +7776,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param_count(duckdb_v2_lo
  * the empty view {NULL, 0} for a positional parameter. A non-empty view is valid until the logical type is destroyed.
  * out_value receives an owned value, destroyed via value_destroy: child types come back as TYPE values (unwrap them
  * with value_get_type), DECIMAL width and scale as UTINYINT, ARRAY size as BIGINT, and ENUM dictionary entries and
- * collations as VARCHAR. An out-of-range index returns ERROR_INPUT_INVALID. Each call allocates one owned value.
+ * collations as VARCHAR. An out-of-range index returns an error. Each call allocates one owned value.
  *
  * history:
  * - stable: v2.0.0
@@ -7942,7 +7802,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param(duckdb_v2_logical_
  * and the name come from the bind info.
  *
  * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the context.
- * An empty alias name returns ERROR_INPUT_INVALID.
+ * An empty alias name returns an error.
  *
  * history:
  * - stable: v2.0.0
@@ -7969,7 +7829,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_
  * and the name come from the bind info.
  *
  * Scoped like the rest of the create_type family: the alias is resolved against the catalog reachable from the
- * connection. An empty alias name returns ERROR_INPUT_INVALID.
+ * connection. An empty alias name returns an error.
  *
  * history:
  * - stable: v2.0.0
@@ -8981,7 +8841,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_stateme
  * transaction read-only, and runs alongside a paused stream. It is single-consumer like the stepping functions, so bind
  * concurrently only on a second connection. Prepare-time errors — binder, catalog, preprocessing — surface here. A
  * statement that preprocessing expands into a group (a dynamic PIVOT, or statement-expanding DDL such as ALTER ADD
- * COLUMN with a non-constant DEFAULT) cannot be bound and is rejected with ERROR_INPUT_INVALID; execute it instead.
+ * COLUMN with a non-constant DEFAULT) cannot be bound and is rejected with an error; execute it instead.
  *
  * *out_schema and *out_parameters are set to NULL on failure.
  *
@@ -9068,7 +8928,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_count(duckdb_
  * `duckdb_v2_statement_execute()` accepts: "1", "2", ... for a positional parameter ($1 or ?), the identifier for a
  * named one ($name). Positional indices may be gapped ($1 and $3 without $2), in which case the names are "1" and "3"
  * at positions 0 and 1. The view is valid until the statement is destroyed. An index outside [0, count) is rejected
- * with ERROR_INPUT_OUT_OF_RANGE.
+ * with an error.
  *
  * history:
  * - stable: v2.0.0
@@ -9163,7 +9023,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_null(duckdb_v2_logical_type_
  * Returns the value as a BOOLEAN.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9180,7 +9040,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_bool(duckdb_v2_value_handle val
  * Returns the value as a UTINYINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9197,7 +9057,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_utinyint(duckdb_v2_value_handle
  * Returns the value as a USMALLINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9214,7 +9074,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_usmallint(duckdb_v2_value_handl
  * Returns the value as a UINTEGER.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9231,7 +9091,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_uint(duckdb_v2_value_handle val
  * Returns the value as a UBIGINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9248,7 +9108,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_ubigint(duckdb_v2_value_handle 
  * Returns the value as a UHUGEINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9265,7 +9125,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_uhugeint(duckdb_v2_value_handle
  * Returns the value as a TINYINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9282,7 +9142,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_tinyint(duckdb_v2_value_handle 
  * Returns the value as a SMALLINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9299,7 +9159,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_smallint(duckdb_v2_value_handle
  * Returns the value as an INTEGER.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9316,7 +9176,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_int(duckdb_v2_value_handle valu
  * Returns the value as a BIGINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9333,7 +9193,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_bigint(duckdb_v2_value_handle v
  * Returns the value as a HUGEINT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9351,7 +9211,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_hugeint(duckdb_v2_value_handle 
  *
  * The string is borrowed from the value and stays valid until the value is destroyed. That borrow is why this getter
  * does not convert: a converted copy would not outlive the call. A value of any other type id, and a NULL value, return
- * ERROR_INPUT_INVALID.
+ * an error.
  *
  * history:
  * - stable: v2.0.0
@@ -9370,7 +9230,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_varchar(duckdb_v2_value_handle 
  *
  * The string is borrowed from the value and stays valid until the value is destroyed. That borrow is why this getter
  * does not convert: a converted copy would not outlive the call. A value of any other type id, and a NULL value, return
- * ERROR_INPUT_INVALID.
+ * an error.
  *
  * history:
  * - stable: v2.0.0
@@ -9388,7 +9248,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_blob(duckdb_v2_value_handle val
  * Returns the value as a FLOAT.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9405,7 +9265,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_float(duckdb_v2_value_handle va
  * Returns the value as a DOUBLE.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9424,7 +9284,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_double(duckdb_v2_value_handle v
  * The payload is days since 1970-01-01, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9443,7 +9303,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_date(duckdb_v2_value_handle val
  * The payload is microseconds since midnight, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9462,7 +9322,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_time(duckdb_v2_value_handle val
  * The payload is nanoseconds since midnight, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9482,7 +9342,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_time_ns(duckdb_v2_value_handle 
  * bits, a biased offset in the low 24. The same form a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9501,7 +9361,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_time_tz(duckdb_v2_value_handle 
  * The payload is microseconds since 1970-01-01, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9520,7 +9380,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_timestamp(duckdb_v2_value_handl
  * The payload is seconds since 1970-01-01, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9539,7 +9399,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_timestamp_sec(duckdb_v2_value_h
  * The payload is milliseconds since 1970-01-01, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9558,7 +9418,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_timestamp_ms(duckdb_v2_value_ha
  * The payload is nanoseconds since 1970-01-01, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9577,7 +9437,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_timestamp_ns(duckdb_v2_value_ha
  * The payload is microseconds since 1970-01-01, in UTC, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9596,7 +9456,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_timestamp_tz(duckdb_v2_value_ha
  * The payload is nanoseconds since 1970-01-01, in UTC, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9615,7 +9475,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_timestamp_tz_ns(duckdb_v2_value
  * The payload is the (months, days, micros) triple, the same unit a vector of this type exposes.
  *
  * A value of a different type is converted through the default cast set, on a copy, so reading never alters the value.
- * An unsupported conversion returns ERROR_INPUT_INVALID, as does a NULL value.
+ * An unsupported conversion returns an error, as does a NULL value.
  *
  * history:
  * - stable: v2.0.0
@@ -9632,8 +9492,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_interval(duckdb_v2_value_handle
  * Returns the value as a UUID, in its internal 128-bit form.
  *
  * The dual of value_create_uuid: the storage form a vector element holds, with the high bit flipped so the integer
- * sorts, rather than the canonical byte order. A value of any other type id, and a NULL value, return
- * ERROR_INPUT_INVALID.
+ * sorts, rather than the canonical byte order. A value of any other type id, and a NULL value, return an error.
  *
  * history:
  * - stable: v2.0.0
@@ -9652,7 +9511,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_uuid(duckdb_v2_value_handle val
  * The integer is the value scaled by 10^scale — the dual of value_create_decimal — widened to 128 bits from whatever
  * storage tier the width selects. The integer getters convert, so a DECIMAL read through value_get_bigint is its
  * numeric value with the fraction dropped; this one always reports storage instead, together with the scale needed to
- * interpret it. A value of any other type id, and a NULL value, return ERROR_INPUT_INVALID.
+ * interpret it. A value of any other type id, and a NULL value, return an error.
  *
  * history:
  * - stable: v2.0.0
@@ -9671,8 +9530,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_decimal(duckdb_v2_value_handle 
 /*!
  * Unwraps the logical type carried by a TYPE value.
  *
- * Returns ERROR_INPUT_INVALID unless the value is a non-NULL TYPE value. The returned logical type is caller-owned and
- * must be destroyed via logical_type_destroy.
+ * Returns an error unless the value is a non-NULL TYPE value. The returned logical type is caller-owned and must be
+ * destroyed via logical_type_destroy.
  *
  * history:
  * - stable: v2.0.0
@@ -10773,9 +10632,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duc
  * Creates a DECIMAL value from its backing integer.
  *
  * The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is the total digit count and must be 1..38; scale
- * is the number of digits after the point and must not exceed width. Violating either returns ERROR_INPUT_INVALID, as
- * does a value too wide for the storage tier the width selects. The value itself is not range-checked against the
- * width; value_cast is the validating path.
+ * is the number of digits after the point and must not exceed width. Violating either returns an error, as does a value
+ * too wide for the storage tier the width selects. The value itself is not range-checked against the width; value_cast
+ * is the validating path.
  *
  * history:
  * - stable: v2.0.0
@@ -10798,9 +10657,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_context(duckdb_
  * Creates a DECIMAL value from its backing integer.
  *
  * The value is scaled by 10^scale, so (18500, 18, 3) is 18.500. width is the total digit count and must be 1..38; scale
- * is the number of digits after the point and must not exceed width. Violating either returns ERROR_INPUT_INVALID, as
- * does a value too wide for the storage tier the width selects. The value itself is not range-checked against the
- * width; value_cast is the validating path.
+ * is the number of digits after the point and must not exceed width. Violating either returns an error, as does a value
+ * too wide for the storage tier the width selects. The value itself is not range-checked against the width; value_cast
+ * is the validating path.
  *
  * history:
  * - stable: v2.0.0
@@ -10951,7 +10810,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_connection(duckd
  * The child type is the common type of the elements, resolved by the same rule a SQL list literal follows, and every
  * element is cast to it; a set with no common type surfaces the cast error. Pass child_type to name the type instead,
  * which is also how an empty list is built: with child_type NULL, an empty element array has no type to resolve and
- * returns ERROR_INPUT_INVALID.
+ * returns an error.
  *
  * The elements are borrowed and copied in, and a NULL element becomes a typed NULL. The type is rebuilt from its child,
  * so an alias on the outer LIST type is not preserved; value_cast is the alias-preserving path.
@@ -10977,7 +10836,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_context(
  * The child type is the common type of the elements, resolved by the same rule a SQL list literal follows, and every
  * element is cast to it; a set with no common type surfaces the cast error. Pass child_type to name the type instead,
  * which is also how an empty list is built: with child_type NULL, an empty element array has no type to resolve and
- * returns ERROR_INPUT_INVALID.
+ * returns an error.
  *
  * The elements are borrowed and copied in, and a NULL element becomes a typed NULL. The type is rebuilt from its child,
  * so an alias on the outer LIST type is not preserved; value_cast is the alias-preserving path.
@@ -11001,7 +10860,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_connection(
  * Creates an ARRAY value from its elements, sized by their count.
  *
  * The child type is resolved exactly as for value_create_list, and child_type names it explicitly the same way. The
- * minimum array size is 1, so an empty element array returns ERROR_INPUT_INVALID whether or not child_type is given.
+ * minimum array size is 1, so an empty element array returns an error whether or not child_type is given.
  *
  * The elements are borrowed and copied in, and a NULL element becomes a typed NULL.
  *
@@ -11024,7 +10883,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_context(
  * Creates an ARRAY value from its elements, sized by their count.
  *
  * The child type is resolved exactly as for value_create_list, and child_type names it explicitly the same way. The
- * minimum array size is 1, so an empty element array returns ERROR_INPUT_INVALID whether or not child_type is given.
+ * minimum array size is 1, so an empty element array returns an error whether or not child_type is given.
  *
  * The elements are borrowed and copied in, and a NULL element becomes a typed NULL.
  *
@@ -11144,7 +11003,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_tuple_with_connection(duckdb
  *
  * The key and value types are the common types of the keys and of the values, resolved as for value_create_list, and
  * every entry is cast to them. Pass key_type and value_type to name them instead, which is also how an empty map is
- * built: with both NULL, empty key and value arrays have no types to resolve and return ERROR_INPUT_INVALID.
+ * built: with both NULL, empty key and value arrays have no types to resolve and return an error.
  *
  * Keys and values are borrowed and copied in, and the two arrays must be the same length. Keys must be non-NULL and
  * unique; both are enforced.
@@ -11173,7 +11032,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_map_with_context(
  *
  * The key and value types are the common types of the keys and of the values, resolved as for value_create_list, and
  * every entry is cast to them. Pass key_type and value_type to name them instead, which is also how an empty map is
- * built: with both NULL, empty key and value arrays have no types to resolve and return ERROR_INPUT_INVALID.
+ * built: with both NULL, empty key and value arrays have no types to resolve and return an error.
  *
  * Keys and values are borrowed and copied in, and the two arrays must be the same length. Keys must be non-NULL and
  * unique; both are enforced.
@@ -11226,8 +11085,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_child_count(duckdb_v2_value_han
  * Note the divergence from vector_get_child, which descends structurally and so exposes [0] = tag and [1..N] = ALL
  * members. Code written to descend generically over both must account for that difference.
  *
- * An out-of-range index returns ERROR_INPUT_INVALID, as does any index on a non-composite or NULL value. The returned
- * value is caller-owned; destroy it via value_destroy.
+ * An out-of-range index returns an error, as does any index on a non-composite or NULL value. The returned value is
+ * caller-owned; destroy it via value_destroy.
  *
  * history:
  * - stable: v2.0.0
@@ -11339,7 +11198,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_logical_type(duckdb_v2_value_ha
  *
  * Pass out_string = NULL to size the buffer without rendering into it: out_length then receives the length, and
  * out_capacity is ignored. With out_string != NULL, out_capacity must be at least out_length + 1, or the call returns
- * ERROR_INPUT_OBJECT_SIZE with out_length set to the required length and out_string left untouched.
+ * an error with out_length set to the required length and out_string left untouched.
  *
  * out_length never counts the terminator, but a successful write always appends one, so the buffer is usable as a C
  * string.
@@ -11351,8 +11210,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_get_logical_type(duckdb_v2_value_ha
  * @param out_string Caller-owned buffer receiving the text plus a null terminator, or NULL to only report the required
  * length in out_length.
  * @param out_capacity Bytes available in out_string, terminator included. Ignored when out_string is NULL.
- * @param out_length Receives the text length excluding the null terminator — written on success and on
- * ERROR_INPUT_OBJECT_SIZE.
+ * @param out_length Receives the text length excluding the null terminator — written on success and when the buffer is
+ * too small.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
@@ -11397,12 +11256,12 @@ typedef struct _duckdb_v2_prepared_statement {
  * `duckdb_v2_sql_statement_destroy()`.
  *
  * By default this succeeds for any preparable statement, whether or not its plan will be reused; ask
- * `duckdb_v2_prepared_statement_reuses_plan()` which one you got. Setting `require_cacheable` instead fails with
- * `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup finds
- * out here rather than after silently taking the slow path.
+ * `duckdb_v2_prepared_statement_reuses_plan()` which one you got. Setting `require_cacheable` instead fails with an
+ * error when the plan would not be reused, so a caller who wants the handle only for the speedup finds out here rather
+ * than after silently taking the slow path.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that result
- * first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
+ * Refuses with an error while the connection has a live result. Drain, destroy, or interrupt that result first, or
+ * prepare on another connection. `*out_prepared` is set to NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11411,8 +11270,8 @@ typedef struct _duckdb_v2_prepared_statement {
  * it.
  * @param statement The statement to prepare. Borrowed and copied, not consumed; destroy it with
  * `duckdb_v2_sql_statement_destroy()`.
- * @param require_cacheable When true, fail with `ERROR_INPUT_INVALID` unless the prepared plan will be reused across
- * executions, as `duckdb_v2_prepared_statement_reuses_plan()` would report it.
+ * @param require_cacheable When true, fail with an error unless the prepared plan will be reused across executions, as
+ * `duckdb_v2_prepared_statement_reuses_plan()` would report it.
  * @param out_prepared On success, receives the new prepared statement. Owned by the caller; destroy via
  * `duckdb_v2_prepared_statement_destroy()`.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
@@ -11437,18 +11296,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_conne
  * ($1 = element 0); supply `parameter_names` to bind by name instead, where a non-empty entry binds its value to that
  * named parameter ($name, matched case-insensitively) and a {NULL, 0} entry stays positional. Pass NULL for both
  * arrays, or a count of 0, for a statement without parameters. Both arrays are borrowed and copied in, so the caller
- * still owns and destroys them. A key set that does not match the statement's parameters is rejected with
- * `ERROR_INPUT_INVALID`, with one exception: a named parameter left without a value reads the session variable of the
- * same name (`SET VARIABLE`) when one exists.
+ * still owns and destroys them. A key set that does not match the statement's parameters is rejected with an error,
+ * with one exception: a named parameter left without a value reads the session variable of the same name (`SET
+ * VARIABLE`) when one exists.
  *
  * Not consumed: execute the same handle again, with the same values or different ones, as often as you like. Values are
  * bound per execution and nothing carries over between them. A catalog change since the statement was prepared, or a
  * parameter type that differs from the one the cached plan assumed, triggers a re-bind that is invisible apart from its
  * cost.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it first,
- * or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
- * `*out_result` is set to NULL on failure.
+ * Refuses with an error while the connection has a live result; drain, destroy, or interrupt it first, or execute on
+ * another connection. A failed execution, at any stage, leaves the prepared statement usable. `*out_result` is set to
+ * NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11582,18 +11441,18 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  * case-insensitively), while a {NULL, 0} entry leaves that value positional. The parameter schema from statement_bind
  * lists the names to use. Both arrays are borrowed and copied in; the caller still owns and destroys them. Pass NULL
  * for both, or a count of 0, for an unparameterized statement. A key set that does not match the statement's parameters
- * — names for a positional statement, or the reverse — is rejected with ERROR_INPUT_INVALID, and named and positional
- * parameters cannot be mixed within one statement. Parameters and statement expansion are mutually exclusive: passing
- * values for a statement that preprocesses into a group is rejected with ERROR_INPUT_INVALID.
+ * — names for a positional statement, or the reverse — is rejected with an error, and named and positional parameters
+ * cannot be mixed within one statement. Parameters and statement expansion are mutually exclusive: passing values for a
+ * statement that preprocesses into a group is rejected with an error.
  *
  * Preprocessing can expand one statement into a group — a dynamic PIVOT, or statement-expanding DDL such as ALTER ...
  * ADD COLUMN with a non-constant DEFAULT. The group executes as one result through the same steps, and the stream
  * surfaces the first row-producing statement of the group, or the last statement when none produces rows. An expansion
- * with more than one row-producing statement cannot be streamed as a single result and reports
- * ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
+ * with more than one row-producing statement cannot be streamed as a single result and reports an error; no known
+ * expansion produces one.
  *
- * One live result per connection: this refuses with ERROR_RESOURCE_IN_USE while the connection already has a live
- * result. Drain, destroy, or interrupt that one first, or open another connection.
+ * One live result per connection: this refuses with an error while the connection already has a live result. Drain,
+ * destroy, or interrupt that one first, or open another connection.
  *
  * Schema metadata — result type, statement type, column count, names, logical types — is available on the returned
  * handle immediately, before the first step.
@@ -11654,7 +11513,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_destroy(duckdb_v2_result_handle *r
  * or an error. Block in result_wait rather than busy-stepping.
  * - FINISHED: stream exhausted. Sticky.
  * - CANCELLED: query interrupted via connection_interrupt. Sticky. Cancellation is a status here, not an error;
- * result_fetch_chunk, which has no status out-param, reports it as ERROR_RUNTIME_INTERRUPT.
+ * result_fetch_chunk, which has no status out-param, reports it as an error.
  *
  * Execution errors come back as the return code plus err, never as a status; out_status is then unspecified and
  * *out_chunk is nullptr. Errors are sticky, so later steps report the same code.
@@ -11680,8 +11539,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_step(duckdb_v2_result_handle resul
  * caller-owned chunk (destroy via data_chunk_destroy), or nullptr at end-of-stream. End-of-stream is sticky, so later
  * calls keep succeeding with *out_chunk set to nullptr.
  *
- * An interrupted query returns ERROR_RUNTIME_INTERRUPT — the same event result_step reports as status CANCELLED,
- * carried on the error channel because this function has no status out-param.
+ * An interrupted query returns an error — the same event result_step reports as status CANCELLED, carried on the error
+ * channel because this function has no status out-param.
  *
  * On failure *out_chunk is set to nullptr. Errors are sticky, so later calls report the same code.
  *
@@ -11766,8 +11625,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_render_box(duckdb_v2_result_handle
  * every other result type, and for a stream whose Count chunk was already consumed, it receives 0.
  *
  * The result type (result_get_result_type) is prepare-time metadata, so a caller can choose between consuming rows and
- * draining without inspecting the SQL. Draining an already FINISHED result succeeds. Cancellation surfaces as
- * ERROR_RUNTIME_INTERRUPT; errors are sticky, and on failure *out_rows_changed is unspecified.
+ * draining without inspecting the SQL. Draining an already FINISHED result succeeds. Cancellation surfaces as an error;
+ * errors are sticky, and on failure *out_rows_changed is unspecified.
  *
  * history:
  * - stable: v2.0.0
@@ -11787,7 +11646,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_drain(duckdb_v2_result_handle resu
  * DELETE without RETURNING, NOTHING for DDL and other statements with no row output.
  *
  * Prepare-time metadata: available from statement_execute on, except for a statement that preprocessing expands into a
- * group, where it fails with ERROR_INPUT_INVALID until stepping has prepared the row-producing fragment.
+ * group, where it fails with an error until stepping has prepared the row-producing fragment.
  *
  * history:
  * - stable: v2.0.0
@@ -11805,7 +11664,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_get_result_type(duckdb_v2_result_h
  * Returns the SQL statement type that produced the result.
  *
  * Prepare-time metadata: available from statement_execute on, except for a statement that preprocessing expands into a
- * group, where it fails with ERROR_INPUT_INVALID until stepping has prepared the row-producing fragment.
+ * group, where it fails with an error until stepping has prepared the row-producing fragment.
  *
  * history:
  * - stable: v2.0.0
@@ -12345,8 +12204,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_cardinality(
  * With `ORDER_PRESERVATION_NO_ORDER`, a scan that reports more than one thread via
  * `duckdb_v2_table_function_init_global_set_max_threads()` runs in parallel into query results, INSERT and COPY without
  * a `duckdb_v2_table_function_set_partition_data_callback()`, and the rows arrive in no particular order. With
- * insertion order kept, those consumers need the partition data callback to run in parallel. Fails with
- * `ERROR_INPUT_INVALID` when order is not one of the enum's declared values.
+ * insertion order kept, those consumers need the partition data callback to run in parallel. Fails with an error when
+ * order is not one of the enum's declared values.
  *
  * history:
  * - stable: v2.0.0
@@ -13048,8 +12907,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_get_partiti
  * same thread, must be unique across threads for the ordering to be meaningful, must be less than roughly `10^13`, and,
  * when partitioning column values are also being reported, must change whenever those values change: the engine only
  * re-reads them when the batch index changes, so reporting a new value under an unchanged batch index is treated as a
- * caller error rather than applied. Fails with `ERROR_INPUT_INVALID` for an out-of-range value; a decreasing value or
- * an unchanged value paired with changed partitioning columns fails the query once the callback returns.
+ * caller error rather than applied. Fails with an error for an out-of-range value; a decreasing value or an unchanged
+ * value paired with changed partitioning columns fails the query once the callback returns.
  *
  * history:
  * - stable: v2.0.0
@@ -13073,8 +12932,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partition_data_set_batch_i
  * `duckdb_v2_table_function_partition_data_get_partition_column_count()`)` before the callback returns; calling it
  * again for the same index overwrites the previous value. The reported value only takes effect together with a changed
  * `duckdb_v2_table_function_partition_data_set_batch_index()`: reporting a different value under an unchanged batch
- * index fails the query once the callback returns. Fails with `ERROR_INPUT_INVALID` when the index is out of bounds or
- * the value's type does not match.
+ * index fails the query once the callback returns. Fails with an error when the index is out of bounds or the value's
+ * type does not match.
  *
  * history:
  * - stable: v2.0.0
@@ -13164,8 +13023,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_get_partition
  *
  * Only `TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS` unlocks the partitioned aggregate optimization; any other value
  * keeps the regular hash aggregate. A callback that never calls this is treated as reporting
- * `TABLE_PARTITION_INFO_NOT_PARTITIONED`. Fails with `ERROR_INPUT_INVALID` when partition_info is not one of the enum's
- * declared values.
+ * `TABLE_PARTITION_INFO_NOT_PARTITIONED`. Fails with an error when partition_info is not one of the enum's declared
+ * values.
  *
  * history:
  * - stable: v2.0.0
@@ -13332,9 +13191,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_get_schema(duckdb_v2_arrow
  * Gives the importer one array to convert.
  *
  * Take the chunks with `duckdb_v2_arrow_importer_next_chunk()` until that returns NULL. Appending while the previous
- * array still has rows left is rejected with `ERROR_INPUT_INVALID`. An array whose shape does not match the resolved
- * schema -- a different child count, a child whose length differs from the array's, a null or already-released child --
- * is rejected the same way, before anything is read.
+ * array still has rows left is rejected with an error. An array whose shape does not match the resolved schema -- a
+ * different child count, a child whose length differs from the array's, a null or already-released child -- is rejected
+ * the same way, before anything is read.
  *
  * `flush` marks the end of the input: rows that do not fill a batch then come out as a final short chunk instead of
  * being held back for the next array. Pass NULL for `array` with `flush` set to release the held rows without supplying
@@ -13352,8 +13211,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_get_schema(duckdb_v2_arrow
  * Either way, a chunk that joins rows held back from the previous array is a copy, since it cannot reference two
  * arrays.
  *
- * Only the default, dictionary-encoded and run-end-encoded Arrow layouts are supported. Any other layout reports
- * `ERROR_QUERY_NOT_IMPLEMENTED` when the column is converted.
+ * Only the default, dictionary-encoded and run-end-encoded Arrow layouts are supported. Any other layout reports an
+ * error when the column is converted.
  *
  * history:
  * - stable: v2.0.0
@@ -13478,8 +13337,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_get_schema(duckdb_v2_arrow
  * `flush` marks the end of the input: the held rows are then finished as a final short array. Pass NULL for `chunk`
  * with `flush` set to release the held rows without supplying more input.
  *
- * The chunk's types must match the ones the exporter was created with, or the call is rejected with
- * `ERROR_INPUT_INVALID` before anything is read.
+ * The chunk's types must match the ones the exporter was created with, or the call is rejected with an error before
+ * anything is read.
  *
  * `consume` decides only what happens to the caller's handle, since the data is copied either way. When true the chunk
  * is destroyed and the slot set to NULL, saving a `duckdb_v2_data_chunk_destroy()` for a chunk the caller owns. When

@@ -539,7 +539,7 @@ TEST_CASE("V2: STRUCT(INTEGER, VARCHAR) via get_child", "[capi_v2][data_chunk]")
 
 	// Out-of-range field index rejected.
 	duckdb_v2_vector_handle oor = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(svec, 99, &oor, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_child(svec, 99, &oor, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(oor == nullptr);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
@@ -590,7 +590,7 @@ TEST_CASE("V2: TUPLE(INTEGER, VARCHAR) via get_child", "[capi_v2][data_chunk]") 
 
 	// Out-of-range field index rejected.
 	duckdb_v2_vector_handle oor = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(tvec, 99, &oor, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_child(tvec, 99, &oor, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(oor == nullptr);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
@@ -735,7 +735,7 @@ TEST_CASE("V2: MAP(VARCHAR, INTEGER) via get_child", "[capi_v2][data_chunk]") {
 
 	// Out-of-range MAP child index rejected (only [0] and [1] are valid).
 	duckdb_v2_vector_handle oor = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(mvec, 2, &oor, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_child(mvec, 2, &oor, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(oor == nullptr);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
@@ -803,7 +803,7 @@ TEST_CASE("V2: UNION(INTEGER, VARCHAR) via get_child", "[capi_v2][data_chunk]") 
 
 	// Out-of-range member index (3 is past the last member at child-index 2).
 	duckdb_v2_vector_handle oor = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(uvec, 3, &oor, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_child(uvec, 3, &oor, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(oor == nullptr);
 
 	// view.data on a UNION is unspecified per the contract (typically
@@ -905,7 +905,7 @@ TEST_CASE("V2: generic accessors handle non-nested vectors", "[capi_v2][data_chu
 	// get_child(idx=0) rejects on a non-nested vector.
 	duckdb_v2_vector_handle child = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(vec, 0, &child, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_child(vec, 0, &child, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(child == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
@@ -1092,7 +1092,7 @@ TEST_CASE("V2: vector_get_view rejects OTHER + zeroes view", "[capi_v2][data_chu
 	view.validity = reinterpret_cast<const uint64_t *>(0x2);
 	view.sel = reinterpret_cast<const duckdb_v2_sel_t *>(0x3);
 
-	REQUIRE(duckdb_v2_vector_get_view(handle, &view, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_view(handle, &view, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(view.data == nullptr);
 	REQUIRE(view.validity == nullptr);
 	REQUIRE(view.sel == nullptr);
@@ -1121,7 +1121,7 @@ TEST_CASE("V2: chunk null-arg + out-of-range rejection", "[capi_v2][data_chunk]"
 
 	duckdb_v2_data_chunk_handle chunk = StepChunk(r);
 	duckdb_v2_vector_handle vec = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 99, &vec, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 99, &vec, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(vec == nullptr);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
@@ -1144,7 +1144,7 @@ TEST_CASE("V2: success leaves a pre-existing err untouched", "[capi_v2][data_chu
 	Query(fx.conn, "SELECT 1", &r1, nullptr);
 	duckdb_v2_data_chunk_handle chunk = StepChunk(r1);
 	duckdb_v2_vector_handle oor_vec = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 99, &oor_vec, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 99, &oor_vec, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(err != nullptr); // populated on failure
 	duckdb_v2_data_chunk_destroy(&chunk);
 	duckdb_v2_result_destroy(&r1);
@@ -1158,7 +1158,7 @@ TEST_CASE("V2: success leaves a pre-existing err untouched", "[capi_v2][data_chu
 	{
 		DUCKDB_V2_ERROR code = DUCKDB_V2_ERROR_NONE;
 		duckdb_v2_error_info_get_code(err, &code);
-		REQUIRE(code == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(code == DUCKDB_V2_ERROR_GENERIC);
 	}
 	duckdb_v2_error_info_destroy(&err);
 
@@ -1235,7 +1235,7 @@ TEST_CASE("V2: vector_get_view zeroes view on failure", "[capi_v2][data_chunk]")
 	view.validity = reinterpret_cast<const uint64_t *>(0x2);
 	view.sel = reinterpret_cast<const duckdb_v2_sel_t *>(0x3);
 
-	REQUIRE(duckdb_v2_vector_get_view(nullptr, &view, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_view(nullptr, &view, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(view.data == nullptr);
 	REQUIRE(view.validity == nullptr);
 	REQUIRE(view.sel == nullptr);
@@ -1262,26 +1262,23 @@ TEST_CASE("V2: string decoders reject null arguments", "[capi_v2][data_chunk]") 
 	bool is_neg = false;
 
 	// Null input bytes, and storage too short to carry a header + magnitude.
-	REQUIRE(duckdb_v2_bignum_decode(nullptr, 4, out, sizeof(out), &len, &is_neg, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_bignum_decode(nullptr, 4, out, sizeof(out), &len, &is_neg, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	const uint8_t header_only[3] = {0x80, 0x00, 0x00};
 	REQUIRE(duckdb_v2_bignum_decode(header_only, sizeof(header_only), out, sizeof(out), &len, &is_neg, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	// The out-params carrying the answer are mandatory in both directions.
 	const uint8_t storage[4] = {0x80, 0x00, 0x01, 0x07};
 	REQUIRE(duckdb_v2_bignum_decode(storage, sizeof(storage), out, sizeof(out), nullptr, &is_neg, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_bignum_decode(storage, sizeof(storage), out, sizeof(out), &len, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	const uint8_t magnitude[1] = {0x07};
-	REQUIRE(duckdb_v2_bignum_encode(nullptr, 1, false, out, sizeof(out), &len, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_bignum_encode(magnitude, 0, false, out, sizeof(out), &len, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_bignum_encode(nullptr, 1, false, out, sizeof(out), &len, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_bignum_encode(magnitude, 0, false, out, sizeof(out), &len, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_bignum_encode(magnitude, 1, false, out, sizeof(out), nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 }
 
 // ===========================================================================
@@ -1302,7 +1299,7 @@ TEST_CASE("V2: bignum codec sizes and refuses short buffers", "[capi_v2][data_ch
 	std::vector<uint8_t> storage(storage_len);
 	idx_t short_len = 0;
 	REQUIRE(duckdb_v2_bignum_encode(magnitude, sizeof(magnitude), true, storage.data(), storage_len - 1, &short_len,
-	                                nullptr) == DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE);
+	                                nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(short_len == storage_len);
 
 	REQUIRE(duckdb_v2_bignum_encode(magnitude, sizeof(magnitude), true, storage.data(), storage.size(), &storage_len,
@@ -1319,7 +1316,7 @@ TEST_CASE("V2: bignum codec sizes and refuses short buffers", "[capi_v2][data_ch
 	std::vector<uint8_t> decoded(mag_len);
 	idx_t refused_len = 0;
 	REQUIRE(duckdb_v2_bignum_decode(storage.data(), storage.size(), decoded.data(), mag_len - 1, &refused_len, &is_neg,
-	                                nullptr) == DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE);
+	                                nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(refused_len == mag_len);
 
 	REQUIRE(duckdb_v2_bignum_decode(storage.data(), storage.size(), decoded.data(), decoded.size(), &mag_len, &is_neg,
@@ -1340,12 +1337,12 @@ TEST_CASE("V2: bignum encode requires a canonical magnitude", "[capi_v2][data_ch
 	// Leading zero bytes are not canonical.
 	const uint8_t leading_zero[2] = {0x00, 0x07};
 	REQUIRE(duckdb_v2_bignum_encode(leading_zero, sizeof(leading_zero), false, out, sizeof(out), &len, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	// Zero is the single byte 0x00, and only positive: -0 has no encoding.
 	const uint8_t zero[1] = {0x00};
 	REQUIRE(duckdb_v2_bignum_encode(zero, sizeof(zero), true, out, sizeof(out), &len, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_bignum_encode(zero, sizeof(zero), false, out, sizeof(out), &len, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(len == 4);

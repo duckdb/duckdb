@@ -276,20 +276,20 @@ TEST_CASE("V2: column_data_collection combine refusals", "[capi_v2][column_data_
 	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&bigint_type);
 
-	REQUIRE(duckdb_v2_column_data_collection_combine(target, &source, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_combine(target, &source, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(source != nullptr);
 	duckdb_v2_column_data_collection_destroy(&source);
 
 	// Self-combine is refused rather than corrupting the collection.
 	auto self = target;
-	REQUIRE(duckdb_v2_column_data_collection_combine(target, &self, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_combine(target, &self, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(self != nullptr);
 
 	// Null arguments.
-	REQUIRE(duckdb_v2_column_data_collection_combine(nullptr, &self, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_column_data_collection_combine(target, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_combine(nullptr, &self, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_column_data_collection_combine(target, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_column_data_collection_handle null_source = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_combine(target, &null_source, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_combine(target, &null_source, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_column_data_collection_destroy(&target);
 }
@@ -341,7 +341,7 @@ TEST_CASE("V2: column_data_collection clear keeps types, drops rows", "[capi_v2]
 }
 
 TEST_CASE("V2: column_data_collection clear null arg", "[capi_v2][column_data_collection]") {
-	REQUIRE(duckdb_v2_column_data_collection_clear(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_clear(nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 // ===========================================================================
@@ -356,22 +356,22 @@ TEST_CASE("V2: column_data_collection create refusals", "[capi_v2][column_data_c
 
 	// Null connection / types / out slot.
 	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(nullptr, types, 1, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(cdc == nullptr);
 	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, nullptr, 1, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(cdc == nullptr);
 	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 1, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	// A collection must have at least one column.
 	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 0, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(cdc == nullptr);
 
 	// A null element in the types array.
 	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 2, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(cdc == nullptr);
 
 	duckdb_v2_logical_type_destroy(&int_type);
@@ -388,7 +388,7 @@ TEST_CASE("V2: column_data_collection append refuses mismatching chunks", "[capi
 	duckdb_v2_logical_type_handle two_types[2] = {int_type, int_type};
 	duckdb_v2_data_chunk_handle two_cols = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_create(two_types, 2, &two_cols, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, two_cols, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, two_cols, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_data_chunk_destroy(&two_cols);
 	duckdb_v2_logical_type_destroy(&int_type);
 
@@ -397,18 +397,16 @@ TEST_CASE("V2: column_data_collection append refuses mismatching chunks", "[capi
 	duckdb_v2_logical_type_handle double_types[1] = {double_type};
 	duckdb_v2_data_chunk_handle double_chunk = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_create(double_types, 1, &double_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, double_chunk, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, double_chunk, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_logical_type_destroy(&double_type);
 
 	// Nothing was appended by the refusals.
 	REQUIRE(RowCount(cdc) == 0);
 
 	// Null arguments.
-	REQUIRE(duckdb_v2_column_data_collection_append(nullptr, st, double_chunk, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_column_data_collection_append(cdc, nullptr, double_chunk, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_append(nullptr, st, double_chunk, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_column_data_collection_append(cdc, nullptr, double_chunk, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_data_chunk_destroy(&double_chunk);
 
 	duckdb_v2_column_data_collection_append_state_destroy(&st);
@@ -433,19 +431,19 @@ TEST_CASE("V2: column_data_collection scan refuses mismatching chunks", "[capi_v
 
 	bool did_produce = false;
 	REQUIRE(duckdb_v2_column_data_collection_scan(cdc, shared, worker, wrong_chunk, &did_produce, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	// Null arguments.
 	REQUIRE(duckdb_v2_column_data_collection_scan(nullptr, shared, worker, wrong_chunk, &did_produce, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_column_data_collection_scan(cdc, nullptr, worker, wrong_chunk, &did_produce, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_column_data_collection_scan(cdc, shared, nullptr, wrong_chunk, &did_produce, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_column_data_collection_scan(cdc, shared, worker, nullptr, &did_produce, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_column_data_collection_scan(cdc, shared, worker, wrong_chunk, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_data_chunk_destroy(&wrong_chunk);
 	duckdb_v2_column_data_collection_worker_scan_state_destroy(&worker);
@@ -577,8 +575,7 @@ TEST_CASE("V2: data_chunk_create_with_connection", "[capi_v2][column_data_collec
 	duckdb_v2_data_chunk_destroy(&chunk);
 
 	// Null connection.
-	REQUIRE(duckdb_v2_data_chunk_create_with_connection(nullptr, types, 1, &chunk, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_create_with_connection(nullptr, types, 1, &chunk, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(chunk == nullptr);
 
 	duckdb_v2_logical_type_destroy(&int_type);
@@ -643,13 +640,11 @@ TEST_CASE("V2: data_chunk_copy_with_connection refusals and empty copy", "[capi_
 	duckdb_v2_data_chunk_destroy(&copy);
 
 	// Null arguments.
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(nullptr, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(nullptr, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(copy == nullptr);
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, nullptr, &copy, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, nullptr, &copy, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(copy == nullptr);
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, chunk, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, chunk, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
 }

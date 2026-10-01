@@ -193,7 +193,7 @@ TEST_CASE("V2: require_cacheable rejects a re-bound plan", "[capi_v2][prepared_s
 
 	auto rc = DUCKDB_V2_ERROR_NONE;
 	auto prepared = PsPrepare(fx.conn, "SELECT x FROM t WHERE x = $1", true, &rc);
-	REQUIRE(rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(rc == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(prepared == nullptr);
 
 	// The same statement prepares fine without the flag; the caller then knows what it got.
@@ -435,8 +435,7 @@ TEST_CASE("V2: prepared_statement_create refuses while a result is live", "[capi
 	duckdb_v2_prepared_statement_handle prepared = nullptr;
 	// Preparing would run the engine's cleanup and cancel the live stream, so it refuses
 	// before reaching the engine, leaving the statement intact.
-	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, nullptr) ==
-	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(prepared == nullptr);
 	REQUIRE(stmt != nullptr);
 
@@ -460,7 +459,7 @@ TEST_CASE("V2: prepared_statement_execute refuses while a result is live", "[cap
 
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, nullptr, 0, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 
 	REQUIRE(DrainRowCount(live) == 100000);
@@ -482,8 +481,7 @@ TEST_CASE("V2: a live prepared result blocks statement_execute", "[capi_v2][prep
 	// The slot the prepared path claims is the one the stateless path checks.
 	auto stmt = PsParseOne(fx.conn, "SELECT 1");
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 
 	// Destroying the prepared result frees the connection even undrained.
@@ -540,8 +538,7 @@ TEST_CASE("V2: prepared_statement_create surfaces a catalog error", "[capi_v2][p
 	duckdb_v2_error_info_handle err = nullptr;
 	// The typed error survives the prepare, so the code is the catalog one rather than a
 	// generic failure.
-	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, &err) ==
-	        DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(prepared == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_str msg = {nullptr, 0};
@@ -562,35 +559,32 @@ TEST_CASE("V2: prepared_statement functions guard null arguments", "[capi_v2][pr
 	auto stmt = PsParseOne(fx.conn, "SELECT 1::BIGINT");
 	duckdb_v2_prepared_statement_handle prepared = nullptr;
 
-	REQUIRE(duckdb_v2_prepared_statement_create(nullptr, stmt, false, &prepared, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_prepared_statement_create(nullptr, stmt, false, &prepared, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, nullptr, false, &prepared, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(prepared == nullptr);
 
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_destroy(&stmt);
 
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(duckdb_v2_prepared_statement_execute(nullptr, nullptr, nullptr, 0, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_prepared_statement_execute(nullptr, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, nullptr, 0, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	// A count without values, and a null value inside the array, are both rejected.
 	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, nullptr, 1, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 	duckdb_v2_value_handle null_values[1] = {nullptr};
 	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, null_values, 1, &r, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 
 	bool reuses = false;
-	REQUIRE(duckdb_v2_prepared_statement_reuses_plan(nullptr, &reuses, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_prepared_statement_reuses_plan(prepared, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_prepared_statement_reuses_plan(nullptr, &reuses, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_prepared_statement_reuses_plan(prepared, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// Every rejection above left the prepared statement usable.
 	REQUIRE(PsExecuteWith(fx.conn, prepared, {}) == std::vector<int64_t> {1});

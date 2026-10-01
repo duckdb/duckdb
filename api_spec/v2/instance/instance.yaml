@@ -104,7 +104,7 @@ functions:
       database the default for connections created afterwards, exactly as a
       `[[instance_set_default]]` call right after the attach would; otherwise the
       default is left alone. A path that is already attached on this or any
-      other instance of the environment returns ERROR_RESOURCE_IN_USE, and a
+      other instance of the environment returns an error, and a
       name that is already attached fails. Options that only apply at startup
       must be set before the first attach or connection.
     role: method
@@ -149,7 +149,7 @@ functions:
       existing connections bound to it keep it alive until their transaction
       on it ends and fail unqualified DDL afterwards. The path is matched
       against the attached databases as `[[instance_attach]]` recorded it, so pass
-      the path that was passed to `[[instance_attach]]`. Returns ERROR_INPUT_INVALID
+      the path that was passed to `[[instance_attach]]`. Returns an error
       when no database attached from that path exists. Connections that still
       reference the database keep it alive until they release it.
     role: method
@@ -186,7 +186,7 @@ functions:
       default has been detached fails unqualified DDL with a message saying
       so until it selects another with `USE`. `path` is either the path that
       was passed to `[[instance_attach]]` or the name the database is attached
-      under; a name match wins. Returns ERROR_INPUT_INVALID when neither
+      under; a name match wins. Returns an error when neither
       matches an attached database.
     role: method
     belongs_to: instance
@@ -300,7 +300,7 @@ functions:
       extension to consume at startup; if none does, startup fails with the
       unrecognized names. After startup, this is `SET GLOBAL name = setting`
       and an unknown name is rejected unless an extension that defines it can
-      be autoloaded. Returns ERROR_INPUT_INVALID for an option declared
+      be autoloaded. Returns an error for an option declared
       LOCAL_ONLY, and for a legacy option with no global setter.
     role: setter
     belongs_to: instance
@@ -337,7 +337,7 @@ functions:
       Before startup the current setting is the staged startup value, or the
       default. Aliases resolve transparently — passing an alias returns the
       canonical option, with the alias listed in its alias array. An unknown
-      name returns ERROR_INPUT_INVALID; before startup that includes an
+      name returns an error; before startup that includes an
       option of an extension that has not loaded yet, even if a setting for
       it has been staged. The caller destroys the returned option.
     role: getter
@@ -397,7 +397,7 @@ functions:
 
       Index space: [0, core_count) addresses core options, [core_count, total)
       extension options. The mapping is stable for as long as no extension
-      registers new options. An out-of-range index returns ERROR_INPUT_INVALID.
+      registers new options. An out-of-range index returns an error.
       The caller destroys the returned option.
     role: getter
     belongs_to: instance

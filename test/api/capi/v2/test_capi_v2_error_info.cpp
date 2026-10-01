@@ -35,7 +35,7 @@ duckdb_v2_error_info_handle FailingQuery(duckdb_v2_connection_handle conn, const
 TEST_CASE("V2 error: get_raw_message on a binder error", "[capi_v2][error]") {
 	EnvFixture fx;
 
-	auto err = FailingQuery(fx.conn, "SELECT * FROM no_such_table", DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	auto err = FailingQuery(fx.conn, "SELECT * FROM no_such_table", DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_str raw = {nullptr, 0};
 	REQUIRE(duckdb_v2_error_info_get_raw_text(err, &raw) == DUCKDB_V2_ERROR_NONE);
@@ -60,7 +60,7 @@ TEST_CASE("V2 error: get_raw_message on a binder error", "[capi_v2][error]") {
 
 TEST_CASE("V2 error: directly-set messages have no raw body", "[capi_v2][error]") {
 	duckdb_v2_error_info_handle err = nullptr;
-	SetErrorInfo(&err, DUCKDB_V2_ERROR_API, "boom");
+	SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, "boom");
 	REQUIRE(err != nullptr);
 
 	duckdb_v2_str raw = {nullptr, 0};
@@ -76,10 +76,10 @@ TEST_CASE("V2 error: directly-set messages have no raw body", "[capi_v2][error]"
 	REQUIRE(raw.len == 0);
 
 	// set an error code
-	REQUIRE(duckdb_v2_error_info_set_code(err, DUCKDB_V2_ERROR_CONFIGURATION_PERMISSION) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_error_info_set_code(err, DUCKDB_V2_ERROR_GENERIC) == DUCKDB_V2_ERROR_NONE);
 	DUCKDB_V2_ERROR out_err_code;
 	REQUIRE(duckdb_v2_error_info_get_code(err, &out_err_code) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(out_err_code == DUCKDB_V2_ERROR_CONFIGURATION_PERMISSION);
+	REQUIRE(out_err_code == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -93,7 +93,7 @@ TEST_CASE("V2 error: raw body does not leak across slot reuse", "[capi_v2][error
 
 	duckdb_v2_error_info_handle err = nullptr;
 	duckdb_v2_result_handle r = nullptr;
-	REQUIRE(Query(fx.conn, "SELECT * FROM no_such_table", &r, &err) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(Query(fx.conn, "SELECT * FROM no_such_table", &r, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(r == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_str raw = {nullptr, 0};
@@ -116,22 +116,22 @@ TEST_CASE("V2 error: raw body does not leak across slot reuse", "[capi_v2][error
 
 TEST_CASE("V2 error: get_raw_message rejects null args", "[capi_v2][error]") {
 	duckdb_v2_error_info_handle err = nullptr;
-	SetErrorInfo(&err, DUCKDB_V2_ERROR_API, "x");
+	SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, "x");
 
 	duckdb_v2_str out = {nullptr, 0};
-	REQUIRE(duckdb_v2_error_info_get_raw_text(nullptr, &out) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_error_info_get_raw_text(err, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(nullptr, &out) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_error_info_get_raw_text(err, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_error_info_destroy(&err);
 }
 
 TEST_CASE("V2 error: set_text rejects a null view", "[capi_v2][error]") {
 	duckdb_v2_error_info_handle err = nullptr;
-	SetErrorInfo(&err, DUCKDB_V2_ERROR_API, "x");
+	SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, "x");
 
-	REQUIRE(duckdb_v2_error_info_set_text(err, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_error_info_set_text(err, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_str malformed = {nullptr, 3};
-	REQUIRE(duckdb_v2_error_info_set_text(err, &malformed) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_error_info_set_text(err, &malformed) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -155,7 +155,7 @@ TEST_CASE("V2 error: statement_iterator_next renders the location like the eager
 
 	// The next() that reaches "SELEKT 2" raises the parse error.
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, &err) == DUCKDB_V2_ERROR_QUERY_PARSER);
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(stmt == nullptr);
 	REQUIRE(err != nullptr);
 
@@ -186,7 +186,7 @@ TEST_CASE("V2 error: errors_as_json makes the parse boundary emit JSON", "[capi_
 	REQUIRE(duckdb_v2_parse_sql(fx.conn, "SELEKT 1", &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_handle stmt = nullptr;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, &err) == DUCKDB_V2_ERROR_QUERY_PARSER);
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(stmt == nullptr);
 	REQUIRE(err != nullptr);
 
@@ -212,8 +212,8 @@ TEST_CASE("V2 error: errors_as_json makes the parse boundary emit JSON", "[capi_
 TEST_CASE("V2 error: SetErrorInfo helper", "[capi_v2][error]") {
 	SECTION("SetErrorInfo allocates an info and returns the code") {
 		duckdb_v2_error_info_handle err = nullptr;
-		auto rc = SetErrorInfo(&err, DUCKDB_V2_ERROR_INPUT_INVALID, "bad input");
-		REQUIRE(rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+		auto rc = SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, "bad input");
+		REQUIRE(rc == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(err != nullptr);
 
 		duckdb_v2_str msg = {nullptr, 0};
@@ -227,8 +227,8 @@ TEST_CASE("V2 error: SetErrorInfo helper", "[capi_v2][error]") {
 
 	SECTION("SetErrorInfo with null message produces an empty message") {
 		duckdb_v2_error_info_handle err = nullptr;
-		auto rc = SetErrorInfo(&err, DUCKDB_V2_ERROR_INPUT_INVALID, nullptr);
-		REQUIRE(rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+		auto rc = SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, nullptr);
+		REQUIRE(rc == DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(err != nullptr);
 
 		duckdb_v2_str msg = {nullptr, 0};
@@ -242,7 +242,7 @@ TEST_CASE("V2 error: SetErrorInfo helper", "[capi_v2][error]") {
 	SECTION("SetErrorInfo preserves arbitrarily long messages") {
 		duckdb_v2_error_info_handle err = nullptr;
 		std::string long_msg(4096, 'x');
-		SetErrorInfo(&err, DUCKDB_V2_ERROR_API, long_msg.c_str());
+		SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, long_msg.c_str());
 
 		duckdb_v2_str msg = {nullptr, 0};
 		duckdb_v2_error_info_get_text(err, &msg);
@@ -252,14 +252,14 @@ TEST_CASE("V2 error: SetErrorInfo helper", "[capi_v2][error]") {
 	}
 
 	SECTION("SetErrorInfo with nullptr err returns the code and allocates nothing") {
-		auto rc = SetErrorInfo(nullptr, DUCKDB_V2_ERROR_INPUT_INVALID, "ignored");
-		REQUIRE(rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+		auto rc = SetErrorInfo(nullptr, DUCKDB_V2_ERROR_GENERIC, "ignored");
+		REQUIRE(rc == DUCKDB_V2_ERROR_GENERIC);
 	}
 
 	SECTION("SetErrorInfo replaces a pre-existing info's message") {
 		duckdb_v2_error_info_handle err = nullptr;
-		SetErrorInfo(&err, DUCKDB_V2_ERROR_INPUT_INVALID, "first");
-		SetErrorInfo(&err, DUCKDB_V2_ERROR_API, "second");
+		SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, "first");
+		SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, "second");
 		REQUIRE(err != nullptr);
 
 		duckdb_v2_str msg = {nullptr, 0};
@@ -282,7 +282,7 @@ TEST_CASE("V2 error: error_info_destroy is null-safe", "[capi_v2][error]") {
 
 	SECTION("detach + destroy preserves info independently of the original slot") {
 		duckdb_v2_error_info_handle err = nullptr;
-		SetErrorInfo(&err, DUCKDB_V2_ERROR_API, "boom");
+		SetErrorInfo(&err, DUCKDB_V2_ERROR_GENERIC, "boom");
 
 		// Transfer ownership out of `err` — the original slot is now detached.
 		duckdb_v2_error_info_handle saved = err;

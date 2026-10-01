@@ -20,7 +20,7 @@ module: prepared_statement
 #
 # One live result per connection, as everywhere else in this API: both
 # `prepared_statement_create` and `prepared_statement_execute` refuse with
-# `ERROR_RESOURCE_IN_USE` while the connection has a live result. Open another connection
+# an error while the connection has a live result. Open another connection
 # for concurrency; a prepared statement belongs to the connection it was prepared on.
 #
 # The handle is opaque and exposes no signature of its own: `statement_bind` already
@@ -61,10 +61,10 @@ functions:
 
       By default this succeeds for any preparable statement, whether or not its plan will be reused; ask
       `[[prepared_statement_reuses_plan]]` which one you got. Setting `require_cacheable` instead fails with
-      `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup
+      an error when the plan would not be reused, so a caller who wants the handle only for the speedup
       finds out here rather than after silently taking the slow path.
 
-      Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that
+      Refuses with an error while the connection has a live result. Drain, destroy, or interrupt that
       result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
     role: constructor
     belongs_to: prepared_statement
@@ -78,7 +78,7 @@ functions:
       require_cacheable:
         type: bool
         description: |
-          When true, fail with `ERROR_INPUT_INVALID` unless the prepared plan will be reused across executions, as
+          When true, fail with an error unless the prepared plan will be reused across executions, as
           `[[prepared_statement_reuses_plan]]` would report it.
       out_prepared:
         type: prepared_statement
@@ -110,7 +110,7 @@ functions:
       value to that named parameter ($name, matched case-insensitively) and a {NULL, 0} entry stays positional. Pass
       NULL for both arrays, or a count of 0, for a statement without parameters. Both arrays are borrowed and copied
       in, so the caller still owns and destroys them. A key set that does not match the statement's parameters is
-      rejected with `ERROR_INPUT_INVALID`, with one exception: a named parameter left without a value reads the
+      rejected with an error, with one exception: a named parameter left without a value reads the
       session variable of the same name (`SET VARIABLE`) when one exists.
 
       Not consumed: execute the same handle again, with the same values or different ones, as often as you like.
@@ -118,7 +118,7 @@ functions:
       prepared, or a parameter type that differs from the one the cached plan assumed, triggers a re-bind that is
       invisible apart from its cost.
 
-      Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it
+      Refuses with an error while the connection has a live result; drain, destroy, or interrupt it
       first, or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
       `*out_result` is set to NULL on failure.
     role: method
