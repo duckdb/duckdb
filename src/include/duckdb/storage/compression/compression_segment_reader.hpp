@@ -237,19 +237,21 @@ public:
 	//! Throws if alignment is zero.
 	void AlignBackward(idx_t alignment);
 
-private:
+	//! Validates that length bytes fit at the current position without advancing it.
 	void CheckForwardRead(idx_t length) const {
 		if (DUCKDB_UNLIKELY(length > size - position)) {
 			ThrowForwardReadOutOfBounds();
 		}
 	}
 
+	//! Validates that length bytes fit before the current position without moving it.
 	void CheckBackwardRead(idx_t length) const {
 		if (DUCKDB_UNLIKELY(length > position)) {
 			ThrowBackwardReadOutOfBounds();
 		}
 	}
 
+	//! Validates that length bytes fit at offset without changing the position.
 	void CheckRange(idx_t offset, idx_t length) const {
 		if (DUCKDB_UNLIKELY(offset > size)) {
 			ThrowOffsetOutOfBounds();
@@ -259,6 +261,7 @@ private:
 		}
 	}
 
+private:
 	//! Keep exception construction out of bounds-checking paths.
 	[[noreturn]] static void ThrowOffsetExceedsBlockSize(const char *context);
 	[[noreturn]] static void ThrowByteSizeExceedsBlockSize(const char *context);
