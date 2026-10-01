@@ -50,10 +50,10 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		}
 		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
-			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+			throw BinderException("Cant update column %s because it is a generated column!", column.Name());
 		}
 		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
-			throw BinderException("Multiple assignments to same column \"%s\"", colname);
+			throw BinderException("Multiple assignments to same column %s", colname);
 		}
 		columns.push_back(column.Physical());
 		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {

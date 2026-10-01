@@ -43,10 +43,9 @@
 #include <limits>
 
 // Arrow C Data Interface structs. Forward declared only: the definitions come from `duckdb_v2.h` or from the
-// consumer's own Arrow headers, under the standard ARROW_C_DATA_INTERFACE / ARROW_C_STREAM_INTERFACE guards.
+// consumer's own Arrow headers, under the standard ARROW_C_DATA_INTERFACE guard.
 struct ArrowSchema;
 struct ArrowArray;
-struct ArrowArrayStream;
 
 namespace duckdb {
 namespace cxx {
@@ -75,7 +74,6 @@ class DataChunk;
 class ColumnDataCollection;
 class QueryResult;
 class PreparedStatement;
-class ArrowStream;
 class ArrowImporter;
 class ArrowExporter;
 
@@ -2727,61 +2725,6 @@ private:
 	explicit ArrowExporter(void *impl);
 };
 
-/// An owning handle to an Arrow C Data Interface stream, produced by `QueryResult::ToArrowStream`. Destroying it
-/// releases the stream, which closes the query and frees the connection for its next one. Arrays handed out by
-/// `Next` are owned by the caller and released independently of this.
-///
-/// Unlike the other wrappers this does not derive from `detail::Handle`: it owns a raw `ArrowArrayStream` rather than
-/// an opaque DuckDB handle, so the handle machinery does not apply.
-class ArrowStream final {
-	friend detail::Factory;
-
-public:
-	ArrowStream(ArrowStream &&other) noexcept : stream(other.stream) {
-		other.stream = nullptr;
-	}
-	ArrowStream &operator=(ArrowStream &&other) noexcept {
-		std::swap(stream, other.stream);
-		return *this;
-	}
-	ArrowStream(const ArrowStream &) = delete;
-	ArrowStream &operator=(const ArrowStream &) = delete;
-
-	~ArrowStream();
-
-	/// True while this holds a live stream, false once it has been moved from or detached.
-	explicit operator bool() const noexcept {
-		return stream != nullptr;
-	}
-
-	/// Borrows the underlying stream, which this still owns. Hand its address to an Arrow consumer that does not
-	/// take ownership.
-	auto get() const noexcept -> ArrowArrayStream * {
-		return stream;
-	}
-
-	/// Detaches the underlying stream, handing the caller ownership and the duty to release it. Leaves this empty.
-	auto Detach() noexcept -> ArrowArrayStream * {
-		auto detached = stream;
-		stream = nullptr;
-		return detached;
-	}
-
-	/// Reads the stream's schema into `out`, which the caller then owns and releases.
-	/// @throws InvalidInputException On failure, or when this stream is empty.
-	void GetSchema(ArrowSchema &out) const;
-
-	/// Fetches the next array into `out`, which the caller then owns and releases.
-	/// @return False at end of stream, where `out` is left released.
-	/// @throws InvalidInputException On failure, or when this stream is empty.
-	bool Next(ArrowArray &out) const;
-
-private:
-	explicit ArrowStream(ArrowArrayStream *stream) : stream(stream) {
-	}
-	ArrowArrayStream *stream = nullptr;
-};
-
 //----------------------------------------------------------------------------------------------------------------------
 // Result
 //----------------------------------------------------------------------------------------------------------------------
@@ -2881,12 +2824,6 @@ public:
 	auto RenderBox(idx_t max_rows = 0, idx_t max_width = 0, idx_t max_col_width = 0, const std::string &null_value = "",
 	               idx_t render_mode = 0, idx_t limit = 0) -> std::string;
 
-	/// Exports the result as a lazy `ArrowStream`, consuming it. Nothing is executed here: the stream converts as its
-	/// consumer pulls. A result that has already yielded chunks produces a stream over what remains.
-	/// @param batch_size Target rows per Arrow array, 0 for the default of 131072.
-	/// @return The stream, which owns the query from now on and frees the connection when released.
-	auto ToArrowStream(idx_t batch_size = 0) -> ArrowStream;
-
 private:
 	explicit QueryResult(void *impl);
 };
@@ -2895,8 +2832,23 @@ private:
 // Function Signature
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A function's declared parameters, variadic tail, and return type.
-/// Borrowed from the `ScalarFunction` or `AggregateFunction` it was read from via `GetSignature`.
+/// How a caller passes the argument for a parameter, following Python's parameter kinds. A signature orders its
+/// parameters by kind, in the order the values are listed here.
+enum class FunctionParameterKind : uint8_t {
+	/// Passed by position only. A named argument with the parameter's name is received by `**kwargs`.
+	POSITIONAL_ONLY = 0,
+	/// Passed by position or by name.
+	STANDARD = 1,
+	/// `*args`: receives the positional arguments left over after the positional-only and standard parameters.
+	POSITIONAL_VARIADIC = 2,
+	/// Passed by name only.
+	NAMED_ONLY = 3,
+	/// `**kwargs`: receives the named arguments that match no other parameter.
+	NAMED_VARIADIC = 4,
+};
+
+/// A function's declared parameters and return type.
+/// Borrowed from the function it was read from via `GetSignature`.
 /// Valid for as long as the owning function is.
 /// Setters mutate the function's signature in place.
 class FunctionSignature final : public detail::Handle<FunctionSignature> {
@@ -2908,22 +2860,36 @@ public:
 
 	~FunctionSignature() override;
 
-	/// Appends a parameter without a default value. `LogicalTypeId::ANY` is accepted and leaves the argument un-cast.
+	/// Adds a parameter without a default value. The signature orders its parameters by kind, and parameters of the
+	/// same kind in the order they were added. `LogicalTypeId::ANY` is accepted and leaves the argument un-cast.
 	/// @param name The parameter's name.
 	/// @param type The parameter's type.
-	auto AddParameter(const std::string &name, const LogicalType &type) -> FunctionSignature &;
+	/// @param kind How a caller passes the argument.
+	/// @throws InvalidInputException When the kind is not a `FunctionParameterKind`.
+	auto AddParameter(const std::string &name, const LogicalType &type,
+	                  FunctionParameterKind kind = FunctionParameterKind::STANDARD) -> FunctionSignature &;
 
-	/// Appends a parameter with a default value: the caller may omit it, the function still receives the default.
+	/// Adds a parameter with a default value: the caller may omit it, the function still receives the default.
+	/// `*args` and `**kwargs` cannot have a default value; registration rejects one.
 	/// @param name The parameter's name.
 	/// @param type The parameter's type.
 	/// @param default_value The value the parameter takes when the caller omits it.
-	auto AddParameter(const std::string &name, const LogicalType &type, const Value &default_value)
-	    -> FunctionSignature &;
+	/// @param kind How a caller passes the argument.
+	/// @throws InvalidInputException When the kind is not a `FunctionParameterKind`.
+	auto AddParameter(const std::string &name, const LogicalType &type, const Value &default_value,
+	                  FunctionParameterKind kind = FunctionParameterKind::STANDARD) -> FunctionSignature &;
 
-	/// Sets the variadic tail type, allowing any number of extra arguments after the fixed parameters. Pass
-	/// `LogicalTypeId::ANY` to leave the tail un-cast. Overwrites any prior variadic tail.
-	/// @param type The type every extra argument is cast to.
-	auto SetVarArgs(const LogicalType &type) -> FunctionSignature &;
+	/// Adds the `*args` parameter, receiving any number of extra positional arguments. Pass `LogicalTypeId::ANY` to
+	/// leave them un-cast.
+	/// @param name The parameter's name.
+	/// @param type The type every extra positional argument is cast to.
+	auto AddArgs(const std::string &name, const LogicalType &type) -> FunctionSignature &;
+
+	/// Adds the `**kwargs` parameter, receiving the named arguments that match no other parameter. Pass
+	/// `LogicalTypeId::ANY` to leave them un-cast.
+	/// @param name The parameter's name.
+	/// @param type The type every such named argument is cast to.
+	auto AddKwargs(const std::string &name, const LogicalType &type) -> FunctionSignature &;
 
 	/// Sets the return type. Overwrites any prior return type.
 	/// @param type The return type.
@@ -2931,6 +2897,97 @@ public:
 
 private:
 	explicit FunctionSignature(void *impl);
+};
+
+/// The sizes of the four parts of a function call's argument list, which follow each other in this order.
+struct ArgumentCounts {
+	/// One argument per positional-only and standard parameter, in declaration order.
+	idx_t positional_fixed = 0;
+	/// The arguments `*args` received, in call order.
+	idx_t positional_variadic = 0;
+	/// One argument per named-only parameter, in declaration order.
+	idx_t named_fixed = 0;
+	/// The arguments `**kwargs` received, in call order.
+	idx_t named_variadic = 0;
+
+	/// The index of the first named argument.
+	auto NamedOffset() const -> idx_t {
+		return positional_fixed + positional_variadic;
+	}
+	/// The number of arguments in all four parts.
+	auto Total() const -> idx_t {
+		return NamedOffset() + named_fixed + named_variadic;
+	}
+};
+
+/// What every function's bind callback works with: the arguments of the call being bound, and the bind data.
+/// Borrowed, valid only for the callback duration.
+///
+/// The arguments form one list in the four parts of `ArgumentCounts`. A standard parameter passed by name is at its
+/// declared position, and a parameter the call omitted carries its default value.
+class FunctionBindInput {
+public:
+	/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback via
+	/// `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T` has one,
+	/// by identity otherwise.
+	template <class T, class... ARGS>
+	void SetBindData(ARGS &&... args) {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+	}
+
+	/// How many arguments the call passes, in all four parts. Valid indices for the other argument accessors are
+	/// [0, GetArgCount()).
+	auto GetArgCount() const -> idx_t;
+
+	/// The sizes of the four parts of the argument list.
+	auto GetArgumentCounts() const -> ArgumentCounts;
+
+	/// The resolved type of one argument. An ANY parameter reports the type the caller passed.
+	/// @param index Argument index in [0, GetArgCount()).
+	/// @throws InvalidInputException When the index is out of range.
+	auto GetArgType(idx_t index) const -> LogicalType;
+
+	/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
+	/// before execution, e.g. a format string or a target type. A table function's arguments are always constant.
+	/// @param index Argument index in [0, GetArgCount()).
+	/// @throws InvalidInputException When the index is out of range.
+	/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
+	auto GetConstantArgument(idx_t index) const -> Value;
+
+	/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
+	/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
+	/// prepared-statement parameter), or the index is out of range.
+	/// @param index Argument index in [0, GetArgCount()).
+	auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
+
+	/// The name of one argument: the parameter name for a declared parameter, the name the caller passed for an
+	/// argument `**kwargs` received, and an empty name for an argument `*args` received.
+	/// @param index Argument index in [0, GetArgCount()).
+	/// @throws InvalidInputException When the index is out of range.
+	auto GetArgName(idx_t index) const -> std::string;
+
+	/// The index of the argument a caller passes by the given name, matched case-insensitively, or nullopt when the
+	/// call passed no argument of that name. Positional-only parameters are skipped, as a caller cannot pass them by
+	/// name.
+	/// @param name The name to look up.
+	auto FindArg(const std::string &name) const -> std::optional<idx_t>;
+
+	/// The binding context. Borrowed, valid only for the callback duration.
+	auto GetContext() const -> Context;
+
+protected:
+	FunctionBindInput(void *args, void *context) : args(args), context(context) {
+	}
+
+	/// The user data slot of the function, which carries the function's info table
+	void *GetFunctionInfo() const;
+
+	void *args;
+	void *context;
+
+private:
+	void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2975,6 +3032,17 @@ enum class FunctionCollationHandling : uint8_t {
 	PUSH_COMBINABLE = 1,
 	/// Collations are ignored by the function.
 	IGNORE = 2,
+};
+
+/// The order guarantee a producer of rows makes about its output.
+enum class OrderPreservation : uint8_t {
+	/// The rows have no meaningful order and may be reordered freely.
+	NO_ORDER = 0,
+	/// The rows are in insertion order, kept unless the `preserve_insertion_order` setting is disabled (default).
+	INSERTION_ORDER = 1,
+	/// The rows are in an order that must be kept, as if sorted by an `ORDER BY`, even when the
+	/// `preserve_insertion_order` setting is disabled.
+	FIXED_ORDER = 2,
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3070,19 +3138,10 @@ private:
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
-	class BindInput {
+	class BindInput final : public FunctionBindInput {
 		friend detail::Factory;
 
 	public:
-		/// Constructs bind data of type `T`, owned by the bound function call and readable from the init and exec
-		/// callbacks via `GetBindData<T>`. The engine compares bind data when it compares expressions: by
-		/// `operator==` when `T` has one, by identity otherwise.
-		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
-			auto ptr = new T(std::forward<ARGS>(args)...);
-			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
-		}
-
 		/// The user data set via `ScalarFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -3090,45 +3149,16 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// How many arguments this call passes: one per argument of the call, variadic tail arguments included.
-		/// Valid indices for `GetArgType` and `GetConstantArgument` are [0, GetArgCount()).
-		auto GetArgCount() const -> idx_t;
-
-		/// One argument's resolved type, as the binder settled it. An ANY parameter reports the type the caller
-		/// actually passed.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgType(idx_t index) const -> LogicalType;
-
-		/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
-		/// before execution, e.g. a format string or a target type.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
-		auto GetConstantArgument(idx_t index) const -> Value;
-
-		/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
-		/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
-		/// prepared-statement parameter), or the index is out of range. Use it when a non-constant argument should
-		/// fall back to the runtime value instead of failing the query.
-		/// @param index Argument index in [0, GetArgCount()).
-		auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
-
 		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
 		/// @param type The concrete return type of this bound call.
 		auto SetReturnType(const LogicalType &type) -> void;
 
-		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
-
 	private:
-		BindInput(void *args, void *context) : args(args), context(context) {
+		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
-		void *args;
-		void *context;
+		void *result;
 
-		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 
@@ -3205,11 +3235,14 @@ public:
 		/// the engine expands the result.
 		auto GetRowCount() const -> idx_t;
 
-		/// How many argument vectors this execution carries: one per argument of the call, variadic tail arguments
-		/// included. Valid indices for `GetArg` are [0, GetArgCount()).
+		/// How many argument vectors this execution carries, in all four parts. Valid indices for `GetArg` are
+		/// [0, GetArgCount()).
 		auto GetArgCount() const -> idx_t;
 
-		/// One argument's vector.
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// One argument vector, at the index the bind callback used for the argument.
 		/// @param index Argument index in [0, GetArgCount()).
 		auto GetArg(idx_t index) const -> Vector;
 
@@ -3371,19 +3404,10 @@ private:
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
-	class BindInput {
+	class BindInput final : public FunctionBindInput {
 		friend detail::Factory;
 
 	public:
-		/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback
-		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
-		/// has one, by identity otherwise.
-		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
-			auto ptr = new T(std::forward<ARGS>(args)...);
-			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
-		}
-
 		/// The user data set via `AggregateFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -3391,45 +3415,16 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// How many arguments this call passes: one per argument of the call, variadic tail arguments included.
-		/// Valid indices for `GetArgType` and `GetConstantArgument` are [0, GetArgCount()).
-		auto GetArgCount() const -> idx_t;
-
-		/// One argument's resolved type, as the binder settled it. An ANY parameter reports the type the caller
-		/// actually passed.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgType(idx_t index) const -> LogicalType;
-
-		/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
-		/// before execution, e.g. a format string or a target type.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
-		auto GetConstantArgument(idx_t index) const -> Value;
-
-		/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
-		/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
-		/// prepared-statement parameter), or the index is out of range. Use it when a non-constant argument should
-		/// fall back to the runtime value instead of failing the query.
-		/// @param index Argument index in [0, GetArgCount()).
-		auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
-
 		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
 		/// @param type The concrete return type of this bound call.
 		auto SetReturnType(const LogicalType &type) -> void;
 
-		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
-
 	private:
-		BindInput(void *args, void *context) : args(args), context(context) {
+		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
-		void *args;
-		void *context;
+		void *result;
 
-		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 
@@ -3524,11 +3519,14 @@ public:
 		/// How many input rows this invocation carries: the length of the argument vectors and of `GetStates`.
 		auto GetRowCount() const -> idx_t;
 
-		/// How many argument vectors this invocation carries: one per argument of the call, variadic tail arguments
-		/// included. Valid indices for `GetArg` are [0, GetArgCount()).
+		/// How many argument vectors this invocation carries, in all four parts. Valid indices for `GetArg` are
+		/// [0, GetArgCount()).
 		auto GetArgCount() const -> idx_t;
 
-		/// One argument's vector.
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// One argument vector, at the index the bind callback used for the argument.
 		/// @param index Argument index in [0, GetArgCount()).
 		auto GetArg(idx_t index) const -> Vector;
 
@@ -3909,7 +3907,7 @@ private:
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
-	class BindInput {
+	class BindInput final : public FunctionBindInput {
 		friend detail::Factory;
 
 	public:
@@ -3919,15 +3917,6 @@ public:
 		/// @param type The column's type. Must be a fully defined concrete type; ANY is rejected.
 		auto AddResultColumn(const std::string &name, const LogicalType &type) -> void;
 
-		/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback
-		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
-		/// has one, by identity otherwise.
-		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
-			auto ptr = new T(std::forward<ARGS>(args)...);
-			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
-		}
-
 		/// The user data set via `TableFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -3935,38 +3924,25 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// How many arguments this call passes. The arguments are the signature's parameters in order -- a parameter
-		/// the call site omitted still appears, carrying its declared default -- followed by any variadic tail
-		/// arguments. Valid indices for `GetArgType` and `GetArgument` are [0, GetArgCount()).
-		auto GetArgCount() const -> idx_t;
-
-		/// One argument's type.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgType(idx_t index) const -> LogicalType;
-
-		/// One argument's value. A table function's arguments are always constants, so this only fails on a bad index.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgument(idx_t index) const -> Value;
-
 		/// Hints how many rows the scan will produce, for the optimizer. Producing a different number of rows is not
 		/// an error.
 		/// @param cardinality The estimated row count.
 		/// @param is_exact Whether the estimate is exact, which also makes it an upper bound.
 		auto SetCardinality(idx_t cardinality, bool is_exact) -> void;
 
-		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		/// Sets the order guarantee of the rows this call produces. Defaults to `OrderPreservation::INSERTION_ORDER`.
+		/// With `OrderPreservation::NO_ORDER`, a scan that allows more than one thread runs in parallel into query
+		/// results, INSERT and COPY without a partition data callback, and the rows arrive in no particular order.
+		/// @param order The order guarantee of the produced rows.
+		/// @throws InvalidInputException When order is not a declared enum value.
+		auto SetOrderPreservation(OrderPreservation order) -> void;
 
 	private:
-		BindInput(void *args, void *context) : args(args), context(context) {
+		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
-		void *args;
-		void *context;
+		void *result;
 
-		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 

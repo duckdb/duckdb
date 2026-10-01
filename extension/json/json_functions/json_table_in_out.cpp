@@ -462,11 +462,13 @@ virtual_column_map_t GetJSONTableInOutVirtualColumns(ClientContext &, optional_p
 
 template <JSONTableInOutType TYPE>
 TableFunction GetJSONTableInOutFunction(const LogicalType &input_type, const bool &has_path_param) {
-	vector<LogicalType> arguments = {input_type};
+	FunctionSignature signature;
+	signature.AddPositionalOnly("json", input_type);
 	if (has_path_param) {
-		arguments.push_back(LogicalType::VARCHAR);
+		signature.AddPositionalOnly("path", LogicalType::VARCHAR);
 	}
-	TableFunction function(arguments, nullptr, JSONTableInOutBind, JSONTableInOutInitGlobal, JSONTableInOutInitLocal);
+	TableFunction function(std::move(signature), nullptr, JSONTableInOutBind, JSONTableInOutInitGlobal,
+	                       JSONTableInOutInitLocal);
 	function.in_out_function = JSONTableInOutFunction<TYPE>;
 	function.table_scan_progress = JSONTableInOutProgress;
 	function.get_virtual_columns = GetJSONTableInOutVirtualColumns;

@@ -954,11 +954,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto &con = *conn;
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	unique_ptr<duckdb::QueryResultStream> stream;
+	unique_ptr<duckdb::QueryResultStream<>> stream;
 	const bool render_materialized = renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
-		result = con.Query(std::move(statement), duckdb::QueryResultMemoryType::BUFFER_MANAGED);
+		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
 	} else {
 		result = con.Submit(std::move(statement));
 	}
@@ -999,7 +999,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::SUCCESS;
 	}
 	if (render_streaming) {
-		stream = duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result));
+		stream = duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result));
 	} else {
 		last_result = std::move(result);
 	}
@@ -3664,43 +3664,5 @@ int RunShell(int argc, const char **argv) {
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
-	return rc;
-}
-
-#if !((defined(_WIN32) || defined(WIN32)) && defined(_MSC_VER))
-int main(int argc, const char **argv) {
-#else
-int wmain(int argc, wchar_t **wargv) {
-	vector<string> utf8_args;
-	utf8_args.resize(argc);
-	vector<const char *> utf8_args_ptrs;
-	utf8_args_ptrs.resize(argc);
-	const char **argv = utf8_args_ptrs.data();
-	for (int i = 0; i < argc; i++) {
-		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		utf8_args_ptrs[i] = utf8_args[i].c_str();
-	}
-#endif
-
-	auto &shell_state = ShellState::GetReference();
-	int rc = 0;
-	try {
-		rc = RunShell(argc, argv);
-	} catch (std::exception &ex) {
-		rc = 1;
-		ErrorData error(ex);
-		fprintf(stderr, "Exited due to error: %s", error.Message().c_str());
-	}
-	try {
-		// destroy shell state prior to program clean-up
-		if (shell_state) {
-			delete shell_state;
-		}
-		shell_state = nullptr;
-	} catch (std::exception &ex) {
-		rc = 1;
-		ErrorData error(ex);
-		fprintf(stderr, "Error during clean-up due to error: %s", error.Message().c_str());
-	}
 	return rc;
 }

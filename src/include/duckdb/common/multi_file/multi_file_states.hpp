@@ -10,6 +10,7 @@
 
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/condition_variable.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
@@ -27,6 +28,8 @@ struct MultiFileReaderInterface;
 struct MultiFileReaderBindData {
 	//! The (global) column id of the filename column (if any)
 	optional_idx filename_idx;
+	//! The (global) column id of the file_row_number column (if any) - it is read from the row number virtual column
+	optional_idx file_row_number_idx;
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
 	//! (optional) The schema set by the multi file reader
@@ -170,6 +173,8 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Signal to other threads that a file failed to open, letting every thread abort.
 	//! Atomic because a cancelled file open settles it while the scheduling thread may hold the lock.
 	atomic<bool> error_opening_file {false};
+	//! Signalled when an async file open settles, waking the threads waiting for the front file
+	condition_variable async_open_settled;
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;

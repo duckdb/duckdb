@@ -4,6 +4,7 @@
 */tools/shell/*
 */tools/sqlite3_api_wrapper/*
 */benchmark/*
+*/build/*
 */examples/*
 */third_party/*
 */test/*

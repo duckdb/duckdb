@@ -82,7 +82,7 @@ static const StatementParameter &FindParam(const StatementSignature &sig, const 
 static int64_t CountRows(Connection &con, const string &sql) {
 	auto r = con.Query(sql);
 	REQUIRE_NO_FAIL(*r);
-	return r->GetValue(0, 0).GetValue<int64_t>();
+	return r->Collection().GetValue(0, 0).GetValue<int64_t>();
 }
 
 TEST_CASE("A failing BindStatement leaves the enclosing transaction usable", "[api][bind_statement]") {

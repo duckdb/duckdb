@@ -389,6 +389,9 @@ static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &conte
 	}
 	AutoCompleteParameters parameters;
 	for (auto &param : input.named_parameters) {
+		if (param.second.IsNull()) {
+			throw BinderException("sql_auto_complete %s cannot be NULL", param.first);
+		}
 		if (param.first == "max_suggestion_count") {
 			parameters.max_suggestion_count = UBigIntValue::Get(param.second);
 		} else if (param.first == "max_file_suggestion_count") {
@@ -667,19 +670,23 @@ static void FormatSQLExecute(DataChunk &args, ExpressionState &state, Vector &re
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
-	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
-	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
-	auto_complete_fun.named_parameters["max_suggestion_count"] = LogicalType::UBIGINT;
-	auto_complete_fun.named_parameters["max_file_suggestion_count"] = LogicalType::UBIGINT;
-	auto_complete_fun.named_parameters["max_exact_suggestion_count"] = LogicalType::UBIGINT;
+	TableFunction auto_complete_fun("sql_auto_complete",
+	                                FunctionSignature().AddPositionalOnly("sql", LogicalType::VARCHAR),
+	                                SQLAutoCompleteFunction, SQLAutoCompleteBind, SQLAutoCompleteInit);
+	auto_complete_fun.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("max_suggestion_count", LogicalType::UBIGINT)
+		    .Add("max_file_suggestion_count", LogicalType::UBIGINT)
+		    .Add("max_exact_suggestion_count", LogicalType::UBIGINT);
+	});
 	loader.RegisterFunction(auto_complete_fun);
 
-	TableFunction check_peg_parser_fun("check_peg_parser", {LogicalType::VARCHAR}, CheckPEGParserFunction,
-	                                   CheckPEGParserBind, nullptr);
+	TableFunction check_peg_parser_fun("check_peg_parser",
+	                                   FunctionSignature().AddPositionalOnly("sql", LogicalType::VARCHAR),
+	                                   CheckPEGParserFunction, CheckPEGParserBind, nullptr);
 	loader.RegisterFunction(check_peg_parser_fun);
 
-	TableFunction tokenize_fun("sql_tokenize", {LogicalType::VARCHAR}, SQLTokenizeFunction, SQLTokenizeBind,
-	                           SQLTokenizeInit);
+	TableFunction tokenize_fun("sql_tokenize", FunctionSignature().AddPositionalOnly("sql", LogicalType::VARCHAR),
+	                           SQLTokenizeFunction, SQLTokenizeBind, SQLTokenizeInit);
 
 	loader.RegisterFunction(tokenize_fun);
 

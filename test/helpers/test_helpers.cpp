@@ -69,11 +69,11 @@ bool NO_FAIL(QueryResult &result) {
 	return !result.HasError();
 }
 
-duckdb::unique_ptr<duckdb::QueryResultStream> OpenStream(duckdb::Connection &con, const string &query) {
-	return duckdb::make_uniq<duckdb::QueryResultStream>(con.Submit(query));
+duckdb::unique_ptr<duckdb::QueryResultStream<>> OpenStream(duckdb::Connection &con, const string &query) {
+	return duckdb::make_uniq<duckdb::QueryResultStream<>>(con.Submit(query));
 }
 
-duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream &stream) {
+duckdb::unique_ptr<duckdb::QueryResult> DrainStream(duckdb::QueryResultStream<> &stream) {
 	auto statement_type = stream.GetStatementType();
 	auto properties = stream.GetStatementProperties();
 	auto names = stream.GetNames();
@@ -740,8 +740,9 @@ bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Valu
 		result.Print();
 		return false;
 	}
+	auto rows = result.Collection().GetRows();
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
-		auto value = result.GetValue(column_number, row_idx);
+		auto value = rows.GetValue(column_number, row_idx);
 		// NULL <> NULL, hence special handling
 		if (value.IsNull() && values[row_idx].IsNull()) {
 			continue;

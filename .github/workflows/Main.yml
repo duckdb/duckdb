@@ -29,18 +29,22 @@ on:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ (github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/heads/v')) || github.run_id }}
   cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  # Override extension CI matrix reduction with "enabled" or "disabled".
+  # Use "disabled" on risky PRs to run the full extension matrix.
+  # OVERRIDE_REDUCED_CI_MODE: disabled
   # Run only specific jobs in CI (separated by whitespace) and skip the rest.
   #
   # Add the CI job's `needs:` list here as well. Otherwise, those are skipped
   # and the dependent job is also skipped.
   #
   # For example, to build and deploy extensions, use:
-  # OVERRIDE_JOBS: linux-relassert linux-release extensions-build extensions-deploy
+  # OVERRIDE_JOBS: linux-relassert linux-release linux-release-musl windows extensions-build extensions-deploy
+  # Add "osx" when running the full extension matrix.
 
 jobs:
  prepare:
@@ -70,6 +74,7 @@ jobs:
       extensions_extra_exclude_archs: ${{ steps.config.outputs.extra_exclude_archs }}
       enabled_jobs: ${{ steps.selection.outputs.enabled_jobs }}
       save_cache: ${{ steps.selection.outputs.save_cache }}
+      reduced_ci_mode: ${{ steps.selection.outputs.reduced_ci_mode }}
       runner_provider: ${{ steps.runners.outputs.runner_provider }}
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       duckdb_version: ${{ steps.version.outputs.duckdb_version }}
@@ -171,6 +176,7 @@ jobs:
             --repository "${{ github.repository }}" \
             --skip-tests "$skip_tests" \
             --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
+            --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
             --runners '${{ steps.runners.outputs.runners }}'
 
       - name: Configure CI
@@ -277,6 +283,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        LINK_CORE_EXTENSIONS: 1
       with:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
@@ -390,12 +397,23 @@ jobs:
 
  extensions-build:
     name: Build extensions
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-build') }}
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-build') &&
+      needs.linux-relassert.result == 'success' &&
+      needs.linux-release.result == 'success' &&
+      needs.linux-release-musl.result == 'success' &&
+      needs.windows.result == 'success' &&
+      (needs.osx.result == 'success' || needs.osx.result == 'skipped')
     uses: duckdb/extension-ci-tools/.github/workflows/build.yml@main
     needs:
       - prepare
       - linux-relassert
       - linux-release
+      - linux-release-musl
+      - windows
+      - osx
     with:
       duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
@@ -432,10 +450,22 @@ jobs:
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
-      reduced_ci_mode: ${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}
+      reduced_ci_mode: ${{ needs.prepare.outputs.reduced_ci_mode }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
       runners: ${{ needs.prepare.outputs.runners }}
+      prebuilt_duckdb: |
+        {
+          "linux_amd64": "duckdb-static-libs-linux-amd64.tar.gz",
+          "linux_arm64": "duckdb-static-libs-linux-arm64.tar.gz",
+          "linux_amd64_musl": "duckdb-static-libs-linux-amd64-musl.tar.gz",
+          "linux_arm64_musl": "duckdb-static-libs-linux-arm64-musl.tar.gz",
+          "osx_amd64": "duckdb-static-libs-osx-amd64.tar.gz",
+          "osx_arm64": "duckdb-static-libs-osx-arm64.tar.gz",
+          "windows_amd64": "duckdb-static-libs-windows-amd64.tar.gz",
+          "windows_arm64": "duckdb-static-libs-windows-arm64.tar.gz",
+          "windows_amd64_mingw": "duckdb-static-libs-windows-mingw.tar.gz"
+        }
 
  extensions-deploy:
     name: Deploy extensions
@@ -524,8 +554,7 @@ jobs:
           GEN: ninja
           EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
           EXTENSION_TESTS_ONLY: 1
-          ENABLE_EXTENSION_AUTOLOADING: 1
-          ENABLE_EXTENSION_AUTOINSTALL: 1
+          DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
           DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
         with:
@@ -667,8 +696,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         EXTENSION_CONFIGS: ${{ format('{0}/.github/config/{1}', github.workspace, matrix.config.extension_config) }}
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
+        DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: ${{ matrix.config.build_jemalloc }}
         FORCE_WARN_UNUSED: 1
@@ -685,21 +713,25 @@ jobs:
         cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}
         save-cache: ${{ matrix.config.save_vcpkg_cache && fromJson(needs.prepare.outputs.save_cache) }}
 
-    - name: Symbol Checks
-      run: make -j4 --output-sync=target symbol-checks
-
-    - name: CLI check
+    - name: Checks
       shell: bash
+      env:
+        TEST_STATIC: ${{ matrix.config.test_static }}
+        TEST_SHARED: ${{ matrix.config.is_canonical_build }}
       run: |
+        echo "::group::Symbol checks"
+        make -j4 --output-sync=target symbol-checks
+        echo "::endgroup::"
+
+        echo "::group::CLI check"
         ./build/release/duckdb -c "PRAGMA platform; PRAGMA version;"
         if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
           # Fail on non-zero major version.
           ./build/release/duckdb -ascii -noheader -c "SELECT library_version FROM pragma_version() WHERE library_version NOT LIKE 'v0%'" | grep '^v'
         fi
+        echo "::endgroup::"
 
-    - name: Verify build flags
-      shell: bash
-      run: |
+        echo "::group::Verify build flags"
         if [[ "${{ matrix.config.arch }}" == "amd64" ]]; then
           grep -Fq -- '-march=x86-64-v3' build/release/compile_commands.json
         else
@@ -714,39 +746,14 @@ jobs:
         else
           grep -Fq -- '-flto=thin' build/release/compile_commands.json
         fi
+        echo "::endgroup::"
 
-    - name: GCC static library compatibility
-      if: ${{ matrix.config.is_compatibility_build }}
-      shell: bash
-      run: |
-        gcc -std=c11 \
-          -Isrc/include \
-          examples/embedded-c/main.c \
-          build/release/src/libduckdb_static.a \
-          -ldl -lpthread -lm -lstdc++ \
-          -o build/release/gcc-static-library-smoke
-        build/release/gcc-static-library-smoke
-
-    - name: Static extension link
-      shell: bash
-      run: |
-        build/release/test/static_link_smoke
-        build/release/test/static_link_explicit_smoke
-
-    - name: GCC shared library compatibility
-      if: ${{ matrix.config.is_canonical_build }}
-      shell: bash
-      run: |
-        gcc -std=c11 \
-          -Isrc/include \
-          examples/embedded-c/main.c \
-          -Lbuild/release/src \
-          -Wl,-rpath,"$PWD/build/release/src" \
-          -lduckdb \
-          -o build/release/gcc-shared-library-smoke
-        build/release/gcc-shared-library-smoke
+        echo "::group::Link checks"
+        make linux-release-link-checks
+        echo "::endgroup::"
 
     - name: Deploy
+      if: ${{ matrix.config.publish_source || matrix.config.publish_static || matrix.config.is_canonical_build }}
       shell: bash
       env:
         AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
@@ -763,7 +770,7 @@ jobs:
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
-          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a"
+          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
           assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
@@ -790,6 +797,13 @@ jobs:
       with:
         path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
+
+    - uses: actions/upload-artifact@v7
+      if: ${{ matrix.config.publish_static }}
+      with:
+        name: release-core-extensions-${{ matrix.config.artifact_suffix }}
+        path: build/release/repository
+        if-no-files-found: error
 
     - name: ARM64 release tests
       if: ${{ matrix.config.run_arm_tests && !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -934,8 +948,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
+        DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
         BUILD_BENCHMARK: 1
         FORCE_WARN_UNUSED: 1
       with:
@@ -975,7 +988,7 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/extension/*/lib*_extension.a"
+        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
         ./scripts/upload-assets-to-staging.sh github_release \
           duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \
@@ -995,6 +1008,12 @@ jobs:
       with:
         path: duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz
         archive: false
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: release-core-extensions-${{ matrix.config.artifact_suffix }}
+        path: build/release/repository
+        if-no-files-found: error
 
     - name: Release tests
       if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -1116,6 +1135,7 @@ jobs:
           REDUCE_SYMBOLS: 1
           EXTENSION_STATIC_BUILD: 0
           CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          LINK_CORE_EXTENSIONS: 1
           DISABLE_STRING_INLINE: 1
           DESTROY_UNPINNED_BLOCKS: 1
           ALTERNATIVE_VERIFY: 1

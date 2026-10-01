@@ -1,0 +1,13 @@
+# name: test/sql/function/variant/variant_normalize.test
+# description: Normalize less common primitive variant types
+# group: [variant]
+
+query III
+SELECT
+	variant_normalize('12:34:56.123456789'::TIME_NS::VARIANT) = '12:34:56.123456789'::TIME_NS::VARIANT,
+	variant_normalize('2020-01-01 12:00:00.123456789+00'::TIMESTAMPTZ_NS::VARIANT) =
+		'2020-01-01 12:00:00.123456789+00'::TIMESTAMPTZ_NS::VARIANT,
+	variant_normalize('123456789012345678901234567890'::BIGNUM::VARIANT) =
+		'123456789012345678901234567890'::BIGNUM::VARIANT;
+----
+true	true	true
