@@ -126,6 +126,21 @@ class TDigest {
 		}
 		vec.reserve(target);
 	}
+
+	// Keep every buffer large enough for the next process() -- which appends processed_ to unprocessed_,
+	// rebuilds processed_ from the merged run and rebuilds cumulative_ -- so that process() itself never
+	// allocates.  process() also runs at finalize time (compress(), quantile()), on a thread that may be
+	// finalizing several partitions holding states from the same arena concurrently: the arena a digest's
+	// buffers live in is the local hash table's, which the sink hands to the global state and which is not
+	// thread-safe.  Growing here, in add()/merge(), keeps all allocation on the thread that owns the arena.
+	// A merged digest holds at most as many centroids as it was given, and at most maxProcessed_.
+	void reserveForProcess() {
+		const size_t total = processed_.size() + unprocessed_.size();
+		Grow(unprocessed_, total, size_t(maxUnprocessed_ + maxProcessed_ + 1));
+		const size_t merged = total < size_t(maxProcessed_) ? total : size_t(maxProcessed_);
+		Grow(processed_, merged, size_t(maxProcessed_));
+		Grow(cumulative_, merged + 1, size_t(maxProcessed_ + 1));
+	}
 	class TDigestComparator {
 	public:
 		TDigestComparator() {
@@ -170,6 +185,7 @@ public:
 			max_ = std::max(max_, (processed_.cend() - 1)->mean());
 		}
 		updateCumulative();
+		reserveForProcess();
 	}
 
 	static Weight weight(duckdb::arena_vector<Centroid> &centroids) noexcept {
@@ -270,6 +286,7 @@ public:
 					mergeProcessed(batch);
 					mergeUnprocessed(batch);
 					processIfNecessary();
+					reserveForProcess();
 					batch.clear();
 					totalSize = 0;
 				}
@@ -440,6 +457,7 @@ public:
 		unprocessed_.push_back(Centroid(x, w));
 		unprocessedWeight_ += w;
 		processIfNecessary();
+		reserveForProcess();
 		return true;
 	}
 
@@ -455,6 +473,7 @@ public:
 				process();
 			}
 		}
+		reserveForProcess();
 	}
 
 private:
