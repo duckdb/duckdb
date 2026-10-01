@@ -406,7 +406,10 @@ void TransferKernel::VisitPassthrough(LogicalOperator &op, ScopeFacts &props) {
 			}
 
 			auto pos = PositionIn(out_bindings, extracted.column->Binding());
-			D_ASSERT(pos.IsValid());
+			if (!pos.IsValid()) {
+				props.rows_dropped_below = true;
+				continue;
+			}
 			props.NarrowDomain(pos.GetIndex(), extracted.allowed);
 		}
 		break;
