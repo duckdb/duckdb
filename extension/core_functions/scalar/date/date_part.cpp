@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -2716,9 +2717,23 @@ ScalarFunctionSet JulianDayFun::GetFunctions() {
 	return operator_set;
 }
 
+//! Binding date_part with a constant part replaces it with the unary part function (year, month, ...), so the bound
+//! call has one argument and must be rendered under the replacement's own name
+static unique_ptr<ParsedExpression> DatePartUnbind(FunctionUnbindInput &input) {
+	auto &function = input.expression.Function();
+	if (input.children.size() == 1) {
+		return make_uniq<FunctionExpression>(function.GetQualifiedName(), std::move(input.children));
+	}
+	if (input.children.size() != 2) {
+		return nullptr;
+	}
+	return make_uniq<FunctionExpression>(function.GetDefinition()->GetQualifiedName(), std::move(input.children));
+}
+
 // Names the "part,ts" pair shared by date_part's per-type overloads.
 static ScalarFunction NamePartTsArguments(ScalarFunction fun, const LogicalType &type) {
 	fun.GetSignature().AddParameter("part", LogicalType::VARCHAR).AddParameter("ts", type);
+	fun.SetUnbindCallback(DatePartUnbind);
 	return fun;
 }
 

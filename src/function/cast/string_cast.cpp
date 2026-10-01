@@ -305,7 +305,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 		}
 		list_data[i].length = total - list_data[i].offset;
 	}
-	D_ASSERT(total_elements == total);
+	D_ASSERT(total <= total_elements);
 
 	auto &result_key_child = MapVector::GetKeys(result);
 	auto &result_val_child = MapVector::GetValues(result);
@@ -313,15 +313,15 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 	auto &lstate = parameters.local_state->Cast<MapCastLocalState>();
 
 	CastParameters key_params(parameters, cast_data.key_cast.GetCastData(), lstate.key_state);
-	if (!cast_data.key_cast.Cast(varchar_key_vector, result_key_child, total_elements, key_params)) {
+	if (!cast_data.key_cast.Cast(varchar_key_vector, result_key_child, total, key_params)) {
 		vector_cast_data.all_converted = false;
 	}
 	CastParameters val_params(parameters, cast_data.value_cast.GetCastData(), lstate.value_state);
-	if (!cast_data.value_cast.Cast(varchar_val_vector, result_val_child, total_elements, val_params)) {
+	if (!cast_data.value_cast.Cast(varchar_val_vector, result_val_child, total, val_params)) {
 		vector_cast_data.all_converted = false;
 	}
 	// set the list size after the child casts, since the casts may have replaced the child buffers
-	ListVector::SetListSize(result, total_elements);
+	ListVector::SetListSize(result, total);
 
 	if (!vector_cast_data.all_converted) {
 		auto &key_validity = FlatVector::ValidityMutable(result_key_child);
