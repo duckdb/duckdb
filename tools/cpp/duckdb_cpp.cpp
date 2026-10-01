@@ -2465,23 +2465,6 @@ auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width
 	return out;
 }
 
-auto QueryResult::ToArrowStream(idx_t batch_size) -> ArrowStream {
-	// Allocate before detaching: if this throws, the result is still ours and ~QueryResult
-	// frees it.
-	auto *stream = new ArrowArrayStream {};
-	auto raw = handle();
-	// The C call takes the result by transfer, consuming it on success and failure alike, so
-	// detach now and ~QueryResult will not double-free it.
-	this->release();
-	try {
-		CheckedAPICall(duckdb_v2_result_to_arrow_stream, &raw, batch_size, stream);
-	} catch (...) {
-		delete stream;
-		throw;
-	}
-	return detail::Factory::Make<ArrowStream>(stream);
-}
-
 //----------------------------------------------------------------------------------------------------------------------
 // Arrow
 //----------------------------------------------------------------------------------------------------------------------
@@ -2573,39 +2556,6 @@ auto ArrowExporter::Flush() -> void {
 
 auto ArrowExporter::NextArray(ArrowArray &out) -> bool {
 	CheckedAPICall(duckdb_v2_arrow_exporter_next_array, handle(), &out);
-	return out.release != nullptr;
-}
-
-ArrowStream::~ArrowStream() {
-	if (stream) {
-		if (stream->release) {
-			stream->release(stream);
-		}
-		delete stream;
-	}
-}
-
-// The Arrow C stream interface reports failure only as an errno-style int with no error code, so both calls below
-// surface a generic INVALID_INPUT; the detail comes from get_last_error and is carried in the message.
-void ArrowStream::GetSchema(ArrowSchema &out) const {
-	if (!stream || !stream->release) {
-		throw InvalidInputException("ArrowStream::GetSchema on an empty stream");
-	}
-	if (stream->get_schema(stream, &out) != 0) {
-		const char *msg = stream->get_last_error ? stream->get_last_error(stream) : nullptr;
-		throw InvalidInputException(msg ? msg : "Arrow stream get_schema failed");
-	}
-}
-
-bool ArrowStream::Next(ArrowArray &out) const {
-	out.release = nullptr;
-	if (!stream || !stream->release) {
-		throw InvalidInputException("ArrowStream::Next on an empty stream");
-	}
-	if (stream->get_next(stream, &out) != 0) {
-		const char *msg = stream->get_last_error ? stream->get_last_error(stream) : nullptr;
-		throw InvalidInputException(msg ? msg : "Arrow stream get_next failed");
-	}
 	return out.release != nullptr;
 }
 
