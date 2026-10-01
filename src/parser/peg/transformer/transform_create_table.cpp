@@ -398,32 +398,10 @@ ColumnConstraintEntry PEGTransformerFactory::TransformColumnCompression(PEGTrans
 	return entry;
 }
 
-// Duplicate actions are not allowed. Throw error if found.
-static void VerifyKeyActions(const vector<KeyActions> &key_actions) {
-	bool has_update = false;
-	bool has_delete = false;
-	for (auto &action : key_actions) {
-		if (!action.update_action.empty()) {
-			if (has_update) {
-				throw ParserException("Conflicting ON UPDATE actions specified");
-			}
-			has_update = true;
-		}
-		if (!action.delete_action.empty()) {
-			if (has_delete) {
-				throw ParserException("Conflicting ON DELETE actions specified");
-			}
-			has_delete = true;
-		}
-	}
-}
-
-ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(
-    PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name, const optional<vector<string>> &column_list,
-    const optional<vector<KeyActions>> &key_action_clause) {
-	if (key_action_clause) {
-		VerifyKeyActions(*key_action_clause);
-	}
+ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTransformer &transformer,
+                                                                           unique_ptr<BaseTableRef> base_table_name,
+                                                                           const optional<vector<string>> &column_list,
+                                                                           const optional<KeyActions> &key_actions) {
 	ForeignKeyInfo fk_info;
 	fk_info.schema = base_table_name->GetQualifiedName().Schema();
 	fk_info.table = base_table_name->Table();
@@ -439,16 +417,34 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(
 	return entry;
 }
 
-KeyActions PEGTransformerFactory::TransformUpdateAction(PEGTransformer &transformer, const string &key_action) {
+KeyActions PEGTransformerFactory::TransformUpdateFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &update_action,
+                                                                 const optional<string> &delete_action) {
 	KeyActions result;
-	result.update_action = key_action;
+	result.update_action = update_action;
+	if (delete_action) {
+		result.delete_action = *delete_action;
+	}
 	return result;
 }
 
-KeyActions PEGTransformerFactory::TransformDeleteAction(PEGTransformer &transformer, const string &key_action) {
+KeyActions PEGTransformerFactory::TransformDeleteFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &delete_action,
+                                                                 const optional<string> &update_action) {
 	KeyActions result;
-	result.delete_action = key_action;
+	result.delete_action = delete_action;
+	if (update_action) {
+		result.update_action = *update_action;
+	}
 	return result;
+}
+
+string PEGTransformerFactory::TransformUpdateAction(PEGTransformer &transformer, const string &key_action) {
+	return key_action;
+}
+
+string PEGTransformerFactory::TransformDeleteAction(PEGTransformer &transformer, const string &key_action) {
+	return key_action;
 }
 
 string PEGTransformerFactory::TransformNoKeyAction(PEGTransformer &transformer) {

@@ -1096,6 +1096,8 @@ String:
     - CubeOrRollup
     - CubeKeyword
     - RollupKeyword
+    - UpdateAction
+    - DeleteAction
     - KeyAction
     - NoKeyAction
     - RestrictKeyAction
@@ -1619,8 +1621,8 @@ overrides:
     type: "ConstraintColumnDefinition"
     by_value: true
   KeyActions: "KeyActions"
-  UpdateAction: "KeyActions"
-  DeleteAction: "KeyActions"
+  UpdateFirstKeyActions: "KeyActions"
+  DeleteFirstKeyActions: "KeyActions"
   GeneratedColumn:
     type: "GeneratedColumnDefinition"
     by_value: true
