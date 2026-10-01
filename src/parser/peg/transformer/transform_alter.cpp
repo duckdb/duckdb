@@ -389,8 +389,8 @@ PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const b
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
 		change_column_type->column_name = nested_column_name->ColumnNames()[0];
 		if (!change_column_type->expression) {
-			// the binder casts the expression to the target type
-			change_column_type->expression = std::move(nested_column_name);
+			change_column_type->expression =
+			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
 		}
 		return std::move(change_column_type);
 	} else {
