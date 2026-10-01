@@ -19,6 +19,7 @@
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
@@ -220,6 +221,7 @@ void TransferKernel::Visit(LogicalOperator &op) {
 void TransferKernel::VisitGet(LogicalOperator &op, ScopeFacts &props) {
 	auto &get = op.Cast<LogicalGet>();
 	auto table_ptr = get.GetTable();
+
 	if (!table_ptr) {
 		return;
 	}
@@ -227,9 +229,9 @@ void TransferKernel::VisitGet(LogicalOperator &op, ScopeFacts &props) {
 	auto &columns = table.GetColumns();
 	auto &column_ids = get.GetColumnIds();
 
-	idx_t width = owner_.store_.OutputBindings(op).size();
+	const auto &out_bindings = owner_.store_.OutputBindings(op);
+	idx_t width = out_bindings.size();
 	props.base_table = &table;
-	props.filter_below = get.table_filters.HasFilters();
 	props.base_column.assign(width, DConstants::INVALID_INDEX);
 	for (idx_t i = 0; i < width && i < column_ids.size(); i++) {
 		if (column_ids[i].HasPrimaryIndex()) {
@@ -237,7 +239,7 @@ void TransferKernel::VisitGet(LogicalOperator &op, ScopeFacts &props) {
 		}
 	}
 
-	// Collect NOT NULL logical indexes AND record positions, in one pass.
+	// Collect NOT NULL logical indexes AND record positions
 	unordered_set<idx_t> not_null_logical;
 	for (auto &constraint : table.GetConstraints()) {
 		if (constraint->type != ConstraintType::NOT_NULL) {
@@ -317,6 +319,32 @@ void TransferKernel::VisitGet(LogicalOperator &op, ScopeFacts &props) {
 			}
 		}
 	}
+
+	// Filter-aware D
+	props.domains.assign(width, ValueDomain());
+	props.rows_dropped_below = false;
+	for (idx_t pos = 0; pos < width; pos++) {
+		if (props.NotNull().Test(pos)) {
+			props.domains[pos].null_possible = false;
+		}
+	}
+	for (auto &entry : get.table_filters) {
+		auto proj_idx = entry.GetIndex();
+		idx_t pos = proj_idx.GetIndex();
+		if (pos >= width) {
+			props.rows_dropped_below = true;
+			continue;
+		}
+		const auto &col_idx = get.GetColumnIndex(proj_idx);
+		const LogicalType &col_type = get.GetColumnType(col_idx);
+		auto column_ref = make_uniq<BoundColumnRefExpression>(col_type, out_bindings[pos]);
+		ValueDomain allowed;
+		if (TryExtractTableFilterDomain(entry.Filter(), *column_ref, allowed)) {
+			props.NarrowDomain(pos, allowed);
+		} else {
+			props.rows_dropped_below = true;
+		}
+	}
 }
 
 void TransferKernel::VisitProjection(LogicalOperator &op, ScopeFacts &props) {
@@ -341,7 +369,14 @@ void TransferKernel::VisitProjection(LogicalOperator &op, ScopeFacts &props) {
 			props.base_column[map[p]] = child_facts.base_column[p];
 		}
 	}
-	props.filter_below = child_facts.filter_below;
+	props.rows_dropped_below = child_facts.rows_dropped_below;
+
+	props.domains.assign(width, ValueDomain());
+	for (idx_t p = 0; p < map.size(); p++) {
+		if (map[p] != DConstants::INVALID_INDEX && p < child_facts.domains.size()) {
+			props.domains[map[p]] = child_facts.domains[p];
+		}
+	}
 }
 
 void TransferKernel::VisitPassthrough(LogicalOperator &op, ScopeFacts &props) {
@@ -352,18 +387,37 @@ void TransferKernel::VisitPassthrough(LogicalOperator &op, ScopeFacts &props) {
 	props.SetFKFacts(child_facts.FKs());
 	props.base_table = child_facts.base_table;
 	props.base_column = child_facts.base_column;
-	props.filter_below = child_facts.filter_below;
+	props.rows_dropped_below = child_facts.rows_dropped_below;
+	props.domains = child_facts.domains;
+
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_FILTER:
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = op.Cast<LogicalFilter>();
+		const auto &out_bindings = owner_.store_.OutputBindings(op);
+		vector<const Expression *> conjuncts;
+		for (auto &expr : filter.expressions) {
+			FlattenConjuncts(*expr, conjuncts);
+		}
+		for (auto *conjunct : conjuncts) {
+			ExtractedConstraint extracted;
+			if (!TryExtractConstraint(*conjunct, extracted)) {
+				props.rows_dropped_below = true;
+				continue;
+			}
+
+			auto pos = PositionIn(out_bindings, extracted.column->Binding());
+			D_ASSERT(pos.IsValid());
+			props.NarrowDomain(pos.GetIndex(), extracted.allowed);
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_SAMPLE:
-		props.filter_below = true;
+		props.rows_dropped_below = true;
 		break;
 	default:
 		break;
 	}
-	// TODO (filter-derived not_null): a FILTER can ADD not_null facts from
-	// IS NOT NULL conjuncts and comparisons with non-null constants
 }
 
 void TransferKernel::VisitAggregate(LogicalOperator &op, ScopeFacts &props) {
@@ -391,7 +445,14 @@ void TransferKernel::VisitAggregate(LogicalOperator &op, ScopeFacts &props) {
 	RemapFKFacts(child_facts.FKs(), map, props);
 
 	props.base_table = nullptr;
-	props.filter_below = child_facts.filter_below;
+	props.rows_dropped_below = child_facts.rows_dropped_below;
+
+	props.domains.assign(width, ValueDomain());
+	for (idx_t p = 0; p < map.size(); p++) {
+		if (map[p] != DConstants::INVALID_INDEX && p < child_facts.domains.size()) {
+			props.domains[map[p]] = child_facts.domains[p];
+		}
+	}
 }
 
 void TransferKernel::VisitDistinct(LogicalOperator &op, ScopeFacts &props) {
@@ -405,10 +466,10 @@ void TransferKernel::VisitDistinct(LogicalOperator &op, ScopeFacts &props) {
 	props.SetFKFacts(child_facts.FKs());
 	props.base_table = child_facts.base_table;
 	props.base_column = child_facts.base_column;
-	props.filter_below = child_facts.filter_below;
+	props.rows_dropped_below = child_facts.rows_dropped_below;
 
 	if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
-		props.filter_below = true;
+		props.rows_dropped_below = true;
 	}
 
 	// Uniqueness is always null-safe here
@@ -496,7 +557,7 @@ void TransferKernel::VisitSetOperation(LogicalOperator &op, ScopeFacts &props) {
 		props.AddUniqueFact(std::move(f));
 	}
 	props.base_table = nullptr;
-	props.filter_below = true;
+	props.rows_dropped_below = true;
 }
 
 void TransferKernel::TransferJoinValueFacts(LogicalOperator &op, JoinType join_type, ScopeFacts &props,
@@ -547,7 +608,7 @@ void TransferKernel::TransferJoinValueFacts(LogicalOperator &op, JoinType join_t
 	RemapFKFacts(f0.FKs(), map0, props);
 	RemapFKFacts(f1.FKs(), map1, props);
 
-	props.filter_below = f0.filter_below || f1.filter_below;
+	props.rows_dropped_below = f0.rows_dropped_below || f1.rows_dropped_below;
 }
 
 void TransferKernel::VisitComparisonJoin(LogicalOperator &op, ScopeFacts &props) {
