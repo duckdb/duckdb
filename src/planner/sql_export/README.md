@@ -24,7 +24,7 @@ SQL mode accepts supported SELECT, VALUES, and WITH queries. It does not combine
 
 PIVOT with values discovered from data is rejected because column discovery requires executing auxiliary statements. Specify the values with an explicit IN list to export supported PIVOT queries. Unresolved parameters and explicit optimizer opt-outs may also leave unsupported plan nodes.
 
-MARK joins, used by queries such as `IN` and `ANY`, support ordinary scalar comparisons and conjunctions containing only equality or only `IS NOT DISTINCT FROM` comparisons. `IS DISTINCT FROM`, ordering comparisons on nested types, mixed or arbitrary predicates, and plans requiring group-specific NULL handling or duplicate-eliminated input scopes are rejected. These restrictions preserve the distinction between false and unknown results.
+MARK joins, used by queries such as `IN` and `ANY`, support ordinary scalar comparisons and conjunctions containing only equality or only `IS NOT DISTINCT FROM` comparisons. Grouped comparisons are also supported when a prefix of null-safe grouping keys followed by one quantified comparison reconstructs the retained grouping metadata. Group types, including collations, must match in order. Grouped UNION/TUPLE quantifiers, `IS DISTINCT FROM`, ordering comparisons on nested types, other mixed or arbitrary predicates, and duplicate-eliminated input scopes remain unsupported. These restrictions preserve the distinction between false and unknown results.
 
 ## Execution and effects
 
@@ -54,6 +54,18 @@ RANGE frames retain the binder-selected function signature and inserted casts as
 Internal helper declarations live under `src/include/duckdb/planner/sql_export/`. Public entry points retain their headers directly under `duckdb/planner/`. Shared SQL constructors in `sql_export_helpers.hpp` combine predicates and qualify generated system-function calls. General logical-plan verification and repeatability analysis remain separate planner facilities. Statement replacement verification lives in `src/main/client_verify.cpp`.
 
 C++ tests under `test/sql_export/` follow these feature boundaries; shared fixtures live in the corresponding test-helper files. SQL regression tests live under `test/sql/sql_export/`.
+
+### Scope composition
+
+Ordering, windows and UNNEST reuse suitable plain column-reference scopes. The helpers in `sql_export_composition.cpp` also combine compatible computed stages using typed column bindings:
+
+- Semantic identity projections can disappear, and ordinary grouping over distinct column references does not need an input scope for staging keys.
+- Computed scalar inputs must be safe to move and used at most once. Volatile expressions, throwing evaluation boundaries and shared scalar computations retain their scopes.
+- Aggregate-output composition preserves the aggregate stage and retains unused computed outputs. Repeated aggregate calls can be shared by the binder, but composition is rejected when their duplication would grow the combined expression trees.
+- Ordering can reuse a computed SELECT when its keys remain source column references. Literal order keys can be positional or rejected by the binder. Group-key substitution admits NULL literals but excludes bare integers, which GROUP BY can interpret as positions.
+- Existing modifiers, sampling, conditional evaluation and incompatible grouping or CTE stages retain their boundaries. Computed composition does not currently cross expression-list or column-data sources such as VALUES; identity elimination and plain-scope reuse remain separate rules.
+
+### Verification
 
 The CI Query Verification configuration uses `debug_verify_statement='explain_sql'`.
 It executes reconstructed SQL when export succeeds and falls back for explicitly

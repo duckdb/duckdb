@@ -47,6 +47,19 @@ static string MarkConditionUnsupportedReason(const LogicalComparisonJoin &join) 
 	return string();
 }
 
+static bool CanReconstructMarkGroups(const LogicalComparisonJoin &join) {
+	vector<LogicalType> group_types;
+	if (!join.TryGetMarkJoinGroupTypes(group_types) || group_types.size() != join.mark_types.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < group_types.size(); i++) {
+		if (!group_types[i].EqualsIncludingCollation(join.mark_types[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
 static bool RequiresMarkGroupMetadata(const LogicalComparisonJoin &join) {
 	if (join.join_type != JoinType::MARK || join.mark_types.empty()) {
 		return false;
@@ -92,16 +105,16 @@ ExportJoinCondition(LogicalJoin &op, LogicalPlanSQLExportContext &context,
 			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
 			    path, "join_delim_state", "The join requires a duplicate-eliminated input scope")});
 		}
-		if (comparison.join_type == JoinType::MARK) {
+		if (comparison.join_type == JoinType::MARK && !CanReconstructMarkGroups(comparison)) {
 			auto reason = MarkConditionUnsupportedReason(comparison);
 			if (!reason.empty()) {
 				return Result::Failure(
 				    {LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(path, "mark_condition_semantics", reason)});
 			}
-		}
-		if (RequiresMarkGroupMetadata(comparison)) {
-			return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
-			    path, "mark_group_null_semantics", "The MARK join requires its group-specific NULL semantics")});
+			if (RequiresMarkGroupMetadata(comparison)) {
+				return Result::Failure({LogicalPlanSQLExportHelpers::PlanUnsupportedFeature(
+				    path, "mark_group_null_semantics", "The MARK join requires its group-specific NULL semantics")});
+			}
 		}
 		idx_t ordinal = 0;
 		for (auto &condition : comparison.conditions) {
