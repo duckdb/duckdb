@@ -674,9 +674,9 @@ static const TransformFrameOps REL_OPTION_OPS = {"RelOption", &PEGTransformerFac
 static const TransformFrameOps REL_OPTION_NAME_OPS = {"RelOptionName",
                                                       &PEGTransformerFactory::InitializeRelOptionNameTrampoline,
                                                       &PEGTransformerFactory::FinalizeRelOptionNameTrampoline};
-static const TransformFrameOps DOTTED_IDENTIFIER_STRING_OPS = {
-    "DottedIdentifierString", &PEGTransformerFactory::InitializeDottedIdentifierStringTrampoline,
-    &PEGTransformerFactory::FinalizeDottedIdentifierStringTrampoline};
+static const TransformFrameOps DOTTED_COL_LABEL_OPS = {"DottedColLabel",
+                                                       &PEGTransformerFactory::InitializeDottedColLabelTrampoline,
+                                                       &PEGTransformerFactory::FinalizeDottedColLabelTrampoline};
 static const TransformFrameOps REL_OPTION_ARGUMENT_OPT_OPS = {
     "RelOptionArgumentOpt", &PEGTransformerFactory::InitializeRelOptionArgumentOptTrampoline,
     &PEGTransformerFactory::FinalizeRelOptionArgumentOptTrampoline};
@@ -3281,7 +3281,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"IndexType", &INDEX_TYPE_OPS},
 	    {"RelOption", &REL_OPTION_OPS},
 	    {"RelOptionName", &REL_OPTION_NAME_OPS},
-	    {"DottedIdentifierString", &DOTTED_IDENTIFIER_STRING_OPS},
+	    {"DottedColLabel", &DOTTED_COL_LABEL_OPS},
 	    {"RelOptionArgumentOpt", &REL_OPTION_ARGUMENT_OPT_OPS},
 	    {"DefArg", &DEF_ARG_OPS},
 	    {"DefArgNull", &DEF_ARG_NULL_OPS},
@@ -8431,8 +8431,7 @@ void PEGTransformerFactory::InitializeRelOptionNameTrampoline(PEGTransformer &tr
 	    choice_result.type == ParseResultType::KEYWORD || choice_result.type == ParseResultType::STRING) {
 		return;
 	}
-	if (!has_transform_process && (choice_result.name == "DottedIdentifierString" ||
-	                               choice_result.name == "StringLiteral" || choice_result.name == "ColLabel")) {
+	if (!has_transform_process && (choice_result.name == "DottedColLabel" || choice_result.name == "StringLiteral")) {
 		return;
 	}
 	if (!has_transform_process &&
@@ -8472,18 +8471,47 @@ PEGTransformerFactory::FinalizeRelOptionNameTrampoline(PEGTransformer &transform
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
-void PEGTransformerFactory::InitializeDottedIdentifierStringTrampoline(PEGTransformer &transformer,
-                                                                       GeneratedTransformProcess &process) {
+void PEGTransformerFactory::InitializeDottedColLabelTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("DottedIdentifier"), list_pr.GetChild(0)}, 0);
+	auto &repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	idx_t dynamic_child_count = 0;
+	if (repeat_opt.HasResult()) {
+		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto repeat_children = repeat_pr.GetChildren();
+		dynamic_child_count = repeat_children.size();
+		process.ReserveChildSlots(2 + dynamic_child_count - 1);
+		for (idx_t i = repeat_children.size(); i > 0; i--) {
+			auto child_idx = i - 1;
+			process.PushChild({transformer.GetRule("DotColLabel"), repeat_children[child_idx].get()}, 1 + child_idx);
+		}
+	} else {
+		process.ReserveChildSlots(2 - 1);
+	}
+	process.PushChild({transformer.GetRule("ColLabel"), list_pr.GetChild(0)}, 0);
 }
 
 unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeDottedIdentifierStringTrampoline(PEGTransformer &transformer,
-                                                                GeneratedTransformProcess &process) {
-	auto dotted_identifier = process.TakeResult<vector<string>>(0);
-	auto result = TransformDottedIdentifierString(transformer, dotted_identifier);
+PEGTransformerFactory::FinalizeDottedColLabelTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	idx_t dynamic_child_count = 0;
+	auto &dynamic_repeat_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (dynamic_repeat_opt.HasResult()) {
+		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
+		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
+		dynamic_child_count = dynamic_repeat_children.size();
+	}
+	auto col_label = process.TakeResult<string>(0);
+	optional<vector<string>> dot_col_label {};
+	if (dynamic_child_count > 0) {
+		vector<string> dot_col_label_value;
+		for (idx_t i = 1; i < 1 + dynamic_child_count; i++) {
+			dot_col_label_value.push_back(process.TakeResult<string>(i));
+		}
+		dot_col_label = std::move(dot_col_label_value);
+	}
+	auto result = TransformDottedColLabel(transformer, col_label, dot_col_label);
 	return make_uniq<TypedTransformResult<string>>(result);
 }
 

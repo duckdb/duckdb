@@ -1426,10 +1426,9 @@ public:
 	static void InitializeRelOptionNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeRelOptionNameTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
-	static void InitializeDottedIdentifierStringTrampoline(PEGTransformer &transformer,
-	                                                       GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue>
-	FinalizeDottedIdentifierStringTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeDottedColLabelTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDottedColLabelTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
 	static void InitializeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
 	                                                     GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
@@ -4458,7 +4457,8 @@ public:
 	TransformRelOption(PEGTransformer &transformer, const Identifier &rel_option_name,
 	                   optional<unique_ptr<ParsedExpression>> rel_option_argument_opt);
 	static Identifier TransformRelOptionName(PEGTransformer &transformer, const string &child);
-	static string TransformDottedIdentifierString(PEGTransformer &transformer, const vector<string> &dotted_identifier);
+	static string TransformDottedColLabel(PEGTransformer &transformer, const string &col_label,
+	                                      const optional<vector<string>> &dot_col_label);
 	static unique_ptr<ParsedExpression> TransformRelOptionArgumentOpt(PEGTransformer &transformer,
 	                                                                  unique_ptr<ParsedExpression> def_arg);
 	static unique_ptr<ParsedExpression> TransformDefArgNull(PEGTransformer &transformer, const Value &null_literal);
