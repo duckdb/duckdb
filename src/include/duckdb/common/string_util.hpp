@@ -146,6 +146,8 @@ public:
 
 	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
+	//! Read one quoted token with doubled-quote escaping. On failure, leave pos and result unchanged.
+	DUCKDB_API static bool TryParseQuotedString(const string &str, idx_t &pos, string &result, char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);

@@ -73,7 +73,7 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info,
                                  optional_ptr<SchemaCatalogEntry> parent_schema_p)
-    : SchemaCatalogEntry(catalog, info), parent_schema(parent_schema_p), schemas(catalog),
+    : SchemaCatalogEntry(catalog, info, parent_schema_p), schemas(catalog),
       tables(catalog, catalog.IsSystemCatalog() ? make_uniq<DefaultViewGenerator>(catalog, *this) : nullptr),
       indexes(catalog),
       table_functions(catalog,
@@ -91,31 +91,6 @@ unique_ptr<CatalogEntry> DuckSchemaEntry::Copy(ClientContext &context) const {
 
 	auto result = make_uniq<DuckSchemaEntry>(catalog, cast_info, parent_schema);
 
-	return std::move(result);
-}
-
-unique_ptr<CreateInfo> DuckSchemaEntry::GetInfo() const {
-	auto result = make_uniq<CreateSchemaInfo>();
-	// collect the parent chain (innermost first)
-	vector<Identifier> parents;
-	auto current = GetParentSchema();
-	while (current) {
-		parents.push_back(current->name);
-		current = current->GetParentSchema();
-	}
-	// build the schema path: top-level schemas serialize as [name] (unchanged), nested schemas root the path at the
-	// catalog so the full path can be navigated on load: [catalog, parent schemas (outermost first)..., name]
-	vector<Identifier> path;
-	if (!parents.empty()) {
-		path.push_back(catalog.GetName());
-		for (auto it = parents.rbegin(); it != parents.rend(); ++it) {
-			path.push_back(*it);
-		}
-	}
-	path.push_back(name);
-	result->SetQualifiedName(QualifiedName(std::move(path), Identifier()));
-	result->comment = comment;
-	result->tags = tags;
 	return std::move(result);
 }
 
@@ -356,8 +331,12 @@ void DuckSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info) {
 
 void DuckSchemaEntry::Scan(ClientContext &context, CatalogType type,
                            const std::function<void(CatalogEntry &)> &callback) {
-	auto &set = GetCatalogSet(type);
-	set.Scan(GetCatalogTransaction(context), callback);
+	Scan(GetCatalogTransaction(context), type, callback);
+}
+
+void DuckSchemaEntry::Scan(CatalogTransaction transaction, CatalogType type,
+                           const std::function<void(CatalogEntry &)> &callback) {
+	GetCatalogSet(type).Scan(transaction, callback);
 }
 
 void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {

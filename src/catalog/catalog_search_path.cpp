@@ -54,36 +54,24 @@ CatalogSearchEntry CatalogSearchEntry::ParseInternal(const string &input, idx_t 
 	string entry;
 	bool finished = false;
 normal:
-	for (; idx < input.size(); idx++) {
+	for (; idx < input.size();) {
 		if (input[idx] == '"') {
-			idx++;
-			goto quoted;
+			string quoted;
+			if (!StringUtil::TryParseQuotedString(input, idx, quoted)) {
+				throw ParserException("Unterminated quote in qualified name!");
+			}
+			entry += quoted;
 		} else if (input[idx] == '.') {
 			goto separator;
 		} else if (input[idx] == ',') {
 			finished = true;
 			goto separator;
+		} else {
+			entry += input[idx++];
 		}
-		entry += input[idx];
 	}
 	finished = true;
 	goto separator;
-quoted:
-	//! look for another quote
-	for (; idx < input.size(); idx++) {
-		if (input[idx] == '"') {
-			//! unquote
-			idx++;
-			if (idx < input.size() && input[idx] == '"') {
-				// escaped quote
-				entry += input[idx];
-				continue;
-			}
-			goto normal;
-		}
-		entry += input[idx];
-	}
-	throw ParserException("Unterminated quote in qualified name!");
 separator:
 	if (entry.empty()) {
 		throw ParserException("Unexpected dot - empty CatalogSearchEntry");
@@ -270,6 +258,17 @@ Identifier CatalogSearchPath::GetDefaultCatalog(const Identifier &schema) const 
 		}
 	}
 	return Identifier::InvalidCatalog();
+}
+
+Identifier CatalogSearchPath::ResolveCatalog(const Identifier &schema) const {
+	auto catalog = schema.empty() ? Identifier::InvalidCatalog() : GetDefaultCatalog(schema);
+	if (IsInvalidCatalog(catalog)) {
+		catalog = GetDefault().GetCatalog();
+	}
+	if (IsInvalidCatalog(catalog)) {
+		catalog = DatabaseManager::GetDefaultDatabase(context);
+	}
+	return catalog;
 }
 
 vector<Identifier> CatalogSearchPath::GetCatalogsForSchema(const Identifier &schema) const {

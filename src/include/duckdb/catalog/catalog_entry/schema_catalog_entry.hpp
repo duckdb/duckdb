@@ -45,26 +45,37 @@ public:
 	static constexpr const char *Name = "schema";
 
 public:
-	SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info);
+	SchemaCatalogEntry(Catalog &catalog, CreateSchemaInfo &info,
+	                   optional_ptr<SchemaCatalogEntry> parent_schema = nullptr);
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 
 	//! The parent schema if this is a nested schema, or nullptr for a top-level schema
-	virtual optional_ptr<SchemaCatalogEntry> GetParentSchema() const {
-		return nullptr;
+	optional_ptr<SchemaCatalogEntry> GetParentSchema() const {
+		return parent_schema;
 	}
 
 	//! The full path of this schema (its parent chain outermost first, ending with this schema's own name)
 	vector<Identifier> GetSchemaPath() const;
+	//! The schema path formatted as a SQL name, without the catalog.
+	DUCKDB_API string GetSchemaName() const;
 	//! The fully qualified name of an entry in this schema: [catalog, schema path..., entry_name]
 	QualifiedName GetQualifiedName(const Identifier &entry_name) const;
 
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	virtual void Scan(ClientContext &context, CatalogType type,
 	                  const std::function<void(CatalogEntry &)> &callback) = 0;
+	//! Scan using an existing transaction. Override when scans can run under catalog locks.
+	DUCKDB_API virtual void Scan(CatalogTransaction transaction, CatalogType type,
+	                             const std::function<void(CatalogEntry &)> &callback);
 	//! Scan the specified catalog set, invoking the callback method for every committed entry
 	virtual void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) = 0;
+	//! Visit this schema and its descendants in depth-first, parent-before-child order.
+	DUCKDB_API void ScanSchemaTree(CatalogTransaction transaction,
+	                               const std::function<void(SchemaCatalogEntry &)> &callback);
+	//! Visit the committed schema tree in the same order.
+	DUCKDB_API void ScanSchemaTree(const std::function<void(SchemaCatalogEntry &)> &callback);
 
 	string ToSQL() const override;
 
@@ -118,5 +129,8 @@ public:
 	virtual void Alter(CatalogTransaction transaction, AlterInfo &info) = 0;
 
 	CatalogTransaction GetCatalogTransaction(ClientContext &context);
+
+protected:
+	optional_ptr<SchemaCatalogEntry> parent_schema;
 };
 } // namespace duckdb
