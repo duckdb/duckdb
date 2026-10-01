@@ -26,15 +26,22 @@ CREATE INDEX i3 ON t1(foo) WITH (where);
 
 # dotted option names, including ones that start with a reserved keyword
 statement ok
-CREATE INDEX i4 ON t1(foo) WITH ('default' = 5, deferrable, default.x = 1);
+CREATE INDEX i4 ON t1(foo) WITH ('default' = 5);
+
+statement ok
+CREATE INDEX i5 ON t1(foo) WITH (default.x = 1);
+
+statement ok
+CREATE INDEX i6 ON t1(foo) WITH ('default' = 5, deferrable, default.x = 1);
 
 query I
-SELECT sql FROM duckdb_indexes() WHERE index_name IN ('i1', 'i2', 'i3', 'i4') ORDER BY index_name
+SELECT sql FROM duckdb_indexes() WHERE index_name IN ('i1', 'i2', 'i3', 'i4', 'i5') ORDER BY index_name
 ----
 CREATE INDEX i1 ON t1(foo) WITH ("deferrable" );
 CREATE INDEX i2 ON t1(foo) WITH ("default" );
 CREATE INDEX i3 ON t1(foo) WITH ("where" );
-CREATE INDEX i4 ON t1(foo) WITH ("default" = 5, "deferrable", "default.x" = 1 );
+CREATE INDEX i4 ON t1(foo) WITH ("default" = 5 );
+CREATE INDEX i5 ON t1(foo) WITH ("default.x" = 1 );
 
 # option names are case-insensitive, duplicates are rejected
 statement error
