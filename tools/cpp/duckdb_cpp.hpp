@@ -24,7 +24,7 @@
 /// Failures that are part of a function's contract are documented with `\@throws`; any other failure surfaces as a
 /// plain `Exception`.
 ///
-/// The usual path through the API: an `Environment` opens a `Database`, a `Database` hands out `Connection`s, and a
+/// The usual path through the API: an `Environment` opens an `Instance`, an `Instance` hands out `Connection`s, and a
 /// `Connection` parses and executes SQL into a streaming `QueryResult` that yields `DataChunk`s of `Vector`s.
 
 #include <utility>
@@ -59,9 +59,9 @@ namespace cxx {
 typedef uint64_t idx_t;
 
 class Exception;
-class DatabaseOption;
+class InstanceOption;
 class Environment;
-class Database;
+class Instance;
 class Connection;
 class SqlStatement;
 class StatementIterator;
@@ -313,11 +313,11 @@ public:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
-// Database Option
+// Instance Option
 //----------------------------------------------------------------------------------------------------------------------
-// Configuration settings. Write one with `Database::SetOption` or `Connection::SetOption`, which take the name and
-// value directly; read one back as a `DatabaseOption` to inspect its current value, default value, description,
-// target scope or aliases. Settings that can only be chosen at startup are written on a `Database` before its first
+// Configuration settings. Write one with `Instance::SetOption` or `Connection::SetOption`, which take the name and
+// value directly; read one back as a `InstanceOption` to inspect its current value, default value, description,
+// target scope or aliases. Settings that can only be chosen at startup are written on an `Instance` before its first
 // `Attach` or `Connect`.
 
 /// At which scope a setting may be written.
@@ -347,12 +347,12 @@ enum class SettingScope : uint8_t {
 /// A single configuration setting as read from a database or connection: its current value there, plus the
 /// metadata DuckDB declares for it. Read-only.
 /// The string accessors return views borrowed from this option, valid until it is destroyed.
-class DatabaseOption final : public detail::Handle<DatabaseOption> {
+class InstanceOption final : public detail::Handle<InstanceOption> {
 	friend detail::Factory;
 
 public:
-	DatabaseOption(DatabaseOption &&) noexcept = default;
-	DatabaseOption &operator=(DatabaseOption &&) noexcept = default;
+	InstanceOption(InstanceOption &&) noexcept = default;
+	InstanceOption &operator=(InstanceOption &&) noexcept = default;
 
 	/// The setting's name.
 	auto GetName() const -> std::string_view;
@@ -376,10 +376,10 @@ public:
 	/// @param index Alias index in [0, GetAliasCount()).
 	auto GetAliasByIndex(size_t index) const -> std::string_view;
 
-	~DatabaseOption() override;
+	~InstanceOption() override;
 
 private:
-	explicit DatabaseOption(void *impl);
+	explicit InstanceOption(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -639,13 +639,13 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // Connection
 //----------------------------------------------------------------------------------------------------------------------
-// A session on a `Database`: the handle that parses, binds and executes SQL, creates types and values outside of a
+// A session on an `Instance`: the handle that parses, binds and executes SQL, creates types and values outside of a
 // callback, and carries session-scoped settings. A connection is not thread-safe -- give each thread its own, via
-// `Database::Connect` -- with the deliberate exception of `Interrupt` and `GetQueryProgress`, which exist to be called
+// `Instance::Connect` -- with the deliberate exception of `Interrupt` and `GetQueryProgress`, which exist to be called
 // while another thread runs a query.
 
 /// A connection to a database.
-/// It must not outlive the `Database` it was opened on, and only one result may be live on it at a time.
+/// It must not outlive the `Instance` it was opened on, and only one result may be live on it at a time.
 class Connection final : public detail::Handle<Connection> {
 	friend detail::Factory;
 
@@ -679,13 +679,13 @@ public:
 
 	/// One setting with its current value on this connection.
 	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> DatabaseOption;
+	auto GetOptionByIndex(size_t index) const -> InstanceOption;
 
 	/// One setting with its current value on this connection.
 	/// @param name The setting's name or one of its aliases.
 	/// @return The setting.
 	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> DatabaseOption;
+	auto GetOption(std::string_view name) const -> InstanceOption;
 
 	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
@@ -823,18 +823,18 @@ private:
 };
 
 //----------------------------------------------------------------------------------------------------------------------
-// Database
+// Instance
 //----------------------------------------------------------------------------------------------------------------------
 // An open database: the catalog, the storage behind it, and the settings shared by every session on it. Databases are
 // opened through an `Environment` and worked with through the `Connection`s they hand out.
 
-class Database final : public detail::Handle<Database> {
+class Instance final : public detail::Handle<Instance> {
 	friend detail::Factory;
 
 public:
-	~Database() override;
-	Database(Database &&) noexcept = default;
-	Database &operator=(Database &&) noexcept = default;
+	~Instance() override;
+	Instance(Instance &&) noexcept = default;
+	Instance &operator=(Instance &&) noexcept = default;
 
 	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first
 	/// use.
@@ -873,13 +873,13 @@ public:
 
 	/// One setting with its current global value.
 	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> DatabaseOption;
+	auto GetOptionByIndex(size_t index) const -> InstanceOption;
 
 	/// One setting with its current global value.
 	/// @param name The setting's name or one of its aliases; an alias resolves to the canonical setting.
 	/// @return The setting.
 	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> DatabaseOption;
+	auto GetOption(std::string_view name) const -> InstanceOption;
 
 	/// Writes a setting globally, for this database and every session on it. Before the first `Attach` or `Connect`
 	/// the setting goes into the startup configuration, which is how settings that can only be chosen at startup,
@@ -894,7 +894,7 @@ public:
 	auto Connect() -> Connection;
 
 private:
-	explicit Database(void *impl);
+	explicit Instance(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -902,7 +902,7 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 // Loading an extension is how catalog entries (functions, types, casts) and database-level hooks get installed under
 // the extension's identity, so DuckDB can attribute them to the extension that provided them. Outside a load, the same
-// objects are registered on a `Connection` or a `Database` instead.
+// objects are registered on a `Connection` or an `Instance` instead.
 
 /// The extension being loaded, handed to its load entry point.
 /// Borrowed for the duration of the load: never store or outlive one.
@@ -928,11 +928,11 @@ auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, vo
 //----------------------------------------------------------------------------------------------------------------------
 // Environment
 //----------------------------------------------------------------------------------------------------------------------
-// The entry point to the API: an `Environment` creates databases and tracks the ones it has created. Create one,
-// keep it for as long as any database is alive, and create databases through it.
+// The entry point to the API: an `Environment` creates instances and tracks the ones it has created. Create one,
+// keep it for as long as any instance is alive, and create instances through it.
 
-/// The environment databases are created in. It must outlive every `Database` created through it; destroying it
-/// while databases are still alive leaks them.
+/// The environment instances are created in. It must outlive every `Instance` created through it; destroying it
+/// while instances are still alive leaks them.
 class Environment final : public detail::Handle<Environment> {
 	friend detail::Factory;
 
@@ -943,15 +943,15 @@ public:
 	Environment &operator=(Environment &&) noexcept = default;
 
 	/// How many databases are currently alive in this environment.
-	auto GetDatabaseCount() const -> size_t;
+	auto GetInstanceCount() const -> size_t;
 
-	/// Creates a database instance with nothing attached. Write startup settings with `Database::SetOption`, then
-	/// attach a database with `Database::Attach` and make it the default with `Database::SetDefault`.
-	auto CreateDatabase() -> Database;
+	/// Creates a database instance with nothing attached. Write startup settings with `Instance::SetOption`, then
+	/// attach a database with `Instance::Attach` and make it the default with `Instance::SetDefault`.
+	auto CreateInstance() -> Instance;
 
 	/// Creates a database instance with default settings, attaches `path`, and makes it the default database.
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
-	auto Open(const std::string &path) -> Database;
+	auto Open(const std::string &path) -> Instance;
 };
 
 /// The version of the DuckDB library this program is linked against, e.g. "v1.5.0", with a suffix such as
@@ -2234,6 +2234,14 @@ public:
 	/// beforehand do not survive this.
 	auto Flatten() const -> void;
 
+	/// Repoints the vector at another vector's data, without copying: the two then alias the same buffers, in the
+	/// source's layout, until one of them is reset or re-referenced. Works for any type, including nested ones, and
+	/// is the way to hand an already-materialized vector to an output vector without a per-row copy. Pointers and
+	/// views taken from this vector beforehand do not survive this.
+	/// @param source The vector to reference. Its data must outlive every read of this vector.
+	/// @throws InvalidInputException When the source's type does not match the vector's.
+	auto Reference(const Vector &source) -> void;
+
 	/// How many rows the vector holds.
 	auto GetSize() const -> idx_t;
 
@@ -2887,8 +2895,23 @@ private:
 // Function Signature
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A function's declared parameters, variadic tail, and return type.
-/// Borrowed from the `ScalarFunction` or `AggregateFunction` it was read from via `GetSignature`.
+/// How a caller passes the argument for a parameter, following Python's parameter kinds. A signature orders its
+/// parameters by kind, in the order the values are listed here.
+enum class FunctionParameterKind : uint8_t {
+	/// Passed by position only. A named argument with the parameter's name is received by `**kwargs`.
+	POSITIONAL_ONLY = 0,
+	/// Passed by position or by name.
+	STANDARD = 1,
+	/// `*args`: receives the positional arguments left over after the positional-only and standard parameters.
+	POSITIONAL_VARIADIC = 2,
+	/// Passed by name only.
+	NAMED_ONLY = 3,
+	/// `**kwargs`: receives the named arguments that match no other parameter.
+	NAMED_VARIADIC = 4,
+};
+
+/// A function's declared parameters and return type.
+/// Borrowed from the function it was read from via `GetSignature`.
 /// Valid for as long as the owning function is.
 /// Setters mutate the function's signature in place.
 class FunctionSignature final : public detail::Handle<FunctionSignature> {
@@ -2900,22 +2923,36 @@ public:
 
 	~FunctionSignature() override;
 
-	/// Appends a parameter without a default value. `LogicalTypeId::ANY` is accepted and leaves the argument un-cast.
+	/// Adds a parameter without a default value. The signature orders its parameters by kind, and parameters of the
+	/// same kind in the order they were added. `LogicalTypeId::ANY` is accepted and leaves the argument un-cast.
 	/// @param name The parameter's name.
 	/// @param type The parameter's type.
-	auto AddParameter(const std::string &name, const LogicalType &type) -> FunctionSignature &;
+	/// @param kind How a caller passes the argument.
+	/// @throws InvalidInputException When the kind is not a `FunctionParameterKind`.
+	auto AddParameter(const std::string &name, const LogicalType &type,
+	                  FunctionParameterKind kind = FunctionParameterKind::STANDARD) -> FunctionSignature &;
 
-	/// Appends a parameter with a default value: the caller may omit it, the function still receives the default.
+	/// Adds a parameter with a default value: the caller may omit it, the function still receives the default.
+	/// `*args` and `**kwargs` cannot have a default value; registration rejects one.
 	/// @param name The parameter's name.
 	/// @param type The parameter's type.
 	/// @param default_value The value the parameter takes when the caller omits it.
-	auto AddParameter(const std::string &name, const LogicalType &type, const Value &default_value)
-	    -> FunctionSignature &;
+	/// @param kind How a caller passes the argument.
+	/// @throws InvalidInputException When the kind is not a `FunctionParameterKind`.
+	auto AddParameter(const std::string &name, const LogicalType &type, const Value &default_value,
+	                  FunctionParameterKind kind = FunctionParameterKind::STANDARD) -> FunctionSignature &;
 
-	/// Sets the variadic tail type, allowing any number of extra arguments after the fixed parameters. Pass
-	/// `LogicalTypeId::ANY` to leave the tail un-cast. Overwrites any prior variadic tail.
-	/// @param type The type every extra argument is cast to.
-	auto SetVarArgs(const LogicalType &type) -> FunctionSignature &;
+	/// Adds the `*args` parameter, receiving any number of extra positional arguments. Pass `LogicalTypeId::ANY` to
+	/// leave them un-cast.
+	/// @param name The parameter's name.
+	/// @param type The type every extra positional argument is cast to.
+	auto AddArgs(const std::string &name, const LogicalType &type) -> FunctionSignature &;
+
+	/// Adds the `**kwargs` parameter, receiving the named arguments that match no other parameter. Pass
+	/// `LogicalTypeId::ANY` to leave them un-cast.
+	/// @param name The parameter's name.
+	/// @param type The type every such named argument is cast to.
+	auto AddKwargs(const std::string &name, const LogicalType &type) -> FunctionSignature &;
 
 	/// Sets the return type. Overwrites any prior return type.
 	/// @param type The return type.
@@ -2923,6 +2960,97 @@ public:
 
 private:
 	explicit FunctionSignature(void *impl);
+};
+
+/// The sizes of the four parts of a function call's argument list, which follow each other in this order.
+struct ArgumentCounts {
+	/// One argument per positional-only and standard parameter, in declaration order.
+	idx_t positional_fixed = 0;
+	/// The arguments `*args` received, in call order.
+	idx_t positional_variadic = 0;
+	/// One argument per named-only parameter, in declaration order.
+	idx_t named_fixed = 0;
+	/// The arguments `**kwargs` received, in call order.
+	idx_t named_variadic = 0;
+
+	/// The index of the first named argument.
+	auto NamedOffset() const -> idx_t {
+		return positional_fixed + positional_variadic;
+	}
+	/// The number of arguments in all four parts.
+	auto Total() const -> idx_t {
+		return NamedOffset() + named_fixed + named_variadic;
+	}
+};
+
+/// What every function's bind callback works with: the arguments of the call being bound, and the bind data.
+/// Borrowed, valid only for the callback duration.
+///
+/// The arguments form one list in the four parts of `ArgumentCounts`. A standard parameter passed by name is at its
+/// declared position, and a parameter the call omitted carries its default value.
+class FunctionBindInput {
+public:
+	/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback via
+	/// `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T` has one,
+	/// by identity otherwise.
+	template <class T, class... ARGS>
+	void SetBindData(ARGS &&... args) {
+		auto ptr = new T(std::forward<ARGS>(args)...);
+		SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+	}
+
+	/// How many arguments the call passes, in all four parts. Valid indices for the other argument accessors are
+	/// [0, GetArgCount()).
+	auto GetArgCount() const -> idx_t;
+
+	/// The sizes of the four parts of the argument list.
+	auto GetArgumentCounts() const -> ArgumentCounts;
+
+	/// The resolved type of one argument. An ANY parameter reports the type the caller passed.
+	/// @param index Argument index in [0, GetArgCount()).
+	/// @throws InvalidInputException When the index is out of range.
+	auto GetArgType(idx_t index) const -> LogicalType;
+
+	/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
+	/// before execution, e.g. a format string or a target type. A table function's arguments are always constant.
+	/// @param index Argument index in [0, GetArgCount()).
+	/// @throws InvalidInputException When the index is out of range.
+	/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
+	auto GetConstantArgument(idx_t index) const -> Value;
+
+	/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
+	/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
+	/// prepared-statement parameter), or the index is out of range.
+	/// @param index Argument index in [0, GetArgCount()).
+	auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
+
+	/// The name of one argument: the parameter name for a declared parameter, the name the caller passed for an
+	/// argument `**kwargs` received, and an empty name for an argument `*args` received.
+	/// @param index Argument index in [0, GetArgCount()).
+	/// @throws InvalidInputException When the index is out of range.
+	auto GetArgName(idx_t index) const -> std::string;
+
+	/// The index of the argument a caller passes by the given name, matched case-insensitively, or nullopt when the
+	/// call passed no argument of that name. Positional-only parameters are skipped, as a caller cannot pass them by
+	/// name.
+	/// @param name The name to look up.
+	auto FindArg(const std::string &name) const -> std::optional<idx_t>;
+
+	/// The binding context. Borrowed, valid only for the callback duration.
+	auto GetContext() const -> Context;
+
+protected:
+	FunctionBindInput(void *args, void *context) : args(args), context(context) {
+	}
+
+	/// The user data slot of the function, which carries the function's info table
+	void *GetFunctionInfo() const;
+
+	void *args;
+	void *context;
+
+private:
+	void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2967,6 +3095,17 @@ enum class FunctionCollationHandling : uint8_t {
 	PUSH_COMBINABLE = 1,
 	/// Collations are ignored by the function.
 	IGNORE = 2,
+};
+
+/// The order guarantee a producer of rows makes about its output.
+enum class OrderPreservation : uint8_t {
+	/// The rows have no meaningful order and may be reordered freely.
+	NO_ORDER = 0,
+	/// The rows are in insertion order, kept unless the `preserve_insertion_order` setting is disabled (default).
+	INSERTION_ORDER = 1,
+	/// The rows are in an order that must be kept, as if sorted by an `ORDER BY`, even when the
+	/// `preserve_insertion_order` setting is disabled.
+	FIXED_ORDER = 2,
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3062,19 +3201,10 @@ private:
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
-	class BindInput {
+	class BindInput final : public FunctionBindInput {
 		friend detail::Factory;
 
 	public:
-		/// Constructs bind data of type `T`, owned by the bound function call and readable from the init and exec
-		/// callbacks via `GetBindData<T>`. The engine compares bind data when it compares expressions: by
-		/// `operator==` when `T` has one, by identity otherwise.
-		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
-			auto ptr = new T(std::forward<ARGS>(args)...);
-			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
-		}
-
 		/// The user data set via `ScalarFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -3082,45 +3212,16 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// How many arguments this call passes: one per argument of the call, variadic tail arguments included.
-		/// Valid indices for `GetArgType` and `GetConstantArgument` are [0, GetArgCount()).
-		auto GetArgCount() const -> idx_t;
-
-		/// One argument's resolved type, as the binder settled it. An ANY parameter reports the type the caller
-		/// actually passed.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgType(idx_t index) const -> LogicalType;
-
-		/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
-		/// before execution, e.g. a format string or a target type.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
-		auto GetConstantArgument(idx_t index) const -> Value;
-
-		/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
-		/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
-		/// prepared-statement parameter), or the index is out of range. Use it when a non-constant argument should
-		/// fall back to the runtime value instead of failing the query.
-		/// @param index Argument index in [0, GetArgCount()).
-		auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
-
 		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
 		/// @param type The concrete return type of this bound call.
 		auto SetReturnType(const LogicalType &type) -> void;
 
-		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
-
 	private:
-		BindInput(void *args, void *context) : args(args), context(context) {
+		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
-		void *args;
-		void *context;
+		void *result;
 
-		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 
@@ -3197,11 +3298,14 @@ public:
 		/// the engine expands the result.
 		auto GetRowCount() const -> idx_t;
 
-		/// How many argument vectors this execution carries: one per argument of the call, variadic tail arguments
-		/// included. Valid indices for `GetArg` are [0, GetArgCount()).
+		/// How many argument vectors this execution carries, in all four parts. Valid indices for `GetArg` are
+		/// [0, GetArgCount()).
 		auto GetArgCount() const -> idx_t;
 
-		/// One argument's vector.
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// One argument vector, at the index the bind callback used for the argument.
 		/// @param index Argument index in [0, GetArgCount()).
 		auto GetArg(idx_t index) const -> Vector;
 
@@ -3363,19 +3467,10 @@ private:
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
-	class BindInput {
+	class BindInput final : public FunctionBindInput {
 		friend detail::Factory;
 
 	public:
-		/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback
-		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
-		/// has one, by identity otherwise.
-		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
-			auto ptr = new T(std::forward<ARGS>(args)...);
-			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
-		}
-
 		/// The user data set via `AggregateFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -3383,45 +3478,16 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// How many arguments this call passes: one per argument of the call, variadic tail arguments included.
-		/// Valid indices for `GetArgType` and `GetConstantArgument` are [0, GetArgCount()).
-		auto GetArgCount() const -> idx_t;
-
-		/// One argument's resolved type, as the binder settled it. An ANY parameter reports the type the caller
-		/// actually passed.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgType(idx_t index) const -> LogicalType;
-
-		/// The constant value of one argument, folded at bind time. Use it for arguments the function needs to know
-		/// before execution, e.g. a format string or a target type.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		/// @throws Exception When the argument is not a constant expression, e.g. a column reference.
-		auto GetConstantArgument(idx_t index) const -> Value;
-
-		/// `GetConstantArgument` without the failure: nullopt instead of an exception when the argument carries no
-		/// constant value, i.e. it is not a constant expression, its value is not yet known (an unresolved
-		/// prepared-statement parameter), or the index is out of range. Use it when a non-constant argument should
-		/// fall back to the runtime value instead of failing the query.
-		/// @param index Argument index in [0, GetArgCount()).
-		auto TryGetConstantArgument(idx_t index) const -> std::optional<Value>;
-
 		/// Resolves the declared return type; required, and only permitted, when the signature declared it as ANY.
 		/// @param type The concrete return type of this bound call.
 		auto SetReturnType(const LogicalType &type) -> void;
 
-		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
-
 	private:
-		BindInput(void *args, void *context) : args(args), context(context) {
+		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
-		void *args;
-		void *context;
+		void *result;
 
-		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 
@@ -3516,11 +3582,14 @@ public:
 		/// How many input rows this invocation carries: the length of the argument vectors and of `GetStates`.
 		auto GetRowCount() const -> idx_t;
 
-		/// How many argument vectors this invocation carries: one per argument of the call, variadic tail arguments
-		/// included. Valid indices for `GetArg` are [0, GetArgCount()).
+		/// How many argument vectors this invocation carries, in all four parts. Valid indices for `GetArg` are
+		/// [0, GetArgCount()).
 		auto GetArgCount() const -> idx_t;
 
-		/// One argument's vector.
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// One argument vector, at the index the bind callback used for the argument.
 		/// @param index Argument index in [0, GetArgCount()).
 		auto GetArg(idx_t index) const -> Vector;
 
@@ -3901,7 +3970,7 @@ private:
 
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
-	class BindInput {
+	class BindInput final : public FunctionBindInput {
 		friend detail::Factory;
 
 	public:
@@ -3911,15 +3980,6 @@ public:
 		/// @param type The column's type. Must be a fully defined concrete type; ANY is rejected.
 		auto AddResultColumn(const std::string &name, const LogicalType &type) -> void;
 
-		/// Constructs bind data of type `T`, owned by the bound function call and readable from every later callback
-		/// via `GetBindData<T>`. The engine compares bind data when it compares expressions: by `operator==` when `T`
-		/// has one, by identity otherwise.
-		template <class T, class... ARGS>
-		void SetBindData(ARGS &&... args) {
-			auto ptr = new T(std::forward<ARGS>(args)...);
-			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
-		}
-
 		/// The user data set via `TableFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -3927,38 +3987,25 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// How many arguments this call passes. The arguments are the signature's parameters in order -- a parameter
-		/// the call site omitted still appears, carrying its declared default -- followed by any variadic tail
-		/// arguments. Valid indices for `GetArgType` and `GetArgument` are [0, GetArgCount()).
-		auto GetArgCount() const -> idx_t;
-
-		/// One argument's type.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgType(idx_t index) const -> LogicalType;
-
-		/// One argument's value. A table function's arguments are always constants, so this only fails on a bad index.
-		/// @param index Argument index in [0, GetArgCount()).
-		/// @throws InvalidInputException When the index is out of range.
-		auto GetArgument(idx_t index) const -> Value;
-
 		/// Hints how many rows the scan will produce, for the optimizer. Producing a different number of rows is not
 		/// an error.
 		/// @param cardinality The estimated row count.
 		/// @param is_exact Whether the estimate is exact, which also makes it an upper bound.
 		auto SetCardinality(idx_t cardinality, bool is_exact) -> void;
 
-		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		/// Sets the order guarantee of the rows this call produces. Defaults to `OrderPreservation::INSERTION_ORDER`.
+		/// With `OrderPreservation::NO_ORDER`, a scan that allows more than one thread runs in parallel into query
+		/// results, INSERT and COPY without a partition data callback, and the rows arrive in no particular order.
+		/// @param order The order guarantee of the produced rows.
+		/// @throws InvalidInputException When order is not a declared enum value.
+		auto SetOrderPreservation(OrderPreservation order) -> void;
 
 	private:
-		BindInput(void *args, void *context) : args(args), context(context) {
+		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
-		void *args;
-		void *context;
+		void *result;
 
-		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 
@@ -4619,8 +4666,9 @@ public:
 			return *static_cast<T *>(GetUserDataInternal());
 		}
 
-		/// Reports how many rows a batch should carry, as the target the engine cuts batches at; the callback must
-		/// call this. A batch may still be smaller (the last one of a file, or when `BATCH_SIZE_BYTES` cuts it first).
+		/// Reports how many rows a batch should carry, as the target the engine cuts batches at. Not calling this
+		/// leaves the engine's default in effect. A batch may still be smaller (the last one of a file, or when
+		/// `BATCH_SIZE_BYTES` cuts it first).
 		/// @param rows The number of rows a batch should carry; must be greater than 0.
 		auto SetTarget(idx_t rows) -> void;
 
@@ -5499,7 +5547,7 @@ private:
 //----------------------------------------------------------------------------------------------------------------------
 
 /// A user-defined replacement scan, built up with the setters and made live with `Register`.
-/// Create one against the `Connection`, `Database` or `Extension` it will be registered on, set its callback and
+/// Create one against the `Connection`, `Instance` or `Extension` it will be registered on, set its callback and
 /// user data, then call `Register`. The scan object may be destroyed after registration; the registered scan lives
 /// on until its scope ends.
 ///
@@ -5510,8 +5558,8 @@ private:
 /// error is raised. A callback reports failure by throwing; the exception surfaces as the query's error.
 ///
 /// Scope follows the constructor. A scan created against a `Connection` is visible only to that connection, is
-/// released when it closes, and is consulted before every database-wide scan, including the built-in file scans. A
-/// scan created against a `Database` or `Extension` is visible to every connection to that database and lives until
+/// released when it closes, and is consulted before every instance-wide scan, including the built-in file scans. A
+/// scan created against an `Instance` or `Extension` is visible to every connection to that instance and lives until
 /// it closes; registering one is not thread-safe against queries binding on other connections, so do it during
 /// extension load or before issuing queries. A registered scan cannot be unregistered.
 class ReplacementScan final : public detail::Handle<ReplacementScan> {
@@ -5531,7 +5579,7 @@ public:
 	/// Creates a scan that `Register` adds to the connection, visible only there.
 	static auto Create(const Connection &conn) -> ReplacementScan;
 	/// Creates a scan that `Register` adds to the database, visible to every connection.
-	static auto Create(const Database &db) -> ReplacementScan;
+	static auto Create(const Instance &instance) -> ReplacementScan;
 	/// Creates a scan that `Register` adds through the loading extension, visible to every connection.
 	static auto Create(const Extension &extension) -> ReplacementScan;
 

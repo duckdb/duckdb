@@ -525,7 +525,7 @@ static unique_ptr<BaseStatistics> TryBuildShreddingStats(const LogicalType &type
 		return WrapTypedValue(typed_value, nullptr).ToUnique();
 	}
 	default:
-		if (type.IsNested() || type.id() == LogicalTypeId::ENUM) {
+		if (type.IsNested() || type.id() == LogicalTypeId::ENUM || type.IsJSONType()) {
 			// MAP / UNION / ENUM etc. are not stored in their source representation in the variant
 			return nullptr;
 		}

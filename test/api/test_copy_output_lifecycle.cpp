@@ -17,6 +17,7 @@ struct LifecycleCopyInfo : CopyFunctionInfo {
 	idx_t fail_finalize_after = DConstants::INVALID_INDEX;
 	atomic<idx_t> finalize_attempts {0};
 	mutex lock;
+	vector<string> initialized_paths;
 	vector<string> finalized_paths;
 };
 
@@ -42,6 +43,49 @@ struct LifecycleCopyBindData : FunctionData {
 struct LifecycleCopyLocalData : LocalFunctionData {};
 
 struct LifecycleCopyPreparedData : PreparedBatchData {};
+
+// A remote output sink for the lifecycle COPY function, which does not write payloads.
+// No network service or local backing files are needed to exercise partition path construction.
+class PartitionCopyFileSystem : public FileSystem {
+public:
+	struct Handle : FileHandle {
+		Handle(FileSystem &fs, const string &path, FileOpenFlags flags) : FileHandle(fs, path, flags) {
+		}
+		void Close() override {
+		}
+	};
+
+	string GetName() const override {
+		return "PartitionCopyFileSystem";
+	}
+	bool CanHandleFile(const string &path) override {
+		return StringUtil::StartsWith(path, "s3://partition-copy-test/");
+	}
+	bool IsManuallySet() override {
+		return true;
+	}
+	string PathSeparator(const string &) override {
+		return "/";
+	}
+	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener>) override {
+		return make_uniq<Handle>(*this, path, flags);
+	}
+	bool FileExists(const string &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool IsPipe(const string &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool DirectoryExists(const string &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool CreateDirectoryExtended(const string &, const CreateDirectoryOptions &, optional_ptr<FileOpener>) override {
+		return false;
+	}
+	bool ListFiles(const string &, const std::function<void(const string &, bool)> &, FileOpener *) override {
+		return true;
+	}
+};
 
 struct LifecycleCopyGlobalData : GlobalFunctionData {
 	LifecycleCopyGlobalData(ClientContext &context, string path_p)
@@ -75,9 +119,13 @@ unique_ptr<LocalFunctionData> LifecycleCopyInitializeLocal(ExecutionContext &, F
 	return make_uniq<LifecycleCopyLocalData>();
 }
 
-unique_ptr<GlobalFunctionData> LifecycleCopyInitializeGlobal(ClientContext &context, FunctionData &,
+unique_ptr<GlobalFunctionData> LifecycleCopyInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                              const string &path) {
-	return make_uniq<LifecycleCopyGlobalData>(context, path);
+	auto state = make_uniq<LifecycleCopyGlobalData>(context, path);
+	auto &info = bind_data.Cast<LifecycleCopyBindData>().GetInfo();
+	lock_guard<mutex> guard(info.lock);
+	info.initialized_paths.push_back(path);
+	return std::move(state);
 }
 
 void LifecycleCopySink(ExecutionContext &, FunctionData &, GlobalFunctionData &, LocalFunctionData &, DataChunk &) {
@@ -160,7 +208,38 @@ void RemoveDirectoryIfPresent(FileSystem &fs, const string &path) {
 
 } // namespace
 
-TEST_CASE("COPY output lifecycle removes only finalized owned files", "[api][copy]") {
+TEST_CASE("Partitioned COPY to remote storage does not require the local filesystem", "[api][copy]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	auto &fs = FileSystem::GetFileSystem(*connection.context);
+	fs.RegisterSubSystem(make_uniq<PartitionCopyFileSystem>());
+	auto info = make_shared_ptr<LifecycleCopyInfo>();
+	RegisterLifecycleCopyFunction(db, "copy_remote_partitions", info);
+	REQUIRE_NO_FAIL(connection.Query("SET disabled_filesystems='LocalFileSystem'"));
+
+	string path_option;
+	string directory;
+	SECTION("Default Hive partition path") {
+		directory = "p=1";
+	}
+	SECTION("Explicit partition path") {
+		path_option = ", PARTITION_PATH 'custom/part_' || p::VARCHAR";
+		directory = "custom/part_1";
+	}
+	REQUIRE_NO_FAIL(connection.Query("COPY (SELECT 1 AS p, 42 AS v) TO 's3://partition-copy-test/output' "
+	                                 "(FORMAT copy_remote_partitions, PARTITION_BY (p), FILENAME_PATTERN 'part_{i}'" +
+	                                 path_option + ")"));
+	REQUIRE(info->finalized_paths.size() == 1);
+	REQUIRE(info->finalized_paths[0] == "s3://partition-copy-test/output/" + directory + "/part_0.test");
+
+	// A genuinely local target must still enforce the disabled filesystem setting.
+	auto local_result = connection.Query("COPY (SELECT 1 AS p, 42 AS v) TO 'partition_copy_local' "
+	                                     "(FORMAT copy_remote_partitions, PARTITION_BY (p))");
+	REQUIRE_FAIL(local_result);
+	REQUIRE(local_result->GetError().find("LocalFileSystem has been disabled") != string::npos);
+}
+
+TEST_CASE("COPY output lifecycle removes owned files after failure", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
 	auto &fs = FileSystem::GetFileSystem(*connection.context);
@@ -169,10 +248,9 @@ TEST_CASE("COPY output lifecycle removes only finalized owned files", "[api][cop
 	fs.TryRemoveFile(finalized_path);
 	{
 		CopyOutputLifecycle lifecycle(*connection.context);
-		auto file_index = lifecycle.RegisterFile(finalized_path);
+		lifecycle.RegisterFile(finalized_path);
 		auto handle = fs.OpenFile(finalized_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 		handle->Close();
-		lifecycle.MarkFileFinalized(file_index);
 	}
 	REQUIRE(!fs.FileExists(finalized_path));
 
@@ -184,8 +262,7 @@ TEST_CASE("COPY output lifecycle removes only finalized owned files", "[api][cop
 		auto handle = fs.OpenFile(incomplete_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 		handle->Close();
 	}
-	REQUIRE(fs.FileExists(incomplete_path));
-	fs.RemoveFile(incomplete_path);
+	REQUIRE(!fs.FileExists(incomplete_path));
 
 	auto existing_path = TestCreatePath("copy_lifecycle_existing.test");
 	fs.TryRemoveFile(existing_path);
@@ -195,8 +272,7 @@ TEST_CASE("COPY output lifecycle removes only finalized owned files", "[api][cop
 	}
 	{
 		CopyOutputLifecycle lifecycle(*connection.context);
-		auto file_index = lifecycle.RegisterFile(existing_path);
-		lifecycle.MarkFileFinalized(file_index);
+		lifecycle.RegisterFile(existing_path);
 	}
 	REQUIRE(fs.FileExists(existing_path));
 	fs.RemoveFile(existing_path);
@@ -205,10 +281,9 @@ TEST_CASE("COPY output lifecycle removes only finalized owned files", "[api][cop
 	fs.TryRemoveFile(successful_path);
 	{
 		CopyOutputLifecycle lifecycle(*connection.context);
-		auto file_index = lifecycle.RegisterFile(successful_path);
+		lifecycle.RegisterFile(successful_path);
 		auto handle = fs.OpenFile(successful_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 		handle->Close();
-		lifecycle.MarkFileFinalized(file_index);
 		lifecycle.MarkSuccessful();
 	}
 	REQUIRE(fs.FileExists(successful_path));
@@ -250,6 +325,33 @@ TEST_CASE("COPY output lifecycle removes only empty query-created directories", 
 	RemoveDirectoryIfPresent(fs, root);
 }
 
+TEST_CASE("COPY removes an open output after finalization fails", "[api][copy]") {
+	for (auto batch_mode : {false, true}) {
+		DuckDB db(nullptr);
+		Connection connection(db);
+		REQUIRE_NO_FAIL(connection.Query(batch_mode ? "SET threads=4" : "SET threads=1"));
+		if (batch_mode) {
+			REQUIRE_NO_FAIL(connection.Query("CREATE TABLE copy_lifecycle_batch_input AS FROM range(4096)"));
+		}
+		auto &fs = FileSystem::GetFileSystem(*connection.context);
+		string name = batch_mode ? "copy_lifecycle_batch_finalize_failure" : "copy_lifecycle_regular_finalize_failure";
+		auto info = make_shared_ptr<LifecycleCopyInfo>();
+		info->fail_finalize_after = 0;
+		RegisterLifecycleCopyFunction(db, name, info, batch_mode);
+
+		auto output = TestCreatePath(name + ".test");
+		fs.TryRemoveFile(output);
+		auto source = batch_mode ? "copy_lifecycle_batch_input" : "(SELECT i FROM range(4096) t(i))";
+		auto result = connection.Query(
+		    StringUtil::Format("COPY %s TO '%s' (FORMAT %s, PRESERVE_ORDER false)", source, output, name));
+		REQUIRE_FAIL(result);
+		result.reset();
+		REQUIRE(info->finalize_attempts == 1);
+		REQUIRE(info->initialized_paths.size() == 1);
+		REQUIRE(!fs.FileExists(output));
+	}
+}
+
 TEST_CASE("COPY removes finalized partition outputs after a later finalization failure", "[api][copy]") {
 	DuckDB db(nullptr);
 	Connection connection(db);
@@ -270,7 +372,8 @@ TEST_CASE("COPY removes finalized partition outputs after a later finalization f
 	result.reset();
 	REQUIRE(info->finalize_attempts > 1);
 	REQUIRE(!info->finalized_paths.empty());
-	for (auto &path : info->finalized_paths) {
+	REQUIRE(info->initialized_paths.size() >= 2);
+	for (auto &path : info->initialized_paths) {
 		REQUIRE(!fs.FileExists(path));
 	}
 	REQUIRE(!fs.DirectoryExists(output));
@@ -296,7 +399,8 @@ TEST_CASE("COPY removes rotated outputs after a later finalization failure", "[a
 	result.reset();
 	REQUIRE(info->finalize_attempts > 1);
 	REQUIRE(!info->finalized_paths.empty());
-	for (auto &path : info->finalized_paths) {
+	REQUIRE(info->initialized_paths.size() >= 2);
+	for (auto &path : info->initialized_paths) {
 		REQUIRE(!fs.FileExists(path));
 	}
 	REQUIRE(!fs.DirectoryExists(output));

@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Checks projection evaluation counts after optimizer filter pushdown.",
+      "paths": [
+        "test/optimizer/pushdown/lateral_projection_evaluation.test"
+      ]
+    },
+    {
       "reason": "Requires the join order optimizer to enforce debug_force_no_cross_product.",
       "paths": [
         "test/optimizer/joins/required_cross_product_activation.test"
@@ -59,7 +65,8 @@
         "test/sql/types/geo/geometry_vertex_extract.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
         "test/optimizer/joins/fkpk_composite_key_ce.test",
-        "test/sql/cast/signed_cast_repro.test"
+        "test/sql/cast/signed_cast_repro.test",
+        "test/optimizer/remove_redundant_order_keys_side_effects.test"
       ]
     },
     {
@@ -134,6 +141,28 @@
       "reason": "FIXME: binding bug.",
       "paths": [
         "test/sql/join/natural/natural_join.test"
+      ]
+    },
+    {
+      "reason": "SQL export of these recursive plans requires CTE inlining to preserve evaluation.",
+      "paths": [
+        "test/sql/sql_export/explain_sql_roundtrip.test",
+        "test/sql/sql_export/correlated_metadata.test",
+        "test/sql/sql_export/cte_result_matrices.test",
+        "test/sql/sql_export/recursive_payload_results.test"
+      ]
+    },
+    {
+      "reason": "Checks pruning of a throwing unused secure-view output and safe caller filter pushdown.",
+      "paths": [
+        "test/sql/sql_export/secure_view_sql_export.test"
+      ]
+    },
+    {
+      "reason": "An early LIMIT over an unbounded recursion only terminates through the optimizer's limit pushdown",
+      "paths": [
+        "test/sql/sql_export/recursive_state.test",
+        "test/sql/sql_export/single_child_union.test"
       ]
     }
   ]

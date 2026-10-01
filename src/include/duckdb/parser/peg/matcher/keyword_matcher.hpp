@@ -16,11 +16,9 @@ public:
 	KeywordMatcher(string keyword_p, const KeywordInfo &info, const PEGKeywordHelper &keyword_helper)
 	    : KeywordMatcher(std::move(keyword_p), info) {
 		literal_table = keyword_helper.GetLiteralTable();
-		if (literal_table) {
-			literal_info = literal_table->Lookup(keyword);
-			if (!literal_info.LiteralId()) {
-				literal_table = nullptr;
-			}
+		literal_info = literal_table->Lookup(keyword);
+		if (!literal_info.LiteralId()) {
+			literal_table = nullptr;
 		}
 	}
 

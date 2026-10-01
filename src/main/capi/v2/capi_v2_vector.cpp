@@ -80,7 +80,16 @@ DUCKDB_V2_ERROR duckdb_v2_vector_reference(duckdb_v2_vector_handle vector, duckd
                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(vector);
 	DUCKDB_CHECK_ARG(source);
-	return WithErrorHandler(err, [&]() { Convert(vector)->Reference(*Convert(source)); });
+	return WithErrorHandler(err, [&]() {
+		auto *vec = Convert(vector);
+		auto *src = Convert(source);
+		// The engine reports a mismatch as an INTERNAL error, and only by type id.
+		if (vec->GetType() != src->GetType()) {
+			throw duckdb::InvalidInputException(
+			    "duckdb_v2_vector_reference: source type does not match the vector's logical type");
+		}
+		vec->Reference(*src);
+	});
 }
 
 // ---------------------------------------------------------------------------

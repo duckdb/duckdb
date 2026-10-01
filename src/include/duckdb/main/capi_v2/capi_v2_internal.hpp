@@ -74,6 +74,22 @@ inline auto Convert(duckdb_v2_str str) -> std::string_view {
 	}
 	return std::string_view(str.ptr, str.len);
 }
+inline auto Convert(const duckdb_v2_str *str) -> std::string_view {
+	if (!str) {
+		throw InvalidInputException("byte range cannot be null");
+	}
+	return Convert(*str);
+}
+
+// Validates identifier UTF-8 and returns its text; throws on invalid input. Defined in capi_v2_utf8.cpp.
+auto ConvertIdentifierName(duckdb_v2_identifier_t name) -> std::string_view;
+inline auto ConvertIdentifierName(const duckdb_v2_identifier_t *name) -> std::string_view {
+	if (!name) {
+		throw InvalidInputException("identifier cannot be null");
+	}
+	return ConvertIdentifierName(*name);
+}
+
 inline auto Convert(std::string_view str) -> duckdb_v2_str {
 	return duckdb_v2_str {str.data(), str.size()};
 }
@@ -88,6 +104,18 @@ inline auto Convert(duckdb_v2_hugeint_t value) -> hugeint_t {
 }
 inline auto Convert(duckdb_v2_uhugeint_t value) -> uhugeint_t {
 	return uhugeint_t(value.upper, value.lower);
+}
+inline auto Convert(const duckdb_v2_hugeint_t *value) -> hugeint_t {
+	if (!value) {
+		throw InvalidInputException("hugeint value cannot be null");
+	}
+	return Convert(*value);
+}
+inline auto Convert(const duckdb_v2_uhugeint_t *value) -> uhugeint_t {
+	if (!value) {
+		throw InvalidInputException("uhugeint value cannot be null");
+	}
+	return Convert(*value);
 }
 inline auto Convert(hugeint_t value) -> duckdb_v2_hugeint_t {
 	return duckdb_v2_hugeint_t {value.lower, value.upper};
@@ -105,9 +133,15 @@ inline auto Convert(duckdb_v2_interval_t value) -> interval_t {
 	out.micros = value.micros;
 	return out;
 }
+inline auto Convert(const duckdb_v2_interval_t *value) -> interval_t {
+	if (!value) {
+		throw InvalidInputException("interval value cannot be null");
+	}
+	return Convert(*value);
+}
 
-// The V2 enum surfaces core's StatementType under the same numeric values; every spec member is pinned. Core has no
-// count sentinel, so a member appended in core is caught by the test over the values past the last spec member.
+// The V2 enum surfaces core's StatementType under the same numeric values; every spec member is pinned, and the count
+// pins the highest one - appending a member in core fails to compile until the v2 spec mirrors it.
 #define DUCKDB_V2_ASSERT_STATEMENT_TYPE(member)                                                                        \
 	static_assert(static_cast<uint8_t>(StatementType::member##_STATEMENT) == DUCKDB_V2_STATEMENT_TYPE_##member,        \
 	              "StatementType::" #member "_STATEMENT must mirror DUCKDB_V2_STATEMENT_TYPE_" #member)
@@ -145,7 +179,10 @@ DUCKDB_V2_ASSERT_STATEMENT_TYPE(MERGE_INTO);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(CONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(DISCONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXTERNAL_RESOURCE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(PASSTHROUGH);
 #undef DUCKDB_V2_ASSERT_STATEMENT_TYPE
+static_assert(static_cast<uint8_t>(StatementType::ENUM_SIZE) == DUCKDB_V2_STATEMENT_TYPE_PASSTHROUGH + 1,
+              "a StatementType was added: give it a DUCKDB_V2_STATEMENT_TYPE id in the v2 spec and pin it above");
 inline auto Convert(StatementType type) -> DUCKDB_V2_STATEMENT_TYPE {
 	return static_cast<DUCKDB_V2_STATEMENT_TYPE>(type);
 }
@@ -157,7 +194,7 @@ inline auto Convert(StatementType type) -> DUCKDB_V2_STATEMENT_TYPE {
 class CV2Environment {
 public:
 	unique_ptr<DBInstanceCache> cache;
-	std::atomic<idx_t> database_count {0};
+	std::atomic<idx_t> instance_count {0};
 };
 
 inline auto Convert(CV2Environment *env) -> duckdb_v2_environment_handle {
@@ -169,17 +206,17 @@ inline auto Convert(duckdb_v2_environment_handle env) -> CV2Environment * {
 }
 
 class CV2Option;
-class CV2Database;
+class CV2Instance;
 
 //! The SQL ATTACH `(KEY value)` options of one attach, as the text values a quoted literal produces. Bound to the
-//! database handle it was created from, which is what future per-instance resources (an allocator, say) would be
+//! instance handle it was created from, which is what future per-instance resources (an allocator, say) would be
 //! taken from.
 class CV2AttachOptions {
 public:
-	explicit CV2AttachOptions(CV2Database &db) : db(db) {
+	explicit CV2AttachOptions(CV2Instance &instance) : instance(instance) {
 	}
 
-	CV2Database &db;
+	CV2Instance &instance;
 	unordered_map<string, Value> options;
 };
 
@@ -191,12 +228,12 @@ inline auto Convert(CV2AttachOptions *options) -> duckdb_v2_attach_options_handl
 	return reinterpret_cast<duckdb_v2_attach_options_handle>(options);
 }
 
-//! A database handle: a DuckDB instance plus the configuration it starts with. The instance starts on first use
-//! (database_attach or connection_create); until then options are staged in the startup config. Every entry point
+//! An instance handle: a DuckDB instance plus the configuration it starts with. The instance starts on first use
+//! (instance_attach or connection_create); until then options are staged in the startup config. Every entry point
 //! holds `lock`, which also serializes use of the internal connection.
-class CV2Database {
+class CV2Instance {
 public:
-	explicit CV2Database(CV2Environment &env);
+	explicit CV2Instance(CV2Environment &env);
 
 	bool IsStarted() const {
 		return database != nullptr;
@@ -231,12 +268,12 @@ private:
 	unique_ptr<Connection> internal_connection;
 };
 
-inline auto Convert(duckdb_v2_database_handle db) -> CV2Database * {
-	return reinterpret_cast<CV2Database *>(db);
+inline auto Convert(duckdb_v2_instance_handle instance) -> CV2Instance * {
+	return reinterpret_cast<CV2Instance *>(instance);
 }
 
-inline auto Convert(CV2Database *db) -> duckdb_v2_database_handle {
-	return reinterpret_cast<duckdb_v2_database_handle>(db);
+inline auto Convert(CV2Instance *instance) -> duckdb_v2_instance_handle {
+	return reinterpret_cast<duckdb_v2_instance_handle>(instance);
 }
 
 using CV2Connection = duckdb::Connection;
@@ -370,6 +407,15 @@ inline auto Convert(CV2ColumnDescription *column) -> duckdb_v2_column_descriptio
 	return reinterpret_cast<duckdb_v2_column_description_handle>(column);
 }
 
+using CV2ColumnDataCollection = duckdb::ColumnDataCollection;
+
+inline auto Convert(duckdb_v2_column_data_collection_handle cdc) -> CV2ColumnDataCollection * {
+	return reinterpret_cast<CV2ColumnDataCollection *>(cdc);
+}
+inline auto Convert(CV2ColumnDataCollection *cdc) -> duckdb_v2_column_data_collection_handle {
+	return reinterpret_cast<duckdb_v2_column_data_collection_handle>(cdc);
+}
+
 using CV2Value = duckdb::Value;
 
 inline auto Convert(duckdb_v2_value_handle val) -> CV2Value * {
@@ -440,14 +486,15 @@ auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, c
 auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &raw_message) noexcept -> void;
 
 // The null test behind DUCKDB_CHECK_ARG: a pointer/handle is invalid when null; a string/identifier view is invalid
-// when its pointer is null while it carries a non-zero length.
+// when it is null, or when its pointer is null while it carries a non-zero length.
 template <class T>
 bool IsNullArgument(const T &arg) {
-	if constexpr (std::is_pointer_v<T>) {
-		return arg == nullptr;
-	} else {
-		return !arg.ptr && arg.len > 0;
-	}
+	static_assert(std::is_pointer_v<T>, "DUCKDB_CHECK_ARG takes a pointer or handle");
+	return arg == nullptr;
+}
+
+inline bool IsNullArgument(const duckdb_v2_str *arg) {
+	return !arg || (!arg->ptr && arg->len > 0);
 }
 
 // Check if an argument is null and return DUCKDB_V2_ERROR_INPUT_INVALID with a message if it is.
@@ -578,7 +625,7 @@ inline void InvokeTextSink(duckdb_v2_text_sink_fn sink, duckdb_v2_str text, void
 	// The slot is always live: sinks populate it, they never allocate or destroy it.
 	CV2ErrorInfo info;
 	auto handle = Convert(&info);
-	sink(text, user_data, &handle);
+	sink(&text, user_data, &handle);
 	if (info.HasError()) {
 		info.ThrowAsException();
 	}
@@ -706,7 +753,7 @@ inline void BuildParameterMap(const duckdb_v2_identifier_t *parameter_names,
 			throw InvalidInputException("null parameter value passed to %s", function_name);
 		}
 		// Named iff the name view is non-empty; otherwise positional
-		auto str = Convert(name);
+		auto str = ConvertIdentifierName(name);
 		Identifier key = (name.ptr && name.len > 0) ? Identifier(str) : Identifier(std::to_string(i + 1));
 		out[key] = BoundParameterData(*Convert(parameter_values[i]));
 	}

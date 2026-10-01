@@ -1181,11 +1181,11 @@ TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][d
 
 	{
 		duckdb_v2_environment_handle env = nullptr;
-		duckdb_v2_database_handle db = nullptr;
+		duckdb_v2_instance_handle instance = nullptr;
 		duckdb_v2_connection_handle conn = nullptr;
 		duckdb_v2_environment_create(&env, nullptr);
-		OpenDatabase(env, duckdb_v2_str {nullptr, 0}, &db, nullptr);
-		duckdb_v2_connection_create(db, &conn, nullptr);
+		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
+		duckdb_v2_connection_create(instance, &conn, nullptr);
 
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(conn, "SELECT * FROM (VALUES (1), (2), (3)) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1194,7 +1194,7 @@ TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][d
 		// Tear everything down except the chunk itself.
 		duckdb_v2_result_destroy(&r);
 		duckdb_v2_connection_destroy(&conn);
-		duckdb_v2_database_destroy(&db);
+		duckdb_v2_instance_destroy(&instance);
 		duckdb_v2_environment_destroy(&env);
 	}
 

@@ -127,6 +127,16 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Verify Progress
+//===----------------------------------------------------------------------===//
+void DebugVerifyProgressSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_progress setting cannot be NULL");
+	}
+	EnumUtil::FromString<DebugProgressVerification>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Verify Statement
 //===----------------------------------------------------------------------===//
 void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -207,6 +217,16 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 		throw InvalidInputException("explain_output setting cannot be NULL");
 	}
 	EnumUtil::FromString<ExplainOutputType>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Fsync Mode
+//===----------------------------------------------------------------------===//
+void FsyncModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("fsync_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<FileSyncMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

@@ -176,6 +176,8 @@ static void setTextMode(FILE *file, int isOutput) {
 
 /* True if the timer is enabled */
 static bool enableTimer = false;
+/* Number of decimals printed for the real time */
+static int timerDigits = 3;
 
 #if !defined(_WIN32) && !defined(WIN32) && !defined(__minux)
 #include <sys/time.h>
@@ -191,8 +193,8 @@ struct rusage {
 #endif
 
 /* Saved resource information for the beginning of an operation */
-static struct rusage sBegin; /* CPU time at start */
-static int64_t iBegin;       /* Monotonic time at start */
+static struct rusage sBegin;     /* CPU time at start */
+static duckdb::TimePoint tBegin; /* Monotonic time at start */
 
 /*
 ** Begin timing an operation
@@ -200,7 +202,7 @@ static int64_t iBegin;       /* Monotonic time at start */
 static void beginTimer(void) {
 	if (enableTimer) {
 		getrusage(RUSAGE_SELF, &sBegin);
-		iBegin = duckdb::TimePoint::GetTickMs();
+		tBegin = duckdb::TimePoint::Tick();
 	}
 }
 
@@ -214,10 +216,9 @@ static double timeDiff(struct timeval *pStart, struct timeval *pEnd) {
 */
 static void endTimer(void) {
 	if (enableTimer) {
-		int64_t iEnd = duckdb::TimePoint::GetTickMs();
 		struct rusage sEnd;
 		getrusage(RUSAGE_SELF, &sEnd);
-		printf("Run Time (s): real %.3f user %f sys %f\n", (iEnd - iBegin) * 0.001,
+		printf("Run Time (s): real %.*f user %f sys %f\n", timerDigits, tBegin.ElapsedSeconds(),
 		       timeDiff(&sBegin.ru_utime, &sEnd.ru_utime), timeDiff(&sBegin.ru_stime, &sEnd.ru_stime));
 	}
 }
@@ -232,7 +233,7 @@ static void endTimer(void) {
 static HANDLE hProcess;
 static FILETIME ftKernelBegin;
 static FILETIME ftUserBegin;
-static int64_t ftMonotonicBegin;
+static duckdb::TimePoint tBegin;
 typedef BOOL(WINAPI *GETPROCTIMES)(HANDLE, LPFILETIME, LPFILETIME, LPFILETIME, LPFILETIME);
 static GETPROCTIMES getProcessTimesAddr = NULL;
 
@@ -272,7 +273,7 @@ static void beginTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit;
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelBegin, &ftUserBegin);
-		ftMonotonicBegin = duckdb::TimePoint::GetTickMs();
+		tBegin = duckdb::TimePoint::Tick();
 	}
 }
 
@@ -289,9 +290,8 @@ static double timeDiff(FILETIME *pStart, FILETIME *pEnd) {
 static void endTimer(void) {
 	if (enableTimer && getProcessTimesAddr) {
 		FILETIME ftCreation, ftExit, ftKernelEnd, ftUserEnd;
-		int64_t ftMonotonicEnd = duckdb::TimePoint::GetTickMs();
 		getProcessTimesAddr(hProcess, &ftCreation, &ftExit, &ftKernelEnd, &ftUserEnd);
-		printf("Run Time (s): real %.3f user %f sys %f\n", (ftMonotonicEnd - ftMonotonicBegin) * 0.001,
+		printf("Run Time (s): real %.*f user %f sys %f\n", timerDigits, tBegin.ElapsedSeconds(),
 		       timeDiff(&ftUserBegin, &ftUserEnd), timeDiff(&ftKernelBegin, &ftKernelEnd));
 	}
 }
@@ -954,11 +954,11 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto &con = *conn;
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
-	unique_ptr<duckdb::QueryResultStream> stream;
+	unique_ptr<duckdb::QueryResultStream<>> stream;
 	const bool render_materialized = renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
-		result = con.Query(std::move(statement), duckdb::QueryResultMemoryType::BUFFER_MANAGED);
+		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
 	} else {
 		result = con.Submit(std::move(statement));
 	}
@@ -999,7 +999,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		return SuccessState::SUCCESS;
 	}
 	if (render_streaming) {
-		stream = duckdb::make_uniq<duckdb::QueryResultStream>(std::move(result));
+		stream = duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result));
 	} else {
 		last_result = std::move(result);
 	}
@@ -2644,6 +2644,17 @@ SuccessState ShellState::ShowDatabases() {
 }
 
 MetadataResult ShellState::ToggleTimer(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2 || args.size() > 3) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 3) {
+		auto digits = ShellState::StringToInt(args[2]);
+		if (digits < 0 || digits > 9) {
+			state.PrintF(PrintOutput::STDERR, ".timer DIGITS must be between 0 and 9\n");
+			return MetadataResult::FAIL;
+		}
+		timerDigits = static_cast<int>(digits);
+	}
 	enableTimer = state.StringToBool(args[1]);
 	if (enableTimer && !HAS_TIMER) {
 		state.PrintF(PrintOutput::STDERR, "Error: timer not available on this system.\n");
@@ -3653,43 +3664,5 @@ int RunShell(int argc, const char **argv) {
 	data.ResetOutput();
 	data.doXdgOpen = 0;
 	data.ClearTempFile();
-	return rc;
-}
-
-#if !((defined(_WIN32) || defined(WIN32)) && defined(_MSC_VER))
-int main(int argc, const char **argv) {
-#else
-int wmain(int argc, wchar_t **wargv) {
-	vector<string> utf8_args;
-	utf8_args.resize(argc);
-	vector<const char *> utf8_args_ptrs;
-	utf8_args_ptrs.resize(argc);
-	const char **argv = utf8_args_ptrs.data();
-	for (int i = 0; i < argc; i++) {
-		utf8_args[i] = ShellState::Win32UnicodeToUtf8(wargv[i]);
-		utf8_args_ptrs[i] = utf8_args[i].c_str();
-	}
-#endif
-
-	auto &shell_state = ShellState::GetReference();
-	int rc = 0;
-	try {
-		rc = RunShell(argc, argv);
-	} catch (std::exception &ex) {
-		rc = 1;
-		ErrorData error(ex);
-		fprintf(stderr, "Exited due to error: %s", error.Message().c_str());
-	}
-	try {
-		// destroy shell state prior to program clean-up
-		if (shell_state) {
-			delete shell_state;
-		}
-		shell_state = nullptr;
-	} catch (std::exception &ex) {
-		rc = 1;
-		ErrorData error(ex);
-		fprintf(stderr, "Error during clean-up due to error: %s", error.Message().c_str());
-	}
 	return rc;
 }

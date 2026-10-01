@@ -50,7 +50,7 @@ public:
 	vector<MetaBlockPointer> Checkpoint(RowGroupWriter &writer);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
-	bool HasUnserializedChanges();
+	bool HasUnserializedChanges(VisibilityBound bound);
 	bool HasDeletes();
 	bool HasUncommittedChanges();
 	vector<MetaBlockPointer> GetStoragePointers();
@@ -59,7 +59,9 @@ private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
 	vector<unique_ptr<ChunkVectorInfo>> vector_info;
-	optional_idx uncheckpointed_delete_commit;
+	//! The newest and the oldest delete commit that has not been written by a checkpoint yet
+	optional_idx newest_uncheckpointed_delete_commit;
+	optional_idx oldest_uncheckpointed_delete_commit;
 	vector<MetaBlockPointer> storage_pointers;
 	//! Whether a compression pass may achieve anything: set when version ids are modified, cleared when a
 	//! pass finds no ids that could still compress. For deserialized version info this is derived from the

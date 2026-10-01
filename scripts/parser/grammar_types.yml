@@ -225,6 +225,7 @@ AlterTableInfo:
   by_value: true
   rules:
     - AlterTableOptions
+    - AlterSchemaOptions
     - AddColumn
     - DropConstraint
     - DropColumn
@@ -362,6 +363,7 @@ ResultModifier:
     - OffsetLimitClause
     - LimitOffsetClause
     - OffsetFetchClause
+    - FetchOffsetClause
     - FetchOnlyClause
 
 AtClause:
@@ -400,7 +402,7 @@ Expression:
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
-    - BetweenInLikeOpExpression
+    - BetweenLikeOpExpression
     - InClause
     - InExpression
     - InContainsExpression
@@ -410,7 +412,10 @@ Expression:
     - LikeClause
     - EscapeClause
     - OtherOperatorExpression
+    - InfixOtherOperatorExpression
+    - CustomPrefixExpression
     - BitwiseExpression
+    - TildeExpression
     - AdditiveExpression
     - MultiplicativeExpression
     - ExponentiationExpression
@@ -715,6 +720,8 @@ StringList:
     - ColumnList
     - NameList
     - DottedIdentifier
+    - CommentTarget
+    - CommentStringLiteralIdentifier
     - ColumnAliases
     - TriggerColumnList
     - RepositoryPublicKey
@@ -827,6 +834,8 @@ LimitPercentResult:
     - LimitLiteralPercent
     - LimitExpression
     - FetchClause
+    - FetchClauseWithoutValue
+    - FetchClauseWithValue
     - FetchValue
     - OffsetClause
     - OffsetValue
@@ -1064,11 +1073,7 @@ String:
     - QualifiedOperator
     - QualifiedOperatorContents
     - ColIdDot
-    - AnyOp
-    - StringOperator
-    - JsonOperator
-    - InetOperator
-    - ListOperator
+    - AnyOperatorLiteral
     - BitOperator
     - Term
     - Factor
@@ -1564,6 +1569,7 @@ RelOptionMap:
   by_value: true
   rules:
     - WithList
+    - WithOptionList
     - RelOptionOrOids
     - RelOptionList
     - Oids
@@ -1631,7 +1637,28 @@ overrides:
   ComparisonExpressionTail:
     type: "ComparisonExpressionTail"
     by_value: true
-  BetweenInLikeOp:
+  IsExpressionTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsExpressionContinuation:
+    type: "vector<IsExpressionTail>"
+    by_value: true
+  IsTestTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsDistinctTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsComparisonTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsOtherOperatorTail:
+    type: "IsExpressionTail"
+    by_value: true
+  BetweenLikeOp:
+    type: "BetweenInLikeOperator"
+    by_value: true
+  InPredicate:
     type: "BetweenInLikeOperator"
     by_value: true
   OtherOperator:
@@ -1696,6 +1723,7 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
     - StringLiteralIdentifier
@@ -1802,30 +1830,48 @@ matcher_rule_overrides:
   OperatorLiteral:
     allow_type_overlap: true
     matcher: operator
+  AnyOperatorLiteral:
+    allow_type_overlap: true
+    matcher: all_operators
 
-packrat_memoized_rules:
+# collapsible_rules: see ParsedGrammar::SetTransformProcess. Every rule below has a transformer that returns its
+# operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that stops being
+# true. The flag is attached to the default transform, so an extension that replaces the transform of
+# one of these rules does not inherit it.
+collapsible_rules:
   - Expression
+  - ColumnDefaultExpr
   - LambdaArrowExpression
   - LogicalOrExpression
+  - ColDefOrExpr
   - LogicalAndExpression
+  - ColDefAndExpr
   - LogicalNotExpression
   - IsExpression
+  - IsDistinctFromExpression
   - ComparisonExpression
+  - BetweenInLikeExpression
+  - OtherOperatorExpression
+  - InfixOtherOperatorExpression
   - BitwiseExpression
   - AdditiveExpression
   - MultiplicativeExpression
   - ExponentiationExpression
-  - PrefixExpression
   - CollateExpression
   - AtTimeZoneExpression
-  - SingleExpression
+  - PrefixExpression
   - BaseExpression
-  - ParensExpression
-  - ParenthesisExpression
+  - SelectSetOpChain
+  - IntersectChain
+  - TableRef
+
+packrat_memoized_rules:
+  - Expression
   - Identifier
   - ColId
-  - ColumnReference
-  - FunctionExpression
+  - CatalogQualification
+  - SchemaQualification
+  - ReservedSchemaQualification
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted

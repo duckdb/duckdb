@@ -77,6 +77,19 @@ private:
 	BoundAggregateFunction &bound_function;
 };
 
+class FunctionExpression;
+
+struct AggregateFunctionUnbindInput {
+	AggregateFunctionUnbindInput(const BoundAggregateExpression &expression_p,
+	                             vector<unique_ptr<ParsedExpression>> children_p);
+	~AggregateFunctionUnbindInput();
+
+	const BoundAggregateExpression &expression;
+	vector<unique_ptr<ParsedExpression>> children;
+};
+
+typedef unique_ptr<FunctionExpression> (*aggregate_function_unbind_t)(AggregateFunctionUnbindInput &input);
+
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)(AggregateStateInput &input);
 //! The type used for initializing hashed aggregate function states (batched: initializes `count` states)
@@ -194,6 +207,9 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	bind_aggregate_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
+	bool HasUnbindCallback() const { return unbind != nullptr; }
+	aggregate_function_unbind_t GetUnbindCallback() const { return unbind; }
+	void SetUnbindCallback(aggregate_function_unbind_t callback) { unbind = callback; }
 
 	bool HasStateInitCallback() const { return initialize != nullptr; }
 	aggregate_initialize_t GetStateInitCallback() const { return initialize; }
@@ -296,6 +312,7 @@ public:
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind = nullptr;
+	aggregate_function_unbind_t unbind = nullptr;
 
 	//! The destructor method (may be null)
 	aggregate_destructor_t destructor = nullptr;
@@ -393,6 +410,9 @@ public: // Callbacks
 	auto HasBindCallback() const -> bool { return callbacks.bind != nullptr; }
 	auto GetBindCallback() const -> bind_aggregate_function_t { return callbacks.bind; }
 	auto SetBindCallback(bind_aggregate_function_t callback) -> void { callbacks.bind = callback; }
+	auto HasUnbindCallback() const -> bool { return callbacks.unbind != nullptr; }
+	auto GetUnbindCallback() const -> aggregate_function_unbind_t { return callbacks.unbind; }
+	auto SetUnbindCallback(aggregate_function_unbind_t callback) -> void { callbacks.unbind = callback; }
 
 	auto HasStateInitCallback() const -> bool { return callbacks.initialize != nullptr; }
 	auto GetStateInitCallback() const -> aggregate_initialize_t { return callbacks.initialize; }
@@ -856,13 +876,32 @@ public:
 	const shared_ptr<const AggregateFunction> &GetDefinition() const {
 		return definition;
 	}
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
 	//! Restore the definition after the bound function has been replaced wholesale, together with the
 	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
 		definition = std::move(definition_p);
 		if (definition) {
-			schema_name = definition->GetSchemaName();
-			catalog_name = definition->GetCatalogName();
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
 		}
 	}
 	const vector<LogicalType> &GetLogicalArguments() const {

@@ -136,6 +136,24 @@ TEST_CASE("Stable C++API: GetQueryProgress reports idle values when no query is 
 	REQUIRE(progress.rows_processed == 0);
 	REQUIRE(progress.total_rows_to_process == 0);
 }
+
+TEST_CASE("Stable C++API: GetQueryProgress reports unavailable progress", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	conn.SetOption("enable_progress_bar", "true", SettingScope::LOCAL);
+
+	auto result = conn.Execute("SELECT sum(sin(i)) FROM unnest(range(100000)) AS t(i)");
+	REQUIRE(result.FetchChunk());
+
+	auto progress = conn.GetQueryProgress();
+	REQUIRE(progress.percentage == 0.0);
+	REQUIRE(progress.rows_processed == 0);
+	REQUIRE(progress.total_rows_to_process == 0);
+}
+
 TEST_CASE("Stable C++API: ParseSQL iterates statements into Execute", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
@@ -356,6 +374,20 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 		REQUIRE(summary[0].first == 3);   // three rows inserted
 		REQUIRE(summary[0].second == 30); // last value
 	}
+}
+TEST_CASE("Stable C++API: Connection Execute binds named parameters", "[cpp_api][prepared_statement]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	auto statement = conn.ParseSQL("SELECT $left::BIGINT - $right::BIGINT").Next();
+
+	std::vector<NamedParam> params;
+	params.push_back({"right", Value::Create(conn, int64_t(4))});
+	params.push_back({"left", Value::Create(conn, int64_t(10))});
+	auto result = conn.Execute(statement, params);
+	REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 6);
 }
 TEST_CASE("Stable C++API: RenderBox renders glyphs, the type row, and NULL cells", "[cpp_api]") {
 	using namespace duckdb::cxx;

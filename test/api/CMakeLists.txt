@@ -11,10 +11,12 @@ add_subdirectory(cpp)
 
 set(TEST_API_OBJECTS
     test_api.cpp
+    test_multi_file_column_mapper.cpp
     test_process_util.cpp
     test_remove_directory_extended.cpp
     test_temporary_file_owner.cpp
     test_bind_statement.cpp
+    test_function_signature_variadic.cpp
     test_scalar_function_decimal_return.cpp
     test_aggregate_state_bind_data.cpp
     test_config.cpp
@@ -22,9 +24,12 @@ set(TEST_API_OBJECTS
     test_copy_output_lifecycle.cpp
     test_custom_allocator.cpp
     test_extension_repositories.cpp
+    test_external_extension_provider.cpp
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
     test_storage_extension_alias.cpp
+    test_static_database_callback.cpp
+    test_result_unit.cpp
     test_results.cpp
     test_reset.cpp
     test_get_table_names.cpp
@@ -35,7 +40,10 @@ set(TEST_API_OBJECTS
     test_extension_schema_api.cpp
     test_pending_query.cpp
     test_query_result.cpp
+    test_query_result_format.cpp
+    test_query_result_format_buffer.cpp
     test_query_result_stream.cpp
+    test_retained_result_collection.cpp
     test_plan_serialization.cpp
     test_relation_api.cpp
     test_stream_result_buffer.cpp
@@ -50,6 +58,8 @@ set(TEST_API_OBJECTS
     test_parse_statement_iterator.cpp
     test_dialect_extension.cpp
     test_grammar_extension.cpp
+    test_passthrough_dialect.cpp
+    test_passthrough_token_matcher.cpp
     test_progress_bar.cpp
     test_uuid.cpp
     test_insertion_order_preserving_map.cpp
@@ -60,7 +70,8 @@ set(TEST_API_OBJECTS
     test_object_cache.cpp
     test_partial_executor.cpp
     test_buffer_pool_eviction.cpp
-    test_block_allocator_tls.cpp)
+    test_block_allocator_tls.cpp
+    test_data_table_scan_without_row_groups.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

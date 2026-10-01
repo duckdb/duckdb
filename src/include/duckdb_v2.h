@@ -101,9 +101,9 @@ extern "C" {
 #endif
 
 //! Set to 1 to compile the unstable surface, 0 to omit it. Defaults from the
-//! older DUCKDB_API_ALLOW_UNSTABLE macro when that is what the consumer defines.
+//! older DUCKDB_EXTENSION_API_VERSION_UNSTABLE macro when that is what the consumer defines.
 #if !defined(DUCKDB_V2_API_ALLOW_UNSTABLE)
-#ifdef DUCKDB_API_ALLOW_UNSTABLE
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 #define DUCKDB_V2_API_ALLOW_UNSTABLE 1
 #else
 #define DUCKDB_V2_API_ALLOW_UNSTABLE 0
@@ -185,6 +185,31 @@ typedef struct _duckdb_extension_info *duckdb_v2_extension_handle;
 
 /* --- Enums for common --- */
 
+/*!
+ * The order guarantee a producer of rows makes about its output, which decides whether the rows it produces must be
+ * kept in order downstream.
+ */
+typedef enum DUCKDB_V2_ORDER_PRESERVATION {
+	/*!
+	 * The rows have no meaningful order. The engine may reorder them freely, and consumers that otherwise keep
+	 * insertion order, such as query results, INSERT and COPY, run in parallel without ordering them.
+	 */
+	DUCKDB_V2_ORDER_PRESERVATION_NO_ORDER = 0,
+
+	/*!
+	 * The rows are produced in insertion order, which the engine keeps unless the `preserve_insertion_order` setting is
+	 * disabled.
+	 */
+	DUCKDB_V2_ORDER_PRESERVATION_INSERTION_ORDER = 1,
+
+	/*!
+	 * The rows are produced in an order that must be kept, as if sorted by an `ORDER BY`, even when the
+	 * `preserve_insertion_order` setting is disabled.
+	 */
+	DUCKDB_V2_ORDER_PRESERVATION_FIXED_ORDER = 2,
+	DUCKDB_V2_ORDER_PRESERVATION_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_ORDER_PRESERVATION;
+
 /* --- Struct forward declarations for common --- */
 
 typedef struct duckdb_v2_str duckdb_v2_str;
@@ -196,9 +221,9 @@ typedef struct duckdb_v2_opaque duckdb_v2_opaque;
 /* --- Types for common --- */
 
 /*!
- * An opaque, owned handle to the V2 environment: the required root through which database handles are created. All
- * databases under one environment share an instance cache, so file-level conflicts — the same database file opened
- * twice — are detected across them. Destroying the environment refuses with ERROR_RESOURCE_IN_USE while any database
+ * An opaque, owned handle to the V2 environment: the required root through which instance handles are created. All
+ * instances under one environment share an instance cache, so file-level conflicts — the same database file opened
+ * twice — are detected across them. Destroying the environment refuses with ERROR_RESOURCE_IN_USE while any instance
  * created through it is still alive; destroy those first.
  */
 typedef struct _duckdb_v2_environment {
@@ -207,13 +232,13 @@ typedef struct _duckdb_v2_environment {
 
 /*!
  * An opaque, owned handle to a DuckDB database instance: a buffer pool, a scheduler, a set of GLOBAL settings, and the
- * databases attached to it. Created empty by `duckdb_v2_database_create()`; databases are attached with
- * `duckdb_v2_database_attach()`, made the default with `duckdb_v2_database_set_default()`, and detached with
- * `duckdb_v2_database_detach()`. Always destroy via `duckdb_v2_database_destroy()`.
+ * databases attached to it. Created empty by `duckdb_v2_instance_create()`; databases are attached with
+ * `duckdb_v2_instance_attach()`, made the default with `duckdb_v2_instance_set_default()`, and detached with
+ * `duckdb_v2_instance_detach()`. Always destroy via `duckdb_v2_instance_destroy()`.
  */
-typedef struct _duckdb_v2_database {
+typedef struct _duckdb_v2_instance {
 	void *internal_ptr;
-} * duckdb_v2_database_handle;
+} * duckdb_v2_instance_handle;
 
 /*!
  * An opaque, owned handle to a DuckDB connection: a session on a database instance with its own LOCAL settings and
@@ -224,8 +249,8 @@ typedef struct _duckdb_v2_connection {
 } * duckdb_v2_connection_handle;
 
 /*!
- * An opaque, owned, read-only descriptor of a single config option as seen from a database, connection, or context: its
- * canonical name, current setting, default setting, description, target scope, and aliases. Returned by the
+ * An opaque, owned, read-only descriptor of a single config option as seen from an instance, connection, or context:
+ * its canonical name, current setting, default setting, description, target scope, and aliases. Returned by the
  * *_get_option and *_get_option_by_index functions; the caller always destroys it via `duckdb_v2_option_destroy()`.
  * Options are written with the *_set_option functions, which take a name and a setting directly.
  */
@@ -308,7 +333,7 @@ typedef struct _duckdb_v2_arena {
  * A borrowed handle to a client context: a connection seen from inside DuckDB. Handed out within DuckDB-managed scopes
  * — function bind / init / exec callbacks, replacement scans, and the extension entrypoint — and valid only for the
  * duration of that scope; the caller never destroys it. A context is the scope for reading (settings, the file system)
- * and for constructing values and types, not for registration: catalog entries and database-level hooks are installed
+ * and for constructing values and types, not for registration: catalog entries and instance-level hooks are installed
  * through an extension or a connection. A transaction is always active while a context is handed out, which is what the
  * context-scoped constructors assume.
  */
@@ -342,6 +367,8 @@ typedef duckdb_v2_bytes duckdb_v2_bignum_t;
  * case-insensitively. Compare two identifiers case-insensitively rather than byte for byte, and render one into SQL
  * through the identifier-quoting entry point rather than embedding it raw. The catalog preserves casing; some
  * registries (config settings) canonicalize to lowercase.
+ *
+ * An identifier passed into the API must be valid UTF-8; otherwise the call fails with `ERROR_INPUT_INVALID`.
  */
 typedef duckdb_v2_str duckdb_v2_identifier_t;
 
@@ -357,8 +384,8 @@ typedef duckdb_v2_str duckdb_v2_identifier_t;
  *
  * Invoked exactly once per producing call, with the complete text in a single view.
  *
- * The view is borrowed for the duration of the call only. Copy what you need before returning, and do not retain
- * `text.ptr`. The bytes are NOT guaranteed to be null-terminated.
+ * The view is borrowed for the duration of the call only. Copy what you need before returning, and do not retain `text`
+ * or `text->ptr`. The bytes are NOT guaranteed to be null-terminated.
  *
  * `err` is a live error slot, never NULL. Populate it with `duckdb_v2_error_info_set_code()` /
  * `duckdb_v2_error_info_set_text()` to signal failure to DuckDB. Do not destroy it yourself.
@@ -366,7 +393,7 @@ typedef duckdb_v2_str duckdb_v2_identifier_t;
  * The sink runs inside DuckDB's call frame: it must not throw or unwind across the boundary, and it must not re-enter
  * the API on the handle being operated on.
  */
-typedef void (*duckdb_v2_text_sink_fn)(duckdb_v2_str text, void *user_data, duckdb_v2_error_info_handle *err);
+typedef void (*duckdb_v2_text_sink_fn)(const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *err);
 
 /*!
  * Compares two caller-defined resources for equality.
@@ -401,6 +428,9 @@ typedef void (*duckdb_v2_opaque_destroy_fn)(void *data);
  * "valid until the owning handle is destroyed"). `{NULL, 0}` is the canonical empty view, and `ptr` must not be
  * dereferenced when `len` is 0. Not to be confused with `bytes`, the transparent 16-byte *storage* format for a
  * variable-size value in a vector.
+ *
+ * Functions take an input view as a `const str *`, which must not be NULL; a NULL pointer, or a view whose `ptr` is
+ * NULL while `len` is nonzero, fails with ERROR_INPUT_INVALID. Point at a `{NULL, 0}` view to pass an empty string.
  *
  * Text inputs, such as VARCHAR values and names, must contain valid UTF-8. The caller is responsible for ensuring this;
  * API functions do not necessarily validate the input. Binary inputs, such as BLOB values, do not require valid UTF-8.
@@ -1453,7 +1483,7 @@ typedef enum DUCKDB_V2_OPTION_TARGET_SCOPE {
 	//! Target scope is not known.
 	DUCKDB_V2_OPTION_TARGET_SCOPE_UNKNOWN = 0,
 
-	//! May only be written at GLOBAL (database) scope.
+	//! May only be written at GLOBAL (instance) scope.
 	DUCKDB_V2_OPTION_TARGET_SCOPE_GLOBAL_ONLY = 1,
 
 	//! May only be written at LOCAL (session) scope.
@@ -1469,14 +1499,14 @@ typedef enum DUCKDB_V2_OPTION_TARGET_SCOPE {
 
 /*!
  * Destination scope for a connection-side option write, as taken by connection_option_set. AUTOMATIC defers to the
- * option's target scope, like SQL `SET name = value`. GLOBAL writes through to the database, visible to all
+ * option's target scope, like SQL `SET name = value`. GLOBAL writes through to the instance, visible to all
  * connections, like `SET GLOBAL`. LOCAL writes to the connection's session only, like `SET LOCAL` / `SET SESSION`.
  */
 typedef enum DUCKDB_V2_SETTING_SCOPE {
 	//! Resolve from the option's target scope.
 	DUCKDB_V2_SETTING_SCOPE_AUTOMATIC = 0,
 
-	//! Write through to the database (visible to all connections).
+	//! Write through to the instance (visible to all connections).
 	DUCKDB_V2_SETTING_SCOPE_GLOBAL = 1,
 
 	//! Write to the connection's session only.
@@ -1529,7 +1559,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_name(duckdb_v2_option_handle o
 /*!
  * Borrows the option's current setting (its string-encoded value).
  *
- * The effective setting at the scope of the database, connection, or context the descriptor was read from.
+ * The effective setting at the scope of the instance, connection, or context the descriptor was read from.
  *
  * history:
  * - stable: v2.0.0
@@ -1638,7 +1668,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
  * The context is a connection seen from inside DuckDB, so this reads the same cascade
  * `duckdb_v2_connection_get_option_by_name()` does: the LOCAL override if the connection set one, otherwise the GLOBAL
  * value, otherwise the static default. Aliases resolve transparently, and an unknown name returns ERROR_INPUT_INVALID.
- * The caller destroys the returned option. A context is a read scope: options are written through a database or
+ * The caller destroys the returned option. A context is a read scope: options are written through an instance or
  * connection.
  *
  * history:
@@ -1652,14 +1682,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_name(duckdb_v2_context_handle ctx,
-                                                                  duckdb_v2_identifier_t name,
+                                                                  const duckdb_v2_identifier_t *name,
                                                                   duckdb_v2_option_handle *out_option,
                                                                   duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the number of config options visible to this context.
  *
- * The same count `duckdb_v2_database_get_option_count()` reports for the underlying database: core plus extension
+ * The same count `duckdb_v2_instance_get_option_count()` reports for the underlying instance: core plus extension
  * options, aliases excluded.
  *
  * history:
@@ -1678,7 +1708,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_count(duckdb_v2_contex
  * Reads the config option at the given index visible to this context.
  *
  * Index space: [0, core_count) addresses core options, [core_count, total) the extension options visible from this
- * context's database. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the returned option.
+ * context's instance. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -1779,7 +1809,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_extension(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_set_name(duckdb_v2_custom_type_handle type,
-                                                            duckdb_v2_identifier_t name,
+                                                            const duckdb_v2_identifier_t *name,
                                                             duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2031,301 +2061,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_vector(duckdb_v2_data_chun
 /* --- Struct definitions for data_chunk --- */
 
 /* ============================================================================
- * MODULE: database
- * ============================================================================ */
-
-/* --- Enums for database --- */
-
-/* --- Struct forward declarations for database --- */
-
-/* --- Types for database --- */
-
-/*!
- * An opaque, owned handle to the `(KEY value)` options of one `duckdb_v2_database_attach()` call, as SQL `ATTACH`
- * accepts them. Created from the database handle it will be used with via `duckdb_v2_attach_options_create()`; destroy
- * it via `duckdb_v2_attach_options_destroy()`.
- */
-typedef struct _duckdb_v2_attach_options {
-	void *internal_ptr;
-} * duckdb_v2_attach_options_handle;
-
-/* --- Constants for database --- */
-
-/* --- Function pointer typedefs for database --- */
-
-/* --- Functions for database --- */
-
-/*!
- * Creates a database handle under the environment.
- *
- * The handle starts with no database attached and with its instance not yet started; set startup options with
- * `duckdb_v2_database_set_option()`, then attach a database with `duckdb_v2_database_attach()` and pick the default
- * with `duckdb_v2_database_set_default()`, or connect with `duckdb_v2_connection_create()`. The caller destroys it via
- * `duckdb_v2_database_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param env The environment.
- * @param out_db Receives the new database handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_create(duckdb_v2_environment_handle env,
-                                                       duckdb_v2_database_handle *out_db,
-                                                       duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys the database handle.
- *
- * Always succeeds. Every attached database is closed with the instance. The instance itself stays alive for as long as
- * any connection still references it; when the last reference drops, it is destroyed and its database files become
- * available to open again. On success the handle is set to null. Safe to call on an already-null slot.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_destroy(duckdb_v2_database_handle *db);
-
-/*!
- * Attaches a database to the handle, starting the instance if it has not started yet.
- *
- * Attaches the database at `path` exactly like `ATTACH 'path'`:
- *   - `:memory:` or an empty view attaches a fresh in-memory database named `memory`.
- *   - any other path attaches that file, creating it if it does not exist, under the name derived from the file's base
- * name. `name` is the name to attach under, like `ATTACH ... AS name`; null, or an empty view, uses the name derived
- * from the path. Naming is how two files with the same base name, or `:memory:` twice, attach side by side. `options`
- * may be null; it carries the `(KEY value)` options of SQL `ATTACH`, for per-database options such as READ_ONLY,
- * BLOCK_SIZE or ENCRYPTION_KEY, and must have been created from this database handle. `make_default` makes the attached
- * database the default for connections created afterwards, exactly as a `duckdb_v2_database_set_default()` call right
- * after the attach would; otherwise the default is left alone. A path that is already attached on this or any other
- * database of the environment returns ERROR_RESOURCE_IN_USE, and a name that is already attached fails. Options that
- * only apply at startup must be set before the first attach or connection.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle.
- * @param path Path to the database file, or `:memory:` / an empty view for an in-memory database.
- * @param name Optional. The name to attach under; null or an empty view for the name derived from the path. Borrowed
- * and copied.
- * @param options Optional attach options created from `db`, or null to attach with defaults under the derived name.
- * @param make_default Whether to make the attached database the default for connections created afterwards.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_attach(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                                       duckdb_v2_identifier_t *name,
-                                                       duckdb_v2_attach_options_handle options, bool make_default,
-                                                       duckdb_v2_error_info_handle *err);
-
-/*!
- * Detaches the database that was attached from `path`.
- *
- * Detaches it like `DETACH`, checkpointing a file database first. Unlike SQL, the default database may be detached too;
- * new connections then start without a default until `duckdb_v2_database_set_default()` names another, and existing
- * connections bound to it keep it alive until their transaction on it ends and fail unqualified DDL afterwards. The
- * path is matched against the attached databases as `duckdb_v2_database_attach()` recorded it, so pass the path that
- * was passed to `duckdb_v2_database_attach()`. Returns ERROR_INPUT_INVALID when no database attached from that path
- * exists. Connections that still reference the database keep it alive until they release it.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle.
- * @param path The path the database was attached from, or the name it is attached under.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_detach(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                                       duckdb_v2_error_info_handle *err);
-
-/*!
- * Makes the database that was attached from `path` the default database for connections created from now on.
- *
- * A connection binds to the default database when it is created, so this does not retarget existing connections: their
- * default stays what it was when they connected, or what they chose with `USE`. The default is where unqualified DDL
- * and unqualified table lookups that miss the temporary catalog go. It stays the default for new connections until
- * another `duckdb_v2_database_set_default()` call or until it is detached; a connection whose default has been detached
- * fails unqualified DDL with a message saying so until it selects another with `USE`. `path` is either the path that
- * was passed to `duckdb_v2_database_attach()` or the name the database is attached under; a name match wins. Returns
- * ERROR_INPUT_INVALID when neither matches an attached database.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle.
- * @param path The path the database was attached from, or the name it is attached under.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_set_default(duckdb_v2_database_handle db, duckdb_v2_str path,
-                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates an empty set of attach options for use with `duckdb_v2_database_attach()` on `db`.
- *
- * Starts empty. The caller destroys it via `duckdb_v2_attach_options_destroy()`; the options may be destroyed as soon
- * as the attach call returns, and reused for further attaches before that.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle the options will be used with.
- * @param out_options Receives the new options handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_database_handle db,
-                                                             duckdb_v2_attach_options_handle *out_options,
-                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets one attach option, like a `(KEY value)` entry of SQL `ATTACH`.
- *
- * The key is matched case-insensitively, as an unquoted SQL identifier is. The setting is passed on as the text a
- * quoted SQL literal would produce: the engine casts the options it knows (READ_ONLY, RECOVERY_MODE, TYPE,
- * DEFAULT_TABLE, VACUUM_REBUILD_INDEXES, BLOCK_SIZE, ENCRYPTION_KEY, ...) and hands the rest to the storage extension
- * that ends up owning the database, which decides what they mean. Nothing is validated here; an unknown or ill-typed
- * option fails the attach. Both views are borrowed and copied. Setting the same key again replaces it.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param options The attach options.
- * @param key The option name, e.g. READ_ONLY.
- * @param setting The option value, in the textual form a quoted SQL literal would carry.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options,
-                                                          duckdb_v2_identifier_t key, duckdb_v2_str setting,
-                                                          duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys an attach options handle.
- *
- * On success the slot is set to null. Safe to call on an already-null slot.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param options The attach options to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle *options);
-
-/*!
- * Sets a config option on the database (GLOBAL scope).
- *
- * Before the instance has started (no `duckdb_v2_database_attach()` or `duckdb_v2_connection_create()` yet), the option
- * goes into the startup configuration: this is the only way to set an option that can only be chosen at startup, such
- * as access_mode or enable_external_access. Unknown names are kept for an extension to consume at startup; if none
- * does, startup fails with the unrecognized names. After startup, this is `SET GLOBAL name = setting` and an unknown
- * name is rejected unless an extension that defines it can be autoloaded. Returns ERROR_INPUT_INVALID for an option
- * declared LOCAL_ONLY, and for a legacy option with no global setter.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle.
- * @param name Option name (canonical or alias).
- * @param setting The setting, in the textual form SQL `SET` accepts.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_set_option(duckdb_v2_database_handle db, duckdb_v2_identifier_t name,
-                                                           duckdb_v2_str setting, duckdb_v2_error_info_handle *err);
-
-/*!
- * Reads a config option from the database (GLOBAL scope) by name.
- *
- * Allocates a fully populated option: canonical name, current GLOBAL setting, default setting, description, target
- * scope, and aliases. Before startup the current setting is the staged startup value, or the default. Aliases resolve
- * transparently — passing an alias returns the canonical option, with the alias listed in its alias array. An unknown
- * name returns ERROR_INPUT_INVALID; before startup that includes an option of an extension that has not loaded yet,
- * even if a setting for it has been staged. The caller destroys the returned option.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle.
- * @param name Option name (canonical or alias).
- * @param out_option Receives the populated option handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_get_option_by_name(duckdb_v2_database_handle db,
-                                                                   duckdb_v2_identifier_t name,
-                                                                   duckdb_v2_option_handle *out_option,
-                                                                   duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the number of config options registered on the database.
- *
- * Counts core options plus the extension options registered on this database. Aliases are NOT counted separately; each
- * one is reachable through its canonical option's alias array.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle.
- * @param out_count Receives the option count.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_get_option_count(duckdb_v2_database_handle db, idx_t *out_count,
-                                                                 duckdb_v2_error_info_handle *err);
-
-/*!
- * Reads the config option at the given index from the database.
- *
- * Index space: [0, core_count) addresses core options, [core_count, total) extension options. The mapping is stable for
- * as long as no extension registers new options. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys
- * the returned option.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param db The database handle.
- * @param index The option index, in [0, option_count).
- * @param out_option Receives the populated option handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_database_get_option_by_index(duckdb_v2_database_handle db, idx_t index,
-                                                                    duckdb_v2_option_handle *out_option,
-                                                                    duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the version of the linked DuckDB library.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param out_version The version string.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_library_version(duckdb_v2_str *out_version, duckdb_v2_error_info_handle *err);
-
-/* --- Struct definitions for database --- */
-
-/* ============================================================================
  * MODULE: environment
  * ============================================================================ */
 
@@ -2358,8 +2093,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_create(duckdb_v2_environment_
 /*!
  * Destroys the environment.
  *
- * Refuses with ERROR_RESOURCE_IN_USE while any database created through this environment is still alive; destroy those
- * databases first, then retry. On success the handle is set to null.
+ * Refuses with ERROR_RESOURCE_IN_USE while any instance created through this environment is still alive; destroy those
+ * instances first, then retry. On success the handle is set to null.
  *
  * history:
  * - stable: v2.0.0
@@ -2370,21 +2105,21 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_create(duckdb_v2_environment_
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_destroy(duckdb_v2_environment_handle *env);
 
 /*!
- * Returns the number of database handles currently alive under the environment.
+ * Returns the number of instances currently alive under the environment.
  *
- * A diagnostic accessor, for tracking down leaked database handles when `duckdb_v2_environment_destroy()` returns
+ * A diagnostic accessor, for tracking down leaked instances when `duckdb_v2_environment_destroy()` returns
  * ERROR_RESOURCE_IN_USE. The count is a snapshot and may change before the next call.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param env The environment.
- * @param out_count Receives the number of live database handles.
+ * @param out_count Receives the number of live instances.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_get_database_count(duckdb_v2_environment_handle env,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_environment_get_instance_count(duckdb_v2_environment_handle env,
                                                                       idx_t *out_count,
                                                                       duckdb_v2_error_info_handle *err);
 
@@ -2485,7 +2220,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_code(duckdb_v2_error_info_
  * @param text The error text to set in the info.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_text(duckdb_v2_error_info_handle info, duckdb_v2_str text);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_error_info_set_text(duckdb_v2_error_info_handle info, const duckdb_v2_str *text);
 
 /*!
  * Destroys an error info handle and frees its resources.
@@ -2751,7 +2486,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_flag(duckdb_v2_file
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_value(duckdb_v2_file_open_options_handle options,
-                                                                   duckdb_v2_str name, duckdb_v2_value_handle value,
+                                                                   const duckdb_v2_str *name,
+                                                                   duckdb_v2_value_handle value,
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
@@ -2797,7 +2533,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_open_options_destroy(duckdb_v2_file_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_system,
-                                                        duckdb_v2_str file_path,
+                                                        const duckdb_v2_str *file_path,
                                                         duckdb_v2_file_open_options_handle options,
                                                         duckdb_v2_file_handle *file, duckdb_v2_error_info_handle *err);
 
@@ -2996,16 +2732,230 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_file_destroy(duckdb_v2_file_handle *file)
 /* --- Struct definitions for file system --- */
 
 /* ============================================================================
+ * MODULE: function
+ * ============================================================================ */
+
+/* --- Enums for function --- */
+
+/* --- Struct forward declarations for function --- */
+
+/* --- Types for function --- */
+
+/*!
+ * A borrowed opaque handle to the call site a bind callback is binding. Every function family's bind callback receives
+ * this handle next to its own bind info. It gives access to the arguments of the call, the function's user data, and
+ * the bind data.
+ *
+ * The arguments form one list in four parts, in this order: one argument per positional-only and standard parameter, in
+ * declaration order; the arguments `*args` received, in call order; one argument per named-only parameter, in
+ * declaration order; and the arguments `**kwargs` received, in call order. How the caller passed an argument does not
+ * matter: a standard parameter passed by name is at its declared position. A parameter the call omitted is present with
+ * its default value. See `duckdb_v2_function_bind_get_arg_count()` for the size of each part.
+ */
+typedef struct _duckdb_v2_function_bind_info {
+	void *internal_ptr;
+} * duckdb_v2_function_bind_info_handle;
+
+/* --- Constants for function --- */
+
+/* --- Function pointer typedefs for function --- */
+
+/* --- Functions for function --- */
+
+/*!
+ * Retrieves the user data set on the function being bound, e.g. via `duckdb_v2_scalar_function_set_user_data()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_user_data(duckdb_v2_function_bind_info_handle info,
+                                                                   void **data, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the function's "bind data" from the bind callback.
+ *
+ * The bind data is stored with the bound call site and retrievable from every later callback. The opaque handle bundles
+ * the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional equality
+ * callback used when comparing two bound call sites; without one, pointer equality is used.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_set_bind_data(duckdb_v2_function_bind_info_handle info,
+                                                                   duckdb_v2_opaque *data,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the number of arguments of the call site being bound, split into the four parts of the argument list.
+ *
+ * The parts follow each other in this order: the positional-only and standard parameters, the arguments `*args`
+ * received, the named-only parameters, and the arguments `**kwargs` received. The argument at index `i` of the
+ * named-only part is therefore at index `positional_fixed + positional_variadic + i`. Valid indices for the other
+ * argument functions are [0, the sum of the four counts). Every out-parameter may be NULL, in which case nothing is
+ * written to it.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param positional_fixed Optional. Receives the number of positional-only and standard parameters.
+ * @param positional_variadic Optional. Receives the number of arguments `*args` received, 0 when the signature has
+ * none.
+ * @param named_fixed Optional. Receives the number of named-only parameters.
+ * @param named_variadic Optional. Receives the number of arguments `**kwargs` received, 0 when the signature has none.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_count(duckdb_v2_function_bind_info_handle info,
+                                                                   idx_t *positional_fixed, idx_t *positional_variadic,
+                                                                   idx_t *named_fixed, idx_t *named_variadic,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the type of the argument at the given index.
+ *
+ * Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
+ * `duckdb_v2_logical_type_destroy()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param index The index of the argument.
+ * @param type Receives the argument type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_type(duckdb_v2_function_bind_info_handle info, idx_t index,
+                                                                  duckdb_v2_logical_type_handle *type,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/*!
+ * Folds the argument at the given index to a constant value.
+ *
+ * Fails if the argument is not constant, e.g. a column reference, or if the index is out of bounds. The arguments of a
+ * table function are always constant. The resulting value may be NULL. The returned value is owned by the caller and
+ * must be destroyed via `duckdb_v2_value_destroy()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param index The index of the argument.
+ * @param value Receives the constant value. Owned by the caller; destroy via `duckdb_v2_value_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_value(duckdb_v2_function_bind_info_handle info,
+                                                                   idx_t index, duckdb_v2_value_handle *value,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Retrieves the name of the argument at the given index.
+ *
+ * For an argument of a declared parameter, this is the parameter name. For an argument `**kwargs` received, it is the
+ * name the caller passed, which may be the name of a positional-only parameter. An argument `*args` received has no
+ * name, and yields an empty name. Fails if the index is out of bounds. The name is borrowed and valid only for the
+ * duration of the callback.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param index The index of the argument.
+ * @param name Receives a borrowed view of the argument name. Valid only for the duration of the callback.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_name(duckdb_v2_function_bind_info_handle info, idx_t index,
+                                                                  duckdb_v2_identifier_t *name,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/*!
+ * Looks up the index of an argument by name.
+ *
+ * Names are matched case-insensitively, against the names a caller can pass an argument by: those of the standard and
+ * named-only parameters, and those `**kwargs` received. Positional-only parameters are skipped, so `f(1, x := 2)` with
+ * a positional-only `x` finds the argument `**kwargs` received. A name the call did not pass is not an error: `found`
+ * receives false and `index` is left untouched. A standard or named-only parameter is always found, as the call either
+ * passed it or it carries its default value.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param name The name to look up. Borrowed for the call only.
+ * @param index Receives the index of the argument, if found.
+ * @param found Receives whether the call has an argument of that name.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_index(duckdb_v2_function_bind_info_handle info,
+                                                                   const duckdb_v2_identifier_t *name, idx_t *index,
+                                                                   bool *found, duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for function --- */
+
+/* ============================================================================
  * MODULE: function signature
  * ============================================================================ */
 
 /* --- Enums for function signature --- */
 
+/*!
+ * How a caller passes the argument for a parameter, following Python's parameter kinds. A signature orders its
+ * parameters by kind, in the order the values are listed here. Pass one of these to
+ * `duckdb_v2_function_signature_add_parameter()`.
+ */
+typedef enum DUCKDB_V2_FUNCTION_PARAMETER_KIND {
+	/*!
+	 * Passed by position only. The name is invisible to a caller: a named argument with the same name is received by
+	 * `**kwargs`, or rejected when the signature has none.
+	 */
+	DUCKDB_V2_FUNCTION_PARAMETER_KIND_POSITIONAL_ONLY = 0,
+
+	//! Passed by position or by name.
+	DUCKDB_V2_FUNCTION_PARAMETER_KIND_STANDARD = 1,
+
+	/*!
+	 * `*args`: receives the positional arguments left over after the positional-only and standard parameters, each cast
+	 * to the parameter type. ANY leaves them un-cast.
+	 */
+	DUCKDB_V2_FUNCTION_PARAMETER_KIND_POSITIONAL_VARIADIC = 2,
+
+	//! Passed by name only.
+	DUCKDB_V2_FUNCTION_PARAMETER_KIND_NAMED_ONLY = 3,
+
+	/*!
+	 * `**kwargs`: receives the named arguments that match no other parameter, each cast to the parameter type. ANY
+	 * leaves them un-cast.
+	 */
+	DUCKDB_V2_FUNCTION_PARAMETER_KIND_NAMED_VARIADIC = 4,
+	DUCKDB_V2_FUNCTION_PARAMETER_KIND_MAX_ENUM = 0x7FFFFFFF,
+} DUCKDB_V2_FUNCTION_PARAMETER_KIND;
+
 /* --- Struct forward declarations for function signature --- */
 
 /* --- Types for function signature --- */
 
-//! An opaque handle to a function signature. Carries the function's argument types and return type.
+//! An opaque handle to a function signature. Carries the function's parameters and return type.
 typedef struct _duckdb_v2_function_signature {
 	void *internal_ptr;
 } * duckdb_v2_function_signature_handle;
@@ -3017,41 +2967,31 @@ typedef struct _duckdb_v2_function_signature {
 /* --- Functions for function signature --- */
 
 /*!
+ * Adds a parameter to a signature.
+ *
+ * The kind decides how a caller passes the argument; see `DUCKDB_V2_FUNCTION_PARAMETER_KIND`. The signature keeps its
+ * parameters ordered by kind, and parameters of the same kind in the order they were added, so parameters of different
+ * kinds can be added in any order. A default value makes the parameter optional; `*args` and `**kwargs` cannot have
+ * one.
+ *
+ * Registration fails when two parameters share a name, when the signature has more than one `*args` or `**kwargs`
+ * parameter, or when a standard parameter without a default value follows one with a default value.
+ *
  * history:
  * - stable: v2.0.0
  *
  * @param sig The signature to configure.
  * @param name The parameter name. Borrowed and copied.
- * @param type The parameter type. Borrowed and copied.
+ * @param type The parameter type. ANY accepts an argument of any type without casting it. Borrowed and copied.
  * @param value Optional default value, borrowed and copied. Will be cast to the parameter type.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @param kind How a caller passes the argument for the parameter.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(duckdb_v2_function_signature_handle sig,
-                                                                        duckdb_v2_identifier_t name,
-                                                                        duckdb_v2_logical_type_handle type,
-                                                                        duckdb_v2_value_handle value,
-                                                                        duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the variadic tail type of a signature.
- *
- * Makes the signature variadic: after its fixed parameters it accepts any number of extra trailing arguments, each
- * implicitly cast to type. Pass ANY for a heterogeneous tail whose arguments keep their own types. A NULL or INVALID
- * type is rejected with INVALID_INPUT; ANY is accepted. Calling this again overwrites the previous variadic tail type.
- * The type is borrowed and copied.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param sig The signature to configure.
- * @param type The type extra trailing arguments are cast to. ANY leaves them un-cast.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_varargs(duckdb_v2_function_signature_handle sig,
-                                                                      duckdb_v2_logical_type_handle type,
-                                                                      duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_add_parameter(
+    duckdb_v2_function_signature_handle sig, const duckdb_v2_identifier_t *name, duckdb_v2_logical_type_handle type,
+    duckdb_v2_value_handle value, DUCKDB_V2_FUNCTION_PARAMETER_KIND kind, duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the return type of a signature.
@@ -3118,11 +3058,311 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_signature_set_return_type(duckdb
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_identifier_render_quoted(duckdb_v2_identifier_t name, char *out_text,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_identifier_render_quoted(const duckdb_v2_identifier_t *name, char *out_text,
                                                                 idx_t out_capacity, idx_t *out_length,
                                                                 duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for identifier --- */
+
+/* ============================================================================
+ * MODULE: instance
+ * ============================================================================ */
+
+/* --- Enums for instance --- */
+
+/* --- Struct forward declarations for instance --- */
+
+/* --- Types for instance --- */
+
+/*!
+ * An opaque, owned handle to the `(KEY value)` options of one `duckdb_v2_instance_attach()` call, as SQL `ATTACH`
+ * accepts them. Created from the instance handle it will be used with via `duckdb_v2_attach_options_create()`; destroy
+ * it via `duckdb_v2_attach_options_destroy()`.
+ */
+typedef struct _duckdb_v2_attach_options {
+	void *internal_ptr;
+} * duckdb_v2_attach_options_handle;
+
+/* --- Constants for instance --- */
+
+/* --- Function pointer typedefs for instance --- */
+
+/* --- Functions for instance --- */
+
+/*!
+ * Creates an instance handle under the environment.
+ *
+ * The handle starts with no database attached and with its instance not yet started; set startup options with
+ * `duckdb_v2_instance_set_option()`, then attach a database with `duckdb_v2_instance_attach()` and pick the default
+ * with `duckdb_v2_instance_set_default()`, or connect with `duckdb_v2_connection_create()`. The caller destroys it via
+ * `duckdb_v2_instance_destroy()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param env The environment.
+ * @param out_instance Receives the new instance handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_create(duckdb_v2_environment_handle env,
+                                                       duckdb_v2_instance_handle *out_instance,
+                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the instance handle.
+ *
+ * Always succeeds. Every attached database is closed with the instance. The instance itself stays alive for as long as
+ * any connection still references it; when the last reference drops, it is destroyed and its database files become
+ * available to open again. On success the handle is set to null. Safe to call on an already-null slot.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_destroy(duckdb_v2_instance_handle *instance);
+
+/*!
+ * Attaches a database to the instance, starting it if it has not started yet.
+ *
+ * Attaches the database at `path` exactly like `ATTACH 'path'`:
+ *   - `:memory:` or an empty view attaches a fresh in-memory database named `memory`.
+ *   - any other path attaches that file, creating it if it does not exist, under the name derived from the file's base
+ * name. `name` is the name to attach under, like `ATTACH ... AS name`; null, or an empty view, uses the name derived
+ * from the path. Naming is how two files with the same base name, or `:memory:` twice, attach side by side. `options`
+ * may be null; it carries the `(KEY value)` options of SQL `ATTACH`, for per-database options such as READ_ONLY,
+ * BLOCK_SIZE or ENCRYPTION_KEY, and must have been created from this instance handle. `make_default` makes the attached
+ * database the default for connections created afterwards, exactly as a `duckdb_v2_instance_set_default()` call right
+ * after the attach would; otherwise the default is left alone. A path that is already attached on this or any other
+ * instance of the environment returns ERROR_RESOURCE_IN_USE, and a name that is already attached fails. Options that
+ * only apply at startup must be set before the first attach or connection.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param path Path to the database file, or `:memory:` / an empty view for an in-memory database.
+ * @param name Optional. The name to attach under; null or an empty view for the name derived from the path. Borrowed
+ * and copied.
+ * @param options Optional attach options created from `instance`, or null to attach with defaults under the derived
+ * name.
+ * @param make_default Whether to make the attached database the default for connections created afterwards.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
+                                                       const duckdb_v2_identifier_t *name,
+                                                       duckdb_v2_attach_options_handle options, bool make_default,
+                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Detaches the database that was attached from `path`.
+ *
+ * Detaches it like `DETACH`, checkpointing a file database first. Unlike SQL, the default database may be detached too;
+ * new connections then start without a default until `duckdb_v2_instance_set_default()` names another, and existing
+ * connections bound to it keep it alive until their transaction on it ends and fail unqualified DDL afterwards. The
+ * path is matched against the attached databases as `duckdb_v2_instance_attach()` recorded it, so pass the path that
+ * was passed to `duckdb_v2_instance_attach()`. Returns ERROR_INPUT_INVALID when no database attached from that path
+ * exists. Connections that still reference the database keep it alive until they release it.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param path The path the database was attached from, or the name it is attached under.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
+                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Makes the database that was attached from `path` the default database for connections created from now on.
+ *
+ * A connection binds to the default database when it is created, so this does not retarget existing connections: their
+ * default stays what it was when they connected, or what they chose with `USE`. The default is where unqualified DDL
+ * and unqualified table lookups that miss the temporary catalog go. It stays the default for new connections until
+ * another `duckdb_v2_instance_set_default()` call or until it is detached; a connection whose default has been detached
+ * fails unqualified DDL with a message saying so until it selects another with `USE`. `path` is either the path that
+ * was passed to `duckdb_v2_instance_attach()` or the name the database is attached under; a name match wins. Returns
+ * ERROR_INPUT_INVALID when neither matches an attached database.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param path The path the database was attached from, or the name it is attached under.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance,
+                                                            const duckdb_v2_str *path,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Creates an empty set of attach options for use with `duckdb_v2_instance_attach()` on `instance`.
+ *
+ * Starts empty. The caller destroys it via `duckdb_v2_attach_options_destroy()`; the options may be destroyed as soon
+ * as the attach call returns, and reused for further attaches before that.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle the options will be used with.
+ * @param out_options Receives the new options handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_instance_handle instance,
+                                                             duckdb_v2_attach_options_handle *out_options,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets one attach option, like a `(KEY value)` entry of SQL `ATTACH`.
+ *
+ * The key is matched case-insensitively, as an unquoted SQL identifier is. The setting is passed on as the text a
+ * quoted SQL literal would produce: the engine casts the options it knows (READ_ONLY, RECOVERY_MODE, TYPE,
+ * DEFAULT_TABLE, VACUUM_REBUILD_INDEXES, BLOCK_SIZE, ENCRYPTION_KEY, ...) and hands the rest to the storage extension
+ * that ends up owning the database, which decides what they mean. Keys must be valid UTF-8; an unknown or ill-typed
+ * option fails the attach. Both views are borrowed and copied. Setting the same key again replaces it.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param options The attach options.
+ * @param key The option name, e.g. READ_ONLY.
+ * @param setting The option value, in the textual form a quoted SQL literal would carry.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options,
+                                                          const duckdb_v2_identifier_t *key,
+                                                          const duckdb_v2_str *setting,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys an attach options handle.
+ *
+ * On success the slot is set to null. Safe to call on an already-null slot.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param options The attach options to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle *options);
+
+/*!
+ * Sets a config option on the instance (GLOBAL scope).
+ *
+ * Before the instance has started (no `duckdb_v2_instance_attach()` or `duckdb_v2_connection_create()` yet), the option
+ * goes into the startup configuration: this is the only way to set an option that can only be chosen at startup, such
+ * as access_mode or enable_external_access. Unknown names are kept for an extension to consume at startup; if none
+ * does, startup fails with the unrecognized names. After startup, this is `SET GLOBAL name = setting` and an unknown
+ * name is rejected unless an extension that defines it can be autoloaded. Returns ERROR_INPUT_INVALID for an option
+ * declared LOCAL_ONLY, and for a legacy option with no global setter.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param name Option name (canonical or alias).
+ * @param setting The setting, in the textual form SQL `SET` accepts.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance,
+                                                           const duckdb_v2_identifier_t *name,
+                                                           const duckdb_v2_str *setting,
+                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reads a config option from the instance (GLOBAL scope) by name.
+ *
+ * Allocates a fully populated option: canonical name, current GLOBAL setting, default setting, description, target
+ * scope, and aliases. Before startup the current setting is the staged startup value, or the default. Aliases resolve
+ * transparently — passing an alias returns the canonical option, with the alias listed in its alias array. An unknown
+ * name returns ERROR_INPUT_INVALID; before startup that includes an option of an extension that has not loaded yet,
+ * even if a setting for it has been staged. The caller destroys the returned option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param name Option name (canonical or alias).
+ * @param out_option Receives the populated option handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_name(duckdb_v2_instance_handle instance,
+                                                                   const duckdb_v2_identifier_t *name,
+                                                                   duckdb_v2_option_handle *out_option,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the number of config options registered on the instance.
+ *
+ * Counts core options plus the extension options registered on this instance. Aliases are NOT counted separately; each
+ * one is reachable through its canonical option's alias array.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param out_count Receives the option count.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_count(duckdb_v2_instance_handle instance, idx_t *out_count,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reads the config option at the given index from the instance.
+ *
+ * Index space: [0, core_count) addresses core options, [core_count, total) extension options. The mapping is stable for
+ * as long as no extension registers new options. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys
+ * the returned option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param index The option index, in [0, option_count).
+ * @param out_option Receives the populated option handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_index(duckdb_v2_instance_handle instance, idx_t index,
+                                                                    duckdb_v2_option_handle *out_option,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the version of the linked DuckDB library.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param out_version The version string.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_library_version(duckdb_v2_str *out_version, duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for instance --- */
 
 /* ============================================================================
  * MODULE: logging
@@ -3184,7 +3424,7 @@ typedef enum DUCKDB_V2_LOG_LEVEL {
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level,
-                                                   duckdb_v2_str log_type, duckdb_v2_str message,
+                                                   const duckdb_v2_str *log_type, const duckdb_v2_str *message,
                                                    duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for logging --- */
@@ -3220,9 +3460,9 @@ typedef struct _duckdb_v2_qname {
  * Parses SQL text into a qualified name.
  *
  * Applies the engine's qualified-name rules: dots separate parts, and a double-quoted part may contain dots and doubled
- * interior quotes. More than three parts and an unterminated quote are rejected with the parser's own error; text
- * without at least one non-empty part is rejected with `ERROR_INPUT_INVALID`. When the parts are already separate,
- * build the name with `duckdb_v2_qname_create()` rather than joining them and parsing the result.
+ * interior quotes. More than three parts and an unterminated quote are rejected with the parser's own error. Invalid
+ * UTF-8 and text without at least one non-empty part are rejected with `ERROR_INPUT_INVALID`. When the parts are
+ * already separate, build the name with `duckdb_v2_qname_create()` rather than joining them and parsing the result.
  *
  * history:
  * - stable: v2.0.0
@@ -3233,7 +3473,7 @@ typedef struct _duckdb_v2_qname {
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(duckdb_v2_str text, duckdb_v2_qname_handle *name,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_qname_parse(const duckdb_v2_str *text, duckdb_v2_qname_handle *name,
                                                    duckdb_v2_error_info_handle *err);
 
 /*!
@@ -3529,7 +3769,7 @@ typedef struct _duckdb_v2_token_iterator {
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, duckdb_v2_str sql,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
                                                     duckdb_v2_token_iterator_handle *out_iterator,
                                                     duckdb_v2_error_info_handle *err);
 
@@ -3824,18 +4064,18 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_get_data_mutable(duckdb_v2_vector_
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_vector_flatten(duckdb_v2_vector_handle vector, duckdb_v2_error_info_handle *err);
 
 /*!
- * Repoints a vector at another vector's data and type, without copying.
+ * Repoints a vector at another vector's data, without copying.
  *
- * `vector` takes on the storage and logical type of `source`: no data moves, and the two alias the same buffers until
- * one of them is reset or re-referenced. Works for any type, including nested types. The source's data must outlive
- * every read of `vector`. Use it to hand an already-materialized vector straight to an output vector without a per-row
- * copy.
+ * `vector` takes on the storage of `source`: no data moves, and the two alias the same buffers until one of them is
+ * reset or re-referenced. Works for any type, including nested types. The source's logical type must equal the
+ * vector's; a mismatch returns ERROR_INPUT_INVALID. The source's data must outlive every read of `vector`. Use it to
+ * hand an already-materialized vector straight to an output vector without a per-row copy.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param vector The vector to repoint at the source's data.
- * @param source The vector whose data and logical type to reference.
+ * @param source The vector whose data to reference. Its logical type must equal the vector's.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
@@ -4080,13 +4320,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx
                                                      duckdb_v2_error_info_handle *err);
 
 /*!
- * Validates all text.len bytes as UTF-8, including bytes after embedded NUL characters.
+ * Validates all text->len bytes as UTF-8, including bytes after embedded NUL characters.
  *
- * Returns ERROR_INPUT_INVALID if either:
- * - text.ptr is NULL and text.len is nonzero.
+ * Returns ERROR_INPUT_INVALID if any of:
+ * - text is NULL.
+ * - text->ptr is NULL and text->len is nonzero.
  * - The input contains malformed UTF-8.
  *
- * A NULL pointer with zero length is valid.
+ * A view with a NULL ptr and zero length is valid.
  *
  * history:
  * - stable: v2.0.0
@@ -4095,7 +4336,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_bignum_encode(const uint8_t *in_data, idx
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_validate_utf8(duckdb_v2_str text, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_validate_utf8(const duckdb_v2_str *text, duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for vector --- */
 
@@ -4150,9 +4391,9 @@ typedef struct _duckdb_v2_aggregate_function {
 } * duckdb_v2_aggregate_function_handle;
 
 /*!
- * A borrowed opaque handle to the arguments supplied to an aggregate function during the query preparation "bind"
- * phase. The "bind" callback receives this handle and can use it to e.g. inspect the arguments given to the function,
- * initialize some constant state and set the return type.
+ * A borrowed opaque handle to the result of an aggregate function's "bind" phase. The "bind" callback receives this
+ * handle next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments, the user data and the
+ * bind data, and can use it to set the return type of the call site being bound.
  */
 typedef struct _duckdb_v2_aggregate_function_bind_info {
 	void *internal_ptr;
@@ -4214,7 +4455,8 @@ typedef struct _duckdb_v2_aggregate_function_destroy_info {
 
 /* --- Function pointer typedefs for aggregate --- */
 
-typedef void (*duckdb_v2_aggregate_function_bind_callback_fn)(duckdb_v2_aggregate_function_bind_info_handle info,
+typedef void (*duckdb_v2_aggregate_function_bind_callback_fn)(duckdb_v2_function_bind_info_handle info,
+                                                              duckdb_v2_aggregate_function_bind_info_handle result,
                                                               duckdb_v2_context_handle context,
                                                               duckdb_v2_error_info_handle *err);
 
@@ -4299,14 +4541,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_aggregate_function_handle function,
-                                                                   duckdb_v2_str *name,
+                                                                   const duckdb_v2_identifier_t *name,
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the function's signature so it can be configured.
  *
- * Add parameters with `duckdb_v2_function_signature_add_parameter()`, set a variadic tail with
- * `duckdb_v2_function_signature_set_varargs()` and set the return type with
+ * Add parameters with `duckdb_v2_function_signature_add_parameter()` and set the return type with
  * `duckdb_v2_function_signature_set_return_type()`. The signature is modified in place; the function must be given a
  * signature with a return type before registration.
  *
@@ -4327,8 +4568,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_get_signature(duckdb_v
  * Sets arbitrary user data on the aggregate function.
  *
  * Associates an opaque pointer with the function, retrievable from each callback via its user data accessor (e.g.
- * `duckdb_v2_aggregate_function_bind_get_user_data()`, `duckdb_v2_aggregate_function_update_get_user_data()`, etc.).
- * The opaque handle bundles the pointer with an optional destructor, invoked when the data is no longer needed.
+ * `duckdb_v2_function_bind_get_user_data()`, `duckdb_v2_aggregate_function_update_get_user_data()`, etc.). The opaque
+ * handle bundles the pointer with an optional destructor, invoked when the data is no longer needed.
  *
  * history:
  * - stable: v2.0.0
@@ -4369,9 +4610,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_property(duckdb_v2
 /*!
  * Sets the optional bind callback of the aggregate function.
  *
- * The bind callback is invoked during query planning for each call site of the function. It can inspect the argument
- * types and constant argument values, set a concrete return type, and set "bind data" that is shared with the other
- * callbacks.
+ * The bind callback is invoked during query planning for each call site of the function. Through its
+ * `duckdb_v2_function_bind_info_handle` it can inspect the argument types and constant argument values and set "bind
+ * data" that is shared with the other callbacks. Through its `duckdb_v2_aggregate_function_bind_info_handle` it can set
+ * a concrete return type.
  *
  * history:
  * - stable: v2.0.0
@@ -4499,99 +4741,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_finalize_callback(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_destroy_callback(
     duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_destroy_callback_fn callback,
     duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the user data set via `duckdb_v2_aggregate_function_set_user_data()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param data Receives the user data pointer, or null if none was set.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_user_data(
-    duckdb_v2_aggregate_function_bind_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the function's "bind data" from the bind callback.
- *
- * The bind data is stored with the bound call site and retrievable from the other callbacks. The opaque handle bundles
- * the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional equality
- * callback used when comparing two bound call sites; without one, pointer equality is used.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_bind_data(
-    duckdb_v2_aggregate_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the number of arguments of the call site being bound.
- *
- * Variadic tail arguments are included. Valid indices for `duckdb_v2_aggregate_function_bind_get_arg_type()` and
- * `duckdb_v2_aggregate_function_bind_get_arg_value()` are [0, count).
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param count Receives the number of arguments.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_get_arg_count(
-    duckdb_v2_aggregate_function_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the type of the argument at the given index.
- *
- * Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
- * `duckdb_v2_logical_type_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param index The index of the argument to get the type of.
- * @param type Receives the argument type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR
-duckdb_v2_aggregate_function_bind_get_arg_type(duckdb_v2_aggregate_function_bind_info_handle info, idx_t index,
-                                               duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
-
-/*!
- * Folds the argument at the given index to a constant value.
- *
- * The argument must be foldable to a constant (e.g. a literal or a constant expression); otherwise the call fails with
- * an error, as it does when the index is out of bounds. The resulting value may be NULL. The returned value is owned by
- * the caller and must be destroyed via `duckdb_v2_value_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param index The index of the argument to extract a constant value from.
- * @param value Receives the constant value. Owned by the caller; destroy via `duckdb_v2_value_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR
-duckdb_v2_aggregate_function_bind_get_arg_value(duckdb_v2_aggregate_function_bind_info_handle info, idx_t index,
-                                                duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the concrete return type of the call site being bound.
@@ -4768,40 +4917,49 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_row_count(
     duckdb_v2_aggregate_function_update_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 
 /*!
- * Returns how many argument vectors this invocation carries: one per argument of the call, variadic tail arguments
- * included. Valid indices for `duckdb_v2_aggregate_function_update_get_arg()` are [0, count).
+ * Returns how many argument vectors this invocation carries, split into the four parts of the argument list.
+ *
+ * The parts and their order are those the bind callback saw through `duckdb_v2_function_bind_get_arg_count()`, and the
+ * vectors are at the same indices. Valid indices for `duckdb_v2_aggregate_function_update_get_arg()` are [0, the sum of
+ * the four counts). Every out-parameter may be NULL, in which case nothing is written to it.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The update info handle.
- * @param count Receives the number of argument vectors.
+ * @param positional_fixed Optional. Receives the number of positional-only and standard parameters.
+ * @param positional_variadic Optional. Receives the number of arguments `*args` received, 0 when the signature has
+ * none.
+ * @param named_fixed Optional. Receives the number of named-only parameters.
+ * @param named_variadic Optional. Receives the number of arguments `**kwargs` received, 0 when the signature has none.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_update_get_arg_count(
-    duckdb_v2_aggregate_function_update_info_handle info, uint32_t *count, duckdb_v2_error_info_handle *err);
+    duckdb_v2_aggregate_function_update_info_handle info, idx_t *positional_fixed, idx_t *positional_variadic,
+    idx_t *named_fixed, idx_t *named_variadic, duckdb_v2_error_info_handle *err);
 
 /*!
  * Retrieves the argument vector at the given index.
  *
- * The vector holds the argument's values for the current batch; use
- * `duckdb_v2_aggregate_function_update_get_row_count()` for the number of rows. Fails if the index is out of bounds.
- * Borrowed; valid only for the duration of the callback.
+ * The index is the one the bind callback used for the argument, e.g. the index
+ * `duckdb_v2_function_bind_get_arg_index()` found for a name. The vector holds the argument's values for the current
+ * batch; use `duckdb_v2_aggregate_function_update_get_row_count()` for the number of rows. Fails if the index is out of
+ * bounds. Borrowed; valid only for the duration of the callback.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The update info handle.
- * @param index The index of the argument vector to get.
+ * @param index The index of the argument.
  * @param vector Receives the borrowed argument vector.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR
-duckdb_v2_aggregate_function_update_get_arg(duckdb_v2_aggregate_function_update_info_handle info, uint32_t index,
+duckdb_v2_aggregate_function_update_get_arg(duckdb_v2_aggregate_function_update_info_handle info, idx_t index,
                                             duckdb_v2_vector_handle *vector, duckdb_v2_error_info_handle *err);
 
 /*!
@@ -5332,7 +5490,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_arrow_importer_destroy(duckdb_v2_arrow_im
  *
  * @param context The context whose Arrow settings are captured and whose transaction resolves the types.
  * @param types An array of `count` column types. May be NULL only when `count` is 0.
- * @param names An array of `count` column names, parallel to `types`. May be NULL only when `count` is 0.
+ * @param names An array of `count` column names, parallel to `types`. Each name must be valid UTF-8. May be NULL only
+ * when `count` is 0.
  * @param count The number of columns, being the length of both `types` and `names`.
  * @param batch_size Maximum rows per produced array, or 0 for no maximum.
  * @param out_exporter On success, receives the new exporter. Owned by the caller; destroy via
@@ -5694,15 +5853,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_description_destroy(duckdb_v2_colu
 
 /* --- Types for connection --- */
 
-/*!
- * An opaque, owned handle to a snapshot of a query's execution progress, taken by
- * `duckdb_v2_connection_query_progress()` at call time. Read it with the query_progress_get_* accessors; destroy it via
- * `duckdb_v2_query_progress_destroy()`.
- */
-typedef struct _duckdb_v2_query_progress {
-	void *internal_ptr;
-} * duckdb_v2_query_progress_handle;
-
 /* --- Constants for connection --- */
 
 /* --- Function pointer typedefs for connection --- */
@@ -5710,23 +5860,23 @@ typedef struct _duckdb_v2_query_progress {
 /* --- Functions for connection --- */
 
 /*!
- * Opens a connection to a database, starting its instance if it has not started yet.
+ * Opens a connection to an instance, starting it if it has not started yet.
  *
- * Each connection carries its own client context and session-scoped (LOCAL) settings. Connections to the same database
+ * Each connection carries its own client context and session-scoped (LOCAL) settings. Connections to the same instance
  * share its catalog, buffer pool, and transaction manager. A connection may be created before any database is attached
- * to the handle; until one is, only the system catalog and the connection's temporary catalog are visible. The caller
+ * to the instance; until one is, only the system catalog and the connection's temporary catalog are visible. The caller
  * destroys it via `duckdb_v2_connection_destroy()`.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param db The database to connect to.
+ * @param instance The instance to connect to.
  * @param out_conn Receives the new connection handle.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_database_handle db,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance,
                                                          duckdb_v2_connection_handle *out_conn,
                                                          duckdb_v2_error_info_handle *err);
 
@@ -5749,11 +5899,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_h
  *
  * `scope` chooses the destination, mirroring SQL:
  *   - AUTOMATIC resolves it from the option's target scope, like a bare `SET name = setting`.
- *   - GLOBAL writes through to the database, visible to all connections, like `SET GLOBAL`.
+ *   - GLOBAL writes through to the instance, visible to all connections, like `SET GLOBAL`.
  *   - LOCAL writes to this connection's session only, like `SET LOCAL` / `SET SESSION`.
  * A disallowed combination returns ERROR_INPUT_INVALID: GLOBAL against a LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY
  * one, and the legacy analogues. An unknown name is rejected unless an extension that defines it can be autoloaded; to
- * stage a setting for an extension before startup, use `duckdb_v2_database_set_option()`.
+ * stage a setting for an extension before startup, use `duckdb_v2_instance_set_option()`.
  *
  * history:
  * - stable: v2.0.0
@@ -5767,7 +5917,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_h
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn,
-                                                             duckdb_v2_identifier_t name, duckdb_v2_str setting,
+                                                             const duckdb_v2_identifier_t *name,
+                                                             const duckdb_v2_str *setting,
                                                              DUCKDB_V2_SETTING_SCOPE scope,
                                                              duckdb_v2_error_info_handle *err);
 
@@ -5776,7 +5927,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connectio
  *
  * Returns the option's effective setting at the connection's scope: the LOCAL override if this connection set one,
  * otherwise the GLOBAL value, otherwise the static default. The remaining fields are populated exactly as by
- * `duckdb_v2_database_get_option_by_name()`. Aliases resolve transparently, and an unknown name returns
+ * `duckdb_v2_instance_get_option_by_name()`. Aliases resolve transparently, and an unknown name returns
  * ERROR_INPUT_INVALID. The caller destroys the returned option.
  *
  * history:
@@ -5790,14 +5941,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connectio
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option_by_name(duckdb_v2_connection_handle conn,
-                                                                     duckdb_v2_identifier_t name,
+                                                                     const duckdb_v2_identifier_t *name,
                                                                      duckdb_v2_option_handle *out_option,
                                                                      duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the number of config options visible to this connection.
  *
- * The same count `duckdb_v2_database_get_option_count()` reports for the underlying database: core plus extension
+ * The same count `duckdb_v2_instance_get_option_count()` reports for the underlying instance: core plus extension
  * options, aliases excluded.
  *
  * history:
@@ -5816,7 +5967,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option_count(duckdb_v2_con
  * Reads the config option at the given index visible to this connection.
  *
  * Index space: [0, core_count) addresses core options, [core_count, total) the extension options visible from this
- * connection's database. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the returned option.
+ * connection's instance. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the returned option.
  *
  * history:
  * - stable: v2.0.0
@@ -5854,88 +6005,29 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_interrupt(duckdb_v2_connection
 /*!
  * Captures a snapshot of the active query's execution progress.
  *
- * Writes the progress of the query currently executing on the connection into an owned snapshot handle; read it with
- * the query_progress_get_* accessors and destroy it via `duckdb_v2_query_progress_destroy()`. Safe to call from any
- * thread, including while another thread steps the query's result.
+ * Reads the percentage and row counts from one consistent snapshot of the query currently executing on the connection.
+ * Safe to call from any thread, including while another thread steps the query's result.
  *
- * Progress is published only while the enable_progress_bar option is set; this call does not enable tracking itself. A
- * percentage of -1, with both row counts 0, means no information is available: tracking is disabled, no query is
- * active, or nothing has been published yet.
+ * Progress is published only when the enable_progress_bar option is set; the bridge does not enable tracking itself.
+ * Both row counts are 0 when no information is available. The percentage is -1 when tracking is disabled, no query is
+ * active, or no progress has been published yet.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param conn The connection.
- * @param out_progress Receives the new progress snapshot handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_query_progress(duckdb_v2_connection_handle conn,
-                                                                 duckdb_v2_query_progress_handle *out_progress,
-                                                                 duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the snapshot's percentage complete.
- *
- * A percentage in [0, 100], or -1 when no progress information was available at capture time.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param progress The progress snapshot.
- * @param out_percentage Receives the percentage.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_percentage(duckdb_v2_query_progress_handle progress,
-                                                                     double *out_percentage,
-                                                                     duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the snapshot's processed row count.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param progress The progress snapshot.
+ * @param out_percentage Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active,
+ * or no progress has been published yet.
  * @param out_rows_processed Receives the number of rows processed so far.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_rows_processed(duckdb_v2_query_progress_handle progress,
-                                                                         uint64_t *out_rows_processed,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the snapshot's total row count.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param progress The progress snapshot.
  * @param out_total_rows_to_process Receives the total number of rows the query will process.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_get_total_rows_to_process(
-    duckdb_v2_query_progress_handle progress, uint64_t *out_total_rows_to_process, duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys a progress snapshot handle.
- *
- * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. On success the slot is set to nullptr.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param progress The progress snapshot to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_query_progress_destroy(duckdb_v2_query_progress_handle *progress);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle conn, double *out_percentage,
+                                                               uint64_t *out_rows_processed,
+                                                               uint64_t *out_total_rows_to_process,
+                                                               duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for connection --- */
 
@@ -6169,7 +6261,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_extension(duckd
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_set_name(duckdb_v2_copy_function_handle function,
-                                                              duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+                                                              const duckdb_v2_identifier_t *name,
+                                                              duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets arbitrary user data on the copy function.
@@ -6215,7 +6308,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_set_bind_callback(duckdb_v2_copy_
  * Sets the optional batch size callback of the `COPY ... TO` side.
  *
  * The batch size callback is invoked during query planning, after the bind callback, for each `COPY ... TO` statement
- * that does not set `BATCH_SIZE` itself. It must report how many rows a batch should carry via
+ * that does not set `BATCH_SIZE` itself. It should report how many rows a batch should carry via
  * `duckdb_v2_copy_to_batch_size_set_target()`; the engine then cuts the rows being written into batches of that size
  * and hands each to the batch callback. Without a batch size from either the statement or the callback, a batch is cut
  * for every chunk of rows sunk, i.e. a vector at a time. A batch may still be smaller than the reported size (the last
@@ -6521,7 +6614,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_to_batch_size_get_bind_data(duckdb_v
 
 /*!
  * Sets the number of rows a batch should carry, as the target the engine cuts batches at. The batch size callback must
- * set this to a value greater than 0; the statement fails otherwise.
+ * set this to a value greater than 0; the statement fails otherwise. DuckDB defines the `BATCH_SIZE` on omission of
+ * calling the function.
  *
  * history:
  * - stable: v2.0.0
@@ -7928,7 +8022,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx, duckdb_v2_str text,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx,
+                                                                     const duckdb_v2_str *text,
                                                                      duckdb_v2_logical_type_handle *out_type,
                                                                      duckdb_v2_error_info_handle *err);
 
@@ -8024,7 +8119,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn,
-                                                                        duckdb_v2_str text,
+                                                                        const duckdb_v2_str *text,
                                                                         duckdb_v2_logical_type_handle *out_type,
                                                                         duckdb_v2_error_info_handle *err);
 
@@ -8213,7 +8308,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_logical_type_get_param(duckdb_v2_logical_
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handle ctx,
                                                                       duckdb_v2_logical_type_handle base_type,
-                                                                      duckdb_v2_identifier_t alias_name,
+                                                                      const duckdb_v2_identifier_t *alias_name,
                                                                       duckdb_v2_logical_type_handle *out_type,
                                                                       duckdb_v2_error_info_handle *err);
 
@@ -8240,7 +8335,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_v2_connection_handle conn,
                                                                          duckdb_v2_logical_type_handle base_type,
-                                                                         duckdb_v2_identifier_t alias_name,
+                                                                         const duckdb_v2_identifier_t *alias_name,
                                                                          duckdb_v2_logical_type_handle *out_type,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -8258,7 +8353,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_
 
 /*!
  * An owned opaque handle to a replacement scan being built. Created with
- * `duckdb_v2_replacement_scan_create_with_connection()`, `duckdb_v2_replacement_scan_create_with_database()` or
+ * `duckdb_v2_replacement_scan_create_with_connection()`, `duckdb_v2_replacement_scan_create_with_instance()` or
  * `duckdb_v2_replacement_scan_create_with_extension()`, configured with `duckdb_v2_replacement_scan_set_callback()` and
  * `duckdb_v2_replacement_scan_set_user_data()`, made available with `duckdb_v2_replacement_scan_register()`, and
  * destroyed with `duckdb_v2_replacement_scan_destroy()`.
@@ -8289,9 +8384,9 @@ typedef void (*duckdb_v2_replacement_scan_callback_fn)(duckdb_v2_replacement_sca
 /*!
  * Creates a new replacement scan that will be registered on the connection.
  *
- * The scan is visible only to queries on this connection and is released when the connection closes. It is consulted
- * before every database-wide scan, so it can claim a name that a built-in scan would otherwise take. The scan starts
- * out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
+ * The scan is visible only to queries on this connection and is released when the connection is destroyed. It is
+ * consulted before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take. The scan
+ * starts out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
  * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
  * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
  * registration.
@@ -8310,10 +8405,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_connection(d
                                                                                duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a new replacement scan that will be registered on the database.
+ * Creates a new replacement scan that will be registered on the instance.
  *
- * The scan is visible to every connection to the database and lives until the database closes. The scan starts out
- * empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
+ * The scan is visible to every connection to the instance and lives until the instance is destroyed. The scan starts
+ * out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
  * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
  * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
  * registration.
@@ -8321,21 +8416,21 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_connection(d
  * history:
  * - stable: v2.0.0
  *
- * @param database The database to create the scan on.
+ * @param instance The instance to create the scan on.
  * @param scan On success, receives the newly created replacement scan. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_database(duckdb_v2_database_handle database,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_instance(duckdb_v2_instance_handle instance,
                                                                              duckdb_v2_replacement_scan_handle *scan,
                                                                              duckdb_v2_error_info_handle *err);
 
 /*!
- * Creates a new replacement scan that will be registered on the loading extension's database.
+ * Creates a new replacement scan that will be registered on the loading extension's instance.
  *
  * Use this from an extension load callback, where an extension handle is available. The scan is visible to every
- * connection to that database and lives until the database closes. The scan starts out empty: configure it with
+ * connection to that instance and lives until the instance is destroyed. The scan starts out empty: configure it with
  * `duckdb_v2_replacement_scan_set_callback()` and optionally `duckdb_v2_replacement_scan_set_user_data()`, then make it
  * available with `duckdb_v2_replacement_scan_register()`. The caller owns the returned handle and must destroy it with
  * `duckdb_v2_replacement_scan_destroy()`, also after registration.
@@ -8496,7 +8591,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_argument(duckdb_v2_r
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckdb_v2_replacement_scan_info_handle info,
-                                                                           duckdb_v2_identifier_t name,
+                                                                           const duckdb_v2_identifier_t *name,
                                                                            duckdb_v2_value_handle value,
                                                                            duckdb_v2_error_info_handle *err);
 
@@ -8561,7 +8656,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_scan_info_handle info,
-                                                                     duckdb_v2_str sql,
+                                                                     const duckdb_v2_str *sql,
                                                                      duckdb_v2_error_info_handle *err);
 
 /*!
@@ -8581,16 +8676,16 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_r
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_replacement_scan_info_handle info,
-                                                                  duckdb_v2_identifier_t alias,
+                                                                  const duckdb_v2_identifier_t *alias,
                                                                   duckdb_v2_error_info_handle *err);
 
 /*!
  * Registers the replacement scan, making it consulted for names the catalog cannot resolve.
  *
- * The scan is registered on the target given at creation: the connection, the database or the loading extension's
- * database. Registration requires a callback. Scans are consulted in registration order within their scope,
- * connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan cannot be registered
- * twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering a database-wide scan
+ * The scan is registered on the target given at creation: the connection, the instance or the loading extension's
+ * instance. Registration requires a callback. Scans are consulted in registration order within their scope,
+ * connection-scoped ones before instance-wide ones, and the first to claim a name wins. A scan cannot be registered
+ * twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering an instance-wide scan
  * while queries are binding on other connections is not thread-safe; register from an extension load callback or before
  * issuing queries. The caller still owns the handle after registration and must destroy it with
  * `duckdb_v2_replacement_scan_destroy()`, which does not affect the registered scan.
@@ -8645,9 +8740,9 @@ typedef struct _duckdb_v2_scalar_function {
 } * duckdb_v2_scalar_function_handle;
 
 /*!
- * A borrowed opaque handle to the arguments supplied to a scalar function during the query preparation "bind" phase.
- * The "bind" callback receives this handle and can use it to e.g. inspect the arguments given to the function,
- * initialize some constant state and set the return type.
+ * A borrowed opaque handle to the result of a scalar function's "bind" phase. The "bind" callback receives this handle
+ * next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments, the user data and the bind
+ * data, and can use it to set the return type of the call site being bound.
  */
 typedef struct _duckdb_v2_scalar_function_bind_info {
 	void *internal_ptr;
@@ -8675,7 +8770,8 @@ typedef struct _duckdb_v2_scalar_function_exec_info {
 
 /* --- Function pointer typedefs for scalar --- */
 
-typedef void (*duckdb_v2_scalar_function_bind_callback_fn)(duckdb_v2_scalar_function_bind_info_handle info,
+typedef void (*duckdb_v2_scalar_function_bind_callback_fn)(duckdb_v2_function_bind_info_handle info,
+                                                           duckdb_v2_scalar_function_bind_info_handle result,
                                                            duckdb_v2_context_handle context,
                                                            duckdb_v2_error_info_handle *err);
 
@@ -8750,13 +8846,13 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duc
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar_function_handle function,
-                                                                duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+                                                                const duckdb_v2_identifier_t *name,
+                                                                duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the function's signature so it can be configured.
  *
- * Add parameters with `duckdb_v2_function_signature_add_parameter()`, set a variadic tail with
- * `duckdb_v2_function_signature_set_varargs()` and set the return type with
+ * Add parameters with `duckdb_v2_function_signature_add_parameter()` and set the return type with
  * `duckdb_v2_function_signature_set_return_type()`. The signature is modified in place; the function must be given a
  * signature with a return type before registration.
  *
@@ -8777,7 +8873,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_get_signature(duckdb_v2_s
  * Sets arbitrary user data on the scalar function.
  *
  * Associates an opaque pointer with the function, retrievable from the callbacks via
- * `duckdb_v2_scalar_function_bind_get_user_data()`, `duckdb_v2_scalar_function_init_get_user_data()` and
+ * `duckdb_v2_function_bind_get_user_data()`, `duckdb_v2_scalar_function_init_get_user_data()` and
  * `duckdb_v2_scalar_function_exec_get_user_data()`. The opaque handle bundles the pointer with an optional destructor,
  * invoked when the data is no longer needed.
  *
@@ -8820,9 +8916,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_property(duckdb_v2_sc
 /*!
  * Sets the optional bind callback of the scalar function.
  *
- * The bind callback is invoked during query planning for each call site of the function. It can inspect the argument
- * types and constant argument values, set a concrete return type, and set "bind data" that is shared with the init and
- * exec callbacks.
+ * The bind callback is invoked during query planning for each call site of the function. Through its
+ * `duckdb_v2_function_bind_info_handle` it can inspect the argument types and constant argument values and set "bind
+ * data" that is shared with the init and exec callbacks. Through its `duckdb_v2_scalar_function_bind_info_handle` it
+ * can set a concrete return type.
  *
  * history:
  * - stable: v2.0.0
@@ -8875,99 +8972,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_init_callback(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
     duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_exec_callback_fn callback,
     duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the user data set via `duckdb_v2_scalar_function_set_user_data()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param data Receives the user data pointer, or null if none was set.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_get_user_data(
-    duckdb_v2_scalar_function_bind_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the function's "bind data" from the bind callback.
- *
- * The bind data is stored with the bound call site and retrievable from the init and exec callbacks. The opaque handle
- * bundles the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional
- * equality callback used when comparing two bound call sites; without one, pointer equality is used.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(
-    duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the number of arguments of the call site being bound.
- *
- * Variadic tail arguments are included. Valid indices for `duckdb_v2_scalar_function_bind_get_arg_type()` and
- * `duckdb_v2_scalar_function_bind_get_arg_value()` are [0, count).
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param count Receives the number of arguments.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_get_arg_count(
-    duckdb_v2_scalar_function_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the type of the argument at the given index.
- *
- * Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
- * `duckdb_v2_logical_type_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param index The index of the argument to get the type of.
- * @param type Receives the argument type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR
-duckdb_v2_scalar_function_bind_get_arg_type(duckdb_v2_scalar_function_bind_info_handle info, idx_t index,
-                                            duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
-
-/*!
- * Folds the argument at the given index to a constant value.
- *
- * The argument must be foldable to a constant (e.g. a literal or a constant expression); otherwise the call fails with
- * an error, as it does when the index is out of bounds. The resulting value may be NULL. The returned value is owned by
- * the caller and must be destroyed via `duckdb_v2_value_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param index The index of the argument to extract a constant value from.
- * @param value Receives the constant value. Owned by the caller; destroy via `duckdb_v2_value_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR
-duckdb_v2_scalar_function_bind_get_arg_value(duckdb_v2_scalar_function_bind_info_handle info, idx_t index,
-                                             duckdb_v2_value_handle *value, duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the concrete return type of the call site being bound.
@@ -9101,39 +9105,49 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_row_count(
     duckdb_v2_scalar_function_exec_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 
 /*!
- * Returns how many argument vectors this execution carries: one per argument of the call, variadic tail arguments
- * included. Valid indices for `duckdb_v2_scalar_function_exec_get_arg()` are [0, count).
+ * Returns how many argument vectors this invocation carries, split into the four parts of the argument list.
+ *
+ * The parts and their order are those the bind callback saw through `duckdb_v2_function_bind_get_arg_count()`, and the
+ * vectors are at the same indices. Valid indices for `duckdb_v2_scalar_function_exec_get_arg()` are [0, the sum of the
+ * four counts). Every out-parameter may be NULL, in which case nothing is written to it.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The exec info handle.
- * @param count Receives the number of argument vectors.
+ * @param positional_fixed Optional. Receives the number of positional-only and standard parameters.
+ * @param positional_variadic Optional. Receives the number of arguments `*args` received, 0 when the signature has
+ * none.
+ * @param named_fixed Optional. Receives the number of named-only parameters.
+ * @param named_variadic Optional. Receives the number of arguments `**kwargs` received, 0 when the signature has none.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_arg_count(
-    duckdb_v2_scalar_function_exec_info_handle info, uint32_t *count, duckdb_v2_error_info_handle *err);
+    duckdb_v2_scalar_function_exec_info_handle info, idx_t *positional_fixed, idx_t *positional_variadic,
+    idx_t *named_fixed, idx_t *named_variadic, duckdb_v2_error_info_handle *err);
 
 /*!
  * Retrieves the argument vector at the given index.
  *
- * The vector holds the argument's values for the current batch; use `duckdb_v2_scalar_function_exec_get_row_count()`
- * for the number of rows. Fails if the index is out of bounds. Borrowed; valid only for the duration of the callback.
+ * The index is the one the bind callback used for the argument, e.g. the index
+ * `duckdb_v2_function_bind_get_arg_index()` found for a name. The vector holds the argument's values for the current
+ * batch; use `duckdb_v2_scalar_function_exec_get_row_count()` for the number of rows. Fails if the index is out of
+ * bounds. Borrowed; valid only for the duration of the callback.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param info The exec info handle.
- * @param index The index of the argument vector to get.
+ * @param index The index of the argument.
  * @param vector Receives the borrowed argument vector.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_arg(duckdb_v2_scalar_function_exec_info_handle info,
-                                                                    uint32_t index, duckdb_v2_vector_handle *vector,
+                                                                    idx_t index, duckdb_v2_vector_handle *vector,
                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
@@ -9233,6 +9247,7 @@ typedef enum DUCKDB_V2_STATEMENT_TYPE {
 	DUCKDB_V2_STATEMENT_TYPE_CONNECT = 31,
 	DUCKDB_V2_STATEMENT_TYPE_DISCONNECT = 32,
 	DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE = 33,
+	DUCKDB_V2_STATEMENT_TYPE_PASSTHROUGH = 34,
 	DUCKDB_V2_STATEMENT_TYPE_MAX_ENUM = 0x7FFFFFFF,
 } DUCKDB_V2_STATEMENT_TYPE;
 
@@ -10149,7 +10164,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_context(duckdb_v2_context_handle ctx,
-                                                                          duckdb_v2_uhugeint_t in_value,
+                                                                          const duckdb_v2_uhugeint_t *in_value,
                                                                           duckdb_v2_value_handle *out_value,
                                                                           duckdb_v2_error_info_handle *err);
 
@@ -10241,7 +10256,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_context(duckdb_v
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_context(duckdb_v2_context_handle ctx,
-                                                                         duckdb_v2_hugeint_t in_value,
+                                                                         const duckdb_v2_hugeint_t *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -10260,7 +10275,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_context(duckdb_v2_context_handle ctx,
-                                                                         duckdb_v2_str in_value,
+                                                                         const duckdb_v2_str *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -10279,7 +10294,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_context(duckdb_v2_context_handle ctx,
-                                                                      duckdb_v2_str in_value,
+                                                                      const duckdb_v2_str *in_value,
                                                                       duckdb_v2_value_handle *out_value,
                                                                       duckdb_v2_error_info_handle *err);
 
@@ -10467,7 +10482,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                                             duckdb_v2_uhugeint_t in_value,
+                                                                             const duckdb_v2_uhugeint_t *in_value,
                                                                              duckdb_v2_value_handle *out_value,
                                                                              duckdb_v2_error_info_handle *err);
 
@@ -10562,7 +10577,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_connection(duckd
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                                            duckdb_v2_hugeint_t in_value,
+                                                                            const duckdb_v2_hugeint_t *in_value,
                                                                             duckdb_v2_value_handle *out_value,
                                                                             duckdb_v2_error_info_handle *err);
 
@@ -10581,7 +10596,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_connection(duckdb_v2_connection_handle conn,
-                                                                            duckdb_v2_str in_value,
+                                                                            const duckdb_v2_str *in_value,
                                                                             duckdb_v2_value_handle *out_value,
                                                                             duckdb_v2_error_info_handle *err);
 
@@ -10600,7 +10615,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_connection(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_str in_value,
+                                                                         const duckdb_v2_str *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -11081,7 +11096,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_connect
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_context(duckdb_v2_context_handle ctx,
-                                                                          duckdb_v2_interval_t in_value,
+                                                                          const duckdb_v2_interval_t *in_value,
                                                                           duckdb_v2_value_handle *out_value,
                                                                           duckdb_v2_error_info_handle *err);
 
@@ -11101,7 +11116,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_context(duckdb
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duckdb_v2_connection_handle conn,
-                                                                             duckdb_v2_interval_t in_value,
+                                                                             const duckdb_v2_interval_t *in_value,
                                                                              duckdb_v2_value_handle *out_value,
                                                                              duckdb_v2_error_info_handle *err);
 
@@ -11125,8 +11140,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duc
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_context(duckdb_v2_context_handle ctx,
-                                                                         duckdb_v2_hugeint_t in_value, uint8_t width,
-                                                                         uint8_t scale,
+                                                                         const duckdb_v2_hugeint_t *in_value,
+                                                                         uint8_t width, uint8_t scale,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -11150,8 +11165,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_context(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_connection(duckdb_v2_connection_handle conn,
-                                                                            duckdb_v2_hugeint_t in_value, uint8_t width,
-                                                                            uint8_t scale,
+                                                                            const duckdb_v2_hugeint_t *in_value,
+                                                                            uint8_t width, uint8_t scale,
                                                                             duckdb_v2_value_handle *out_value,
                                                                             duckdb_v2_error_info_handle *err);
 
@@ -11172,7 +11187,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_connection(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_context(duckdb_v2_context_handle ctx,
-                                                                      duckdb_v2_hugeint_t in_value,
+                                                                      const duckdb_v2_hugeint_t *in_value,
                                                                       duckdb_v2_value_handle *out_value,
                                                                       duckdb_v2_error_info_handle *err);
 
@@ -11193,7 +11208,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_context(duckdb_v2_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_connection(duckdb_v2_connection_handle conn,
-                                                                         duckdb_v2_hugeint_t in_value,
+                                                                         const duckdb_v2_hugeint_t *in_value,
                                                                          duckdb_v2_value_handle *out_value,
                                                                          duckdb_v2_error_info_handle *err);
 
@@ -11214,7 +11229,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_connection(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_context(duckdb_v2_context_handle ctx,
-                                                                     duckdb_v2_str in_value,
+                                                                     const duckdb_v2_str *in_value,
                                                                      duckdb_v2_value_handle *out_value,
                                                                      duckdb_v2_error_info_handle *err);
 
@@ -11235,7 +11250,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_context(duckdb_v2_c
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_connection(duckdb_v2_connection_handle conn,
-                                                                        duckdb_v2_str in_value,
+                                                                        const duckdb_v2_str *in_value,
                                                                         duckdb_v2_value_handle *out_value,
                                                                         duckdb_v2_error_info_handle *err);
 
@@ -11256,7 +11271,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_connection(duckdb_v
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_context(duckdb_v2_context_handle ctx,
-                                                                        duckdb_v2_str in_value,
+                                                                        const duckdb_v2_str *in_value,
                                                                         duckdb_v2_value_handle *out_value,
                                                                         duckdb_v2_error_info_handle *err);
 
@@ -11277,7 +11292,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_context(duckdb_v
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_connection(duckdb_v2_connection_handle conn,
-                                                                           duckdb_v2_str in_value,
+                                                                           const duckdb_v2_str *in_value,
                                                                            duckdb_v2_value_handle *out_value,
                                                                            duckdb_v2_error_info_handle *err);
 
@@ -12089,9 +12104,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_wait(duckdb_v2_result_handle resul
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_result_render_box(duckdb_v2_result_handle *result, idx_t max_rows,
-                                                         idx_t max_width, idx_t max_col_width, duckdb_v2_str null_value,
-                                                         idx_t render_mode, idx_t limit, duckdb_v2_text_sink_fn sink,
-                                                         void *user_data, duckdb_v2_error_info_handle *err);
+                                                         idx_t max_width, idx_t max_col_width,
+                                                         const duckdb_v2_str *null_value, idx_t render_mode,
+                                                         idx_t limit, duckdb_v2_text_sink_fn sink, void *user_data,
+                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Runs the result to completion and reports the changed-row count.
@@ -12224,10 +12240,10 @@ typedef struct _duckdb_v2_table_function {
 } * duckdb_v2_table_function_handle;
 
 /*!
- * A borrowed opaque handle to the arguments supplied to a table function during the query preparation "bind" phase. The
- * "bind" callback receives this handle and must use it to declare the columns the function returns; it can also inspect
- * the arguments given to the function, initialize some constant state and hint at the number of rows the scan will
- * produce.
+ * A borrowed opaque handle to the result of a table function's "bind" phase. The "bind" callback receives this handle
+ * next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments, the user data and the bind
+ * data. It must use this handle to declare the columns the function returns, and can use it to hint at the number of
+ * rows the scan will produce.
  */
 typedef struct _duckdb_v2_table_function_bind_info {
 	void *internal_ptr;
@@ -12300,7 +12316,8 @@ typedef struct _duckdb_v2_table_function_partitioning_info {
 
 /* --- Function pointer typedefs for table --- */
 
-typedef void (*duckdb_v2_table_function_bind_callback_fn)(duckdb_v2_table_function_bind_info_handle info,
+typedef void (*duckdb_v2_table_function_bind_callback_fn)(duckdb_v2_function_bind_info_handle info,
+                                                          duckdb_v2_table_function_bind_info_handle result,
                                                           duckdb_v2_context_handle context,
                                                           duckdb_v2_error_info_handle *err);
 
@@ -12395,18 +12412,15 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duck
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function,
-                                                               duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+                                                               const duckdb_v2_identifier_t *name,
+                                                               duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the function's signature so it can be configured.
  *
- * Add parameters with `duckdb_v2_function_signature_add_parameter()` and set a variadic tail with
- * `duckdb_v2_function_signature_set_varargs()`. The signature is modified in place. A table function maps the signature
- * onto the two ways SQL passes arguments to a table function: a parameter without a default value becomes a required
- * positional argument, a parameter with a default value becomes a named argument the caller may omit. The variadic tail
- * extends the positional arguments. A table function declares the columns it returns from its bind callback instead of
- * through a return type, so registration rejects a signature whose return type was set with
- * `duckdb_v2_function_signature_set_return_type()`.
+ * Add parameters with `duckdb_v2_function_signature_add_parameter()`. The signature is modified in place. A table
+ * function declares the columns it returns from its bind callback instead of through a return type, so registration
+ * rejects a signature whose return type was set with `duckdb_v2_function_signature_set_return_type()`.
  *
  * history:
  * - stable: v2.0.0
@@ -12425,7 +12439,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_signature(duckdb_v2_ta
  * Sets arbitrary user data on the table function.
  *
  * Associates an opaque pointer with the function, retrievable from the callbacks via
- * `duckdb_v2_table_function_bind_get_user_data()`, `duckdb_v2_table_function_init_global_get_user_data()`,
+ * `duckdb_v2_function_bind_get_user_data()`, `duckdb_v2_table_function_init_global_get_user_data()`,
  * `duckdb_v2_table_function_exec_get_user_data()` and their counterparts on the other phases. The opaque handle bundles
  * the pointer with an optional destructor, invoked when the data is no longer needed.
  *
@@ -12446,9 +12460,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_user_data(duckdb_v2_ta
  * Sets the bind callback of the table function.
  *
  * The bind callback is invoked during query planning for each call site of the function. It must declare the columns
- * the function returns via `duckdb_v2_table_function_bind_add_result_column()`. It can also inspect the constant
- * argument values and set "bind data" that is shared with all later callbacks. A bind callback must be set before
- * registration.
+ * the function returns via `duckdb_v2_table_function_bind_add_result_column()`. Through its
+ * `duckdb_v2_function_bind_info_handle` it can also inspect the constant argument values and set "bind data" that is
+ * shared with all later callbacks. A bind callback must be set before registration.
  *
  * history:
  * - stable: v2.0.0
@@ -12635,105 +12649,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_partitioning_callback(
     duckdb_v2_error_info_handle *err);
 
 /*!
- * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param data Receives the user data pointer, or null if none was set.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_user_data(duckdb_v2_table_function_bind_info_handle info,
-                                                                         void **data, duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets the function's "bind data" from the bind callback.
- *
- * The bind data is stored with the bound call site and retrievable from every later callback. The opaque handle bundles
- * the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional equality
- * callback used when comparing two bound call sites; without one, pointer equality is used.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_bind_data(duckdb_v2_table_function_bind_info_handle info,
-                                                                         duckdb_v2_opaque *data,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the number of arguments of the call site being bound.
- *
- * The arguments are presented in signature order: one for every parameter declared with
- * `duckdb_v2_function_signature_add_parameter()`, followed by any variadic tail arguments. A parameter the call site
- * omitted is still present, carrying the default value declared for it, so the count only varies with the length of the
- * variadic tail. Valid indices for `duckdb_v2_table_function_bind_get_arg_type()` and
- * `duckdb_v2_table_function_bind_get_arg_value()` are [0, count).
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param count Receives the number of arguments.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_count(duckdb_v2_table_function_bind_info_handle info,
-                                                                         idx_t *count,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the type of the argument at the given index.
- *
- * Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed via
- * `duckdb_v2_logical_type_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param index The index of the argument to get the type of.
- * @param type Receives the argument type. Owned by the caller; destroy via `duckdb_v2_logical_type_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_type(duckdb_v2_table_function_bind_info_handle info,
-                                                                        idx_t index,
-                                                                        duckdb_v2_logical_type_handle *type,
-                                                                        duckdb_v2_error_info_handle *err);
-
-/*!
- * Retrieves the constant value of the argument at the given index.
- *
- * The arguments of a table function are always constants, folded before the bind callback runs, so this never fails for
- * an index in bounds; it does fail when the index is out of bounds. The value may be NULL. The returned value is owned
- * by the caller and must be destroyed via `duckdb_v2_value_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param info The bind info handle.
- * @param index The index of the argument to get the value of.
- * @param value Receives the constant value. Owned by the caller; destroy via `duckdb_v2_value_destroy()`.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_v2_table_function_bind_info_handle info,
-                                                                         idx_t index, duckdb_v2_value_handle *value,
-                                                                         duckdb_v2_error_info_handle *err);
-
-/*!
  * Declares one of the columns the function returns.
  *
  * Call this once per column, in order: the columns declared here are the columns of the table the function produces,
@@ -12752,8 +12667,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(
-    duckdb_v2_table_function_bind_info_handle info, duckdb_v2_identifier_t name, duckdb_v2_logical_type_handle type,
-    duckdb_v2_error_info_handle *err);
+    duckdb_v2_table_function_bind_info_handle info, const duckdb_v2_identifier_t *name,
+    duckdb_v2_logical_type_handle type, duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the estimated number of rows the scan will produce.
@@ -12773,6 +12688,29 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_cardinality(
     duckdb_v2_table_function_bind_info_handle info, idx_t cardinality, bool is_exact, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the order guarantee of the rows this call of the function produces. Defaults to
+ * `ORDER_PRESERVATION_INSERTION_ORDER`.
+ *
+ * With `ORDER_PRESERVATION_NO_ORDER`, a scan that reports more than one thread via
+ * `duckdb_v2_table_function_init_global_set_max_threads()` runs in parallel into query results, INSERT and COPY without
+ * a `duckdb_v2_table_function_set_partition_data_callback()`, and the rows arrive in no particular order. With
+ * insertion order kept, those consumers need the partition data callback to run in parallel. Fails with
+ * `ERROR_INPUT_INVALID` when order is not one of the enum's declared values.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param order The order guarantee of the produced rows.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_order_preservation(
+    duckdb_v2_table_function_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
+    duckdb_v2_error_info_handle *err);
 
 /*!
  * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
@@ -13196,7 +13134,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_filter_pushdown_get_user_d
     duckdb_v2_table_function_filter_pushdown_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 
 /*!
- * Retrieves the bind data set via `duckdb_v2_table_function_bind_set_bind_data()`, or null if none was set.
+ * Retrieves the bind data set via `duckdb_v2_function_bind_set_bind_data()`, or null if none was set.
  *
  * This is the same object the init and exec callbacks later receive, so a predicate the callback accepts can be
  * recorded in it for the scan to apply.

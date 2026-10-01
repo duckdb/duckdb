@@ -842,7 +842,15 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	if (!ignore_extensions && arrow_type.HasExtension()) {
 		if (arrow_type.extension_data->arrow_to_duckdb) {
 			// Convert the storage and then call the cast function
-			Vector input_data(arrow_type.extension_data->GetInternalType());
+			// `size` is the child's own count, which for a nested child is not bounded by
+			// STANDARD_VECTOR_SIZE -- size the storage vector for it (as ArrowAppendData::AppendChild does).
+			Vector input_data(arrow_type.extension_data->GetInternalType(),
+			                  MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
+			// Every caller has already established this column's top-level validity on `vector` — transfer
+			// it onto the storage vector, since the cast function is responsible for carrying it through to
+			// its result (a conversion that rebuilds the result does not preserve the pre-set validity, and
+			// a spec-clean writer need not mirror a parent NULL in the storage children's own validity).
+			FlatVector::CopyValidity(input_data, vector, size);
 			ColumnArrowToDuckDB(input_data, array, chunk_offset, array_state, size, arrow_type, nested_offset,
 			                    parent_mask, parent_offset, /*ignore_extensions*/ true);
 			arrow_type.extension_data->arrow_to_duckdb(array_state.context, input_data, vector, size);

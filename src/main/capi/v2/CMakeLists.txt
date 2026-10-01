@@ -11,11 +11,11 @@ add_library_unity(
   capi_v2_connection.cpp
   capi_v2_custom_type.cpp
   capi_v2_data_chunk.cpp
-  capi_v2_database.cpp
   capi_v2_environment.cpp
   capi_v2_error.cpp
   capi_v2_extension.cpp
   capi_v2_file_system.cpp
+  capi_v2_func.cpp
   capi_v2_func_aggregate.cpp
   capi_v2_func_cast.cpp
   capi_v2_func_copy.cpp
@@ -24,6 +24,7 @@ add_library_unity(
   capi_v2_func_signature.cpp
   capi_v2_func_table.cpp
   capi_v2_identifier.cpp
+  capi_v2_instance.cpp
   capi_v2_logging.cpp
   capi_v2_logical_type.cpp
   capi_v2_option.cpp
