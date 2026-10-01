@@ -84,30 +84,16 @@ struct FKFact {
 	}
 };
 
-//! Over-approximation of the values a column can hold at a point in the
-//! plan. Two roles, and the distinction is load-bearing:
-//!  - PROBE-side fact (transfer kernel): over-approximation of values that
-//!    actually occur. Wider = sound.
-//!  - ALLOWED-set extracted from a ref-side conjunct: EXACT set of values for
-//!    which the conjunct is TRUE. IsSubsetOf is only sound when the right-hand
-//!    side is exact — never approximate an IN list as [min, max].
 struct ValueDomain {
-	//! Column type; only meaningful when values are constrained.
 	LogicalType type;
-	//! Can the column be NULL here?
 	bool null_possible = true;
-	//! Contradiction detected (relation provably empty). SubsetOf(bottom, X)
-	//! is vacuously true.
+	//! Contradiction detected (relation provably empty)
 	bool bottom = false;
 
-	//! RANGE: v in domain iff
-	//!   (!has_lo || v > lo || (lo_inclusive && v == lo)) &&
-	//!   (!has_hi || v < hi || (hi_inclusive && v == hi))
 	bool has_lo = false, has_hi = false;
 	bool lo_inclusive = true, hi_inclusive = true;
 	Value lo, hi;
 
-	//! SET: exact finite set of non-null values.
 	bool is_set = false;
 	vector<Value> values;
 
@@ -118,10 +104,9 @@ struct ValueDomain {
 		return !HasValueConstraint();
 	}
 
-	//! this ⊆ other, null-aware. Only sound when `other` is EXACT.
+	//! this ⊆ other, null-aware.
 	bool IsSubsetOf(const ValueDomain &other) const;
-	//! this := this ∩ other. Only sound when `other` is EXACT (a conjunct's
-	//! allowed-set). Used to narrow probe-side facts.
+	//! this := this ∩ other.
 	void IntersectWith(const ValueDomain &other);
 };
 

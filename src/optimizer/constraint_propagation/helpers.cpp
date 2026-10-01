@@ -270,7 +270,7 @@ bool TryExtractConstraint(const Expression &conjunct, ExtractedConstraint &out) 
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		return TryExtractComparison(conjunct, out);
 	default:
-		return false;
+		return false; // TODO: add IN lists and OR-of-equalities.
 	}
 }
 

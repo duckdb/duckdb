@@ -214,7 +214,7 @@ void TransferKernel::Visit(LogicalOperator &op) {
 		VisitSetOperation(op, props);
 		break;
 	default:
-		break;
+		break; // TODO: propagate facts through WINDOW, CTE, UNNEST, etc.
 	}
 }
 
