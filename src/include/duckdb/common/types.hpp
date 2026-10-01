@@ -15,6 +15,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/atomic.hpp"
 
+#include <limits>
+
 namespace duckdb {
 
 class Serializer;
@@ -285,7 +287,20 @@ struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias);
 	virtual ~ExtraTypeInfo();
 
+	// the 1-byte fields and the ref count are declared first so they pack into one word after the vtable pointer
 	const ExtraTypeInfoType type;
+
+private:
+	friend struct LogicalType;
+	//! The id and physical type of the LogicalType that owns this info - set when a LogicalType adopts it
+	LogicalTypeId id = LogicalTypeId::INVALID;
+	PhysicalType physical_type = PhysicalType::INVALID;
+	//! Immortal infos (e.g. the one behind LogicalType::INTEGER) are shared without ref-counting and never freed.
+	bool immortal = false;
+	//! Atomic intrusive ref-count. This comes after the other members to avoid extra padding.
+	mutable atomic<uint32_t> ref_count {0};
+
+public:
 	string alias;
 	unique_ptr<ExtensionTypeInfo> extension_info;
 
@@ -297,12 +312,20 @@ public:
 	ExtraTypeInfo &operator=(const ExtraTypeInfo &other) = delete;
 
 	inline void AddRef() const {
-		if (!immortal) {
-			ref_count.fetch_add(1, std::memory_order_relaxed);
+		if (immortal) {
+			return;
 		}
+		auto previous = ref_count.fetch_add(1, std::memory_order_relaxed);
+		D_ASSERT(previous < std::numeric_limits<uint32_t>::max());
+		(void)previous;
 	}
 	inline void Release() const {
-		if (!immortal && ref_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+		if (immortal) {
+			return;
+		}
+		auto previous = ref_count.fetch_sub(1, std::memory_order_acq_rel);
+		D_ASSERT(previous > 0);
+		if (previous == 1) {
 			delete this;
 		}
 	}
@@ -330,15 +353,6 @@ public:
 
 protected:
 	virtual bool EqualsInternal(const ExtraTypeInfo *other_p) const;
-
-private:
-	friend struct LogicalType;
-	//! The id and physical type of the LogicalType that owns this info - set when a LogicalType adopts it
-	LogicalTypeId id = LogicalTypeId::INVALID;
-	PhysicalType physical_type = PhysicalType::INVALID;
-	//! Immortal infos (e.g. the one behind LogicalType::INTEGER) are shared without ref-counting and never freed
-	bool immortal = false;
-	mutable atomic<idx_t> ref_count {0};
 };
 
 struct LogicalType {
