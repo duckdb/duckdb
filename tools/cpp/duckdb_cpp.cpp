@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cstring>
 #include <memory>
+#include <string_view>
 
 // The V2 extension header. By default, (client library, or extension statically linked into DuckDB) this library binds
 // duckdb_v2_* symbols at link time and only needs the header for the loader-interface types of the extension
@@ -674,9 +675,10 @@ auto StatementIterator::Next() -> SqlStatement {
 	return detail::Factory::Make<SqlStatement>(statement);
 }
 
-auto Connection::ParseSQL(const char *sql) -> StatementIterator {
+auto Connection::ParseSQL(const std::string_view sql) -> StatementIterator {
 	duckdb_v2_statement_iterator_handle iterator = nullptr;
-	CheckedAPICall(duckdb_v2_parse_sql, handle(), sql, &iterator);
+	auto sql_str = ToStr(sql);
+	CheckedAPICall(duckdb_v2_parse_sql, handle(), &sql_str, &iterator);
 	return detail::Factory::Make<StatementIterator>(iterator);
 }
 
@@ -702,7 +704,7 @@ static_assert(static_cast<uint8_t>(TokenType::TERMINATOR) == DUCKDB_V2_TOKEN_TYP
 auto Connection::Tokenize(std::string_view sql) const -> TokenList {
 	duckdb_v2_token_iterator_handle iterator = nullptr;
 	auto sql_str = ToStr(sql);
-	CheckedAPICall(duckdb_v2_tokenize_sql, handle(), &sql_str, &iterator);
+	CheckedAPICall(duckdb_v2_tokenize_sql_from_connection, handle(), &sql_str, &iterator);
 	TokenList list;
 	try {
 		while (true) {

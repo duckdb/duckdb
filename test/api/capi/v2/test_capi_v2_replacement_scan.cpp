@@ -665,8 +665,8 @@ TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", 
 	ReplRegisterRegistry(fx.conn, registry);
 
 	duckdb_v2_statement_iterator_handle iter = nullptr;
-	REQUIRE(duckdb_v2_parse_sql(fx.conn, "SELECT col1 FROM cached_batch ORDER BY col1", &iter, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	auto sql = Convert("SELECT col1 FROM cached_batch ORDER BY col1");
+	REQUIRE(duckdb_v2_parse_sql(fx.conn, &sql, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_handle stmt = nullptr;
 	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_statement_iterator_destroy(&iter);
