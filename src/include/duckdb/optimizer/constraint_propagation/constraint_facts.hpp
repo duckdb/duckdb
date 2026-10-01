@@ -4,6 +4,7 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
@@ -83,6 +84,47 @@ struct FKFact {
 	}
 };
 
+//! Over-approximation of the values a column can hold at a point in the
+//! plan. Two roles, and the distinction is load-bearing:
+//!  - PROBE-side fact (transfer kernel): over-approximation of values that
+//!    actually occur. Wider = sound.
+//!  - ALLOWED-set extracted from a ref-side conjunct: EXACT set of values for
+//!    which the conjunct is TRUE. IsSubsetOf is only sound when the right-hand
+//!    side is exact — never approximate an IN list as [min, max].
+struct ValueDomain {
+	//! Column type; only meaningful when values are constrained.
+	LogicalType type;
+	//! Can the column be NULL here?
+	bool null_possible = true;
+	//! Contradiction detected (relation provably empty). SubsetOf(bottom, X)
+	//! is vacuously true.
+	bool bottom = false;
+
+	//! RANGE: v in domain iff
+	//!   (!has_lo || v > lo || (lo_inclusive && v == lo)) &&
+	//!   (!has_hi || v < hi || (hi_inclusive && v == hi))
+	bool has_lo = false, has_hi = false;
+	bool lo_inclusive = true, hi_inclusive = true;
+	Value lo, hi;
+
+	//! SET: exact finite set of non-null values.
+	bool is_set = false;
+	vector<Value> values;
+
+	bool HasValueConstraint() const {
+		return has_lo || has_hi || is_set;
+	}
+	bool IsUnconstrained() const {
+		return !HasValueConstraint();
+	}
+
+	//! this ⊆ other, null-aware. Only sound when `other` is EXACT.
+	bool IsSubsetOf(const ValueDomain &other) const;
+	//! this := this ∩ other. Only sound when `other` is EXACT (a conjunct's
+	//! allowed-set). Used to narrow probe-side facts.
+	void IntersectWith(const ValueDomain &other);
+};
+
 class ScopeFacts {
 public:
 	const ColumnMask &NotNull() const {
@@ -111,11 +153,29 @@ public:
 		fks = std::move(facts);
 	}
 
+	const ValueDomain &Domain(idx_t pos) const {
+		if (pos < domains.size()) {
+			return domains[pos];
+		}
+		static const ValueDomain ANY;
+		return ANY;
+	}
+	void NarrowDomain(idx_t pos, const ValueDomain &allowed) {
+		if (!allowed.null_possible) {
+			AddNotNullBit(pos);
+		}
+		if (pos >= domains.size()) {
+			domains.resize(pos + 1);
+		}
+		domains[pos].IntersectWith(allowed);
+	}
+
 	bool IsUniqueOn(const ColumnMask &cols, bool require_null_safe) const;
 
 	const TableCatalogEntry *base_table = nullptr;
 	vector<idx_t> base_column;
-	bool filter_below = false;
+	vector<ValueDomain> domains;
+	bool rows_dropped_below = false;
 
 private:
 	ColumnMask not_null;
