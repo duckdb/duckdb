@@ -159,12 +159,12 @@ jobs:
 
     - name: Package release artifact
       shell: bash
-      run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=.
+      run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=. RELEASE_ARTIFACT_TARBALL=build/windows-release-amd64-build.tar.gz
 
     - uses: actions/upload-artifact@v7
       with:
-        name: windows-release-amd64-build
-        path: build/release-artifact.tar.gz
+        path: build/windows-release-amd64-build.tar.gz
+        if-no-files-found: error
         archive: false
 
  win-release-32:
@@ -308,12 +308,12 @@ jobs:
 
      - name: Package release artifact
        shell: bash
-       run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=.
+       run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=. RELEASE_ARTIFACT_TARBALL=build/windows-release-arm64-build.tar.gz
 
      - uses: actions/upload-artifact@v7
        with:
-         name: windows-release-arm64-build
-         path: build/release-artifact.tar.gz
+         path: build/windows-release-arm64-build.tar.gz
+         if-no-files-found: error
          archive: false
 
  mingw:
@@ -427,10 +427,10 @@ jobs:
 
        - name: Package release artifact
          shell: bash
-         run: make release-artifact
+         run: make release-artifact RELEASE_ARTIFACT_TARBALL=build/windows-release-mingw-build.tar.gz
 
        - uses: actions/upload-artifact@v7
          with:
-           name: windows-release-mingw-build
-           path: build/release-artifact.tar.gz
+           path: build/windows-release-mingw-build.tar.gz
+           if-no-files-found: error
            archive: false

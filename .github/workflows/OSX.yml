@@ -237,10 +237,10 @@ jobs:
 
           make release-artifact \
             RELEASE_ARTIFACT_SOURCE_DIR=build/release_arm64 \
-            RELEASE_ARTIFACT_TARBALL=build/release-artifacts/osx-arm64/release-artifact.tar.gz
+            RELEASE_ARTIFACT_TARBALL=build/release-artifacts/osx-release-arm64-build.tar.gz
           make release-artifact \
             RELEASE_ARTIFACT_SOURCE_DIR=build/release_amd64 \
-            RELEASE_ARTIFACT_TARBALL=build/release-artifacts/osx-amd64/release-artifact.tar.gz
+            RELEASE_ARTIFACT_TARBALL=build/release-artifacts/osx-release-amd64-build.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
@@ -296,14 +296,14 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: osx-release-arm64-build
-          path: build/release-artifacts/osx-arm64/release-artifact.tar.gz
+          path: build/release-artifacts/osx-release-arm64-build.tar.gz
+          if-no-files-found: error
           archive: false
 
       - uses: actions/upload-artifact@v7
         with:
-          name: osx-release-amd64-build
-          path: build/release-artifacts/osx-amd64/release-artifact.tar.gz
+          path: build/release-artifacts/osx-release-amd64-build.tar.gz
+          if-no-files-found: error
           archive: false
 
       - name: Unit Test
