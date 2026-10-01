@@ -56,7 +56,7 @@ public:
 	transaction_t GetLastCommit() const {
 		return last_commit;
 	}
-	//! Wait until every published commit is durable. Called under the WAL lock, so no new commit can
+	//! Wait until every published commit is durable. Called under the commit lock, so no new commit can
 	//! enter its sync window and the wait is bounded by the syncs in flight
 	void WaitForDurability();
 	optional_idx GetActiveCheckpoint() const {
