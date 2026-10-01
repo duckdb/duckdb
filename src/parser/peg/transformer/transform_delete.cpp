@@ -37,7 +37,7 @@ unique_ptr<BaseTableRef> PEGTransformerFactory::TransformTargetOptAlias(PEGTrans
 }
 
 Identifier PEGTransformerFactory::TransformTargetAlias(PEGTransformer &transformer, const bool &has_result,
-                                                        const Identifier &col_id) {
+                                                       const Identifier &col_id) {
 	return col_id;
 }
 
