@@ -27,4 +27,7 @@ bool JoinCoverage(const ConstraintPropagator &p, const LogicalComparisonJoin &jo
 //! How many output rows side `side` produces per input row.
 SideMultiplicity MultiplicityOf(const ConstraintPropagator &p, const LogicalComparisonJoin &join, idx_t side);
 
+//! Is every filter effect on `drop` is implied by `keep`'s domain on the same physical column.
+bool DropFilterEffectsAreRedundant(const ScopeFacts &keep_facts, const ScopeFacts &drop_facts);
+
 } // namespace duckdb
