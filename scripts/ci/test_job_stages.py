@@ -200,6 +200,10 @@ class JobStagesTest(unittest.TestCase):
                 [False, False, True, True],
             )
             self.assertEqual(
+                [config["build_jemalloc"] for config in workflow_dispatch_selection.linux_release_matrix],
+                ["1", "1", "1", "1"],
+            )
+            self.assertEqual(
                 [config["publish_source"] for config in workflow_dispatch_selection.linux_release_matrix],
                 [True, False, False, False],
             )

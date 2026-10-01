@@ -48,8 +48,8 @@ DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_handle *conn) 
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn, duckdb_v2_identifier_t name,
-                                                duckdb_v2_str setting, DUCKDB_V2_SETTING_SCOPE scope,
+DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn, const duckdb_v2_identifier_t *name,
+                                                const duckdb_v2_str *setting, DUCKDB_V2_SETTING_SCOPE scope,
                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(name);
@@ -61,7 +61,8 @@ DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_connection_get_option_by_name(duckdb_v2_connection_handle conn, duckdb_v2_identifier_t name,
+DUCKDB_V2_ERROR duckdb_v2_connection_get_option_by_name(duckdb_v2_connection_handle conn,
+                                                        const duckdb_v2_identifier_t *name,
                                                         duckdb_v2_option_handle *out_option,
                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);

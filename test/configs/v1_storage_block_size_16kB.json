@@ -38,7 +38,16 @@
         "test/sql/catalog/view/secure_view.test",
         "test/sql/optimizer/secure_view_explain.test",
         "test/sql/optimizer/secure_view_pushdown.test",
-        "test/sql/optimizer/secure_view_statistics.test"
+        "test/sql/optimizer/secure_view_statistics.test",
+        "test/sql/sql_export/secure_view_sql_export.test",
+        "test/sql/sql_export/secure_view_predicates.test"
+      ]
+    },
+    {
+      "reason": "Stored aggregate-state and TUPLE columns require v2.0.0 storage.",
+      "paths": [
+        "test/sql/sql_export/empty_aggregate_state.test",
+        "test/sql/sql_export/mark_condition_shapes.test"
       ]
     }
   ]

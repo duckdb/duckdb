@@ -91,6 +91,7 @@ public:
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
+	//! Destroy after global_state so its handle closes before cleanup.
 	CopyOutputLifecycle output_lifecycle;
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchCopyTask> task_manager;
@@ -102,7 +103,6 @@ public:
 	atomic<idx_t> rows_copied;
 	//! Global copy state
 	unique_ptr<GlobalFunctionData> global_state;
-	optional_idx lifecycle_file_index;
 	//! Unpartitioned batches
 	map<idx_t, unique_ptr<FixedRawBatchData>> raw_batches;
 	//! The prepared batch data by batch index - ready to flush
@@ -129,7 +129,7 @@ public:
 			return;
 		}
 		// initialize writing to the file
-		lifecycle_file_index = output_lifecycle.RegisterFile(op.file_path);
+		output_lifecycle.RegisterFile(op.file_path);
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*global_state, op);
@@ -341,9 +341,6 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	gstate.memory_manager.FinalCheck();
 	if (function.copy_to_finalize && gstate.global_state) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
-		D_ASSERT(gstate.lifecycle_file_index.IsValid());
-		gstate.output_lifecycle.MarkFileFinalized(gstate.lifecycle_file_index.GetIndex());
-
 		if (use_tmp_file) {
 			PhysicalCopyToFile::MoveTmpFile(context, file_path);
 		}
