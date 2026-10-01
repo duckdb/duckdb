@@ -337,6 +337,8 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 				if (new_column.compression_type == CompressionType::COMPRESSION_AUTO) {
 					throw ParserException("Unrecognized option for column compression");
 				}
+			} else if (constraint.constraint_name == "ColumnCollation") {
+				new_column.type = ApplyColumnCollation(new_column.type, std::move(constraint.expression));
 			}
 		}
 	}
@@ -387,8 +389,8 @@ PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const b
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
 		change_column_type->column_name = nested_column_name->ColumnNames()[0];
 		if (!change_column_type->expression) {
-			change_column_type->expression =
-			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
+			// the binder casts the expression to the target type
+			change_column_type->expression = std::move(nested_column_name);
 		}
 		return std::move(change_column_type);
 	} else {
@@ -415,12 +417,9 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(
 	if (!type && !using_expression) {
 		throw ParserException("Omitting the type is only possible in combination with USING");
 	}
-	if (!type && column_collation) {
-		throw ParserException("Specify the VARCHAR type to alter a column collation");
-	}
 	auto alter_type = type ? *type : LogicalType::UNKNOWN;
 	if (column_collation) {
-		alter_type = ApplyColumnCollation(alter_type, std::move(column_collation->expression));
+		alter_type = ApplyColumnCollation(type, std::move(column_collation->expression));
 	}
 	unique_ptr<ParsedExpression> expression;
 	if (using_expression) {

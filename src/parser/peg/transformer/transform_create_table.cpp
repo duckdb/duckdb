@@ -18,8 +18,6 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/parser/expression/type_expression.hpp"
-#include "duckdb/catalog/default/default_types.hpp"
 
 namespace duckdb {
 
@@ -224,24 +222,6 @@ string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, 
 	return col_label;
 }
 
-LogicalType PEGTransformerFactory::ApplyColumnCollation(const LogicalType &type,
-                                                        unique_ptr<ParsedExpression> collation) {
-	if (!type.IsUnbound()) {
-		throw InternalException("Expected only unbound types here");
-	}
-	auto &expr = UnboundType::GetTypeExpression(type);
-	if (expr->GetExpressionClass() != ExpressionClass::TYPE) {
-		throw InternalException("Expected a type expression");
-	}
-	auto &type_expr = expr->Cast<TypeExpression>();
-	if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
-		throw ParserException("Only VARCHAR columns can have collations!");
-	}
-	vector<unique_ptr<ParsedExpression>> type_children;
-	type_children.push_back(std::move(collation));
-	return LogicalType::UNBOUND(make_uniq<TypeExpression>(Identifier("VARCHAR"), std::move(type_children)));
-}
-
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
     PEGTransformer &transformer, const vector<string> &dotted_identifier, const optional<LogicalType> &type,
     optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
@@ -281,10 +261,6 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
 				if (has_generated) {
 					throw ParserException("Collations are not supported on generated columns");
-				}
-				if (column_type.id() == LogicalTypeId::ANY) {
-					throw ParserException("Specify the VARCHAR type for column \"%s\" with collation.",
-					                      qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
 				}
 				column_type = ApplyColumnCollation(column_type, std::move(cc_entry.expression));
 			} else {

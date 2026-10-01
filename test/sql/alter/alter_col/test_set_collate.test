@@ -46,9 +46,43 @@ Parser Error
 statement error
 ALTER TABLE t ALTER COLUMN s TYPE COLLATE nocase USING s;
 ----
-Parser Error
+Parser Error: Specify the VARCHAR type to set a collation
 
 statement error
 ALTER TABLE t ALTER COLUMN s TYPE VARCHAR COLLATE nonexistent_collation;
 ----
 <REGEX>:.*Catalog Error.*nonexistent_collation.*
+
+# the collation is stored in the table definition
+query I
+SELECT sql LIKE '%s VARCHAR COLLATE nocase%' FROM duckdb_tables() WHERE table_name = 't'
+----
+true
+
+# ADD COLUMN with a collation
+statement ok
+ALTER TABLE t ADD COLUMN c VARCHAR COLLATE nocase;
+
+statement ok
+UPDATE t SET c = s;
+
+query I
+SELECT id FROM t WHERE c = 'HELLO' ORDER BY id
+----
+x1
+x2
+
+query I
+SELECT sql LIKE '%c VARCHAR COLLATE nocase%' FROM duckdb_tables() WHERE table_name = 't'
+----
+true
+
+statement error
+ALTER TABLE t ADD COLUMN d INTEGER COLLATE nocase;
+----
+Parser Error: Only VARCHAR columns can have collations!
+
+statement error
+ALTER TABLE t ADD COLUMN d VARCHAR COLLATE nonexistent_collation;
+----
+Catalog Error: Collation with name nonexistent_collation does not exist!

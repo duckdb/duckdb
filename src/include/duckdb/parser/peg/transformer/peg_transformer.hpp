@@ -628,7 +628,7 @@ public:
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
-	static LogicalType ApplyColumnCollation(const LogicalType &type, unique_ptr<ParsedExpression> collation);
+	static LogicalType ApplyColumnCollation(const optional<LogicalType> &type, unique_ptr<ParsedExpression> collation);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
 	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);
 	static vector<GroupingSet> GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
