@@ -546,7 +546,7 @@ TEST_CASE("Table function overloads selected by named arguments survive serializ
 	                     Value::DATE(date_t(Date::FromDate(2024, 1, 2)))}};
 	for (auto &test_case : cases) {
 		CAPTURE(test_case.sql);
-		Parser parser(context.GetParserOptions());
+		Parser parser(context);
 		parser.ParseQuery(test_case.sql);
 		Planner planner(context);
 		planner.CreatePlan(std::move(parser.statements[0]));
@@ -567,7 +567,7 @@ TEST_CASE("Table function overloads selected by named arguments survive serializ
 	}
 
 	// a plan for an older version records only the positional arguments, which cannot select the first overload
-	Parser parser(context.GetParserOptions());
+	Parser parser(context);
 	parser.ParseQuery(cases[0].sql);
 	Planner planner(context);
 	planner.CreatePlan(std::move(parser.statements[0]));
@@ -599,7 +599,7 @@ TEST_CASE("Table function options survive plans written for older versions", "[s
 	CreateTableFunctionInfo info(set);
 	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
 
-	Parser parser(context.GetParserOptions());
+	Parser parser(context);
 	parser.ParseQuery("SELECT * FROM keyword_scan('a', opt := 1.5)");
 	Planner planner(context);
 	planner.CreatePlan(std::move(parser.statements[0]));
@@ -719,7 +719,7 @@ TEST_CASE("Table function defaults survive serialization", "[serialization][func
 	for (auto &test_case : cases) {
 		CAPTURE(test_case.sql);
 		CAPTURE(test_case.drop_option);
-		Parser parser(context.GetParserOptions());
+		Parser parser(context);
 		parser.ParseQuery(test_case.sql);
 		Planner planner(context);
 		planner.CreatePlan(std::move(parser.statements[0]));
