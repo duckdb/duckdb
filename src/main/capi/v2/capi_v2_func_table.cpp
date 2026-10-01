@@ -240,6 +240,25 @@ static auto Convert(CV2TablePartitionDataInfo *info) -> duckdb_v2_table_function
 	return reinterpret_cast<duckdb_v2_table_function_partition_data_info_handle>(info);
 }
 
+class CV2TableStatsInfo {
+public:
+	explicit CV2TableStatsInfo(BaseStatistics &result) : result_stats(CV2Stats::Writable(result)) {
+	}
+
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	idx_t in_column_index = 0;
+
+	CV2Stats result_stats;
+};
+
+static auto Convert(duckdb_v2_table_function_stats_info_handle info) -> CV2TableStatsInfo * {
+	return reinterpret_cast<CV2TableStatsInfo *>(info);
+}
+static auto Convert(CV2TableStatsInfo *info) -> duckdb_v2_table_function_stats_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_stats_info_handle>(info);
+}
+
 class CV2TablePartitioningInfo {
 public:
 	void *in_user_data = nullptr;
@@ -301,6 +320,7 @@ public:
 	duckdb_v2_table_function_filter_pushdown_callback_fn filter_pushdown_cb = nullptr;
 	duckdb_v2_table_function_partition_data_callback_fn partition_data_cb = nullptr;
 	duckdb_v2_table_function_partitioning_callback_fn partitioning_cb = nullptr;
+	duckdb_v2_table_function_stats_callback_fn stats_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 	bool projection_pushdown = false;
 
@@ -479,6 +499,35 @@ static auto CV2TableCardinality(ClientContext &context, const FunctionData *bind
 	return CV2TableMakeStatistics(data.cardinality, data.cardinality_is_exact);
 }
 
+static auto CV2TableStats(ClientContext &context, TableFunctionGetStatisticsInput &input)
+    -> unique_ptr<BaseStatistics> {
+	const auto &data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *data.info;
+
+	// The callback only describes whole declared columns, not virtual columns or fields extracted from a column
+	const auto &column_index = input.column_index;
+	if (!column_index.HasPrimaryIndex() || column_index.HasChildren() || column_index.IsVirtualColumn() ||
+	    column_index.GetPrimaryIndex() >= data.column_types.size()) {
+		return nullptr;
+	}
+
+	auto result = BaseStatistics::CreateUnknown(data.column_types[column_index.GetPrimaryIndex()]);
+	CV2TableStatsInfo args(result);
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = data.handle ? data.handle->GetData() : nullptr;
+	args.in_column_index = column_index.GetPrimaryIndex();
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	info.stats_cb(Convert(&args), Convert(&context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	return result.ToUnique();
+}
+
 static auto CV2TableProgress(ClientContext &context, const FunctionData *bind_data,
                              const GlobalTableFunctionState *global_state) -> double {
 	const auto &data = bind_data->Cast<CV2TableFunctionData>();
@@ -654,6 +703,10 @@ public:
 		}
 		if (info.partitioning_cb) {
 			function.get_partition_info = CV2TableGetPartitionInfo;
+		}
+		// The extended variant: setting the plain one would turn off pushing field extraction into the scan
+		if (info.stats_cb) {
+			function.statistics_extended = CV2TableStats;
 		}
 		function.projection_pushdown = info.projection_pushdown;
 
@@ -837,6 +890,13 @@ duckdb_v2_table_function_set_partitioning_callback(duckdb_v2_table_function_hand
                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	return WithErrorHandler(err, [&]() { Convert(function)->info.partitioning_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_set_stats_callback(duckdb_v2_table_function_handle function,
+                                                            duckdb_v2_table_function_stats_callback_fn callback,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.stats_cb = callback; });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_function_bind_info_handle info,
@@ -1312,6 +1372,35 @@ duckdb_v2_table_function_partitioning_set_partition_info(duckdb_v2_table_functio
 	DUCKDB_CHECK_ARG(info);
 	return WithErrorHandler(err,
 	                        [&]() { Convert(info)->out_partition_info = CV2ConvertPartitionInfo(partition_info); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_user_data(duckdb_v2_table_function_stats_info_handle info,
+                                                             void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_bind_data(duckdb_v2_table_function_stats_info_handle info,
+                                                             void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_column_index(duckdb_v2_table_function_stats_info_handle info,
+                                                                idx_t *column_index, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(column_index);
+	return WithErrorHandler(err, [&]() { *column_index = Convert(info)->in_column_index; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_stats_get_result_stats(duckdb_v2_table_function_stats_info_handle info,
+                                                                duckdb_v2_stats_handle *stats,
+                                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(stats);
+	return WithErrorHandler(err, [&]() { *stats = Convert(&Convert(info)->result_stats); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_register(duckdb_v2_table_function_handle function,
