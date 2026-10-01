@@ -41,6 +41,7 @@ class Connection {
 public:
 	DUCKDB_API explicit Connection(DuckDB &database);
 	DUCKDB_API explicit Connection(DatabaseInstance &database);
+	DUCKDB_API static Connection CreateInternal(DatabaseInstance &database);
 	// disable copy constructors
 	Connection(const Connection &other) = delete;
 	Connection &operator=(const Connection &) = delete;
@@ -50,6 +51,9 @@ public:
 	DUCKDB_API ~Connection();
 
 	shared_ptr<ClientContext> context;
+
+private:
+	Connection(DatabaseInstance &database, bool is_internal);
 
 public:
 	//! Returns query profiling information for the current query, formatted according to the given ProfilerPrintFormat

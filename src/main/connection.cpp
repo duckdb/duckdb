@@ -20,14 +20,22 @@
 
 namespace duckdb {
 
-Connection::Connection(DatabaseInstance &database)
+Connection::Connection(DatabaseInstance &database) : Connection(database, false) {
+}
+
+Connection::Connection(DatabaseInstance &database, bool is_internal)
     : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
+	context->is_internal_connection = is_internal;
 	auto &connection_manager = ConnectionManager::Get(database);
 	connection_manager.AssignConnectionId(*this);
 	connection_manager.AddConnection(*context);
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+}
+
+Connection Connection::CreateInternal(DatabaseInstance &database) {
+	return Connection(database, true);
 }
 
 Connection::Connection(Connection &&other) noexcept {

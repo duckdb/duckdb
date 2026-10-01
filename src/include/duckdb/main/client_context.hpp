@@ -270,6 +270,11 @@ public:
 
 	connection_t GetConnectionId() const;
 
+	//! Whether this context belongs to a connection DuckDB opened for its own use (e.g. a checkpoint)
+	bool IsInternalConnection() const {
+		return is_internal_connection;
+	}
+
 	//! Fetch the set of tables names of the query.
 	//! Returns the fully qualified, escaped table names, if qualified is set to true,
 	//! else returns the not qualified, not escaped table names.
@@ -364,6 +369,8 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+	//! Whether DuckDB opened this connection internally
+	bool is_internal_connection = false;
 	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is
 	//! true and connected_to_database can be locked, the chokepoint dispatches non-control SQL via
 	//! `Catalog::RemoteExecute(string)` and wraps the returned TableRef into a SelectStatement.
