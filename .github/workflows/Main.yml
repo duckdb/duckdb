@@ -469,7 +469,11 @@ jobs:
 
  extensions-deploy:
     name: Deploy extensions
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-deploy') }}
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.extensions-build.result == 'success' &&
+      contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-deploy')
     runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_x64 || 'ubuntu-latest' }}
     container:
       image: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:${{ needs.prepare.outputs.image_version }}
