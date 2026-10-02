@@ -72,8 +72,9 @@ enum class RenderMode : uint32_t {
 	BOX,       /* Unicode box-drawing characters */
 	LATEX,     /* Latex tabular formatting */
 	TRASH,     /* Discard output */
-	JSONLINES, /* Output JSON Lines */
-	DUCKBOX    /* Unicode box drawing - using DuckDB's own renderer */
+	JSONLINES,      /* Output JSON Lines */
+	DUCKBOX,        /* Unicode box drawing - using DuckDB's own renderer */
+	DUCKBOX_PREVIEW /* Like DUCKBOX, but only the first rows of the result are fetched */
 };
 
 enum class PrintOutput { STDOUT, STDERR };
@@ -81,6 +82,10 @@ enum class PrintOutput { STDOUT, STDERR };
 enum class InputMode { STANDARD, FILE, DUCKDB_RC };
 
 enum class LargeNumberRendering { NONE = 0, FOOTER = 1, ALL = 2, DEFAULT = 3 };
+
+//! How much of a result is fetched before rendering: whatever the mode needs (AUTO), all of it (FULL), or only the
+//! first rows (PREVIEW - duckbox mode only, see ModeDuckBoxPreviewRenderer)
+enum class MaterializeMode { AUTO, FULL, PREVIEW };
 
 /*
 ** These are the allowed shellFlgs values
@@ -202,6 +207,11 @@ public:
 	char thousand_separator = '\0';
 	//! When to use formatting of large numbers (in DuckBox mode)
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
+	//! How much of a result is fetched before rendering (.materialize)
+	MaterializeMode materialize = MaterializeMode::AUTO;
+	//! With MaterializeMode::PREVIEW: fetch rows (in whole chunks) until more than this many are fetched
+	idx_t materialize_rows = DEFAULT_MATERIALIZE_ROWS;
+	static constexpr idx_t DEFAULT_MATERIALIZE_ROWS = 1000000;
 	//! The command to execute when `-ui` is passed in
 	string ui_command = "CALL start_ui()";
 	//! The command to execute when `-serve` is passed in - `create_secret_if_not_exists` persists the
@@ -221,6 +231,11 @@ public:
 	bool run_init = true;
 	unique_ptr<duckdb::QueryResult> last_result;
 	bool last_result_referenced = false;
+	//! In duckbox_preview mode: the still-open stream of the last query, when it had more rows than were fetched.
+	//! last_result holds the rows fetched so far - the rest is fetched only if the next statement refers to `_`
+	unique_ptr<duckdb::QueryResultStream<>> pending_result_stream;
+	//! The last result from before the pending stream's query, which that query may still be reading through `_`
+	unique_ptr<duckdb::QueryResult> pending_result_input;
 	//! Whether the last EXPLAIN ANALYZE tree folded any operators (so ".last" has a fuller tree to show)
 	bool last_explain_hid_content = false;
 	//! The widest rendered line of the last EXPLAIN tree, in display columns (used for the pager-width decision)
@@ -375,6 +390,11 @@ public:
 	unique_ptr<ShellRenderer> GetRenderer(RenderMode mode);
 	vector<string> TableColumnList(const char *zTab);
 	SuccessState ExecuteStatement(unique_ptr<duckdb::SQLStatement> statement);
+	//! Ends the pending result stream (if any): with consume, its remaining rows are first appended to last_result,
+	//! otherwise the query is cancelled. On fail - prints the error and returns FAILURE
+	SuccessState ResolvePendingResult(bool consume);
+	//! Whether the SQL text may refer to the last result `_` - errs on the side of yes (e.g. a `_` in a string)
+	static bool MayReferenceLastResult(const string &sql);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
 	//! Route EXPLAIN ANALYZE output through the shell's direct-printing renderer when on an interactive console
 	void SetupPrettyExplain(duckdb::SQLStatement &statement);

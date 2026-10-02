@@ -108,6 +108,46 @@ MetadataResult SetLargeNumberRendering(ShellState &state, const vector<string> &
 	return MetadataResult::SUCCESS;
 }
 
+MetadataResult SetMaterialize(ShellState &state, const vector<string> &args) {
+	if (args.size() == 1) {
+		// materialize the previous result: fetch the rest of its rows into `_`, and report how many there are
+		if (state.ResolvePendingResult(true) != SuccessState::SUCCESS) {
+			return MetadataResult::FAIL;
+		}
+		if (!state.last_result) {
+			state.Print(PrintOutput::STDERR, "No result to materialize\n");
+			return MetadataResult::FAIL;
+		}
+		state.PrintF("%llu rows\n", state.last_result->RowCount());
+		return MetadataResult::SUCCESS;
+	}
+	if (args.size() == 3 && StringUtil::Equals(args[1], "rows")) {
+		auto rows = state.StringToInt(args[2]);
+		if (rows <= 0) {
+			state.Print(PrintOutput::STDERR, "Error: .materialize rows expects a positive row count\n");
+			return MetadataResult::FAIL;
+		}
+		state.materialize = MaterializeMode::PREVIEW;
+		state.materialize_rows = static_cast<idx_t>(rows);
+		return MetadataResult::SUCCESS;
+	}
+	if (args.size() != 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (StringUtil::Equals(args[1], "auto")) {
+		state.materialize = MaterializeMode::AUTO;
+	} else if (StringUtil::Equals(args[1], "full")) {
+		state.materialize = MaterializeMode::FULL;
+	} else if (StringUtil::Equals(args[1], "preview")) {
+		// shorthand for .materialize rows 1000000
+		state.materialize = MaterializeMode::PREVIEW;
+		state.materialize_rows = ShellState::DEFAULT_MATERIALIZE_ROWS;
+	} else {
+		return MetadataResult::PRINT_USAGE;
+	}
+	return MetadataResult::SUCCESS;
+}
+
 MetadataResult DumpTable(ShellState &state, const vector<string> &args) {
 	string zLike;
 	bool savedShowHeader = state.showHeader;
@@ -288,6 +328,10 @@ MetadataResult RenderLastResult(ShellState &state, const vector<string> &args) {
 	// if the last query produced a profiling tree (e.g. EXPLAIN ANALYZE), show the full expanded query tree
 	if (RenderExpandedQueryTree(state)) {
 		return MetadataResult::SUCCESS;
+	}
+	// in duckbox_preview mode the last query may still be open - fetch the rest of its rows first
+	if (state.ResolvePendingResult(true) != SuccessState::SUCCESS) {
+		return MetadataResult::FAIL;
 	}
 	if (state.last_result) {
 		auto renderer = state.GetRenderer();
@@ -1002,6 +1046,14 @@ static const MetadataCommand metadata_commands[] = {
     {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
      "Displays the signatures, descriptions and examples of all overloads of FUNCTION.\n"
      "FUNCTION may be qualified: [database.][schema.]function."},
+    {"materialize", 0, SetMaterialize, "?auto|full|rows N|preview?",
+     "How much of a result is fetched before rendering. Without argument: fetch the rest of the previous result", 0,
+     "auto (the default) fetches what the mode needs: all rows for duckbox and the other aligned modes, none ahead "
+     "for streamed modes like csv. full always fetches the whole result first. rows N (duckbox only, e.g. rows 100K) "
+     "fetches about the first N rows, and preview is rows 1M: a result with more rows is rendered as its first rows, "
+     "and the rest is only fetched if the next "
+     "statement refers to the last result _, by .last, or by .materialize without argument (which reports the row "
+     "count, and any error)"},
     {"maxbytes", 0, SetMaxBytes, "COUNT",
      "Sets the maximum number of bytes of rows for display (0 = all). Only for markdown mode in -agent mode.", 0, ""},
     {"maxcellwidth", 0, SetMaxCellWidth, "COUNT",
@@ -1015,7 +1067,9 @@ static const MetadataCommand metadata_commands[] = {
     {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0,
      "MODE is one of:\n\tascii\tColumns/rows delimited by 0x1F and 0x1E\n\tbox\tTables using unicode box-drawing "
      "characters\n\tcsv\tComma-separated values\n\tcolumn\tOutput in columns. (See .width)\n\tduckbox\tTables "
-     "with extensive features\n\thtml\tHTML <table> code\n\tinsert\tSQL insert statements for TABLE\n\t"
+     "with extensive features\n\tduckbox_preview\tLike duckbox, but only fetches the first rows (see .materialize; "
+     ".last fetches the "
+     "rest)\n\thtml\tHTML <table> code\n\tinsert\tSQL insert statements for TABLE\n\t"
      "json\tResults in a JSON array\n\tjsonlines\tResults in a NDJSON\n\tlatex\tLaTeX tabular environment code\n\t"
      "line\tOne value per line\n\tlist\tValues delimited by \"|\"\n\tmarkdown\tMarkdown table format\n\t"
      "quote\tEscape answers as for SQL\n\ttable\tASCII-art table\n\ttabs\tTab-separated values\n\ttcl\tTCL list "
