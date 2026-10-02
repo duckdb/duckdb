@@ -53,7 +53,7 @@ public:
 	shared_ptr<ClientContext> context;
 
 private:
-	Connection(DatabaseInstance &database, bool is_internal);
+	Connection(DatabaseInstance &database, ConnectionType connection_type);
 
 public:
 	//! Returns query profiling information for the current query, formatted according to the given ProfilerPrintFormat

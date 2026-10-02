@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -270,9 +271,8 @@ public:
 
 	connection_t GetConnectionId() const;
 
-	//! Whether this context belongs to a connection DuckDB opened for its own use (e.g. a checkpoint)
-	bool IsInternalConnection() const {
-		return is_internal_connection;
+	ConnectionType GetConnectionType() const {
+		return connection_type;
 	}
 
 	//! Fetch the set of tables names of the query.
@@ -369,8 +369,8 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
-	//! Whether DuckDB opened this connection internally
-	bool is_internal_connection = false;
+	//! Whether this connection was opened by a user or internally by DuckDB
+	ConnectionType connection_type = ConnectionType::USER;
 	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is
 	//! true and connected_to_database can be locked, the chokepoint dispatches non-control SQL via
 	//! `Catalog::RemoteExecute(string)` and wraps the returned TableRef into a SelectStatement.
