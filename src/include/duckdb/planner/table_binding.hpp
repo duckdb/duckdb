@@ -25,6 +25,8 @@ class BoundQueryNode;
 class ColumnRefExpression;
 class SubqueryRef;
 class LogicalGet;
+class LogicalProjection;
+class BoundColumnRefExpression;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class StandardEntry;
@@ -34,8 +36,10 @@ enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY, CTE };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
+	friend class BindContext;
 	Binding(BindingType binding_type, BindingAlias alias, vector<LogicalType> types, vector<Identifier> names,
 	        TableIndex index);
+	Binding(const Binding &other);
 	virtual ~Binding() = default;
 
 public:
@@ -62,6 +66,10 @@ public:
 	//! Marks this binding as the NULL-producing side of an outer join
 	void SetNullExtended();
 	bool IsNullExtended() const;
+	bool HasSourceProjection() const;
+	unique_ptr<ParsedExpression> RegisterProjectionExpression(const Identifier &column_name,
+	                                                          unique_ptr<ParsedExpression> expression);
+	unique_ptr<ParsedExpression> RegisterWholeRowExpression(unique_ptr<ParsedExpression> expression);
 
 	static BindingAlias GetAlias(const Identifier &explicit_alias, const StandardEntry &entry);
 	static BindingAlias GetAlias(const Identifier &explicit_alias, optional_ptr<StandardEntry> entry);
@@ -87,6 +95,8 @@ protected:
 	void Initialize();
 	//! Set the alias of the column reference to the name under which the column is registered in this binding
 	void SetBoundColumnAlias(ColumnRefExpression &colref);
+	unique_ptr<Expression> ProjectColumn(unique_ptr<BoundColumnRefExpression> expression);
+	unique_ptr<Binding> CopyForSourceBinding();
 
 protected:
 	//! The type of Binding
@@ -103,6 +113,12 @@ protected:
 	identifier_map_t<column_t> name_map;
 	//! Whether rows of this binding can be NULL-extended by an outer join
 	bool null_extended = false;
+	//! Projection at this relation's source, before surrounding joins
+	optional_ptr<LogicalProjection> source_projection;
+	unordered_map<idx_t, ProjectionIndex> forwarded_columns;
+	identifier_map_t<unique_ptr<ParsedExpression>> projection_expressions;
+	identifier_map_t<ProjectionIndex> projected_columns;
+	Identifier whole_row_column;
 };
 
 struct EntryBinding : public Binding {

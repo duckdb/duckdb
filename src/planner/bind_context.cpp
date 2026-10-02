@@ -12,6 +12,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
@@ -201,6 +202,9 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(TableBinding &ta
                                                                 const Identifier &column_name) {
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->SetAlias(column_name);
+	if (table_binding.HasSourceProjection() && table_binding.IsNullExtended()) {
+		return table_binding.RegisterProjectionExpression(column_name, std::move(result));
+	}
 	return result;
 }
 
@@ -464,7 +468,54 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (!binding) {
 		return BindResult(std::move(error));
 	}
+	auto expression_entry = binding->projection_expressions.find(colref.GetColumnName());
+	if (expression_entry != binding->projection_expressions.end()) {
+		auto &projection = *binding->source_projection;
+		auto projected_entry = binding->projected_columns.find(colref.GetColumnName());
+		ProjectionIndex projection_index;
+		if (projected_entry != binding->projected_columns.end()) {
+			projection_index = projected_entry->second;
+		} else {
+			auto source_binder = Binder::CreateBinder(binder.context, &binder);
+			for (auto &source_binding : bindings_list) {
+				if (source_binding->source_projection == binding->source_projection) {
+					source_binder->bind_context.AddBinding(source_binding->CopyForSourceBinding());
+				}
+			}
+			auto expression = expression_entry->second->Copy();
+			ExpressionBinder expression_binder(*source_binder, binder.context);
+			auto bound_expression = expression_binder.Bind(expression);
+			projection_index = ProjectionIndex(projection.expressions.size());
+			if (!bound_expression->IsVolatile()) {
+				binding->projected_columns.emplace(colref.GetColumnName(), projection_index);
+			}
+			projection.expressions.push_back(std::move(bound_expression));
+		}
+		auto &expression = *projection.expressions[projection_index];
+		return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), expression.GetReturnType(),
+		                                                      ColumnBinding(projection.table_index, projection_index),
+		                                                      depth));
+	}
 	return binding->Bind(colref, depth);
+}
+
+void BindContext::AddSourceProjection(BoundStatement &statement) {
+	vector<reference<Binding>> source_bindings;
+	for (auto &binding : bindings_list) {
+		if (!binding->HasSourceProjection()) {
+			source_bindings.emplace_back(*binding);
+		}
+	}
+	if (source_bindings.empty()) {
+		return;
+	}
+	vector<unique_ptr<Expression>> expressions;
+	auto projection = make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+	for (auto &binding : source_bindings) {
+		binding.get().source_projection = projection.get();
+	}
+	projection->AddChild(std::move(statement.plan));
+	statement.plan = std::move(projection);
 }
 
 string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name) {

@@ -90,6 +90,7 @@ public:
 	vector<BindingAlias> GetBindingAliases();
 
 	void GetTypesAndNames(vector<Identifier> &result_names, vector<LogicalType> &result_types);
+	void AddSourceProjection(BoundStatement &statement);
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,

@@ -1,0 +1,220 @@
+# name: test/sql/generated_columns/virtual/outer_join.test
+# description: Generated columns are evaluated before outer join NULL-extension
+# group: [virtual]
+
+statement ok
+CREATE TABLE l(i INTEGER);
+
+statement ok
+INSERT INTO l VALUES (1), (2), (3), (4);
+
+statement ok
+CREATE TABLE r(i INTEGER, v VARCHAR, v_is_null AS (v IS NULL), fixed AS (42), nested AS (struct_pack(x := v)), dependent AS (CASE WHEN v_is_null THEN 'missing' ELSE v END));
+
+statement ok
+INSERT INTO r VALUES (1, 'hello'), (3, 'world'), (4, NULL), (5, 'extra');
+
+query IIITI
+SELECT l.i, r.i, r.v_is_null, r.dependent, r.fixed FROM l LEFT JOIN r USING (i) ORDER BY l.i;
+----
+1	1	false	hello	42
+2	NULL	NULL	NULL	NULL
+3	3	false	world	42
+4	4	true	missing	42
+
+query III
+SELECT l.i, r.nested IS NULL, r IS NULL FROM l LEFT JOIN r USING (i) ORDER BY l.i;
+----
+1	false	false
+2	true	true
+3	false	false
+4	false	false
+
+query I
+SELECT l.i FROM l LEFT JOIN r USING (i) WHERE r.v_is_null IS NULL;
+----
+2
+
+query I
+SELECT l.i FROM l LEFT JOIN r USING (i) WHERE r.v IS NULL ORDER BY l.i;
+----
+2
+4
+
+query III
+SELECT count(r.fixed), count(r.v_is_null), count(r) FROM l LEFT JOIN r USING (i);
+----
+3	3	3
+
+query II
+SELECT l.i, r.fixed FROM r RIGHT JOIN l USING (i) ORDER BY l.i;
+----
+1	42
+2	NULL
+3	42
+4	42
+
+query III
+SELECT coalesce(l.i, r.i), l.i, r.fixed FROM l FULL JOIN r USING (i) ORDER BY 1;
+----
+1	1	42
+2	2	NULL
+3	3	42
+4	4	42
+5	NULL	42
+
+query II
+SELECT l.i, r.fixed FROM l LEFT JOIN r ON l.i = r.i AND r.fixed = 42 ORDER BY l.i;
+----
+1	42
+2	NULL
+3	42
+4	42
+
+query III
+SELECT l.i, r.fixed, s.k FROM (l LEFT JOIN r USING (i)) LEFT JOIN (VALUES (42)) s(k) ON r.fixed = s.k ORDER BY l.i;
+----
+1	42	42
+2	NULL	NULL
+3	42	42
+4	42	42
+
+query III
+SELECT l.i, r.fixed, r IS NULL FROM l LEFT JOIN (r INNER JOIN (VALUES (1), (3)) s(i) USING (i)) ON l.i = r.i ORDER BY l.i;
+----
+1	42	false
+2	NULL	true
+3	42	false
+4	NULL	true
+
+query III
+SELECT l.i, (SELECT r.fixed), (SELECT r IS NULL) FROM l LEFT JOIN r USING (i) ORDER BY l.i;
+----
+1	42	false
+2	NULL	true
+3	42	false
+4	42	false
+
+query II
+SELECT l.i, s.f FROM (l LEFT JOIN r USING (i)) LEFT JOIN LATERAL (SELECT r.fixed AS f) s ON true ORDER BY l.i;
+----
+1	42
+2	NULL
+3	42
+4	42
+
+query II
+SELECT r.v_is_null, count(*) FROM l LEFT JOIN r USING (i) GROUP BY r.v_is_null ORDER BY r.v_is_null NULLS LAST;
+----
+false	2
+true	1
+NULL	1
+
+query I
+SELECT fixed FROM r GROUP BY v ORDER BY fixed;
+----
+42
+42
+42
+42
+
+query II
+SELECT r.v_is_null, count(*) FROM l LEFT JOIN r USING (i) GROUP BY r.v_is_null HAVING r.v_is_null IS NULL;
+----
+NULL	1
+
+statement ok
+CREATE TABLE nested_generated(i INTEGER, value INTEGER, items AS ([coalesce(value, 42)]));
+
+statement ok
+INSERT INTO nested_generated VALUES (1, NULL), (3, 7);
+
+query IT
+SELECT l.i, nested_generated.items FROM l LEFT JOIN nested_generated USING (i) ORDER BY l.i;
+----
+1	[42]
+2	NULL
+3	[7]
+4	NULL
+
+statement ok
+CREATE TABLE volatile_generated(i INTEGER, value AS (random()));
+
+statement ok
+INSERT INTO volatile_generated VALUES (1), (3);
+
+query I
+SELECT count(*) FROM l LEFT JOIN volatile_generated USING (i) WHERE volatile_generated.value = volatile_generated.value;
+----
+0
+
+statement ok
+CREATE TABLE throwing(i INTEGER, v VARCHAR, checked AS (CASE WHEN v IS NULL THEN error('v is not allowed to be null!') ELSE v END));
+
+statement ok
+INSERT INTO throwing VALUES (1, 'hello'), (3, 'world');
+
+query IT
+SELECT l.i, throwing.checked FROM l LEFT JOIN throwing USING (i) ORDER BY l.i;
+----
+1	hello
+2	NULL
+3	world
+4	NULL
+
+statement error
+INSERT INTO throwing VALUES (4, NULL);
+----
+v is not allowed to be null!
+
+statement ok
+CREATE TABLE generated_key(i INTEGER, k AS (i + 1), fixed AS (42));
+
+statement ok
+INSERT INTO generated_key VALUES (0), (2);
+
+query III
+SELECT l.i, g.k, g.fixed FROM l LEFT JOIN generated_key g ON l.i = g.k ORDER BY l.i;
+----
+1	1	42
+2	NULL	NULL
+3	3	42
+4	NULL	NULL
+
+query III
+SELECT l.i, g.k, g.fixed FROM l LEFT JOIN generated_key g USING (i) ORDER BY l.i;
+----
+1	NULL	NULL
+2	3	42
+3	NULL	NULL
+4	NULL	NULL
+
+query III
+SELECT a.k, g.k, g.fixed FROM (SELECT i AS k FROM l) a LEFT JOIN generated_key g USING (k) ORDER BY a.k;
+----
+1	1	42
+2	NULL	NULL
+3	3	42
+4	NULL	NULL
+
+query IIT
+SELECT l.i, x.flag, x.value FROM l LEFT JOIN r AS x(k, value, flag) ON l.i = x.k ORDER BY l.i;
+----
+1	false	hello
+2	NULL	NULL
+3	false	world
+4	true	NULL
+
+statement ok
+PRAGMA disable_optimizer;
+
+query IIITI
+SELECT l.i, r.i, r.v_is_null, r.dependent, r.fixed FROM l LEFT JOIN r USING (i) ORDER BY l.i;
+----
+1	1	false	hello	42
+2	NULL	NULL	NULL	NULL
+3	3	false	world	42
+4	4	true	missing	42
+
+statement ok
+PRAGMA enable_optimizer;
