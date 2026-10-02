@@ -57,7 +57,8 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
     : WindowExecutor(SimplifyWindowedAggregate(wexpr, client), shared),
       mode(Settings::Get<DebugWindowModeSetting>(client)) {
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
-	if (!Settings::Get<EnableOptimizerSetting>(client) || mode == WindowAggregationMode::SEPARATE) {
+	if (!Settings::Get<EnableOptimizerSetting>(client) || mode == WindowAggregationMode::SEPARATE ||
+	    !wexpr.AggregateFunction()->IsWindowStateCombineSafe()) {
 		if (!WindowNaiveAggregator::CanAggregate(wexpr)) {
 			throw InvalidInputException("Cannot use non-aggregate window function with naive window executor!");
 		}
