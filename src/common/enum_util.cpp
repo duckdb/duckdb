@@ -6568,19 +6568,20 @@ const StringUtil::EnumStringLiteral *GetTableReferenceTypeValues() {
 		{ static_cast<uint32_t>(TableReferenceType::COLUMN_DATA), "COLUMN_DATA" },
 		{ static_cast<uint32_t>(TableReferenceType::DELIM_GET), "DELIM_GET" },
 		{ static_cast<uint32_t>(TableReferenceType::BOUND_TABLE_REF), "BOUND_TABLE_REF" },
-		{ static_cast<uint32_t>(TableReferenceType::MATCH_RECOGNIZE), "MATCH_RECOGNIZE" }
+		{ static_cast<uint32_t>(TableReferenceType::MATCH_RECOGNIZE), "MATCH_RECOGNIZE" },
+		{ static_cast<uint32_t>(TableReferenceType::DIFF_REF), "DIFF_REF" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<TableReferenceType>(TableReferenceType value) {
-	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 14, "TableReferenceType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetTableReferenceTypeValues(), 15, "TableReferenceType", static_cast<uint32_t>(value));
 }
 
 template<>
 TableReferenceType EnumUtil::FromString<TableReferenceType>(const char *value) {
-	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 14, "TableReferenceType", value));
+	return static_cast<TableReferenceType>(StringUtil::StringToEnum(GetTableReferenceTypeValues(), 15, "TableReferenceType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetTaskExecutionModeValues() {

@@ -1,0 +1,321 @@
+# name: test/sql/diff/diff_library.test
+# description: The integration tests of hadley/data-diff (tests/diff.rs), replicated over DIFF
+# group: [diff]
+
+# Each section names the library's test. The expected lines are what its assertions say, spelled as the summary
+# the library renders. A KEY (id) here is the library's declared("id"); no KEY is its default options.
+
+# combines_schema_row_order_and_cell_changes
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 10, 'x'), (2, 20, 'y')) t(id, value, "drop")), (SELECT * FROM (VALUES (21, 2, 'a'), (11, 1, 'b'), (99, 3, 'c')) t(value, id, "add")) KEY (id))
+----
+table_key([id], basis: declared)
+col_drop(drop)
+col_add(add)
+col_order(value, 2 -> 1)
+col_edit(value, changes: 2)
+row_add(rows: 1)
+
+# summary_combines_row_and_column_edits_minimally
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 0, 0, 0), (2, 0, 0, 0), (3, 0, 0, 0)) t(id, a, b, c)), (SELECT * FROM (VALUES (1, 1, 1, 0), (2, 0, 0, 1), (3, 0, 0, 1)) t(id, a, b, c)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(c, changes: 2)
+row_edit(rows: 1, changes: 2, columns: [a, b])
+
+# selected_row_retains_its_moved_coordinate
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 10, 30), (2, 20, 40)) t(id, a, b)), (SELECT * FROM (VALUES (2, 20, 40), (1, 11, 31)) t(id, a, b)) KEY (id))
+----
+table_key([id], basis: declared)
+row_edit(rows: 1, changes: 2, columns: [a, b])
+
+# default_options_guess_a_key_and_align_reordered_rows
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 10), (2, 20), (3, 30)) t(customer_id, value)), (SELECT * FROM (VALUES (30, 3), (10, 1), (21, 2)) t(value, customer_id)))
+----
+table_key([customer_id], basis: guessed, overlap: 1.00)
+col_order(value, 2 -> 1)
+row_edit(rows: 1, changes: 1, columns: [value])
+
+# automatic_resolution_without_an_eligible_key_falls_back
+statement ok
+CREATE TABLE lib_empty AS SELECT 1::BIGINT AS id WHERE false
+
+statement ok
+CREATE TABLE lib_rows AS SELECT * FROM (VALUES (1::BIGINT), (2)) t(id)
+
+statement ok
+CREATE TABLE lib_disjoint AS SELECT * FROM (VALUES (3::BIGINT), (4)) t(id)
+
+query I
+SELECT op || ' ' || change.table_key.columns[1] || ' ' || change.table_key.basis FROM (DIFF lib_empty, lib_rows) WHERE op = 'table_key'
+----
+table_key :row fallback
+
+query I
+SELECT op || ' ' || change.table_key.columns[1] || ' ' || change.table_key.basis FROM (DIFF lib_rows, lib_empty) WHERE op = 'table_key'
+----
+table_key :row fallback
+
+query I
+SELECT op || ' ' || change.table_key.columns[1] || ' ' || change.table_key.basis FROM (DIFF lib_rows, lib_disjoint) WHERE op = 'table_key'
+----
+table_key :row fallback
+
+# a_compound_key_is_guessed_and_matches_rows_semantically
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES ('a', 1, 10), ('a', 2, 20), ('b', 1, 30), ('b', 2, 40)) t("group", id, value)), (SELECT * FROM (VALUES ('a', 1, 10), ('a', 2, 25), ('b', 1, 30), ('b', 2, 45)) t("group", id, value)))
+----
+table_key([group, id], basis: guessed, overlap: 1.00)
+col_edit(value, changes: 2)
+
+# a_bounded_fanout_keeps_its_cells_out_of_the_one_to_one_result
+query I
+SELECT summary FROM (DIFF (SELECT (range + 1)::INTEGER AS id, 0 AS value FROM range(10)), (SELECT * FROM (VALUES (1, 0), (2, 0), (3, 0), (4, 0), (4, 7), (5, 0), (6, 0), (7, 5), (8, 0), (9, 0), (10, 0)) t(id, value)) KEY (id))
+----
+table_key([id], basis: declared)
+row_edit(rows: 1, changes: 1, columns: [value])
+row_fanout(rows: 1)
+
+# an_undeclared_rename_is_inferred_from_the_values
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 10, 'a'), (2, 20, 'b'), (3, 30, 'c')) t(id, amount, note)), (SELECT * FROM (VALUES ('a', 1, 10), ('B', 2, 20), ('c', 3, 30)) t(note, id, total)) KEY (id))
+----
+table_key([id], basis: declared)
+col_rename(amount -> total, basis: exact)
+col_order(note, 3 -> 1)
+row_edit(rows: 1, changes: 1, columns: [note])
+
+# a_rename_is_inferred_despite_an_edit_it_carried
+query I
+SELECT summary FROM (DIFF (SELECT range + 1 AS id, (range + 1) * 10 AS amount, range + 1 AS note FROM range(11)), (SELECT range + 1 AS id, CASE WHEN range = 0 THEN 99 ELSE (range + 1) * 10 END AS total, CASE WHEN range = 0 THEN 99 ELSE range + 1 END AS note FROM range(11)) KEY (id))
+----
+table_key([id], basis: declared)
+col_rename(amount -> total, basis: approximate)
+row_edit(rows: 1, changes: 2, columns: [total, note])
+
+# a_swap_replaces_two_edits_with_two_renames
+query I
+SELECT summary FROM (DIFF (SELECT range + 1 AS id, (range + 1) * 10 AS price, (range + 1) * 1000 AS cost FROM range(11)), (SELECT range + 1 AS id, (range + 1) * 1000 AS price, CASE WHEN range = 0 THEN 99 ELSE (range + 1) * 10 END AS cost FROM range(11)) KEY (id))
+----
+table_key([id], basis: declared)
+col_rename(price -> cost, basis: swapped)
+col_rename(cost -> price, basis: swapped)
+col_order(price, 3 -> 2)
+row_edit(rows: 1, changes: 1, columns: [cost])
+
+# a_faithful_boolean_reencoding_is_a_type_change_and_nothing_more
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, true), (2, false), (3, true)) t(id, paid)), (SELECT * FROM (VALUES (1, 1), (2, 0), (3, 1)) t(id, paid)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(paid, type: BOOLEAN -> INTEGER)
+
+# an_unfaithful_boolean_reencoding_reports_its_changed_cells
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, true), (2, false), (3, true)) t(id, paid)), (SELECT * FROM (VALUES (1, 1), (2, 1), (3, 1)) t(id, paid)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(paid, type: BOOLEAN -> INTEGER)
+row_edit(rows: 1, changes: 1, columns: [paid])
+
+# a_cross_type_exchange_is_a_swap_rather_than_two_impossible_retypes
+query I
+SELECT summary FROM (DIFF (SELECT range + 1 AS id, range % 2 = 0 AS flag, (range + 1) * 1000 AS count FROM range(11)), (SELECT range + 1 AS id, (range + 1) * 1000 AS flag, range % 2 = 0 AS count FROM range(11)) KEY (id))
+----
+table_key([id], basis: declared)
+col_rename(flag -> count, basis: swapped)
+col_rename(count -> flag, basis: swapped)
+col_order(flag, 3 -> 2)
+
+# a_guessed_key_may_fan_out
+query I
+SELECT summary FROM (DIFF (SELECT (range + 1)::INTEGER AS id, 'x' AS status FROM range(10)), (SELECT * FROM (VALUES (1, 'x'), (2, 'x'), (3, 'x'), (4, 'x'), (4, 'y'), (5, 'x'), (6, 'x'), (7, 'x'), (8, 'x'), (9, 'x'), (10, 'x')) t(id, status)))
+----
+table_key([id], basis: guessed, overlap: 1.00)
+row_fanout(rows: 1)
+
+# repeated_comparisons_are_identical (and the other two determinism tests): the same query twice
+statement ok
+CREATE TABLE lib_rep_old AS SELECT * FROM (VALUES (1, 7), (2, 8), (3, 9)) t(a, b)
+
+statement ok
+CREATE TABLE lib_rep_new AS SELECT * FROM (VALUES (2, 9), (3, 8), (4, 7)) t(a, b)
+
+query I
+SELECT count(*) FROM (SELECT * FROM (DIFF lib_rep_old, lib_rep_new) EXCEPT ALL SELECT * FROM (DIFF lib_rep_old, lib_rep_new))
+----
+0
+
+# unmatched_rows_are_classified_without_cells_or_edits
+query I
+SELECT summary FROM (DIFF lib_empty, lib_rows KEY (id))
+----
+table_key([id], basis: declared)
+row_add(rows: 2)
+
+query I
+SELECT summary FROM (DIFF lib_rows, lib_empty KEY (id))
+----
+table_key([id], basis: declared)
+row_drop(rows: 2)
+
+query I
+SELECT summary FROM (DIFF lib_empty, lib_empty KEY (id))
+----
+table_key([id], basis: declared)
+
+query I
+SELECT summary FROM (DIFF lib_rows, lib_disjoint KEY (id))
+----
+table_key([id], basis: declared)
+row_drop(rows: 2)
+row_add(rows: 2)
+
+# every_stage_still_runs_under_a_fallback_key
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES ('x', 10, 'a'), ('x', 10, 'a'), ('x', 30, 'a')) t(tag, amount, note)), (SELECT * FROM (VALUES ('x', 10, 'a'), ('x', 10, 'a'), ('x', 30, 'z')) t(tag, total, note)))
+----
+table_key([:row], basis: fallback)
+col_rename(amount -> total, basis: exact)
+row_edit(rows: 1, changes: 1, columns: [note])
+
+# an_implausible_fallback_regenerates_without_a_second_pass
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES ('p', 1), ('p', 2)) t(tag, v)), (SELECT * FROM (VALUES ('q', 3), ('q', 4)) t(tag, v)))
+----
+table_key([:row], basis: fallback)
+table_regenerate()
+
+# a_declared_key_is_neither_reconsidered_nor_regenerated_over
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 1, 4), (2, 2, 5), (3, 3, 6)) t(id, v, w)), (SELECT * FROM (VALUES (1, 7, 10), (2, 8, 11), (3, 9, 12)) t(id, v, w)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(v, w, rows: 3, changes: 6)
+
+# an_opaque_column_is_edited_like_any_other
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, DATE '1970-04-11'), (2, DATE '1970-07-20'), (3, DATE '1970-10-28')) t(id, "when")), (SELECT * FROM (VALUES (1, DATE '1970-04-11'), (2, DATE '1970-09-08'), (3, DATE '1970-10-28')) t(id, "when")))
+----
+table_key([id], basis: guessed, overlap: 1.00)
+row_edit(rows: 1, changes: 1, columns: [when])
+
+# an_opaque_column_can_be_the_key
+statement ok
+CREATE TABLE lib_when_old AS SELECT * FROM (VALUES (DATE '1970-04-11', 1), (DATE '1970-07-20', 1), (DATE '1970-10-28', 2)) t("when", value)
+
+statement ok
+CREATE TABLE lib_when_new AS SELECT * FROM (VALUES (DATE '1970-10-28', 2), (DATE '1970-04-11', 1), (DATE '1970-07-20', 1)) t("when", value)
+
+query I
+SELECT summary FROM (DIFF lib_when_old, lib_when_new KEY ("when"))
+----
+table_key([when], basis: declared)
+
+query I
+SELECT summary FROM (DIFF lib_when_old, lib_when_new)
+----
+table_key([when], basis: guessed, overlap: 1.00)
+
+# a_renamed_opaque_column_is_recovered_on_exact_evidence
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, TIMESTAMP '1970-01-01 00:00:01'), (2, TIMESTAMP '1970-01-01 00:00:02')) t(id, stamp)), (SELECT * FROM (VALUES (1, TIMESTAMP '1970-01-01 00:00:01'), (2, TIMESTAMP '1970-01-01 00:00:02')) t(id, logged)) KEY (id))
+----
+table_key([id], basis: declared)
+col_rename(stamp -> logged, basis: exact)
+
+# two_same_named_opaque_columns_can_swap
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, TIMESTAMP '1970-01-01 00:00:01', TIMESTAMP '1970-01-01 00:00:09'), (2, TIMESTAMP '1970-01-01 00:00:02', TIMESTAMP '1970-01-01 00:00:08'), (3, TIMESTAMP '1970-01-01 00:00:03', TIMESTAMP '1970-01-01 00:00:07')) t(id, start, "end")), (SELECT * FROM (VALUES (1, TIMESTAMP '1970-01-01 00:00:09', TIMESTAMP '1970-01-01 00:00:01'), (2, TIMESTAMP '1970-01-01 00:00:08', TIMESTAMP '1970-01-01 00:00:02'), (3, TIMESTAMP '1970-01-01 00:00:07', TIMESTAMP '1970-01-01 00:00:03')) t(id, start, "end")) KEY (id))
+----
+table_key([id], basis: declared)
+col_rename(start -> end, basis: swapped)
+col_rename(end -> start, basis: swapped)
+col_order(start, 3 -> 2)
+
+# an_incomparable_same_name_pair_is_a_type_change_with_no_value_story
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, {'v': 100}), (2, {'v': 200})) t(id, "when")), (SELECT * FROM (VALUES (1, DATE '1970-04-11'), (2, DATE '1970-07-20')) t(id, "when")) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(when, type: STRUCT(v INTEGER) -> DATE)
+
+# an_exchange_that_swapped_types_is_recovered_through_its_crossings
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, DATE '1970-04-11', 7), (2, DATE '1970-07-20', 8), (3, DATE '1970-10-28', 9)) t(id, "when", count)), (SELECT * FROM (VALUES (1, 7, DATE '1970-04-11'), (2, 8, DATE '1970-07-20'), (3, 9, DATE '1970-10-28')) t(id, "when", count)) KEY (id))
+----
+table_key([id], basis: declared)
+col_rename(when -> count, basis: swapped)
+col_rename(count -> when, basis: swapped)
+col_order(when, 3 -> 2)
+
+# a_cross_unit_retype_compares_values_and_reports_the_type_change (a unit is not part of DuckDB's timestamp type, so
+# the retype here is TIMESTAMP -> TIMESTAMP_MS)
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, TIMESTAMP '1970-01-01 00:00:01'), (2, TIMESTAMP '1970-01-01 00:00:02'), (3, TIMESTAMP '1970-01-01 00:00:03')) t(id, "at")), (SELECT * FROM (VALUES (1, TIMESTAMP_MS '1970-01-01 00:00:01'), (2, TIMESTAMP_MS '1970-01-01 00:00:02.5'), (3, TIMESTAMP_MS '1970-01-01 00:00:03')) t(id, "at")) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(at, type: TIMESTAMP -> TIMESTAMP_MS)
+row_edit(rows: 1, changes: 1, columns: [at])
+
+# a_decimal_column_meets_the_integers_it_replaced
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 500), (2, 600), (3, 700)) t(id, price)), (SELECT * FROM (VALUES (1, 500.00), (2, 600.00), (3, 701.00)) t(id, price)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(price, type: INTEGER -> DECIMAL(5,2))
+row_edit(rows: 1, changes: 1, columns: [price])
+
+# an_iso_date_string_column_retyped_to_dates_is_a_type_only_edit
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, '2026-08-01'), (2, '2026-08-02'), (3, '2026-08-03')) t(id, day)), (SELECT * FROM (VALUES (1, DATE '2026-08-01'), (2, DATE '2026-08-02'), (3, DATE '2026-08-03')) t(id, day)) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(day, type: VARCHAR -> DATE)
+
+# an_instant_string_column_matches_an_aware_timestamp
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, '1970-01-01T00:00:01Z'), (2, '1970-01-01T01:00:00+01:00')) t(id, "at")), (SELECT * FROM (VALUES (1, TIMESTAMPTZ '1970-01-01 00:00:01+00'), (2, TIMESTAMPTZ '1970-01-01 00:00:00+00')) t(id, "at")) KEY (id))
+----
+table_key([id], basis: declared)
+col_edit(at, type: VARCHAR -> TIMESTAMP WITH TIME ZONE)
+
+# changed_cells_lookup_to_values_that_differ_and_the_rest_agree (tests/lookup.rs): the cells are the values that differ
+query IIIII
+DIFF (SELECT * FROM (VALUES (1, 9, 'a'), (2, 14, 'b'), (3, 20, 'c'), (4, 7, 'd')) t(id, price, name)), (SELECT * FROM (VALUES (1, 9, 'a'), (2, 16, 'b'), (3, 20, 'c'), (4, 8, 'd')) t(id, price, name)) KEY (id) CELLS
+----
+row_edit	[2]	price	14	16
+row_edit	[4]	price	7	8
+
+#
+# Where the prototype differs from the library
+#
+
+# an_excessive_fanout_rejects_the_declared_key: the library refuses a declared key duplicated in new for more than
+# 10% of the old rows and guesses instead; DIFF keeps the declared key and reports the fanout
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1), (2)) t(id)), (SELECT * FROM (VALUES (1), (1), (2)) t(id)) KEY (id))
+----
+table_key([id], basis: declared)
+row_fanout(rows: 1)
+
+# a_renamed_key_is_recovered_on_reconsideration: the library reconsiders the key once with the inferred rename in
+# hand and lands on customer_id -> id; DIFF keeps its first guess
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 10), (2, 20), (3, 30)) t(customer_id, amount)), (SELECT * FROM (VALUES (1, 10), (2, 20), (3, 35)) t(id, amount)))
+----
+table_key([amount], basis: guessed, overlap: 0.67)
+col_rename(customer_id -> id, basis: exact)
+row_drop(rows: 1)
+row_add(rows: 1)
+
+# an_implausible_guess_is_retracted_for_the_next_candidate: the library retracts a guess whose diff changes more than
+# half of the cells and moves to the next candidate (b); DIFF reports the regeneration
+query I
+SELECT summary FROM (DIFF (SELECT * FROM (VALUES (1, 10, 5), (2, 20, 6), (3, 30, 7), (4, 40, 8)) t(a, b, x)), (SELECT * FROM (VALUES (4, 10, 5), (3, 20, 6), (2, 30, 7), (1, 40, 8)) t(a, b, x)))
+----
+table_key([a], basis: guessed, overlap: 1.00)
+table_regenerate()

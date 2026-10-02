@@ -1134,6 +1134,20 @@ static const TransformFrameOps DESC_RULE_OPS = {"DescRule", &PEGTransformerFacto
 static const TransformFrameOps DETACH_STATEMENT_OPS = {"DetachStatement",
                                                        &PEGTransformerFactory::InitializeDetachStatementTrampoline,
                                                        &PEGTransformerFactory::FinalizeDetachStatementTrampoline};
+static const TransformFrameOps DIFF_STATEMENT_OPS = {"DiffStatement",
+                                                     &PEGTransformerFactory::InitializeDiffStatementTrampoline,
+                                                     &PEGTransformerFactory::FinalizeDiffStatementTrampoline};
+static const TransformFrameOps DIFF_SIDE_OPS = {"DiffSide", &PEGTransformerFactory::InitializeDiffSideTrampoline,
+                                                &PEGTransformerFactory::FinalizeDiffSideTrampoline};
+static const TransformFrameOps DIFF_SUBQUERY_OPS = {"DiffSubquery",
+                                                    &PEGTransformerFactory::InitializeDiffSubqueryTrampoline,
+                                                    &PEGTransformerFactory::FinalizeDiffSubqueryTrampoline};
+static const TransformFrameOps DIFF_TABLE_OPS = {"DiffTable", &PEGTransformerFactory::InitializeDiffTableTrampoline,
+                                                 &PEGTransformerFactory::FinalizeDiffTableTrampoline};
+static const TransformFrameOps DIFF_KEY_OPS = {"DiffKey", &PEGTransformerFactory::InitializeDiffKeyTrampoline,
+                                               &PEGTransformerFactory::FinalizeDiffKeyTrampoline};
+static const TransformFrameOps DIFF_CELLS_OPS = {"DiffCells", &PEGTransformerFactory::InitializeDiffCellsTrampoline,
+                                                 &PEGTransformerFactory::FinalizeDiffCellsTrampoline};
 static const TransformFrameOps DROP_STATEMENT_OPS = {"DropStatement",
                                                      &PEGTransformerFactory::InitializeDropStatementTrampoline,
                                                      &PEGTransformerFactory::FinalizeDropStatementTrampoline};
@@ -3532,6 +3546,12 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"DescribeLongRule", &DESCRIBE_LONG_RULE_OPS},
 	    {"DescRule", &DESC_RULE_OPS},
 	    {"DetachStatement", &DETACH_STATEMENT_OPS},
+	    {"DiffStatement", &DIFF_STATEMENT_OPS},
+	    {"DiffSide", &DIFF_SIDE_OPS},
+	    {"DiffSubquery", &DIFF_SUBQUERY_OPS},
+	    {"DiffTable", &DIFF_TABLE_OPS},
+	    {"DiffKey", &DIFF_KEY_OPS},
+	    {"DiffCells", &DIFF_CELLS_OPS},
 	    {"DropStatement", &DROP_STATEMENT_OPS},
 	    {"DropEntries", &DROP_ENTRIES_OPS},
 	    {"DropTrigger", &DROP_TRIGGER_OPS},
@@ -12102,6 +12122,112 @@ PEGTransformerFactory::FinalizeDetachStatementTrampoline(PEGTransformer &transfo
 	auto catalog_name = list_pr.GetChild(3).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformDetachStatement(transformer, has_result, if_exists, catalog_name);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDiffStatementTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(4);
+	auto &diff_cells_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (diff_cells_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("DiffCells"), diff_cells_opt.GetResult()}, 3);
+	}
+	auto &diff_key_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (diff_key_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("DiffKey"), diff_key_opt.GetResult()}, 2);
+	}
+	process.PushChild({transformer.GetRule("DiffSide"), list_pr.GetChild(3)}, 1);
+	process.PushChild({transformer.GetRule("DiffSide"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDiffStatementTrampoline(PEGTransformer &transformer,
+                                                       GeneratedTransformProcess &process) {
+	auto diff_side = process.TakeResult<unique_ptr<TableRef>>(0);
+	auto diff_side_1 = process.TakeResult<unique_ptr<TableRef>>(1);
+	optional<vector<string>> diff_key {};
+	if (process.child_results[2]) {
+		diff_key = process.TakeResult<vector<string>>(2);
+	}
+	optional<bool> diff_cells {};
+	if (process.child_results[3]) {
+		diff_cells = process.TakeResult<bool>(3);
+	}
+	auto result =
+	    TransformDiffStatement(transformer, std::move(diff_side), std::move(diff_side_1), diff_key, diff_cells);
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDiffSideTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDiffSideTrampoline(PEGTransformer &transformer,
+                                                                                   GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<unique_ptr<TableRef>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDiffSubqueryTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("SelectParens"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDiffSubqueryTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto select_parens = process.TakeResult<unique_ptr<SelectStatement>>(0);
+	auto result = TransformDiffSubquery(transformer, std::move(select_parens));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDiffTableTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("BaseTableName"), list_pr.GetChild(0)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDiffTableTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto base_table_name = process.TakeResult<unique_ptr<BaseTableRef>>(0);
+	auto result = TransformDiffTable(transformer, std::move(base_table_name));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeDiffKeyTrampoline(PEGTransformer &transformer,
+                                                        GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("InsertColumnList"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeDiffKeyTrampoline(PEGTransformer &transformer,
+                                                                                  GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<vector<string>>(0);
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+void PEGTransformerFactory::InitializeDiffCellsTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeDiffCellsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto result = TransformDiffCells(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 void PEGTransformerFactory::InitializeDropStatementTrampoline(PEGTransformer &transformer,

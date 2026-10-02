@@ -4139,6 +4139,66 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDetachStatement
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDiffStatementInternal(PEGTransformer &transformer,
+                                                                                       ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto diff_side = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(1));
+	auto diff_side_1 = transformer.Transform<unique_ptr<TableRef>>(list_pr.GetChild(3));
+	optional<vector<string>> diff_key {};
+	auto &diff_key_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (diff_key_opt.HasResult()) {
+		auto diff_key_value = transformer.Transform<vector<string>>(diff_key_opt.GetResult());
+		diff_key = diff_key_value;
+	}
+	optional<bool> diff_cells {};
+	auto &diff_cells_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
+	if (diff_cells_opt.HasResult()) {
+		auto diff_cells_value = transformer.Transform<bool>(diff_cells_opt.GetResult());
+		diff_cells = diff_cells_value;
+	}
+	auto result =
+	    TransformDiffStatement(transformer, std::move(diff_side), std::move(diff_side_1), diff_key, diff_cells);
+	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDiffSideInternal(PEGTransformer &transformer,
+                                                                                  ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto result = transformer.Transform<unique_ptr<TableRef>>(choice_pr.GetResult());
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDiffSubqueryInternal(PEGTransformer &transformer,
+                                                                                      ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto select_parens = transformer.Transform<unique_ptr<SelectStatement>>(list_pr.GetChild(0));
+	auto result = TransformDiffSubquery(transformer, std::move(select_parens));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDiffTableInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto base_table_name = transformer.Transform<unique_ptr<BaseTableRef>>(list_pr.GetChild(0));
+	auto result = TransformDiffTable(transformer, std::move(base_table_name));
+	return make_uniq<TypedTransformResult<unique_ptr<TableRef>>>(std::move(result));
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDiffKeyInternal(PEGTransformer &transformer,
+                                                                                 ParseResult &parse_result) {
+	auto &list_pr = parse_result.Cast<ListParseResult>();
+	auto insert_column_list = transformer.Transform<vector<string>>(list_pr.GetChild(1));
+	auto result = insert_column_list;
+	return make_uniq<TypedTransformResult<vector<string>>>(result);
+}
+
+unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDiffCellsInternal(PEGTransformer &transformer,
+                                                                                   ParseResult &parse_result) {
+	auto result = TransformDiffCells(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
 unique_ptr<TransformResultValue> PEGTransformerFactory::TransformDropStatementInternal(PEGTransformer &transformer,
                                                                                        ParseResult &parse_result) {
 	auto &list_pr = parse_result.Cast<ListParseResult>();
@@ -12005,6 +12065,12 @@ void PEGTransformerFactory::RegisterGenerated() {
 	    {"DescribeLongRule", &PEGTransformerFactory::TransformDescribeLongRuleInternal},
 	    {"DescRule", &PEGTransformerFactory::TransformDescRuleInternal},
 	    {"DetachStatement", &PEGTransformerFactory::TransformDetachStatementInternal},
+	    {"DiffStatement", &PEGTransformerFactory::TransformDiffStatementInternal},
+	    {"DiffSide", &PEGTransformerFactory::TransformDiffSideInternal},
+	    {"DiffSubquery", &PEGTransformerFactory::TransformDiffSubqueryInternal},
+	    {"DiffTable", &PEGTransformerFactory::TransformDiffTableInternal},
+	    {"DiffKey", &PEGTransformerFactory::TransformDiffKeyInternal},
+	    {"DiffCells", &PEGTransformerFactory::TransformDiffCellsInternal},
 	    {"DropStatement", &PEGTransformerFactory::TransformDropStatementInternal},
 	    {"DropEntries", &PEGTransformerFactory::TransformDropEntriesInternal},
 	    {"DropTrigger", &PEGTransformerFactory::TransformDropTriggerInternal},

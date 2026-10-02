@@ -119,6 +119,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("cascade");
 	unreserved_keyword_map.insert("cascaded");
 	unreserved_keyword_map.insert("catalog");
+	unreserved_keyword_map.insert("cells");
 	unreserved_keyword_map.insert("centuries");
 	unreserved_keyword_map.insert("century");
 	unreserved_keyword_map.insert("chain");
@@ -165,6 +166,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("depends");
 	unreserved_keyword_map.insert("detach");
 	unreserved_keyword_map.insert("dictionary");
+	unreserved_keyword_map.insert("diff");
 	unreserved_keyword_map.insert("disable");
 	unreserved_keyword_map.insert("discard");
 	unreserved_keyword_map.insert("disconnect");

@@ -570,6 +570,7 @@ private:
 	BoundStatement Bind(ColumnDataRef &ref);
 	BoundStatement Bind(PivotRef &expr);
 	BoundStatement Bind(ShowRef &ref);
+	BoundStatement Bind(DiffRef &ref);
 
 	unique_ptr<SelectNode> BindPivot(PivotRef &expr, vector<unique_ptr<ParsedExpression>> all_columns);
 	unique_ptr<SelectNode> BindUnpivot(Binder &child_binder, PivotRef &expr,

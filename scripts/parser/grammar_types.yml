@@ -123,6 +123,7 @@ SelectStatement:
   by_value: true
   rules:
     - DescribeStatement
+    - DiffStatement
     - PivotStatement
     - UnpivotStatement
     - SelectStatementInternal
@@ -577,6 +578,9 @@ TableRef:
   by_value: true
   rules:
     - TableRef
+    - DiffSide
+    - DiffSubquery
+    - DiffTable
     - FromClause
     - JoinOrPivot
     - JoinClause
@@ -731,6 +735,7 @@ StringList:
   rules:
     - ColumnIdList
     - InsertColumnList
+    - DiffKey
     - ColumnList
     - NameList
     - DottedIdentifier
@@ -1143,6 +1148,7 @@ Bool:
   type: "bool"
   by_value: false
   rules:
+    - DiffCells
     - TimeZone
     - WithOrWithout
     - FromOrTo

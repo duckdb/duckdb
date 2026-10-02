@@ -412,5 +412,32 @@
       "unit",
       "expr"
     ]
+  },
+  {
+    "class": "DiffRef",
+    "base": "TableRef",
+    "enum": "DIFF_REF",
+    "members": [
+      {
+        "id": 200,
+        "name": "old_side",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "new_side",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "key",
+        "type": "vector<string>"
+      },
+      {
+        "id": 203,
+        "name": "cells",
+        "type": "bool"
+      }
+    ]
   }
 ]
