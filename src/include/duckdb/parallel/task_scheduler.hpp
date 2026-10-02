@@ -10,6 +10,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/common/array.hpp"
@@ -61,6 +62,10 @@ public:
 	//! Run tasks forever until "marker" is set to false, "marker" must remain valid until the thread is joined
 	void ExecuteForever(atomic<bool> *marker);
 	void ExecuteForever(atomic<bool> *marker, TaskSchedulerType pool_type);
+#ifndef DUCKDB_NO_THREADS
+	//! Run tasks forever on a worker owned by this scheduler
+	void ExecuteForeverOnInternalThread(atomic<bool> *marker, TaskSchedulerType pool_type);
+#endif
 	//! Run tasks until `marker` is set to false, `max_tasks` have been completed, or until there are no more tasks
 	//! available. Returns the number of tasks that were completed.
 	idx_t ExecuteTasks(atomic<bool> *marker, idx_t max_tasks);
@@ -99,6 +104,10 @@ private:
 
 private:
 	DatabaseInstance &db;
+#ifndef DUCKDB_NO_THREADS
+	//! The scheduler that owns the current internal worker thread, if any
+	static thread_local optional_ptr<TaskScheduler> current_worker_scheduler;
+#endif
 	//! Lock for modifying the thread count
 	mutex thread_lock;
 	//! The thread pools
