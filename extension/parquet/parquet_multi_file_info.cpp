@@ -62,6 +62,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	unique_ptr<ParquetFileReaderOptions> options;
 	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
+	vector<unique_ptr<ParquetReader>> partition_stats_readers;
 
 	ParquetOptions &GetParquetOptions() {
 		return options->options;
@@ -212,7 +213,13 @@ GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCach
 
 	// all caches are valid! we can return the partition stats
 	for (auto &cache : cached_metadata) {
-		ParquetReader::GetPartitionStats(*cache.metadata->metadata, result);
+		if (bind_data.file_options.union_by_name) {
+			ParquetReader::GetPartitionStats(*cache.metadata->metadata, result);
+			continue;
+		}
+		auto reader = make_uniq<ParquetReader>(context, parquet_options, cache.metadata);
+		reader->GetPartitionStats(result);
+		parquet_data.partition_stats_readers.push_back(std::move(reader));
 	}
 	return result;
 }

@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/parquet_glob_cache.test
-# description: Test usage of metadata cache in COUNT(*)
+# description: Test usage of metadata cache in multi-file scans
 # group: [parquet]
 
 require parquet
@@ -28,3 +28,29 @@ query I
 select count(*) from parquet_scan('{DATA_DIR}/parquet-testing/glob/*')
 ----
 2
+
+# issue #22679: explicit file lists should retain the metadata needed to validate cached footers
+statement ok
+COPY (SELECT i AS x FROM range(100) t(i)) TO '{TEMP_DIR}/cache_list_1.parquet';
+
+statement ok
+COPY (SELECT i + 100 AS x FROM range(100) t(i)) TO '{TEMP_DIR}/cache_list_2.parquet';
+
+# populate the metadata cache for both files
+query I
+SELECT count(*) FROM read_parquet(['{TEMP_DIR}/cache_list_1.parquet', '{TEMP_DIR}/cache_list_2.parquet']);
+----
+200
+
+# min/max/count can be answered entirely from the validated cached metadata
+query II
+EXPLAIN ANALYZE SELECT min(x), max(x), count(*)
+FROM read_parquet(['{TEMP_DIR}/cache_list_1.parquet', '{TEMP_DIR}/cache_list_2.parquet']);
+----
+analyzed_plan	<!REGEX>:.*READ_PARQUET.*
+
+query III
+SELECT min(x), max(x), count(*)
+FROM read_parquet(['{TEMP_DIR}/cache_list_1.parquet', '{TEMP_DIR}/cache_list_2.parquet']);
+----
+0	199	200

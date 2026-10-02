@@ -345,6 +345,9 @@ public:
 	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr,
 	              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions = {});
+	//! Construct a parquet reader from cached metadata without opening a file
+	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
+	              shared_ptr<ParquetFileMetadataCache> metadata);
 	~ParquetReader() override;
 
 	mutable CachingFileSystem fs;
@@ -439,10 +442,6 @@ public:
 	static shared_ptr<ParquetFileMetadataCache> GetMetadataCacheEntry(ClientContext &context, const OpenFileInfo &file);
 
 private:
-	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
-	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
-	              shared_ptr<ParquetFileMetadataCache> metadata);
-
 	void InitializeSchema(ClientContext &context);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema(ClientContext &context);
