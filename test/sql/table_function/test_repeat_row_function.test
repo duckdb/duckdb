@@ -62,7 +62,7 @@ mode skip
 statement error
 SELECT * FROM repeat_row(1, num_rows=-1)
 ----
-Binder Error
+<REGEX>:Binder Error.*No function matches.*repeat_row.*
 
 mode unskip
 
@@ -70,4 +70,4 @@ mode unskip
 statement error
 SELECT * FROM repeat_row(1, num_rows=-9223372036854775808)
 ----
-Binder Error
+<REGEX>:Binder Error.*No function matches.*repeat_row.*
