@@ -3,6 +3,7 @@
 import contextlib
 import io
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts import sync_out_of_tree_extensions as sync
+
+CMAKE = shutil.which('cmake')
+MAKE = shutil.which('make')
 
 
 class ExtensionSyncTest(unittest.TestCase):
@@ -151,6 +155,155 @@ class ExtensionSyncTest(unittest.TestCase):
         self.make_named_configs()
         os.environ.update(DUCKDB_EXTENSIONS='aws', CORE_EXTENSIONS='httpfs')
         self.assertEqual(list(sync.collect_extensions(self.root)), ['aws', 'httpfs'])
+
+    def test_project_config_overrides_named_revision(self):
+        self.make_named_configs()
+        config = self.root / 'project.cmake'
+        config.write_text(
+            'duckdb_extension_load(httpfs GIT_URL https://example.com/project-httpfs GIT_TAG project-pin)'
+        )
+        extensions = sync.collect_extensions(self.root, 'httpfs;avro', str(config))
+        self.assertEqual(list(extensions), ['httpfs', 'avro'])
+        self.assertEqual(extensions['httpfs']['git_url'], 'https://example.com/project-httpfs')
+        self.assertEqual(extensions['httpfs']['git_tag'], 'project-pin')
+
+    def test_first_project_config_wins(self):
+        self.make_named_configs()
+        first, second = self.root / 'first.cmake', self.root / 'second.cmake'
+        first.write_text('duckdb_extension_load(httpfs GIT_URL first-url GIT_TAG first-pin)')
+        second.write_text('duckdb_extension_load(httpfs GIT_URL second-url GIT_TAG second-pin)')
+        extensions = sync.collect_extensions(self.root, 'httpfs', f'{first};{second}')
+        self.assertEqual(extensions['httpfs']['git_tag'], 'first-pin')
+
+    def test_project_local_and_disabled_extensions_prevent_default_cloning(self):
+        self.make_named_configs()
+        config = self.root / 'project.cmake'
+        config.write_text(
+            '''
+            duckdb_extension_load(httpfs SOURCE_DIR /local/httpfs)
+            duckdb_extension_load(avro DONT_BUILD GIT_URL unused GIT_TAG unused)
+            duckdb_extension_load(httpfs GIT_URL unused GIT_TAG unused)
+            '''
+        )
+        self.assertEqual(sync.collect_extensions(self.root, 'httpfs;avro', str(config)), {})
+
+    def test_custom_config_directory_from_environment_and_argument(self):
+        self.make_named_configs()
+        custom_dir = self.root / 'project-configs'
+        custom_dir.mkdir()
+        (custom_dir / 'httpfs.cmake').write_text(
+            'duckdb_extension_load(httpfs GIT_URL project-url GIT_TAG project-pin)'
+        )
+        os.environ['EXTENSION_CONFIG_BASE_DIR'] = 'project-configs'
+        extensions = sync.collect_extensions(self.root, 'httpfs')
+        self.assertEqual(extensions['httpfs']['git_tag'], 'project-pin')
+        extensions = sync.collect_extensions(self.root, 'httpfs', extension_config_base_dir='.github/config/extensions')
+        self.assertEqual(extensions['httpfs']['git_tag'], 'revision')
+
+    def test_custom_config_directory_does_not_fall_back_to_builtin_pins(self):
+        self.make_named_configs()
+        custom_dir = self.root / 'project-configs'
+        custom_dir.mkdir()
+        self.assertEqual(sync.collect_extensions(self.root, 'httpfs', extension_config_base_dir=custom_dir), {})
+
+    def test_nested_project_includes_use_configured_base_directory(self):
+        config_dir = self.root / 'project-configs'
+        config_dir.mkdir()
+        (config_dir / 'httpfs.cmake').write_text(
+            'duckdb_extension_load(httpfs GIT_URL project-url GIT_TAG project-pin)'
+        )
+        project = self.root / 'project'
+        project.mkdir()
+        (project / 'extension_config.cmake').write_text('include("${CMAKE_CURRENT_LIST_DIR}/group.cmake")')
+        (project / 'group.cmake').write_text('include("${EXTENSION_CONFIG_BASE_DIR}/httpfs.cmake")')
+        extensions = sync.collect_extensions(
+            self.root, extension_configs_arg='project/extension_config.cmake', extension_config_base_dir=config_dir
+        )
+        self.assertEqual(extensions['httpfs']['git_tag'], 'project-pin')
+
+    def test_missing_explicit_config_and_directory_fail(self):
+        with self.assertRaises(FileNotFoundError):
+            sync.collect_extensions(self.root, extension_configs_arg='missing.cmake')
+        with self.assertRaises(FileNotFoundError):
+            sync.collect_extensions(self.root, extension_config_base_dir='missing')
+
+    def test_recursive_project_include_fails(self):
+        config = self.root / 'recursive.cmake'
+        config.write_text('include("${CMAKE_CURRENT_LIST_DIR}/recursive.cmake")')
+        with self.assertRaisesRegex(ValueError, 'Recursive extension config include'):
+            sync.parse_cmake_file(config)
+
+    @unittest.skipUnless(MAKE, 'Make is required for build command tests')
+    def test_make_new_mode_replaces_legacy_manifest_step_and_passes_config_directory(self):
+        os.environ.update(PATH=os.defpath, USE_MERGED_VCPKG_MANIFEST='1', VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
+        for new_mode in (False, True):
+            with self.subTest(new_mode=new_mode):
+                os.environ['DUCKDB_NEW_EXTENSION_BUILD'] = '1' if new_mode else ''
+                commands = subprocess.check_output(
+                    [
+                        MAKE,
+                        '-Bn',
+                        'reldebug',
+                        'BUILD_EXTENSIONS=httpfs',
+                        'EXTENSION_CONFIG_BASE_DIR=/project/custom configs',
+                        'EXTENSION_CONFIGS=/project/project.cmake',
+                    ],
+                    cwd=REPO_ROOT,
+                    text=True,
+                    stderr=subprocess.STDOUT,
+                )
+                self.assertIn('-DEXTENSION_CONFIG_BASE_DIR="/project/custom configs"', commands)
+                self.assertIn('-DDUCKDB_EXTENSION_CONFIGS="/project/project.cmake"', commands)
+                if new_mode:
+                    self.assertIn('--extension-config-base-dir "/project/custom configs"', commands)
+                    self.assertIn('--extension-configs "/project/project.cmake"', commands)
+                    self.assertNotIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
+                    self.assertNotIn('build/extension_configuration', commands)
+                else:
+                    self.assertIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
+                    self.assertNotIn('sync_out_of_tree_extensions.py', commands)
+
+    @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
+    def test_cmake_and_sync_use_the_same_project_configuration(self):
+        os.environ['PATH'] = os.defpath
+        source = self.root / 'sample-source'
+        source.mkdir()
+        os.environ['DUCKDB_SAMPLE_DIRECTORY'] = str(source)
+        config_dir = self.root / 'project-configs'
+        config_dir.mkdir()
+        named = config_dir / 'sample.cmake'
+        project = self.root / 'project.cmake'
+        for config, revision in [(named, 'named-pin'), (project, 'project-pin')]:
+            config.write_text(
+                f'duckdb_extension_load(sample GIT_URL https://example.invalid/sample '
+                f'GIT_TAG {revision} EXTENSION_VERSION {revision})'
+            )
+        for use_project in (False, True):
+            with self.subTest(use_project=use_project):
+                build_dir = self.root / f'build-{use_project}'
+                command = [
+                    CMAKE,
+                    '-S',
+                    str(REPO_ROOT),
+                    '-B',
+                    str(build_dir),
+                    '-DEXTENSION_CONFIG_BUILD=TRUE',
+                    '-DBUILD_EXTENSIONS=sample',
+                ]
+                if use_project:
+                    os.environ['EXTENSION_CONFIG_BASE_DIR'] = str(config_dir)
+                    command.append(f'-DDUCKDB_EXTENSION_CONFIGS={project}')
+                else:
+                    command.append(f'-DEXTENSION_CONFIG_BASE_DIR={config_dir}')
+                configured = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                self.assertEqual(configured.returncode, 0, configured.stdout)
+                extensions = sync.collect_extensions(
+                    REPO_ROOT, 'sample', str(project) if use_project else '', config_dir
+                )
+                self.assertIn(
+                    f'sample, "{extensions["sample"]["git_tag"]}"',
+                    (build_dir / 'extensions.csv').read_text(),
+                )
 
     def test_sync_clones_only_required_submodule_and_reuses_checkout(self):
         os.environ.update(
