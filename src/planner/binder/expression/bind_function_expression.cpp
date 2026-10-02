@@ -405,7 +405,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 }
 
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
-                                                idx_t depth) {
+                                                idx_t depth, vector<unique_ptr<Expression>> bound_children) {
 	// get the callback function for the lambda parameter types
 	auto &scalar_function = *func.functions.functions.front();
 	auto bind_lambda_function = scalar_function.GetBindLambdaCallback();
@@ -424,7 +424,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	vector<LogicalType> function_child_types;
-	vector<unique_ptr<Expression>> bound_children(function.GetArguments().size());
+	if (bound_children.empty()) {
+		bound_children.resize(function.GetArguments().size());
+	}
+	D_ASSERT(bound_children.size() == function.GetArguments().size());
+	D_ASSERT(!bound_children[lambda_expr_idx]);
 	ErrorData error;
 
 	for (idx_t i = 0; i < function.GetArguments().size(); i++) {
@@ -438,7 +442,9 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			                  "'. You might need to add explicit type casts.");
 		}
 
-		bound_children[i] = BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
+		if (!bound_children[i]) {
+			bound_children[i] = BindChild(function.GetArgumentsMutable()[i].GetExpressionMutable(), depth, error);
+		}
 		if (error.HasError()) {
 			return BindResult(std::move(error));
 		}
