@@ -8,6 +8,9 @@ on:
         type: string
       runner_macos_arm64:
         type: string
+      is_alpha_release:
+        default: false
+        type: boolean
       skip_tests:
         type: boolean
       run_all:
@@ -138,6 +141,7 @@ jobs:
         #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
       - name: Sign Binaries
         if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
+        continue-on-error: ${{ inputs.is_alpha_release }}
         shell: bash
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}

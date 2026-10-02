@@ -79,6 +79,7 @@ jobs:
       skip_tests: ${{ steps.config.outputs.skip_tests }}
       duckdb_version: ${{ steps.version.outputs.duckdb_version }}
       staged_version: ${{ steps.version.outputs.staged_version }}
+      is_alpha_release: ${{ steps.version.outputs.is_alpha_release }}
       extension_allow_failure_archs: ${{ steps.version.outputs.extension_allow_failure_archs }}
     env:
       GEN: ninja
@@ -115,9 +116,11 @@ jobs:
         run: |
           alpha_args=()
           staged_version=""
+          is_alpha_release=false
           extension_allow_failure_archs=
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.duckdb_commit }}" && -z "$INPUT_VERSION" ]]; then
             alpha_args=(--alpha-run-number "${{ github.run_number }}")
+            is_alpha_release=true
             extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
           fi
           version_output="$(python3 scripts/ci/version.py \
@@ -127,16 +130,18 @@ jobs:
             --github-output)"
           printf '%s\n' "$version_output" >> "$GITHUB_OUTPUT"
           duckdb_version="$(sed -n 's/^duckdb_version=//p' <<<"$version_output")"
-          if [[ ${#alpha_args[@]} -gt 0 ]]; then
+          if [[ "$is_alpha_release" == "true" ]]; then
             staged_version="${RESOLVED_COMMIT:0:10}/$duckdb_version"
           fi
           {
+            echo "is_alpha_release=$is_alpha_release"
             echo "staged_version=$staged_version"
             echo "extension_allow_failure_archs=$extension_allow_failure_archs"
           } >> "$GITHUB_OUTPUT"
           echo "Using duckdb_commit=$RESOLVED_COMMIT"
           echo "Using duckdb_version=$duckdb_version"
           echo "Using staged_version=$staged_version"
+          echo "Using is_alpha_release=$is_alpha_release"
           echo "Using extension_allow_failure_archs=$extension_allow_failure_archs"
 
       - name: Detect changes
@@ -1114,6 +1119,7 @@ jobs:
       duckdb_version: ${{ needs.prepare.outputs.duckdb_version }}
       duckdb_commit: ${{ needs.prepare.outputs.duckdb_commit }}
       runner_macos_arm64: ${{ needs.prepare.outputs.runner_macos_arm64 }}
+      is_alpha_release: ${{ fromJson(needs.prepare.outputs.is_alpha_release) }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       run_all: ${{ github.event_name != 'workflow_dispatch' || inputs.run_all }}
 
