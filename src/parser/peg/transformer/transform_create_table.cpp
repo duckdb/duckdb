@@ -237,6 +237,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 	}
 	auto column_type = has_type ? *type : LogicalType::ANY;
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
+	bool has_collation = false;
 	ColumnConstraint accumulated_constraints;
 	if (column_constraint) {
 		for (auto &cc_entry : *column_constraint) {
@@ -261,6 +262,10 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 				fk_constraint.fk_columns.push_back(qualified_name.Name());
 				accumulated_constraints.constraints.push_back(std::move(cc_entry.constraint));
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
+				if (has_collation) {
+					throw ParserException("multiple COLLATE clauses not allowed");
+				}
+				has_collation = true;
 				if (has_generated) {
 					throw ParserException("Collations are not supported on generated columns");
 				}

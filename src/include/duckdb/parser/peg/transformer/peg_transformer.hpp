@@ -1931,6 +1931,9 @@ public:
 	static void InitializeTargetOptAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeTargetOptAliasTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
+	static void InitializeTargetAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTargetAliasTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
 	static void InitializeDeleteUsingClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeDeleteUsingClauseTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -4691,7 +4694,9 @@ public:
 	                                                           unique_ptr<BaseTableRef> base_table_name);
 	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
 	                                                        unique_ptr<BaseTableRef> base_table_name,
-	                                                        const bool &has_result, const optional<Identifier> &col_id);
+	                                                        const optional<Identifier> &target_alias);
+	static Identifier TransformTargetAlias(PEGTransformer &transformer, const bool &has_result,
+	                                       const Identifier &col_id);
 	static vector<unique_ptr<TableRef>> TransformDeleteUsingClause(PEGTransformer &transformer,
 	                                                               vector<unique_ptr<TableRef>> table_ref);
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,

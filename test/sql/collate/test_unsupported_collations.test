@@ -18,6 +18,12 @@ Parser Error: Only VARCHAR columns can have collations!
 statement ok
 CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)
 
+# multiple COLLATE clauses are not allowed
+statement error
+CREATE TABLE collate_test_duplicate(s VARCHAR COLLATE NOCASE COLLATE NOACCENT)
+----
+Parser Error: multiple COLLATE clauses not allowed
+
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)
 ----
