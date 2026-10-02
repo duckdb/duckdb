@@ -23,7 +23,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/wal_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
