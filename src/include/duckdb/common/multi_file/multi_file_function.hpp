@@ -1148,28 +1148,22 @@ public:
 		}
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			if (!bind_data.file_options.union_by_name) {
-				// multiple files, but no union_by_name: no luck!
-				return nullptr;
-			}
-
-			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
-			if (!merged_stats) {
-				return nullptr;
-			}
-
+		const bool multiple_files = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
+		if (multiple_files && !bind_data.file_options.union_by_name) {
+			// multiple files, but no union_by_name: no luck!
+			return nullptr;
+		}
+		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (result && multiple_files) {
 			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
 				auto &union_reader = *bind_data.union_readers[i];
 				auto stats = union_reader.GetStatistics(context, col_name);
-				if (!stats || merged_stats->GetType() != stats->GetType()) {
+				if (!stats || result->GetType() != stats->GetType()) {
 					return nullptr;
 				}
-				merged_stats->Merge(*stats);
+				result->Merge(*stats);
 			}
-			return merged_stats;
 		}
-		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
 		if (!result || !column_index.IsPushdownExtract()) {
 			return result;
 		}
