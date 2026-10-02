@@ -1708,6 +1708,14 @@ public:
 	static void InitializeKeyActionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeKeyActionsTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
+	static void InitializeUpdateFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeUpdateFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
+	static void InitializeDeleteFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDeleteFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
 	static void InitializeUpdateActionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUpdateActionTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
@@ -4586,13 +4594,15 @@ public:
 	static ColumnConstraintEntry TransformForeignKeyConstraint(PEGTransformer &transformer,
 	                                                           unique_ptr<BaseTableRef> base_table_name,
 	                                                           const optional<vector<string>> &column_list,
-	                                                           const KeyActions &key_actions);
+	                                                           const optional<KeyActions> &key_actions);
 	static ColumnConstraintEntry TransformColumnCollation(PEGTransformer &transformer,
 	                                                      const vector<string> &dotted_identifier);
 	static ColumnConstraintEntry TransformColumnCompression(PEGTransformer &transformer,
 	                                                        const Identifier &col_id_or_string);
-	static KeyActions TransformKeyActions(PEGTransformer &transformer, const optional<string> &update_action,
-	                                      const optional<string> &delete_action);
+	static KeyActions TransformUpdateFirstKeyActions(PEGTransformer &transformer, const string &update_action,
+	                                                 const optional<string> &delete_action);
+	static KeyActions TransformDeleteFirstKeyActions(PEGTransformer &transformer, const string &delete_action,
+	                                                 const optional<string> &update_action);
 	static string TransformUpdateAction(PEGTransformer &transformer, const string &key_action);
 	static string TransformDeleteAction(PEGTransformer &transformer, const string &key_action);
 	static string TransformNoKeyAction(PEGTransformer &transformer);
@@ -5102,7 +5112,8 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformInSelectStatement(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<ParsedExpression>
-	TransformBetweenClause(PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+	TransformBetweenClause(PEGTransformer &transformer, const bool &,
+	                       unique_ptr<ParsedExpression> other_operator_expression,
 	                       unique_ptr<ParsedExpression> other_operator_expression_1);
 	static unique_ptr<ParsedExpression>
 	TransformInfixOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,

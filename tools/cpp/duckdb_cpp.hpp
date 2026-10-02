@@ -43,10 +43,9 @@
 #include <limits>
 
 // Arrow C Data Interface structs. Forward declared only: the definitions come from `duckdb_v2.h` or from the
-// consumer's own Arrow headers, under the standard ARROW_C_DATA_INTERFACE / ARROW_C_STREAM_INTERFACE guards.
+// consumer's own Arrow headers, under the standard ARROW_C_DATA_INTERFACE guard.
 struct ArrowSchema;
 struct ArrowArray;
-struct ArrowArrayStream;
 
 namespace duckdb {
 namespace cxx {
@@ -75,7 +74,6 @@ class DataChunk;
 class ColumnDataCollection;
 class QueryResult;
 class PreparedStatement;
-class ArrowStream;
 class ArrowImporter;
 class ArrowExporter;
 
@@ -2727,61 +2725,6 @@ private:
 	explicit ArrowExporter(void *impl);
 };
 
-/// An owning handle to an Arrow C Data Interface stream, produced by `QueryResult::ToArrowStream`. Destroying it
-/// releases the stream, which closes the query and frees the connection for its next one. Arrays handed out by
-/// `Next` are owned by the caller and released independently of this.
-///
-/// Unlike the other wrappers this does not derive from `detail::Handle`: it owns a raw `ArrowArrayStream` rather than
-/// an opaque DuckDB handle, so the handle machinery does not apply.
-class ArrowStream final {
-	friend detail::Factory;
-
-public:
-	ArrowStream(ArrowStream &&other) noexcept : stream(other.stream) {
-		other.stream = nullptr;
-	}
-	ArrowStream &operator=(ArrowStream &&other) noexcept {
-		std::swap(stream, other.stream);
-		return *this;
-	}
-	ArrowStream(const ArrowStream &) = delete;
-	ArrowStream &operator=(const ArrowStream &) = delete;
-
-	~ArrowStream();
-
-	/// True while this holds a live stream, false once it has been moved from or detached.
-	explicit operator bool() const noexcept {
-		return stream != nullptr;
-	}
-
-	/// Borrows the underlying stream, which this still owns. Hand its address to an Arrow consumer that does not
-	/// take ownership.
-	auto get() const noexcept -> ArrowArrayStream * {
-		return stream;
-	}
-
-	/// Detaches the underlying stream, handing the caller ownership and the duty to release it. Leaves this empty.
-	auto Detach() noexcept -> ArrowArrayStream * {
-		auto detached = stream;
-		stream = nullptr;
-		return detached;
-	}
-
-	/// Reads the stream's schema into `out`, which the caller then owns and releases.
-	/// @throws InvalidInputException On failure, or when this stream is empty.
-	void GetSchema(ArrowSchema &out) const;
-
-	/// Fetches the next array into `out`, which the caller then owns and releases.
-	/// @return False at end of stream, where `out` is left released.
-	/// @throws InvalidInputException On failure, or when this stream is empty.
-	bool Next(ArrowArray &out) const;
-
-private:
-	explicit ArrowStream(ArrowArrayStream *stream) : stream(stream) {
-	}
-	ArrowArrayStream *stream = nullptr;
-};
-
 //----------------------------------------------------------------------------------------------------------------------
 // Result
 //----------------------------------------------------------------------------------------------------------------------
@@ -2880,12 +2823,6 @@ public:
 	/// "? rows", since there may have been more.
 	auto RenderBox(idx_t max_rows = 0, idx_t max_width = 0, idx_t max_col_width = 0, const std::string &null_value = "",
 	               idx_t render_mode = 0, idx_t limit = 0) -> std::string;
-
-	/// Exports the result as a lazy `ArrowStream`, consuming it. Nothing is executed here: the stream converts as its
-	/// consumer pulls. A result that has already yielded chunks produces a stream over what remains.
-	/// @param batch_size Target rows per Arrow array, 0 for the default of 131072.
-	/// @return The stream, which owns the query from now on and frees the connection when released.
-	auto ToArrowStream(idx_t batch_size = 0) -> ArrowStream;
 
 private:
 	explicit QueryResult(void *impl);
