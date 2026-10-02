@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -58,7 +59,6 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 			return BindExpression(invoke_expr, depth);
 		}
 
-		auto initial_bound_column_count = GetBoundColumns().size();
 		auto case_operand_expr = expr.CaseOperand()->Copy();
 		auto case_operand = BindChild(case_operand_expr, depth, error);
 		if (error.HasError()) {
@@ -78,11 +78,14 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 			}
 			else_expr = BindChild(expr.ElseMutable(), depth, error);
 		} else {
-			TruncateBoundColumns(initial_bound_column_count);
 			auto invoke_expr = CreateCaseInvokeExpression(expr, lambda_index, std::move(parameter_name),
 			                                              operand_location, std::move(expr.CaseOperandMutable()));
-			// FIXME: Support subqueries and UNNEST without falling back to repeated operand evaluation.
-			return BindExpression(invoke_expr, depth);
+			auto stack_checker = StackCheck(*invoke_expr);
+			auto &invoke_function = invoke_expr->Cast<FunctionExpression>();
+			auto &invoke_entry = BindFunction(invoke_function).Cast<ScalarFunctionCatalogEntry>();
+			vector<unique_ptr<Expression>> bound_children(invoke_function.GetArguments().size());
+			bound_children[1] = std::move(case_operand);
+			return BindLambdaFunction(invoke_function, invoke_entry, depth, std::move(bound_children));
 		}
 	} else {
 		// first try to bind the children of the case expression
