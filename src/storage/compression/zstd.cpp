@@ -690,8 +690,9 @@ struct ZSTDVectorScanMetadata {
 struct ZSTDVectorScanState {
 public:
 	ZSTDVectorScanState(const ZSTDVectorScanMetadata &metadata_p,
-	                    unsafe_array_ptr<const string_length_t> string_lengths_p)
-	    : metadata(metadata_p), string_lengths(string_lengths_p) {
+	                    unsafe_array_ptr<const string_length_t> string_lengths_p,
+	                    const CompressionSegmentReader &reader_p)
+	    : metadata(metadata_p), string_lengths(string_lengths_p), reader(reader_p) {
 	}
 	ZSTDVectorScanState(ZSTDVectorScanState &&other) = default;
 	ZSTDVectorScanState(const ZSTDVectorScanState &other) = delete;
@@ -703,6 +704,8 @@ public:
 	vector<BufferHandle> buffer_handles;
 	//! The (uncompressed) string lengths for this vector
 	unsafe_array_ptr<const string_length_t> string_lengths;
+	//! Reader for the current page.
+	CompressionSegmentReader reader;
 	//! The amount of values already consumed from the state
 	idx_t scanned_count = 0;
 	//! The amount of compressed data read
@@ -815,11 +818,10 @@ public:
 			if (data_remaining == 0) {
 				ThrowZSTDPageTooSmall();
 			}
-			// FIXME: Validate the next page ID with CompressionSegmentReader in LoadNextPageForVector.
 			compressed_size = data_remaining;
 		}
 		auto compressed_data = reader.ReadBytes(compressed_size);
-		current_vector = make_uniq<ZSTDVectorScanState>(metadata, string_lengths);
+		current_vector = make_uniq<ZSTDVectorScanState>(metadata, string_lengths, reader);
 		auto &scan_state = *current_vector;
 		if (data_handle.IsValid()) {
 			scan_state.buffer_handles.push_back(std::move(data_handle));
@@ -848,24 +850,25 @@ public:
 			ThrowZSTDCompressedDataExhausted();
 		}
 		// Read the next block id from the end of the page
-		auto base_ptr =
-		    reinterpret_cast<data_ptr_t>(const_cast<void *>(scan_state.in_buffer.src)); // NOLINT: const cast
-		auto next_id_ptr = base_ptr + scan_state.in_buffer.size;
-		block_id_t next_id = Load<block_id_t>(next_id_ptr);
+		const auto next_id = scan_state.reader.Read<block_id_t>();
 
 		// Load the next page
 		auto block = LoadPage(next_id);
 		auto handle = buffer_manager.Pin(context, block);
-		auto ptr = handle.GetDataMutable();
+		auto reader = CompressionSegmentReader(handle.Ptr(), block->GetBlockSize(), "ZSTD overflow page");
+		if (reader.Remaining() <= sizeof(block_id_t)) {
+			ThrowZSTDPageTooSmall();
+		}
+		idx_t page_size = reader.Remaining() - sizeof(block_id_t);
+		idx_t remaining_compressed_data = scan_state.metadata.compressed_size - scan_state.compressed_scan_count;
+		auto compressed_data = reader.ReadBytes(MinValue<idx_t>(page_size, remaining_compressed_data));
 		scan_state.buffer_handles.push_back(std::move(handle));
+		scan_state.reader = reader;
 
 		// Update the in_buffer to point to the new page
-		scan_state.in_buffer.src = ptr;
+		scan_state.in_buffer.src = compressed_data.data();
 		scan_state.in_buffer.pos = 0;
-
-		idx_t page_size = segment.SegmentSize() - sizeof(block_id_t);
-		idx_t remaining_compressed_data = scan_state.metadata.compressed_size - scan_state.compressed_scan_count;
-		scan_state.in_buffer.size = MinValue<idx_t>(page_size, remaining_compressed_data);
+		scan_state.in_buffer.size = compressed_data.size();
 	}
 
 	void DecompressString(ZSTDVectorScanState &scan_state, data_ptr_t destination, idx_t uncompressed_length) {
