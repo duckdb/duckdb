@@ -1,5 +1,5 @@
 diff --git a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
-index 871a005d..4d27ca30 100644
+index 871a005..c51f3d3 100644
 --- a/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
 +++ b/src/catalog/rest/catalog_entry/schema/iceberg_schema_entry.cpp
 @@ -327,7 +327,7 @@ void IntroduceNewSchema(IcebergTable &updated_table, IcebergTransactionData &tra
@@ -16,15 +16,28 @@ index 871a005d..4d27ca30 100644
  		}
  		auto &column_path = cast.Child().Cast<ColumnRefExpression>().ColumnNames();
 -		if (column_path[0] != change_type_info.column_name) {
-+		if (column_path[0] != change_type_info.column_path[0]) {
++		if (column_path != change_type_info.column_path) {
  			throw NotImplementedException("ALTER TYPE with a USING expression is not supported for Iceberg tables");
  		}
  		auto column_p = new_schema->GetMutableFromPath(column_path, nullptr);
-@@ -695,7 +695,7 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+@@ -578,6 +578,9 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
+ 	}
+ 	case AlterTableType::DROP_NOT_NULL: {
+ 		auto &drop_not_null_info = alter_table_info.Cast<DropNotNullInfo>();
++		if (drop_not_null_info.column_path.size() > 1) {
++			throw NotImplementedException("Dropping a NOT NULL constraint on a nested field is not yet supported");
++		}
+ 
+ 		auto new_schema = current_schema.Copy();
+ 		new_schema->schema_id++;
+@@ -695,7 +698,10 @@ void IcebergSchemaEntry::Alter(CatalogTransaction transaction, AlterInfo &info)
  	}
  	case AlterTableType::SET_DEFAULT: {
  		auto &set_default_info = alter_table_info.Cast<SetDefaultInfo>();
 -		auto &column_name = set_default_info.column_name;
++		if (set_default_info.column_path.size() > 1) {
++			throw NotImplementedException("Setting a default value on a nested field is not yet supported");
++		}
 +		auto &column_name = set_default_info.column_path[0];
  		auto &expression = set_default_info.expression;
  

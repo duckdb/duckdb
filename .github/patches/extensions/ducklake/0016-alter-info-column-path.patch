@@ -1,9 +1,14 @@
 diff --git a/src/storage/ducklake_table_entry.cpp b/src/storage/ducklake_table_entry.cpp
-index c923ebd8..f7028c53 100644
+index 32de8e5..408b4a3 100644
 --- a/src/storage/ducklake_table_entry.cpp
 +++ b/src/storage/ducklake_table_entry.cpp
-@@ -694,10 +694,10 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(ClientContext &context,
+@@ -700,12 +700,15 @@ optional_idx FindNotNullConstraint(CreateTableInfo &table_info, LogicalIndex ind
+ 
+ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(ClientContext &context, DuckLakeTransaction &transaction,
                                                          SetNotNullInfo &info) {
++	if (info.column_path.size() > 1) {
++		throw NotImplementedException("Setting a NOT NULL constraint on a nested field is not yet supported");
++	}
  	auto create_info = GetInfo();
  	auto &table_info = create_info->Cast<CreateTableInfo>();
 -	if (!table_info.columns.ColumnExists(info.column_name)) {
@@ -16,8 +21,13 @@ index c923ebd8..f7028c53 100644
  	auto &field_id = GetFieldId(col.Physical());
  
  	// check if there is an existing constraint
-@@ -743,10 +743,10 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(ClientContext &context,
+@@ -749,12 +752,15 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(ClientContext &context,
+ }
+ 
  unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, DropNotNullInfo &info) {
++	if (info.column_path.size() > 1) {
++		throw NotImplementedException("Dropping a NOT NULL constraint on a nested field is not yet supported");
++	}
  	auto create_info = GetInfo();
  	auto &table_info = create_info->Cast<CreateTableInfo>();
 -	if (!table_info.columns.ColumnExists(info.column_name)) {
@@ -30,8 +40,13 @@ index c923ebd8..f7028c53 100644
  	auto &field_id = GetFieldId(col.Physical());
  
  	// find the existing index
-@@ -1091,10 +1091,10 @@ unique_ptr<DuckLakeFieldId> DuckLakeTableEntry::TypePromotion(const DuckLakeFiel
+@@ -1097,12 +1103,15 @@ unique_ptr<DuckLakeFieldId> DuckLakeTableEntry::TypePromotion(const DuckLakeFiel
+ }
+ 
  unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, ChangeColumnTypeInfo &info) {
++	if (info.column_path.size() > 1) {
++		throw NotImplementedException("Changing the type of a nested field is not yet supported");
++	}
  	auto create_info = GetInfo();
  	auto &table_info = create_info->Cast<CreateTableInfo>();
 -	if (!ColumnExists(info.column_name)) {
@@ -44,7 +59,7 @@ index c923ebd8..f7028c53 100644
  	auto &field_id = GetFieldId(col.Physical());
  	if (!IsSimpleCast(*info.expression)) {
  		throw NotImplementedException("Column type cannot be modified using an expression");
-@@ -1109,7 +1109,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1117,7 +1126,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	ColumnList new_columns;
  	for (auto &col : columns.Logical()) {
  		auto copy = col.Copy();
@@ -53,7 +68,7 @@ index c923ebd8..f7028c53 100644
  			copy.SetType(info.target_type);
  		}
  		new_columns.AddColumn(std::move(copy));
-@@ -1120,7 +1120,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1128,7 +1137,7 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
  	auto &current_field_ids = field_data->GetFieldIds();
  	auto new_field_ids = make_shared_ptr<DuckLakeFieldData>();
  	for (auto &field_id : current_field_ids) {
@@ -62,8 +77,13 @@ index c923ebd8..f7028c53 100644
  			new_field_ids->Add(std::move(new_field_id));
  			new_field_id.reset();
  		} else {
-@@ -1327,10 +1327,10 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+@@ -1333,12 +1342,15 @@ unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &tra
+ }
+ 
  unique_ptr<CatalogEntry> DuckLakeTableEntry::AlterTable(DuckLakeTransaction &transaction, SetDefaultInfo &info) {
++	if (info.column_path.size() > 1) {
++		throw NotImplementedException("Setting a default value on a nested field is not yet supported");
++	}
  	auto create_info = GetInfo();
  	auto &table_info = create_info->Cast<CreateTableInfo>();
 -	if (!ColumnExists(info.column_name)) {
@@ -76,3 +96,78 @@ index c923ebd8..f7028c53 100644
  	auto &field_id = GetFieldId(col.Physical());
  	col.SetDefaultValue(std::move(info.expression));
  	bool new_column = !transaction.GetMetadataManager().IsColumnCreatedWithTable(
+diff --git a/test/sql/alter/alter_nested_field_not_supported.test b/test/sql/alter/alter_nested_field_not_supported.test
+new file mode 100644
+index 0000000..bde203d
+--- /dev/null
++++ b/test/sql/alter/alter_nested_field_not_supported.test
+@@ -0,0 +1,69 @@
++# name: test/sql/alter/alter_nested_field_not_supported.test
++# description: ALTER on a nested struct field must not silently target the top-level column
++# group: [alter]
++
++require ducklake
++
++require parquet
++
++test-env DUCKLAKE_CONNECTION {TEST_DIR}/{UUID}.db
++
++test-env DATA_PATH {TEST_DIR}
++
++statement ok
++ATTACH 'ducklake:{DUCKLAKE_CONNECTION}' AS ducklake (DATA_PATH '{DATA_PATH}/ducklake_alter_nested_field_files')
++
++statement ok
++CREATE TABLE ducklake.test(s STRUCT(a INTEGER, b INTEGER))
++
++statement ok
++INSERT INTO ducklake.test VALUES ({'a': NULL, 'b': 1})
++
++statement error
++ALTER TABLE ducklake.test ALTER s.a SET NOT NULL
++----
++Setting a NOT NULL constraint on a nested field is not yet supported
++
++statement error
++ALTER TABLE ducklake.test ALTER s.a DROP NOT NULL
++----
++Dropping a NOT NULL constraint on a nested field is not yet supported
++
++statement error
++ALTER TABLE ducklake.test ALTER s.a SET DEFAULT 5
++----
++Setting a default value on a nested field is not yet supported
++
++statement error
++ALTER TABLE ducklake.test ALTER s.a TYPE BIGINT
++----
++Changing the type of a nested field is not yet supported
++
++# "s" itself did not get a NOT NULL constraint
++statement ok
++INSERT INTO ducklake.test VALUES (NULL)
++
++query I
++SELECT * FROM ducklake.test ORDER BY s.b NULLS LAST
++----
++{'a': NULL, 'b': 1}
++NULL
++
++# top-level columns are unaffected
++statement ok
++CREATE TABLE ducklake.simple(a INTEGER, b INTEGER)
++
++statement ok
++INSERT INTO ducklake.simple VALUES (1, 1)
++
++statement ok
++ALTER TABLE ducklake.simple ALTER a SET NOT NULL
++
++statement ok
++ALTER TABLE ducklake.simple ALTER a DROP NOT NULL
++
++statement ok
++ALTER TABLE ducklake.simple ALTER a SET DEFAULT 42
++
++statement ok
++ALTER TABLE ducklake.simple ALTER a TYPE BIGINT
