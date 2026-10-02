@@ -32,7 +32,10 @@ Binding::Binding(const Binding &other)
       forwarded_columns(other.forwarded_columns), projected_columns(other.projected_columns),
       whole_row_column(other.whole_row_column) {
 	for (auto &entry : other.projection_expressions) {
-		projection_expressions.emplace(entry.first, entry.second->Copy());
+		auto &source = entry.second;
+		auto copy = SourceExpression(source.expression->Copy(), source.diagnostic_name, source.generated);
+		copy.can_reconstruct = source.can_reconstruct;
+		projection_expressions.emplace(entry.first, std::move(copy));
 	}
 }
 
@@ -89,10 +92,12 @@ bool Binding::HasSourceProjection() const {
 }
 
 unique_ptr<ParsedExpression> Binding::RegisterProjectionExpression(const Identifier &column_name,
-                                                                   unique_ptr<ParsedExpression> expression) {
+                                                                   unique_ptr<ParsedExpression> expression,
+                                                                   bool generated) {
 	D_ASSERT(source_projection);
 	if (projection_expressions.find(column_name) == projection_expressions.end()) {
-		projection_expressions.emplace(column_name, std::move(expression));
+		projection_expressions.emplace(
+		    column_name, SourceExpression(std::move(expression), generated ? column_name : GetAlias(), generated));
 		if (name_map.find(column_name) == name_map.end()) {
 			name_map.emplace(column_name, DConstants::INVALID_INDEX);
 		}
@@ -109,7 +114,7 @@ unique_ptr<ParsedExpression> Binding::RegisterWholeRowExpression(unique_ptr<Pars
 			whole_row_column = Identifier(whole_row_column.GetIdentifierName() + "_");
 		}
 	}
-	return RegisterProjectionExpression(whole_row_column, std::move(expression));
+	return RegisterProjectionExpression(whole_row_column, std::move(expression), false);
 }
 
 unique_ptr<Expression> Binding::ProjectColumn(unique_ptr<BoundColumnRefExpression> expression) {
@@ -140,7 +145,7 @@ unique_ptr<Binding> Binding::CopyForSourceBinding() {
 	result->alias = alias;
 	result->name_map = name_map;
 	for (auto &entry : projection_expressions) {
-		if (entry.second && result->name_map.at(entry.first) == DConstants::INVALID_INDEX) {
+		if (result->name_map.at(entry.first) == DConstants::INVALID_INDEX) {
 			result->name_map.erase(entry.first);
 		}
 	}

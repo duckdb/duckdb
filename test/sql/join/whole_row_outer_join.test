@@ -209,3 +209,23 @@ SELECT l.i, r FROM l LEFT JOIN r USING (i) ORDER BY l.i;
 1	{'i': 1, 'v': HELLO}
 2	NULL
 3	NULL
+
+statement error
+SELECT r, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN r USING (i) GROUP BY r.i;
+----
+<REGEX>:.*column "r" must appear in the GROUP BY clause.*ANY_VALUE\("r"\).*
+
+statement error
+SELECT r AS row_alias, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN r USING (i) GROUP BY r.i;
+----
+<REGEX>:.*column "r" must appear in the GROUP BY clause.*ANY_VALUE\("r"\).*
+
+statement error
+SELECT hash(r), count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN r USING (i) GROUP BY r.i;
+----
+<REGEX>:.*column "r" must appear in the GROUP BY clause.*ANY_VALUE\("r"\).*
+
+statement error
+SELECT s, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN r AS s USING (i) GROUP BY s.i;
+----
+<REGEX>:.*column "s" must appear in the GROUP BY clause.*ANY_VALUE\("s"\).*

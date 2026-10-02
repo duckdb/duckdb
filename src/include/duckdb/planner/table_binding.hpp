@@ -34,6 +34,17 @@ struct ColumnBinding;
 
 enum class BindingType { BASE, TABLE, DUMMY, CATALOG_ENTRY, CTE };
 
+struct SourceExpression {
+	SourceExpression(unique_ptr<ParsedExpression> expression, Identifier diagnostic_name, bool generated)
+	    : expression(std::move(expression)), diagnostic_name(std::move(diagnostic_name)), generated(generated) {
+	}
+
+	unique_ptr<ParsedExpression> expression;
+	Identifier diagnostic_name;
+	bool generated;
+	bool can_reconstruct = false;
+};
+
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
 struct Binding {
 	friend class BindContext;
@@ -68,7 +79,7 @@ public:
 	bool IsNullExtended() const;
 	bool HasSourceProjection() const;
 	unique_ptr<ParsedExpression> RegisterProjectionExpression(const Identifier &column_name,
-	                                                          unique_ptr<ParsedExpression> expression);
+	                                                          unique_ptr<ParsedExpression> expression, bool generated);
 	unique_ptr<ParsedExpression> RegisterWholeRowExpression(unique_ptr<ParsedExpression> expression);
 
 	static BindingAlias GetAlias(const Identifier &explicit_alias, const StandardEntry &entry);
@@ -116,7 +127,7 @@ protected:
 	//! Projection at this relation's source, before surrounding joins
 	optional_ptr<LogicalProjection> source_projection;
 	unordered_map<idx_t, ProjectionIndex> forwarded_columns;
-	identifier_map_t<unique_ptr<ParsedExpression>> projection_expressions;
+	identifier_map_t<SourceExpression> projection_expressions;
 	identifier_map_t<ProjectionIndex> projected_columns;
 	Identifier whole_row_column;
 };

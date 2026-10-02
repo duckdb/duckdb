@@ -218,3 +218,162 @@ SELECT l.i, r.i, r.v_is_null, r.dependent, r.fixed FROM l LEFT JOIN r USING (i) 
 
 statement ok
 PRAGMA enable_optimizer;
+
+statement ok
+CREATE TABLE grouped_inputs(i INTEGER, j INTEGER, g AS (i + 1), multiple_inputs AS (i + j), wide AS (i::BIGINT + 1), chained AS (g + 1), unit AS (1));
+
+statement ok
+INSERT INTO grouped_inputs VALUES (1, 10), (3, 30), (NULL, 99);
+
+query II
+SELECT r.g, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i ORDER BY r.g;
+----
+2	1
+4	1
+NULL	1
+
+query II
+SELECT (SELECT r.g), count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i ORDER BY 1;
+----
+2	1
+4	1
+NULL	1
+
+statement error
+SELECT r, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i;
+----
+<REGEX>:.*column "r" must appear in the GROUP BY clause.*ANY_VALUE\("r"\).*
+
+query IIII
+SELECT r.g, r.chained, r.wide, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i ORDER BY r.g;
+----
+2	3	2	1
+4	5	4	1
+NULL	NULL	NULL	1
+
+query II
+SELECT r.multiple_inputs, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i, r.j ORDER BY 1;
+----
+11	1
+33	1
+NULL	1
+
+statement error
+SELECT r.multiple_inputs, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i;
+----
+column "multiple_inputs" must appear in the GROUP BY clause
+
+query II
+SELECT r.chained, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.g ORDER BY 1;
+----
+3	1
+5	1
+NULL	1
+
+query II
+SELECT r.g, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i + 1 ORDER BY 1;
+----
+2	1
+4	1
+NULL	1
+
+query II
+SELECT r.g, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i HAVING r.g > 2;
+----
+4	1
+
+query II
+SELECT r.g, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i QUALIFY row_number() OVER (ORDER BY r.g) <= 2 ORDER BY 1;
+----
+2	1
+4	1
+
+query II
+SELECT r.g, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY GROUPING SETS ((r.i), ()) ORDER BY 1, 2;
+----
+2	1
+4	1
+NULL	1
+NULL	3
+
+query II
+SELECT sum(r.g), count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i ORDER BY 1;
+----
+2	1
+4	1
+NULL	1
+
+query II
+SELECT r.g, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY GROUPING SETS ((r.i, r.unit), (r.i)) ORDER BY 1, 2;
+----
+2	1
+2	1
+4	1
+4	1
+NULL	1
+NULL	1
+
+statement ok
+CREATE TABLE nullable_inputs(i INTEGER, is_null AS (i IS NULL), filled AS (coalesce(i, 42)), fixed AS (42), value AS (random()));
+
+statement ok
+INSERT INTO nullable_inputs VALUES (NULL);
+
+statement error
+SELECT r.is_null, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN nullable_inputs r ON l.i = 1 GROUP BY r.i;
+----
+column "is_null" must appear in the GROUP BY clause
+
+statement error
+SELECT r.filled, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN nullable_inputs r ON l.i = 1 GROUP BY r.i;
+----
+column "filled" must appear in the GROUP BY clause
+
+statement error
+SELECT r.fixed, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN nullable_inputs r ON l.i = 1 GROUP BY r.i;
+----
+column "fixed" must appear in the GROUP BY clause
+
+statement error
+SELECT r.value, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN nullable_inputs r ON l.i = 1 GROUP BY r.i;
+----
+column "value" must appear in the GROUP BY clause
+
+query II
+SELECT r.is_null, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN nullable_inputs r ON l.i = 1 GROUP BY r.is_null ORDER BY 1;
+----
+true	1
+NULL	1
+
+statement ok
+CREATE TABLE collated_inputs(v VARCHAR COLLATE nocase, lowered AS (lower(v)));
+
+statement ok
+CREATE TABLE independently_throwing(i INTEGER, g AS (i + CAST('not an integer' AS INTEGER)));
+
+statement error
+SELECT r.g, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN independently_throwing r USING (i) GROUP BY r.i;
+----
+column "g" must appear in the GROUP BY clause
+
+statement ok
+INSERT INTO collated_inputs VALUES ('Hello');
+
+query TI
+SELECT r.lowered, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN collated_inputs r ON l.i = 1 GROUP BY r.v ORDER BY 1;
+----
+hello	1
+NULL	1
+
+statement ok
+PRAGMA disable_optimizer;
+
+query IIII
+SELECT r.g, r.chained, r.wide, count(*) FROM (VALUES (1), (2), (3)) l(i) LEFT JOIN grouped_inputs r USING (i) GROUP BY r.i ORDER BY r.g;
+----
+2	3	2	1
+4	5	4	1
+NULL	NULL	NULL	1
+
+statement ok
+PRAGMA enable_optimizer;

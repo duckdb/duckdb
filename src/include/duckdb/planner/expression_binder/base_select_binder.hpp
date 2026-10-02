@@ -51,6 +51,7 @@ protected:
 	bool MatchesGroup(ParsedExpression &expr) override;
 	bool ClaimsAlias(ColumnRefExpression &colref) override;
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, ProjectionIndex group_index);
+	BindResult TryBindGeneratedColumn(ColumnRefExpression &expr, idx_t depth);
 
 protected:
 	bool inside_window = false;
