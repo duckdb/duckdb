@@ -357,6 +357,9 @@ unique_ptr<TimeZone> ICUHelpers::GetTimeZone(string &tz_str, string *error_messa
 }
 
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("TimeZone setting cannot be NULL");
+	}
 	auto tz_str = StringValue::Get(parameter);
 	ICUHelpers::GetTimeZone(tz_str);
 	parameter = Value(tz_str);
@@ -394,6 +397,9 @@ static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data
 }
 
 static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("Calendar setting cannot be NULL");
+	}
 	const auto name = parameter.Value::GetValueUnsafe<string>();
 	//	Try to be friendlier: look for a case insensitive match, and if we don't find one,
 	//	make a suggestion
