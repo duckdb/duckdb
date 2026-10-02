@@ -12,6 +12,10 @@ CastFunctionSet &TypeManager::GetCastFunctions() {
 	return *cast_functions;
 }
 
+const CastFunctionSet &TypeManager::GetCastFunctions() const {
+	return *cast_functions;
+}
+
 static LogicalType TransformStringToUnboundType(const string &str, const ParserOptions &options) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;

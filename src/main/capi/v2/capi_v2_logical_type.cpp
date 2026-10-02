@@ -269,7 +269,7 @@ DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_id(duckdb_v2_connection_ha
 	});
 }
 
-static void CreateLogicalTypeFromTextV2(duckdb::ClientContext &context, duckdb_v2_str text,
+static void CreateLogicalTypeFromTextV2(duckdb::ClientContext &context, const duckdb_v2_str *text,
                                         duckdb_v2_logical_type_handle *out_type) {
 	*out_type = nullptr;
 	// Parse and bind errors propagate.
@@ -278,7 +278,7 @@ static void CreateLogicalTypeFromTextV2(duckdb::ClientContext &context, duckdb_v
 	*out_type = Convert(new duckdb::LogicalType(std::move(parsed)));
 }
 
-DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx, duckdb_v2_str text,
+DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle ctx, const duckdb_v2_str *text,
                                                         duckdb_v2_logical_type_handle *out_type,
                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
@@ -290,7 +290,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn, duckdb_v2_str text,
+DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn, const duckdb_v2_str *text,
                                                            duckdb_v2_logical_type_handle *out_type,
                                                            duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);
@@ -456,20 +456,21 @@ namespace {
 
 // The alias keeps the base type's internal representation; only the name and
 // its catalog identity change.
-duckdb::LogicalType AliasOf(duckdb_v2_logical_type_handle base_type, duckdb_v2_identifier_t alias_name,
+duckdb::LogicalType AliasOf(duckdb_v2_logical_type_handle base_type, const duckdb_v2_identifier_t *alias_name,
                             duckdb_v2_logical_type_handle *out_type) {
 	*out_type = nullptr;
-	if (alias_name.len == 0) {
+	auto name = ConvertIdentifierName(alias_name);
+	if (name.empty()) {
 		throw duckdb::InvalidInputException("alias name cannot be empty");
 	}
-	return Convert(base_type)->WithAlias(std::string(ConvertIdentifierName(alias_name)));
+	return Convert(base_type)->WithAlias(std::string(name));
 }
 
 } // namespace
 
 DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handle ctx,
                                                          duckdb_v2_logical_type_handle base_type,
-                                                         duckdb_v2_identifier_t alias_name,
+                                                         const duckdb_v2_identifier_t *alias_name,
                                                          duckdb_v2_logical_type_handle *out_type,
                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
@@ -482,7 +483,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handl
 
 DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_v2_connection_handle conn,
                                                             duckdb_v2_logical_type_handle base_type,
-                                                            duckdb_v2_identifier_t alias_name,
+                                                            const duckdb_v2_identifier_t *alias_name,
                                                             duckdb_v2_logical_type_handle *out_type,
                                                             duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);

@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -128,8 +129,22 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
                                                                       const optional<bool> &if_exists,
                                                                       const QualifiedName &qualified_name,
-                                                                      unique_ptr<AlterTableInfo> rename_alter) {
-	throw NotImplementedException("Altering schemas is not yet supported");
+                                                                      unique_ptr<AlterTableInfo> alter_schema_options) {
+	// the new schema is stored in the Schema() slot, matching the layout used by CreateSchemaInfo
+	auto if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	AlterEntryData data(QualifiedName(qualified_name.Path(), Identifier()), if_not_found);
+	switch (alter_schema_options->alter_table_type) {
+	case AlterTableType::SET_TABLE_OPTIONS: {
+		auto &set_options = alter_schema_options->Cast<SetTableOptionsInfo>();
+		return make_uniq<SetSchemaOptionsInfo>(data, std::move(set_options.table_options));
+	}
+	case AlterTableType::RESET_TABLE_OPTIONS: {
+		auto &reset_options = alter_schema_options->Cast<ResetTableOptionsInfo>();
+		return make_uniq<ResetSchemaOptionsInfo>(data, std::move(reset_options.table_options));
+	}
+	default:
+		throw NotImplementedException("Altering schemas is not yet supported");
+	}
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
@@ -323,6 +338,8 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 				if (new_column.compression_type == CompressionType::COMPRESSION_AUTO) {
 					throw ParserException("Unrecognized option for column compression");
 				}
+			} else if (constraint.constraint_name == "ColumnCollation") {
+				new_column.type = ApplyColumnCollation(new_column.type, std::move(constraint.expression));
 			}
 		}
 	}
@@ -373,10 +390,6 @@ PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const b
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
 		change_column_type->column_path = column_path;
-		if (!change_column_type->expression) {
-			change_column_type->expression =
-			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
-		}
 		return std::move(change_column_type);
 	} else {
 		throw NotImplementedException("Unrecognized type for alter column encountered");
@@ -396,14 +409,16 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEG
 	}
 }
 
-unique_ptr<AlterTableInfo>
-PEGTransformerFactory::TransformAlterType(PEGTransformer &transformer, const bool &has_result,
-                                          const optional<LogicalType> &type,
-                                          optional<unique_ptr<ParsedExpression>> using_expression) {
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(
+    PEGTransformer &transformer, const bool &has_result, const optional<LogicalType> &type,
+    optional<ColumnConstraintEntry> column_collation, optional<unique_ptr<ParsedExpression>> using_expression) {
 	if (!type && !using_expression) {
 		throw ParserException("Omitting the type is only possible in combination with USING");
 	}
 	auto alter_type = type ? *type : LogicalType::UNKNOWN;
+	if (column_collation) {
+		alter_type = ApplyColumnCollation(type, std::move(column_collation->expression));
+	}
 	unique_ptr<ParsedExpression> expression;
 	if (using_expression) {
 		expression = std::move(*using_expression);
