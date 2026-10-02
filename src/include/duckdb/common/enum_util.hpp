@@ -236,6 +236,8 @@ enum class ExtensionRepositoryType : uint8_t;
 
 enum class ExtensionUpdateResultTag : uint8_t;
 
+enum class ExternalFileCacheRequestSizing : uint8_t;
+
 enum class ExternalResourceOperation : uint8_t;
 
 enum class ExtraDropInfoType : uint8_t;
@@ -970,6 +972,9 @@ const char* EnumUtil::ToChars<ExtensionRepositoryType>(ExtensionRepositoryType v
 
 template<>
 const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag value);
+
+template<>
+const char* EnumUtil::ToChars<ExternalFileCacheRequestSizing>(ExternalFileCacheRequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<ExternalResourceOperation>(ExternalResourceOperation value);
@@ -1919,6 +1924,9 @@ ExtensionRepositoryType EnumUtil::FromString<ExtensionRepositoryType>(const char
 
 template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value);
+
+template<>
+ExternalFileCacheRequestSizing EnumUtil::FromString<ExternalFileCacheRequestSizing>(const char *value);
 
 template<>
 ExternalResourceOperation EnumUtil::FromString<ExternalResourceOperation>(const char *value);

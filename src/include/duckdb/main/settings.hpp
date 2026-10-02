@@ -1520,6 +1520,22 @@ struct ExternalFileCacheRemoteMinBlockSizeSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct ExternalFileCacheRequestSizingSetting {
+	using RETURN_TYPE = ExternalFileCacheRequestSizing;
+	static constexpr const char *Name = "external_file_cache_request_sizing";
+	static constexpr const char *Description =
+	    "How reads of cached files are sized: AUTO lets each reader choose, GRID reads the aligned blocks of the cache "
+	    "block size around each read, EXACT reads exactly the requested bytes. Reads of files that are not cached are "
+	    "always exact.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "AUTO";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+	static void OnSet(SettingCallbackInfo &info, Value &input);
+};
+
 struct ExternalFileCacheSpillSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "external_file_cache_spill";

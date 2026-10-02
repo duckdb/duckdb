@@ -934,6 +934,13 @@
         ]
     },
     {
+        "name": "external_file_cache_request_sizing",
+        "description": "How reads of cached files are sized: AUTO lets each reader choose, GRID reads the aligned blocks of the cache block size around each read, EXACT reads exactly the requested bytes. Reads of files that are not cached are always exact.",
+        "type": "ENUM<ExternalFileCacheRequestSizing>",
+        "default_scope": "global",
+        "default_value": "AUTO"
+    },
+    {
         "name": "external_file_cache_spill",
         "description": "Whether evicted external file cache blocks of remote files spill to the temporary directory instead of being dropped, so that they are re-read from there rather than re-fetched from the source.",
         "type": "BOOLEAN",

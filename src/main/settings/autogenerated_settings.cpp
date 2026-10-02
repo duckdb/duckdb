@@ -220,6 +220,16 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
+// External File Cache Request Sizing
+//===----------------------------------------------------------------------===//
+void ExternalFileCacheRequestSizingSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("external_file_cache_request_sizing setting cannot be NULL");
+	}
+	EnumUtil::FromString<ExternalFileCacheRequestSizing>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Fsync Mode
 //===----------------------------------------------------------------------===//
 void FsyncModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
