@@ -24,6 +24,19 @@ FROM (
 ----
 100000	4999950000
 
+query III
+SELECT count(*), sum(group_rows), sum(group_sum)
+FROM (
+    SELECT customer_id, count(*) AS group_rows, sum(i) AS group_sum
+    FROM (
+        SELECT 'group_' || (i % 100000)::VARCHAR AS customer_id, i
+        FROM growth_input
+    ) source
+    GROUP BY customer_id
+) grouped;
+----
+100000	2000000	1999999000000
+
 statement ok
 SET memory_limit='128MB';
 
