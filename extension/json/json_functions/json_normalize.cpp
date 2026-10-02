@@ -39,6 +39,7 @@ static void SortKeys(yyjson_mut_val *v) {
 			pairs.reserve(size);
 			idx_t idx, max;
 			yyjson_mut_val *key, *child_val;
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast): yyjson iteration macro
 			yyjson_mut_obj_foreach(item.val, idx, max, key, child_val) {
 				pairs.emplace_back(key, child_val);
 			}
