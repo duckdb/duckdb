@@ -94,6 +94,7 @@ class ColumnDescription;
 class FileSystem;
 class FileHandle;
 class FileOpenOptions;
+class Stats;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -3046,6 +3047,44 @@ enum class OrderPreservation : uint8_t {
 };
 
 //----------------------------------------------------------------------------------------------------------------------
+// Statistics
+//----------------------------------------------------------------------------------------------------------------------
+
+/// The statistics of an expression or a column: what values it can produce. A function's stats callback reads the
+/// statistics of its arguments and narrows those of its result, and the engine uses them to simplify the query, e.g.
+/// folding `x IS NULL` to false when `x` cannot be NULL.
+///
+/// Every statistic states what can occur: `true` means a kind of value may be present, `false` guarantees it is
+/// absent. The engine relies on the guarantees, so claiming less than the data holds produces wrong query results.
+/// Borrowed: valid only for the duration of the callback that handed it out.
+class Stats final : public detail::Handle<Stats> {
+	friend detail::Factory;
+
+public:
+	Stats(Stats &&) noexcept = default;
+	Stats &operator=(Stats &&) noexcept = default;
+	~Stats() override = default;
+
+	/// Whether a value can be NULL. False guarantees every value is non-NULL.
+	auto CanHaveNull() const -> bool;
+	/// Whether a value can be valid, i.e. non-NULL. False guarantees every value is NULL. When both this and
+	/// `CanHaveNull` are false, there are no values at all.
+	auto CanHaveValid() const -> bool;
+
+	/// Sets whether a value can be NULL. Setting false is a guarantee the engine relies on; setting true is always
+	/// safe.
+	/// @throws InvalidInputException When the statistics are read-only, such as those of an argument.
+	auto SetCanHaveNull(bool value) -> void;
+	/// Sets whether a value can be valid, i.e. non-NULL. Setting false is a guarantee the engine relies on; setting
+	/// true is always safe.
+	/// @throws InvalidInputException When the statistics are read-only, such as those of an argument.
+	auto SetCanHaveValid(bool value) -> void;
+
+private:
+	explicit Stats(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -3064,6 +3103,7 @@ public:
 	class BindInput;
 	class InitInput;
 	class ExecInput;
+	class StatsInput;
 
 	/// Called once per query while the function call is bound. Optional; required when the return type is ANY.
 	using BindCallback = void (*)(BindInput &input);
@@ -3071,6 +3111,9 @@ public:
 	using InitCallback = void (*)(InitInput &input);
 	/// Called for every batch of rows; must fill the result vector. Required.
 	using ExecCallback = void (*)(ExecInput &input);
+	/// Called while the query is optimized, possibly more than once, to narrow the statistics of the result from
+	/// those of the arguments. Optional; without it the engine knows nothing about the result.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	ScalarFunction(ScalarFunction &&) noexcept = default;
 	ScalarFunction &operator=(ScalarFunction &&) noexcept = default;
@@ -3110,6 +3153,7 @@ public:
 	auto SetBindCallback(BindCallback callback) & -> ScalarFunction &;
 	auto SetInitCallback(InitCallback callback) & -> ScalarFunction &;
 	auto SetExecCallback(ExecCallback callback) & -> ScalarFunction &;
+	auto SetStatsCallback(StatsCallback callback) & -> ScalarFunction &;
 
 	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
 	auto SetStability(FunctionStability value) & -> ScalarFunction &;
@@ -3134,6 +3178,7 @@ private:
 	BindCallback bind_callback = nullptr;
 	InitCallback init_callback = nullptr;
 	ExecCallback exec_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -3263,6 +3308,56 @@ public:
 		void *GetInitDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The result statistics start out unknown, with every kind of value possible. A callback that leaves them
+	/// unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `ScalarFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many arguments the call has, in all four parts. Valid indices for `GetArgStats` are
+		/// [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// The statistics of one argument, at the index the bind callback used for it. Read-only.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArgStats(idx_t index) const -> Stats;
+
+		/// The statistics of the result, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3310,6 +3405,7 @@ public:
 	class CombineInput;
 	class FinalizeInput;
 	class DestroyInput;
+	class StatsInput;
 
 	/// Called once per query while the function call is bound. Optional; required when the return type is ANY.
 	using BindCallback = void (*)(BindInput &input);
@@ -3325,6 +3421,9 @@ public:
 	using FinalizeCallback = void (*)(FinalizeInput &input);
 	/// Called to release resources a batch of states owns. Optional; must not fail.
 	using DestroyCallback = void (*)(DestroyInput &input);
+	/// Called while the query is optimized, possibly more than once, to narrow the statistics of the result from
+	/// those of the arguments. Optional; without it the engine knows nothing about the result.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	AggregateFunction(AggregateFunction &&) noexcept = default;
 	AggregateFunction &operator=(AggregateFunction &&) noexcept = default;
@@ -3368,6 +3467,7 @@ public:
 	auto SetCombineCallback(CombineCallback callback) & -> AggregateFunction &;
 	auto SetFinalizeCallback(FinalizeCallback callback) & -> AggregateFunction &;
 	auto SetDestroyCallback(DestroyCallback callback) & -> AggregateFunction &;
+	auto SetStatsCallback(StatsCallback callback) & -> AggregateFunction &;
 
 	/// How stable the function's result is across rows and queries. Defaults to `CONSISTENT`.
 	auto SetStability(FunctionStability value) & -> AggregateFunction &;
@@ -3400,6 +3500,7 @@ private:
 	CombineCallback combine_callback = nullptr;
 	FinalizeCallback finalize_callback = nullptr;
 	DestroyCallback destroy_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -3661,6 +3762,57 @@ public:
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The result statistics start out unknown, with every kind of value possible. They describe every result the
+	/// aggregate produces, including that of a group with no input rows, such as an ungrouped aggregate over an empty
+	/// table. A callback that leaves them unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `AggregateFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// How many arguments the call has, in all four parts. Valid indices for `GetArgStats` are
+		/// [0, GetArgCount()).
+		auto GetArgCount() const -> idx_t;
+
+		/// The sizes of the four parts of the argument list, as the bind callback saw them.
+		auto GetArgumentCounts() const -> ArgumentCounts;
+
+		/// The statistics of one argument, at the index the bind callback used for it. Read-only.
+		/// @param index Argument index in [0, GetArgCount()).
+		auto GetArgStats(idx_t index) const -> Stats;
+
+		/// The statistics of the result, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -3801,6 +3953,7 @@ public:
 	class FilterPushdownInput;
 	class PartitionDataInput;
 	class PartitioningInput;
+	class StatsInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -3833,6 +3986,9 @@ public:
 	/// Called while the query is planned, possibly more than once, with a candidate `GROUP BY` column set; reports
 	/// whether every batch carries a single value for it. Optional; requires a partition data callback.
 	using PartitioningCallback = void (*)(PartitioningInput &input);
+	/// Called while the query is optimized, once per declared column the query reads, to narrow that column's
+	/// statistics. Optional; without it the engine knows nothing about the columns.
+	using StatsCallback = void (*)(StatsInput &input);
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -3877,6 +4033,7 @@ public:
 	auto SetFilterPushdownCallback(FilterPushdownCallback callback) & -> TableFunction &;
 	auto SetPartitionDataCallback(PartitionDataCallback callback) & -> TableFunction &;
 	auto SetPartitioningCallback(PartitioningCallback callback) & -> TableFunction &;
+	auto SetStatsCallback(StatsCallback callback) & -> TableFunction &;
 
 	/// Declares whether the function supports projection pushdown. Defaults to false. With it, the engine asks for
 	/// only the columns a query uses: the exec callback's output chunk holds one vector per requested column, and
@@ -3903,6 +4060,7 @@ private:
 	FilterPushdownCallback filter_pushdown_callback = nullptr;
 	PartitionDataCallback partition_data_callback = nullptr;
 	PartitioningCallback partitioning_callback = nullptr;
+	StatsCallback stats_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -4342,6 +4500,48 @@ public:
 
 	private:
 		PartitioningInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the stats callback works with. Borrowed, valid only for the callback duration.
+	///
+	/// The column statistics start out unknown, with every kind of value possible, and describe every value the scan
+	/// produces for the column. A callback that leaves them unchanged tells the engine nothing.
+	class StatsInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Which declared column (in `BindInput::AddResultColumn` order) the statistics describe.
+		auto GetColumnIndex() const -> idx_t;
+
+		/// The statistics of the column, for the callback to narrow.
+		auto GetResultStats() const -> Stats;
+
+		/// The query's context. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		StatsInput(void *args, void *context) : args(args), context(context) {
 		}
 
 		void *args;
