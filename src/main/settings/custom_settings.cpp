@@ -523,6 +523,7 @@ void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig
 		case CompressionType::COMPRESSION_CONSTANT:
 		case CompressionType::COMPRESSION_EMPTY:
 		case CompressionType::COMPRESSION_UNCOMPRESSED:
+		case CompressionType::ENUM_SIZE:
 			throw InvalidInputException("Compression method %s cannot be disabled", param);
 		default:
 			break;
