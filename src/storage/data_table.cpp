@@ -291,14 +291,20 @@ vector<PartitionStatistics> DataTable::GetPartitionStats(ClientContext &context)
 	return result;
 }
 
-idx_t DataTable::MaxThreads(ClientContext &context) const {
+idx_t DataTable::MaxThreads(ClientContext &context) {
 	idx_t row_group_size = GetRowGroupSize();
 	idx_t parallel_scan_vector_count = row_group_size / STANDARD_VECTOR_SIZE;
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		parallel_scan_vector_count = 1;
 	}
 	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
-	return GetTotalRows() / parallel_scan_tuple_count + 1;
+	idx_t total_rows = GetTotalRows();
+	auto local_storage = LocalStorage::Get(context, db).GetStorage(*this);
+	if (local_storage) {
+		// transaction-local rows are scanned in parallel as well
+		total_rows += local_storage->GetCollection().GetTotalRows();
+	}
+	return total_rows / parallel_scan_tuple_count + 1;
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
