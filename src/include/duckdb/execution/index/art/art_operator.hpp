@@ -116,9 +116,12 @@ public:
 	//! Insert a key and its row ID into the node.
 	//! Starts at depth (in the key).
 	//! status indicates if the insert happens inside a gate or not.
+	//! The caller must keep the storage containing node_ptr valid for the duration of the call.
 	static ARTConflictType Insert(ArenaAllocator &arena, ART &art, NodePtr &node_ptr, const ARTKey &key, idx_t depth,
 	                              const ARTKey &row_id, GateStatus status, DeleteIndexInfo delete_index_info,
 	                              const IndexAppendMode append_mode) {
+		// Keep the containing node pinned while active_node_ptr_ref refers to its child pointer.
+		optional<NodeHandle> parent_node_handle;
 		reference<NodePtr> active_node_ptr_ref(node_ptr);
 		reference<const ARTKey> active_key_ref(key);
 
@@ -130,13 +133,21 @@ public:
 				return ARTConflictType::NO_CONFLICT;
 			}
 
-			Prefix::New(art, active_node_ptr_ref, active_key_ref.get(), depth, active_key_ref.get().len);
-			Leaf::New(active_node_ptr_ref, row_id.GetRowId());
+			if (key.len == 0) {
+				Leaf::New(node_ptr, row_id.GetRowId());
+				return ARTConflictType::NO_CONFLICT;
+			}
+			auto chain = PrefixHandle::New(art, key, depth, key.len);
+			Leaf::New(chain.tail.Child(art), row_id.GetRowId());
+			node_ptr = chain.root_ptr;
 			return ARTConflictType::NO_CONFLICT;
 		}
 
-		while (active_node_ptr_ref.get().HasMetadata()) {
+		while (true) {
 			auto &active_node_ptr = active_node_ptr_ref.get();
+			if (!active_node_ptr.HasMetadata()) {
+				throw InternalException("node without metadata in ARTOperator::Insert");
+			}
 			auto &active_key = active_key_ref.get();
 
 			// status is GATE_SET, if we've passed a gate in the previous iteration.
@@ -186,28 +197,47 @@ public:
 			case NType::NODE_48:
 			case NType::NODE_256: {
 				D_ASSERT(depth < active_key.len);
-				auto child_ptr_ref = active_node_ptr.GetChildMutable(art, active_key[depth]);
-				if (child_ptr_ref) {
-					// Continue in the child.
-					active_node_ptr_ref = *child_ptr_ref;
-					depth++;
-					D_ASSERT(active_node_ptr_ref.get().HasMetadata());
-					continue;
+				{
+					NodeHandle node_handle(art, active_node_ptr);
+					auto child_ptr_ref = NodePtr::GetChildMutable(node_handle, active_key[depth]);
+					if (child_ptr_ref) {
+						active_node_ptr_ref = *child_ptr_ref;
+						parent_node_handle = std::move(node_handle);
+						depth++;
+						D_ASSERT(active_node_ptr_ref.get().HasMetadata());
+						continue;
+					}
 				}
 				InsertIntoNode(art, active_node_ptr, key, row_id, depth, status);
 				return ARTConflictType::NO_CONFLICT;
 			}
 			case NType::PREFIX: {
-				Prefix prefix(art, active_node_ptr, true);
-				for (idx_t i = 0; i < prefix.data[art.PrefixCount()]; i++) {
-					if (prefix.data[i] != active_key[depth]) {
-						// The active key and the prefix don't match.
-						InsertIntoPrefix(art, active_node_ptr_ref, active_key, row_id, i, depth, status);
-						return ARTConflictType::NO_CONFLICT;
+				idx_t pos = 0;
+				uint8_t count;
+				uint8_t byte = 0;
+				{
+					NodeHandle prefix_handle(art, active_node_ptr);
+					auto data = prefix_handle.GetPtr();
+					count = data[art.PrefixCount()];
+					for (; pos < count; pos++) {
+						D_ASSERT(depth < active_key.len);
+						byte = data[pos];
+						if (byte != active_key[depth]) {
+							break;
+						}
+						depth++;
 					}
-					depth++;
+
+					if (pos == count) {
+						active_node_ptr_ref = PrefixHandle::ChildRef(art, prefix_handle);
+						parent_node_handle = std::move(prefix_handle);
+					}
 				}
-				active_node_ptr_ref = *prefix.child_slot;
+				if (pos != count) {
+					// The active key and the prefix don't match.
+					InsertIntoPrefix(art, active_node_ptr, active_key, row_id, pos, byte, depth, status);
+					return ARTConflictType::NO_CONFLICT;
+				}
 				D_ASSERT(active_node_ptr_ref.get().HasMetadata());
 				continue;
 			}
@@ -215,7 +245,6 @@ public:
 				throw InternalException("Invalid node type for ARTOperator::Insert.");
 			}
 		}
-		throw InternalException("node without metadata in ARTOperator::Insert");
 	}
 
 	//! Delete a key and its row ID.
@@ -399,14 +428,13 @@ private:
 		NodePtr::InsertChild(art, node_ptr, key[depth], leaf_ptr);
 	}
 
-	static void InsertIntoPrefix(ART &art, reference<NodePtr> &node_ptr_ref, const ARTKey &key, const ARTKey &row_id,
-	                             const idx_t pos, const idx_t depth, const GateStatus status) {
+	static void InsertIntoPrefix(ART &art, NodePtr &node_ptr, const ARTKey &key, const ARTKey &row_id, const idx_t pos,
+	                             const uint8_t byte, const idx_t depth, const GateStatus status) {
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos);
-		const auto byte = Prefix::GetByte(art, node_ptr_ref, cast_pos);
 
 		NodePtr branching_node4_ptr;
 		Node4::New(art, branching_node4_ptr);
-		auto child_ptr = PrefixHandle::Split(art, node_ptr_ref, branching_node4_ptr, cast_pos);
+		auto child_ptr = PrefixHandle::Split(art, node_ptr, branching_node4_ptr, cast_pos);
 
 		Node4::InsertChild(art, branching_node4_ptr, byte, child_ptr);
 		InsertIntoNode(art, branching_node4_ptr, key, row_id, depth, status);
