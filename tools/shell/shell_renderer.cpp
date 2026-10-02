@@ -755,7 +755,7 @@ public:
 					value_hash = duckdb::Hash(str.GetData(), str.GetSize());
 				}
 				// positional mix, so that swapping two columns changes the hash
-				row_hash = duckdb::MurmurHash64(row_hash ^ value_hash);
+				row_hash = duckdb::Hash<uint64_t>(row_hash ^ value_hash);
 			}
 			result_hash += row_hash;
 		}
