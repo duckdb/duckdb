@@ -495,7 +495,7 @@ unordered_set<column_t> TableIndexList::GetIndexedColumns() const {
 	return column_ids;
 }
 
-vector<shared_ptr<const IndexStorageInfo>> TableIndexList::CheckPoint(TableIndexWriter &writer) {
+vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndexWriter &writer) {
 	annotated_lock_guard lock(index_entries_lock);
 
 	vector<unique_ptr<BoundIndex>> shadows;
