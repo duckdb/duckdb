@@ -54,6 +54,9 @@ ActiveCheckpointWrapper::ActiveCheckpointWrapper(optional_ptr<ClientContext> con
 
 ActiveCheckpointWrapper::~ActiveCheckpointWrapper() {
 	// This happens on failure before we commit the transaction.
+	if (active) {
+		transaction_manager.ResetActiveCheckpoint();
+	}
 	if (checkpoint_transaction) {
 		transaction_manager.RollbackTransaction(*checkpoint_transaction);
 		checkpoint_transaction = nullptr;
@@ -72,10 +75,12 @@ void ActiveCheckpointWrapper::GetCheckpointTransaction(CheckpointOptions &option
 	options.checkpoint_id = transaction_manager.NextCheckpointId();
 	options.visibility_bound = transaction.view.visibility_bound;
 	transaction_manager.SetActiveCheckpoint(options.checkpoint_id.GetIndex());
+	active = true;
 }
 
 void ActiveCheckpointWrapper::Commit() {
 	transaction_manager.ResetActiveCheckpoint();
+	active = false;
 	if (!checkpoint_transaction) {
 		return;
 	}
