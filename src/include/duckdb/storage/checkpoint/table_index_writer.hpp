@@ -30,11 +30,12 @@ public:
 	virtual ~TableIndexWriter();
 
 public:
-	PartialBlockManager &GetPartialBlockManager() const {
+	//! Segments managed by this block manager will be packed across indexes.
+	PartialBlockManager &GetSharedPartialBlockManager() const {
 		return partial_block_manager;
 	}
-
-	virtual PartialBlockManager CreateIsolatedPartialBlockManager() = 0;
+	//! Segments managed by this block manager will be packer on a per-index basis.
+	virtual PartialBlockManager CreatePerIndexPartialBlockManager() = 0;
 	//! Writes the index buffers to disk
 	virtual void Flush() = 0;
 	//! Get the targeted storage version for the current writer
@@ -51,7 +52,7 @@ public:
 	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager, StorageVersion version);
 
 public:
-	PartialBlockManager CreateIsolatedPartialBlockManager() override;
+	PartialBlockManager CreatePerIndexPartialBlockManager() override;
 	void Flush() override;
 
 private:
