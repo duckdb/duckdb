@@ -55,8 +55,10 @@ public:
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
-	//! Detach an existing database
-	void DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found);
+	//! Detach an existing database. SQL DETACH refuses the connection's default database, which would leave it
+	//! without one; a host closing a database it opened passes `allow_default_database` to detach it regardless.
+	void DetachDatabase(ClientContext &context, const Identifier &name, OnEntryNotFound if_not_found,
+	                    bool allow_default_database = false);
 	//! Queue the teardown of an external resource from a context that cannot run SQL (e.g. transaction
 	//! rollback, under the transaction lock).
 	void AddPendingTeardown(unique_ptr<ResourceDeleter> deleter);
@@ -73,7 +75,17 @@ public:
 	//! Returns a reference to the system catalog
 	Catalog &GetSystemCatalog();
 
+	//! The default database of the connection: its USE'd catalog, else the default database it connected with, as long
+	//! as that is still attached. Throws when there is none; TryGetDefaultDatabase returns the empty identifier
+	//! instead, for lookups that can skip it.
 	static Identifier GetDefaultDatabase(ClientContext &context);
+	static Identifier TryGetDefaultDatabase(ClientContext &context);
+	//! The default database new connections start with; empty when none is set.
+	Identifier GetDefaultDatabase();
+	//! Sets the default database for new connections, which must be attached; the empty identifier clears it. Set to
+	//! the main database at startup and never set implicitly by an attach; detaching it falls back to the oldest
+	//! remaining database, if any.
+	void SetDefaultDatabase(const Identifier &name);
 
 	//! Inserts a path to name mapping to the database paths map
 	InsertDatabasePathResult InsertDatabasePath(const AttachInfo &info, AttachOptions &options);
@@ -134,6 +146,8 @@ private:
 	mutex databases_lock;
 	//! The set of attached databases
 	identifier_map_t<shared_ptr<AttachedDatabase>> databases;
+	//! The default database for new connections; empty when none is set (guarded by databases_lock)
+	Identifier default_database;
 	//! The next object id handed out by the NextOid method
 	atomic<idx_t> next_oid;
 	//! The current query number
@@ -147,8 +161,6 @@ private:
 	//! External-resource teardowns queued from contexts that cannot run SQL (see AddPendingTeardown);
 	//! drained best-effort once no transaction locks are held.
 	vector<unique_ptr<ResourceDeleter>> pending_teardowns;
-	//! The current default database
-	Identifier default_database;
 	//! Manager for ensuring we never open the same database file twice in the same program
 	shared_ptr<DatabaseFilePathManager> path_manager;
 

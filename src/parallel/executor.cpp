@@ -19,6 +19,7 @@
 #include "duckdb/parallel/pipeline_initialize_event.hpp"
 #include "duckdb/parallel/pipeline_prepare_finish_event.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
+#include "duckdb/parallel/progress_verifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
@@ -240,6 +241,12 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 
 		this->profiler = ClientData::Get(context).profiler;
 		this->producer = scheduler.CreateProducer();
+
+		auto verify_progress = Settings::Get<DebugVerifyProgressSetting>(context);
+		if (verify_progress != DebugProgressVerification::NONE) {
+			progress_verifier = make_uniq<ProgressVerifier>(context, verify_progress,
+			                                                Settings::Get<DebugVerifyProgressIgnoreSetting>(context));
+		}
 
 		// build and ready the pipelines
 		PipelineBuildState state;
@@ -515,6 +522,12 @@ void Executor::FailExecution() {
 QueryResultState Executor::FinishExecution() {
 	D_ASSERT(!task);
 	lock_guard<mutex> elock(executor_lock);
+	if (progress_verifier && !HasError()) {
+		auto progress_error = progress_verifier->Finalize(pipelines);
+		if (!progress_error.empty()) {
+			error_manager.PushError(ErrorData(ExceptionType::INVALID_INPUT, progress_error));
+		}
+	}
 	pipelines.clear();
 	NextExecutor();
 	if (HasError()) { // LCOV_EXCL_START
@@ -536,6 +549,7 @@ void Executor::Reset() {
 	completed_pipelines = 0;
 	total_pipelines = 0;
 	error_manager.Reset();
+	progress_verifier.reset();
 	pipelines.clear();
 	events.clear();
 	to_be_rescheduled_tasks.clear();

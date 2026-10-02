@@ -1360,15 +1360,16 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &
 void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// Strip catalog prefix from qualified column references, normalising to exactly table.col (2 parts).
+		// Strip the catalog prefix from qualified column references, keeping everything after it.
 		// Require at least 3 names: a 2-part ref like "rpc.field" is either table.col or struct-column.field —
 		// not catalog-qualified — so stripping would be wrong.
-		// For 3-part  catalog.table.col        → table.col   (one level stripped)
-		// For 4-part  catalog.schema.table.col → table.col   (catalog + schema stripped)
+		// For 3-part  catalog.table.col        → table.col
+		// For 4-part  catalog.schema.table.col → schema.table.col
+		// Only the catalog is dropped: the parser keeps arbitrarily deep refs in a single ColumnRef, so trailing
+		// names may be struct fields (catalog.table.s.a.b → table.s.a.b) and must be preserved.
 		if (col_ref.ColumnNames().size() >= 3 && col_ref.ColumnNames()[0] == catalog_name) {
-			Identifier table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2];
-			Identifier col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1];
-			col_ref.ColumnNamesMutable() = {std::move(table_name), std::move(col_name)};
+			auto &names = col_ref.ColumnNamesMutable();
+			names.erase(names.begin());
 		}
 		return;
 	}

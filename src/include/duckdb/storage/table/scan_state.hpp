@@ -416,6 +416,8 @@ struct ParallelCollectionScanState {
 	idx_t max_row;
 	idx_t batch_index;
 	atomic<idx_t> processed_rows;
+	//! Rows of assignments that were skipped entirely (e.g. by zonemaps) without being handed out
+	atomic<idx_t> skipped_rows;
 	optional_idx row_number_base;
 	mutex lock;
 

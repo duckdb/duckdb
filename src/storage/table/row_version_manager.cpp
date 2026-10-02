@@ -204,8 +204,11 @@ idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	if (!uncheckpointed_delete_commit.IsValid() || commit_id > uncheckpointed_delete_commit.GetIndex()) {
-		uncheckpointed_delete_commit = commit_id;
+	if (!newest_uncheckpointed_delete_commit.IsValid() || commit_id > newest_uncheckpointed_delete_commit.GetIndex()) {
+		newest_uncheckpointed_delete_commit = commit_id;
+	}
+	if (!oldest_uncheckpointed_delete_commit.IsValid() || commit_id < oldest_uncheckpointed_delete_commit.GetIndex()) {
+		oldest_uncheckpointed_delete_commit = commit_id;
 	}
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, info);
 }
@@ -244,8 +247,10 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 	lock_guard<mutex> lock(version_lock);
 	auto &manager = *writer.GetMetadataManager();
 	auto options = writer.GetCheckpointOptions();
-	if (!uncheckpointed_delete_commit.IsValid()) {
-		// we can write the current pointer as-is
+	if (!oldest_uncheckpointed_delete_commit.IsValid() ||
+	    oldest_uncheckpointed_delete_commit.GetIndex() >= options.visibility_bound) {
+		// nothing below the bound changed since the last checkpoint: the blocks on disk are current. A delete that
+		// committed above the bound, while this checkpoint ran, is written by the next checkpoint
 		// ensure the blocks we are pointing to are not marked as free
 		manager.ClearModifiedBlocks(storage_pointers);
 		// return the current set of pointers
@@ -279,10 +284,12 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(RowGroupWriter &writer) {
 		metadata_writer.Flush();
 	}
 
-	if (uncheckpointed_delete_commit.IsValid() && uncheckpointed_delete_commit.GetIndex() < options.visibility_bound) {
+	if (newest_uncheckpointed_delete_commit.IsValid() &&
+	    newest_uncheckpointed_delete_commit.GetIndex() < options.visibility_bound) {
 		// the last checkpointed id was either before or on the transaction we are checkpointing
 		// nothing to checkpoint in future commits until more deletes appear
-		uncheckpointed_delete_commit = optional_idx();
+		newest_uncheckpointed_delete_commit = optional_idx();
+		oldest_uncheckpointed_delete_commit = optional_idx();
 	}
 	return storage_pointers;
 }
@@ -313,13 +320,14 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 		}
 		version_info->vector_info[vector_index] = std::move(info);
 	}
-	version_info->uncheckpointed_delete_commit = optional_idx();
+	version_info->newest_uncheckpointed_delete_commit = optional_idx();
+	version_info->oldest_uncheckpointed_delete_commit = optional_idx();
 	return version_info;
 }
 
-bool RowVersionManager::HasUnserializedChanges() {
+bool RowVersionManager::HasUnserializedChanges(VisibilityBound bound) {
 	lock_guard<mutex> lock(version_lock);
-	return uncheckpointed_delete_commit.IsValid();
+	return oldest_uncheckpointed_delete_commit.IsValid() && oldest_uncheckpointed_delete_commit.GetIndex() < bound;
 }
 
 bool RowVersionManager::HasDeletes() {
@@ -344,7 +352,7 @@ bool RowVersionManager::HasUncommittedChanges() {
 
 vector<MetaBlockPointer> RowVersionManager::GetStoragePointers() {
 	lock_guard<mutex> lock(version_lock);
-	D_ASSERT(!uncheckpointed_delete_commit.IsValid());
+	D_ASSERT(!newest_uncheckpointed_delete_commit.IsValid());
 	return storage_pointers;
 }
 

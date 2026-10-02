@@ -1317,7 +1317,8 @@ Statistics::Statistics() noexcept
      max_value(),
      min_value(),
      is_max_value_exact(0),
-     is_min_value_exact(0) {
+     is_min_value_exact(0),
+     nan_count(0) {
 }
 
 void Statistics::__set_max(const std::string& val) {
@@ -1358,6 +1359,11 @@ __isset.is_max_value_exact = true;
 void Statistics::__set_is_min_value_exact(const bool val) {
   this->is_min_value_exact = val;
 __isset.is_min_value_exact = true;
+}
+
+void Statistics::__set_nan_count(const int64_t val) {
+  this->nan_count = val;
+__isset.nan_count = true;
 }
 std::ostream& operator<<(std::ostream& out, const Statistics& obj)
 {
@@ -1451,6 +1457,14 @@ uint32_t Statistics::read(::apache::thrift::protocol::TProtocol* iprot) {
           xfer += iprot->skip(ftype);
         }
         break;
+      case 9:
+        if (ftype == ::apache::thrift::protocol::T_I64) {
+          xfer += iprot->readI64(this->nan_count);
+          this->__isset.nan_count = true;
+        } else {
+          xfer += iprot->skip(ftype);
+        }
+        break;
       default:
         xfer += iprot->skip(ftype);
         break;
@@ -1508,6 +1522,11 @@ uint32_t Statistics::write(::apache::thrift::protocol::TProtocol* oprot) const {
     xfer += oprot->writeBool(this->is_min_value_exact);
     xfer += oprot->writeFieldEnd();
   }
+  if (this->__isset.nan_count) {
+    xfer += oprot->writeFieldBegin("nan_count", ::apache::thrift::protocol::T_I64, 9);
+    xfer += oprot->writeI64(this->nan_count);
+    xfer += oprot->writeFieldEnd();
+  }
   xfer += oprot->writeFieldStop();
   xfer += oprot->writeStructEnd();
   return xfer;
@@ -1523,6 +1542,7 @@ void swap(Statistics &a, Statistics &b) {
   swap(a.min_value, b.min_value);
   swap(a.is_max_value_exact, b.is_max_value_exact);
   swap(a.is_min_value_exact, b.is_min_value_exact);
+  swap(a.nan_count, b.nan_count);
   swap(a.__isset, b.__isset);
 }
 
@@ -1535,6 +1555,7 @@ Statistics::Statistics(const Statistics& other30) {
   min_value = other30.min_value;
   is_max_value_exact = other30.is_max_value_exact;
   is_min_value_exact = other30.is_min_value_exact;
+  nan_count = other30.nan_count;
   __isset = other30.__isset;
 }
 Statistics::Statistics(Statistics&& other31) noexcept {
@@ -1546,6 +1567,7 @@ Statistics::Statistics(Statistics&& other31) noexcept {
   min_value = std::move(other31.min_value);
   is_max_value_exact = other31.is_max_value_exact;
   is_min_value_exact = other31.is_min_value_exact;
+  nan_count = other31.nan_count;
   __isset = other31.__isset;
 }
 Statistics& Statistics::operator=(const Statistics& other32) {
@@ -1557,6 +1579,7 @@ Statistics& Statistics::operator=(const Statistics& other32) {
   min_value = other32.min_value;
   is_max_value_exact = other32.is_max_value_exact;
   is_min_value_exact = other32.is_min_value_exact;
+  nan_count = other32.nan_count;
   __isset = other32.__isset;
   return *this;
 }
@@ -1569,6 +1592,7 @@ Statistics& Statistics::operator=(Statistics&& other33) noexcept {
   min_value = std::move(other33.min_value);
   is_max_value_exact = other33.is_max_value_exact;
   is_min_value_exact = other33.is_min_value_exact;
+  nan_count = other33.nan_count;
   __isset = other33.__isset;
   return *this;
 }
@@ -1583,6 +1607,7 @@ void Statistics::printTo(std::ostream& out) const {
   out << ", " << "min_value="; (__isset.min_value ? (out << to_string(min_value)) : (out << "<null>"));
   out << ", " << "is_max_value_exact="; (__isset.is_max_value_exact ? (out << to_string(is_max_value_exact)) : (out << "<null>"));
   out << ", " << "is_min_value_exact="; (__isset.is_min_value_exact ? (out << to_string(is_min_value_exact)) : (out << "<null>"));
+  out << ", " << "nan_count="; (__isset.nan_count ? (out << to_string(nan_count)) : (out << "<null>"));
   out << ")";
 }
 

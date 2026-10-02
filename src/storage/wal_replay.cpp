@@ -64,6 +64,10 @@ public:
 	optional_idx checkpoint_end_position;
 	optional_idx expected_checkpoint_id;
 	WALReplayState replay_state;
+	//! Blocks referenced by ROW_GROUP_DATA entries, collected during the deserialize-only scan. They are marked as used
+	//! only once we have decided to replay the WAL, so if log replay is not needed, these blocks won't be
+	//! double-referenced.
+	vector<block_id_t> row_group_blocks;
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid)
@@ -606,6 +610,15 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		auto main_handle = fs.OpenFile(wal_path, FileFlags::FILE_FLAGS_READ);
 		truncated_wal_reader = make_uniq<BufferedFileReader>(fs, std::move(main_handle));
 	}
+
+	// Now we have decided to replay this WAL, mark the blocks referenced by ROW_GROUP_DATA entries as used.
+	// Notice, this must happen before replay, because replaying earlier entries can allocate blocks; without the marks,
+	// those allocations could hand out blocks that later entries reference.
+	auto &block_manager = storage_manager.GetBlockManager();
+	for (auto &block_id : checkpoint_state.row_group_blocks) {
+		block_manager.MarkBlockAsUsed(block_id);
+	}
+
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context, replay_state);
 
@@ -627,7 +640,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index));
+					info.index_list.get().AddIndex(std::move(info.index), info.index_oid);
 				}
 				state.replay_index_infos.clear();
 
@@ -1306,7 +1319,7 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: insert without table");
+		throw DataCorruptionException("Corrupt WAL: insert without table");
 	}
 
 	// Append to the current table without constraint verification.
@@ -1325,16 +1338,13 @@ void WriteAheadLogDeserializer::ReplayRowGroupData() {
 	deserializer.Unset<const CompressionInfo>();
 	deserializer.Unset<DatabaseInstance>();
 	if (DeserializeOnly()) {
-		// label blocks in data as used - they will be used after the WAL replay is finished
-		// we need to do this during the deserialization phase to ensure the blocks will not be overwritten
-		// by previous deserialization steps
 		for (auto &block_id : data.GetBlockIds()) {
-			block_manager.MarkBlockAsUsed(block_id);
+			state.row_group_blocks.push_back(block_id);
 		}
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: insert without table");
+		throw DataCorruptionException("Corrupt WAL: insert without table");
 	}
 	auto &storage = state.current_table->GetStorage();
 	auto &table_info = storage.GetDataTableInfo();
@@ -1374,7 +1384,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 		return;
 	}
 	if (!state.current_table) {
-		throw SerializationException("delete without a table");
+		throw DataCorruptionException("Corrupt WAL: delete without table");
 	}
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
@@ -1387,7 +1397,7 @@ void WriteAheadLogDeserializer::ReplayDelete() {
 	auto next_row_id = storage.GetNextRowId();
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		if (source_ids[i] >= UnsafeNumericCast<row_t>(next_row_id)) {
-			throw SerializationException("invalid row ID delete in WAL");
+			throw DataCorruptionException("Corrupt WAL: row ID for delete out of bounds");
 		}
 	}
 	TableDeleteState delete_state;
@@ -1404,11 +1414,11 @@ void WriteAheadLogDeserializer::ReplayUpdate() {
 		return;
 	}
 	if (!state.current_table) {
-		throw InternalException("Corrupt WAL: update without table");
+		throw DataCorruptionException("Corrupt WAL: update without table");
 	}
 
 	if (column_path[0] >= state.current_table->GetColumns().PhysicalColumnCount()) {
-		throw InternalException("Corrupt WAL: column index for update out of bounds");
+		throw DataCorruptionException("Corrupt WAL: column index for update out of bounds");
 	}
 
 	// remove the row id vector from the chunk

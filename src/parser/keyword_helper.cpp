@@ -5,29 +5,12 @@
 
 namespace duckdb {
 
-static KeywordCategory GetPEGKeywordCategory(const string &text) {
-	auto &helper = DuckDBKeywordHelper::Instance();
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
-		return KeywordCategory::KEYWORD_RESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
-		return KeywordCategory::KEYWORD_UNRESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
-		return KeywordCategory::KEYWORD_TYPE_FUNC;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
-		return KeywordCategory::KEYWORD_COL_NAME;
-	}
-	return KeywordCategory::KEYWORD_NONE;
-}
-
 bool KeywordHelper::IsKeyword(const string &text, KeywordCategory category) {
-	return GetPEGKeywordCategory(text) != category;
+	return DuckDBKeywordHelper::Instance().GetKeywordCategory(text) != category;
 }
 
 KeywordCategory KeywordHelper::KeywordCategoryType(const string &text) {
-	return GetPEGKeywordCategory(text);
+	return DuckDBKeywordHelper::Instance().GetKeywordCategory(text);
 }
 
 bool KeywordHelper::RequiresQuotes(const string &text, bool allow_caps) {

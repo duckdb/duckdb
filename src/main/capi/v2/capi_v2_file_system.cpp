@@ -151,8 +151,9 @@ DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_flag(duckdb_v2_file_open_options
 	return WithErrorHandler(err, [&]() { ApplyFileFlag(*Convert(options), flag); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_value(duckdb_v2_file_open_options_handle options, duckdb_v2_str name,
-                                                      duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_value(duckdb_v2_file_open_options_handle options,
+                                                      const duckdb_v2_str *name, duckdb_v2_value_handle value,
+                                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(options);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(value);
@@ -177,7 +178,7 @@ DUCKDB_V2_ERROR duckdb_v2_file_open_options_destroy(duckdb_v2_file_open_options_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_system, duckdb_v2_str file_path,
+DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *file_path,
                                            duckdb_v2_file_open_options_handle options,
                                            duckdb_v2_file_handle *out_file_handle, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);

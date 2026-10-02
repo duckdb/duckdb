@@ -158,8 +158,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 				error = ErrorData("Unnamed parameters cannot come after named parameters");
 				return false;
 			}
-			arguments.emplace_back(constant.IsNull() ? LogicalType::SQLNULL : ExpressionBinder::GetExpressionReturnType(*expr));
-			parameters.emplace_back(std::move(constant));
+			positional_arguments.push_back(std::move(expr));
 		} else {
 			named_parameters[parameter_name] = std::move(constant);
 		}

@@ -9,6 +9,7 @@ namespace duckdb {
 class ClientContext;
 class DialectExtension;
 class GrammarExtension;
+class PassthroughDialect;
 
 using compiled_rules_map_t = case_insensitive_map_t<unique_ptr<CompiledGrammarRule>>;
 
@@ -17,8 +18,7 @@ public:
 	CompiledGrammar(MatcherAllocator &&allocator, unique_ptr<PEGKeywordHelper> &&keyword_helper,
 	                unique_ptr<Tokenizer> &&tokenizer, compiled_rules_map_t &&rules, const Matcher &program_matcher,
 	                const Matcher &top_level_statement_matcher);
-	static shared_ptr<CompiledGrammar>
-	Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions);
+	static shared_ptr<CompiledGrammar> Create(const vector<reference<GrammarExtension>> &grammar_extensions);
 
 public:
 	const Matcher &ProgramMatcher() const {
@@ -40,8 +40,7 @@ public:
 	//! Compile the base DuckDB grammar.
 	static shared_ptr<CompiledGrammar> Create();
 	//! Compile a grammar for the selected extensions without changing the client configuration.
-	static shared_ptr<CompiledGrammar> Create(const ClientContext &context,
-	                                          const case_insensitive_set_t &active_extensions);
+	static shared_ptr<CompiledGrammar> Create(const ClientContext &context, const vector<string> &active_extensions);
 
 private:
 	MatcherAllocator allocator;
@@ -55,11 +54,18 @@ private:
 //! Per-database holder for the compiled base grammar.
 struct ParserCache {
 public:
+	ParserCache();
+	~ParserCache();
+
 	shared_ptr<CompiledGrammar> GetMatcher();
+	//! The grammar that forwards statements instead of interpreting them, used while CONNECT-ed
+	shared_ptr<CompiledGrammar> GetPassthroughMatcher(const ClientContext &context);
 
 private:
 	std::mutex mutex;
 	shared_ptr<CompiledGrammar> matcher;
+	std::mutex passthrough_mutex;
+	unique_ptr<PassthroughDialect> passthrough_dialect;
 };
 
 } // namespace duckdb

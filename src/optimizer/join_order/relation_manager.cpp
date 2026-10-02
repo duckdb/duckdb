@@ -264,6 +264,22 @@ static bool JoinIsReorderable(LogicalOperator &op) {
 	return false;
 }
 
+static bool IsProjectedRecursiveCTERef(const LogicalOperator &op, const JoinOrderOptimizer &optimizer) {
+	optional_ptr<const LogicalOperator> source = op;
+	while (source->children.size() == 1) {
+		if (OperatorIsNonReorderable(source->type) ||
+		    (OperatorNeedsRelation(source->type) && source->type != LogicalOperatorType::LOGICAL_PROJECTION)) {
+			return false;
+		}
+		source = source->children[0].get();
+	}
+	if (source->type != LogicalOperatorType::LOGICAL_CTE_REF) {
+		return false;
+	}
+	auto &cte_ref = source->Cast<LogicalCTERef>();
+	return optimizer.recursive_cte_indexes.find(cte_ref.cte_index) != optimizer.recursive_cte_indexes.end();
+}
+
 static bool RecursiveCTERefCanReorder(optional_ptr<LogicalOperator> parent) {
 	if (!parent || parent->type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		return false;
@@ -584,7 +600,11 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		}
 		proj.SetEstimatedCardinality(proj_stats->cardinality);
 		ModifyStatsIfLimit(limit_op.get(), *proj_stats);
-		return AddRelation(input_op, parent, *proj_stats);
+		if (!AddRelation(input_op, parent, *proj_stats)) {
+			return false;
+		}
+		// A projection must preserve the recursive reference's join-order restriction.
+		return !IsProjectedRecursiveCTERef(proj, optimizer) || RecursiveCTERefCanReorder(parent);
 	}
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT: {
 		// optimize the child and copy the stats

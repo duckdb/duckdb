@@ -11,6 +11,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 
 namespace duckdb {
 struct BindInfo;
@@ -28,7 +29,17 @@ struct MultiFileOptions {
 	//! The maximum number of files that are opened to determine the schema - the schemas of the sampled files are
 	//! combined into one. NumericLimits<idx_t>::Maximum() samples every file
 	idx_t maximum_sample_files = 1;
+	//! Whether the schemas of the sampled files are combined into a union of their columns - files are then allowed
+	//! to be missing columns of the combined schema, the way they are with union_by_name. This is how the schemas of
+	//! sampled files are combined unless the reader combines them itself
+	bool sampled_schema_is_union = true;
 	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
+	//! (Optional) The schema of the scan, given by the "schema" option. Every file is mapped onto it - by field id
+	//! when its columns are identified by INTEGER, by name otherwise - instead of the schema being read from the files
+	vector<MultiFileColumnDefinition> schema;
+	//! Whether to add a "file_row_number" column with the row number of each row within its file - it is read from the
+	//! row number virtual column of the reader
+	bool file_row_number = false;
 
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
@@ -48,10 +59,14 @@ struct MultiFileOptions {
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 	DUCKDB_API Value GetHivePartitionValue(const string &base, const string &entry, ClientContext &context) const;
 	DUCKDB_API bool AnySet() const;
+	//! Set "maximum_sample_files" from an option value - a positive count, or -1 for all files
+	DUCKDB_API void SetMaximumSampleFiles(const Identifier &key, const Value &val);
+	//! Set "maximum_sample_files" from an option value, returning false if it is not a valid count
+	DUCKDB_API bool TrySetMaximumSampleFiles(const Value &val);
 	//! Whether the global schema is a union of the schemas of several files - individual files are then allowed to
 	//! be missing columns that are present in the global schema
 	bool SchemaIsUnion() const {
-		return union_by_name || maximum_sample_files > 1;
+		return union_by_name || (maximum_sample_files > 1 && sampled_schema_is_union);
 	}
 };
 
