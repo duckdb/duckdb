@@ -445,6 +445,10 @@ public:
 	bool registered;
 	//! Sink capacity for this thread
 	idx_t local_sink_capacity;
+	//! Input and materialized rows at the last local table growth
+	idx_t sink_count_at_growth;
+	idx_t materialized_count_at_growth;
+	bool has_grown;
 
 	//! Data that is abandoned ends up here (only if we're doing external aggregation)
 	unique_ptr<PartitionedTupleData> abandoned_data;
@@ -453,7 +457,8 @@ public:
 };
 
 RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &, const RadixPartitionedHashTable &radix_ht)
-    : adapted(false), registered(false), local_sink_capacity(DConstants::INVALID_INDEX) {
+    : adapted(false), registered(false), local_sink_capacity(DConstants::INVALID_INDEX), sink_count_at_growth(0),
+      materialized_count_at_growth(0), has_grown(false) {
 	// If there are no groups we create a fake group so everything has the same group
 	group_chunk.InitializeEmpty(radix_ht.group_types);
 	if (radix_ht.grouping_set.empty()) {
@@ -467,6 +472,9 @@ void RadixHTLocalSinkState::ResetForReuse(const RadixPartitionedHashTable &radix
 		group_chunk.data[0].Reference(Value::TINYINT(42), count_t(STANDARD_VECTOR_SIZE));
 	}
 	registered = false;
+	sink_count_at_growth = 0;
+	materialized_count_at_growth = 0;
+	has_grown = false;
 	abandoned_data.reset();
 	abandoned_exported_data.clear();
 	if (!ht) {
@@ -710,10 +718,21 @@ bool TryGrowSinkHashTable(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState 
 
 	const auto hll_count = MinValue(ht.GetHLLUpperBound(), materialized_count);
 	// The margin protects against HLL underestimation on nearly unique input.
-	static constexpr double MINIMUM_MISSED_DEDUPLICATION = 1.25;
+	static constexpr double MINIMUM_MISSED_DEDUPLICATION = 1.50;
+	static constexpr double MINIMUM_POST_GROWTH_HIT_RATE = 0.25;
 	if (hll_count == 0 ||
 	    static_cast<double>(materialized_count) / static_cast<double>(hll_count) <= MINIMUM_MISSED_DEDUPLICATION) {
 		return false;
+	}
+	if (lstate.has_grown) {
+		const auto input_count = ht.GetSinkCount() - lstate.sink_count_at_growth;
+		const auto new_materialized_count = materialized_count - lstate.materialized_count_at_growth;
+		D_ASSERT(new_materialized_count <= input_count);
+		if (input_count == 0 ||
+		    static_cast<double>(input_count - new_materialized_count) / static_cast<double>(input_count) <
+		        MINIMUM_POST_GROWTH_HIT_RATE) {
+			return false;
+		}
 	}
 
 	if (ht.Capacity() > NumericLimits<idx_t>::Maximum() / (3 * sizeof(ht_entry_t))) {
@@ -721,9 +740,12 @@ bool TryGrowSinkHashTable(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState 
 	}
 	const auto minimum_capacity = ht.Capacity() * 2;
 	auto next_capacity = MaxValue(GroupedAggregateHashTable::GetCapacityForCount(hll_count), minimum_capacity);
+	if (next_capacity > NumericLimits<idx_t>::Maximum() / sizeof(ht_entry_t) - ht.Capacity()) {
+		return false;
+	}
 	const auto data_size = ht.GetAllocatedDataSizeInBytes();
 	const auto arena_size = ht.GetAggregateAllocator()->AllocationSize();
-	const auto table_size = (ht.Capacity() + minimum_capacity) * sizeof(ht_entry_t);
+	const auto table_size = (ht.Capacity() + next_capacity) * sizeof(ht_entry_t);
 	if (data_size > NumericLimits<idx_t>::Maximum() - arena_size ||
 	    table_size > NumericLimits<idx_t>::Maximum() - data_size - arena_size) {
 		return false;
@@ -758,6 +780,9 @@ bool TryGrowSinkHashTable(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState 
 	ht.Abandon();
 	ht.Resize(next_capacity);
 	lstate.local_sink_capacity = next_capacity;
+	lstate.sink_count_at_growth = ht.GetSinkCount();
+	lstate.materialized_count_at_growth = materialized_count;
+	lstate.has_grown = true;
 	return true;
 }
 
