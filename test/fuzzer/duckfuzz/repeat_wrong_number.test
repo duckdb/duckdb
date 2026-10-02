@@ -16,6 +16,11 @@ FROM repeat(42, -1)
 ----
 Binder Error
 
+statement error
+FROM repeat(42, NULL)
+----
+Binder Error
+
 # original issue https://github.com/duckdb/duckdb-fuzzer/issues/2688
 statement error
 SELECT NULL FROM repeat('7fb6658b-4f42-44ce-bbd0-b22ba2faf7ad', -32768)
