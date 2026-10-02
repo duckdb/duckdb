@@ -36,6 +36,10 @@ private:
 	static bool IsClauseKeywordLine(const string &trimmed);
 	static bool ShouldUppercase(const string &kw);
 
+	// Token helpers
+	static vector<MatcherToken> Tokenize(const string &sql);
+	static bool SkipNonCodeToken(const vector<MatcherToken> &tokens, idx_t &token_idx, idx_t &pos);
+
 	// Token lookahead helpers
 	static string PeekKeyword(const vector<MatcherToken> &tokens, idx_t i, idx_t offset);
 	static idx_t DetectCompoundClause(const vector<MatcherToken> &tokens, idx_t i, string &compound_text,
@@ -87,7 +91,7 @@ private:
 SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
 }
 
-string SQLFormatter::Format(const string &sql) {
+vector<MatcherToken> SQLFormatter::Tokenize(const string &sql) {
 	auto &keyword_helper = DuckDBKeywordHelper::Instance();
 	vector<MatcherToken> tokens;
 	HighlightTokenizerBehavior behavior(sql, tokens);
@@ -99,6 +103,41 @@ string SQLFormatter::Format(const string &sql) {
 			tokens.pop_back();
 		}
 	}
+
+	return tokens;
+}
+
+bool SQLFormatter::SkipNonCodeToken(const vector<MatcherToken> &tokens, idx_t &token_idx, idx_t &pos) {
+	while (token_idx < tokens.size() && tokens[token_idx].offset + tokens[token_idx].length <= pos) {
+		token_idx++;
+	}
+	if (token_idx == tokens.size()) {
+		return false;
+	}
+	auto &token = tokens[token_idx];
+	if (token.offset > pos) {
+		return false;
+	}
+	bool quoted_identifier = token.type == TokenType::IDENTIFIER && !token.text.empty() && token.text[0] == '"';
+	if (token.type != TokenType::STRING_LITERAL && token.type != TokenType::COMMENT && !quoted_identifier) {
+		return false;
+	}
+	auto length = token.length;
+	// Keep the newline ending a line comment as a formatting boundary.
+	if (token.type == TokenType::COMMENT && StringUtil::StartsWith(token.text, "--")) {
+		while (length > 0 && (token.text[length - 1] == '\n' || token.text[length - 1] == '\r')) {
+			length--;
+		}
+	}
+	if (token.offset + length <= pos) {
+		return false;
+	}
+	pos = token.offset + length - 1;
+	return true;
+}
+
+string SQLFormatter::Format(const string &sql) {
+	auto tokens = Tokenize(sql);
 
 	if (tokens.empty()) {
 		return sql;
@@ -327,9 +366,14 @@ string SQLFormatter::TrimLeft(const string &line) {
 }
 
 vector<string> SQLFormatter::SplitLines(const string &formatted) {
+	auto tokens = Tokenize(formatted);
+	idx_t token_idx = 0;
 	vector<string> lines;
 	idx_t start = 0;
 	for (idx_t k = 0; k <= formatted.size(); k++) {
+		if (SkipNonCodeToken(tokens, token_idx, k)) {
+			continue;
+		}
 		if (k == formatted.size() || formatted[k] == '\n') {
 			lines.push_back(formatted.substr(start, k - start));
 			start = k + 1;
@@ -866,6 +910,9 @@ string SQLFormatter::MergeShortClauses(const string &formatted) const {
 					break;
 				}
 				content_end = j + 1;
+				if (cline.find('\n') != string::npos) {
+					break;
+				}
 				j++;
 			}
 
@@ -1028,19 +1075,15 @@ string SQLFormatter::CollapseFirstCondition(const string &formatted) const {
 vector<string> SQLFormatter::SplitTopLevelCommas(const string &s) {
 	vector<string> parts;
 	int32_t depth = 0;
-	bool in_str = false;
-	char str_char = '\0';
+	auto tokens = Tokenize(s);
+	idx_t token_idx = 0;
 	idx_t start = 0;
 	for (idx_t k = 0; k < s.size(); k++) {
 		const char c = s[k];
-		if (in_str) {
-			if (c == str_char) {
-				in_str = false;
-			}
-		} else if (c == '\'' || c == '"' || c == '`') {
-			in_str = true;
-			str_char = c;
-		} else if (c == '(') {
+		if (SkipNonCodeToken(tokens, token_idx, k)) {
+			continue;
+		}
+		if (c == '(') {
 			depth++;
 		} else if (c == ')') {
 			depth--;
@@ -1081,18 +1124,14 @@ vector<string> SQLFormatter::SplitTopLevelCommas(const string &s) {
 //! Returns string::npos if not found.
 idx_t SQLFormatter::FindMatchingClose(const string &s, idx_t open_pos) {
 	int32_t depth = 0;
-	bool in_str = false;
-	char str_char = '\0';
+	auto tokens = Tokenize(s);
+	idx_t token_idx = 0;
 	for (idx_t k = open_pos; k < s.size(); k++) {
 		const char c = s[k];
-		if (in_str) {
-			if (c == str_char) {
-				in_str = false;
-			}
-		} else if (c == '\'' || c == '"' || c == '`') {
-			in_str = true;
-			str_char = c;
-		} else if (c == '(') {
+		if (SkipNonCodeToken(tokens, token_idx, k)) {
+			continue;
+		}
+		if (c == '(') {
 			depth++;
 		} else if (c == ')') {
 			depth--;
@@ -1165,7 +1204,12 @@ string SQLFormatter::ExpandTableDefinition(const string &formatted) const {
 		}
 
 		idx_t paren_pos = string::npos;
+		auto tokens = Tokenize(line);
+		idx_t token_idx = 0;
 		for (idx_t k = indent + prefix_len; k < line.size(); k++) {
+			if (SkipNonCodeToken(tokens, token_idx, k)) {
+				continue;
+			}
 			if (line[k] == '(') {
 				paren_pos = k;
 				break;
@@ -1192,7 +1236,12 @@ string SQLFormatter::ExpandTableDefinition(const string &formatted) const {
 			// Case A: keyword on line i, "tablename(cols)" on line i+1.
 			const string &next_line = lines[i + 1];
 			idx_t next_paren = string::npos;
+			auto next_tokens = Tokenize(next_line);
+			idx_t next_token_idx = 0;
 			for (idx_t k = 0; k < next_line.size(); k++) {
+				if (SkipNonCodeToken(next_tokens, next_token_idx, k)) {
+					continue;
+				}
 				if (next_line[k] == '(') {
 					next_paren = k;
 					break;
@@ -1278,19 +1327,10 @@ bool SQLFormatter::MatchKeywordAt(const string &s, idx_t pos, const char *keywor
 //! skipping string literals.  Does NOT skip paren-enclosed content
 //! so that CASE inside function calls (e.g. sum(CASE...)) is found.
 idx_t SQLFormatter::FindKeywordAny(const string &s, idx_t from_pos, const char *keyword) {
-	bool in_str = false;
-	char str_char = '\0';
+	auto tokens = Tokenize(s);
+	idx_t token_idx = 0;
 	for (idx_t k = from_pos; k < s.size(); k++) {
-		const char c = s[k];
-		if (in_str) {
-			if (c == str_char) {
-				in_str = false;
-			}
-			continue;
-		}
-		if (c == '\'' || c == '"' || c == '`') {
-			in_str = true;
-			str_char = c;
+		if (SkipNonCodeToken(tokens, token_idx, k)) {
 			continue;
 		}
 		if (MatchKeywordAt(s, k, keyword)) {
@@ -1304,21 +1344,11 @@ idx_t SQLFormatter::FindKeywordAny(const string &s, idx_t from_pos, const char *
 //! CASE...END pairs.  Returns string::npos if no matching END is found.
 idx_t SQLFormatter::FindCaseEnd(const string &s, idx_t case_pos) {
 	int32_t depth = 0;
-	bool in_str = false;
-	char str_char = '\0';
+	auto tokens = Tokenize(s);
+	idx_t token_idx = 0;
 	idx_t k = case_pos;
 	while (k < s.size()) {
-		const char c = s[k];
-		if (in_str) {
-			if (c == str_char) {
-				in_str = false;
-			}
-			k++;
-			continue;
-		}
-		if (c == '\'' || c == '"' || c == '`') {
-			in_str = true;
-			str_char = c;
+		if (SkipNonCodeToken(tokens, token_idx, k)) {
 			k++;
 			continue;
 		}
@@ -1347,8 +1377,8 @@ vector<string> SQLFormatter::SplitCaseBranches(const string &content) {
 	vector<string> branches;
 	int32_t paren_depth = 0;
 	int32_t case_depth = 0;
-	bool in_str = false;
-	char str_char = '\0';
+	auto tokens = Tokenize(content);
+	idx_t token_idx = 0;
 
 	idx_t start = 0;
 	while (start < content.size() && content[start] == ' ') {
@@ -1358,16 +1388,7 @@ vector<string> SQLFormatter::SplitCaseBranches(const string &content) {
 
 	while (k < content.size()) {
 		const char c = content[k];
-		if (in_str) {
-			if (c == str_char) {
-				in_str = false;
-			}
-			k++;
-			continue;
-		}
-		if (c == '\'' || c == '"' || c == '`') {
-			in_str = true;
-			str_char = c;
+		if (SkipNonCodeToken(tokens, token_idx, k)) {
 			k++;
 			continue;
 		}
@@ -1528,20 +1549,12 @@ string SQLFormatter::ExpandCaseExpressions(const string &formatted) const {
 idx_t SQLFormatter::FindLongestParenList(const string &line, idx_t from_pos) {
 	idx_t best_pos = string::npos;
 	idx_t best_len = 0;
-	bool in_str = false;
-	char str_char = '\0';
+	auto tokens = Tokenize(line);
+	idx_t token_idx = 0;
 	int32_t depth = 0;
 	for (idx_t k = from_pos; k < line.size(); k++) {
 		char c = line[k];
-		if (in_str) {
-			if (c == str_char) {
-				in_str = false;
-			}
-			continue;
-		}
-		if (c == '\'' || c == '"' || c == '`') {
-			in_str = true;
-			str_char = c;
+		if (SkipNonCodeToken(tokens, token_idx, k)) {
 			continue;
 		}
 		if (c == '(' && depth == 0) {
