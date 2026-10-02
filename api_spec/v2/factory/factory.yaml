@@ -1,0 +1,78 @@
+module: factory
+#
+# The scope through which values and types are constructed.
+#
+# Every value and type constructor (value_create_<kind>, value_cast,
+# logical_type_create_*) takes a factory. A factory is borrowed from a
+# connection, for callers outside DuckDB, or from a context, inside callbacks;
+# both kinds are used the same way. What differs is how a constructor that
+# looks something up in the catalog gets its transaction: through a
+# connection's factory it runs in a transaction of its own, through a context's
+# factory it runs in the transaction the context already holds.
+#
+# Values and types are self-contained once constructed: they are owned by the
+# caller and may outlive the factory that created them.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  factory:
+    description: |
+      A borrowed opaque handle to the scope values and types are constructed through. Obtained from
+      `[[connection_get_factory]]` or `[[context_get_factory]]`. Borrowed: the handle belongs to the connection or
+      context it came from, is valid only for as long as that is, and must not be destroyed. The values and types it
+      creates are owned by the caller and may outlive it.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  connection_get_factory:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-01" ]
+    description: |
+      Borrows the factory of a connection.
+
+      Use this from outside DuckDB, where a connection is in hand. Constructors that look something up in the catalog
+      run in a transaction of their own through this factory, so do not use it from inside a callback running on the
+      same connection; take the factory of the callback's context instead. The returned handle is borrowed: it is
+      valid only for as long as the connection is, and must not be destroyed.
+    parameters:
+      connection:
+        type: connection
+        description: The connection to take the factory from.
+      factory:
+        type: factory
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed factory.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  context_get_factory:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-01" ]
+    description: |
+      Borrows the factory of a context.
+
+      Use this from inside a callback, where a context is in hand. Constructors that look something up in the catalog
+      run in the transaction the context already holds. The returned handle is borrowed: it is valid only for as long
+      as the context is, and must not be destroyed.
+    parameters:
+      context:
+        type: context
+        description: The context to take the factory from.
+      factory:
+        type: factory
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed factory.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR

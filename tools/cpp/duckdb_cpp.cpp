@@ -333,6 +333,19 @@ auto WithExceptionGuard(duckdb_v2_error_info_handle *err, T callback) -> DUCKDB_
 	return code;
 }
 
+// The factory values and types are constructed through, borrowed from a connection or a context.
+auto GetFactory(const Connection &conn) -> duckdb_v2_factory_handle {
+	duckdb_v2_factory_handle factory = nullptr;
+	CheckedAPICall(duckdb_v2_connection_get_factory, conn.handle(), &factory);
+	return factory;
+}
+
+auto GetFactory(const Context &ctx) -> duckdb_v2_factory_handle {
+	duckdb_v2_factory_handle factory = nullptr;
+	CheckedAPICall(duckdb_v2_context_get_factory, ctx.handle(), &factory);
+	return factory;
+}
+
 } // namespace
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -580,7 +593,7 @@ auto Connection::SetOption(std::string_view name, std::string_view value, Settin
 auto Connection::ParseType(std::string_view text) -> LogicalType {
 	duckdb_v2_logical_type_handle type = nullptr;
 	auto text_str = duckdb_v2_str {text.data(), text.size()};
-	CheckedAPICall(duckdb_v2_connection_create_type_from_text, handle(), &text_str, &type);
+	CheckedAPICall(duckdb_v2_logical_type_create_from_text, GetFactory(*this), &text_str, &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
 
@@ -605,8 +618,8 @@ auto Connection::CreateType(const QualifiedName &name) -> LogicalType {
 auto Connection::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_connection_create_type_from_name, handle(), name.handle(), split.names(), split.values(),
-	               static_cast<idx_t>(params.size()), &type);
+	CheckedAPICall(duckdb_v2_logical_type_create_from_name, GetFactory(*this), name.handle(), split.names(),
+	               split.values(), static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
 
@@ -617,7 +630,7 @@ auto Connection::CreateType(LogicalTypeId id) -> LogicalType {
 auto Connection::CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_connection_create_type_from_id, handle(), static_cast<DUCKDB_V2_LOGICAL_TYPE_ID>(id),
+	CheckedAPICall(duckdb_v2_logical_type_create_from_id, GetFactory(*this), static_cast<DUCKDB_V2_LOGICAL_TYPE_ID>(id),
 	               split.names(), split.values(), static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
@@ -877,7 +890,7 @@ auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, vo
 auto Context::ParseType(std::string_view text) const -> LogicalType {
 	duckdb_v2_logical_type_handle type = nullptr;
 	auto text_str = duckdb_v2_str {text.data(), text.size()};
-	CheckedAPICall(duckdb_v2_context_create_type_from_text, handle(), &text_str, &type);
+	CheckedAPICall(duckdb_v2_logical_type_create_from_text, GetFactory(*this), &text_str, &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
 
@@ -909,8 +922,8 @@ auto Context::CreateType(const QualifiedName &name) const -> LogicalType {
 auto Context::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) const -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_context_create_type_from_name, handle(), name.handle(), split.names(), split.values(),
-	               static_cast<idx_t>(params.size()), &type);
+	CheckedAPICall(duckdb_v2_logical_type_create_from_name, GetFactory(*this), name.handle(), split.names(),
+	               split.values(), static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
 
@@ -921,7 +934,7 @@ auto Context::CreateType(LogicalTypeId id) const -> LogicalType {
 auto Context::CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) const -> LogicalType {
 	TypeParamArrays split(params);
 	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_context_create_type_from_id, handle(), static_cast<DUCKDB_V2_LOGICAL_TYPE_ID>(id),
+	CheckedAPICall(duckdb_v2_logical_type_create_from_id, GetFactory(*this), static_cast<DUCKDB_V2_LOGICAL_TYPE_ID>(id),
 	               split.names(), split.values(), static_cast<idx_t>(params.size()), &type);
 	return detail::Factory::Make<LogicalType>(type);
 }
@@ -957,14 +970,14 @@ auto LogicalType::GetName() const -> std::string_view {
 auto LogicalType::WithAlias(const Context &ctx, std::string_view alias) const -> LogicalType {
 	duckdb_v2_logical_type_handle new_type = nullptr;
 	auto alias_name_str = ToStr(alias);
-	CheckedAPICall(duckdb_v2_context_create_type_with_alias, ctx.handle(), handle(), &alias_name_str, &new_type);
+	CheckedAPICall(duckdb_v2_logical_type_create_with_alias, GetFactory(ctx), handle(), &alias_name_str, &new_type);
 	return detail::Factory::Make<LogicalType>(new_type);
 }
 
 auto LogicalType::WithAlias(const Connection &conn, std::string_view alias) const -> LogicalType {
 	duckdb_v2_logical_type_handle new_type = nullptr;
 	auto alias_name_str = ToStr(alias);
-	CheckedAPICall(duckdb_v2_connection_create_type_with_alias, conn.handle(), handle(), &alias_name_str, &new_type);
+	CheckedAPICall(duckdb_v2_logical_type_create_with_alias, GetFactory(conn), handle(), &alias_name_str, &new_type);
 	return detail::Factory::Make<LogicalType>(new_type);
 }
 
@@ -1203,13 +1216,13 @@ auto Value::ToText() const -> std::string {
 
 auto Value::Cast(const Context &ctx, const LogicalType &target) const -> Value {
 	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_cast_with_context, ctx.handle(), handle(), target.handle(), &value);
+	CheckedAPICall(duckdb_v2_value_cast, GetFactory(ctx), handle(), target.handle(), &value);
 	return detail::Factory::Make<Value>(value);
 }
 
 auto Value::Cast(const Connection &conn, const LogicalType &target) const -> Value {
 	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_cast_with_connection, conn.handle(), handle(), target.handle(), &value);
+	CheckedAPICall(duckdb_v2_value_cast, GetFactory(conn), handle(), target.handle(), &value);
 	return detail::Factory::Make<Value>(value);
 }
 
@@ -1343,153 +1356,153 @@ auto Value::Get() const -> LogicalType {
 
 #define MAKE_VALUE_IMPL(ctx, name, value)                                                                              \
 	duckdb_v2_value_handle handle = nullptr;                                                                           \
-	CheckedAPICall(name, ctx.handle(), value, &handle);                                                                \
+	CheckedAPICall(name, GetFactory(ctx), value, &handle);                                                             \
 	return detail::Factory::Make<Value>(handle);
 
 // Connection
 auto Value::CreateNull(Connection &conn, const LogicalType &type) -> Value {
 	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_null_with_connection, conn.handle(), type.handle(), &value);
+	CheckedAPICall(duckdb_v2_value_create_null, GetFactory(conn), type.handle(), &value);
 	return detail::Factory::Make<Value>(value);
 }
 
 auto Value::Create(Connection &conn, bool value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bool_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bool, value)
 }
 
 auto Value::Create(Connection &conn, uint8_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_utinyint_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_utinyint, value)
 }
 
 auto Value::Create(Connection &conn, uint16_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_usmallint_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_usmallint, value)
 }
 
 auto Value::Create(Connection &conn, uint32_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uint_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uint, value)
 }
 
 auto Value::Create(Connection &conn, uint64_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_ubigint_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_ubigint, value)
 }
 
 auto Value::Create(Connection &conn, uint128_t value) -> Value {
 	auto value_uhugeint = ToC(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uhugeint_with_connection, &value_uhugeint)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uhugeint, &value_uhugeint)
 }
 
 auto Value::Create(Connection &conn, int8_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_tinyint_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_tinyint, value)
 }
 
 auto Value::Create(Connection &conn, int16_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_smallint_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_smallint, value)
 }
 
 auto Value::Create(Connection &conn, int32_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_int_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_int, value)
 }
 
 auto Value::Create(Connection &conn, int64_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bigint_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bigint, value)
 }
 
 auto Value::Create(Connection &conn, int128_t value) -> Value {
 	auto value_hugeint = ToC(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_hugeint_with_connection, &value_hugeint)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_hugeint, &value_hugeint)
 }
 
 auto Value::Create(Connection &conn, float value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_float_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_float, value)
 }
 
 auto Value::Create(Connection &conn, double value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_double_with_connection, value)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_double, value)
 }
 auto Value::Create(Connection &conn, blob_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_blob_with_connection, &value_str)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_blob, &value_str)
 }
 auto Value::Create(Connection &conn, varchar_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_varchar_with_connection, &value_str)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_varchar, &value_str)
 }
 auto Value::Create(Connection &conn, const LogicalType &value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_type_with_connection, value.handle())
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_type, value.handle())
 }
 
 // Context
 auto Value::CreateNull(Context &ctx, const LogicalType &type) -> Value {
 	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_null_with_context, ctx.handle(), type.handle(), &value);
+	CheckedAPICall(duckdb_v2_value_create_null, GetFactory(ctx), type.handle(), &value);
 	return detail::Factory::Make<Value>(value);
 }
 auto Value::Create(Context &ctx, bool value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bool_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bool, value)
 }
 
 auto Value::Create(Context &ctx, uint8_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_utinyint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_utinyint, value)
 }
 
 auto Value::Create(Context &ctx, uint16_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_usmallint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_usmallint, value)
 }
 
 auto Value::Create(Context &ctx, uint32_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uint, value)
 }
 
 auto Value::Create(Context &ctx, uint64_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_ubigint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_ubigint, value)
 }
 
 auto Value::Create(Context &ctx, uint128_t value) -> Value {
 	auto value_uhugeint = ToC(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uhugeint_with_context, &value_uhugeint)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uhugeint, &value_uhugeint)
 }
 
 auto Value::Create(Context &ctx, int8_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_tinyint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_tinyint, value)
 }
 
 auto Value::Create(Context &ctx, int16_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_smallint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_smallint, value)
 }
 
 auto Value::Create(Context &ctx, int32_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_int_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_int, value)
 }
 
 auto Value::Create(Context &ctx, int64_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bigint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bigint, value)
 }
 
 auto Value::Create(Context &ctx, int128_t value) -> Value {
 	auto value_hugeint = ToC(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_hugeint_with_context, &value_hugeint)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_hugeint, &value_hugeint)
 }
 
 auto Value::Create(Context &ctx, float value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_float_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_float, value)
 }
 
 auto Value::Create(Context &ctx, double value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_double_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_double, value)
 }
 
 auto Value::Create(Context &ctx, blob_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_blob_with_context, &value_str)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_blob, &value_str)
 }
 
 auto Value::Create(Context &ctx, varchar_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_varchar_with_context, &value_str)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_varchar, &value_str)
 }
 
 auto Value::Create(Context &ctx, const LogicalType &value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_type_with_context, value.handle())
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_type, value.handle())
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1508,11 +1521,11 @@ auto Value::Get() const -> date_t {
 }
 
 auto Value::Create(Connection &conn, date_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_date_with_connection, value.days)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_date, value.days)
 }
 
 auto Value::Create(Context &ctx, date_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_date_with_context, value.days)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_date, value.days)
 }
 
 template <>
@@ -1523,11 +1536,11 @@ auto Value::Get() const -> dtime_t {
 }
 
 auto Value::Create(Connection &conn, dtime_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_with_connection, value.micros)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time, value.micros)
 }
 
 auto Value::Create(Context &ctx, dtime_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_with_context, value.micros)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time, value.micros)
 }
 
 template <>
@@ -1538,11 +1551,11 @@ auto Value::Get() const -> dtime_ns_t {
 }
 
 auto Value::Create(Connection &conn, dtime_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_ns_with_connection, value.nanos)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_ns, value.nanos)
 }
 
 auto Value::Create(Context &ctx, dtime_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_ns_with_context, value.nanos)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_ns, value.nanos)
 }
 
 template <>
@@ -1553,11 +1566,11 @@ auto Value::Get() const -> dtime_tz_t {
 }
 
 auto Value::Create(Connection &conn, dtime_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_tz_with_connection, value.GetBits())
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_tz, value.GetBits())
 }
 
 auto Value::Create(Context &ctx, dtime_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_tz_with_context, value.GetBits())
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_tz, value.GetBits())
 }
 
 template <>
@@ -1568,11 +1581,11 @@ auto Value::Get() const -> timestamp_t {
 }
 
 auto Value::Create(Connection &conn, timestamp_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_with_connection, value.micros)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp, value.micros)
 }
 
 auto Value::Create(Context &ctx, timestamp_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_with_context, value.micros)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp, value.micros)
 }
 
 template <>
@@ -1583,11 +1596,11 @@ auto Value::Get() const -> timestamp_s_t {
 }
 
 auto Value::Create(Connection &conn, timestamp_s_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_sec_with_connection, value.seconds)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_sec, value.seconds)
 }
 
 auto Value::Create(Context &ctx, timestamp_s_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_sec_with_context, value.seconds)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_sec, value.seconds)
 }
 
 template <>
@@ -1598,11 +1611,11 @@ auto Value::Get() const -> timestamp_ms_t {
 }
 
 auto Value::Create(Connection &conn, timestamp_ms_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_ms_with_connection, value.millis)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_ms, value.millis)
 }
 
 auto Value::Create(Context &ctx, timestamp_ms_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ms_with_context, value.millis)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ms, value.millis)
 }
 
 template <>
@@ -1613,11 +1626,11 @@ auto Value::Get() const -> timestamp_ns_t {
 }
 
 auto Value::Create(Connection &conn, timestamp_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_ns_with_connection, value.nanos)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_ns, value.nanos)
 }
 
 auto Value::Create(Context &ctx, timestamp_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ns_with_context, value.nanos)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ns, value.nanos)
 }
 
 template <>
@@ -1628,11 +1641,11 @@ auto Value::Get() const -> timestamp_tz_t {
 }
 
 auto Value::Create(Connection &conn, timestamp_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_tz_with_connection, value.micros)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_tz, value.micros)
 }
 
 auto Value::Create(Context &ctx, timestamp_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz_with_context, value.micros)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz, value.micros)
 }
 
 template <>
@@ -1643,11 +1656,11 @@ auto Value::Get() const -> timestamp_tz_ns_t {
 }
 
 auto Value::Create(Connection &conn, timestamp_tz_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_tz_ns_with_connection, value.nanos)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_tz_ns, value.nanos)
 }
 
 auto Value::Create(Context &ctx, timestamp_tz_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz_ns_with_context, value.nanos)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz_ns, value.nanos)
 }
 
 auto ToC(interval_t value) -> duckdb_v2_interval_t {
@@ -1663,12 +1676,12 @@ auto Value::Get() const -> interval_t {
 
 auto Value::Create(Connection &conn, interval_t value) -> Value {
 	auto value_interval = ToC(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_interval_with_connection, &value_interval)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_interval, &value_interval)
 }
 
 auto Value::Create(Context &ctx, interval_t value) -> Value {
 	auto value_interval = ToC(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_interval_with_context, &value_interval)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_interval, &value_interval)
 }
 
 void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
@@ -1687,14 +1700,14 @@ void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
 auto Value::CreateDecimal(Connection &conn, int128_t value, uint8_t width, uint8_t scale) -> Value {
 	duckdb_v2_value_handle out = nullptr;
 	auto value_hugeint = ToC(value);
-	CheckedAPICall(duckdb_v2_value_create_decimal_with_connection, conn.handle(), &value_hugeint, width, scale, &out);
+	CheckedAPICall(duckdb_v2_value_create_decimal, GetFactory(conn), &value_hugeint, width, scale, &out);
 	return detail::Factory::Make<Value>(out);
 }
 
 auto Value::CreateDecimal(Context &ctx, int128_t value, uint8_t width, uint8_t scale) -> Value {
 	duckdb_v2_value_handle out = nullptr;
 	auto value_hugeint = ToC(value);
-	CheckedAPICall(duckdb_v2_value_create_decimal_with_context, ctx.handle(), &value_hugeint, width, scale, &out);
+	CheckedAPICall(duckdb_v2_value_create_decimal, GetFactory(ctx), &value_hugeint, width, scale, &out);
 	return detail::Factory::Make<Value>(out);
 }
 
@@ -1751,32 +1764,32 @@ auto Value::Get() const -> uuid_t {
 
 auto Value::Create(Connection &conn, bit_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bit_with_connection, &value_str)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bit, &value_str)
 }
 
 auto Value::Create(Context &ctx, bit_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bit_with_context, &value_str)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bit, &value_str)
 }
 
 auto Value::Create(Connection &conn, bignum_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bignum_with_connection, &value_str)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bignum, &value_str)
 }
 
 auto Value::Create(Context &ctx, bignum_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bignum_with_context, &value_str)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bignum, &value_str)
 }
 
 auto Value::Create(Connection &conn, uuid_t value) -> Value {
 	auto value_hugeint = ToC(value.value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uuid_with_connection, &value_hugeint)
+	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uuid, &value_hugeint)
 }
 
 auto Value::Create(Context &ctx, uuid_t value) -> Value {
 	auto value_hugeint = ToC(value.value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uuid_with_context, &value_hugeint)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uuid, &value_hugeint)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1812,7 +1825,7 @@ auto FromHandle(duckdb_v2_value_handle value) -> Value {
 auto Value::CreateList(Connection &conn, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_connection, conn.handle(), nullptr, DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_list, GetFactory(conn), nullptr, DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
@@ -1820,29 +1833,29 @@ auto Value::CreateList(Connection &conn, ValueList values) -> Value {
 auto Value::CreateList(Context &ctx, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_context, ctx.handle(), nullptr, DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_list, GetFactory(ctx), nullptr, DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateList(Connection &conn, const LogicalType &child_type) -> Value {
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_connection, conn.handle(), child_type.handle(), nullptr,
-	               static_cast<idx_t>(0), &out);
+	CheckedAPICall(duckdb_v2_value_create_list, GetFactory(conn), child_type.handle(), nullptr, static_cast<idx_t>(0),
+	               &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateList(Context &ctx, const LogicalType &child_type) -> Value {
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_context, ctx.handle(), child_type.handle(), nullptr,
-	               static_cast<idx_t>(0), &out);
+	CheckedAPICall(duckdb_v2_value_create_list, GetFactory(ctx), child_type.handle(), nullptr, static_cast<idx_t>(0),
+	               &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateArray(Connection &conn, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_array_with_connection, conn.handle(), nullptr, DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_array, GetFactory(conn), nullptr, DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
@@ -1850,7 +1863,7 @@ auto Value::CreateArray(Connection &conn, ValueList values) -> Value {
 auto Value::CreateArray(Context &ctx, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_array_with_context, ctx.handle(), nullptr, DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_array, GetFactory(ctx), nullptr, DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
@@ -1876,23 +1889,23 @@ struct StructArrays {
 auto Value::CreateStruct(Connection &conn, NamedValueList values) -> Value {
 	StructArrays split(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_struct_with_connection, conn.handle(), DataOrNull(split.names),
-	               DataOrNull(split.children), static_cast<idx_t>(values.size()), &out);
+	CheckedAPICall(duckdb_v2_value_create_struct, GetFactory(conn), DataOrNull(split.names), DataOrNull(split.children),
+	               static_cast<idx_t>(values.size()), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateStruct(Context &ctx, NamedValueList values) -> Value {
 	StructArrays split(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_struct_with_context, ctx.handle(), DataOrNull(split.names),
-	               DataOrNull(split.children), static_cast<idx_t>(values.size()), &out);
+	CheckedAPICall(duckdb_v2_value_create_struct, GetFactory(ctx), DataOrNull(split.names), DataOrNull(split.children),
+	               static_cast<idx_t>(values.size()), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateTuple(Connection &conn, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_tuple_with_connection, conn.handle(), DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_tuple, GetFactory(conn), DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
@@ -1900,7 +1913,7 @@ auto Value::CreateTuple(Connection &conn, ValueList values) -> Value {
 auto Value::CreateTuple(Context &ctx, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_tuple_with_context, ctx.handle(), DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_tuple, GetFactory(ctx), DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
@@ -1926,7 +1939,7 @@ struct MapArrays {
 auto Value::CreateMap(Connection &conn, KeyValueList values) -> Value {
 	MapArrays split(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_connection, conn.handle(), nullptr, nullptr, DataOrNull(split.keys),
+	CheckedAPICall(duckdb_v2_value_create_map, GetFactory(conn), nullptr, nullptr, DataOrNull(split.keys),
 	               DataOrNull(split.entries), static_cast<idx_t>(values.size()), &out);
 	return FromHandle(out);
 }
@@ -1934,22 +1947,22 @@ auto Value::CreateMap(Connection &conn, KeyValueList values) -> Value {
 auto Value::CreateMap(Context &ctx, KeyValueList values) -> Value {
 	MapArrays split(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_context, ctx.handle(), nullptr, nullptr, DataOrNull(split.keys),
+	CheckedAPICall(duckdb_v2_value_create_map, GetFactory(ctx), nullptr, nullptr, DataOrNull(split.keys),
 	               DataOrNull(split.entries), static_cast<idx_t>(values.size()), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateMap(Connection &conn, const LogicalType &key_type, const LogicalType &value_type) -> Value {
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_connection, conn.handle(), key_type.handle(), value_type.handle(),
-	               nullptr, nullptr, static_cast<idx_t>(0), &out);
+	CheckedAPICall(duckdb_v2_value_create_map, GetFactory(conn), key_type.handle(), value_type.handle(), nullptr,
+	               nullptr, static_cast<idx_t>(0), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateMap(Context &ctx, const LogicalType &key_type, const LogicalType &value_type) -> Value {
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_context, ctx.handle(), key_type.handle(), value_type.handle(),
-	               nullptr, nullptr, static_cast<idx_t>(0), &out);
+	CheckedAPICall(duckdb_v2_value_create_map, GetFactory(ctx), key_type.handle(), value_type.handle(), nullptr,
+	               nullptr, static_cast<idx_t>(0), &out);
 	return FromHandle(out);
 }
 

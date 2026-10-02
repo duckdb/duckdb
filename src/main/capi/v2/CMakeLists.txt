@@ -14,6 +14,7 @@ add_library_unity(
   capi_v2_environment.cpp
   capi_v2_error.cpp
   capi_v2_extension.cpp
+  capi_v2_factory.cpp
   capi_v2_file_system.cpp
   capi_v2_func.cpp
   capi_v2_func_aggregate.cpp
