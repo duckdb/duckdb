@@ -24,6 +24,13 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
+	// Fallible aggregates with multiple arguments may have row-dependent parameters. The segment tree
+	// combines states outside individual frames, which can trigger errors for otherwise valid frames.
+	if (wexpr.AggregateFunction()->GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR &&
+	    wexpr.GetChildren().size() > 1) {
+		return false;
+	}
+
 	//	We can't handle DISTINCT, ORDER BY args or () args (COUNT(*))
 	return !wexpr.Distinct() && wexpr.ArgOrders().empty() && !wexpr.GetChildren().empty();
 }
