@@ -66,6 +66,8 @@ enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
 
+enum class AlterSchemaType : uint8_t;
+
 enum class AlterTableFunctionType : uint8_t;
 
 enum class AlterTableType : uint8_t;
@@ -217,6 +219,8 @@ enum class ExplainType : uint8_t;
 enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
+
+enum class ExpressionTailType : uint8_t;
 
 enum class ExpressionType : uint8_t;
 
@@ -466,8 +470,6 @@ enum class QueryResultMemoryType : uint8_t;
 
 enum class QueryResultState : uint8_t;
 
-enum class QueryResultType : uint8_t;
-
 enum class RecoveryMode : uint8_t;
 
 enum class RecursiveCTEPipelineMetricType : uint8_t;
@@ -485,6 +487,8 @@ enum class RemoteCapability : uint8_t;
 enum class RemoveUnusedColumnsMode : uint8_t;
 
 enum class RenderMode : uint8_t;
+
+enum class RequestSizing : uint8_t;
 
 enum class RequestType : uint8_t;
 
@@ -713,6 +717,9 @@ template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
 
 template<>
+const char* EnumUtil::ToChars<AlterSchemaType>(AlterSchemaType value);
+
+template<>
 const char* EnumUtil::ToChars<AlterTableFunctionType>(AlterTableFunctionType value);
 
 template<>
@@ -939,6 +946,9 @@ const char* EnumUtil::ToChars<ExponentType>(ExponentType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
+
+template<>
+const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
@@ -1313,9 +1323,6 @@ template<>
 const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
 
 template<>
-const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
-
-template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
 
 template<>
@@ -1341,6 +1348,9 @@ const char* EnumUtil::ToChars<RemoveUnusedColumnsMode>(RemoveUnusedColumnsMode v
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
+
+template<>
+const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
@@ -1656,6 +1666,9 @@ template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
 
 template<>
+AlterSchemaType EnumUtil::FromString<AlterSchemaType>(const char *value);
+
+template<>
 AlterTableFunctionType EnumUtil::FromString<AlterTableFunctionType>(const char *value);
 
 template<>
@@ -1882,6 +1895,9 @@ ExponentType EnumUtil::FromString<ExponentType>(const char *value);
 
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
+
+template<>
+ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
@@ -2256,9 +2272,6 @@ template<>
 QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
 
 template<>
-QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
-
-template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
 
 template<>
@@ -2284,6 +2297,9 @@ RemoveUnusedColumnsMode EnumUtil::FromString<RemoveUnusedColumnsMode>(const char
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
+
+template<>
+RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);

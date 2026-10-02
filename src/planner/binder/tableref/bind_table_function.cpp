@@ -200,6 +200,21 @@ static void AddPostgresSetofColumnAlias(BindContext &bind_context, TableIndex bi
 	bind_context.AddColumnAlias(bind_index, original_name, 0);
 }
 
+static bool PlanSupportsStatementCache(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<LogicalGet>();
+		if (get.bind_data && !get.bind_data->SupportStatementCache()) {
+			return false;
+		}
+	}
+	for (auto &child : op.children) {
+		if (!PlanSupportsStatementCache(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
                                                  vector<Value> parameters, named_argument_map_t named_parameters,
                                                  vector<LogicalType> input_table_types,
@@ -224,6 +239,9 @@ BoundStatement Binder::BindTableFunctionInternal(BoundTableFunction &table_funct
 		if (table_function.bind_operator) {
 			auto new_plan = table_function.bind_operator(context, bind_input, bind_index, return_names);
 			if (new_plan) {
+				if (!PlanSupportsStatementCache(*new_plan)) {
+					SetAlwaysRequireRebind();
+				}
 				new_plan->ResolveOperatorTypes();
 				if (new_plan->types.size() != return_names.size()) {
 					throw InternalException("Failed to bind \"%s\": return_types/names must have same size",

@@ -164,7 +164,7 @@ int8_t JsonDeserializer::ReadSignedInt8() {
 	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int8_t");
 	}
-	return yyjson_get_sint(val);
+	return NumericCast<int8_t>(yyjson_get_sint(val));
 }
 
 uint8_t JsonDeserializer::ReadUnsignedInt8() {
@@ -180,7 +180,7 @@ int16_t JsonDeserializer::ReadSignedInt16() {
 	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int16_t");
 	}
-	return yyjson_get_sint(val);
+	return NumericCast<int16_t>(yyjson_get_sint(val));
 }
 
 uint16_t JsonDeserializer::ReadUnsignedInt16() {
@@ -196,7 +196,7 @@ int32_t JsonDeserializer::ReadSignedInt32() {
 	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int32_t");
 	}
-	return yyjson_get_sint(val);
+	return NumericCast<int32_t>(yyjson_get_sint(val));
 }
 
 uint32_t JsonDeserializer::ReadUnsignedInt32() {

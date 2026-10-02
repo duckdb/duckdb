@@ -80,6 +80,8 @@ public:
 	bool IsObject() const;
 	//! Whether or not this is an integer (signed or unsigned)
 	bool IsInteger() const;
+	//! Whether or not this is a number
+	bool IsNumber() const;
 
 	//! Get the value as a string (only valid if IsString())
 	string GetString() const;
@@ -91,6 +93,8 @@ public:
 	int64_t GetSignedInteger() const;
 	//! Get the value as a double
 	double GetDouble() const;
+	//! Get any number as a double
+	double GetNumber() const;
 
 	//! Look up a member of an object by key - returns an invalid value if this is not an object or the key is absent
 	JSONValue GetMember(const string &key) const;
