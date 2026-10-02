@@ -59,7 +59,7 @@ unique_ptr<Filter> CreateAuxiliaryFilter(const Expression &partition, const Filt
 
 	//	It must preserve ordering
 	const auto arg_props = partition_func.Function().GetArgProperties(0);
-	if (!IsKnownMonotonic(arg_props.monotonicity)) {
+	if (!IsMonotonicIncreasing(arg_props.monotonicity)) {
 		return nullptr;
 	}
 
