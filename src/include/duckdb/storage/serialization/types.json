@@ -68,8 +68,7 @@
         "name": "extension_info",
         "type": "unique_ptr<ExtensionTypeInfo>"
       }
-    ],
-    "pointer_type": "shared_ptr"
+    ]
   },
   {
     "class": "DecimalTypeInfo",
@@ -187,7 +186,7 @@
     "class": "GenericTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "GENERIC_TYPE_INFO",
-    "custom_switch_code": "result = make_shared_ptr<ExtraTypeInfo>(type);\nbreak;"
+    "custom_switch_code": "result = make_uniq<ExtraTypeInfo>(type);\nbreak;"
   },
   {
     "class": "AnyTypeInfo",
