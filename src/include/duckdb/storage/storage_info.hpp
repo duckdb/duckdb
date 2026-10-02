@@ -9,11 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/limits.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/optional_idx.hpp"
-#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/query_context.hpp"
 
 namespace duckdb {

@@ -1183,7 +1183,7 @@ IndexCheckpointResult ART::Checkpoint(PartialBlockManager &partial_block_manager
 		}
 	}
 
-	auto shadow = make_uniq<ART>(*this, new_allocators);
+	auto shadow = unique_ptr<ART>(new ART(*this, new_allocators));
 	return {make_shared_ptr<IndexStorageInfo>(std::move(storage_info)), std::move(shadow)};
 }
 

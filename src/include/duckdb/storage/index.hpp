@@ -14,13 +14,15 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/storage/checkpoint/table_index_writer.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 namespace duckdb {
 
 class AttachedDatabase;
 class TableIOManager;
 class TableIndexWriter;
+class PartialBlockManager;
+struct IndexCheckpointResult;
 
 //! Describes how an index participates in a checkpoint.
 //!
@@ -69,7 +71,7 @@ public:
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;
 
-	//! Returns how this index participates in a checkpoint.
+	//! Returns how this index participates in a checkpoint, defaults to IMMEDIATE mode.
 	virtual IndexCheckpointMode GetCheckpointMode() const {
 		return IndexCheckpointMode::IMMEDIATE;
 	}

@@ -85,19 +85,14 @@ unique_ptr<FixedSizeBuffer> FixedSizeBuffer::Persist(PartialBlockManager &partia
                                                      const idx_t bitmask_offset) {
 	D_ASSERT(readers == 0);
 
-	// Early-out, if the block is already on disk and not in memory.
-	if (!InMemory()) {
-		if (!OnDisk() || dirty) {
-			throw InternalException("invalid or missing buffer in FixedSizeAllocator");
-		}
-		block_manager.IncreaseBlockReferenceCount(block_pointer.block_id);
-		return make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, block_pointer);
-	}
-
 	// Early-out, if the buffer is already on disk and not dirty.
 	if (!dirty && OnDisk()) {
 		block_manager.IncreaseBlockReferenceCount(block_pointer.block_id);
 		return make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, block_pointer);
+	}
+	// We cannot persist a buffer which is not in memory.
+	if (!InMemory()) {
+		throw InternalException("invalid or missing buffer in FixedSizeAllocator");
 	}
 
 	const auto new_allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);

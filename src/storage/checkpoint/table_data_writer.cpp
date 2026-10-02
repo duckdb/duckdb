@@ -206,7 +206,12 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 			}
 		}
 	}
-	TableIndexList::Serialize(index_infos, serializer);
+
+	// write empty block pointers for forwards compatibility
+	const vector<BlockPointer> compat_block_pointers;
+	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
+	serializer.WriteList(104, "index_storage_infos", index_infos.size(),
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(*index_infos[i]); });
 
 	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(105, "next_row_id", next_row_id);

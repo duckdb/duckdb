@@ -135,8 +135,6 @@ public:
 	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const StorageVersion version);
 
 public:
-	//! Write persist metadata.
-	static void Serialize(const vector<shared_ptr<const IndexStorageInfo>> &infos, Serializer &serializer);
 	//! Initialize an index_chunk from a table.
 	static void InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
 	                                 vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info);

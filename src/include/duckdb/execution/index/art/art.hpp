@@ -58,7 +58,6 @@ public:
 	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db, const shared_ptr<AllocatorArray> &allocators_ptr = nullptr,
 	    const IndexStorageInfo &info = IndexStorageInfo());
-	ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr);
 
 	//! Create a index instance of this type.
 	static unique_ptr<BoundIndex> Create(CreateIndexInput &input) {
@@ -187,6 +186,8 @@ public:
 	}
 
 private:
+	//! Constructor for creating a shadow index based on the source index.
+	ART(const ART &src, shared_ptr<AllocatorArray> allocators_ptr);
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 

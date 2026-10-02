@@ -1,6 +1,5 @@
 #include "duckdb/execution/index/unbound_index.hpp"
 
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
@@ -56,17 +55,7 @@ void UnboundIndex::ResetStorage() {
 }
 
 IndexCheckpointResult UnboundIndex::Checkpoint(PartialBlockManager &, StorageVersion) {
-	return {GetStorageInfoPtr(), nullptr};
-}
-
-IndexStorageInfo UnboundIndex::CopyStorageInfo() const {
-	IndexStorageInfo result(storage_info->name);
-	result.root = storage_info->root;
-	result.options = storage_info->options;
-	result.allocator_infos = storage_info->allocator_infos;
-	result.buffers = storage_info->buffers;
-	result.root_block_ptr = storage_info->root_block_ptr;
-	return result;
+	return {storage_info, nullptr};
 }
 
 unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types) {

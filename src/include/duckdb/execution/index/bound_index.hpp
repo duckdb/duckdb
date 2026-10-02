@@ -8,18 +8,15 @@
 
 #pragma once
 
+#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/mutex.hpp"
 
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
-#include "duckdb/common/types/constraint_conflict_info.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/index.hpp"
-#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 class BoundIndex;
@@ -196,6 +193,7 @@ public:
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
 
+	//! Serializes index memory to the WAL, the caller must have exclusive access to the index.
 	virtual IndexStorageInfo SerializeToWAL(StorageVersion storage_version);
 
 	//! Execute the index expressions on an input chunk

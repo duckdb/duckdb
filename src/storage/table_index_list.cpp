@@ -563,14 +563,6 @@ void TableIndexList::MergeCheckpointDeltas(const optional_idx checkpoint_id) con
 	}
 }
 
-void TableIndexList::Serialize(const vector<shared_ptr<const IndexStorageInfo>> &infos, Serializer &serializer) {
-	// write empty block pointers for forwards compatibility
-	const vector<BlockPointer> compat_block_pointers;
-	serializer.WriteProperty(103, "index_pointers", compat_block_pointers);
-	serializer.WriteList(104, "index_storage_infos", infos.size(),
-	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(*infos[i]); });
-}
-
 void TableIndexList::InitializeIndexChunk(DataChunk &index_chunk, const vector<LogicalType> &table_types,
                                           vector<StorageIndex> &mapped_column_ids, DataTableInfo &data_table_info) {
 	// table_chunk contains all table columns.
