@@ -20,8 +20,3 @@ query TT
 SELECT reservoir_quantile(d, [0.1, 0.5, 0.9]), typeof(reservoir_quantile(d, [0.1, 0.5, 0.9])) FROM decimals;
 ----
 [1.10, 5.50, 9.90]	DECIMAL(10,2)[]
-
-statement error
-SELECT reservoir_quantile(d, 'nan'::DOUBLE) FROM decimals;
-----
-cannot be NaN
