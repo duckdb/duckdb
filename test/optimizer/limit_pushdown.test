@@ -82,3 +82,51 @@ query I
 SELECT v FROM offset_result
 ----
 2
+
+# ============================================================================
+# LIMIT pushed into a join side that maps 1:1 to the output
+# ============================================================================
+
+statement ok
+CREATE TABLE dim (
+  id INT PRIMARY KEY,
+  name VARCHAR
+);
+
+statement ok
+CREATE TABLE fact (
+  fid INT PRIMARY KEY,
+  dim_id INT NOT NULL REFERENCES dim(id),
+  val INT
+);
+
+statement ok
+INSERT INTO dim VALUES (1, 'a'), (2, 'b'), (3, 'c');
+
+statement ok
+INSERT INTO fact VALUES (1, 1, 10), (2, 1, 20), (3, 2, 30);
+
+query II
+EXPLAIN SELECT f.val, d.name FROM fact f JOIN dim d ON f.dim_id = d.id LIMIT 2
+----
+logical_opt	<REGEX>:.*JOIN.*LIMIT.*
+
+query II
+EXPLAIN SELECT f.val, d.name FROM fact f LEFT JOIN dim d ON f.dim_id = d.id LIMIT 2
+----
+logical_opt	<REGEX>:.*JOIN.*LIMIT.*
+
+query II
+EXPLAIN SELECT f.val, d.name FROM fact f RIGHT JOIN dim d ON f.dim_id = d.id LIMIT 2
+----
+logical_opt	<REGEX>:.*LIMIT.*JOIN.*
+
+query II
+EXPLAIN SELECT f.val, d.name FROM fact f FULL OUTER JOIN dim d ON f.dim_id = d.id LIMIT 2
+----
+logical_opt	<REGEX>:.*LIMIT.*JOIN.*
+
+query II
+EXPLAIN SELECT f.val, d.name FROM fact f JOIN dim d ON f.dim_id = d.id LIMIT 8192
+----
+logical_opt	<REGEX>:.*LIMIT.*JOIN.*

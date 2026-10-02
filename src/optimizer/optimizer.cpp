@@ -340,10 +340,9 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// Simplifies FULL OUTER -> LEFT/RIGHT OUTER -> INNER if NULLs are filtered anyway
-	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION, [&]() {
-		OuterJoinSimplification outer_join_simplification;
-		outer_join_simplification.VisitOperator(*plan);
-	});
+	// Or the match is guaranteed (FK coverage)
+	RunOptimizer(OptimizerType::OUTER_JOIN_SIMPLIFICATION,
+	             [&]() { plan = OuterJoinSimplification::Optimize(std::move(plan)); });
 
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns

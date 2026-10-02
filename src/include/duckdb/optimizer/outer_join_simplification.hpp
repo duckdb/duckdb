@@ -23,10 +23,12 @@ class LogicalJoin;
 class LogicalOrder;
 class LogicalProjection;
 class LogicalTopN;
+class ConstraintPropagator;
 
 //! Simplifies outer joins if NULL-extended rows are filtered in a way that changes the join semantics
 class OuterJoinSimplification : public LogicalOperatorVisitor {
 public:
+	static unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 	OuterJoinSimplification();
 
 public:
@@ -34,6 +36,7 @@ public:
 
 private:
 	explicit OuterJoinSimplification(column_binding_set_t required_columns);
+	explicit OuterJoinSimplification(ConstraintPropagator &propagator_p);
 
 	//! Extract and propagate column references through expressions and join conditions
 	void AddColumnReferences(const Expression &expr, column_binding_set_t &bindings);
@@ -60,6 +63,9 @@ private:
 	vector<ColumnBinding> GetRightBindings(LogicalJoin &join);
 	void SimplifyOuterJoinType(LogicalComparisonJoin &join);
 
+	//! Rewrite join based on constraints
+	bool TrySimplifyByCoverage(LogicalComparisonJoin &join);
+
 	//! Visit operators while preserving only the constraints that can safely pass through each operator type
 	void VisitComparisonJoin(LogicalComparisonJoin &join, LogicalOperator &op);
 	void VisitInnerOrSemiJoin(LogicalComparisonJoin &join, LogicalOperator &op);
@@ -81,6 +87,7 @@ private:
 	//! Columns that must remain available to operators above the current point in the plan
 	column_binding_set_t required_columns;
 	bool initialized_required_columns = false;
+	ConstraintPropagator *propagator = nullptr;
 };
 
 } // namespace duckdb

@@ -1,0 +1,13 @@
+add_library_unity(
+  duckdb_optimizer_constraint_propagation
+  OBJECT
+  constraint_facts.cpp
+  fact_store.cpp
+  helpers.cpp
+  transfer_kernel.cpp
+  constraint_propagator.cpp
+  queries.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES}
+    $<TARGET_OBJECTS:duckdb_optimizer_constraint_propagation>
+    PARENT_SCOPE)
