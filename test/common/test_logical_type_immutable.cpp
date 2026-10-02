@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/string_vector.hpp"
@@ -47,7 +47,7 @@ TEST_CASE("Test that LogicalType::WithAlias does not modify shared type info", "
 
 	SECTION("an empty alias does not allocate extra type info") {
 		auto type = LogicalType(LogicalTypeId::INTEGER);
-		REQUIRE(&type.WithAlias("").AuxInfo() == &type.AuxInfo());
+		REQUIRE(&type.WithAlias("").GetTypeInfo() == &type.GetTypeInfo());
 		REQUIRE(type.WithAlias("") == type);
 		// a generic type info with an empty alias compares equal to a type without type info
 		REQUIRE(type.WithAlias("x").WithAlias("") == type);
@@ -71,13 +71,13 @@ TEST_CASE("Test that LogicalType::WithExtensionInfo does not modify shared type 
 TEST_CASE("Test that types without parameters share one type info", "[logical_type_immutable]") {
 	LogicalType a = LogicalType::INTEGER;
 	LogicalType b(LogicalTypeId::INTEGER);
-	REQUIRE(&a.AuxInfo() == &b.AuxInfo());
-	REQUIRE(a.AuxInfo().type == ExtraTypeInfoType::INVALID_TYPE_INFO);
+	REQUIRE(&a.GetTypeInfo() == &b.GetTypeInfo());
+	REQUIRE(a.GetTypeInfo().type == LogicalTypeInfoType::INVALID_TYPE_INFO);
 	REQUIRE(a.InternalType() == PhysicalType::INT32);
-	REQUIRE(&LogicalType::JSON().AuxInfo() == &LogicalType::JSON().AuxInfo());
-	REQUIRE(&LogicalType::VARIANT().AuxInfo() == &LogicalType::VARIANT().AuxInfo());
+	REQUIRE(&LogicalType::JSON().GetTypeInfo() == &LogicalType::JSON().GetTypeInfo());
+	REQUIRE(&LogicalType::VARIANT().GetTypeInfo() == &LogicalType::VARIANT().GetTypeInfo());
 	// parameterized types are not shared
-	REQUIRE(&LogicalType::DECIMAL(18, 3).AuxInfo() != &LogicalType::DECIMAL(18, 3).AuxInfo());
+	REQUIRE(&LogicalType::DECIMAL(18, 3).GetTypeInfo() != &LogicalType::DECIMAL(18, 3).GetTypeInfo());
 	REQUIRE(LogicalType::DECIMAL(18, 3) == LogicalType::DECIMAL(18, 3));
 }
 

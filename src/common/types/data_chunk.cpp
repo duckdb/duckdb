@@ -56,11 +56,11 @@ void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &type
 	D_ASSERT(data.empty());
 
 	for (idx_t i = 0; i < types.size(); i++) {
-		// We copy the type here so we don't create another reference to the same ExtraTypeInfo
+		// We copy the type here so we don't create another reference to the same LogicalTypeInfo
 		// Otherwise, threads will constantly increment/decrement the atomic ref count to the same shared_ptr
 		// This is necessary to avoid heavy contention on the atomic on many-core machines
 		// Note that for nested types, there will still be contention on the atomic(s) one level down,
-		// because this is a shallow copy (only copies ExtraTypeInfo to depth=1)
+		// because this is a shallow copy (only copies LogicalTypeInfo to depth=1)
 		auto copied_type = types[i].Copy();
 		if (!initialize[i]) {
 			data.emplace_back(copied_type, nullptr);

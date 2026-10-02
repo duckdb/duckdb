@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/extra_type_info.hpp
+// duckdb/common/logical_type_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,7 +17,7 @@ namespace duckdb {
 
 class ParsedExpression;
 
-struct DecimalTypeInfo : public ExtraTypeInfo {
+struct DecimalTypeInfo : public LogicalTypeInfo {
 	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p);
 
 	uint8_t width;
@@ -25,77 +25,77 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	DecimalTypeInfo();
 };
 
-struct StringTypeInfo : public ExtraTypeInfo {
+struct StringTypeInfo : public LogicalTypeInfo {
 	explicit StringTypeInfo(string collation_p);
 
 	string collation;
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	StringTypeInfo();
 };
 
-struct ListTypeInfo : public ExtraTypeInfo {
+struct ListTypeInfo : public LogicalTypeInfo {
 	explicit ListTypeInfo(LogicalType child_type_p);
 
 	LogicalType child_type;
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	ListTypeInfo();
 };
 
-struct StructTypeInfo : public ExtraTypeInfo {
+struct StructTypeInfo : public LogicalTypeInfo {
 	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p);
 
 	child_list_t<LogicalType> child_types;
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &deserializer);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &deserializer);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	StructTypeInfo();
 };
 
-struct LegacyAggregateStateTypeInfo : public ExtraTypeInfo {
+struct LegacyAggregateStateTypeInfo : public LogicalTypeInfo {
 public:
 	void Serialize(Serializer &serializer) const override;
 	// Legacy deserialize method kept only for compatibility with old database files
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
 
-	static unique_ptr<ExtraTypeInfo> LegacyDeserialize();
+	static unique_ptr<LogicalTypeInfo> LegacyDeserialize();
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	LegacyAggregateStateTypeInfo();
@@ -104,7 +104,7 @@ private:
 // If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
 enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
 
-struct EnumTypeInfo : public ExtraTypeInfo {
+struct EnumTypeInfo : public LogicalTypeInfo {
 	explicit EnumTypeInfo(const Vector &values_insert_order_p, idx_t dict_size_p);
 	EnumTypeInfo(const EnumTypeInfo &) = delete;
 	EnumTypeInfo &operator=(const EnumTypeInfo &) = delete;
@@ -116,15 +116,15 @@ public:
 	static PhysicalType DictType(idx_t size);
 
 	static LogicalType CreateType(const Vector &ordered_data, idx_t size);
-	static unique_ptr<ExtraTypeInfo> CreateTypeInfo(const Vector &ordered_data, idx_t size);
+	static unique_ptr<LogicalTypeInfo> CreateTypeInfo(const Vector &ordered_data, idx_t size);
 
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
 	// Equalities are only used in enums with different catalog entries
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 	Vector values_insert_order;
 
@@ -133,21 +133,21 @@ private:
 	idx_t dict_size;
 };
 
-struct ArrayTypeInfo : public ExtraTypeInfo {
+struct ArrayTypeInfo : public LogicalTypeInfo {
 	LogicalType child_type;
 	uint32_t size;
 	explicit ArrayTypeInfo(LogicalType child_type_p, uint32_t size_p);
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &reader);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &reader);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 };
 
-struct AnyTypeInfo : public ExtraTypeInfo {
+struct AnyTypeInfo : public LogicalTypeInfo {
 	AnyTypeInfo(LogicalType target_type, idx_t cast_score);
 
 	LogicalType target_type;
@@ -155,34 +155,34 @@ struct AnyTypeInfo : public ExtraTypeInfo {
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	AnyTypeInfo();
 };
 
-struct IntegerLiteralTypeInfo : public ExtraTypeInfo {
+struct IntegerLiteralTypeInfo : public LogicalTypeInfo {
 	explicit IntegerLiteralTypeInfo(Value constant_value);
 
 	Value constant_value;
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	IntegerLiteralTypeInfo();
 };
 
-struct TemplateTypeInfo : public ExtraTypeInfo {
+struct TemplateTypeInfo : public LogicalTypeInfo {
 	explicit TemplateTypeInfo(string name_p);
 
 	// The name of the template, e.g. `T`, or `KEY_TYPE`. Used to distinguish between different template types within
@@ -191,40 +191,40 @@ struct TemplateTypeInfo : public ExtraTypeInfo {
 
 public:
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 	TemplateTypeInfo();
 };
 
-struct GeoTypeInfo : public ExtraTypeInfo {
+struct GeoTypeInfo : public LogicalTypeInfo {
 public:
 	GeoTypeInfo();
 
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 	// The Coordinate Reference System associated with this geometry type
 	CoordinateReferenceSystem crs;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 };
 
-struct UnboundTypeInfo : public ExtraTypeInfo {
+struct UnboundTypeInfo : public LogicalTypeInfo {
 	explicit UnboundTypeInfo(unique_ptr<ParsedExpression> expr_p);
 
 	unique_ptr<ParsedExpression> expr;
 
 	void Serialize(Serializer &serializer) const override;
-	static unique_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
-	unique_ptr<ExtraTypeInfo> Copy() const override;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	unique_ptr<LogicalTypeInfo> Copy() const override;
 
 protected:
-	bool EqualsInternal(const ExtraTypeInfo *other_p) const override;
+	bool EqualsInternal(const LogicalTypeInfo *other_p) const override;
 
 private:
 	UnboundTypeInfo();

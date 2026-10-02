@@ -3,7 +3,7 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 
 namespace duckdb {
 
@@ -133,9 +133,9 @@ string ColumnDefinition::ToSQLString() const {
 	if (column_type.id() != LogicalTypeId::ANY) {
 		result += Type().ToString();
 	}
-	auto &extra_type_info = column_type.AuxInfo();
-	if (extra_type_info.type == ExtraTypeInfoType::STRING_TYPE_INFO) {
-		auto &string_info = extra_type_info.Cast<StringTypeInfo>();
+	auto &type_info = column_type.GetTypeInfo();
+	if (type_info.type == LogicalTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = type_info.Cast<StringTypeInfo>();
 		if (!string_info.collation.empty()) {
 			result += " COLLATE " + string_info.collation;
 		}

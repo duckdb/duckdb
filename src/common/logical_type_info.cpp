@@ -1,5 +1,5 @@
-#include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/extra_type_info/enum_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
+#include "duckdb/common/logical_type_info/enum_type_info.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -79,24 +79,24 @@ bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> lhs, optional_ptr
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
-ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
+LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type) : type(type) {
 }
-ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
+LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
 }
-ExtraTypeInfo::~ExtraTypeInfo() {
+LogicalTypeInfo::~LogicalTypeInfo() {
 }
 
-ExtraTypeInfo::ExtraTypeInfo(const ExtraTypeInfo &other) : type(other.type), alias(other.alias) {
+LogicalTypeInfo::LogicalTypeInfo(const LogicalTypeInfo &other) : type(other.type), alias(other.alias) {
 	if (other.extension_info) {
 		extension_info = make_uniq<ExtensionTypeInfo>(*other.extension_info);
 	}
 }
 
-unique_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
-	return unique_ptr<ExtraTypeInfo>(new ExtraTypeInfo(*this));
+unique_ptr<LogicalTypeInfo> LogicalTypeInfo::Copy() const {
+	return unique_ptr<LogicalTypeInfo>(new LogicalTypeInfo(*this));
 }
 
-void ExtraTypeInfo::CopyBaseInfo(ExtraTypeInfo &target) const {
+void LogicalTypeInfo::CopyBaseInfo(LogicalTypeInfo &target) const {
 	target.alias = alias;
 	if (extension_info) {
 		target.extension_info = make_uniq<ExtensionTypeInfo>(*extension_info);
@@ -104,12 +104,12 @@ void ExtraTypeInfo::CopyBaseInfo(ExtraTypeInfo &target) const {
 }
 
 //! Infos that carry no parameters that affect equality - collations do not affect equality
-static bool HasNoEqualityParameters(ExtraTypeInfoType type) {
-	return type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
-	       type == ExtraTypeInfoType::GENERIC_TYPE_INFO;
+static bool HasNoEqualityParameters(LogicalTypeInfoType type) {
+	return type == LogicalTypeInfoType::INVALID_TYPE_INFO || type == LogicalTypeInfoType::STRING_TYPE_INFO ||
+	       type == LogicalTypeInfoType::GENERIC_TYPE_INFO;
 }
 
-bool ExtraTypeInfo::Equals(const ExtraTypeInfo &other) const {
+bool LogicalTypeInfo::Equals(const LogicalTypeInfo &other) const {
 	if (alias != other.alias) {
 		return false;
 	}
@@ -125,7 +125,7 @@ bool ExtraTypeInfo::Equals(const ExtraTypeInfo &other) const {
 	return EqualsInternal(&other);
 }
 
-bool ExtraTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool LogicalTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	// Do nothing
 	return true;
 }
@@ -133,77 +133,77 @@ bool ExtraTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Decimal Type Info
 //===--------------------------------------------------------------------===//
-DecimalTypeInfo::DecimalTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO) {
+DecimalTypeInfo::DecimalTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
 }
 
 DecimalTypeInfo::DecimalTypeInfo(uint8_t width_p, uint8_t scale_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
+    : LogicalTypeInfo(LogicalTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
 	D_ASSERT(width_p >= scale_p);
 }
 
-bool DecimalTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool DecimalTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<DecimalTypeInfo>();
 	return width == other.width && scale == other.scale;
 }
 
-unique_ptr<ExtraTypeInfo> DecimalTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> DecimalTypeInfo::Copy() const {
 	return make_uniq<DecimalTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // String Type Info
 //===--------------------------------------------------------------------===//
-StringTypeInfo::StringTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO) {
+StringTypeInfo::StringTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::STRING_TYPE_INFO) {
 }
 
 StringTypeInfo::StringTypeInfo(string collation_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
+    : LogicalTypeInfo(LogicalTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
 }
 
-bool StringTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool StringTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	// collation info has no impact on equality
 	return true;
 }
 
-unique_ptr<ExtraTypeInfo> StringTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> StringTypeInfo::Copy() const {
 	return make_uniq<StringTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // List Type Info
 //===--------------------------------------------------------------------===//
-ListTypeInfo::ListTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO) {
+ListTypeInfo::ListTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::LIST_TYPE_INFO) {
 }
 
 ListTypeInfo::ListTypeInfo(LogicalType child_type_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(std::move(child_type_p)) {
+    : LogicalTypeInfo(LogicalTypeInfoType::LIST_TYPE_INFO), child_type(std::move(child_type_p)) {
 }
 
-bool ListTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool ListTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<ListTypeInfo>();
 	return child_type == other.child_type;
 }
 
-unique_ptr<ExtraTypeInfo> ListTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> ListTypeInfo::Copy() const {
 	return make_uniq<ListTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // Struct Type Info
 //===--------------------------------------------------------------------===//
-StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {
+StructTypeInfo::StructTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::STRUCT_TYPE_INFO) {
 }
 
 StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
+    : LogicalTypeInfo(LogicalTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
 }
 
-bool StructTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool StructTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<StructTypeInfo>();
 	return child_types == other.child_types;
 }
 
-unique_ptr<ExtraTypeInfo> StructTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> StructTypeInfo::Copy() const {
 	return make_uniq<StructTypeInfo>(*this);
 }
 
@@ -211,7 +211,7 @@ unique_ptr<ExtraTypeInfo> StructTypeInfo::Copy() const {
 // User Type Info
 //===--------------------------------------------------------------------===//
 void UnboundTypeInfo::Serialize(Serializer &serializer) const {
-	ExtraTypeInfo::Serialize(serializer);
+	LogicalTypeInfo::Serialize(serializer);
 
 	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
@@ -246,7 +246,7 @@ void UnboundTypeInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<Value>>(203, "user_type_modifiers", user_type_mods);
 }
 
-unique_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
+unique_ptr<LogicalTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<UnboundTypeInfo>(new UnboundTypeInfo());
 
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", result->expr);
@@ -277,16 +277,16 @@ unique_ptr<ExtraTypeInfo> UnboundTypeInfo::Deserialize(Deserializer &deserialize
 // Legacy Aggregate State Type Info
 //===--------------------------------------------------------------------===//
 LegacyAggregateStateTypeInfo::LegacyAggregateStateTypeInfo()
-    : ExtraTypeInfo(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO) {
+    : LogicalTypeInfo(LogicalTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO) {
 	throw InternalException("LegacyAggregateStateTypeInfo should no longer be getting constructed");
 }
 
-bool LegacyAggregateStateTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool LegacyAggregateStateTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	throw InternalException("LegacyAggregateStateTypeInfo should no longer be getting constructed");
 }
 
-unique_ptr<ExtraTypeInfo> LegacyAggregateStateTypeInfo::LegacyDeserialize() {
-	return make_uniq<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
+unique_ptr<LogicalTypeInfo> LegacyAggregateStateTypeInfo::LegacyDeserialize() {
+	return make_uniq<LogicalTypeInfo>(LogicalTypeInfoType::GENERIC_TYPE_INFO);
 }
 
 //===--------------------------------------------------------------------===//
@@ -305,7 +305,7 @@ PhysicalType EnumTypeInfo::DictType(idx_t size) {
 }
 
 EnumTypeInfo::EnumTypeInfo(const Vector &values_insert_order_p, idx_t dict_size_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(Vector::Ref(values_insert_order_p)),
+    : LogicalTypeInfo(LogicalTypeInfoType::ENUM_TYPE_INFO), values_insert_order(Vector::Ref(values_insert_order_p)),
       dict_type(EnumDictType::VECTOR_DICT), dict_size(dict_size_p) {
 }
 
@@ -321,7 +321,7 @@ const idx_t &EnumTypeInfo::GetDictSize() const {
 	return dict_size;
 }
 
-unique_ptr<ExtraTypeInfo> EnumTypeInfo::CreateTypeInfo(const Vector &ordered_data, idx_t size) {
+unique_ptr<LogicalTypeInfo> EnumTypeInfo::CreateTypeInfo(const Vector &ordered_data, idx_t size) {
 	auto enum_internal_type = EnumTypeInfo::DictType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
@@ -349,7 +349,7 @@ int64_t TemplatedGetPos(const string_map_t<T> &map, const string_t &key) {
 }
 
 int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
-	auto &info = type.AuxInfo();
+	auto &info = type.GetTypeInfo();
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
 		return TemplatedGetPos(info.Cast<EnumTypeInfoTemplated<uint8_t>>().GetValues(), key);
@@ -367,7 +367,7 @@ string_t EnumType::GetString(const LogicalType &type, idx_t pos) {
 	return FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type))[pos];
 }
 
-unique_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) {
+unique_ptr<LogicalTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto values_count = deserializer.ReadProperty<idx_t>(200, "values_count");
 	auto enum_internal_type = EnumTypeInfo::DictType(values_count);
 	switch (enum_internal_type) {
@@ -383,7 +383,7 @@ unique_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) 
 }
 
 // Equalities are only used in enums with different catalog entries
-bool EnumTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool EnumTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<EnumTypeInfo>();
 	if (dict_type != other.dict_type) {
 		return false;
@@ -406,7 +406,7 @@ bool EnumTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
 }
 
 void EnumTypeInfo::Serialize(Serializer &serializer) const {
-	ExtraTypeInfo::Serialize(serializer);
+	LogicalTypeInfo::Serialize(serializer);
 
 	// Enums are special in that we serialize their values as a list instead of dumping the whole vector
 	auto strings = FlatVector::GetData<string_t>(values_insert_order);
@@ -415,7 +415,7 @@ void EnumTypeInfo::Serialize(Serializer &serializer) const {
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(strings[i]); });
 }
 
-unique_ptr<ExtraTypeInfo> EnumTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> EnumTypeInfo::Copy() const {
 	// create a templated copy so that the value lookup map is rebuilt - the dictionary itself is shared
 	auto result = CreateTypeInfo(values_insert_order, dict_size);
 	CopyBaseInfo(*result);
@@ -427,105 +427,106 @@ unique_ptr<ExtraTypeInfo> EnumTypeInfo::Copy() const {
 //===--------------------------------------------------------------------===//
 
 ArrayTypeInfo::ArrayTypeInfo(LogicalType child_type_p, uint32_t size_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
+    : LogicalTypeInfo(LogicalTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
 }
 
-bool ArrayTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool ArrayTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<ArrayTypeInfo>();
 	return child_type == other.child_type && size == other.size;
 }
 
-unique_ptr<ExtraTypeInfo> ArrayTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> ArrayTypeInfo::Copy() const {
 	return make_uniq<ArrayTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // Any Type Info
 //===--------------------------------------------------------------------===//
-AnyTypeInfo::AnyTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::ANY_TYPE_INFO) {
+AnyTypeInfo::AnyTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::ANY_TYPE_INFO) {
 }
 
 AnyTypeInfo::AnyTypeInfo(LogicalType target_type_p, idx_t cast_score_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::ANY_TYPE_INFO), target_type(std::move(target_type_p)), cast_score(cast_score_p) {
+    : LogicalTypeInfo(LogicalTypeInfoType::ANY_TYPE_INFO), target_type(std::move(target_type_p)),
+      cast_score(cast_score_p) {
 }
 
-bool AnyTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool AnyTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<AnyTypeInfo>();
 	return target_type == other.target_type && cast_score == other.cast_score;
 }
 
-unique_ptr<ExtraTypeInfo> AnyTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> AnyTypeInfo::Copy() const {
 	return make_uniq<AnyTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // Integer Literal Type Info
 //===--------------------------------------------------------------------===//
-IntegerLiteralTypeInfo::IntegerLiteralTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO) {
+IntegerLiteralTypeInfo::IntegerLiteralTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::INTEGER_LITERAL_TYPE_INFO) {
 }
 
 IntegerLiteralTypeInfo::IntegerLiteralTypeInfo(Value constant_value_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), constant_value(std::move(constant_value_p)) {
+    : LogicalTypeInfo(LogicalTypeInfoType::INTEGER_LITERAL_TYPE_INFO), constant_value(std::move(constant_value_p)) {
 	if (constant_value.IsNull()) {
 		throw InternalException("Integer literal cannot be NULL");
 	}
 }
 
-bool IntegerLiteralTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool IntegerLiteralTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<IntegerLiteralTypeInfo>();
 	return constant_value == other.constant_value;
 }
 
-unique_ptr<ExtraTypeInfo> IntegerLiteralTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> IntegerLiteralTypeInfo::Copy() const {
 	return make_uniq<IntegerLiteralTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // Template Type Info
 //===--------------------------------------------------------------------===//
-TemplateTypeInfo::TemplateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO) {
+TemplateTypeInfo::TemplateTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::TEMPLATE_TYPE_INFO) {
 }
 
 TemplateTypeInfo::TemplateTypeInfo(string name_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), name(std::move(name_p)) {
+    : LogicalTypeInfo(LogicalTypeInfoType::TEMPLATE_TYPE_INFO), name(std::move(name_p)) {
 }
 
-bool TemplateTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool TemplateTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<TemplateTypeInfo>();
 	return name == other.name;
 }
 
-unique_ptr<ExtraTypeInfo> TemplateTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> TemplateTypeInfo::Copy() const {
 	return make_uniq<TemplateTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // Geo Type Info
 //===--------------------------------------------------------------------===//
-GeoTypeInfo::GeoTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::GEO_TYPE_INFO) {
+GeoTypeInfo::GeoTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::GEO_TYPE_INFO) {
 }
 
-bool GeoTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool GeoTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	// No additional info to compare
 	const auto &other = other_p->Cast<GeoTypeInfo>();
 	return other.crs.Equals(crs);
 }
 
-unique_ptr<ExtraTypeInfo> GeoTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> GeoTypeInfo::Copy() const {
 	return make_uniq<GeoTypeInfo>(*this);
 }
 
 //===--------------------------------------------------------------------===//
 // Unbound Type Info
 //===--------------------------------------------------------------------===//
-UnboundTypeInfo::UnboundTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO) {
+UnboundTypeInfo::UnboundTypeInfo() : LogicalTypeInfo(LogicalTypeInfoType::UNBOUND_TYPE_INFO) {
 }
 
 UnboundTypeInfo::UnboundTypeInfo(unique_ptr<ParsedExpression> expr_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::UNBOUND_TYPE_INFO), expr(std::move(expr_p)) {
+    : LogicalTypeInfo(LogicalTypeInfoType::UNBOUND_TYPE_INFO), expr(std::move(expr_p)) {
 }
 
-bool UnboundTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
+bool UnboundTypeInfo::EqualsInternal(const LogicalTypeInfo *other_p) const {
 	auto &other = other_p->Cast<UnboundTypeInfo>();
 	if (!expr->Equals(*other.expr)) {
 		return false;
@@ -533,7 +534,7 @@ bool UnboundTypeInfo::EqualsInternal(const ExtraTypeInfo *other_p) const {
 	return true;
 }
 
-unique_ptr<ExtraTypeInfo> UnboundTypeInfo::Copy() const {
+unique_ptr<LogicalTypeInfo> UnboundTypeInfo::Copy() const {
 	auto result = make_uniq<UnboundTypeInfo>(expr->Copy());
 	CopyBaseInfo(*result);
 	return std::move(result);

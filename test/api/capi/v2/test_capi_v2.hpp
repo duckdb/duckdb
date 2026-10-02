@@ -82,7 +82,7 @@ struct EnvFixture {
 //----------------------------------------------------------------------------------------------------------------------
 
 //! Consumes a V1 logical type, returning an owned V2 handle to the same type. A V1 handle points to a LogicalType, a
-//! V2 handle to the type's ExtraTypeInfo (holding one reference).
+//! V2 handle to the type's LogicalTypeInfo (holding one reference).
 inline auto ConvertToV2(duckdb_logical_type t) -> duckdb_v2_logical_type_handle {
 	auto type = *reinterpret_cast<duckdb::LogicalType *>(t);
 	duckdb_destroy_logical_type(&t);
@@ -91,7 +91,7 @@ inline auto ConvertToV2(duckdb_logical_type t) -> duckdb_v2_logical_type_handle 
 }
 //! The engine type behind a V2 handle - a copy, the handle keeps its own reference
 inline auto V2LogicalType(duckdb_v2_logical_type_handle t) -> duckdb::LogicalType {
-	auto borrowed = duckdb::LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::ExtraTypeInfo *>(t));
+	auto borrowed = duckdb::LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::LogicalTypeInfo *>(t));
 	duckdb::LogicalType result = borrowed;
 	std::move(borrowed).ReleaseTypeInfo();
 	return result;

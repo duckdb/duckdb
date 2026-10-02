@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/vector/string_vector.hpp"

@@ -373,14 +373,14 @@ inline auto Convert(CV2Option *opt) -> duckdb_v2_option_handle {
 
 using CV2LogicalType = duckdb::LogicalType;
 
-//! A logical type handle is the ExtraTypeInfo of the type. An owned handle holds one reference to it; a borrowed
+//! A logical type handle is the LogicalTypeInfo of the type. An owned handle holds one reference to it; a borrowed
 //! handle holds none and stays valid for as long as the type it was taken from.
 
 //! Views the type behind a handle without touching its reference count
 class CV2LogicalTypeRef {
 public:
 	explicit CV2LogicalTypeRef(duckdb_v2_logical_type_handle handle)
-	    : type(CV2LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::ExtraTypeInfo *>(handle))) {
+	    : type(CV2LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::LogicalTypeInfo *>(handle))) {
 	}
 	~CV2LogicalTypeRef() {
 		std::move(type).ReleaseTypeInfo();
@@ -404,7 +404,7 @@ private:
 inline auto Convert(duckdb_v2_logical_type_handle handle) -> CV2LogicalTypeRef {
 	return CV2LogicalTypeRef(handle);
 }
-inline auto ConvertTypeInfo(const duckdb::ExtraTypeInfo &type_info) -> duckdb_v2_logical_type_handle {
+inline auto ConvertTypeInfo(const duckdb::LogicalTypeInfo &type_info) -> duckdb_v2_logical_type_handle {
 	// the handle is opaque - the type info is only ever read through it
 	return reinterpret_cast<duckdb_v2_logical_type_handle>(reinterpret_cast<uintptr_t>(&type_info));
 }
@@ -414,11 +414,11 @@ inline auto Convert(CV2LogicalType type) -> duckdb_v2_logical_type_handle {
 }
 //! Creates a borrowed handle to "type"
 inline auto ConvertBorrowed(const CV2LogicalType &type) -> duckdb_v2_logical_type_handle {
-	return ConvertTypeInfo(type.AuxInfo());
+	return ConvertTypeInfo(type.GetTypeInfo());
 }
 //! Takes back the reference held by an owned handle
 inline auto TakeOwnership(duckdb_v2_logical_type_handle handle) -> CV2LogicalType {
-	return CV2LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::ExtraTypeInfo *>(handle));
+	return CV2LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::LogicalTypeInfo *>(handle));
 }
 
 using CV2QualifiedName = duckdb::QualifiedName;

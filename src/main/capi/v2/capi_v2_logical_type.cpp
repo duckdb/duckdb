@@ -3,7 +3,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry_retriever.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -398,7 +398,7 @@ DUCKDB_V2_ERROR duckdb_v2_logical_type_get_name(duckdb_v2_logical_type_handle ty
 	DUCKDB_CHECK_ARG(out_name);
 	return WithErrorHandler(err, [&]() {
 		auto lt = Convert(type);
-		auto &info = lt->AuxInfo();
+		auto &info = lt->GetTypeInfo();
 		if (!info.alias.empty()) {
 			*out_name = Convert(info.alias);
 			return;
