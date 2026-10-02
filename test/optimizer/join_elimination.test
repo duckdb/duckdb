@@ -292,3 +292,128 @@ query II
 explain select count(*) from probe_keys left join (select distinct k from (select k, unnest([1,2,3]) e from dup_keys) u) t on t.k=probe_keys.idb;
 ----
 physical_plan	<!REGEX>:.*JOIN.*
+
+# ============================================================================
+# Constraint-Based elimination
+# ============================================================================
+statement ok
+CREATE TABLE customers (
+  id INT PRIMARY KEY,
+  name VARCHAR
+);
+
+statement ok
+CREATE TABLE orders (
+  oid INT PRIMARY KEY,
+  customer_id INT NOT NULL REFERENCES customers(id),
+  amount INT
+);
+
+statement ok
+CREATE TABLE orders_nullable (
+  oid INT PRIMARY KEY,
+  customer_id INT REFERENCES customers(id)
+);
+
+statement ok
+CREATE TABLE no_fk (
+  id INT,
+  val INT
+);
+
+statement ok
+CREATE TABLE ref_composite (
+  x INT,
+  y INT,
+  PRIMARY KEY (x, y)
+);
+
+statement ok
+CREATE TABLE probe_composite (
+  a INT NOT NULL,
+  b INT NOT NULL,
+  FOREIGN KEY (a, b) REFERENCES ref_composite(x, y)
+);
+
+statement ok
+CREATE TABLE probe_composite_nullable (
+  a INT NOT NULL,
+  b INT,
+  FOREIGN KEY (a, b) REFERENCES ref_composite(x, y)
+);
+
+query II
+explain SELECT o.* FROM orders o JOIN customers c ON o.customer_id = c.id;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT o.* FROM orders_nullable o JOIN customers c ON o.customer_id = c.id;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain SELECT o.*, c.name FROM orders o JOIN customers c ON o.customer_id = c.id;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain SELECT o.* FROM orders o JOIN customers c ON o.customer_id = c.id WHERE o.customer_id > 100;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT a.* FROM orders a JOIN orders b ON a.oid = b.oid;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT a.* FROM orders a JOIN orders b ON a.oid = b.oid
+WHERE a.amount > 100 AND b.amount > 50;
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT a.* FROM orders a JOIN orders b ON a.oid = b.oid
+WHERE a.amount > 50 AND b.amount > 100;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain SELECT o.* FROM orders o WHERE o.customer_id IN (SELECT id FROM customers);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT o.* FROM orders o WHERE o.customer_id NOT IN (SELECT id FROM customers);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT o.* FROM orders o
+WHERE EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT o.* FROM orders o
+WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id);
+----
+physical_plan	<!REGEX>:.*JOIN.*
+
+query II
+explain SELECT p.a FROM probe_composite p JOIN ref_composite r ON p.a = r.x;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain SELECT p.a FROM probe_composite p JOIN ref_composite r ON p.b = r.x AND p.a = r.y;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+query II
+explain SELECT p.a FROM probe_composite_nullable p JOIN ref_composite r ON p.a = r.x;
+----
+physical_plan	<REGEX>:.*JOIN.*
+
+
