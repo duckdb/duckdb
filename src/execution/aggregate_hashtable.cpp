@@ -1165,7 +1165,7 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	}
 }
 
-void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress) {
+void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optional_ptr<atomic<idx_t>> combined_chunks) {
 	D_ASSERT(other_data.GetLayout().GetAggrWidth() == layout_ptr->GetAggrWidth());
 	D_ASSERT(other_data.GetLayout().GetDataWidth() == layout_ptr->GetDataWidth());
 	D_ASSERT(other_data.GetLayout().GetRowWidth() == layout_ptr->GetRowWidth());
@@ -1176,8 +1176,6 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 
 	FlushMoveState fm_state(other_data);
 
-	idx_t chunk_idx = 0;
-	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
 		// Check for interrupts with each chunk
 		context.InterruptCheck();
@@ -1188,8 +1186,8 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 			RowOperations::DestroyStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations);
 		}
 
-		if (progress) {
-			*progress = static_cast<double>(++chunk_idx) / static_cast<double>(chunk_count);
+		if (combined_chunks) {
+			combined_chunks->fetch_add(1, std::memory_order_relaxed);
 		}
 	}
 

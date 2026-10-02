@@ -220,6 +220,8 @@ public:
 	value_map_t<GlobalStatePtr> strategy_sinks;
 	//! The number of sunk rows (for progress)
 	atomic<idx_t> count;
+	//! Keeps the sink progress monotonic
+	MonotonicProgress sink_progress;
 	//! The execution functions
 	Executors executors;
 	//! The shared expressions library
@@ -238,6 +240,7 @@ public:
 			strategy_sinks.insert(make_pair(Value(), sort_strategy->GetGlobalSinkState(context)));
 		}
 		count = 0;
+		sink_progress.Reset();
 		GlobalSinkState::Reset(context);
 	}
 
@@ -483,7 +486,8 @@ ProgressData PhysicalWindow::GetSinkProgress(ClientContext &context, GlobalSinkS
 	for (auto &strategy_sink : gsink.strategy_sinks) {
 		progress.Add(gsink.sort_strategy->GetSinkProgress(context, *strategy_sink.second, progress));
 	}
-	return progress;
+	// strategy sinks can be added while sinking (e.g. for partitioned input) - keep the progress monotonic
+	return gsink.sink_progress.Update(progress);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1233,11 +1237,11 @@ ProgressData PhysicalWindow::GetProgress(ClientContext &client, GlobalSourceStat
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.count.load();
-	const auto completed = gsource.completed.load();
+	const auto finished = gsource.finished.load();
 
 	ProgressData res;
 	if (count) {
-		res.done = double(completed);
+		res.done = double(finished);
 		res.total = double(gsource.total_tasks);
 		//	Convert to tuples.
 		res.Normalize(double(count));

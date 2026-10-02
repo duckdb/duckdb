@@ -46,6 +46,9 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperat
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
+	// propagation may replace node_ptr (e.g. a LIMIT that exceeds the child cardinality is removed), which
+	// destroys "node" - remember whether it was the root so that "root" can be re-pointed afterwards
+	const bool node_is_root = root.get() == &node;
 	unique_ptr<NodeStatistics> result;
 	switch (node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -101,6 +104,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		break;
 	default:
 		result = PropagateChildren(node, node_ptr);
+	}
+
+	if (node_is_root) {
+		root = node_ptr.get();
 	}
 
 	if (mode == StatisticsPropagationMode::FULL &&

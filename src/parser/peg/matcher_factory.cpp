@@ -166,6 +166,9 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
+	if (compiled_rule.collapsible) {
+		matcher.SetCollapsible();
+	}
 	if (no_suggestion_rules.count(rule_name)) {
 		matcher.Cast<ListMatcher>().suppress_suggestions = true;
 	}
@@ -217,27 +220,11 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// START GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//
 	AddPackratMemoizedRule("Expression");
-	AddPackratMemoizedRule("LambdaArrowExpression");
-	AddPackratMemoizedRule("LogicalOrExpression");
-	AddPackratMemoizedRule("LogicalAndExpression");
-	AddPackratMemoizedRule("LogicalNotExpression");
-	AddPackratMemoizedRule("IsExpression");
-	AddPackratMemoizedRule("ComparisonExpression");
-	AddPackratMemoizedRule("BitwiseExpression");
-	AddPackratMemoizedRule("AdditiveExpression");
-	AddPackratMemoizedRule("MultiplicativeExpression");
-	AddPackratMemoizedRule("ExponentiationExpression");
-	AddPackratMemoizedRule("PrefixExpression");
-	AddPackratMemoizedRule("CollateExpression");
-	AddPackratMemoizedRule("AtTimeZoneExpression");
-	AddPackratMemoizedRule("SingleExpression");
-	AddPackratMemoizedRule("BaseExpression");
-	AddPackratMemoizedRule("ParensExpression");
-	AddPackratMemoizedRule("ParenthesisExpression");
 	AddPackratMemoizedRule("Identifier");
 	AddPackratMemoizedRule("ColId");
-	AddPackratMemoizedRule("ColumnReference");
-	AddPackratMemoizedRule("FunctionExpression");
+	AddPackratMemoizedRule("CatalogQualification");
+	AddPackratMemoizedRule("SchemaQualification");
+	AddPackratMemoizedRule("ReservedSchemaQualification");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED PACKRAT MEMOIZED RULES
 	//===--------------------------------------------------------------------===//

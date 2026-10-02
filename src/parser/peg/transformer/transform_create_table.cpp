@@ -237,6 +237,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 	}
 	auto column_type = has_type ? *type : LogicalType::ANY;
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
+	bool has_collation = false;
 	ColumnConstraint accumulated_constraints;
 	if (column_constraint) {
 		for (auto &cc_entry : *column_constraint) {
@@ -261,6 +262,10 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 				fk_constraint.fk_columns.push_back(qualified_name.Name());
 				accumulated_constraints.constraints.push_back(std::move(cc_entry.constraint));
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
+				if (has_collation) {
+					throw ParserException("multiple COLLATE clauses not allowed");
+				}
+				has_collation = true;
 				if (has_generated) {
 					throw ParserException("Collations are not supported on generated columns");
 				}
@@ -291,14 +296,14 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 	if (has_generated) {
 		auto generated = std::move(*generated_column);
 		if (generated.expr->HasSubquery()) {
-			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			throw ParserException("Expression of generated column %s contains a subquery, which isn't allowed",
 			                      qualified_name.Name());
 		}
 		if (column_type != LogicalType::ANY) {
 			generated.expr = make_uniq<CastExpression>(column_type, std::move(generated.expr));
 		}
 		if (generated.expr->HasSubquery()) {
-			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			throw ParserException("Expression of generated column %s contains a subquery, which isn't allowed",
 			                      qualified_name.Name());
 		}
 
@@ -401,7 +406,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformColumnCompression(PEGTrans
 ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTransformer &transformer,
                                                                            unique_ptr<BaseTableRef> base_table_name,
                                                                            const optional<vector<string>> &column_list,
-                                                                           const KeyActions &key_actions) {
+                                                                           const optional<KeyActions> &key_actions) {
 	ForeignKeyInfo fk_info;
 	fk_info.schema = base_table_name->GetQualifiedName().Schema();
 	fk_info.table = base_table_name->Table();
@@ -417,17 +422,26 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTr
 	return entry;
 }
 
-KeyActions PEGTransformerFactory::TransformKeyActions(PEGTransformer &transformer,
-                                                      const optional<string> &update_action,
-                                                      const optional<string> &delete_action) {
-	KeyActions results;
-	if (update_action) {
-		results.update_action = *update_action;
-	}
+KeyActions PEGTransformerFactory::TransformUpdateFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &update_action,
+                                                                 const optional<string> &delete_action) {
+	KeyActions result;
+	result.update_action = update_action;
 	if (delete_action) {
-		results.delete_action = *delete_action;
+		result.delete_action = *delete_action;
 	}
-	return results;
+	return result;
+}
+
+KeyActions PEGTransformerFactory::TransformDeleteFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &delete_action,
+                                                                 const optional<string> &update_action) {
+	KeyActions result;
+	result.delete_action = delete_action;
+	if (update_action) {
+		result.update_action = *update_action;
+	}
+	return result;
 }
 
 string PEGTransformerFactory::TransformUpdateAction(PEGTransformer &transformer, const string &key_action) {

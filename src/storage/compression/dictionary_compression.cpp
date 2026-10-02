@@ -122,8 +122,8 @@ void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(const QueryContext &context,
                                                                           ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.GetDatabase());
-	auto state = make_uniq<CompressedStringScanState>(buffer_manager.Pin(segment.GetBlockHandle()));
-	state->Initialize(segment, true);
+	auto state = make_uniq<CompressedStringScanState>(buffer_manager.Pin(context, segment.GetBlockHandle()), segment);
+	state->InitializeDictionary(segment);
 	return std::move(state);
 }
 
@@ -137,6 +137,8 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 
 	auto start = state.GetPositionInSegment();
+	D_ASSERT(start <= segment.count.load());
+	D_ASSERT(scan_count <= segment.count.load() - start);
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE) {
 		scan_state.ScanToFlatVector(result, result_offset, start, scan_count);
 	} else {
@@ -154,9 +156,10 @@ void DictionaryCompressionStorage::StringScan(ColumnSegment &segment, ColumnScan
 //===--------------------------------------------------------------------===//
 void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
                                                   Vector &result, idx_t result_idx) {
+	D_ASSERT(row_id >= 0);
+	D_ASSERT(NumericCast<idx_t>(row_id) < segment.count.load());
 	// fetch a single row from the string segment
-	CompressedStringScanState scan_state(state.GetOrInsertHandle(segment));
-	scan_state.Initialize(segment, false);
+	CompressedStringScanState scan_state(state.GetOrInsertHandle(segment), segment);
 	scan_state.ScanToFlatVector<true>(result, result_idx, NumericCast<idx_t>(row_id), 1);
 }
 

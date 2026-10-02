@@ -207,7 +207,7 @@ SourceResultType PhysicalPerfectHashAggregate::GetDataInternal(ExecutionContext 
 	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
-	state.scanned_slots = state.ht_scan_position;
+	state.scanned_slots.store(state.ht_scan_position, std::memory_order_relaxed);
 
 	if (chunk.size() > 0) {
 		return SourceResultType::HAVE_MORE_OUTPUT;

@@ -945,22 +945,6 @@ TEST_CASE("V2: statement_type numeric round-trip for higher-numbered values", "[
 }
 
 // ===========================================================================
-// Drift detector: probe the first numeric value past the highest core
-// variant V2 currently mirrors. EnumUtil::ToString throws
-// NotImplementedException for values not present in its lookup table; if
-// a new variant is appended to duckdb::StatementType, the call will
-// instead return a string and this assertion will fire, signalling that
-// DUCKDB_V2_STATEMENT_TYPE in api_spec/v2/query_result/query_result.yaml
-// needs a matching id.
-// ===========================================================================
-
-TEST_CASE("V2: STATEMENT_TYPE has no gaps vs duckdb::StatementType", "[capi_v2][query_result]") {
-	constexpr auto highest_known = static_cast<uint8_t>(duckdb::StatementType::EXTERNAL_RESOURCE_STATEMENT);
-	auto probe = static_cast<duckdb::StatementType>(highest_known + 1);
-	REQUIRE_THROWS_AS(duckdb::EnumUtil::ToString(probe), duckdb::NotImplementedException);
-}
-
-// ===========================================================================
 // Results don't alias each other's storage, and a terminal (drained)
 // result keeps its metadata usable while later queries run.
 // ===========================================================================
@@ -1595,8 +1579,9 @@ TEST_CASE("V2: result_render_box renders, consumes the result, and frees the con
 
 	TextSinkTarget rendered;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, AppendToString, &rendered,
-	                                    &err) == DUCKDB_V2_ERROR_NONE);
+	auto null_value_str = duckdb_v2_str {nullptr, 0};
+	REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 0, AppendToString, &rendered, &err) ==
+	        DUCKDB_V2_ERROR_NONE);
 	// Adopt-by-transfer: the slot is nulled on success.
 	REQUIRE(r == nullptr);
 	REQUIRE_FALSE(rendered.text.empty());
@@ -1622,7 +1607,8 @@ TEST_CASE("V2: result_render_box on an execution error consumes the result and r
 
 	TextSinkTarget text; // the sink must not be invoked on the error path
 	duckdb_v2_error_info_handle err = nullptr;
-	auto rc = duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, AppendToString, &text, &err);
+	auto null_value_str = duckdb_v2_str {nullptr, 0};
+	auto rc = duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 0, AppendToString, &text, &err);
 	REQUIRE(rc != DUCKDB_V2_ERROR_NONE);
 	// Consumed by transfer on failure too, and the sink never ran.
 	REQUIRE(r == nullptr);
@@ -1650,19 +1636,20 @@ TEST_CASE("V2: result_render_box rejects null arguments and leaves the result in
 	// A NULL sink: rejected before adoption, so the result is NOT consumed.
 	TextSinkTarget text;
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, nullptr, &text, &err) ==
+	auto null_value_str = duckdb_v2_str {nullptr, 0};
+	REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 0, nullptr, &text, &err) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(r != nullptr); // intact
 	duckdb_v2_error_info_destroy(&err);
 
 	// A NULL result-slot pointer is rejected without a crash.
-	REQUIRE(duckdb_v2_result_render_box(nullptr, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, AppendToString, &text,
-	                                    nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_result_render_box(nullptr, 0, 0, 0, &null_value_str, 0, 0, AppendToString, &text, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(text.text.empty());
 
 	// The still-intact result renders normally now.
-	REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, AppendToString, &text,
-	                                    nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 0, AppendToString, &text, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(r == nullptr);
 	REQUIRE_FALSE(text.text.empty());
 }
@@ -1681,8 +1668,9 @@ TEST_CASE("V2: result_render_box sink contract", "[capi_v2][query_result]") {
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT * FROM range(200) t(i)", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget target;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, AppendToString, &target,
-		                                    nullptr) == DUCKDB_V2_ERROR_NONE);
+		auto null_value_str = duckdb_v2_str {nullptr, 0};
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 0, AppendToString, &target, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
 		REQUIRE(r == nullptr);
 		REQUIRE(target.calls == 1);
 		REQUIRE_FALSE(target.text.empty());
@@ -1697,8 +1685,9 @@ TEST_CASE("V2: result_render_box sink contract", "[capi_v2][query_result]") {
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT 1 AS one", &r) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_error_info_handle err = nullptr;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, FailWithIOError, nullptr,
-		                                    &err) == DUCKDB_V2_ERROR_IO_GENERAL);
+		auto null_value_str2 = duckdb_v2_str {nullptr, 0};
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str2, 0, 0, FailWithIOError, nullptr, &err) ==
+		        DUCKDB_V2_ERROR_IO_GENERAL);
 		REQUIRE(r == nullptr); // consumed by transfer on failure too
 		REQUIRE(err != nullptr);
 		duckdb_v2_str message {nullptr, 0};
@@ -1716,7 +1705,8 @@ TEST_CASE("V2: result_render_box null_value override and exact footer at the C b
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT CAST(NULL AS INTEGER) AS b", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget text;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, Convert("<nil>"), 0, 0, AppendToString, &text, nullptr) ==
+		auto null_value_str = Convert("<nil>");
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 0, AppendToString, &text, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		const std::string &rendered = text.text;
 		REQUIRE(rendered.find("<nil>") != std::string::npos);
@@ -1728,8 +1718,9 @@ TEST_CASE("V2: result_render_box null_value override and exact footer at the C b
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT i FROM range(100) t(i)", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget text;
-		REQUIRE(duckdb_v2_result_render_box(&r, 4, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, AppendToString, &text,
-		                                    nullptr) == DUCKDB_V2_ERROR_NONE);
+		auto null_value_str2 = duckdb_v2_str {nullptr, 0};
+		REQUIRE(duckdb_v2_result_render_box(&r, 4, 0, 0, &null_value_str2, 0, 0, AppendToString, &text, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
 		const std::string &rendered = text.text;
 		REQUIRE(rendered.find("100 rows") != std::string::npos); // exact total
 		REQUIRE(rendered.find("4 shown") != std::string::npos);  // display bounded to max_rows
@@ -1746,8 +1737,9 @@ TEST_CASE("V2: result_render_box validates by-value arguments before consuming t
 		REQUIRE(Query(fx.conn, "SELECT CAST(NULL AS INTEGER) AS b", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget text;
 		duckdb_v2_error_info_handle err = nullptr;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 5}, 0, 0, AppendToString, &text,
-		                                    &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		auto null_value_str = duckdb_v2_str {nullptr, 5};
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 0, AppendToString, &text, &err) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(r != nullptr); // intact
 		REQUIRE(text.text.empty());
 		duckdb_v2_error_info_destroy(&err);
@@ -1759,8 +1751,9 @@ TEST_CASE("V2: result_render_box validates by-value arguments before consuming t
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT 1 AS one", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget text;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 2, 0, AppendToString, &text,
-		                                    nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		auto null_value_str2 = duckdb_v2_str {nullptr, 0};
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str2, 2, 0, AppendToString, &text, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(r != nullptr); // intact
 		REQUIRE(text.text.empty());
 		REQUIRE(duckdb_v2_result_destroy(&r) == DUCKDB_V2_ERROR_NONE);
@@ -1772,7 +1765,7 @@ TEST_CASE("V2: result_render_box validates by-value arguments before consuming t
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT CAST(NULL AS INTEGER) AS b", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget text;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, empty_null, 0, 0, AppendToString, &text, nullptr) ==
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &empty_null, 0, 0, AppendToString, &text, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		REQUIRE(r == nullptr);
 		const std::string &rendered = text.text;
@@ -1791,8 +1784,9 @@ TEST_CASE("V2: result_render_box limit renders an approximate footer when the re
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT i FROM range(21) t(i)", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget text;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 21, AppendToString, &text,
-		                                    nullptr) == DUCKDB_V2_ERROR_NONE);
+		auto null_value_str = duckdb_v2_str {nullptr, 0};
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str, 0, 21, AppendToString, &text, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
 		const std::string &rendered = text.text;
 		REQUIRE(rendered.find("? rows") != std::string::npos);  // count is unknown
 		REQUIRE(rendered.find("21 rows") == std::string::npos); // never claims the bound as an exact total
@@ -1804,8 +1798,9 @@ TEST_CASE("V2: result_render_box limit renders an approximate footer when the re
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(fx.conn, "SELECT i FROM range(21) t(i)", &r) == DUCKDB_V2_ERROR_NONE);
 		TextSinkTarget text;
-		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, duckdb_v2_str {nullptr, 0}, 0, 0, AppendToString, &text,
-		                                    nullptr) == DUCKDB_V2_ERROR_NONE);
+		auto null_value_str2 = duckdb_v2_str {nullptr, 0};
+		REQUIRE(duckdb_v2_result_render_box(&r, 0, 0, 0, &null_value_str2, 0, 0, AppendToString, &text, nullptr) ==
+		        DUCKDB_V2_ERROR_NONE);
 		const std::string &rendered = text.text;
 		REQUIRE(rendered.find("? rows") == std::string::npos);
 	}

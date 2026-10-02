@@ -168,7 +168,7 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator> &root, unique_pt
 	curr_op = &delim_join.children[other_idx];
 	if (curr_op->get()->type == LogicalOperatorType::LOGICAL_GET) {
 		auto &get = curr_op->get()->Cast<LogicalGet>();
-		if (!ExpressionBinder::IsUnnestFunction(get.function.name)) {
+		if (!ExpressionBinder::IsUnnestFunction(get.function.GetName())) {
 			return;
 		}
 		// pattern2: delim_get -> projection -> table_in_out(unnest)
@@ -242,7 +242,7 @@ static bool ConvertCTETableInOutUnnest(unique_ptr<LogicalOperator> &root, unique
 		return false;
 	}
 	auto &get = op->Cast<LogicalGet>();
-	if (!ExpressionBinder::IsUnnestFunction(get.function.name) || get.ordinality_idx.IsValid()) {
+	if (!ExpressionBinder::IsUnnestFunction(get.function.GetName()) || get.ordinality_idx.IsValid()) {
 		return false;
 	}
 	if (op->children.size() != 1 || op->children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {

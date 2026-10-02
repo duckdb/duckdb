@@ -267,8 +267,11 @@ QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const Qual
 	// [catalog, schema path..., name] is fully qualified
 	auto catalog = path.front();
 	if (IsInvalidCatalog(catalog)) {
-		catalog = Identifier(retriever.GetSearchPath().GetDefaultCatalog(schema_path[0]));
-		if (IsInvalidCatalog(catalog)) {
+		EntryLookupInfo schema_lookup(CatalogType::SCHEMA_ENTRY, QualifiedName(schema_path[0]));
+		auto schema = Catalog::GetSchema(retriever, schema_lookup, OnEntryNotFound::RETURN_NULL);
+		if (schema) {
+			catalog = schema->ParentCatalog().GetName();
+		} else {
 			catalog = DatabaseManager::GetDefaultDatabase(retriever.GetContext());
 		}
 	}
@@ -298,9 +301,13 @@ void Binder::BindCreateSchema(CreateSchemaInfo &info) {
 	// component into a catalog (prepending the default catalog when it is a schema)
 	info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
 
+	auto &resolved_catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
+	auto supports_create_schema = resolved_catalog.SupportsCreateSchema(info);
+	if (supports_create_schema.HasError()) {
+		supports_create_schema.Throw();
+	}
 	if (info.IsNested()) {
 		// nested schemas can only be persisted with storage version v2.0.0 or higher
-		auto &resolved_catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
 		auto &attached = resolved_catalog.GetAttached();
 		if (attached.HasStorageManager()) {
 			auto &storage_manager = attached.GetStorageManager();
