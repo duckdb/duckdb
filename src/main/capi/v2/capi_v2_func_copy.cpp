@@ -20,6 +20,7 @@ public:
 	duckdb_v2_copy_to_batch_callback_fn to_batch_cb = nullptr;
 	duckdb_v2_copy_to_flush_callback_fn to_flush_cb = nullptr;
 	duckdb_v2_copy_to_finalize_callback_fn to_finalize_cb = nullptr;
+	duckdb_v2_copy_to_statistics_callback_fn to_statistics_cb = nullptr;
 	// COPY ... FROM
 	duckdb_v2_copy_from_bind_callback_fn from_bind_cb = nullptr;
 	duckdb_v2_copy_from_init_global_callback_fn from_init_global_cb = nullptr;
@@ -30,7 +31,8 @@ public:
 	shared_ptr<CV2UserData> user_data = nullptr;
 
 	bool HasCopyTo() const {
-		return to_bind_cb || to_batch_size_cb || to_init_cb || to_batch_cb || to_flush_cb || to_finalize_cb;
+		return to_bind_cb || to_batch_size_cb || to_init_cb || to_batch_cb || to_flush_cb || to_finalize_cb ||
+		       to_statistics_cb;
 	}
 	bool HasCopyFrom() const {
 		return from_bind_cb || from_init_global_cb || from_init_local_cb || from_exec_cb || from_progress_cb;
@@ -78,7 +80,14 @@ public:
 class CV2CopyToGlobalState final : public GlobalFunctionData {
 public:
 	CV2UserData handle;
+	//! Where the statistics of the file are reported, when the statement asks for them
+	optional_ptr<CopyFunctionFileStatistics> written_statistics;
+	//! Serializes the flushes of callers that sink into the file directly (see CV2CopyToSink)
+	mutex flush_lock;
 };
+
+//! The local state of callers that sink into a file directly rather than through the batch interface
+class CV2CopyToLocalState final : public LocalFunctionData {};
 
 class CV2CopyToBatchData final : public PreparedBatchData {
 public:
@@ -217,6 +226,23 @@ static auto Convert(CV2CopyToFinalizeInfo *info) -> duckdb_v2_copy_to_finalize_i
 	return reinterpret_cast<duckdb_v2_copy_to_finalize_info_handle>(info);
 }
 
+class CV2CopyToStatisticsInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_init_data = nullptr;
+
+	idx_t out_row_count = 0;
+	idx_t out_file_size_bytes = 0;
+};
+
+static auto Convert(duckdb_v2_copy_to_statistics_info_handle info) -> CV2CopyToStatisticsInfo * {
+	return reinterpret_cast<CV2CopyToStatisticsInfo *>(info);
+}
+static auto Convert(CV2CopyToStatisticsInfo *info) -> duckdb_v2_copy_to_statistics_info_handle {
+	return reinterpret_cast<duckdb_v2_copy_to_statistics_info_handle>(info);
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // COPY FROM callback info
 //----------------------------------------------------------------------------------------------------------------------
@@ -338,6 +364,11 @@ static auto MakeBindData(const shared_ptr<CopyFunctionInfo> &info, shared_ptr<CV
 
 static auto CV2CopyToBind(ClientContext &context, CopyFunctionBindInput &input, const vector<Identifier> &names,
                           const vector<LogicalType> &sql_types) -> unique_ptr<FunctionData> {
+	if (!input.function_info) {
+		// the bind reaches the callbacks through the function info, which a caller that binds the copy function
+		// itself has to pass along
+		throw InvalidInputException("The COPY TO bind of a copy function was called without its function info");
+	}
 	const auto &info = input.function_info->Cast<CV2CopyFunctionInfo>();
 
 	CV2CopyToBindInfo args = {};
@@ -454,26 +485,82 @@ static auto CV2CopyToFlushBatch(ClientContext &context, FunctionData &bind_data,
 	}
 }
 
-static auto CV2CopyToFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) -> void {
+static auto CV2CopyToReportStatistics(ClientContext &context, FunctionData &bind_data, CV2CopyToGlobalState &gstate)
+    -> void {
 	const auto &info = GetFunctionInfo(bind_data);
 
-	// Always wired, as the engine requires a finalize hook; the user's callback is optional.
-	if (!info.to_finalize_cb) {
-		return;
-	}
-
-	CV2CopyToFinalizeInfo args = {};
+	CV2CopyToStatisticsInfo args = {};
 	args.in_user_data = GetUserData(info);
 	args.in_bind_data = GetUserBindData(bind_data);
-	args.in_init_data = gstate.Cast<CV2CopyToGlobalState>().handle.GetData();
+	args.in_init_data = gstate.handle.GetData();
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_finalize_cb(Convert(&args), Convert(&context), &err_ptr);
+	info.to_statistics_cb(Convert(&args), Convert(&context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
 	}
+	gstate.written_statistics->row_count = args.out_row_count;
+	gstate.written_statistics->file_size_bytes = args.out_file_size_bytes;
+}
+
+static auto CV2CopyToFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate_p) -> void {
+	const auto &info = GetFunctionInfo(bind_data);
+	auto &gstate = gstate_p.Cast<CV2CopyToGlobalState>();
+
+	// Always wired, as the engine requires a finalize hook; the user's callback is optional.
+	if (info.to_finalize_cb) {
+		CV2CopyToFinalizeInfo args = {};
+		args.in_user_data = GetUserData(info);
+		args.in_bind_data = GetUserBindData(bind_data);
+		args.in_init_data = gstate.handle.GetData();
+
+		CV2ErrorInfo err = {};
+		auto err_ptr = Convert(&err);
+		info.to_finalize_cb(Convert(&args), Convert(&context), &err_ptr);
+
+		if (err.HasError()) {
+			err.ThrowAsException();
+		}
+	}
+	// the statistics describe the finished file, so they are reported once it is finalized
+	if (gstate.written_statistics) {
+		CV2CopyToReportStatistics(context, bind_data, gstate);
+	}
+}
+
+//! The engine asks where to report the statistics of a file right after creating it, before anything is written to it
+static auto CV2CopyToGetWrittenStatistics(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                                          CopyFunctionFileStatistics &statistics) -> void {
+	gstate.Cast<CV2CopyToGlobalState>().written_statistics = &statistics;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO sink interface
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO itself drives the function through its batch interface. These hooks serve callers that write a file through
+// the copy function directly, sinking chunks into it one at a time - every chunk is written as a batch of its own.
+
+static auto CV2CopyToInitLocal(ExecutionContext &context, FunctionData &bind_data) -> unique_ptr<LocalFunctionData> {
+	return make_uniq<CV2CopyToLocalState>();
+}
+
+static auto CV2CopyToSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                          LocalFunctionData &lstate, DataChunk &input) -> void {
+	if (input.size() == 0) {
+		return;
+	}
+	auto batch = make_uniq<ColumnDataCollection>(context.client, input.GetTypes());
+	batch->Append(input);
+	auto prepared = CV2CopyToPrepareBatch(context.client, bind_data, gstate, std::move(batch));
+	// batches are never flushed concurrently for the same file
+	lock_guard<mutex> guard(gstate.Cast<CV2CopyToGlobalState>().flush_lock);
+	CV2CopyToFlushBatch(context.client, bind_data, gstate, *prepared);
+}
+
+static auto CV2CopyToCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                             LocalFunctionData &lstate) -> void {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -685,8 +772,14 @@ public:
 			function.prepare_batch = CV2CopyToPrepareBatch;
 			function.flush_batch = CV2CopyToFlushBatch;
 			function.copy_to_finalize = CV2CopyToFinalize;
+			function.copy_to_initialize_local = CV2CopyToInitLocal;
+			function.copy_to_sink = CV2CopyToSink;
+			function.copy_to_combine = CV2CopyToCombine;
 			if (function_info->to_batch_size_cb) {
 				function.desired_batch_size = CV2CopyToBatchSize;
+			}
+			if (function_info->to_statistics_cb) {
+				function.copy_to_get_written_statistics = CV2CopyToGetWrittenStatistics;
 			}
 		}
 		if (has_copy_from) {
@@ -1428,4 +1521,48 @@ DUCKDB_V2_ERROR duckdb_v2_copy_function_destroy(duckdb_v2_copy_function_handle *
 			*function = nullptr;
 		}
 	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// COPY TO Statistics
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_set_statistics_callback(duckdb_v2_copy_function_handle function,
+                                                          duckdb_v2_copy_to_statistics_callback_fn callback,
+                                                          duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.to_statistics_cb = callback; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_get_user_data(duckdb_v2_copy_to_statistics_info_handle info, void **data,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_get_bind_data(duckdb_v2_copy_to_statistics_info_handle info, void **data,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_get_init_data(duckdb_v2_copy_to_statistics_info_handle info, void **data,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_init_data; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_row_count(duckdb_v2_copy_to_statistics_info_handle info,
+                                                           idx_t row_count, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_row_count = row_count; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_copy_to_statistics_set_file_size(duckdb_v2_copy_to_statistics_info_handle info,
+                                                           idx_t file_size_bytes, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_file_size_bytes = file_size_bytes; });
 }

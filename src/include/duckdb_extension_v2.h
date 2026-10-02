@@ -1394,6 +1394,59 @@ typedef struct {
 	 const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
 	 idx_t parameter_count, idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
 	 duckdb_v2_error_info_handle *err);
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
+	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_to_statistics_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_statistics_get_bind_data)
+	(duckdb_v2_copy_to_statistics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_statistics_get_init_data)
+	(duckdb_v2_copy_to_statistics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_statistics_get_user_data)
+	(duckdb_v2_copy_to_statistics_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_statistics_set_file_size)
+	(duckdb_v2_copy_to_statistics_info_handle info, idx_t file_size_bytes, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_statistics_set_row_count)
+	(duckdb_v2_copy_to_statistics_info_handle info, idx_t row_count, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_capacity)
+	(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_connection)
+	(duckdb_v2_connection_handle connection, duckdb_v2_multi_file_function_handle *function,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_extension)
+	(duckdb_v2_extension_handle extension, duckdb_v2_multi_file_function_handle *function,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_multi_file_function_destroy)(duckdb_v2_multi_file_function_handle *function);
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_register)
+	(duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_file_extension)
+	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *extension, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_name)
+	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_reader_type)
+	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *reader_type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_single_file_function)
+	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_add_file_metadata)
+	(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_result_column_identifier)
+	(duckdb_v2_table_function_bind_info_handle info, idx_t column_index, const idx_t *child_path,
+	 idx_t child_path_length, duckdb_v2_value_handle identifier, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_bind_data)
+	(duckdb_v2_table_function_claim_batch_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_global_state)
+	(duckdb_v2_table_function_claim_batch_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_local_state)
+	(duckdb_v2_table_function_claim_batch_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_user_data)
+	(duckdb_v2_table_function_claim_batch_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_set_claimed)
+	(duckdb_v2_table_function_claim_batch_info_handle info, bool claimed, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_claim_batch_callback)
+	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_claim_batch_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+#endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -2039,6 +2092,84 @@ typedef struct {
 #define duckdb_v2_arrow_result_wait                duckdb_ext_api.duckdb_v2_arrow_result_wait
 #define duckdb_v2_prepared_statement_execute_arrow duckdb_ext_api.duckdb_v2_prepared_statement_execute_arrow
 #define duckdb_v2_statement_execute_arrow          duckdb_ext_api.duckdb_v2_statement_execute_arrow
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_copy_to_set_statistics_callback duckdb_ext_api.duckdb_v2_copy_to_set_statistics_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_copy_to_statistics_get_bind_data duckdb_ext_api.duckdb_v2_copy_to_statistics_get_bind_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_copy_to_statistics_get_init_data duckdb_ext_api.duckdb_v2_copy_to_statistics_get_init_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_copy_to_statistics_get_user_data duckdb_ext_api.duckdb_v2_copy_to_statistics_get_user_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_copy_to_statistics_set_file_size duckdb_ext_api.duckdb_v2_copy_to_statistics_set_file_size
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_copy_to_statistics_set_row_count duckdb_ext_api.duckdb_v2_copy_to_statistics_set_row_count
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_data_chunk_get_capacity duckdb_ext_api.duckdb_v2_data_chunk_get_capacity
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_create_with_connection                                                           \
+	duckdb_ext_api.duckdb_v2_multi_file_function_create_with_connection
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_create_with_extension                                                            \
+	duckdb_ext_api.duckdb_v2_multi_file_function_create_with_extension
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_destroy duckdb_ext_api.duckdb_v2_multi_file_function_destroy
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_register duckdb_ext_api.duckdb_v2_multi_file_function_register
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_set_file_extension duckdb_ext_api.duckdb_v2_multi_file_function_set_file_extension
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_set_name duckdb_ext_api.duckdb_v2_multi_file_function_set_name
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_set_reader_type duckdb_ext_api.duckdb_v2_multi_file_function_set_reader_type
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_multi_file_function_set_single_file_function                                                         \
+	duckdb_ext_api.duckdb_v2_multi_file_function_set_single_file_function
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_bind_add_file_metadata duckdb_ext_api.duckdb_v2_table_function_bind_add_file_metadata
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_bind_set_result_column_identifier                                                     \
+	duckdb_ext_api.duckdb_v2_table_function_bind_set_result_column_identifier
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_claim_batch_get_bind_data                                                             \
+	duckdb_ext_api.duckdb_v2_table_function_claim_batch_get_bind_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_claim_batch_get_global_state                                                          \
+	duckdb_ext_api.duckdb_v2_table_function_claim_batch_get_global_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_claim_batch_get_local_state                                                           \
+	duckdb_ext_api.duckdb_v2_table_function_claim_batch_get_local_state
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_claim_batch_get_user_data                                                             \
+	duckdb_ext_api.duckdb_v2_table_function_claim_batch_get_user_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_claim_batch_set_claimed duckdb_ext_api.duckdb_v2_table_function_claim_batch_set_claimed
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_set_claim_batch_callback                                                              \
+	duckdb_ext_api.duckdb_v2_table_function_set_claim_batch_callback
+#endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

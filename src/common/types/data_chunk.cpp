@@ -88,6 +88,17 @@ idx_t DataChunk::DeriveSize() const {
 	    "DataChunk::size() called but neither count was set, nor any vectors with valid counts were set");
 }
 
+idx_t DataChunk::GetCapacity() const {
+	for (auto &cache : vector_caches) {
+		auto capacity = cache.GetCapacity();
+		if (capacity.IsValid()) {
+			return capacity.GetIndex();
+		}
+	}
+	// a chunk that was not initialized with its own vectors holds at most a standard vector's worth of rows
+	return STANDARD_VECTOR_SIZE;
+}
+
 idx_t DataChunk::GetDataSize() const {
 	idx_t total_size = 0;
 	for (auto &vec : data) {
