@@ -434,7 +434,7 @@ void ColumnDataCheckpointer::Checkpoint() {
 	WriteToDisk();
 }
 
-void ColumnDataCheckpointer::FinalizeCheckpoint() {
+void ColumnDataCheckpointer::FinalizeCheckpoint(const BaseStatistics &old_stats) {
 	auto visibility_bound = checkpoint_info.GetVisibilityBound();
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i].get();
@@ -442,7 +442,7 @@ void ColumnDataCheckpointer::FinalizeCheckpoint() {
 			// no changes - copy over the original columns
 			WritePersistentSegments(state);
 		}
-		state.CheckpointUpdates(visibility_bound);
+		state.CheckpointUpdates(visibility_bound, old_stats);
 	}
 }
 

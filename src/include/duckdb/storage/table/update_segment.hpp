@@ -78,6 +78,8 @@ public:
 	void CleanupUpdate(UpdateInfo &info);
 
 	unique_ptr<BaseStatistics> GetStatistics();
+	//! Widens the statistics, e.g. by the values of the column this segment was handed over from
+	void MergeStatistics(const BaseStatistics &other);
 
 private:
 	//! The type of the column

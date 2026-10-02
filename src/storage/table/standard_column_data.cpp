@@ -305,7 +305,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(const RowGroup 
 
 	ColumnDataCheckpointer checkpointer(checkpoint_states, GetStorageManager(), row_group, checkpoint_info);
 	checkpointer.Checkpoint();
-	checkpointer.FinalizeCheckpoint();
+	checkpointer.FinalizeCheckpoint(stats);
 
 	// merge validity stats into base stats
 	base_state->global_stats->Merge(*validity_state.global_stats);

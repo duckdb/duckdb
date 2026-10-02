@@ -109,7 +109,8 @@ optional_ptr<UpdateSegment> ColumnData::GetUpdates() const {
 	return updates->segment.get();
 }
 
-void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibility_bound) {
+void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibility_bound, BaseStatistics &target_stats,
+                                   const BaseStatistics &old_stats) {
 	unique_lock<mutex> guard(updates->lock);
 	if (&target != this) {
 		// nobody but the checkpoint can reach the target yet
@@ -129,6 +130,19 @@ void ColumnData::CheckpointUpdates(ColumnData &target, VisibilityBound visibilit
 		if (&target == this) {
 			updates->ClearIfLastHolder(guard, updates.use_count());
 		}
+		return;
+	}
+	// older transactions still read values from the segment, so the target's statistics must cover them
+	target.stats_inexact = true;
+	if (type.id() != LogicalTypeId::VALIDITY) {
+		// a validity column receives its parent's statistics, which the parent merges itself
+		target_stats.Merge(old_stats);
+		// the zonemaps also check the segment's statistics, so make those cover the values this column had
+		segment->MergeStatistics(old_stats);
+	}
+	auto update_stats = segment->GetStatistics();
+	if (update_stats) {
+		target_stats.Merge(*update_stats);
 	}
 }
 
@@ -565,19 +579,35 @@ FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> conte
 	if (!stats) {
 		throw InternalException("ColumnData::CheckZonemap called on a column without stats");
 	}
-	lock_guard<mutex> l(stats_lock);
-	if (index.IsPushdownExtract()) {
-		auto child_stats = stats->statistics.PushdownExtract(index.GetChildIndex(0));
-		if (!child_stats) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
-		auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
-		return context ? expr_filter.CheckStatistics(*context, *child_stats)
-		               : expr_filter.CheckStatistics(*child_stats);
-	}
 	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::CheckZonemap");
-	return context ? expr_filter.CheckStatistics(*context, stats->statistics)
-	               : expr_filter.CheckStatistics(stats->statistics);
+	auto check = [&](const BaseStatistics &check_stats) {
+		if (index.IsPushdownExtract()) {
+			auto child_stats = check_stats.PushdownExtract(index.GetChildIndex(0));
+			if (!child_stats) {
+				return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			}
+			return context ? expr_filter.CheckStatistics(*context, *child_stats)
+			               : expr_filter.CheckStatistics(*child_stats);
+		}
+		return context ? expr_filter.CheckStatistics(*context, check_stats) : expr_filter.CheckStatistics(check_stats);
+	};
+	FilterPropagateResult prune_result;
+	{
+		lock_guard<mutex> l(stats_lock);
+		prune_result = check(stats->statistics);
+	}
+	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return prune_result;
+	}
+	// updates made through an older column are in the segment's statistics, not in this column's
+	auto update_stats = GetUpdateStatistics();
+	if (!update_stats) {
+		return prune_result;
+	}
+	if (check(*update_stats) != prune_result) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	return prune_result;
 }
 
 const BaseStatistics &ColumnData::GetStatisticsRef() const {
@@ -943,7 +973,9 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(const RowGroup &row_gro
 	if (!stats) {
 		throw InternalException("ColumnData::Checkpoint called without stats on a nested column");
 	}
-	return Checkpoint(row_group, checkpoint_info, this->stats->statistics);
+	// copied, so that all nested columns see the same statistics while updates widen the live ones
+	auto old_stats = GetStatistics();
+	return Checkpoint(row_group, checkpoint_info, *old_stats);
 }
 
 unique_ptr<ColumnCheckpointState>
@@ -962,7 +994,7 @@ ColumnData::Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &checkpoi
 	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
 	ColumnDataCheckpointer checkpointer(states, GetStorageManager(), row_group, checkpoint_info);
 	checkpointer.Checkpoint();
-	checkpointer.FinalizeCheckpoint();
+	checkpointer.FinalizeCheckpoint(stats);
 	return checkpoint_state;
 }
 

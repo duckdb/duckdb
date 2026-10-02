@@ -1580,6 +1580,11 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	}
 }
 
+void UpdateSegment::MergeStatistics(const BaseStatistics &other) {
+	lock_guard<mutex> stats_guard(stats_lock);
+	stats.statistics.Merge(other);
+}
+
 bool UpdateSegment::HasUpdates() const {
 	auto read_lock = lock.GetSharedLock();
 	return root.get() != nullptr;

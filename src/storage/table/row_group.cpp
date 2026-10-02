@@ -1412,6 +1412,11 @@ void RowGroup::MergeStatistics(idx_t column_idx, const BaseStatistics &other) {
 void RowGroup::MergeIntoStatistics(idx_t column_idx, BaseStatistics &other) {
 	auto &col_data = GetColumn(column_idx);
 	col_data.MergeIntoStatistics(other);
+	// an update made through an older column sharing the segment widened only that column's statistics
+	auto update_stats = col_data.GetUpdateStatistics();
+	if (update_stats) {
+		other.Merge(*update_stats, StatsMergeType::EXPAND_BOUNDS);
+	}
 }
 
 void RowGroup::MergeIntoStatistics(TableStatistics &other) {
@@ -1795,7 +1800,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 				writer.SetHasUnloadedColumn(column_idx);
 				continue;
 			}
-			GetColumn(column_idx).MergeIntoStatistics(global_stats.GetStats(*lock, column_idx).Statistics());
+			MergeIntoStatistics(column_idx, global_stats.GetStats(*lock, column_idx).Statistics());
 		}
 		return row_group_pointer;
 	}
@@ -1813,7 +1818,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 					writer.SetHasUnloadedColumn(column_idx);
 					continue;
 				}
-				GetColumn(column_idx).MergeIntoStatistics(global_stats.GetStats(*lock, column_idx).Statistics());
+				MergeIntoStatistics(column_idx, global_stats.GetStats(*lock, column_idx).Statistics());
 			} else {
 				global_stats.GetStats(*lock, column_idx).Statistics().Merge(write_data.statistics[column_idx]);
 			}
