@@ -703,6 +703,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(format_sql_set);
 }
 
+// LCOV_EXCL_START
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
@@ -714,6 +715,7 @@ std::string AutocompleteExtension::Name() {
 std::string AutocompleteExtension::Version() const {
 	return DefaultVersion();
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 extern "C" {

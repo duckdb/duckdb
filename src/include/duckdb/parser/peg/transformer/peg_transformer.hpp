@@ -628,6 +628,7 @@ public:
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
+	static LogicalType ApplyColumnCollation(const optional<LogicalType> &type, unique_ptr<ParsedExpression> collation);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
 	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);
 	static vector<GroupingSet> GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
@@ -1931,6 +1932,9 @@ public:
 	static void InitializeTargetOptAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeTargetOptAliasTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
+	static void InitializeTargetAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTargetAliasTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
 	static void InitializeDeleteUsingClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeDeleteUsingClauseTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -4164,6 +4168,7 @@ public:
 	static string TransformSetNullability(PEGTransformer &transformer);
 	static unique_ptr<AlterTableInfo> TransformAlterType(PEGTransformer &transformer, const bool &has_result,
 	                                                     const optional<LogicalType> &type,
+	                                                     optional<ColumnConstraintEntry> column_collation,
 	                                                     optional<unique_ptr<ParsedExpression>> using_expression);
 	static unique_ptr<ParsedExpression> TransformUsingExpression(PEGTransformer &transformer,
 	                                                             unique_ptr<ParsedExpression> expression);
@@ -4691,7 +4696,9 @@ public:
 	                                                           unique_ptr<BaseTableRef> base_table_name);
 	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
 	                                                        unique_ptr<BaseTableRef> base_table_name,
-	                                                        const bool &has_result, const optional<Identifier> &col_id);
+	                                                        const optional<Identifier> &target_alias);
+	static Identifier TransformTargetAlias(PEGTransformer &transformer, const bool &has_result,
+	                                       const Identifier &col_id);
 	static vector<unique_ptr<TableRef>> TransformDeleteUsingClause(PEGTransformer &transformer,
 	                                                               vector<unique_ptr<TableRef>> table_ref);
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,

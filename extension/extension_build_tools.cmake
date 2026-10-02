@@ -859,7 +859,17 @@ foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
     endif()
 endforeach()
 
-set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions/")
+if(NOT DEFINED EXTENSION_CONFIG_BASE_DIR)
+    if(DEFINED ENV{EXTENSION_CONFIG_BASE_DIR} AND NOT "$ENV{EXTENSION_CONFIG_BASE_DIR}" STREQUAL "")
+        set(EXTENSION_CONFIG_BASE_DIR "$ENV{EXTENSION_CONFIG_BASE_DIR}")
+    else()
+        set(EXTENSION_CONFIG_BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.github/config/extensions")
+    endif()
+endif()
+get_filename_component(EXTENSION_CONFIG_BASE_DIR "${EXTENSION_CONFIG_BASE_DIR}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+if(NOT IS_DIRECTORY "${EXTENSION_CONFIG_BASE_DIR}")
+    message(FATAL_ERROR "Extension config directory does not exist: ${EXTENSION_CONFIG_BASE_DIR}")
+endif()
 
 if(DEFINED CORE_EXTENSIONS)
     message(DEPRECATION "CORE_EXTENSIONS is deprecated. Use BUILD_EXTENSIONS instead.")
@@ -869,6 +879,13 @@ if(DEFINED CORE_EXTENSIONS)
         list(APPEND BUILD_EXTENSIONS ${CORE_EXTENSIONS})
     endif()
 endif()
+
+# Explicit project configurations take precedence over named defaults.
+foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
+    if (NOT "${DUCKDB_EXTENSION_CONFIG}" STREQUAL "")
+        include("${DUCKDB_EXTENSION_CONFIG}")
+    endif()
+endforeach()
 
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
@@ -905,13 +922,6 @@ if (${_index} GREATER -1)
 endif()
 
 
-
-# Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
-foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
-    if (NOT "${DUCKDB_EXTENSION_CONFIG}" STREQUAL "")
-        include(${DUCKDB_EXTENSION_CONFIG})
-    endif()
-endforeach()
 
 # Local extension config
 if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config_local.cmake)

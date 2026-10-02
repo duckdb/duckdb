@@ -199,6 +199,13 @@ TEST_CASE("Test specific serialized plans", "[.][serialization]") {
 		auto deserialized_results = con.Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)));
 		REQUIRE_NO_FAIL(*deserialized_results);
 
+		// Reset the state, so that statements that modify data (e.g. DELETE) see the same input
+		con.Rollback();
+		con.BeginTransaction();
+		for (idx_t i = 0; i < statements.size() - 1; i++) {
+			REQUIRE_NO_FAIL(con.Query(statements[i]));
+		}
+
 		// Now execute the original statement as well and compare results
 		Parser p(*con.context);
 		p.ParseQuery(target_stmt);

@@ -192,8 +192,7 @@ bool GroupingSetsOptimizer::TryExpandGroupingSets(unique_ptr<LogicalOperator> &o
 	}
 
 	auto cte_name = Identifier(StringUtil::Format("__grouping_sets_input_cte_%llu", cte_index.index));
-	auto input =
-	    AggregateRewriteHelper::PinColumnOrder(optimizer, std::move(op->children[0]), input_types, input_bindings);
+	auto input = LogicalProjection::CreateIdentity(optimizer.binder.GenerateTableIndex(), std::move(op->children[0]));
 	result = make_uniq<LogicalMaterializedCTE>(std::move(cte_name), cte_index, input_types.size(), std::move(input),
 	                                           std::move(result), CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	if (aggr.has_estimated_cardinality) {

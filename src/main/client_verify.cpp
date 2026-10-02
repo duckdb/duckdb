@@ -271,9 +271,7 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			    client_config, [](ClientConfig &config) { config.enable_profiler = false; },
 			    [saved_profiler](ClientConfig &config) { config.enable_profiler = saved_profiler; });
 			auto explain_result = RunStatementInternal(lock, std::move(explain_stmt), query_parameters, false);
-			if (explain_result->HasError()) {
-				explain_result->ThrowError();
-			}
+			explain_result->ThrowIfError();
 			if (!export_sql) {
 				return;
 			}

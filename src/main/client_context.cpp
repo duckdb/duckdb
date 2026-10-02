@@ -507,9 +507,7 @@ unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &
 	QueryParameters parameters;
 	parameters.result_eagerness = ResultEagerness::FORCED;
 	auto result = RunStatementInternal(lock, std::move(prepare), parameters, false);
-	if (result->HasError()) {
-		result->ThrowError();
-	}
+	result->ThrowIfError();
 	auto entry = client_data->prepared_statements.find(Identifier(name));
 	if (entry == client_data->prepared_statements.end()) {
 		throw InternalException("PREPARE succeeded but the prepared statement was not registered");
@@ -1179,9 +1177,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const Identifier &schema_n
 
 void ClientContext::Append(unique_ptr<SQLStatement> stmt) {
 	auto result = Query(std::move(stmt), QueryParameters());
-	if (result->HasError()) {
-		result->GetErrorObject().Throw("Failed to append: ");
-	}
+	result->ThrowIfError("Failed to append: ");
 }
 
 void ClientContext::Append(TableDescription &description, ColumnDataCollection &collection) {
@@ -1345,11 +1341,7 @@ ParserOptions ClientContext::GetParserOptions() {
 
 ClientProperties ClientContext::GetClientProperties() {
 	string timezone = "UTC";
-	Value result;
-
-	if (TryGetCurrentSetting("TimeZone", result)) {
-		timezone = result.ToString();
-	}
+	TryGetCurrentSetting("TimeZone", timezone);
 	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	if (Settings::Get<ArrowLargeBufferSizeSetting>(*this)) {
 		arrow_offset_size = ArrowOffsetSize::LARGE;

@@ -566,6 +566,15 @@ vector<ParserKeyword> Parser::KeywordList() {
 	return keyword_helper.KeywordList();
 }
 
+unique_ptr<QueryNode> Parser::ParseSelectNode(const string &query) {
+	Parser parser(options);
+	parser.ParseQuery(query);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		throw InternalException("Expected a single select statement");
+	}
+	return std::move(parser.statements[0]->Cast<SelectStatement>().node);
+}
+
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list) {
 	// construct a mock query prefixed with SELECT
 	string mock_query = "SELECT " + select_list;
@@ -600,6 +609,14 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 		throw ParserException("Cannot have a SAMPLE clause in the expression list");
 	}
 	return std::move(select_node.select_list);
+}
+
+unique_ptr<ParsedExpression> Parser::ParseSingleExpression(const string &expression) {
+	auto expressions = ParseExpressionList(expression);
+	if (expressions.size() != 1) {
+		throw InternalException("Expected a single expression");
+	}
+	return std::move(expressions[0]);
 }
 
 GroupByNode Parser::ParseGroupByList(const string &group_by) {

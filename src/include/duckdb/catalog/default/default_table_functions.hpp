@@ -38,6 +38,12 @@ public:
 	vector<Identifier> GetDefaultEntries() override;
 
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro);
+	//! Finds a macro in a nullptr-terminated list
+	static optional_ptr<const DefaultTableMacro> FindTableMacro(const DefaultTableMacro macros[],
+	                                                            const Identifier &name,
+	                                                            optional_ptr<const Identifier> schema_name = nullptr);
+	static unique_ptr<CatalogEntry> CreateTableMacroEntry(Catalog &catalog, SchemaCatalogEntry &schema,
+	                                                      const DefaultTableMacro &default_macro);
 
 private:
 	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,

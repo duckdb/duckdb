@@ -1545,6 +1545,38 @@ child_list_t<LogicalType> TupleType::NamedChildren(const LogicalType &type) {
 	return result;
 }
 
+child_list_t<LogicalType> LogicalType::GetNamedChildTypes(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+		return {{"element", ListType::GetChildType(type)}};
+	case LogicalTypeId::ARRAY:
+		return {{"element", ArrayType::GetChildType(type)}};
+	case LogicalTypeId::MAP:
+		return {{"key", MapType::KeyType(type)}, {"value", MapType::ValueType(type)}};
+	case LogicalTypeId::STRUCT:
+		return StructType::GetChildTypes(type);
+	case LogicalTypeId::TUPLE:
+		return TupleType::NamedChildren(type);
+	default:
+		throw InternalException("Unsupported type %s in GetNamedChildTypes", type.ToString());
+	}
+}
+
+LogicalType LogicalType::ConstructNestedType(const LogicalType &type, child_list_t<LogicalType> children) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+		D_ASSERT(children.size() == 1);
+		return LogicalType::LIST(children[0].second);
+	case LogicalTypeId::MAP:
+		D_ASSERT(children.size() == 2);
+		return LogicalType::MAP(children[0].second, children[1].second);
+	case LogicalTypeId::STRUCT:
+		return LogicalType::STRUCT(std::move(children));
+	default:
+		throw InternalException("Unsupported type %s in ConstructNestedType", type.ToString());
+	}
+}
+
 LogicalType LogicalType::TUPLE(child_list_t<LogicalType> children) {
 	// a TUPLE is an unnamed struct - all member names are empty
 	for (auto &child : children) {

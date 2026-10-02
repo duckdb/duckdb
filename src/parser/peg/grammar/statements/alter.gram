@@ -37,7 +37,7 @@ DropOrSet <- DropNullability / SetNullability
 DropNullability <- 'DROP'
 SetNullability <- 'SET'
 
-AlterType <- SetData? 'TYPE' Type? UsingExpression?
+AlterType <- SetData? 'TYPE' Type? ColumnCollation? UsingExpression?
 SetData <- 'SET' 'DATA'?
 UsingExpression <- 'USING' Expression
 

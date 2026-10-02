@@ -227,6 +227,30 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
     return_type: ERROR
 
+  data_chunk_get_capacity:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: |
+      Returns the number of rows a data chunk can hold, e.g. how many rows the exec callback of a table function may
+      write into its output chunk in one call.
+    role: getter
+    belongs_to: data_chunk
+    parameters:
+      chunk:
+        type: data_chunk
+        description: The chunk.
+      out_capacity:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of rows the chunk can hold.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR
+
   data_chunk_get_vector_count:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]

@@ -88,6 +88,10 @@ public:
 	static KeywordCategory ToKeywordCategory(const string &text);
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
 	DUCKDB_API vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list);
+	//! Parses exactly one expression, throwing an InternalException otherwise
+	DUCKDB_API unique_ptr<ParsedExpression> ParseSingleExpression(const string &expression);
+	//! Parses a single SELECT statement into its node
+	DUCKDB_API unique_ptr<QueryNode> ParseSelectNode(const string &query);
 	//! Parses a list of GROUP BY expressions
 	GroupByNode ParseGroupByList(const string &group_by);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
