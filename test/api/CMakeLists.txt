@@ -28,6 +28,7 @@ set(TEST_API_OBJECTS
     test_extension_setting_autoload.cpp
     test_instance_cache.cpp
     test_storage_extension_alias.cpp
+    test_storage_extension_remote_path.cpp
     test_static_database_callback.cpp
     test_result_unit.cpp
     test_results.cpp
