@@ -1,8 +1,11 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
 #include "duckdb/parser/query_node/insert_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
@@ -530,9 +533,28 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 		auto distinct_stmt = make_uniq<SelectStatement>();
 		auto select_node = make_uniq<SelectNode>();
 		auto distinct = make_uniq<DistinctModifier>();
+		vector<unique_ptr<ParsedExpression>> null_checks;
 		for (auto &col : distinct_on_columns) {
 			distinct->distinct_on_targets.push_back(make_uniq<ColumnRefExpression>(col));
+			null_checks.push_back(
+			    make_uniq<OperatorExpression>(ExpressionType::OPERATOR_IS_NULL, make_uniq<ColumnRefExpression>(col)));
 		}
+		// NULL keys never conflict - give each such row a unique distinct key
+		CaseCheck null_check;
+		if (null_checks.size() == 1) {
+			null_check.when_expr = std::move(null_checks[0]);
+		} else {
+			null_check.when_expr =
+			    make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(null_checks));
+		}
+		auto row_number = make_uniq<WindowExpression>(INVALID_CATALOG, INVALID_SCHEMA, "row_number");
+		row_number->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;
+		row_number->WindowEndMutable() = WindowBoundary::CURRENT_ROW_RANGE;
+		null_check.then_expr = std::move(row_number);
+		auto null_key = make_uniq<CaseExpression>();
+		null_key->CaseChecksMutable().push_back(std::move(null_check));
+		null_key->ElseMutable() = ConstantExpression::FromValue(Value());
+		distinct->distinct_on_targets.push_back(std::move(null_key));
 		select_node->modifiers.push_back(std::move(distinct));
 		select_node->select_list.push_back(make_uniq<StarExpression>());
 		select_node->from_table = std::move(source);
