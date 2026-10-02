@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -89,6 +90,8 @@ public:
 
 	static unique_ptr<ParsedExpression> SQLCast(const LogicalType &type, unique_ptr<ParsedExpression> child,
 	                                            bool try_cast = false);
+
+	column_binding_map_t<reference<const ParsedExpression>> substitutions;
 
 	explicit BoundExpressionSQLExportState(const BoundExpressionSQLExportContext &context_p);
 	BoundExpressionSQLExportResult Export(const Expression &expression, const LogicalPlanVerificationPath &path);

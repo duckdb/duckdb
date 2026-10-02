@@ -172,3 +172,95 @@ sql	<!REGEX>:.*FROM [(]SELECT.*FROM [(]SELECT.*
 
 statement ok
 PRAGMA enable_optimizer;
+
+# Ordering, windows, and UNNEST reuse the same plain input scope.
+statement ok
+SET disabled_optimizers='compressed_materialization';
+
+statement ok
+CREATE TABLE scope_input(i INTEGER,xs INTEGER[]);
+
+statement ok
+INSERT INTO scope_input VALUES (1,[1,2]),(2,[3]),(NULL,NULL);
+
+query TT
+EXPLAIN (SQL) SELECT i FROM scope_input ORDER BY i;
+----
+sql	<!REGEX>:.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT i FROM scope_input WHERE i>0 ORDER BY i LIMIT 1 OFFSET 1;
+----
+sql	<!REGEX>:.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT i,row_number() OVER(ORDER BY i) FROM scope_input WHERE i>0;
+----
+sql	<!REGEX>:.*[(]SELECT.*
+
+# UNNEST retains its output projection but no longer wraps its plain input.
+query TT
+EXPLAIN (SQL) SELECT i,unnest(xs) FROM scope_input WHERE i>0;
+----
+sql	<REGEX>:.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT i,unnest(xs) FROM scope_input WHERE i>0;
+----
+sql	<!REGEX>:.*[(]SELECT.*[(]SELECT.*
+
+# Computed expressions and existing evaluation stages still require boundaries.
+
+query TT
+EXPLAIN (SQL) SELECT i+1 FROM scope_input ORDER BY 1;
+----
+sql	<REGEX>:.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT i FROM (SELECT i FROM scope_input LIMIT 1) q ORDER BY i;
+----
+sql	<REGEX>:.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT v,row_number() OVER(ORDER BY v) FROM (SELECT i+1 v FROM scope_input) q;
+----
+sql	<REGEX>:.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT x,unnest(x) FROM (SELECT list_value(i,i+1) x FROM scope_input) q;
+----
+sql	<REGEX>:.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT DISTINCT i FROM scope_input ORDER BY i;
+----
+sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT i FROM scope_input USING SAMPLE 100% ORDER BY i;
+----
+sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
+
+# Ordinary column grouping needs no key-staging scope; the window still has its own scope.
+query TT
+EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT i,count(*) n FROM scope_input GROUP BY i) q;
+----
+sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT i,count(*) n FROM scope_input GROUP BY i) q;
+----
+sql	<!REGEX>:.*[(]SELECT.*[(]SELECT.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT row_number() OVER(ORDER BY i) n FROM scope_input) q;
+----
+sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
+
+query TT
+EXPLAIN (SQL) SELECT unnest(v) FROM (SELECT unnest([[i],[i+1]]) v FROM scope_input) q;
+----
+sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
+
+statement ok
+RESET disabled_optimizers;

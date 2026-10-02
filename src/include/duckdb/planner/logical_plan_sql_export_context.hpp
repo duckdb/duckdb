@@ -5,6 +5,7 @@
 
 namespace duckdb {
 class Expression;
+class BoundExpressionSQLExportState;
 class LogicalOperator;
 class LogicalComparisonJoin;
 struct LogicalExtensionOperator;
@@ -40,7 +41,8 @@ public:
 	LogicalPlanVerificationResult<unique_ptr<ParsedExpression>>
 	ExportExpression(const LogicalOperator &op, const vector<reference<const Expression>> &expressions,
 	                 idx_t expression_ordinal, const BoundExpressionSQLExportContext &expression_context,
-	                 const LogicalPlanVerificationPath &path);
+	                 const LogicalPlanVerificationPath &path,
+	                 optional_ptr<BoundExpressionSQLExportState> composition = nullptr);
 	unique_ptr<SelectNode> CreateNamedSource(const Identifier &name, const vector<LogicalPlanSQLExportField> &fields,
 	                                         bool recurring = false);
 
