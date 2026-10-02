@@ -17,8 +17,8 @@ TEST_CASE("Orphaned temp files from a crashed process are cleaned up on startup"
 	// simulate files left behind by a process that was killed (kill -9 / OOM / power loss)
 	const string orphan_identifier = "dead_instance";
 	auto orphan_lock = fs->JoinPath(temp_dir, "duckdb_temp_" + orphan_identifier + ".lock");
-	auto orphan1 = fs->JoinPath(temp_dir, "duckdb_temp_storage_" + orphan_identifier + "_DEFAULT-0.tmp");
-	auto orphan2 = fs->JoinPath(temp_dir, "duckdb_temp_block_" + orphan_identifier + "-0.block");
+	auto orphan1 = fs->JoinPath(temp_dir, "duckdb_temp_" + orphan_identifier + "_storage_DEFAULT-0.tmp");
+	auto orphan2 = fs->JoinPath(temp_dir, "duckdb_temp_" + orphan_identifier + "_block-0.block");
 	auto unrelated = fs->JoinPath(temp_dir, "not_a_temp_file.txt");
 
 	auto WriteDummyFile = [&](const string &path) {

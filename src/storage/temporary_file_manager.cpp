@@ -723,13 +723,13 @@ void TemporaryFileManager::EraseUsedBlock(TemporaryFileManagerLock &lock, block_
 
 string TemporaryFileManager::CreateTemporaryFileName(const TemporaryFileIdentifier &identifier) const {
 	return FileSystem::GetFileSystem(db).JoinPath(
-	    temp_directory, StringUtil::Format("duckdb_temp_storage_%s_%s-%llu.tmp", temporary_file_identifier,
+	    temp_directory, StringUtil::Format("duckdb_temp_%s_storage_%s-%llu.tmp", temporary_file_identifier,
 	                                       EnumUtil::ToString(identifier.size), identifier.file_index.GetIndex()));
 }
 
 string TemporaryFileManager::CreateTemporaryBlockFileName(block_id_t id) const {
 	return FileSystem::GetFileSystem(db).JoinPath(
-	    temp_directory, StringUtil::Format("duckdb_temp_block_%s-%lld.block", temporary_file_identifier, id));
+	    temp_directory, StringUtil::Format("duckdb_temp_%s_block-%lld.block", temporary_file_identifier, id));
 }
 
 optional_ptr<TemporaryFileHandle> TemporaryFileManager::GetFileHandle(TemporaryFileManagerLock &,
