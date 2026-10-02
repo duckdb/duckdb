@@ -106,7 +106,6 @@ public:
 	const IndexStorageInfo &GetStorageInfo() const {
 		return *storage_info;
 	}
-	IndexStorageInfo CopyStorageInfo() const;
 	const vector<unique_ptr<ParsedExpression>> &GetParsedExpressions() const {
 		return GetCreateInfo().parsed_expressions;
 	}

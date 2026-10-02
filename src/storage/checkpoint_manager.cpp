@@ -110,7 +110,7 @@ BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
 	return *storage_manager.block_manager;
 }
 
-PartialBlockManager SingleFileCheckpointWriter::CreateIsolatedIndexPartialBlockManager() {
+PartialBlockManager SingleFileCheckpointWriter::CreatePerIndexPartialBlockManager() {
 	return PartialBlockManager(QueryContext(context), GetBlockManager(), PartialBlockType::FULL_CHECKPOINT);
 }
 

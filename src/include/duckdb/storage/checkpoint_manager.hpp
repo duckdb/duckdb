@@ -152,7 +152,7 @@ public:
 
 	BlockManager &GetBlockManager();
 	//! Make a partial block scope for an index that persists immediately.
-	PartialBlockManager CreateIsolatedIndexPartialBlockManager();
+	PartialBlockManager CreatePerIndexPartialBlockManager();
 	CheckpointOptions GetCheckpointOptions() const {
 		return options;
 	}

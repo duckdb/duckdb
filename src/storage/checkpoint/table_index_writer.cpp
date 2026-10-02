@@ -22,7 +22,7 @@ SingleFileTableIndexWriter::SingleFileTableIndexWriter(SingleFileCheckpointWrite
 }
 
 PartialBlockManager SingleFileTableIndexWriter::CreatePerIndexPartialBlockManager() {
-	return checkpoint_manager.CreateIsolatedIndexPartialBlockManager();
+	return checkpoint_manager.CreatePerIndexPartialBlockManager();
 }
 
 void SingleFileTableIndexWriter::Flush() {
