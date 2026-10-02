@@ -69,7 +69,7 @@ SELECT typeof(skewness(1) EXPORT_STATE);
 ----
 AGGREGATE_STATE
 
-# approx_count_distinct exports its sketch (the registers as a BLOB)
+# approx_count_distinct exports its sketch (the precision and the registers)
 query T
 SELECT typeof(approx_count_distinct(1) EXPORT_STATE);
 ----
