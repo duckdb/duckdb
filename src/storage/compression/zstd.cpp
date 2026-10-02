@@ -868,9 +868,6 @@ public:
 		auto block = LoadPage(next_id);
 		auto handle = buffer_manager.Pin(context, block);
 		auto reader = CompressionSegmentReader(handle.Ptr(), block->GetBlockSize(), "ZSTD overflow page");
-		if (reader.Remaining() <= sizeof(block_id_t)) {
-			ThrowZSTDPageTooSmall();
-		}
 		idx_t page_size = reader.Remaining() - sizeof(block_id_t);
 		idx_t remaining_compressed_data = scan_state.metadata.compressed_size - scan_state.compressed_scan_count;
 		auto compressed_data = reader.ReadBytes(MinValue<idx_t>(page_size, remaining_compressed_data));
