@@ -102,6 +102,13 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = PropagateStatistics(node.Cast<LogicalWindow>(), node_ptr);
 		break;
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		// unlike the default handler, also propagate into the unnest expressions
+		result = PropagateChildren(node, node_ptr);
+		for (auto &expr : node.expressions) {
+			PropagateExpression(expr);
+		}
+		break;
 	default:
 		result = PropagateChildren(node, node_ptr);
 	}
@@ -160,6 +167,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 		return PropagateExpression(expr.Cast<BoundColumnRefExpression>(), expr_ptr);
 	case ExpressionClass::BOUND_OPERATOR:
 		return PropagateExpression(expr.Cast<BoundOperatorExpression>(), expr_ptr);
+	case ExpressionClass::BOUND_REF:
+		return PropagateExpression(expr.Cast<BoundReferenceExpression>(), expr_ptr);
 	default:
 		break;
 	}

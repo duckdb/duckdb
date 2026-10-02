@@ -11,6 +11,8 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/common/enums/dialect_compatibility_mode.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -401,6 +403,54 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &context,
 	}
 
 	return make_uniq<ListLambdaBindData>(bound_function.GetReturnType(), std::move(lambda_expr), has_index);
+}
+
+//! The lambda body's input chunk is [index?, element, accumulator?, remaining children...], see LambdaExecuteInfo
+static unique_ptr<BaseStatistics> PropagateLambdaStats(FunctionStatisticsInput &input, const idx_t accumulator_count) {
+	if (!input.propagator || !input.bind_data) {
+		return nullptr;
+	}
+	auto &bind_data = input.bind_data->Cast<ListLambdaBindData>();
+	if (!bind_data.lambda_expr) {
+		return nullptr;
+	}
+	auto &children = input.expr.GetChildren();
+	auto &child_stats = input.child_stats;
+	D_ASSERT(children.size() == child_stats.size());
+
+	const idx_t element_index = bind_data.has_index ? 1 : 0;
+	vector<unique_ptr<BaseStatistics>> ref_stats(element_index + 1 + accumulator_count);
+	if (child_stats[0].GetStatsType() == StatisticsType::LIST_STATS) {
+		ref_stats[element_index] = ListStats::GetChildStats(child_stats[0]).ToUnique();
+	}
+	// the remaining children follow in order, without the lambda placeholder and the initial value
+	bool skip_initial = bind_data.has_initial;
+	for (idx_t i = 1; i < children.size(); i++) {
+		if (children[i]->GetReturnType().id() == LogicalTypeId::LAMBDA) {
+			continue;
+		}
+		if (skip_initial) {
+			skip_initial = false;
+			continue;
+		}
+		ref_stats.push_back(child_stats[i].ToUnique());
+	}
+	// captures repeat once per list element, so cardinality-dependent statistics no longer hold
+	for (auto &stats : ref_stats) {
+		if (stats) {
+			stats->ResetAdditiveStatistics();
+		}
+	}
+	input.propagator->PropagateLambdaStatistics(bind_data.lambda_expr, ref_stats);
+	return nullptr;
+}
+
+unique_ptr<BaseStatistics> LambdaFunctions::ListLambdaStats(ClientContext &context, FunctionStatisticsInput &input) {
+	return PropagateLambdaStats(input, 0);
+}
+
+unique_ptr<BaseStatistics> LambdaFunctions::ListReduceStats(ClientContext &context, FunctionStatisticsInput &input) {
+	return PropagateLambdaStats(input, 1);
 }
 
 void LambdaFunctions::ListTransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
