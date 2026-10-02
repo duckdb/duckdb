@@ -18,6 +18,8 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 constexpr const char *AggregateFunctionCatalogEntry::Name;
 
@@ -443,6 +445,18 @@ struct TableMacroExtractor {
 	}
 };
 
+//! Named parameters in a stable order: sorted by name.
+//! named_parameters is an unordered map, so its iteration order is arbitrary - and not even stable across copies
+//! (on libc++ a copy-construct can reorder it). GetParameters and GetParameterTypes each work on their own copy of
+//! the function and their results are zipped by position, so both must list the named parameters in one
+//! deterministic order.
+static vector<pair<string, LogicalType>> SortedNamedParameters(const named_parameter_type_map_t &named_parameters) {
+	vector<pair<string, LogicalType>> result(named_parameters.begin(), named_parameters.end());
+	std::sort(result.begin(), result.end(),
+	          [](const pair<string, LogicalType> &a, const pair<string, LogicalType> &b) { return a.first < b.first; });
+	return result;
+}
+
 struct TableFunctionExtractor {
 	static idx_t FunctionCount(TableFunctionCatalogEntry &entry) {
 		return entry.functions.Size();
@@ -462,7 +476,7 @@ struct TableFunctionExtractor {
 		for (idx_t i = 0; i < fun.arguments.size(); i++) {
 			results.emplace_back("col" + to_string(i));
 		}
-		for (auto &param : fun.named_parameters) {
+		for (auto &param : SortedNamedParameters(fun.named_parameters)) {
 			results.emplace_back(param.first);
 		}
 		return results;
@@ -475,7 +489,7 @@ struct TableFunctionExtractor {
 		for (idx_t i = 0; i < fun.arguments.size(); i++) {
 			results.emplace_back(fun.arguments[i].ToString());
 		}
-		for (auto &param : fun.named_parameters) {
+		for (auto &param : SortedNamedParameters(fun.named_parameters)) {
 			results.emplace_back(param.second.ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
@@ -524,7 +538,7 @@ struct PragmaFunctionExtractor {
 		for (idx_t i = 0; i < fun.arguments.size(); i++) {
 			results.emplace_back("col" + to_string(i));
 		}
-		for (auto &param : fun.named_parameters) {
+		for (auto &param : SortedNamedParameters(fun.named_parameters)) {
 			results.emplace_back(param.first);
 		}
 		return results;
@@ -537,7 +551,7 @@ struct PragmaFunctionExtractor {
 		for (idx_t i = 0; i < fun.arguments.size(); i++) {
 			results.emplace_back(fun.arguments[i].ToString());
 		}
-		for (auto &param : fun.named_parameters) {
+		for (auto &param : SortedNamedParameters(fun.named_parameters)) {
 			results.emplace_back(param.second.ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, std::move(results));
@@ -577,19 +591,22 @@ static vector<Value> ToValueVector(vector<string> &string_vector) {
 template <class T, class OP>
 static Value GetParameterNames(CatalogEntry &entry, idx_t function_idx, FunctionDescription &function_description,
                                Value &parameter_types) {
-	vector<Value> parameter_names;
+	auto &function = entry.Cast<T>();
+	vector<Value> parameter_names = OP::GetParameters(function, function_idx);
 	if (!function_description.parameter_names.empty()) {
-		for (idx_t param_idx = 0; param_idx < ListValue::GetChildren(parameter_types).size(); param_idx++) {
-			if (param_idx < function_description.parameter_names.size()) {
-				parameter_names.emplace_back(function_description.parameter_names[param_idx]);
-			} else {
-				parameter_names.emplace_back("col" + to_string(param_idx));
+		// The description names the positional parameters. Named parameters keep the names reported by
+		// GetParameters, which lists them in the same order GetParameterTypes lists their types - taking those
+		// from the description too would pair them by position with types listed in a different order.
+		auto positional_count = OP::GetParameterLogicalTypes(function, function_idx).size();
+		auto parameter_count = ListValue::GetChildren(parameter_types).size();
+		parameter_names.resize(parameter_count, Value());
+		for (idx_t param_idx = 0; param_idx < parameter_count; param_idx++) {
+			if (param_idx < positional_count && param_idx < function_description.parameter_names.size()) {
+				parameter_names[param_idx] = Value(function_description.parameter_names[param_idx]);
+			} else if (parameter_names[param_idx].IsNull()) {
+				parameter_names[param_idx] = Value("col" + to_string(param_idx));
 			}
 		}
-	} else {
-		// fallback
-		auto &function = entry.Cast<T>();
-		parameter_names = OP::GetParameters(function, function_idx);
 	}
 	return Value::LIST(LogicalType::VARCHAR, parameter_names);
 }
