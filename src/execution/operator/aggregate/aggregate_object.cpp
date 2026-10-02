@@ -2,6 +2,8 @@
 
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/execution/operator/aggregate/aggregate_input_layout.hpp"
 
 namespace duckdb {
 
@@ -40,8 +42,11 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 }
 
 AggregateFilterData::AggregateFilterData(ClientContext &context, const Expression &filter_expr,
-                                         const vector<LogicalType> &payload_types)
-    : filter_executor(context, &filter_expr), true_sel(STANDARD_VECTOR_SIZE) {
+                                         const vector<LogicalType> &payload_types, optional_idx filter_column)
+    : mapped_filter(filter_column.IsValid()
+                        ? make_uniq<BoundReferenceExpression>(LogicalType::BOOLEAN, filter_column.GetIndex())
+                        : nullptr),
+      filter_executor(context, mapped_filter ? mapped_filter.get() : &filter_expr), true_sel(STANDARD_VECTOR_SIZE) {
 	if (payload_types.empty()) {
 		return;
 	}
@@ -60,7 +65,8 @@ AggregateFilterDataSet::AggregateFilterDataSet() {
 }
 
 void AggregateFilterDataSet::Initialize(ClientContext &context, const vector<AggregateObject> &aggregates,
-                                        const vector<LogicalType> &payload_types) {
+                                        const vector<LogicalType> &payload_types,
+                                        optional_ptr<const AggregateInputLayout> layout) {
 	bool has_filters = false;
 	for (auto &aggregate : aggregates) {
 		if (aggregate.filter) {
@@ -76,7 +82,9 @@ void AggregateFilterDataSet::Initialize(ClientContext &context, const vector<Agg
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx];
 		if (aggr.filter) {
-			filter_data[aggr_idx] = make_uniq<AggregateFilterData>(context, *aggr.filter, payload_types);
+			filter_data[aggr_idx] = make_uniq<AggregateFilterData>(
+			    context, *aggr.filter, payload_types,
+			    layout ? optional_idx(layout->FilterColumnIndex(aggr_idx)) : optional_idx());
 		}
 	}
 }
