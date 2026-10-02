@@ -8,6 +8,7 @@ to determine which extensions to sync:
   BUILD_EXTENSIONS   Semicolon-separated list of extension names
                      (e.g. "spatial;delta;postgres_scanner")
   DUCKDB_EXTENSIONS  Alias for BUILD_EXTENSIONS
+  CORE_EXTENSIONS   Legacy extension list, added to BUILD_EXTENSIONS
   EXTENSION_CONFIGS  Semicolon-separated list of cmake config file paths
                      whose duckdb_extension_load(... GIT_URL ...) calls are parsed
 
@@ -38,6 +39,49 @@ def run_cmd(cmd, cwd=None, check=True):
     return result
 
 
+def cmake_tokens(content):
+    """Tokenize literal arguments, parentheses and comments without evaluating CMake."""
+    pattern = re.compile(
+        r'(?P<bracket>#?\[(?P<equals>=*)\[.*?\](?P=equals)\])'
+        r'|(?P<comment>#[^\n]*)'
+        r'|(?P<quoted>"(?:\\.|[^"\\])*")'
+        r'|(?P<paren>[()])'
+        r'|(?P<argument>(?:\\.|[^\s()"#])+)',
+        re.DOTALL,
+    )
+    for match in pattern.finditer(content):
+        value = match.group()
+        kind = match.lastgroup
+        if kind == 'comment' or (kind == 'bracket' and value.startswith('#')):
+            continue
+        if kind == 'bracket':
+            width = len(match.group('equals')) + 2
+            value = value[width:-width]
+            if value.startswith('\n'):
+                value = value[1:]
+        elif kind in ('quoted', 'argument'):
+            if kind == 'quoted':
+                value = value[1:-1]
+            value = re.sub(r'\\\n|\\([^A-Za-z0-9;])', lambda m: m.group(1) or '', value)
+        yield ('paren' if kind == 'paren' else 'argument'), value
+
+
+def cmake_commands(content):
+    tokens = iter(cmake_tokens(content))
+    for kind, name in tokens:
+        if kind != 'argument' or next(tokens, None) != ('paren', '('):
+            continue
+        depth = 1
+        arguments = []
+        for kind, value in tokens:
+            if kind == 'paren':
+                depth += 1 if value == '(' else -1
+            if depth == 0:
+                break
+            arguments.append(value)
+        yield name.lower(), arguments
+
+
 def parse_cmake_file(cmake_path):
     """
     Parse a cmake file and return a list of out-of-tree extension descriptors,
@@ -48,67 +92,56 @@ def parse_cmake_file(cmake_path):
 
     Each descriptor is a dict with keys:
       name, git_url, git_tag, submodules (list, may be empty), apply_patches (bool)
+
+    This reads literal declarations; it does not evaluate conditionals or variables.
     """
     cmake_path = Path(cmake_path)
     content = cmake_path.read_text(encoding='utf-8')
 
     extensions = []
 
-    # Follow include("${EXTENSION_CONFIG_BASE_DIR}/foo.cmake") directives.
-    # EXTENSION_CONFIG_BASE_DIR resolves to the 'extensions/' subdirectory next to this file.
     ext_config_base_dir = cmake_path.parent / 'extensions'
-    for inc_match in re.finditer(
-        r"include\s*\(\s*[\"']?\$\{EXTENSION_CONFIG_BASE_DIR\}/(\S+?\.cmake)[\"']?\s*\)", content
-    ):
-        included = ext_config_base_dir / inc_match.group(1)
-        if included.exists():
-            extensions.extend(parse_cmake_file(included))
-
-    # Match duckdb_extension_load( NAME ... ) blocks (possibly multi-line).
-    # The closing ) is found by scanning for the first unbalanced ')'.
-    for m in re.finditer(r'duckdb_extension_load\s*\(', content):
-        start = m.end()
-        depth = 1
-        i = start
-        while i < len(content) and depth > 0:
-            if content[i] == '(':
-                depth += 1
-            elif content[i] == ')':
-                depth -= 1
-            i += 1
-        body = content[start : i - 1]
-
-        # First token is the extension name
-        name_match = re.match(r'\s*(\w[\w-]*)', body)
-        if not name_match:
+    options = {'DONT_LINK', 'DONT_BUILD', 'LOAD_TESTS', 'APPLY_PATCHES'}
+    keywords = options | {
+        'SOURCE_DIR',
+        'INCLUDE_DIR',
+        'TEST_DIR',
+        'GIT_URL',
+        'GIT_TAG',
+        'SUBMODULES',
+        'EXTENSION_VERSION',
+        'LINKED_LIBS',
+    }
+    for command, arguments in cmake_commands(content):
+        if command == 'include' and arguments:
+            prefix = '${EXTENSION_CONFIG_BASE_DIR}/'
+            if arguments[0].startswith(prefix):
+                included = ext_config_base_dir / arguments[0][len(prefix) :]
+                if included.exists():
+                    extensions.extend(parse_cmake_file(included))
             continue
-        name = name_match.group(1)
-
-        git_url_match = re.search(r'\bGIT_URL\s+(\S+)', body)
-        git_tag_match = re.search(r'\bGIT_TAG\s+(\S+)', body)
-
-        if not git_url_match or not git_tag_match:
-            continue  # in-tree extension or DONT_BUILD — skip
-
-        # SUBMODULES can be a space-separated list of paths; everything up to
-        # the next keyword or end-of-body
-        submodules = []
-        submodules_match = re.search(
-            r'\bSUBMODULES\s+((?:(?!(?:GIT_URL|GIT_TAG|DONT_BUILD|LOAD_TESTS|APPLY_PATCHES|INCLUDE_DIR|TEST_DIR|EXTENSION_VERSION|LINKED_LIBS|\))).)+)',
-            body,
-        )
-        if submodules_match:
-            submodules = submodules_match.group(1).split()
-
-        apply_patches = bool(re.search(r'\bAPPLY_PATCHES\b', body))
+        if command != 'duckdb_extension_load' or not arguments:
+            continue
+        name = arguments[0]
+        values = {}
+        keyword = None
+        for argument in arguments[1:]:
+            if argument in keywords:
+                keyword = argument
+                values[keyword] = []
+            elif keyword is not None:
+                values[keyword].append(argument)
+        if not values.get('GIT_URL') or not values.get('GIT_TAG'):
+            continue
+        submodules = [path for argument in values.get('SUBMODULES', []) for path in argument.split(';') if path]
 
         extensions.append(
             {
                 'name': name,
-                'git_url': git_url_match.group(1),
-                'git_tag': git_tag_match.group(1),
+                'git_url': values['GIT_URL'][0],
+                'git_tag': values['GIT_TAG'][0],
                 'submodules': submodules,
-                'apply_patches': apply_patches,
+                'apply_patches': 'APPLY_PATCHES' in values,
             }
         )
 
@@ -391,13 +424,15 @@ def collect_extensions(repo_root, build_extensions_arg=None, extension_configs_a
     raw_build_extensions = (
         build_extensions_arg or os.environ.get('BUILD_EXTENSIONS') or os.environ.get('DUCKDB_EXTENSIONS') or ''
     )
+    raw_core_extensions = os.environ.get('CORE_EXTENSIONS', '')
     raw_extension_configs = extension_configs_arg or os.environ.get('EXTENSION_CONFIGS') or ''
 
     extensions = {}  # name -> descriptor (first seen wins)
 
-    # From named extensions in BUILD_EXTENSIONS / DUCKDB_EXTENSIONS
-    for name in re.split(r'[;,\s]+', raw_build_extensions):
-        name = name.strip()
+    # Legacy Makefiles may wrap the whole list in shell quotes.
+    raw_extensions = ';'.join(value.strip("'\"") for value in (raw_build_extensions, raw_core_extensions))
+    for name in re.split(r'[;,\s]+', raw_extensions):
+        name = name.strip("'\"")
         if not name:
             continue
         cmake_path = extensions_config_dir / f'{name}.cmake'
