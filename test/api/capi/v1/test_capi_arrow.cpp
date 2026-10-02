@@ -334,6 +334,54 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	// this likely requires nanoarrow to create the array to scan
 }
 
+namespace {
+
+// A two-column Arrow struct array (a = 1..4, b = 10..40) whose release callback poisons the buffers, so a read after
+// release shows up as wrong values instead of silently reading freed memory.
+struct PoisoningArrowArray {
+	static constexpr idx_t ROWS = 4;
+
+	int64_t a[ROWS];
+	int64_t b[ROWS];
+	const void *buffers_a[2] = {nullptr, a};
+	const void *buffers_b[2] = {nullptr, b};
+	const void *buffers_parent[1] = {nullptr};
+	ArrowArray child_a;
+	ArrowArray child_b;
+	ArrowArray *children[2] = {&child_a, &child_b};
+	ArrowArray array;
+	idx_t release_calls = 0;
+
+	PoisoningArrowArray() {
+		for (idx_t i = 0; i < ROWS; i++) {
+			a[i] = int64_t(i + 1);
+			b[i] = int64_t((i + 1) * 10);
+		}
+		InitChild(child_a, buffers_a);
+		InitChild(child_b, buffers_b);
+		array = {int64_t(ROWS), 0, 0, 1, 2, buffers_parent, children, nullptr, ReleaseParent, this};
+	}
+
+	static void InitChild(ArrowArray &child, const void **buffers) {
+		child = {int64_t(ROWS), 0, 0, 2, 0, buffers, nullptr, nullptr, ReleaseChild, nullptr};
+	}
+	static void ReleaseChild(ArrowArray *child) {
+		child->release = nullptr;
+	}
+	static void ReleaseParent(ArrowArray *parent) {
+		auto &self = *static_cast<PoisoningArrowArray *>(parent->private_data);
+		self.release_calls++;
+		memset(self.a, 0xAB, sizeof(self.a));
+		memset(self.b, 0xAB, sizeof(self.b));
+		for (int64_t i = 0; i < parent->n_children; i++) {
+			parent->children[i]->release(parent->children[i]);
+		}
+		parent->release = nullptr;
+	}
+};
+
+} // namespace
+
 TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 	CAPITester tester;
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -487,5 +535,47 @@ TEST_CASE("Test C-API Arrow conversion functions", "[capi][arrow]") {
 		duckdb_destroy_error_data(&err);
 		duckdb_destroy_arrow_options(&arrow_options);
 		free((void *)names[0]);
+	}
+
+	SECTION("data_chunk_from_arrow keeps the array alive while any of its columns is referenced") {
+		duckdb_logical_type bigint = duckdb_create_logical_type(DUCKDB_TYPE_BIGINT);
+		duckdb_logical_type types[2] = {bigint, bigint};
+		const char *names[2] = {"a", "b"};
+		ArrowSchemaWrapper arrow_schema_wrapper;
+		duckdb_arrow_options arrow_options;
+		duckdb_connection_get_arrow_options(tester.connection, &arrow_options);
+		duckdb_error_data err =
+		    duckdb_to_arrow_schema(arrow_options, types, names, 2, &arrow_schema_wrapper.arrow_schema);
+		duckdb_destroy_arrow_options(&arrow_options);
+		REQUIRE(err == nullptr);
+		duckdb_arrow_converted_schema converted_schema = nullptr;
+		err = duckdb_schema_from_arrow(tester.connection, &arrow_schema_wrapper.arrow_schema, &converted_schema);
+		REQUIRE(err == nullptr);
+
+		// Keep a single column alive by referencing it from another chunk, then destroy the source chunk.
+		for (idx_t column = 0; column < 2; column++) {
+			PoisoningArrowArray producer;
+			duckdb_data_chunk source = nullptr;
+			err = duckdb_data_chunk_from_arrow(tester.connection, &producer.array, converted_schema, &source);
+			REQUIRE(err == nullptr);
+
+			duckdb_data_chunk target = duckdb_create_data_chunk(&bigint, 1);
+			duckdb_vector_reference_vector(duckdb_data_chunk_get_vector(target, 0),
+			                               duckdb_data_chunk_get_vector(source, column));
+			duckdb_data_chunk_set_size(target, PoisoningArrowArray::ROWS);
+			duckdb_destroy_data_chunk(&source);
+
+			REQUIRE(producer.release_calls == 0);
+			auto data = static_cast<int64_t *>(duckdb_vector_get_data(duckdb_data_chunk_get_vector(target, 0)));
+			for (idx_t i = 0; i < PoisoningArrowArray::ROWS; i++) {
+				REQUIRE(data[i] == int64_t((i + 1) * (column == 0 ? 1 : 10)));
+			}
+
+			duckdb_destroy_data_chunk(&target);
+			REQUIRE(producer.release_calls == 1);
+		}
+
+		duckdb_destroy_arrow_converted_schema(&converted_schema);
+		duckdb_destroy_logical_type(&bigint);
 	}
 }
