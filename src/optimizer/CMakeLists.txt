@@ -48,6 +48,7 @@ add_library_unity(
   join_elimination.cpp
   regex_range_filter.cpp
   remove_duplicate_groups.cpp
+  remove_redundant_order_keys.cpp
   remove_unused_columns.cpp
   row_group_pruner.cpp
   statistics_propagator.cpp
