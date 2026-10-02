@@ -267,7 +267,21 @@ SuccessState ShellState::RenderPreparedResult(ShellRenderer &renderer, Rendering
 	}
 	// render the query result
 	PrintStream print_stream(*this);
-	return renderer.RenderQueryResult(print_stream, *this, render_result);
+	auto render_state = renderer.RenderQueryResult(print_stream, *this, render_result);
+	if (render_state != SuccessState::SUCCESS) {
+		// the renderer has reported the failure itself
+		return render_state;
+	}
+	// results are materialized lazily - an error raised during execution only surfaces once the rows are drained
+	if (render_result.result && render_result.result->HasError()) {
+		PrintDatabaseError(render_result.result->GetError());
+		return SuccessState::FAILURE;
+	}
+	if (render_result.stream && render_result.stream->HasError()) {
+		PrintDatabaseError(render_result.stream->GetError());
+		return SuccessState::FAILURE;
+	}
+	return SuccessState::SUCCESS;
 }
 
 SuccessState ShellRenderer::RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) {
