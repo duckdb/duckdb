@@ -1863,7 +1863,10 @@ public:
 	}
 	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override;
 
-private:
+protected:
+	//! Lays out the rows of the collection for rendering - an error is stored and rendered instead
+	void PrepareRender(RenderingQueryResult &result, const duckdb::ColumnDataCollection &collection);
+
 	duckdb::BoxRendererConfig config;
 	unique_ptr<duckdb::ClientBoxRendererContext> render_context;
 	unique_ptr<duckdb::BoxRendererState> render_state;
@@ -1915,10 +1918,14 @@ void ModeDuckBoxRenderer::RemoveRenderLimits() {
 }
 
 void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
+	PrepareRender(result, result.result->Collection());
+}
+
+void ModeDuckBoxRenderer::PrepareRender(RenderingQueryResult &result, const duckdb::ColumnDataCollection &collection) {
 	duckdb::BoxRenderer renderer(config);
 	auto &con = *state.conn;
 	try {
-		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(result.result->Collection());
+		wrapper = make_uniq<duckdb::ColumnDataCollectionWrapper>(collection);
 		render_context = make_uniq<duckdb::ClientBoxRendererContext>(*con.context);
 		render_state = renderer.Prepare(*render_context, result.metadata.column_names, *wrapper);
 	} catch (std::exception &ex) {
@@ -1930,6 +1937,10 @@ void ModeDuckBoxRenderer::Analyze(RenderingQueryResult &result) {
 bool ModeDuckBoxRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) {
 	if (global_mode == PagerMode::PAGER_ON) {
 		return true;
+	}
+	if (!render_state) {
+		// the analysis failed - the error is rendered without a pager
+		return false;
 	}
 	// in duckbox mode the output is automatically truncated to the terminal width if max_width = 0
 	// if max_width is set - check the render width - we use the pager if it exceeds the max render width
@@ -1943,7 +1954,7 @@ bool ModeDuckBoxRenderer::ShouldUsePager(RenderingQueryResult &result, PagerMode
 	// if this is larger than pager_min_rows - we actually check the row count of the result
 	if (config.max_rows >= state.pager_min_rows) {
 		// show the pager if the row count exceeds the min rows
-		if (result.result->RowCount() >= state.pager_min_rows) {
+		if (wrapper->Count() >= state.pager_min_rows) {
 			return true;
 		}
 	}
@@ -1964,6 +1975,92 @@ SuccessState ModeDuckBoxRenderer::RenderQueryResult(PrintStream &out, ShellState
 		return SuccessState::FAILURE;
 	}
 }
+
+//===--------------------------------------------------------------------===//
+// DuckBox Preview Renderer
+//===--------------------------------------------------------------------===//
+//! Renders like duckbox, but streams: only the first rows are fetched (.materialize rows), and the first max_rows
+//! of them are rendered. The fetched rows become the last result (`_`). Up to the cap the row count is exact and an
+//! error is reported; beyond it the row count is a lower bound, and the query is left open - its remaining rows are
+//! fetched into `_` if the next statement refers to it, otherwise the query is cancelled (see ResolvePendingResult)
+class ModeDuckBoxPreviewRenderer : public ModeDuckBoxRenderer {
+public:
+	explicit ModeDuckBoxPreviewRenderer(ShellState &state) : ModeDuckBoxRenderer(state) {
+	}
+
+	bool RequireMaterializedResult() const override {
+		return false;
+	}
+	unique_ptr<duckdb::QueryResult> TakeRetainedResult() override {
+		return std::move(retained);
+	}
+	bool KeepStreamOpen() const override {
+		return has_more_rows;
+	}
+
+	void Analyze(RenderingQueryResult &result) override {
+		if (!result.stream) {
+			// a retained result (e.g. ".last") is rendered like in duckbox mode
+			ModeDuckBoxRenderer::Analyze(result);
+			return;
+		}
+		auto &stream = *result.stream;
+		auto collection = make_uniq<duckdb::ColumnDataCollection>(*state.conn->context, stream.GetTypes());
+		// fetch whole chunks until the cap is reached - and then one more, which tells whether the query has more rows:
+		// if it has none, the row count is exact (even if it is a bit over the cap)
+		bool exhausted = false;
+		bool reached_cap = false;
+		while (true) {
+			if (state.seenInterrupt) {
+				return;
+			}
+			auto chunk = stream.Fetch();
+			if (!chunk) {
+				exhausted = true;
+				break;
+			}
+			collection->Append(*chunk);
+			if (reached_cap) {
+				break;
+			}
+			reached_cap = collection->Count() >= state.materialize_rows;
+		}
+		if (stream.HasError()) {
+			// the query failed within the fetched rows - the caller reports the error, nothing is rendered
+			failed = true;
+			return;
+		}
+		has_more_rows = !exhausted;
+		if (has_more_rows) {
+			// the last fetched rows are not the last rows of the query - only render the first rows
+			config.render_head_only = true;
+			config.row_count_is_lower_bound = true;
+		}
+		retained = duckdb::make_uniq<duckdb::QueryResult>(stream.GetStatementType(), stream.GetStatementProperties(),
+		                                                  stream.GetNames(), std::move(collection),
+		                                                  stream.GetClientProperties());
+		PrepareRender(result, retained->Collection());
+	}
+
+	bool ShouldUsePager(RenderingQueryResult &result, PagerMode global_mode) override {
+		if (failed) {
+			return false;
+		}
+		return ModeDuckBoxRenderer::ShouldUsePager(result, global_mode);
+	}
+
+	SuccessState RenderQueryResult(PrintStream &out, ShellState &state, RenderingQueryResult &result) override {
+		if (failed) {
+			return SuccessState::FAILURE;
+		}
+		return ModeDuckBoxRenderer::RenderQueryResult(out, state, result);
+	}
+
+private:
+	unique_ptr<duckdb::QueryResult> retained;
+	bool has_more_rows = false;
+	bool failed = false;
+};
 
 //===--------------------------------------------------------------------===//
 // Describe Renderer
@@ -2079,7 +2176,12 @@ unique_ptr<ShellRenderer> ShellState::GetRenderer(RenderMode mode) {
 	case RenderMode::LATEX:
 		return make_uniq<ModeLatexRenderer>(*this);
 	case RenderMode::DUCKBOX:
+		if (materialize == MaterializeMode::PREVIEW) {
+			return make_uniq<ModeDuckBoxPreviewRenderer>(*this);
+		}
 		return make_uniq<ModeDuckBoxRenderer>(*this);
+	case RenderMode::DUCKBOX_PREVIEW:
+		return make_uniq<ModeDuckBoxPreviewRenderer>(*this);
 	case RenderMode::DESCRIBE:
 		return make_uniq<ModeDescribeRenderer>(*this);
 	case RenderMode::TRASH:
