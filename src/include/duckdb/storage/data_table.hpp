@@ -95,7 +95,7 @@ public:
 	                    const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
-	idx_t MaxThreads(ClientContext &context);
+	idx_t MaxThreads(ClientContext &context) const;
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
 	                            const vector<ColumnIndex> &column_indexes);
 	optional_idx NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,

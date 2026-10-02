@@ -291,7 +291,7 @@ vector<PartitionStatistics> DataTable::GetPartitionStats(ClientContext &context)
 	return result;
 }
 
-idx_t DataTable::MaxThreads(ClientContext &context) {
+idx_t DataTable::MaxThreads(ClientContext &context) const {
 	idx_t row_group_size = GetRowGroupSize();
 	idx_t parallel_scan_vector_count = row_group_size / STANDARD_VECTOR_SIZE;
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
