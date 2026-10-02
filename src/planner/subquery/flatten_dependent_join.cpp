@@ -1181,9 +1181,11 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownLimit(uniqu
 
 	if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		auto limit_val = limit.limit_val.GetConstantValue();
-		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val);
+		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE &&
+		    !TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val)) {
+			limit_val = NumericLimits<idx_t>::Maximum();
 		}
+		limit_val = MinValue<idx_t>(limit_val, idx_t(NumericLimits<int64_t>::Maximum()));
 		auto upper_bound = make_uniq<BoundConstantExpression>(int64_t(limit_val));
 		condition = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
 		                                              std::move(upper_bound));
