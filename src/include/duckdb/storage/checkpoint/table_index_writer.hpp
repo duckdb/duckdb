@@ -25,8 +25,10 @@ struct IndexCheckpointResult {
 };
 
 class TableIndexWriter {
-public:
+protected:
 	explicit TableIndexWriter(PartialBlockManager &partial_block_manager, StorageVersion version);
+
+public:
 	virtual ~TableIndexWriter();
 
 public:
@@ -51,7 +53,7 @@ class SingleFileTableIndexWriter : public TableIndexWriter {
 public:
 	explicit SingleFileTableIndexWriter(SingleFileCheckpointWriter &checkpoint_manager, StorageVersion version);
 
-public:
+private:
 	PartialBlockManager CreatePerIndexPartialBlockManager() override;
 	void Flush() override;
 
