@@ -17,6 +17,7 @@ set(JSON_EXTENSION_FILES
     json_functions.cpp
     json_scan.cpp
     json_serializer.cpp
+    json_stack.hpp
     json_deserializer.cpp
     serialize_json.cpp
     json_functions/copy_json.cpp

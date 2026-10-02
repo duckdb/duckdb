@@ -1,5 +1,6 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
+#include "json_stack.hpp"
 
 namespace duckdb {
 
@@ -17,12 +18,11 @@ static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyj
 	};
 
 	yyjson_mut_val *result = nullptr;
-	auto stack = vector<stack_item>();
-	stack.push_back(stack_item {nullptr, old_val, new_val, nullptr, nullptr, false});
+	Stack<stack_item> stack;
+	stack.Push(stack_item {nullptr, old_val, new_val, nullptr, nullptr, false});
 
-	while (!stack.empty()) {
-		auto item = stack.back();
-		stack.pop_back();
+	while (!stack.Empty()) {
+		auto item = stack.Pop();
 
 		// finalize phase: update result
 		if (item.finalize) {
@@ -51,7 +51,7 @@ static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyj
 				}
 			}
 
-			stack.push_back({item.key, nullptr, nullptr, item.parent_builder, builder, true});
+			stack.Push({item.key, nullptr, nullptr, item.parent_builder, builder, true});
 
 			// Keys in new: collect in order
 			{
@@ -67,7 +67,7 @@ static yyjson_mut_val *ComputeDiff(yyjson_mut_doc *doc, yyjson_val *old_val, yyj
 				}
 				// push to stack in reverse to preserve order in output
 				for (auto it = children.rbegin(); it != children.rend(); ++it) {
-					stack.push_back(*it);
+					stack.Push(*it);
 				}
 			}
 		} else if (!item.old_node || !yyjson_equals(item.old_node, item.new_node)) {
