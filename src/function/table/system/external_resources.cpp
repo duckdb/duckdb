@@ -129,10 +129,11 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 		    "external resource discovery for type \"%s\": the list callback \"%s\" did not return a \"handle\" column",
 		    type.name, type.list_function);
 	}
+	auto res_rows = res->Collection().GetRows();
 	for (idx_t r = 0; r < res->RowCount(); r++) {
 		// The handle is a MAP (opaque to us), the same contract create/status enforce - reject anything else
 		// with a clear message rather than a cast failure deep in the output append.
-		auto handle = RequireResourceMap(res->GetValue(handle_idx, r), type.list_function, "handle");
+		auto handle = RequireResourceMap(res_rows.GetValue(handle_idx, r), type.list_function, "handle");
 		if (managed_handles.count(HandleKey(handle)) > 0) {
 			continue; // already shown as a locally managed resource of this type
 		}
@@ -141,11 +142,11 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 		row.handle = std::move(handle);
 		row.managed = false;
 		if (reference_idx != DConstants::INVALID_INDEX) {
-			auto ref = res->GetValue(reference_idx, r);
+			auto ref = res_rows.GetValue(reference_idx, r);
 			row.reference = ref.IsNull() ? string() : ref.ToString();
 		}
 		if (state_idx != DConstants::INVALID_INDEX) {
-			auto st = res->GetValue(state_idx, r);
+			auto st = res_rows.GetValue(state_idx, r);
 			row.state = st.IsNull() ? string() : st.ToString();
 		}
 		rows.push_back(std::move(row));
@@ -211,7 +212,8 @@ static void ExternalResourcesFunction(ClientContext &context, TableFunctionInput
 void DuckDBExternalResourcesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction fn("duckdb_external_resources", {}, ExternalResourcesFunction, ExternalResourcesBind,
 	                 ExternalResourcesInit);
-	fn.named_parameters["discover"] = LogicalType::BOOLEAN;
+	fn.GetSignature().WithTypedKwargs("options",
+	                                  [](TypedKwargs &options) { options.Add("discover", LogicalType::BOOLEAN); });
 	set.AddFunction(fn);
 }
 
@@ -285,13 +287,17 @@ static void RegisterExternalResourceFunction(ClientContext &context, TableFuncti
 }
 
 void RegisterExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction fn(
-	    "register_external_resource",
-	    {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)},
-	    RegisterExternalResourceFunction, RegisterExternalResourceBind, RegisterExternalResourceInit);
-	fn.named_parameters["uri"] = LogicalType::VARCHAR;
-	fn.named_parameters["attached_db_type"] = LogicalType::VARCHAR;
-	fn.named_parameters["deleter_function"] = LogicalType::VARCHAR;
+	TableFunction fn("register_external_resource",
+	                 FunctionSignature()
+	                     .AddPositionalOnly("type", LogicalType::VARCHAR)
+	                     .AddPositionalOnly("name", LogicalType::VARCHAR)
+	                     .AddPositionalOnly("handle", LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR)),
+	                 RegisterExternalResourceFunction, RegisterExternalResourceBind, RegisterExternalResourceInit);
+	fn.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("uri", LogicalType::VARCHAR)
+		    .Add("attached_db_type", LogicalType::VARCHAR)
+		    .Add("deleter_function", LogicalType::VARCHAR);
+	});
 	set.AddFunction(fn);
 }
 
@@ -343,9 +349,9 @@ static void DeregisterExternalResourceFunction(ClientContext &context, TableFunc
 }
 
 void DeregisterExternalResourceFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("deregister_external_resource", {LogicalType::VARCHAR},
-	                              DeregisterExternalResourceFunction, DeregisterExternalResourceBind,
-	                              DeregisterExternalResourceInit));
+	set.AddFunction(TableFunction(
+	    "deregister_external_resource", FunctionSignature().AddPositionalOnly("name", LogicalType::VARCHAR),
+	    DeregisterExternalResourceFunction, DeregisterExternalResourceBind, DeregisterExternalResourceInit));
 }
 
 } // namespace duckdb

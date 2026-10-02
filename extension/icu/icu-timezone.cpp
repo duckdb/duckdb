@@ -19,7 +19,7 @@ struct ICUTimeZoneData : public GlobalTableFunctionState {
 	}
 
 	idx_t offset = 0;
-	double now;
+	int64_t now;
 };
 
 static duckdb::unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFunctionBindInput &input,
@@ -108,7 +108,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 			return true;
 		}
 
-		auto nanos = naive.value % Interval::NANOS_PER_MICRO;
+		auto nanos = UnsafeNumericCast<int32_t>(naive.value % Interval::NANOS_PER_MICRO);
 		timestamp_t micros(naive.value / Interval::NANOS_PER_MICRO);
 		timestamp_tz_t cast;
 		if (!TryOperation(calendar, micros, cast, error)) {
@@ -195,7 +195,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 			return timestamp_tz_ns_t(naive);
 		}
 
-		auto nanos = naive.value % Interval::NANOS_PER_MICRO;
+		auto nanos = UnsafeNumericCast<int32_t>(naive.value % Interval::NANOS_PER_MICRO);
 		timestamp_t micros(naive.value / Interval::NANOS_PER_MICRO);
 		timestamp_t cast(Operation(calendar, micros));
 
@@ -343,7 +343,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 			return true;
 		}
 
-		auto nanos = instant.value % Interval::NANOS_PER_MICRO;
+		auto nanos = UnsafeNumericCast<int32_t>(instant.value % Interval::NANOS_PER_MICRO);
 		timestamp_tz_t micros(instant.value / Interval::NANOS_PER_MICRO);
 		timestamp_t cast;
 		if (!TryOperation(calendar, micros, cast, error)) {

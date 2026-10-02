@@ -39,7 +39,7 @@ TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, Calendar *calen
 TimestampComponents ICUHelpers::GetComponents(timestamp_tz_ns_t tsns, Calendar *calendar) {
 	// Get the parts in the given time zone
 	auto ts_data = GetComponents(timestamp_tz_t(tsns.value / Interval::NANOS_PER_MICRO), calendar);
-	ts_data.nanosecond = tsns.value % Interval::NANOS_PER_MICRO;
+	ts_data.nanosecond = UnsafeNumericCast<int16_t>(tsns.value % Interval::NANOS_PER_MICRO);
 	return ts_data;
 }
 

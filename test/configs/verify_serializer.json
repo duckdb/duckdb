@@ -5,6 +5,12 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Measures CTE restrictions using planner dependencies deliberately discarded by serialization",
+      "paths": [
+        "test/optimizer/pushdown/cte_domain_join_filter.test"
+      ]
+    },
+    {
       "reason": "Extension optimizer pass breaks logical plan serialization",
       "paths": [
         "test/extension/test_extensible_filter.test"
