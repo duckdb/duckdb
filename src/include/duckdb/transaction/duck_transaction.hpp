@@ -16,7 +16,6 @@
 #include "duckdb/common/enums/active_transaction_state.hpp"
 
 namespace duckdb {
-class CheckpointLock;
 class CommitDropState;
 class DuckTableEntry;
 class RowGroupCollection;
@@ -24,7 +23,6 @@ class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
 class StorageCommitState;
-struct DataTableInfo;
 struct UndoBufferProperties;
 
 struct CommitInfo {
@@ -72,6 +70,10 @@ public:
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
 	ErrorData PreFlushOptimisticBlocks(AttachedDatabase &db) noexcept;
+	//! Appends the local storage to the tables; with a WAL, the commit state records the optimistically written blocks
+	ErrorData AppendLocalStorage(ClientContext &context, AttachedDatabase &db,
+	                             unique_ptr<StorageCommitState> &commit_state) noexcept;
+	//! Writes the undo buffer to the WAL, with the commit state of AppendLocalStorage
 	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
@@ -107,9 +109,6 @@ public:
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();
 
-	//! Get a shared lock on a table
-	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
-
 	void SetIsCheckpointTransaction() {
 		is_checkpoint_transaction = true;
 	}
@@ -128,14 +127,6 @@ private:
 	mutex sequence_lock;
 	//! Map of all sequences that were used during the transaction and the value they had in this transaction
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
-	//! Lock for the active_locks map
-	mutex active_locks_lock;
-	struct ActiveTableLock {
-		mutex checkpoint_lock_mutex; // protects access to the checkpoint_lock field in this class
-		weak_ptr<CheckpointLock> checkpoint_lock;
-	};
-	//! Active locks on tables
-	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 	//! Flag to prevent auto-checkpointing inside a checkpoint transaction.
 	bool is_checkpoint_transaction = false;
 };
