@@ -78,6 +78,8 @@ public:
 	idx_t RowBlockCount() const;
 	//! Number of heap blocks
 	idx_t HeapBlockCount() const;
+	//! Buffer-manager memory charged for row and heap blocks
+	idx_t GetBlockAllocationSize() const;
 	//! Sets the partition index of this tuple data allocator
 	void SetPartitionIndex(idx_t index);
 	//! Gets the partition index of this tuple data allocator
