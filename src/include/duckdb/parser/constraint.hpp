@@ -10,6 +10,7 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/exception.hpp"
 
@@ -73,6 +74,13 @@ public:
 	DUCKDB_API virtual void Serialize(Serializer &serializer) const;
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &deserializer);
 
+	idx_t GetBackingIndexOid() const;
+	void SetBackingIndexOid(idx_t oid);
+
+protected:
+	//! The backing index identity is local to this database instance and is never persisted.
+	optional_idx backing_index_oid;
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
@@ -89,5 +97,9 @@ public:
 		}
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+private:
+	//! Whether the table enforces this constraint through an index it owns.
+	bool NeedsBackingIndex() const;
 };
 } // namespace duckdb
