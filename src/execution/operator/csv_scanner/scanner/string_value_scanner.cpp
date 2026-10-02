@@ -2013,6 +2013,9 @@ void StringValueScanner::FinishBoundaryScan(const bool moved) {
 			// The row started in an earlier buffer, so it spans a full buffer: over max_line_size
 			LinePosition current_pos = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, result.buffer_size};
 			idx_t line_size = current_pos - result.current_line_position.end;
+			// Move the line forward like AddRowInternal does, so the error reports this row, not the previous one
+			result.current_line_position.begin = result.current_line_position.end;
+			result.current_line_position.end = current_pos;
 			result.current_errors.Insert(MAXIMUM_LINE_SIZE, 1, result.chunk_col_id, result.last_position, line_size);
 			break;
 		}
