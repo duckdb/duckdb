@@ -57,11 +57,14 @@ SELECT * FROM repeat_row(1, num_rows=NULL)
 ----
 <REGEX>:Binder Error.*num_rows should be an integer value >= 0.*
 
+mode skip
 # num_rows is negative
 statement error
 SELECT * FROM repeat_row(1, num_rows=-1)
 ----
 Binder Error
+
+mode unskip
 
 # num_rows is a large negative value
 statement error

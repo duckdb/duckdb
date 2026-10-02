@@ -25,7 +25,7 @@ static unique_ptr<FunctionData> RepeatBind(ClientContext &context, TableFunction
 	return_types.push_back(inputs[0].type());
 	names.emplace_back(inputs[0].ToString());
 	if (inputs[1].IsNull()) {
-		throw BinderException("Second parameter cannot be NULL");
+		throw BinderException("count cannot be NULL");
 	}
 	auto repeat_count = inputs[1].GetValue<uint64_t>();
 	return make_uniq<RepeatFunctionData>(inputs[0], NumericCast<idx_t>(repeat_count));
