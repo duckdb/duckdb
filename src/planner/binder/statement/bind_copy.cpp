@@ -11,6 +11,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
@@ -613,6 +615,20 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	return result;
 }
 
+//! Replace every column reference in a column-list option -- `PARTITION_BY col`, `PARTITION_BY (a, b)`,
+//! which the parser gives as row(a, b) -- with the name it spells, as a string.
+static void ColumnNamesToStrings(unique_ptr<ParsedExpression> &expr) {
+	if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
+		auto &col_ref = expr->Cast<ColumnRefExpression>();
+		auto name = ConstantExpression::String(StringUtil::Join(col_ref.ColumnNames(), "."));
+		name->SetQueryLocation(col_ref.GetQueryLocation());
+		expr = std::move(name);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expr, [](unique_ptr<ParsedExpression> &child) { ColumnNamesToStrings(child); });
+}
+
 vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option_binder, const Identifier &name,
                              unique_ptr<ParsedExpression> &expr) {
 	vector<Value> result;
@@ -628,19 +644,16 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 			return result;
 		}
 	}
-	const bool is_partition_by = name == "partition_by";
-
-	if (is_partition_by) {
-		//! When binding the 'partition_by' option, we don't want to resolve a column reference to a SQLValueFunction
-		//! (like 'user')
-		option_binder.DisableSQLValueFunctions();
+	if (name == "partition_by" || name == "force_quote" || name == "force_not_null" || name == "force_null") {
+		// These options take a list of column names: an identifier in one IS the name, so it is bound as
+		// that string.  Bound as a column reference it would reach the table-function binder's implicit
+		// conversion of unbound identifiers to strings -- the same string, but deprecated and warned about
+		// (and a 'user' or 'current_date' column resolved to a SQL value function instead).
+		ColumnNamesToStrings(expr);
 	}
 	auto bound_expr = option_binder.Bind(expr);
 	if (bound_expr->HasParameter()) {
 		throw ParameterNotResolvedException();
-	}
-	if (is_partition_by) {
-		option_binder.EnableSQLValueFunctions();
 	}
 
 	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
