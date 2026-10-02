@@ -30,7 +30,7 @@ class IndexWriteHandle;
 class IndexBinder;
 struct IndexStorageInfo;
 struct DataTableInfo;
-struct CheckpointedIndex;
+struct IndexCheckpointResult;
 template <class T>
 class TableIndexIterationHelper;
 class TableIndexWriter;

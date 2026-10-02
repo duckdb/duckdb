@@ -19,7 +19,7 @@ class BoundIndex;
 
 //! Checkpointing result for an index. The shadow index may be empty either when
 //! the index is unbound, or the index does not support deferred checkpointing.
-struct CheckpointedIndex {
+struct IndexCheckpointResult {
 	shared_ptr<const IndexStorageInfo> storage_info;
 	unique_ptr<BoundIndex> shadow_index;
 };

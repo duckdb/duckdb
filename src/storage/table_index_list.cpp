@@ -512,7 +512,7 @@ vector<shared_ptr<const IndexStorageInfo>> TableIndexList::Checkpoint(TableIndex
 	writer.Flush();
 
 	for (idx_t i = 0; i < index_entries.size(); i++) {
-		index_entries[i]->Swap(std::move(shadows[i]));
+		index_entries[i]->InstallShadow(std::move(shadows[i]));
 	}
 
 	return infos;

@@ -75,7 +75,7 @@ public:
 	}
 
 	//! Checkpoint an index, based on the mode supported by the index flushing may be deferred.
-	virtual CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version);
+	virtual IndexCheckpointResult Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version);
 
 	//! Returns unique flag
 	bool IsUnique() const {

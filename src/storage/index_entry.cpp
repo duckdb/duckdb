@@ -464,7 +464,7 @@ idx_t IndexEntry::GetInMemorySize() const {
 	return owned_index->Cast<BoundIndex>().GetInMemorySize();
 }
 
-CheckpointedIndex IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
+IndexCheckpointResult IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto entry_lock = lock.GetExclusiveLock();
 	D_ASSERT(owned_index);
 
@@ -480,16 +480,16 @@ CheckpointedIndex IndexEntry::Checkpoint(TableIndexWriter &index_writer) {
 	auto checkpoint = owned_index->Checkpoint(partial_block_manager, storage_version);
 	partial_block_manager.FlushPartialBlocks();
 
-	SwapInternal(std::move(checkpoint.shadow_index));
+	InstallShadowInternal(std::move(checkpoint.shadow_index));
 	return checkpoint;
 }
 
-void IndexEntry::Swap(unique_ptr<BoundIndex> shadow_index) {
+void IndexEntry::InstallShadow(unique_ptr<BoundIndex> shadow_index) {
 	auto entry_lock = lock.GetExclusiveLock();
-	SwapInternal(std::move(shadow_index));
+	InstallShadowInternal(std::move(shadow_index));
 }
 
-void IndexEntry::SwapInternal(unique_ptr<BoundIndex> shadow_index) {
+void IndexEntry::InstallShadowInternal(unique_ptr<BoundIndex> shadow_index) {
 	if (!shadow_index) {
 		return;
 	}

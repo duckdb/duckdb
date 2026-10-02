@@ -164,9 +164,9 @@ public:
 	//! Returns the in-memory size of the physical index, or zero if it is unbound.
 	idx_t GetInMemorySize() const;
 	//! Persist the index through the index writer and optionally returns a shadow index.
-	CheckpointedIndex Checkpoint(TableIndexWriter &writer);
+	IndexCheckpointResult Checkpoint(TableIndexWriter &writer);
 	//! Install a shadow index in place of the current live index.
-	void Swap(unique_ptr<BoundIndex> shadow_index);
+	void InstallShadow(unique_ptr<BoundIndex> shadow_index);
 	//! Serializes the bound physical index for the write-ahead log.
 	IndexStorageInfo SerializeToWAL(const StorageVersion version);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
@@ -199,7 +199,7 @@ private:
 	friend class IndexWriteHandle;
 
 	//! Replace the physical index, this assumes an exclusive lock on the index is being held.
-	void SwapInternal(unique_ptr<BoundIndex> shadow_index);
+	void InstallShadowInternal(unique_ptr<BoundIndex> shadow_index);
 
 private:
 	atomic<IndexBindState> bind_state;
