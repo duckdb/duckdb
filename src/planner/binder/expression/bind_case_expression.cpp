@@ -65,7 +65,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 			return BindResult(std::move(error));
 		}
 
-		if (!case_operand->IsVolatile()) {
+		if (!case_operand->IsVolatile() && !case_operand->HasSubquery()) {
 			for (auto &check : expr.CaseChecksMutable()) {
 				auto when_expr = BindChild(check.when_expr, depth, error);
 				auto then_expr = BindChild(check.then_expr, depth, error);
