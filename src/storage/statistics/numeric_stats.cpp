@@ -42,6 +42,12 @@ BaseStatistics NumericStats::CreateEmpty(LogicalType type) {
 		InitializeEmptyFloatingPointStats<double>(result);
 		break;
 	default:
+		if (result.GetType().id() == LogicalTypeId::ENUM && EnumType::GetSize(result.GetType()) == 0) {
+			// an empty ENUM has no valid values to use as bounds
+			SetMin(result, Value(result.GetType()));
+			SetMax(result, Value(result.GetType()));
+			break;
+		}
 		SetMin(result, Value::MaximumValue(result.GetType()));
 		SetMax(result, Value::MinimumValue(result.GetType()));
 		break;
