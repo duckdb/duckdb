@@ -98,7 +98,7 @@ static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
 			if (!alter_column_info.expression) {
 				// without USING, the column is cast to the target type
 				alter_column_info.expression = make_uniq<CastExpression>(
-				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_name));
+				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_path));
 			}
 		} break;
 		default:
