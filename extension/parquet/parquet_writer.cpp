@@ -797,9 +797,11 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
                                  const string &offset_name) {
 	if (offset >= file_length) {
+		// LCOV_EXCL_START
 		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
 		                  "%s (offset=%llu file_size=%llu).",
 		                  filename, col_idx, offset_name, offset, file_length);
+		// LCOV_EXCL_STOP
 	}
 }
 
@@ -813,18 +815,22 @@ static void ValidateColumnOffsets(const string &filename, idx_t file_length, con
 			ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.dictionary_page_offset,
 			                     "dictionary page offset");
 			if (NumericCast<idx_t>(col_chunk.meta_data.dictionary_page_offset) >= col_start) {
+				// LCOV_EXCL_START
 				throw IOException("Parquet file '%s': metadata is corrupt. Dictionary "
 				                  "page (offset=%llu) must come before any data pages (offset=%llu).",
 				                  filename, col_chunk.meta_data.dictionary_page_offset, col_start);
+				// LCOV_EXCL_STOP
 			}
 			col_start = col_chunk.meta_data.dictionary_page_offset;
 		}
 		auto col_len = NumericCast<idx_t>(col_chunk.meta_data.total_compressed_size);
 		auto col_end = col_start + col_len;
 		if (col_end <= 0 || col_end > file_length) {
+			// LCOV_EXCL_START
 			throw IOException("Parquet file '%s': metadata is corrupt. Column %llu has "
 			                  "invalid column offsets (offset=%llu, size=%llu, file_size=%llu).",
 			                  filename, i, col_start, col_len, file_length);
+			// LCOV_EXCL_STOP
 		}
 	}
 }

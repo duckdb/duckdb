@@ -865,10 +865,12 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	}
 	if (!options.ignore_errors && options.record_type == JSONRecordType::RECORDS &&
 	    GetRecordType() != JSONRecordType::RECORDS) {
+		// LCOV_EXCL_START
 		string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 		throw InvalidInputException(
 		    "JSON auto-detection error in file \"%s\": Expected records, detected non-record JSON instead",
 		    GetFileName());
+		// LCOV_EXCL_STOP
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
 	if (!file_handle->IsPipe()) {
@@ -880,10 +882,12 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 }
 
 void JSONReader::ThrowObjectSizeError(const idx_t object_size) {
+	// LCOV_EXCL_START
 	throw InvalidInputException(
 	    "\"maximum_object_size\" of %llu bytes exceeded while reading file \"%s\" (>%llu bytes)."
 	    "\n Try increasing \"maximum_object_size\".",
 	    options.maximum_object_size, GetFileName(), object_size);
+	// LCOV_EXCL_STOP
 }
 
 bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state) {
