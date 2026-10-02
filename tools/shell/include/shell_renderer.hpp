@@ -50,6 +50,8 @@ struct RenderingQueryResult {
 	vector<unique_ptr<duckdb::DataChunk>> chunks;
 	bool exhausted_result = false;
 	idx_t loaded_row_count = 0;
+	//! If set, each fetched chunk is also appended here in its original types (to keep it as the last result `_`)
+	duckdb::optional_ptr<duckdb::ColumnDataCollection> retained_rows;
 
 	idx_t ColumnCount() const {
 		return metadata.ColumnCount();

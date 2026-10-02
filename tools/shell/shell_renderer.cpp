@@ -398,6 +398,9 @@ bool RenderingQueryResult::TryConvertChunk() {
 		exhausted_result = true;
 		return false;
 	}
+	if (retained_rows) {
+		retained_rows->Append(*chunk);
+	}
 	auto varchar_chunk = renderer.ConvertChunk(*chunk);
 	if (renderer.HasConvertValue()) {
 		for (idx_t c = 0; c < ColumnCount(); c++) {
@@ -585,7 +588,9 @@ public:
 	//! only the first max_rows rows / max_bytes bytes and at most max_cell_width characters per cell, and a footer
 	//! with the row count and a hash of the whole result when they are not obvious from the rows (see
 	//! DetectAgentMode). The result is streamed: after the cap the rows are only counted and hashed, and a query that
-	//! keeps producing rows beyond LOOKAHEAD_ROWS is stopped, with the count reported as a lower bound.
+	//! keeps producing rows beyond LOOKAHEAD_ROWS (or .materialize rows N) is stopped, with the count reported as a
+	//! lower bound. The rows that were read are kept as the last result `_`, and a stopped query stays open: the rest
+	//! is fetched if the next statement refers to `_`, by .last, or by .materialize (see ResolvePendingResult).
 	explicit ModeMarkdownRenderer(ShellState &state)
 	    : ColumnRenderer(state), compact(state.agent_mode_active), max_rows(state.max_rows), max_bytes(state.max_bytes),
 	      max_cell_width(state.max_cell_width) {
@@ -607,6 +612,18 @@ public:
 		}
 		column_width.assign(result.ColumnCount(), 0);
 		right_align.assign(result.ColumnCount(), false);
+		if (result.stream) {
+			// the rows that are read become the last result `_` - a query stopped early stays open for the rest
+			retained_rows = make_uniq<duckdb::ColumnDataCollection>(*state.conn->context, result.stream->GetTypes());
+			result.retained_rows = retained_rows.get();
+		}
+	}
+
+	unique_ptr<duckdb::QueryResult> TakeRetainedResult() override {
+		return std::move(retained);
+	}
+	bool KeepStreamOpen() const override {
+		return !complete;
 	}
 
 	void RemoveRenderLimits() override {
@@ -659,9 +676,14 @@ public:
 				cap_hint = within_rows ? ".maxbytes 0 for all" : ".maxrows -1 for all";
 			}
 			push_tail(std::move(line));
-			// beyond the cap the rows are only counted and hashed - up to a point: the count is then a lower bound
-			if (row_data.row_index >= head_lines.size() + LOOKAHEAD_ROWS) {
-				break;
+			// beyond the cap the rows are only counted and hashed - up to a point (LOOKAHEAD_ROWS, or .materialize
+			// rows N): the count is then a lower bound. With .materialize full all rows are read
+			if (state.materialize != MaterializeMode::FULL) {
+				idx_t read_limit = state.materialize == MaterializeMode::PREVIEW ? state.materialize_rows
+				                                                                 : head_lines.size() + LOOKAHEAD_ROWS;
+				if (row_data.row_index >= read_limit) {
+					break;
+				}
 			}
 		}
 		if (result.HasError()) {
@@ -669,6 +691,12 @@ public:
 		}
 		row_count = result.loaded_row_count;
 		complete = result.exhausted_result;
+		if (retained_rows) {
+			auto &stream = *result.stream;
+			retained = duckdb::make_uniq<duckdb::QueryResult>(stream.GetStatementType(),
+			                                                  stream.GetStatementProperties(), stream.GetNames(),
+			                                                  std::move(retained_rows), stream.GetClientProperties());
+		}
 		if (!capped) {
 			for (auto &line : head_lines) {
 				out.Print(line);
@@ -909,6 +937,9 @@ private:
 	bool complete = true;
 	const char *cap_hint = "";
 	duckdb::hash_t result_hash = 0;
+	//! The rows read so far, in their original types - they become the last result `_`
+	unique_ptr<duckdb::ColumnDataCollection> retained_rows;
+	unique_ptr<duckdb::QueryResult> retained;
 };
 
 /*
