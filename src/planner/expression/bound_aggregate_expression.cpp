@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/planner/collation_binding.hpp"
 
 namespace duckdb {
 
@@ -67,6 +68,11 @@ hash_t BoundAggregateExpression::Hash() const {
 	hash_t result = Expression::Hash();
 	result = CombineHash(result, function.Hash());
 	result = CombineHash(result, duckdb::Hash(IsDistinct()));
+	if (IsDistinct()) {
+		for (auto &child : children) {
+			result = CombineHash(result, CollationBinding::HashCollations(child->GetReturnType()));
+		}
+	}
 	return result;
 }
 
@@ -88,6 +94,10 @@ bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 		return false;
 	}
 	for (idx_t i = 0; i < children.size(); i++) {
+		if (IsDistinct() &&
+		    !CollationBinding::CollationsEqual(children[i]->GetReturnType(), other.children[i]->GetReturnType())) {
+			return false;
+		}
 		if (!Expression::Equals(*children[i], *other.children[i])) {
 			return false;
 		}
