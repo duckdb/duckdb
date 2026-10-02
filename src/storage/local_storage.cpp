@@ -621,7 +621,7 @@ void LocalStorage::FlushBulkAppendBlocksAndSync(AttachedDatabase &db) {
 	if (requires_sync) {
 		// the WAL will reference the flushed row groups (flushed just now or already during the
 		// statement, e.g. by batch inserts) - persist them now so that the commit does not have
-		// to FileSync while holding the WAL lock
+		// to FileSync while holding the commit lock
 		db.GetStorageManager().GetBlockManager().FileSync();
 		synced_flushed_blocks = true;
 	}
