@@ -310,7 +310,7 @@ struct ExecuteSqlTableFunction {
 	}
 
 	static void Function(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &data = (BindData &)*data_p.bind_data;
+		auto &data = data_p.bind_data->CastNoConst<BindData>();
 		if (!data.result) {
 			data.result = data.plan->Execute();
 		}

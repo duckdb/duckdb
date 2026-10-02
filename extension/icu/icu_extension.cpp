@@ -55,7 +55,8 @@ struct IcuBindData : public FunctionData {
 	explicit IcuBindData(string tag_p) : collator(SettingsFromTag(tag_p)), tag(std::move(tag_p)) {
 	}
 
-	static duckdb::unique_ptr<FunctionData> CreateInstance(string language, string country, string tag) {
+	static duckdb::unique_ptr<FunctionData> CreateInstance(const string &language, const string &country,
+	                                                       const string &tag) {
 		//! give priority to tagged collation
 		if (!tag.empty()) {
 			return make_uniq<IcuBindData>(tag);
@@ -308,7 +309,8 @@ unique_ptr<TimeZone> GetNormalizedTimeZone(string &tz_str) {
 			mapped += hours_str;
 		}
 		// Final sanity check
-		if (tz = GetKnownTimeZone(mapped)) {
+		tz = GetKnownTimeZone(mapped);
+		if (tz) {
 			tz_str = mapped;
 			return tz;
 		}
