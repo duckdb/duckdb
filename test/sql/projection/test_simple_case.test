@@ -43,7 +43,7 @@ SELECT CASE random() WHEN DATE '2020-01-01' THEN 1 WHEN DATE '2020-01-02' THEN 2
 
 # Simple CASE uses its SQL syntax as the implicit result-column name.
 query I
-SELECT "CASE i WHEN (w) THEN (t) ELSE e END"
+SELECT "CASE (i) WHEN (w) THEN (t) ELSE e END"
 FROM (
 	SELECT CASE i WHEN w THEN t ELSE e END
 	FROM (VALUES (1, 1, 2, NULL::INTEGER)) tbl(i, w, t, e)
@@ -58,7 +58,7 @@ SELECT simple_case_alias FROM (SELECT CASE 1 WHEN 1 THEN 2 END AS simple_case_al
 
 # The syntax-based name is also used when simple CASE is nested in another expression.
 query I
-SELECT "sum(CASE i WHEN (w) THEN (t) ELSE e END)"
+SELECT "sum(CASE (i) WHEN (w) THEN (t) ELSE e END)"
 FROM (
 	SELECT sum(CASE i WHEN w THEN t ELSE e END)
 	FROM (VALUES (0, 0, 1, 0), (1, 0, 1, 0)) tbl(i, w, t, e)
@@ -67,7 +67,7 @@ FROM (
 1
 
 query I
-SELECT "(CASE i WHEN (w) THEN (t) ELSE e END + delta)"
+SELECT "(CASE (i) WHEN (w) THEN (t) ELSE e END + delta)"
 FROM (
 	SELECT CASE i WHEN w THEN t ELSE e END + delta
 	FROM (VALUES (0, 0, 1, 0, 1)) tbl(i, w, t, e, delta)
@@ -76,7 +76,7 @@ FROM (
 2
 
 query I
-SELECT "CAST(CASE i WHEN (w) THEN (t) ELSE e END AS BIGINT)"
+SELECT "CAST(CASE (i) WHEN (w) THEN (t) ELSE e END AS BIGINT)"
 FROM (
 	SELECT CAST(CASE i WHEN w THEN t ELSE e END AS BIGINT)
 	FROM (VALUES (0, 0, 1, 0)) tbl(i, w, t, e)
@@ -143,7 +143,7 @@ CREATE VIEW invoke_shadow_view AS
 
 statement ok
 CREATE VIEW invoke_shadow_dependent_view AS
-	SELECT "CASE nextval('invoke_shadow_seq') WHEN (1) THEN (42) WHEN (2) THEN (0) ELSE 0 END" AS result
+	SELECT "CASE (nextval('invoke_shadow_seq')) WHEN (1) THEN (42) WHEN (2) THEN (0) ELSE 0 END" AS result
 	FROM invoke_shadow_view
 
 statement ok
@@ -167,7 +167,7 @@ CREATE VIEW nested_simple_case_name_view AS
 
 statement ok
 CREATE VIEW nested_simple_case_name_dependent_view AS
-	SELECT "sum(CASE i WHEN (w) THEN (t) ELSE e END)" AS result
+	SELECT "sum(CASE (i) WHEN (w) THEN (t) ELSE e END)" AS result
 	FROM nested_simple_case_name_view
 
 query I
@@ -189,6 +189,58 @@ SELECT CASE 1 WHEN 1 THEN unnest([2]) ELSE unnest([3]) END
 # Eligibility is determined after macro expansion.
 statement ok
 CREATE MACRO simple_case_subquery() AS (SELECT 2)
+
+query T
+SELECT CASE simple_case_subquery() WHEN 1 THEN 'a' WHEN 2 THEN 'b' END
+----
+b
+
+query T
+SELECT CASE CAST(simple_case_subquery() + 0 AS BIGINT) WHEN 1 THEN 'a' WHEN 2 THEN 'b' END
+----
+b
+
+statement ok
+CREATE MACRO simple_case_correlated_operand(x) AS (SELECT x)
+
+query T
+SELECT CASE simple_case_correlated_operand(i) WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'other' END
+FROM (VALUES (1), (2), (3)) tbl(i)
+ORDER BY i
+----
+a
+b
+other
+
+query T
+SELECT CASE simple_case_correlated_operand(NULL::INTEGER) WHEN 1 THEN 'a' WHEN 2 THEN 'b' ELSE 'other' END
+----
+other
+
+# Binding a macro-expanded subquery must not introduce additional operand evaluations.
+statement ok
+CREATE SEQUENCE simple_case_macro_operand_seq START 1
+
+statement ok
+CREATE MACRO simple_case_volatile_subquery_operand(x) AS (SELECT x + nextval('simple_case_macro_operand_seq') % 3)
+
+query I
+SELECT count(*) FROM (
+	SELECT CASE simple_case_volatile_subquery_operand(i)
+		WHEN i THEN 'zero'
+		WHEN i + 1 THEN 'one'
+		WHEN i + 2 THEN 'two'
+		ELSE 'other'
+	END AS result
+	FROM range(100) tbl(i)
+) WHERE result = 'other'
+----
+0
+
+query I
+SELECT currval('simple_case_macro_operand_seq')
+----
+100
 
 query I
 SELECT CASE 1 WHEN 1 THEN simple_case_subquery() ELSE 0 END
@@ -493,6 +545,13 @@ CREATE VIEW stored_nested_simple_case_name AS
 	SELECT sum(CASE i WHEN w THEN t ELSE e END)
 	FROM (VALUES (0, 0, 1, 0), (1, 0, 1, 0)) tbl(i, w, t, e)
 
+statement ok
+CREATE MACRO stored_simple_case_operand() AS (SELECT 2)
+
+statement ok
+CREATE VIEW stored_simple_case_macro AS
+	SELECT CASE stored_simple_case_operand() WHEN 1 THEN 'a' WHEN 2 THEN 'b' END AS result
+
 restart
 
 query I
@@ -501,14 +560,19 @@ SELECT count(*) FROM stored_simple_case WHERE result = 'other'
 0
 
 query I
-SELECT "CASE i WHEN (w) THEN (t) ELSE e END" FROM stored_simple_case_name
+SELECT "CASE (i) WHEN (w) THEN (t) ELSE e END" FROM stored_simple_case_name
 ----
 2
 
 query I
-SELECT "sum(CASE i WHEN (w) THEN (t) ELSE e END)" FROM stored_nested_simple_case_name
+SELECT "sum(CASE (i) WHEN (w) THEN (t) ELSE e END)" FROM stored_nested_simple_case_name
 ----
 1
+
+query T
+SELECT result FROM stored_simple_case_macro
+----
+b
 
 # Old storage versions receive the historical searched-CASE representation.
 statement ok
@@ -530,6 +594,13 @@ CREATE VIEW legacy.simple_case AS
 	END AS result
 	FROM legacy.simple_case_input
 
+statement ok
+CREATE MACRO legacy.simple_case_operand() AS (SELECT 2)
+
+statement ok
+CREATE VIEW legacy.simple_case_macro AS
+	SELECT CASE legacy.simple_case_operand() WHEN 1 THEN 'a' WHEN 2 THEN 'b' END AS result
+
 # Legacy result-name preservation must not freeze dynamic star projections.
 statement ok
 CREATE TABLE legacy.simple_case_add_input(i INT, w INT, t INT, e INT, extra INT)
@@ -543,7 +614,7 @@ CREATE VIEW legacy.simple_case_add AS
 
 statement ok
 CREATE VIEW legacy.simple_case_add_dependent AS
-	SELECT "CASE i WHEN (w) THEN (t) ELSE e END" AS result FROM legacy.simple_case_add
+	SELECT "CASE (i) WHEN (w) THEN (t) ELSE e END" AS result FROM legacy.simple_case_add
 
 statement ok
 ALTER TABLE legacy.simple_case_add_input ADD COLUMN added INT DEFAULT 777
@@ -560,7 +631,7 @@ CREATE VIEW legacy.simple_case_drop AS
 
 statement ok
 CREATE VIEW legacy.simple_case_drop_dependent AS
-	SELECT "CASE i WHEN (w) THEN (t) ELSE e END" AS result FROM legacy.simple_case_drop
+	SELECT "CASE (i) WHEN (w) THEN (t) ELSE e END" AS result FROM legacy.simple_case_drop
 
 statement ok
 ALTER TABLE legacy.simple_case_drop_input DROP COLUMN extra
@@ -589,6 +660,11 @@ SELECT i, result FROM legacy.simple_case ORDER BY i
 0	zero
 1	other
 
+query T
+SELECT result FROM legacy.simple_case_macro
+----
+b
+
 query I
 SELECT result FROM legacy.simple_case_add_dependent
 ----
@@ -600,6 +676,6 @@ SELECT result FROM legacy.simple_case_drop_dependent
 10
 
 query I
-SELECT "CASE i WHEN (w) THEN (t) ELSE e END" FROM legacy.simple_case_deferred
+SELECT "CASE (i) WHEN (w) THEN (t) ELSE e END" FROM legacy.simple_case_deferred
 ----
 10

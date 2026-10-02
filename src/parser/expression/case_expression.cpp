@@ -12,7 +12,7 @@ string CaseExpression::ToString() const {
 	if (!case_operand) {
 		return ToString<CaseExpression, ParsedExpression>(*this);
 	}
-	string case_str = "CASE " + case_operand->ToString();
+	string case_str = "CASE (" + case_operand->ToString() + ")";
 	for (auto &check : case_checks) {
 		case_str += " WHEN (" + check.when_expr->ToString() + ")";
 		case_str += " THEN (" + check.then_expr->ToString() + ")";
