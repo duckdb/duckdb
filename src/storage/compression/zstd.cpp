@@ -674,6 +674,18 @@ void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
 	throw DataCorruptionException("Corrupted ZSTD vector: compressed data ended before decompression finished");
 }
 
+[[noreturn]] static void ThrowZSTDFrameEndedEarly() {
+	throw DataCorruptionException("Corrupted ZSTD vector: frame ended before producing the requested bytes");
+}
+
+[[noreturn]] static void ThrowZSTDNoProgress() {
+	throw DataCorruptionException("Corrupted ZSTD vector: decompression made no progress");
+}
+
+[[noreturn]] static void ThrowZSTDDecompressionFailed(size_t error) {
+	throw DataCorruptionException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(error));
+}
+
 struct ZSTDVectorScanMetadata {
 	//! The index of the (internal) vector being read
 	idx_t vector_idx;
@@ -885,26 +897,28 @@ public:
 
 		while (true) {
 			idx_t old_pos = in_buffer.pos;
+			idx_t old_output_pos = out_buffer.pos;
 			size_t res = duckdb_zstd::ZSTD_decompressStream(
 			    /* zds = */ decompression_context,
 			    /* output =*/&out_buffer,
 			    /* input =*/&in_buffer);
 			scan_state.compressed_scan_count += in_buffer.pos - old_pos;
 			if (duckdb_zstd::ZSTD_isError(res)) {
-				throw InvalidInputException("ZSTD Decompression failed: %s", duckdb_zstd::ZSTD_getErrorName(res));
+				ThrowZSTDDecompressionFailed(res);
 			}
 			if (out_buffer.pos == out_buffer.size) {
 				//! Done decompressing the relevant portion
 				break;
 			}
 			if (!res) {
-				D_ASSERT(out_buffer.pos == out_buffer.size);
-				D_ASSERT(in_buffer.pos == in_buffer.size);
-				break;
+				ThrowZSTDFrameEndedEarly();
 			}
-			D_ASSERT(in_buffer.pos == in_buffer.size);
-			// Did not fully decompress, it needs a new page to read from
-			LoadNextPageForVector(scan_state);
+			if (in_buffer.pos == in_buffer.size) {
+				// Did not fully decompress, it needs a new page to read from
+				LoadNextPageForVector(scan_state);
+			} else if (in_buffer.pos == old_pos && out_buffer.pos == old_output_pos) {
+				ThrowZSTDNoProgress();
+			}
 		}
 	}
 
