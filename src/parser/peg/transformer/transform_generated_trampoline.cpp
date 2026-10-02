@@ -4814,10 +4814,14 @@ PEGTransformerFactory::FinalizeSetNullabilityTrampoline(PEGTransformer &transfor
 void PEGTransformerFactory::InitializeAlterTypeTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
-	auto &using_expression_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	process.ReserveChildSlots(3);
+	auto &using_expression_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
 	if (using_expression_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("UsingExpression"), using_expression_opt.GetResult()}, 1);
+		process.PushChild({transformer.GetRule("UsingExpression"), using_expression_opt.GetResult()}, 2);
+	}
+	auto &column_collation_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (column_collation_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("ColumnCollation"), column_collation_opt.GetResult()}, 1);
 	}
 	auto &type_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (type_opt.HasResult()) {
@@ -4835,11 +4839,16 @@ PEGTransformerFactory::FinalizeAlterTypeTrampoline(PEGTransformer &transformer, 
 	if (process.child_results[0]) {
 		type = process.TakeResult<LogicalType>(0);
 	}
-	optional<unique_ptr<ParsedExpression>> using_expression {};
+	optional<ColumnConstraintEntry> column_collation {};
 	if (process.child_results[1]) {
-		using_expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+		column_collation = process.TakeResult<ColumnConstraintEntry>(1);
 	}
-	auto result = TransformAlterType(transformer, has_result, type, std::move(using_expression));
+	optional<unique_ptr<ParsedExpression>> using_expression {};
+	if (process.child_results[2]) {
+		using_expression = process.TakeResult<unique_ptr<ParsedExpression>>(2);
+	}
+	auto result =
+	    TransformAlterType(transformer, has_result, type, std::move(column_collation), std::move(using_expression));
 	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
 }
 
