@@ -129,7 +129,7 @@ void ReplClaimCsv(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context
 
 // Fails with a specific code.
 void ReplFail(duckdb_v2_replacement_scan_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
-	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
+	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_GENERIC);
 	auto text_str = Convert("the replacement scan refused");
 	duckdb_v2_error_info_set_text(*err, &text_str);
 }
@@ -209,7 +209,7 @@ void ReplClaimWithUserData(duckdb_v2_replacement_scan_info_handle info, duckdb_v
 	}
 	auto *tag = static_cast<std::string *>(user_data);
 	if (!tag || *tag != "planted") {
-		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_INPUT_INVALID);
+		duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_GENERIC);
 		auto text_str = Convert("user data did not reach the replacement scan");
 		duckdb_v2_error_info_set_text(*err, &text_str);
 		return;
@@ -485,12 +485,12 @@ TEST_CASE("V2 replacement scan: callback errors and unknown functions", "[capi_v
 	SECTION("an error reported by the callback surfaces with its code") {
 		EnvFixture fx;
 		ReplRegisterOnConnection(fx.conn, ReplFail);
-		REQUIRE(ReplQueryError(fx.conn, "SELECT * FROM anything") == DUCKDB_V2_ERROR_IO_GENERAL);
+		REQUIRE(ReplQueryError(fx.conn, "SELECT * FROM anything") == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("claiming a function that does not exist surfaces a catalog error") {
 		EnvFixture fx;
 		ReplRegisterOnConnection(fx.conn, ReplClaimUnknown);
-		REQUIRE(ReplQueryError(fx.conn, "SELECT * FROM anything") == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+		REQUIRE(ReplQueryError(fx.conn, "SELECT * FROM anything") == DUCKDB_V2_ERROR_GENERIC);
 	}
 }
 
@@ -502,8 +502,8 @@ TEST_CASE("V2 replacement scan: claim form rules", "[capi_v2][replacement_scan]"
 	// The last set_function_name wins, so the query still resolves to range(2).
 	REQUIRE(ReplQueryI64(fx.conn, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
 	// An argument before a function name, and a second claim form, are both refused.
-	REQUIRE(repl_observed.bare_argument_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(repl_observed.mixed_form_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(repl_observed.bare_argument_rc == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(repl_observed.mixed_form_rc == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 replacement scan: claims a subquery", "[capi_v2][replacement_scan]") {
@@ -520,9 +520,9 @@ TEST_CASE("V2 replacement scan: claims a subquery", "[capi_v2][replacement_scan]
 		ReplRegisterOnConnection(fx.conn, ReplClaimBadSubqueries);
 
 		REQUIRE(ReplQueryI64(fx.conn, "SELECT v::BIGINT FROM anything") == std::vector<int64_t> {7});
-		REQUIRE(repl_multi_statement_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(repl_non_select_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(repl_bad_syntax_rc == DUCKDB_V2_ERROR_QUERY_PARSER);
+		REQUIRE(repl_multi_statement_rc == DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(repl_non_select_rc == DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(repl_bad_syntax_rc == DUCKDB_V2_ERROR_GENERIC);
 	}
 }
 
@@ -553,7 +553,7 @@ TEST_CASE("V2 replacement scan: registration refusals", "[capi_v2][replacement_s
 	{
 		duckdb_v2_replacement_scan_handle scan = nullptr;
 		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_replacement_scan_destroy(&scan);
 	}
 	// Registering twice from one handle.
@@ -562,7 +562,7 @@ TEST_CASE("V2 replacement scan: registration refusals", "[capi_v2][replacement_s
 		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplDecline, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_replacement_scan_destroy(&scan);
 	}
 }
@@ -571,30 +571,28 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 	EnvFixture fx;
 
 	duckdb_v2_replacement_scan_handle scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(nullptr, &scan, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(scan == nullptr);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_extension(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_replacement_scan_create_with_extension(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_set_callback(nullptr, ReplDecline, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_set_callback(nullptr, ReplDecline, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_replacement_scan_register(nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// The info accessors reject a null handle and a null out-parameter alike.
 	void *data = nullptr;
 	duckdb_v2_qname_handle name = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_get_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_set_function_name(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_add_argument(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_replacement_scan_get_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_replacement_scan_set_function_name(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_replacement_scan_add_argument(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto sql_str = Convert("SELECT 1");
-	REQUIRE(duckdb_v2_replacement_scan_set_subquery(nullptr, &sql_str, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_set_subquery(nullptr, &sql_str, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto alias_str = ReplIdent("x");
-	REQUIRE(duckdb_v2_replacement_scan_set_alias(nullptr, &alias_str, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_set_alias(nullptr, &alias_str, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	REQUIRE(duckdb_v2_replacement_scan_destroy(&scan) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(scan == nullptr);
@@ -719,9 +717,9 @@ TEST_CASE("V2 replacement scan: collection column name validation", "[capi_v2][r
 	// The valid claim at the end still lands, so the query itself succeeds.
 	REQUIRE(ReplQueryI64(fx.conn, "SELECT col1 FROM probe_batch ORDER BY col1") == std::vector<int64_t> {1, 2});
 	// More names than columns, an empty name, and a null array with a non-zero count are all refused.
-	REQUIRE(registry.wrong_count_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(registry.empty_name_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(registry.null_names_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(registry.wrong_count_rc == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(registry.empty_name_rc == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(registry.null_names_rc == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_column_data_collection_destroy(&cdc);
 }

@@ -110,7 +110,7 @@ TEST_CASE("V2: logical_type create_from_id rejects parameterised ids with no par
 		duckdb_v2_logical_type_handle type = nullptr;
 		duckdb_v2_error_info_handle err = nullptr;
 		REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, id, nullptr, nullptr, 0, &type, &err) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		        DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(type == nullptr);
 		REQUIRE(err != nullptr);
 		duckdb_v2_error_info_destroy(&err);
@@ -133,7 +133,7 @@ TEST_CASE("V2: logical_type create_from_id rejects sentinel and bind-time-only i
 		duckdb_v2_logical_type_handle type = nullptr;
 		duckdb_v2_error_info_handle err = nullptr;
 		REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, id, nullptr, nullptr, 0, &type, &err) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		        DUCKDB_V2_ERROR_GENERIC);
 		REQUIRE(type == nullptr);
 		REQUIRE(err != nullptr);
 		duckdb_v2_error_info_destroy(&err);
@@ -215,37 +215,37 @@ TEST_CASE("V2: logical_type create_from_id parameter validation", "[capi_v2][log
 	// A primitive id takes no parameters.
 	duckdb_v2_value_handle one[1] = {MakeInt32Value(fx.conn, 1)};
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, one, 1, &out,
-	                                                 nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	                                                 nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	duckdb_v2_identifier_t invalid_name[1] = {Convert("\x80")};
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, invalid_name, one, 1,
-	                                                 &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                                 &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_value_destroy(&one[0]);
 
 	// Bind errors surface: DECIMAL width 0 is out of range.
 	duckdb_v2_value_handle zero[1] = {MakeInt32Value(fx.conn, 0)};
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_DECIMAL, nullptr, zero, 1, &out,
-	                                                 nullptr) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	                                                 nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	duckdb_v2_value_destroy(&zero[0]);
 
 	// param_count > 0 with no value array, and a hole inside one.
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_LIST, nullptr, nullptr, 1, &out,
-	                                                 nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                                 nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_value_handle holed[1] = {nullptr};
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_LIST, nullptr, holed, 1, &out,
-	                                                 nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                                 nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// A null connection is refused before anything else.
 	REQUIRE(duckdb_v2_connection_create_type_from_id(nullptr, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0,
-	                                                 &out, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                                 &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2: logical_type create_from_id null out param", "[capi_v2][logical_type][lifecycle]") {
 	EnvFixture fx;
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0,
-	                                                 nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                                 nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2: logical_type create_from_id leaves pre-existing err untouched on success",
@@ -256,7 +256,7 @@ TEST_CASE("V2: logical_type create_from_id leaves pre-existing err untouched on 
 	// survives; the return code is authoritative.
 	duckdb_v2_error_info_handle err = nullptr;
 	REQUIRE(duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_DECIMAL, nullptr, nullptr, 0,
-	                                                 nullptr, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	                                                 nullptr, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(err != nullptr);
 
 	duckdb_v2_logical_type_handle t = nullptr;
@@ -265,7 +265,7 @@ TEST_CASE("V2: logical_type create_from_id leaves pre-existing err untouched on 
 	REQUIRE(err != nullptr);
 	DUCKDB_V2_ERROR code = DUCKDB_V2_ERROR_NONE;
 	duckdb_v2_error_info_get_code(err, &code);
-	REQUIRE(code == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(code == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_error_info_destroy(&err);
 	duckdb_v2_logical_type_destroy(&t);
 }
@@ -286,12 +286,12 @@ TEST_CASE("V2: logical_type destroy is null-safe", "[capi_v2][logical_type][life
 TEST_CASE("V2: logical_type get_id null handle / null out", "[capi_v2][logical_type][id]") {
 	EnvFixture fx;
 	DUCKDB_V2_LOGICAL_TYPE_ID id = DUCKDB_V2_LOGICAL_TYPE_ID_BOOLEAN;
-	REQUIRE(duckdb_v2_logical_type_get_id(nullptr, &id, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_get_id(nullptr, &id, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_logical_type_handle t = nullptr;
 	duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &t,
 	                                         nullptr);
-	REQUIRE(duckdb_v2_logical_type_get_id(t, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_get_id(t, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_logical_type_destroy(&t);
 }
 
@@ -370,12 +370,12 @@ TEST_CASE("V2: logical_type get_name reads an alias set on a STRUCT", "[capi_v2]
 TEST_CASE("V2: logical_type get_name null handle / null out", "[capi_v2][logical_type][name]") {
 	EnvFixture fx;
 	duckdb_v2_str alias = {nullptr, 0};
-	REQUIRE(duckdb_v2_logical_type_get_name(nullptr, &alias, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_get_name(nullptr, &alias, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_logical_type_handle t = nullptr;
 	duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &t,
 	                                         nullptr);
-	REQUIRE(duckdb_v2_logical_type_get_name(t, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_get_name(t, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_logical_type_destroy(&t);
 }
 
@@ -683,17 +683,17 @@ TEST_CASE("V2: logical_type to_text null handle / short buffer", "[capi_v2][logi
 	EnvFixture fx;
 	char buf[64] = {};
 	idx_t len = 0;
-	REQUIRE(duckdb_v2_logical_type_to_text(nullptr, buf, sizeof(buf), &len, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_to_text(nullptr, buf, sizeof(buf), &len, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_logical_type_handle t = nullptr;
 	duckdb_v2_connection_create_type_from_id(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &t,
 	                                         nullptr);
-	REQUIRE(duckdb_v2_logical_type_to_text(t, buf, sizeof(buf), nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_to_text(t, buf, sizeof(buf), nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// Sizing excludes the terminator; the buffer must still have room for it.
 	REQUIRE(duckdb_v2_logical_type_to_text(t, nullptr, 0, &len, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(len == 7);
-	REQUIRE(duckdb_v2_logical_type_to_text(t, buf, len, &len, nullptr) == DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE);
+	REQUIRE(duckdb_v2_logical_type_to_text(t, buf, len, &len, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(len == 7);
 	REQUIRE(duckdb_v2_logical_type_to_text(t, buf, len + 1, &len, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(std::string(buf) == "INTEGER");
@@ -921,14 +921,14 @@ TEST_CASE("V2: logical_type create_from_text error paths", "[capi_v2][logical_ty
 
 	// Unparseable type expression.
 	auto text_str2 = Convert("INTEGER[[");
-	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str2, &t, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str2, &t, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(t == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 
 	// Empty text ({NULL, 0} is a valid empty view; parsing it fails).
 	auto text_str3 = duckdb_v2_str {nullptr, 0};
-	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str3, &t, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str3, &t, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(t == nullptr);
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -939,16 +939,13 @@ TEST_CASE("V2: logical_type create_from_text null-arg refusals", "[capi_v2][logi
 
 	// A null connection is refused.
 	auto text_str = Convert("INTEGER");
-	REQUIRE(duckdb_v2_connection_create_type_from_text(nullptr, &text_str, &t, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_create_type_from_text(nullptr, &text_str, &t, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
-	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	// Malformed view: null pointer with nonzero length.
 	duckdb_v2_logical_type_handle out = nullptr;
 	auto text_str2 = duckdb_v2_str {nullptr, 3};
-	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str2, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_create_type_from_text(f.conn, &text_str2, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 }
 
@@ -1137,7 +1134,7 @@ TEST_CASE("V2: ENUM params are the dictionary entries as VARCHAR", "[capi_v2][lo
 	REQUIRE(V2ParamCount(empty) == 0);
 	duckdb_v2_str name = {nullptr, 0};
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_logical_type_get_param(empty, 0, &name, &v, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_get_param(empty, 0, &name, &v, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(v == nullptr);
 	duckdb_v2_logical_type_destroy(&empty);
 }
@@ -1149,17 +1146,17 @@ TEST_CASE("V2: get_param out-of-range and null-arg refusals", "[capi_v2][logical
 	duckdb_v2_str name = {nullptr, 0};
 	auto v = reinterpret_cast<duckdb_v2_value_handle>(0x1);
 	duckdb_v2_error_info_handle err = nullptr;
-	REQUIRE(duckdb_v2_logical_type_get_param(t, 2, &name, &v, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_get_param(t, 2, &name, &v, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(v == nullptr);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 
 	idx_t count = 0;
-	REQUIRE(duckdb_v2_logical_type_get_param_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_logical_type_get_param_count(t, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_logical_type_get_param(nullptr, 0, &name, &v, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_logical_type_get_param(t, 0, nullptr, &v, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_logical_type_get_param(t, 0, &name, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_logical_type_get_param_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_logical_type_get_param_count(t, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_logical_type_get_param(nullptr, 0, &name, &v, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_logical_type_get_param(t, 0, nullptr, &v, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_logical_type_get_param(t, 0, &name, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_logical_type_destroy(&t);
 }
@@ -1207,7 +1204,7 @@ TEST_CASE("V2: logical_type_create builds the built-in parameterized kinds", "[c
 	// struct requires named fields; the anonymous form is the tuple type.
 	REQUIRE(MakeTypeErr(f.conn, "struct", nullptr,
 	                    {MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER),
-	                     MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR)}) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	                     MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR)}) == DUCKDB_V2_ERROR_GENERIC);
 
 	// tuple: all positional; params come back positional.
 	auto tup = MakeType(f.conn, "tuple", nullptr,
@@ -1273,32 +1270,32 @@ TEST_CASE("V2: logical_type_create error paths", "[capi_v2][logical_type][create
 	EnvFixture f;
 
 	// Unknown name: catalog error.
-	REQUIRE(MakeTypeErr(f.conn, "definitely_not_a_type", nullptr, {}) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(MakeTypeErr(f.conn, "definitely_not_a_type", nullptr, {}) == DUCKDB_V2_ERROR_GENERIC);
 	// Wrong parameter counts and types: binder errors from the bind function.
-	REQUIRE(MakeTypeErr(f.conn, "list", nullptr, {}) == DUCKDB_V2_ERROR_QUERY_BINDER);
-	REQUIRE(MakeTypeErr(f.conn, "list", nullptr, {MakeInt32Value(f.conn, 1)}) == DUCKDB_V2_ERROR_QUERY_BINDER);
-	REQUIRE(MakeTypeErr(f.conn, "decimal", nullptr, {MakeInt32Value(f.conn, 0)}) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	REQUIRE(MakeTypeErr(f.conn, "list", nullptr, {}) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(MakeTypeErr(f.conn, "list", nullptr, {MakeInt32Value(f.conn, 1)}) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(MakeTypeErr(f.conn, "decimal", nullptr, {MakeInt32Value(f.conn, 0)}) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(MakeTypeErr(f.conn, "array", nullptr,
 	                    {MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER), MakeInt32Value(f.conn, 0)}) ==
-	        DUCKDB_V2_ERROR_QUERY_BINDER);
+	        DUCKDB_V2_ERROR_GENERIC);
 	// UNION members must be named; ENUM entries must be non-NULL VARCHAR.
 	REQUIRE(MakeTypeErr(f.conn, "union", nullptr, {MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER)}) ==
-	        DUCKDB_V2_ERROR_QUERY_BINDER);
-	REQUIRE(MakeTypeErr(f.conn, "enum", nullptr, {MakeInt32Value(f.conn, 1)}) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	        DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(MakeTypeErr(f.conn, "enum", nullptr, {MakeInt32Value(f.conn, 1)}) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_logical_type_handle varchar_type = nullptr;
 	duckdb_v2_connection_create_type_from_id(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR, nullptr, nullptr, 0,
 	                                         &varchar_type, nullptr);
 	duckdb_v2_value_handle null_entry = nullptr;
 	duckdb_v2_value_create_null(varchar_type, &null_entry, nullptr);
 	duckdb_v2_logical_type_destroy(&varchar_type);
-	REQUIRE(MakeTypeErr(f.conn, "enum", nullptr, {null_entry}) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	REQUIRE(MakeTypeErr(f.conn, "enum", nullptr, {null_entry}) == DUCKDB_V2_ERROR_GENERIC);
 	// STRUCT fields must be all named or all positional.
 	std::vector<const char *> mixed = {"a", nullptr};
 	REQUIRE(MakeTypeErr(f.conn, "struct", &mixed,
 	                    {MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER),
-	                     MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR)}) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	                     MakeTypeValue(f.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR)}) == DUCKDB_V2_ERROR_GENERIC);
 	// A parameterless built-in refuses params.
-	REQUIRE(MakeTypeErr(f.conn, "integer", nullptr, {MakeInt32Value(f.conn, 1)}) == DUCKDB_V2_ERROR_QUERY_BINDER);
+	REQUIRE(MakeTypeErr(f.conn, "integer", nullptr, {MakeInt32Value(f.conn, 1)}) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2: logical_type_create is unqualified-only; from_text resolves qualified names",
@@ -1310,7 +1307,7 @@ TEST_CASE("V2: logical_type_create is unqualified-only; from_text resolves quali
 
 	// A qualified name is one literal identifier to the generic
 	// constructor: no catalog entry matches, so the lookup fails.
-	REQUIRE(MakeTypeErr(f.conn, "main.mood", nullptr, {}) == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+	REQUIRE(MakeTypeErr(f.conn, "main.mood", nullptr, {}) == DUCKDB_V2_ERROR_GENERIC);
 
 	// The text path runs the real binder and resolves it.
 	auto t = V2TypeFromText(f.conn, "main.mood");
@@ -1324,31 +1321,30 @@ TEST_CASE("V2: logical_type_create null-arg refusals", "[capi_v2][logical_type][
 
 	// A null connection is refused.
 	REQUIRE(LTCreateTypeFromName(nullptr, Convert("integer"), nullptr, nullptr, 0, &t, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	duckdb_v2_value_handle value = MakeInt32Value(f.conn, 1);
 	const duckdb_v2_value_handle values[1] = {value};
 	duckdb_v2_logical_type_handle out = nullptr;
 	// Null out_type.
 	REQUIRE(LTCreateTypeFromName(f.conn, Convert("integer"), nullptr, nullptr, 0, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	// A null name handle.
 	REQUIRE(duckdb_v2_connection_create_type_from_name(f.conn, nullptr, nullptr, nullptr, 0, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	// param_count > 0 with a null values array.
 	REQUIRE(LTCreateTypeFromName(f.conn, Convert("list"), nullptr, nullptr, 1, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	// A null value handle inside the array.
 	const duckdb_v2_value_handle holed[1] = {nullptr};
-	REQUIRE(LTCreateTypeFromName(f.conn, Convert("list"), nullptr, holed, 1, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(LTCreateTypeFromName(f.conn, Convert("list"), nullptr, holed, 1, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	// A malformed name view inside the names array.
 	const duckdb_v2_str bad_names[1] = {{nullptr, 3}};
 	REQUIRE(LTCreateTypeFromName(f.conn, Convert("list"), bad_names, values, 1, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(out == nullptr);
 	duckdb_v2_value_destroy(&value);
 }
@@ -1389,10 +1385,9 @@ TEST_CASE("V2: logical_type get_from_text / get_from_args", "[capi_v2][logical_t
 	// A null connection is refused on both.
 	duckdb_v2_logical_type_handle out = nullptr;
 	auto text_str2 = Convert("INTEGER");
-	REQUIRE(duckdb_v2_connection_create_type_from_text(nullptr, &text_str2, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_create_type_from_text(nullptr, &text_str2, &out, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(LTCreateTypeFromName(nullptr, Convert("integer"), nullptr, nullptr, 0, &out, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2: GEOMETRY with a coordinate system constructs and inspects",
@@ -1435,7 +1430,7 @@ TEST_CASE("V2: GEOMETRY with an unknown coordinate system", "[capi_v2][logical_t
 
 	// A well-formed shorthand outside the default entries fails the bind.
 	REQUIRE(MakeTypeErr(f.conn, "geometry", nullptr, {MakeVarcharValue(f.conn, "EPSG:4326")}) ==
-	        DUCKDB_V2_ERROR_QUERY_BINDER);
+	        DUCKDB_V2_ERROR_GENERIC);
 
 	// ignore_unknown_crs degrades to the generic GEOMETRY type instead.
 	ExecSQL(f.conn, "SET ignore_unknown_crs = true");

@@ -96,7 +96,7 @@ functions:
 
       Sets the signature's return type. The type is borrowed and copied.
       Calling this again overwrites the previous return type. An INVALID
-      type is rejected with ERROR_INPUT_INVALID. Whether a concrete return
+      type is rejected with an error. Whether a concrete return
       type is required, and whether ANY is accepted, depends on the function
       family and is enforced when the signature is registered with a builder.
     role: setter

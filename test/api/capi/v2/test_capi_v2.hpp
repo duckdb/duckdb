@@ -181,7 +181,7 @@ inline void AppendToString(const duckdb_v2_str *text, void *user_data, duckdb_v2
 
 // Fails the producing call by populating the slot the library handed over.
 inline void FailWithIOError(const duckdb_v2_str *, void *, duckdb_v2_error_info_handle *err) {
-	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
+	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_GENERIC);
 	auto text_str = Convert("sink could not write");
 	duckdb_v2_error_info_set_text(*err, &text_str);
 }
@@ -273,7 +273,7 @@ inline void RequireColumn(duckdb_v2_result_handle r, idx_t index, const char *na
 // so result_get_schema reports INVALID_INPUT.
 inline void RequireSchemaDeferred(duckdb_v2_result_handle r) {
 	duckdb_v2_schema_handle schema = nullptr;
-	REQUIRE(duckdb_v2_result_get_schema(r, &schema, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_result_get_schema(r, &schema, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(schema == nullptr);
 }
 

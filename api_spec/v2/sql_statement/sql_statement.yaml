@@ -203,7 +203,7 @@ functions:
       Prepare-time errors — binder, catalog, preprocessing — surface here. A
       statement that preprocessing expands into a group (a dynamic PIVOT, or
       statement-expanding DDL such as ALTER ADD COLUMN with a non-constant
-      DEFAULT) cannot be bound and is rejected with ERROR_INPUT_INVALID;
+      DEFAULT) cannot be bound and is rejected with an error;
       execute it instead.
 
       *out_schema and *out_parameters are set to NULL on failure.
@@ -244,18 +244,18 @@ functions:
 #      statement can then be bound, prepared, or executed through the existing
 #      surface; each execution scans the collection's contents at that moment.
 #      Supported statement types are SELECT, INSERT, UPDATE, DELETE, and MERGE
-#      INTO; any other type is rejected with ERROR_INPUT_INVALID.
+#      INTO; any other type is rejected with an error.
 #
 #      name is a borrowed string view and must be non-empty. A name already
 #      present in the statement's CTE map (from the SQL text or a prior call) is
-#      rejected with ERROR_INPUT_INVALID. The binding shadows any catalog table
+#      rejected with an error. The binding shadows any catalog table
 #      named name, following standard CTE semantics.
 #
 #      By default the collection's columns bind as col1..colN. Pass column_names
 #      to bind them under caller-chosen names instead, so the statement can
 #      reference them directly (FROM buf) without an alias. When supplied,
 #      column_count must equal the collection's column count; a mismatch is
-#      rejected with ERROR_INPUT_INVALID. Pass (NULL, 0) for the col1..colN
+#      rejected with an error. Pass (NULL, 0) for the col1..colN
 #      default.
 #
 #      The collection is borrowed: the caller keeps ownership and must keep it
@@ -392,7 +392,7 @@ functions:
       ($1 or ?), the identifier for a named one ($name). Positional indices may
       be gapped ($1 and $3 without $2), in which case the names are "1" and "3"
       at positions 0 and 1. The view is valid until the statement is destroyed.
-      An index outside [0, count) is rejected with ERROR_INPUT_OUT_OF_RANGE.
+      An index outside [0, count) is rejected with an error.
     role: getter
     belongs_to: sql_statement
     parameters:

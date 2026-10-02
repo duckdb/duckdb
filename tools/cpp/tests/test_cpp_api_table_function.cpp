@@ -256,12 +256,12 @@ void StateExec(TableFunction::ExecInput &input) {
 
 // A bind callback that throws: the exception must surface as the query's error.
 void ThrowingBind(TableFunction::BindInput &) {
-	throw InvalidInputException("bind refused");
+	throw Exception("bind refused");
 }
 
 // An exec callback that throws once the scan is under way.
 void ThrowingExec(TableFunction::ExecInput &) {
-	throw InvalidInputException("exec refused");
+	throw Exception("exec refused");
 }
 
 // ---------------------------------------------------------------------------
@@ -421,13 +421,13 @@ void MisusePushdown(TableFunction::FilterPushdownInput &input) {
 	misuse_refused = false;
 	try {
 		filter.GetConstantValue();
-	} catch (const InvalidInputException &) {
+	} catch (const Exception &) {
 		misuse_refused = true;
 	}
 }
 
 void ThrowingPushdown(TableFunction::FilterPushdownInput &) {
-	throw InvalidInputException("pushdown refused");
+	throw Exception("pushdown refused");
 }
 
 void RegisterClaim(Connection &conn, const std::string &name, TableFunction::FilterPushdownCallback pushdown) {
@@ -498,8 +498,7 @@ TEST_CASE("Stable C++API: expression accessors refuse other node types and error
 
 	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_misuse(5) WHERE i < 3")) == std::vector<int64_t> {3});
 	REQUIRE(misuse_refused);
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT count(*) FROM cpp_throwing(5) WHERE i < 3").Drain(), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(conn.Execute("SELECT count(*) FROM cpp_throwing(5) WHERE i < 3").Drain(), Exception);
 }
 
 TEST_CASE("Stable C++API: table function registers and scans", "[cpp_api]") {
@@ -626,10 +625,8 @@ TEST_CASE("Stable C++API: table function callbacks report failure by throwing", 
 	    .SetExecCallback(ThrowingExec);
 	bad_exec.Register();
 
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM cpp_bad_bind()").Drain(), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
-	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM cpp_bad_exec()").Drain(), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM cpp_bad_bind()").Drain(), Exception);
+	REQUIRE_THROWS_AS(conn.Execute("SELECT * FROM cpp_bad_exec()").Drain(), Exception);
 }
 
 TEST_CASE("Stable C++API: table function registration refusals", "[cpp_api]") {
@@ -642,26 +639,26 @@ TEST_CASE("Stable C++API: table function registration refusals", "[cpp_api]") {
 	{
 		auto function = TableFunction::Create(conn);
 		function.SetBindCallback(StateBind).SetExecCallback(StateExec);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_AS(function.Register(), Exception);
 	}
 	// No bind callback: a table function has no other way to declare its columns.
 	{
 		auto function = TableFunction::Create(conn);
 		function.SetName("cpp_no_bind").SetExecCallback(StateExec);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_AS(function.Register(), Exception);
 	}
 	// No exec callback.
 	{
 		auto function = TableFunction::Create(conn);
 		function.SetName("cpp_no_exec").SetBindCallback(StateBind);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_AS(function.Register(), Exception);
 	}
 	// A return type on the signature: the columns come from bind instead.
 	{
 		auto function = TableFunction::Create(conn);
 		function.SetName("cpp_return_type").SetBindCallback(StateBind).SetExecCallback(StateExec);
 		function.GetSignature().SetReturnType(bigint);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_AS(function.Register(), Exception);
 	}
 }
 
@@ -704,13 +701,13 @@ std::string QueryError(Connection &conn, const std::string &sql) {
 	return "";
 }
 
-// Whether a misuse inside a callback was refused with INPUT_INVALID; a REQUIRE there would throw through the callback.
+// Whether a misuse inside a callback was refused; a REQUIRE there would throw through the callback.
 template <class F>
 bool RefusedAsInvalid(F &&f) {
 	try {
 		f();
-	} catch (const Exception &ex) {
-		return ex.GetCode() == DUCKDB_V2_ERROR_INPUT_INVALID;
+	} catch (const Exception &) {
+		return true;
 	}
 	return false;
 }
@@ -829,11 +826,11 @@ void NoPartitionValueData(TableFunction::PartitionDataInput &input) {
 }
 
 void ThrowingPartitionData(TableFunction::PartitionDataInput &) {
-	throw InvalidInputException("partition data refused");
+	throw Exception("partition data refused");
 }
 
 void ThrowingPartitioning(TableFunction::PartitioningInput &) {
-	throw InvalidInputException("partition info refused");
+	throw Exception("partition info refused");
 }
 
 void RegisterPart(Connection &conn, const std::string &name, TableFunction::PartitioningCallback partitioning,
@@ -1112,7 +1109,7 @@ TEST_CASE("Stable C++API: table function partitioning requires partition data", 
 	    .SetInitGlobalCallback(PartInitGlobal)
 	    .SetExecCallback(PartExec)
 	    .SetPartitioningCallback(AlwaysPartitioned);
-	REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(function.Register(), Exception);
 
 	function.SetPartitionDataCallback(NoBatchIndexData);
 	function.Register();

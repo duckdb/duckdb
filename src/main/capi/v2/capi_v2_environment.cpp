@@ -12,9 +12,6 @@ DUCKDB_V2_ERROR duckdb_v2_environment_create(duckdb_v2_environment_handle *out_e
 	});
 }
 
-// environment_destroy keeps a manual return path so the live-instances case
-// can surface as RESOURCE_IN_USE — there is no ExceptionType that maps to
-// that V2 code, so routing it through WithErrorHandler would degrade it.
 DUCKDB_V2_ERROR duckdb_v2_environment_destroy(duckdb_v2_environment_handle *env) {
 	if (!env || !*env) {
 		return DUCKDB_V2_ERROR_NONE;
@@ -22,7 +19,7 @@ DUCKDB_V2_ERROR duckdb_v2_environment_destroy(duckdb_v2_environment_handle *env)
 	const auto *wrapper = Convert(*env);
 	auto count = wrapper->instance_count.load(std::memory_order_acquire);
 	if (count != 0) {
-		return DUCKDB_V2_ERROR_RESOURCE_IN_USE;
+		return DUCKDB_V2_ERROR_GENERIC;
 	}
 	delete wrapper;
 	*env = nullptr;

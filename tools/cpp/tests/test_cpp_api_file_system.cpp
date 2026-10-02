@@ -102,11 +102,9 @@ TEST_CASE("Stable C++API: file system refusals", "[cpp_api]") {
 	// A missing file without a create flag.
 	REQUIRE_THROWS_AS(fs.OpenFile(duckdb::TestCreatePath("cpp_fs_missing.bin"), {FileFlags::READ}), Exception);
 	// No capability at all.
-	REQUIRE_THROWS_MATCHES(fs.OpenFile(duckdb::TestCreatePath("cpp_fs_none.bin"), {}), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(fs.OpenFile(duckdb::TestCreatePath("cpp_fs_none.bin"), {}), Exception);
 	// INVALID names no behaviour.
-	REQUIRE_THROWS_MATCHES(fs.OpenFile(duckdb::TestCreatePath("cpp_fs_none.bin"), {FileFlags::INVALID}), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(fs.OpenFile(duckdb::TestCreatePath("cpp_fs_none.bin"), {FileFlags::INVALID}), Exception);
 }
 
 TEST_CASE("Stable C++API: file handle close then destroy", "[cpp_api]") {
@@ -178,5 +176,5 @@ TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
 
 	// Options carrying no flags cannot say whether the file is read or written.
 	auto empty = fs.CreateOpenOptions();
-	REQUIRE_THROWS_MATCHES(fs.OpenFile(path, empty), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_AS(fs.OpenFile(path, empty), Exception);
 }

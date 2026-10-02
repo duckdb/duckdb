@@ -57,8 +57,7 @@ void ReadChangedRows(const ArrowArrayWrapper &unit, idx_t &rows_changed) {
 
 void ResultWrapperV2::BeginPending(unique_ptr<QueryResult> next_handle, bool is_principal) {
 	if (next_handle->HasError()) {
-		// Re-throw the typed ErrorData so the exception's ExceptionType is
-		// preserved and routed through GetErrorCodeFromExceptionType.
+		// Re-throw the typed ErrorData so the error message keeps its type prefix.
 		next_handle->GetErrorObject().Throw();
 	}
 	principal_active = is_principal;
@@ -340,7 +339,7 @@ unique_ptr<typename FORMAT::T> ResultWrapperV2::FetchBlocking() {
 			return nullptr;
 		case DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED:
 			// fetch_chunk has no status channel, so cancellation surfaces
-			// as ERROR_RUNTIME_INTERRUPT. The state stays CANCELLED (not
+			// as an error. The state stays CANCELLED (not
 			// ERRORED), so steps keep reporting the status. Throwing a
 			// fresh InterruptException means the error text is the generic
 			// "Interrupted!", not the engine's message; deliberate, since
@@ -446,9 +445,7 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
 	auto wrapper = make_uniq<ResultWrapperV2>();
 	// One live result per connection. The busy slot lives in the context's
 	// registered-state map (so the connection handle stays a bare Connection *),
-	// shared with this result. The busy check is a manual return path: no
-	// ExceptionType maps to RESOURCE_IN_USE, so routing it through
-	// WithErrorHandler would degrade the code. It must run before PendingQuery,
+	// shared with this result. The busy check must run before PendingQuery,
 	// which would otherwise silently cancel the live stream.
 	auto busy_slot = GetBusySlot(*context);
 	void *expected = nullptr;

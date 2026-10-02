@@ -33,7 +33,7 @@ functions:
     description: |
       Destroys the environment.
 
-      Refuses with ERROR_RESOURCE_IN_USE while any instance created through
+      Refuses with an error while any instance created through
       this environment is still alive; destroy those instances first, then
       retry. On success the handle is set to null.
     role: destructor
@@ -52,7 +52,7 @@ functions:
       Returns the number of instances currently alive under the environment.
 
       A diagnostic accessor, for tracking down leaked instances when
-      `[[environment_destroy]]` returns ERROR_RESOURCE_IN_USE. The count is a
+      `[[environment_destroy]]` returns an error. The count is a
       snapshot and may change before the next call.
     role: getter
     belongs_to: environment

@@ -75,7 +75,7 @@ TEST_CASE("V2: environment_destroy refuses while instance handles are alive", "[
 	duckdb_v2_instance_handle instance = nullptr;
 	duckdb_v2_instance_create(env, &instance, nullptr);
 
-	REQUIRE(duckdb_v2_environment_destroy(&env) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(duckdb_v2_environment_destroy(&env) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(env != nullptr);
 
 	duckdb_v2_instance_destroy(&instance);
@@ -146,7 +146,7 @@ TEST_CASE("V2: attaching a file twice is rejected", "[capi_v2][db]") {
 		// TODO: Fix this, windows reports another error!
 		auto path_str = Convert(path);
 		auto open_error = duckdb_v2_instance_attach(instance_b, &path_str, nullptr, nullptr, false, &err);
-		REQUIRE(((open_error == DUCKDB_V2_ERROR_RESOURCE_IN_USE) || (open_error == DUCKDB_V2_ERROR_IO_GENERAL)));
+		REQUIRE(((open_error == DUCKDB_V2_ERROR_GENERIC) || (open_error == DUCKDB_V2_ERROR_GENERIC)));
 		REQUIRE(err != nullptr);
 		duckdb_v2_error_info_destroy(&err);
 
@@ -241,10 +241,10 @@ TEST_CASE("V2: several databases on one handle, with an explicit default", "[cap
 	duckdb_v2_connection_destroy(&on_b);
 
 	// A path that is not attached is an error for detach and set_default alike.
-	REQUIRE(duckdb_v2_instance_detach(instance, &path_str2, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_detach(instance, &path_str2, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
-	REQUIRE(duckdb_v2_instance_set_default(instance, &path_str2, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_set_default(instance, &path_str2, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 
@@ -338,7 +338,7 @@ TEST_CASE("V2: attach options give a name and per-database options", "[capi_v2][
 	duckdb_v2_instance_create(env, &other_instance, nullptr);
 	auto path_str5 = Convert(":memory:");
 	REQUIRE(duckdb_v2_instance_attach(other_instance, &path_str5, nullptr, opts, false, &err) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_error_info_destroy(&err);
 	duckdb_v2_instance_destroy(&other_instance);
 	auto key_str3 = Convert("no_such_attach_option");
@@ -349,15 +349,15 @@ TEST_CASE("V2: attach options give a name and per-database options", "[capi_v2][
 	duckdb_v2_error_info_destroy(&err);
 
 	// Null-arg validation and null-safe destroy.
-	REQUIRE(duckdb_v2_attach_options_create(nullptr, &opts, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_attach_options_create(instance, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_attach_options_create(nullptr, &opts, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_attach_options_create(instance, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_identifier_t malformed_name = {nullptr, 1};
 	REQUIRE(duckdb_v2_instance_attach(instance, &path_str3, &malformed_name, nullptr, false, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	        DUCKDB_V2_ERROR_GENERIC);
 	auto key_str4 = duckdb_v2_str {nullptr, 1};
-	REQUIRE(duckdb_v2_attach_options_set(opts, &key_str4, &setting_str3, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_attach_options_set(opts, &key_str4, &setting_str3, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto key_str5 = Convert("\x80");
-	REQUIRE(duckdb_v2_attach_options_set(opts, &key_str5, &setting_str3, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_attach_options_set(opts, &key_str5, &setting_str3, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(duckdb_v2_attach_options_destroy(&opts) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(opts == nullptr);
 	REQUIRE(duckdb_v2_attach_options_destroy(&opts) == DUCKDB_V2_ERROR_NONE);
@@ -379,10 +379,10 @@ TEST_CASE("V2: detach and set_default on a handle that never started", "[capi_v2
 
 	duckdb_v2_error_info_handle err = nullptr;
 	auto path_str = Convert(":memory:");
-	REQUIRE(duckdb_v2_instance_detach(instance, &path_str, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_detach(instance, &path_str, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
-	REQUIRE(duckdb_v2_instance_set_default(instance, &path_str, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_set_default(instance, &path_str, &err) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 
@@ -426,19 +426,19 @@ TEST_CASE("V2: a connection keeps the instance alive after the handle is destroy
 
 TEST_CASE("V2: null-arg validation on env / instance / conn entrypoints", "[capi_v2][env][db][conn]") {
 	SECTION("environment_create rejects null out_env") {
-		REQUIRE(duckdb_v2_environment_create(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_environment_create(nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("environment_destroy with null pointer-to-handle is a no-op") {
 		REQUIRE(duckdb_v2_environment_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
 	}
 	SECTION("instance_create rejects null env") {
 		duckdb_v2_instance_handle instance = nullptr;
-		REQUIRE(duckdb_v2_instance_create(nullptr, &instance, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_instance_create(nullptr, &instance, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("instance_create rejects null out_instance") {
 		duckdb_v2_environment_handle env = nullptr;
 		duckdb_v2_environment_create(&env, nullptr);
-		REQUIRE(duckdb_v2_instance_create(env, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_instance_create(env, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_environment_destroy(&env);
 	}
 	SECTION("instance_attach / detach / set_default reject a null handle and a malformed path") {
@@ -448,14 +448,14 @@ TEST_CASE("V2: null-arg validation on env / instance / conn entrypoints", "[capi
 		duckdb_v2_instance_create(env, &instance, nullptr);
 		auto path_str = Convert(":memory:");
 		REQUIRE(duckdb_v2_instance_attach(nullptr, &path_str, nullptr, nullptr, false, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
+		        DUCKDB_V2_ERROR_GENERIC);
 		auto path_str2 = duckdb_v2_str {nullptr, 3};
 		REQUIRE(duckdb_v2_instance_attach(instance, &path_str2, nullptr, nullptr, false, nullptr) ==
-		        DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_instance_detach(nullptr, &path_str, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_instance_detach(instance, &path_str2, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_instance_set_default(nullptr, &path_str, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_instance_set_default(instance, &path_str2, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		        DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(duckdb_v2_instance_detach(nullptr, &path_str, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(duckdb_v2_instance_detach(instance, &path_str2, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(duckdb_v2_instance_set_default(nullptr, &path_str, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+		REQUIRE(duckdb_v2_instance_set_default(instance, &path_str2, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_instance_destroy(&instance);
 		duckdb_v2_environment_destroy(&env);
 	}
@@ -464,7 +464,7 @@ TEST_CASE("V2: null-arg validation on env / instance / conn entrypoints", "[capi
 	}
 	SECTION("connection_create rejects null instance") {
 		duckdb_v2_connection_handle conn = nullptr;
-		REQUIRE(duckdb_v2_connection_create(nullptr, &conn, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_create(nullptr, &conn, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	}
 	SECTION("connection_destroy with null pointer-to-handle is a no-op") {
 		REQUIRE(duckdb_v2_connection_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);

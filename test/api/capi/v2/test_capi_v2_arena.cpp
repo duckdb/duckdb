@@ -67,17 +67,17 @@ TEST_CASE("V2: vector_get_arena on string-backed kinds", "[capi_v2][arena]") {
 TEST_CASE("V2: vector_get_arena rejects non-string vector", "[capi_v2][arena]") {
 	StringChunk fixture(DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_arena_handle heap = reinterpret_cast<duckdb_v2_arena_handle>(0x1);
-	REQUIRE(duckdb_v2_vector_get_arena(fixture.vec, &heap, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_arena(fixture.vec, &heap, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	// out_heap is nulled on the INVALID_INPUT path.
 	REQUIRE(heap == nullptr);
 }
 
 TEST_CASE("V2: vector_get_arena null args", "[capi_v2][arena]") {
 	duckdb_v2_arena_handle heap = nullptr;
-	REQUIRE(duckdb_v2_vector_get_arena(nullptr, &heap, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_arena(nullptr, &heap, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	StringChunk fixture(DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
-	REQUIRE(duckdb_v2_vector_get_arena(fixture.vec, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_arena(fixture.vec, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 // ---------------------------------------------------------------------------
@@ -134,10 +134,10 @@ TEST_CASE("V2: arena_allocate null args", "[capi_v2][arena]") {
 
 	// Null heap: out_ptr is nulled on the INVALID_INPUT path.
 	uint8_t *bytes = reinterpret_cast<uint8_t *>(0x1);
-	REQUIRE(duckdb_v2_arena_allocate(nullptr, 4, &bytes, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arena_allocate(nullptr, 4, &bytes, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(bytes == nullptr);
 	// Null out_ptr.
-	REQUIRE(duckdb_v2_arena_allocate(heap, 4, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_arena_allocate(heap, 4, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 // ---------------------------------------------------------------------------

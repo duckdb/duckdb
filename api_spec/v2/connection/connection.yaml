@@ -62,7 +62,7 @@ functions:
           like `SET GLOBAL`.
         - LOCAL writes to this connection's session only, like `SET LOCAL` /
           `SET SESSION`.
-      A disallowed combination returns ERROR_INPUT_INVALID: GLOBAL against a
+      A disallowed combination returns an error: GLOBAL against a
       LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY one, and the legacy
       analogues. An unknown name is rejected unless an extension that
       defines it can be autoloaded; to stage a setting for an extension
@@ -104,7 +104,7 @@ functions:
       LOCAL override if this connection set one, otherwise the GLOBAL value,
       otherwise the static default. The remaining fields are populated exactly
       as by `[[instance_get_option_by_name]]`. Aliases resolve transparently, and an unknown
-      name returns ERROR_INPUT_INVALID. The caller destroys the returned
+      name returns an error. The caller destroys the returned
       option.
     role: getter
     belongs_to: connection
@@ -162,7 +162,7 @@ functions:
 
       Index space: [0, core_count) addresses core options, [core_count, total)
       the extension options visible from this connection's instance. An
-      out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the
+      out-of-range index returns an error. The caller destroys the
       returned option.
     role: getter
     belongs_to: connection
@@ -196,7 +196,7 @@ functions:
       of a query through a connection, including while another thread steps
       the query's result. A no-op when no query is active. Cancellation surfaces
       on the consuming side as step status CANCELLED (`[[result_step]]`), or as
-      ERROR_RUNTIME_INTERRUPT (`[[result_fetch_chunk]]`).
+      an error (`[[result_fetch_chunk]]`).
     role: method
     belongs_to: connection
     parameters:

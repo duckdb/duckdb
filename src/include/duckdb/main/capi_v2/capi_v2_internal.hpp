@@ -480,9 +480,9 @@ inline auto Convert(CV2Schema *schema) -> duckdb_v2_schema_handle {
 auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, const char *argument) noexcept
     -> DUCKDB_V2_ERROR;
 
-// Classify the exception currently being handled into a V2 error code and detail strings. Must be called from inside
-// a catch block. Never throws: if rendering the detail itself fails, it degrades to a bare code with empty detail
-// (RESOURCE_OUT_OF_MEMORY on allocation failure). Defined in capi_v2.cpp.
+// Render the exception currently being handled into a V2 error code and detail strings. Must be called from inside
+// a catch block. Never throws: if rendering the detail itself fails, it degrades to a bare code with empty detail.
+// Defined in capi_v2.cpp.
 auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &raw_message) noexcept -> void;
 
 // The null test behind DUCKDB_CHECK_ARG: a pointer/handle is invalid when null; a string/identifier view is invalid
@@ -497,7 +497,7 @@ inline bool IsNullArgument(const duckdb_v2_str *arg) {
 	return !arg || (!arg->ptr && arg->len > 0);
 }
 
-// Check if an argument is null and return DUCKDB_V2_ERROR_INPUT_INVALID with a message if it is.
+// Check if an argument is null and return DUCKDB_V2_ERROR_GENERIC with a message if it is.
 // For use at the top of an API entry point, before WithErrorHandler.
 // `err` must be in scope and `__func__` names the entry point in the message.
 #define DUCKDB_CHECK_ARG(arg)                                                                                          \
@@ -506,10 +506,6 @@ inline bool IsNullArgument(const duckdb_v2_str *arg) {
 			return duckdb::capiv2::NullArgumentError(err, __func__, #arg);                                             \
 		}                                                                                                              \
 	} while (0)
-
-// Error code <-> exception type conversion
-auto GetErrorCodeFromExceptionType(ExceptionType type) -> DUCKDB_V2_ERROR;
-auto TryGetExceptionTypeFromErrorCode(DUCKDB_V2_ERROR code) -> optional<ExceptionType>;
 
 // Backing struct for the opaque duckdb_v2_error_info_handle handle. Allocated
 // only on failure paths and only when the caller requested detail (i.e.
@@ -532,12 +528,6 @@ struct CV2ErrorInfo {
 		// Only throw if there's actually an error!
 		D_ASSERT(HasError());
 
-		// Rethrow with the exception class the code maps to, so the error class
-		// round-trips (mirrors InvokeWithErrorSlot); InvalidInput is the fallback
-		// for codes with no specific type.
-		if (const auto type = TryGetExceptionTypeFromErrorCode(code)) {
-			throw duckdb::Exception(*type, message);
-		}
 		throw duckdb::InvalidInputException(message);
 	}
 };
@@ -580,8 +570,6 @@ DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) n
 			// Allocate a new error info handle if not provided; if even that fails, the code alone reports it.
 			try {
 				*err = Convert(new CV2ErrorInfo());
-			} catch (const std::bad_alloc &) {
-				return DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
 			} catch (...) { // NOLINT(bugprone-empty-catch)
 				return code;
 			}

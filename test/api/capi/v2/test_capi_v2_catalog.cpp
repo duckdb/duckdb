@@ -138,9 +138,9 @@ TEST_CASE("V2 table description: missing tables and views are rejected", "[capi_
 	// Null arguments are rejected.
 	auto qname = MakeQName({"v"});
 	duckdb_v2_table_description_handle desc = nullptr;
-	REQUIRE(duckdb_v2_connection_describe_table(nullptr, qname, &desc, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_connection_describe_table(fx.conn, nullptr, &desc, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_connection_describe_table(fx.conn, qname, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_describe_table(nullptr, qname, &desc, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_connection_describe_table(fx.conn, nullptr, &desc, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_connection_describe_table(fx.conn, qname, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	duckdb_v2_qname_destroy(&qname);
 }
 
@@ -201,7 +201,7 @@ TEST_CASE("V2 table description: column descriptions", "[capi_v2][catalog]") {
 	// An out-of-range index is rejected.
 	desc = Describe(fx.conn, {"facts"});
 	duckdb_v2_column_description_handle column = nullptr;
-	REQUIRE(duckdb_v2_table_description_get_column(desc, 3, &column, nullptr) == DUCKDB_V2_ERROR_INPUT_OUT_OF_RANGE);
+	REQUIRE(duckdb_v2_table_description_get_column(desc, 3, &column, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(column == nullptr);
 	duckdb_v2_table_description_destroy(&desc);
 
@@ -209,9 +209,9 @@ TEST_CASE("V2 table description: column descriptions", "[capi_v2][catalog]") {
 	REQUIRE(duckdb_v2_column_description_destroy(nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_column_description_destroy(&column) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_identifier_t name = {nullptr, 0};
-	REQUIRE(duckdb_v2_column_description_get_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_description_get_name(nullptr, &name, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	bool flag = false;
-	REQUIRE(duckdb_v2_column_description_has_default(nullptr, &flag, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_description_has_default(nullptr, &flag, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 table description: a read only catalog reports readonly", "[capi_v2][catalog]") {
@@ -255,10 +255,10 @@ TEST_CASE("V2 table description: a description is a snapshot", "[capi_v2][catalo
 
 	// Null getter subjects and out-slots are rejected.
 	duckdb_v2_qname_handle qname = nullptr;
-	REQUIRE(duckdb_v2_table_description_get_qname(nullptr, &qname, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_table_description_get_column_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_description_get_qname(nullptr, &qname, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_table_description_get_column_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	bool flag = false;
-	REQUIRE(duckdb_v2_table_description_is_readonly(nullptr, &flag, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_table_description_is_readonly(nullptr, &flag, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 } // namespace test_capi_v2

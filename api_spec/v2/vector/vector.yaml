@@ -400,7 +400,7 @@ functions:
     description: |
       Returns a mutable pointer to the data of a FLAT or CONSTANT vector.
 
-      Any other representation returns ERROR_INPUT_INVALID. The pointer is
+      Any other representation returns an error. The pointer is
       valid until the owning chunk is destroyed, and the vector's storage shape
       must not change — through a flatten, say — while it is in use.
 
@@ -458,7 +458,7 @@ functions:
       `vector` takes on the storage of `source`: no data moves, and the two alias
       the same buffers until one of them is reset or re-referenced. Works for any
       type, including nested types. The source's logical type must equal the
-      vector's; a mismatch returns ERROR_INPUT_INVALID. The source's data must
+      vector's; a mismatch returns an error. The source's data must
       outlive every read of `vector`. Use it to hand an already-materialized
       vector straight to an output vector without a per-row copy.
     role: method
@@ -486,7 +486,7 @@ functions:
       logical row; write it through vector_get_data_mutable, which returns a
       pointer to that one element. For a STRUCT vector the change propagates to
       every child. The value's logical type must equal the vector's; a mismatch
-      returns ERROR_INPUT_INVALID.
+      returns an error.
     role: method
     belongs_to: vector
     parameters:
@@ -642,7 +642,7 @@ functions:
       Borrows a string-backed vector's arena for writing.
 
       Allocates the arena on first use. Valid for VARCHAR, BLOB, BIT, and
-      BIGNUM vectors, and returns ERROR_INPUT_INVALID for anything else. This
+      BIGNUM vectors, and returns an error for anything else. This
       call is the single string-ness check, which is why arena_allocate itself
       performs none. The arena is borrowed — never destroy it — and stays valid
       until the vector is flattened, reallocated, or destroyed.
@@ -718,7 +718,7 @@ functions:
       UNION, exposing only the active member.
 
       The returned child is borrowed and lives as long as the owning chunk.
-      Returns ERROR_INPUT_INVALID if the vector has no children, or if the
+      Returns an error if the vector has no children, or if the
       index is out of range.
     role: getter
     belongs_to: vector
@@ -787,11 +787,11 @@ functions:
       a decode call never needs a retry loop.
 
       With out_data != NULL, out_capacity must be at least out_length bytes, or
-      the call returns ERROR_INPUT_OBJECT_SIZE with out_length set to the
+      the call returns an error with out_length set to the
       required size and out_data left untouched. On success exactly out_length
       bytes are written, and the rest of the buffer is not modified.
 
-      Returns ERROR_INPUT_INVALID if in_data is NULL, or if in_length is too
+      Returns an error if in_data is NULL, or if in_length is too
       short to hold a bignum header.
     parameters:
       in_data:
@@ -815,7 +815,7 @@ functions:
         type: idx
         indirection: 1
         kind: OUT
-        description: Receives the magnitude size in bytes, written on success and on ERROR_INPUT_OBJECT_SIZE.
+        description: Receives the magnitude size in bytes, written on success and when the buffer is too small.
       out_is_negative:
         type: bool
         indirection: 1
@@ -845,7 +845,7 @@ functions:
       exact.
 
       With out_data != NULL, out_capacity must be at least out_length bytes, or
-      the call returns ERROR_INPUT_OBJECT_SIZE with out_length set to the
+      the call returns an error with out_length set to the
       required size and out_data left untouched. On success exactly out_length
       bytes are written, and the rest of the buffer is not modified.
 
@@ -853,8 +853,8 @@ functions:
       in_length >= 1 with no leading zero bytes, so the value zero is the
       single byte 0x00 with is_negative = false. A NULL in_data, an in_length
       of 0, a leading zero byte, or a negative zero returns
-      ERROR_INPUT_INVALID; a magnitude beyond the maximum bignum width returns
-      ERROR_INPUT_OUT_OF_RANGE.
+      an error; a magnitude beyond the maximum bignum width returns
+      an error.
     parameters:
       in_data:
         type: u8
@@ -880,7 +880,7 @@ functions:
         type: idx
         indirection: 1
         kind: OUT
-        description: Receives the storage size in bytes — written on success and on ERROR_INPUT_OBJECT_SIZE.
+        description: Receives the storage size in bytes — written on success and when the buffer is too small.
       err:
         type: error_info
         indirection: 1
@@ -894,7 +894,7 @@ functions:
     description: |
       Validates all text->len bytes as UTF-8, including bytes after embedded NUL characters.
 
-      Returns ERROR_INPUT_INVALID if any of:
+      Returns an error if any of:
       - text is NULL.
       - text->ptr is NULL and text->len is nonzero.
       - The input contains malformed UTF-8.

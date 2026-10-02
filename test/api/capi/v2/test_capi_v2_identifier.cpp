@@ -66,7 +66,7 @@ TEST_CASE("V2 identifier: buffer protocol and null arguments", "[capi_v2][identi
 	char small[8];
 	length = 0;
 	REQUIRE(duckdb_v2_identifier_render_quoted(&view, small, sizeof(small), &length, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_OBJECT_SIZE);
+	        DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(length == 8);
 
 	// A big enough buffer receives the text and a terminator.
@@ -76,20 +76,17 @@ TEST_CASE("V2 identifier: buffer protocol and null arguments", "[capi_v2][identi
 
 	// A null name view with a non-zero length, or a null length slot, is an input error.
 	duckdb_v2_identifier_t malformed = {nullptr, 3};
-	REQUIRE(duckdb_v2_identifier_render_quoted(&malformed, nullptr, 0, &length, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_identifier_render_quoted(&view, nullptr, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_identifier_render_quoted(&malformed, nullptr, 0, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_identifier_render_quoted(&view, nullptr, 0, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 }
 
 TEST_CASE("V2 identifier: names must be valid UTF-8", "[capi_v2][identifier]") {
 	idx_t length = 0;
 	auto name_str = Convert("\x80");
-	REQUIRE(duckdb_v2_identifier_render_quoted(&name_str, nullptr, 0, &length, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_identifier_render_quoted(&name_str, nullptr, 0, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	const std::string trailing_invalid("ok\0\x80", 4);
 	auto name_str2 = Convert(trailing_invalid);
-	REQUIRE(duckdb_v2_identifier_render_quoted(&name_str2, nullptr, 0, &length, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_identifier_render_quoted(&name_str2, nullptr, 0, &length, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	auto name_str3 = Convert("caf\xc3\xa9");
 	REQUIRE(duckdb_v2_identifier_render_quoted(&name_str3, nullptr, 0, &length, nullptr) == DUCKDB_V2_ERROR_NONE);
 }

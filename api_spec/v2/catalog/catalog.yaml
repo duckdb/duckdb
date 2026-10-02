@@ -148,7 +148,7 @@ functions:
       Returns an owned description of the column at index.
 
       Columns are numbered in declared order, generated columns included. An out-of-range index is rejected with
-      `ERROR_INPUT_OUT_OF_RANGE`.
+      an error.
     role: getter
     belongs_to: table_description
     parameters:

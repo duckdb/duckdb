@@ -85,7 +85,7 @@ bool ParseTemperature(const char *data, idx_t len, int32_t &out) {
 void TempToVarchar(duckdb_v2_cast_function_exec_info_handle info, duckdb_v2_context_handle context,
                    duckdb_v2_error_info_handle *err) {
 	if (!context) {
-		FailCast(err, DUCKDB_V2_ERROR_INPUT_INVALID, "cast callback ran without a context");
+		FailCast(err, DUCKDB_V2_ERROR_GENERIC, "cast callback ran without a context");
 		return;
 	}
 	CastArgs args;
@@ -118,7 +118,7 @@ void VarcharToTemp(duckdb_v2_cast_function_exec_info_handle info, duckdb_v2_cont
 	}
 	auto *secret = static_cast<std::string *>(user_data);
 	if (!secret || *secret != "secret") {
-		FailCast(err, DUCKDB_V2_ERROR_INPUT_INVALID, "user data did not reach the cast callback");
+		FailCast(err, DUCKDB_V2_ERROR_GENERIC, "user data did not reach the cast callback");
 		return;
 	}
 
@@ -146,7 +146,7 @@ void VarcharToTemp(duckdb_v2_cast_function_exec_info_handle info, duckdb_v2_cont
 			if (SetOutputNull(args.output, i, err) != DUCKDB_V2_ERROR_NONE) {
 				return;
 			}
-			FailCast(err, DUCKDB_V2_ERROR_TYPE_CONVERSION, "Could not convert '" + Convert(text) + "' to TEMPERATURE");
+			FailCast(err, DUCKDB_V2_ERROR_GENERIC, "Could not convert '" + Convert(text) + "' to TEMPERATURE");
 			continue;
 		}
 		out[i] = parsed;
@@ -332,9 +332,9 @@ TEST_CASE("V2 cast: normal casts abort, try casts yield NULL", "[capi_v2][cast_f
 	duckdb_v2_logical_type_destroy(&varchar);
 	duckdb_v2_logical_type_destroy(&integer);
 
-	// A normal cast: the callback's error aborts the query, and its code round-trips.
+	// A normal cast: the callback's error aborts the query.
 	last_cast_mode = DUCKDB_V2_CAST_MODE_MAX_ENUM;
-	REQUIRE(CastQueryError(fx.conn, "SELECT CAST('not-a-temp' AS TEMPERATURE)") == DUCKDB_V2_ERROR_TYPE_CONVERSION);
+	REQUIRE(CastQueryError(fx.conn, "SELECT CAST('not-a-temp' AS TEMPERATURE)") == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(last_cast_mode == DUCKDB_V2_CAST_MODE_NORMAL);
 
 	// A try cast: the error is discarded and the row the callback left NULL is kept.
@@ -391,13 +391,13 @@ TEST_CASE("V2 cast: registration refusals", "[capi_v2][cast_function]") {
 	{
 		duckdb_v2_cast_function_handle function = nullptr;
 		REQUIRE(duckdb_v2_cast_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 		REQUIRE(duckdb_v2_cast_function_set_source_type(function, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 		REQUIRE(duckdb_v2_cast_function_set_target_type(function, varchar, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 		REQUIRE(duckdb_v2_cast_function_set_exec_callback(function, NoopCast, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -407,12 +407,12 @@ TEST_CASE("V2 cast: registration refusals", "[capi_v2][cast_function]") {
 	// ANY is a signature wildcard, not a cast endpoint -- on either side.
 	{
 		auto function = MakeCast(fx.conn, any, varchar, NoopCast);
-		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_cast_function_destroy(&function);
 	}
 	{
 		auto function = MakeCast(fx.conn, varchar, any, NoopCast);
-		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_cast_function_register(function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 		duckdb_v2_cast_function_destroy(&function);
 	}
 
@@ -426,33 +426,31 @@ TEST_CASE("V2 cast: null arguments and destroy null-safety", "[capi_v2][cast_fun
 	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	duckdb_v2_cast_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_cast_function_create_with_connection(nullptr, &function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_cast_function_create_with_connection(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 	REQUIRE(function == nullptr);
-	REQUIRE(duckdb_v2_cast_function_create_with_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_create_with_extension(nullptr, &function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_cast_function_create_with_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_create_with_extension(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	REQUIRE(duckdb_v2_cast_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_cast_function_set_source_type(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_set_source_type(nullptr, integer, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_set_target_type(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_set_target_type(nullptr, integer, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_set_implicit_cast_cost(nullptr, 0, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_set_user_data(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_set_exec_callback(nullptr, NoopCast, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_cast_function_set_source_type(function, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_set_source_type(nullptr, integer, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_set_target_type(function, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_set_target_type(nullptr, integer, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_set_implicit_cast_cost(nullptr, 0, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_set_user_data(function, nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_set_exec_callback(nullptr, NoopCast, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	// The exec accessors reject a null info handle and a null out-parameter alike.
 	void *data = nullptr;
 	idx_t count = 0;
 	duckdb_v2_vector_handle vector = nullptr;
 	auto mode = DUCKDB_V2_CAST_MODE_NORMAL;
-	REQUIRE(duckdb_v2_cast_function_exec_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_exec_get_row_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_exec_get_input(nullptr, &vector, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_exec_get_output(nullptr, &vector, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_cast_function_exec_get_mode(nullptr, &mode, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_cast_function_exec_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_exec_get_row_count(nullptr, &count, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_exec_get_input(nullptr, &vector, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_exec_get_output(nullptr, &vector, nullptr) == DUCKDB_V2_ERROR_GENERIC);
+	REQUIRE(duckdb_v2_cast_function_exec_get_mode(nullptr, &mode, nullptr) == DUCKDB_V2_ERROR_GENERIC);
 
 	REQUIRE(duckdb_v2_cast_function_destroy(&function) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(function == nullptr);
