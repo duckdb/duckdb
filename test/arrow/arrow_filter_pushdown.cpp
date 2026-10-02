@@ -18,7 +18,7 @@ static unique_ptr<ArrowTestFactory> MakeArrowFactory(Connection &con, const stri
 	REQUIRE(!result->HasError());
 	auto types = result->GetTypes();
 	auto names = IdentifiersToStrings(result->GetNames());
-	return make_uniq<ArrowTestFactory>(std::move(types), std::move(names), std::move(result), false, client_properties,
+	return make_uniq<ArrowTestFactory>(std::move(types), std::move(names), std::move(result), client_properties,
 	                                   *con.context);
 }
 

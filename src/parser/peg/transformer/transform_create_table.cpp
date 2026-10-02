@@ -401,7 +401,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformColumnCompression(PEGTrans
 ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTransformer &transformer,
                                                                            unique_ptr<BaseTableRef> base_table_name,
                                                                            const optional<vector<string>> &column_list,
-                                                                           const KeyActions &key_actions) {
+                                                                           const optional<KeyActions> &key_actions) {
 	ForeignKeyInfo fk_info;
 	fk_info.schema = base_table_name->GetQualifiedName().Schema();
 	fk_info.table = base_table_name->Table();
@@ -417,17 +417,26 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTr
 	return entry;
 }
 
-KeyActions PEGTransformerFactory::TransformKeyActions(PEGTransformer &transformer,
-                                                      const optional<string> &update_action,
-                                                      const optional<string> &delete_action) {
-	KeyActions results;
-	if (update_action) {
-		results.update_action = *update_action;
-	}
+KeyActions PEGTransformerFactory::TransformUpdateFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &update_action,
+                                                                 const optional<string> &delete_action) {
+	KeyActions result;
+	result.update_action = update_action;
 	if (delete_action) {
-		results.delete_action = *delete_action;
+		result.delete_action = *delete_action;
 	}
-	return results;
+	return result;
+}
+
+KeyActions PEGTransformerFactory::TransformDeleteFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &delete_action,
+                                                                 const optional<string> &update_action) {
+	KeyActions result;
+	result.delete_action = delete_action;
+	if (update_action) {
+		result.update_action = *update_action;
+	}
+	return result;
 }
 
 string PEGTransformerFactory::TransformUpdateAction(PEGTransformer &transformer, const string &key_action) {

@@ -220,6 +220,8 @@ enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
 
+enum class ExpressionTailType : uint8_t;
+
 enum class ExpressionType : uint8_t;
 
 enum class ExtensionABIType : uint8_t;
@@ -467,8 +469,6 @@ enum class QueryNodeType : uint8_t;
 enum class QueryResultMemoryType : uint8_t;
 
 enum class QueryResultState : uint8_t;
-
-enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
@@ -948,6 +948,9 @@ template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
 
 template<>
+const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
+
+template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
 
 template<>
@@ -1318,9 +1321,6 @@ const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value
 
 template<>
 const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
-
-template<>
-const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
@@ -1897,6 +1897,9 @@ template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
 
 template<>
+ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
+
+template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
 
 template<>
@@ -2267,9 +2270,6 @@ QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *va
 
 template<>
 QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
-
-template<>
-QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);

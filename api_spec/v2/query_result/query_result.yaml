@@ -84,7 +84,7 @@ enums:
         description: No chunk yet; step again, or block in result_wait.
       RESULT_STEP_STATUS_CHUNK:
         value: 1
-        description: A caller-owned chunk was written to *out_chunk.
+        description: A caller-owned chunk was written to *out_chunk, or an array to *out_array.
       RESULT_STEP_STATUS_FINISHED:
         value: 2
         description: Stream exhausted. Sticky.
@@ -311,8 +311,8 @@ functions:
       same renderer the DuckDB CLI uses, so every client displays results
       identically without reimplementing table formatting. The result is
       consumed by transfer: the slot is set to NULL on success and on failure
-      alike, as with result_to_arrow_stream. A partially consumed result is
-      accepted, and the remainder is what gets rendered.
+      alike. A partially consumed result is accepted, and the remainder is what
+      gets rendered.
 
       The whole remaining result materializes in memory before rendering.
       max_rows bounds what is DISPLAYED, not what is read, so with limit 0 the

@@ -133,14 +133,36 @@ class ShellTest:
         stderr = res.stderr.decode("utf8").strip()
         return stdout, stderr
 
+    # environment variables that switch the shell into agent mode - stripped so the tests behave the same when
+    # they are run by a coding agent, tests opt in explicitly through env_var
+    AGENT_ENVIRONMENT_VARIABLES = [
+        "AI_AGENT",
+        "AGENT",
+        "CLAUDECODE",
+        "CODEX_CI",
+        "CODEX_SANDBOX",
+        "CODEX_THREAD_ID",
+        "CURSOR_AGENT",
+        "GEMINI_CLI",
+        "COPILOT_AGENT",
+        "COPILOT_CLI",
+        "COPILOT_AGENT_SESSION_ID",
+    ]
+
+    def get_environment(self):
+        my_env = os.environ.copy()
+        for key in self.AGENT_ENVIRONMENT_VARIABLES:
+            my_env.pop(key, None)
+        for key, val in self.environment.items():
+            my_env[key] = val
+        return my_env
+
     def run_raw(self, stdin_text):
         """Run the shell with raw stdin text (no statement processing)."""
         command = self.arguments
         input_data = stdin_text.encode("utf8") if isinstance(stdin_text, str) else stdin_text
 
-        my_env = os.environ.copy()
-        for key, val in self.environment.items():
-            my_env[key] = val
+        my_env = self.get_environment()
 
         res = subprocess.run(
             command,
@@ -158,9 +180,7 @@ class ShellTest:
         command = self.get_command(statements)
         input_data = self.get_input_data(statements)
 
-        my_env = os.environ.copy()
-        for key, val in self.environment.items():
-            my_env[key] = val
+        my_env = self.get_environment()
 
         if self.output:
             with open(self.output, "w") as output_pipe:

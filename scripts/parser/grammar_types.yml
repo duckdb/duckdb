@@ -1621,6 +1621,8 @@ overrides:
     type: "ConstraintColumnDefinition"
     by_value: true
   KeyActions: "KeyActions"
+  UpdateFirstKeyActions: "KeyActions"
+  DeleteFirstKeyActions: "KeyActions"
   GeneratedColumn:
     type: "GeneratedColumnDefinition"
     by_value: true
@@ -1636,6 +1638,24 @@ overrides:
     by_value: true
   ComparisonExpressionTail:
     type: "ComparisonExpressionTail"
+    by_value: true
+  IsExpressionTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsExpressionContinuation:
+    type: "vector<IsExpressionTail>"
+    by_value: true
+  IsTestTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsDistinctTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsComparisonTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsOtherOperatorTail:
+    type: "IsExpressionTail"
     by_value: true
   BetweenLikeOp:
     type: "BetweenInLikeOperator"
