@@ -203,26 +203,15 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 		return;
 	}
 
-	// We traverse from the back. A binary search would be faster.
-	// However, buffers are often (almost) full, so the overhead is acceptable.
-
-	// Get a handle to the buffer's validity mask (offset 0).
-	SegmentHandle handle(*this, 0);
-	const auto bitmask_ptr = handle.GetPtr<validity_t>();
-	const ValidityMask mask(bitmask_ptr, available_segments);
-
-	auto max_offset = available_segments;
-	for (idx_t i = available_segments; i > 0; i--) {
-		if (!mask.RowIsValid(i - 1)) {
-			max_offset = i;
-			break;
-		}
-	}
-	allocation_size = max_offset * segment_size + bitmask_offset;
+	allocation_size = GetNewAllocationSize(available_segments, segment_size, bitmask_offset);
 }
 
 idx_t FixedSizeBuffer::GetNewAllocationSize(const idx_t available_segments, const idx_t segment_size,
                                             const idx_t bitmask_offset) {
+	// We traverse from the back. A binary search would be faster.
+	// However, buffers are often (almost) full, so the overhead is acceptable.
+
+	// Get a handle to the buffer's validity mask (offset 0).
 	SegmentHandle handle(*this, 0);
 	const auto bitmask_ptr = handle.GetPtr<validity_t>();
 	const ValidityMask mask(bitmask_ptr, available_segments);
