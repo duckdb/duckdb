@@ -881,6 +881,12 @@ static const TransformFrameOps COLUMN_DEFINITION_OPS = {"ColumnDefinition",
 static const TransformFrameOps COLUMN_CONSTRAINT_OPS = {"ColumnConstraint",
                                                         &PEGTransformerFactory::InitializeColumnConstraintTrampoline,
                                                         &PEGTransformerFactory::FinalizeColumnConstraintTrampoline};
+static const TransformFrameOps NAMED_COLUMN_CONSTRAINT_OPS = {
+    "NamedColumnConstraint", &PEGTransformerFactory::InitializeNamedColumnConstraintTrampoline,
+    &PEGTransformerFactory::FinalizeNamedColumnConstraintTrampoline};
+static const TransformFrameOps COLUMN_CONSTRAINT_ELEMENT_OPS = {
+    "ColumnConstraintElement", &PEGTransformerFactory::InitializeColumnConstraintElementTrampoline,
+    &PEGTransformerFactory::FinalizeColumnConstraintElementTrampoline};
 static const TransformFrameOps NOT_NULL_CONSTRAINT_OPS = {"NotNullConstraint",
                                                           &PEGTransformerFactory::InitializeNotNullConstraintTrampoline,
                                                           &PEGTransformerFactory::FinalizeNotNullConstraintTrampoline};
@@ -3357,6 +3363,8 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CreateTableConstraint", &CREATE_TABLE_CONSTRAINT_OPS},
 	    {"ColumnDefinition", &COLUMN_DEFINITION_OPS},
 	    {"ColumnConstraint", &COLUMN_CONSTRAINT_OPS},
+	    {"NamedColumnConstraint", &NAMED_COLUMN_CONSTRAINT_OPS},
+	    {"ColumnConstraintElement", &COLUMN_CONSTRAINT_ELEMENT_OPS},
 	    {"NotNullConstraint", &NOT_NULL_CONSTRAINT_OPS},
 	    {"NullConstraint", &NULL_CONSTRAINT_OPS},
 	    {"NotNullColumnConstraint", &NOT_NULL_COLUMN_CONSTRAINT_OPS},
@@ -9952,7 +9960,7 @@ PEGTransformerFactory::FinalizeCreateTableConstraintTrampoline(PEGTransformer &t
 void PEGTransformerFactory::InitializeColumnDefinitionTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto &repeat_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &repeat_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	idx_t dynamic_child_count = 0;
 	if (repeat_opt.HasResult()) {
 		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
@@ -9983,7 +9991,7 @@ PEGTransformerFactory::FinalizeColumnDefinitionTrampoline(PEGTransformer &transf
                                                           GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	idx_t dynamic_child_count = 0;
-	auto &dynamic_repeat_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	auto &dynamic_repeat_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (dynamic_repeat_opt.HasResult()) {
 		auto &dynamic_repeat_pr = dynamic_repeat_opt.GetResult().Cast<RepeatParseResult>();
 		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
@@ -9998,9 +10006,6 @@ PEGTransformerFactory::FinalizeColumnDefinitionTrampoline(PEGTransformer &transf
 	if (process.child_results[2]) {
 		generated_column = process.TakeResult<GeneratedColumnDefinition>(2);
 	}
-	bool has_result {};
-	auto &has_result_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
-	has_result = has_result_opt.HasResult();
 	optional<vector<ColumnConstraintEntry>> column_constraint {};
 	if (dynamic_child_count > 0) {
 		vector<ColumnConstraintEntry> column_constraint_value;
@@ -10010,7 +10015,7 @@ PEGTransformerFactory::FinalizeColumnDefinitionTrampoline(PEGTransformer &transf
 		column_constraint = std::move(column_constraint_value);
 	}
 	auto result = TransformColumnDefinition(transformer, dotted_identifier, type, std::move(generated_column),
-	                                        has_result, std::move(column_constraint));
+	                                        std::move(column_constraint));
 	return make_uniq<TypedTransformResult<ConstraintColumnDefinition>>(std::move(result));
 }
 
@@ -10031,6 +10036,41 @@ void PEGTransformerFactory::InitializeColumnConstraintTrampoline(PEGTransformer 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeColumnConstraintTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<ColumnConstraintEntry>(0);
+	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeNamedColumnConstraintTrampoline(PEGTransformer &transformer,
+                                                                      GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("ColumnConstraintElement"), list_pr.GetChild(1)}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeNamedColumnConstraintTrampoline(PEGTransformer &transformer,
+                                                               GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<ColumnConstraintEntry>(0);
+	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeColumnConstraintElementTrampoline(PEGTransformer &transformer,
+                                                                        GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeColumnConstraintElementTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<ColumnConstraintEntry>(0);
 	return make_uniq<TypedTransformResult<ColumnConstraintEntry>>(std::move(result));
 }
