@@ -43,7 +43,7 @@ static void MapLegacyTableFilterKeys(LogicalGet &get) {
 	auto &column_ids = get.GetColumnIds();
 	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> filters;
 	for (auto &entry : get.table_filters) {
-		auto table_column = entry.GetIndex().GetIndex();
+		auto table_column = entry.GetIndex().GetIndexUnsafe();
 		optional_idx projection_index;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto &column_index = column_ids[i];
