@@ -34,3 +34,34 @@ Deprecated implicit conversion of unbound identifiers to strings in table functi
 
 statement ok
 RESET table_function_identifier_conversion;
+
+# A COPY option that takes a list of column names binds each identifier as the name it spells, not as
+# a column reference the conversion would have to turn into a string: no warning, and no error with
+# the conversion disabled.
+require parquet
+
+statement ok
+SET table_function_identifier_conversion='DISABLE_IMPLICIT_STRING';
+
+statement ok
+COPY (SELECT 1 AS a, 0 AS p, 2 AS q) TO '__TEST_DIR__/partitioned_one' (FORMAT PARQUET, PARTITION_BY p);
+
+statement ok
+COPY (SELECT 1 AS a, 0 AS p, 2 AS q) TO '__TEST_DIR__/partitioned_two' (FORMAT PARQUET, PARTITION_BY (p, q));
+
+query III
+SELECT a, p, q FROM read_parquet('__TEST_DIR__/partitioned_two/**/*.parquet');
+----
+1	0	2
+
+# A name that is also a SQL value function is still a column name here.
+statement ok
+COPY (SELECT 1 AS a, 'x' AS p, 'y' AS "user") TO '__TEST_DIR__/force_quote.csv' (FORCE_QUOTE (p, "user"));
+
+query I
+SELECT replace(content, chr(10), '|') FROM read_text('__TEST_DIR__/force_quote.csv');
+----
+a,"p","user"|1,"x","y"|
+
+statement ok
+RESET table_function_identifier_conversion;
