@@ -433,6 +433,43 @@ uint32_t ParquetWriter::WriteData(unique_ptr<AsyncWriteBuffer> buffer) {
 	return buffer_size;
 }
 
+unique_ptr<AsyncWriteBuffer> ParquetWriter::PrepareWrite(const duckdb_apache::thrift::TBase &object,
+                                                         const string &key) {
+	auto stream = make_uniq<MemoryStream>(BufferAllocator::Get(context));
+	TCompactProtocolFactoryT<MyTransport> tproto_factory;
+	auto stream_protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*stream));
+	if (options.encryption_config) {
+		ParquetCrypto::Write(object, *stream_protocol, key, *encryption_util);
+	} else {
+		object.write(stream_protocol.get());
+	}
+	return make_uniq<ParquetPreparedWriteBuffer>(std::move(stream));
+}
+
+unique_ptr<AsyncWriteBuffer> ParquetWriter::PrepareWriteData(unique_ptr<AsyncWriteBuffer> buffer, const string &key) {
+	if (!options.encryption_config) {
+		return buffer;
+	}
+
+	auto required_capacity =
+	    buffer->Size() + ParquetCrypto::LENGTH_BYTES + ParquetCrypto::NONCE_BYTES + ParquetCrypto::TAG_BYTES;
+	auto stream = make_uniq<MemoryStream>(BufferAllocator::Get(context), NextPowerOfTwo(required_capacity));
+	TCompactProtocolFactoryT<MyTransport> tproto_factory;
+	auto stream_protocol = tproto_factory.getProtocol(duckdb_base_std::make_shared<MyTransport>(*stream));
+	ParquetCrypto::WriteData(*stream_protocol, buffer->Ptr(), NumericCast<uint32_t>(buffer->Size()), key,
+	                         *encryption_util);
+	return make_uniq<ParquetPreparedWriteBuffer>(std::move(stream));
+}
+
+bool ParquetWriter::HasEncryption() const {
+	return options.encryption_config != nullptr;
+}
+
+const ParquetEncryptionConfig &ParquetWriter::GetEncryptionConfig() const {
+	D_ASSERT(options.encryption_config);
+	return *options.encryption_config;
+}
+
 static void VerifyUniqueNames(const vector<string> &names) {
 #ifdef DEBUG
 	unordered_set<string> name_set;
