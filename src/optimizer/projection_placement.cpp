@@ -885,25 +885,15 @@ static void ApplyPlacementGroup(Optimizer &optimizer, column_binding_map_t<uniqu
 	}
 
 	auto &target = GetPathTarget(group.path);
-	target->ResolveOperatorTypes();
 	auto old_bindings = target->GetColumnBindings();
-	auto old_types = target->types;
-
-	vector<unique_ptr<Expression>> lower_expressions;
-	lower_expressions.reserve(old_bindings.size() + group.placements.size());
-	for (idx_t i = 0; i < old_bindings.size(); i++) {
-		lower_expressions.push_back(make_uniq<BoundColumnRefExpression>(old_types[i], old_bindings[i]));
-	}
-	for (auto &placement : group.placements) {
-		lower_expressions.push_back(std::move(placement.expression));
-	}
-
 	auto lower_index = optimizer.binder.GenerateTableIndex();
-	auto lower_projection = make_uniq<LogicalProjection>(lower_index, std::move(lower_expressions));
-	if (target->has_estimated_cardinality) {
-		lower_projection->SetEstimatedCardinality(target->estimated_cardinality);
+	auto lower_projection = LogicalProjection::CreateIdentity(lower_index, std::move(target));
+	for (auto &placement : group.placements) {
+		lower_projection->expressions.push_back(std::move(placement.expression));
 	}
-	lower_projection->children.push_back(std::move(target));
+	if (lower_projection->children[0]->has_estimated_cardinality) {
+		lower_projection->SetEstimatedCardinality(lower_projection->children[0]->estimated_cardinality);
+	}
 	target = std::move(lower_projection);
 
 	BindingReplacementGraph replacements;

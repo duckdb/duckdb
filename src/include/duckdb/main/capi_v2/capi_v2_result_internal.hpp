@@ -101,9 +101,7 @@ struct ResultWrapperV2 {
 			// Mirrors Connection::Rollback (Query("ROLLBACK") + throw on error),
 			// driven through the retained context so it works after disconnect.
 			auto result = context->Query("ROLLBACK", QueryParameters());
-			if (result->HasError()) {
-				result->ThrowError();
-			}
+			result->ThrowIfError();
 		}
 	}
 
