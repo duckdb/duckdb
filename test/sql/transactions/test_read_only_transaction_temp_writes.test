@@ -1,0 +1,50 @@
+# name: test/sql/transactions/test_read_only_transaction_temp_writes.test
+# description: A read-only transaction can still write temporary objects, but not persistent ones
+# group: [transactions]
+
+statement ok
+CREATE TABLE p(i INTEGER)
+
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+statement ok
+CREATE TEMP TABLE t(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO t VALUES (1), (2), (3)
+
+statement ok
+UPDATE t SET i = i + 10 WHERE i = 3
+
+statement ok
+DELETE FROM t WHERE i = 1
+
+statement ok
+INSERT OR REPLACE INTO t VALUES (2)
+
+statement ok
+ALTER TABLE t RENAME COLUMN i TO k
+
+statement ok
+CREATE TEMP VIEW v AS SELECT k FROM t
+
+query I
+SELECT k FROM v ORDER BY k
+----
+2
+13
+
+statement ok
+DROP VIEW v
+
+statement ok
+DROP TABLE t
+
+statement error
+INSERT INTO p VALUES (1)
+----
+<REGEX>:.*transaction is launched in read-only mode.*
+
+statement ok
+ROLLBACK

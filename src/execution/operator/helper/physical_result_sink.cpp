@@ -147,6 +147,7 @@ bool PhysicalResultSink::FlushUnits(ResultSinkGlobalState &gstate, ResultSinkLoc
 
 bool PhysicalResultSink::HandOver(ResultSinkGlobalState &gstate, ResultSinkLocalState &lstate,
                                   unique_ptr<ResultUnit> unit, const InterruptState &interrupt) const {
+	D_ASSERT(unit->row_count > 0);
 	if (BatchOrdered()) {
 		return gstate.buffered_data->Cast<BatchedBufferedData>().AppendOrBlock(std::move(unit), lstate.current_batch,
 		                                                                       interrupt);

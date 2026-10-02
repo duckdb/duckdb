@@ -319,6 +319,8 @@ private:
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr,
 	                     bool invalidate_transaction = false);
+	//! Ends the active query as abandoned: nothing it did is committed
+	void AbortInternal(ClientContextLock &lock);
 	unique_ptr<QueryResult> SubmitStatement(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                        const QueryParameters &parameters);
 	unique_ptr<QueryResult> SubmitPreparedStatementInternal(ClientContextLock &lock,

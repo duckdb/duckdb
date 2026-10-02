@@ -1502,6 +1502,24 @@ TEST_CASE("V2: destroying a half-executed expanded group is clean", "[capi_v2][q
 	REQUIRE(DrainRowCount(r) == 1);
 	duckdb_v2_result_destroy(&r);
 }
+
+TEST_CASE("V2: an insert that was only waited on is discarded when destroyed", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t (i INTEGER)");
+
+	duckdb_v2_result_handle r = nullptr;
+	REQUIRE(Query(fx.conn, "INSERT INTO t SELECT * FROM range(1000)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
+	// Gives the workers time to finish the insert, which waiting must not keep
+	for (int i = 0; i < 10; i++) {
+		REQUIRE(duckdb_v2_result_wait(r, nullptr) == DUCKDB_V2_ERROR_NONE);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	REQUIRE(duckdb_v2_result_destroy(&r) == DUCKDB_V2_ERROR_NONE);
+
+	REQUIRE(Query(fx.conn, "SELECT * FROM t", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(r) == 0);
+	duckdb_v2_result_destroy(&r);
+}
 #endif
 
 // ===========================================================================

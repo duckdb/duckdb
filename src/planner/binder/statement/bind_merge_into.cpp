@@ -254,6 +254,8 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 			}
 		}
 		properties.RegisterDBModify(table.catalog, context, modification);
+	} else {
+		GetStatementProperties().writes_temporary = true;
 	}
 
 	// bind the source
