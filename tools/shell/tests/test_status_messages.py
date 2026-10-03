@@ -29,7 +29,9 @@ def test_status_lines_in_agent_mode(shell):
     test = agent_shell(shell).query(*resource_type("ready")).statement(CREATE_RESOURCE)
     result = test.run()
     result.check_stderr("status: Creating resource r (elapsed ")
-    result.check_stderr("status: Waiting for resource r (CREATE_IN_PROGRESS) (elapsed ")
+    result.check_stderr("status: Waiting for resource creation. Status check #1, status: CREATE_IN_PROGRESS (elapsed ")
+    result.check_stderr("status: Waiting for resource creation. Status check #2, status: CREATE_IN_PROGRESS (elapsed ")
+    result.check_stderr("status: Waiting for resource creation. Status check #3, status: ready (elapsed ")
     result.check_stdout("localhost")
 
 
@@ -38,7 +40,7 @@ def test_failure_reports_status(shell):
     test = agent_shell(shell).query(*resource_type("failed")).statement(CREATE_RESOURCE)
     result = test.run()
     assert result.status_code == 1
-    assert "while: Waiting for resource r (failed)" in result.stderr
+    assert "while: Waiting for resource creation. Status check #3, status: failed" in result.stderr
     assert "reported state 'failed'" in result.stderr
 
 
@@ -55,6 +57,31 @@ def test_no_status_without_progress_display(shell):
     result = test.run()
     assert "status:" not in result.stderr
     result.check_stdout("localhost")
+
+
+def test_status_lines_for_create_statement(shell):
+    # CREATE EXTERNAL RESOURCE provisions on an internal connection - its messages still reach this display
+    setup = resource_type("ready")
+    setup[2] = setup[2].replace("nextval('polls') < 3", "nextval('polls') < 2")
+    test = agent_shell(shell).query(*setup).statement("CREATE EXTERNAL RESOURCE 'test@local' AS r")
+    result = test.run()
+    result.check_stderr("status: Creating resource r (elapsed ")
+    result.check_stderr("status: Waiting for resource creation. Status check #1, status: CREATE_IN_PROGRESS (elapsed ")
+
+
+def test_status_provider_message(shell):
+    # a status function may say what its check is - e.g. the CloudFormation stack status - in a 'message' column, in
+    # which {check} is replaced by the number of the check
+    setup = resource_type("ready")
+    setup[2] = ("CREATE MACRO t_status(h) AS TABLE SELECT CASE WHEN nextval('polls') < 3 THEN 'pending' ELSE 'ready' END "
+                "AS state, MAP {'uri': 'localhost', 'attached_db_type': 'quack'} AS result, "
+                "'CloudFormation describe #{check}, status: ' || "
+                "CASE WHEN currval('polls') < 3 THEN 'CREATE_IN_PROGRESS' ELSE 'CREATE_COMPLETE' END AS message")
+    test = agent_shell(shell).query(*setup).statement(CREATE_RESOURCE)
+    result = test.run()
+    result.check_stderr("status: Waiting for resource creation. CloudFormation describe #1, status: CREATE_IN_PROGRESS (elapsed ")
+    result.check_stderr("status: Waiting for resource creation. CloudFormation describe #3, status: CREATE_COMPLETE (elapsed ")
+    assert "status: pending" not in result.stderr
 
 
 # fmt: on

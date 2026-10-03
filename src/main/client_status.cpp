@@ -11,8 +11,17 @@ namespace duckdb {
 shared_ptr<ClientStatusState> ClientStatusState::Get(ClientContext &context) {
 	auto state = context.registered_state->GetOrCreate<ClientStatusState>("client_status");
 	lock_guard<mutex> guard(state->lock);
-	state->context = &context;
+	if (!state->context) {
+		// the context whose progress display shows the messages - for a shared state, the one it was shared from
+		state->context = &context;
+	}
 	return state;
+}
+
+void ClientStatusState::ShareWith(ClientContext &internal_context, ClientContext &context) {
+	auto state = Get(context);
+	internal_context.registered_state->Remove("client_status");
+	internal_context.registered_state->Insert("client_status", std::move(state));
 }
 
 idx_t ClientStatusState::Push(string message) {

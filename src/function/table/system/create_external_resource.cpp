@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -276,13 +277,17 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	// status simply returns 'ready' on the first poll.
 	Value status_result;
 	string status_message;
+	//! How many times the status function was called (one API call to the provider each)
+	idx_t status_updates = 0;
 	bool has_deadline = bind_data.timeout_seconds > 0;
 	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(bind_data.timeout_seconds);
 	while (true) {
 		// Cooperative cancellation: this blocking loop never yields back to the executor, so surface a
 		// pending Ctrl-C / max_execution_time ourselves (InterruptCheck throws InterruptException on either).
 		context.InterruptCheck();
-		auto status_sql = "SELECT state, result FROM " + QualifiedName::Parse(type->status_function).ToString() + "(" +
+		// columns by name: 'state' and 'result', and optionally 'message' - what the provider says about the check,
+		// shown while waiting (so that a provider decides its wording, independent of this code)
+		auto status_sql = "SELECT * FROM " + QualifiedName::Parse(type->status_function).ToString() + "(" +
 		                  handle.ToSQLString() + ")";
 		// One log entry per poll, written once the poll's outcome is known, so a poll is never recorded as 'ok'
 		// only to fail validation a few lines later. The catch also covers the 'failed' and timeout throws.
@@ -297,20 +302,47 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				throw InvalidInputException("create_external_resource: status function \"%s\" returned no rows",
 				                            type->status_function);
 			}
-			auto status_rows = sres->Collection().GetRows();
-			auto state_val = status_rows.GetValue(0, 0);
-			auto status_state = state_val.IsNull() ? string() : state_val.ToString();
-			status_message = "Waiting for resource " + resource_label;
-			if (!status_state.empty() && status_state != "ready") {
-				status_message += " (" + status_state + ")";
+			optional_idx state_column, result_column, message_column;
+			auto &column_names = sres->GetNames();
+			for (idx_t c = 0; c < column_names.size(); c++) {
+				auto column_name = StringUtil::Lower(column_names[c].GetIdentifierName());
+				if (column_name == "state") {
+					state_column = c;
+				} else if (column_name == "result") {
+					result_column = c;
+				} else if (column_name == "message") {
+					message_column = c;
+				}
 			}
+			if (!state_column.IsValid() || !result_column.IsValid()) {
+				throw InvalidInputException(
+				    "create_external_resource: status function \"%s\" must return 'state' and 'result' columns",
+				    type->status_function);
+			}
+			auto status_rows = sres->Collection().GetRows();
+			auto state_val = status_rows.GetValue(state_column.GetIndex(), 0);
+			auto status_state = state_val.IsNull() ? string() : state_val.ToString();
+			string provider_message;
+			if (message_column.IsValid()) {
+				auto message_val = status_rows.GetValue(message_column.GetIndex(), 0);
+				provider_message = message_val.IsNull() ? string() : message_val.ToString();
+			}
+			// shown while waiting: what the provider says about this check (e.g. "CloudFormation describe #{check},
+			// status: CREATE_IN_PROGRESS" - {check} is how many status calls were made so far), or the state it reported
+			auto check = to_string(++status_updates);
+			if (provider_message.empty()) {
+				provider_message = "Status check #{check}, status: " + (status_state.empty() ? string("(none)") : status_state);
+			}
+			status_message = StringUtil::Format("Waiting for resource %s. %s", adopting ? "registration" : "creation",
+			                                    StringUtil::Replace(provider_message, "{check}", check));
 			status.Update(status_message);
 			if (status_state == "failed") {
 				throw IOException("create_external_resource: resource \"%s\" reported state 'failed'",
 				                  bind_data.type_name);
 			}
 			if (status_state == "ready") {
-				status_result = RequireResourceMap(status_rows.GetValue(1, 0), type->status_function, "result");
+				status_result =
+				    RequireResourceMap(status_rows.GetValue(result_column.GetIndex(), 0), type->status_function, "result");
 				ready = true;
 			} else if (has_deadline && std::chrono::steady_clock::now() >= deadline) {
 				throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",

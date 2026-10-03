@@ -22,6 +22,9 @@ class ClientContext;
 class ClientStatusState : public ClientContextState {
 public:
 	static shared_ptr<ClientStatusState> Get(ClientContext &context);
+	//! Makes the messages of an internal context (e.g. of a Connection a statement runs queries on) those of the
+	//! context it works for - so that they are shown on that context's progress display
+	static void ShareWith(ClientContext &internal_context, ClientContext &context);
 
 	//! Adds a message, returns its id
 	idx_t Push(string message);
