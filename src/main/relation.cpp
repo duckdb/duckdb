@@ -231,9 +231,7 @@ unique_ptr<QueryResult> Relation::Execute() {
 unique_ptr<QueryResult> Relation::ExecuteOrThrow() {
 	auto res = Execute();
 	D_ASSERT(res);
-	if (res->HasError()) {
-		res->ThrowError();
-	}
+	res->ThrowIfError();
 	return res;
 }
 
@@ -263,10 +261,7 @@ void Relation::Insert(const Identifier &schema_name, const Identifier &table_nam
 void Relation::Insert(const Identifier &catalog_name, const Identifier &schema_name, const Identifier &table_name) {
 	auto insert = InsertRel(catalog_name, schema_name, table_name);
 	auto res = insert->Execute();
-	if (res->HasError()) {
-		const string prepended_message = "Failed to insert into table '" + table_name + "': ";
-		res->ThrowError(prepended_message);
-	}
+	res->ThrowIfError("Failed to insert into table '" + table_name + "': ");
 }
 
 void Relation::Insert(const vector<vector<Value>> &values) {
@@ -305,10 +300,7 @@ void Relation::Create(const Identifier &catalog_name, const Identifier &schema_n
 	}
 	auto create = CreateRel(catalog_name, schema_name, table_name, temporary, on_conflict);
 	auto res = create->Execute();
-	if (res->HasError()) {
-		const string prepended_message = "Failed to create table '" + table_name + "': ";
-		res->ThrowError(prepended_message);
-	}
+	res->ThrowIfError("Failed to create table '" + table_name + "': ");
 }
 
 shared_ptr<Relation> Relation::WriteCSVRel(const string &csv_file, identifier_map_t<vector<Value>> options) {
@@ -318,10 +310,7 @@ shared_ptr<Relation> Relation::WriteCSVRel(const string &csv_file, identifier_ma
 void Relation::WriteCSV(const string &csv_file, identifier_map_t<vector<Value>> options) {
 	auto write_csv = WriteCSVRel(csv_file, std::move(options));
 	auto res = write_csv->Execute();
-	if (res->HasError()) {
-		const string prepended_message = "Failed to write '" + csv_file + "': ";
-		res->ThrowError(prepended_message);
-	}
+	res->ThrowIfError("Failed to write '" + csv_file + "': ");
 }
 
 shared_ptr<Relation> Relation::WriteParquetRel(const string &parquet_file, identifier_map_t<vector<Value>> options) {
@@ -333,10 +322,7 @@ shared_ptr<Relation> Relation::WriteParquetRel(const string &parquet_file, ident
 void Relation::WriteParquet(const string &parquet_file, identifier_map_t<vector<Value>> options) {
 	auto write_parquet = WriteParquetRel(parquet_file, std::move(options));
 	auto res = write_parquet->Execute();
-	if (res->HasError()) {
-		const string prepended_message = "Failed to write '" + parquet_file + "': ";
-		res->ThrowError(prepended_message);
-	}
+	res->ThrowIfError("Failed to write '" + parquet_file + "': ");
 }
 
 shared_ptr<Relation> Relation::CreateView(const Identifier &name, bool replace, bool temporary) {
@@ -347,10 +333,7 @@ shared_ptr<Relation> Relation::CreateView(const Identifier &schema_name, const I
                                           bool temporary) {
 	auto view = make_shared_ptr<CreateViewRelation>(shared_from_this(), schema_name, name, replace, temporary);
 	auto res = view->Execute();
-	if (res->HasError()) {
-		const string prepended_message = "Failed to create view '" + name + "': ";
-		res->ThrowError(prepended_message);
-	}
+	res->ThrowIfError("Failed to create view '" + name + "': ");
 	return shared_from_this();
 }
 

@@ -835,8 +835,10 @@ public:
 	}
 
 	const vector<Value> &Values() const {
-		D_ASSERT(values);
-		return values.value();
+		if (!values) {
+			throw InternalException("Partitioned copy batch has no partition values");
+		}
+		return *values;
 	}
 
 	idx_t AddCollectionSlot(PartitionedCopyCollectionSchema schema, idx_t row_count) {

@@ -77,6 +77,48 @@ TEST_CASE("SQL export inlines plain join sources without alias capture", "[sql_e
 	connection.Rollback();
 }
 
+TEST_CASE("Grouped MARK export requires reconstructible retained metadata",
+          "[sql_export][logical_plan_sql_export][join_sql_export]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	const vector<LogicalType> types {LogicalType::VARCHAR_COLLATION("nocase"), LogicalType::BIGINT,
+	                                 LogicalType::INTEGER};
+	auto join = make_uniq<LogicalComparisonJoin>(JoinType::MARK);
+	join->mark_index = TableIndex(1102);
+	for (idx_t side = 0; side < 2; side++) {
+		vector<ColumnBinding> bindings;
+		for (idx_t i = 0; i < types.size(); i++) {
+			bindings.emplace_back(TableIndex(1100 + side), ProjectionIndex(i));
+		}
+		join->children.push_back(make_uniq<LogicalEmptyResult>(types, std::move(bindings)));
+	}
+	for (idx_t i = 0; i < types.size(); i++) {
+		join->conditions.emplace_back(
+		    make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(TableIndex(1100), ProjectionIndex(i))),
+		    make_uniq<BoundColumnRefExpression>(types[i], ColumnBinding(TableIndex(1101), ProjectionIndex(i))),
+		    i + 1 == types.size() ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+	}
+	join->ResolveOperatorTypes();
+	const vector<LogicalType> groups {types[0], types[1]};
+	join->mark_types = groups;
+	REQUIRE(LogicalPlanSQLExporter::Export(*connection.context, *join).IsSuccess());
+	for (auto &metadata : vector<vector<LogicalType>> {{},
+	                                                   {types[0]},
+	                                                   {types[1], types[0]},
+	                                                   {LogicalType::VARCHAR, types[1]},
+	                                                   {LogicalType::VARCHAR_COLLATION("noaccent"), types[1]}}) {
+		join->mark_types = metadata;
+		auto exported = LogicalPlanSQLExporter::Export(*connection.context, *join);
+		RequirePlanExportIssue(exported, LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
+	}
+	join->mark_types = groups;
+	std::swap(join->conditions[0], join->conditions[2]);
+	RequirePlanExportIssue(LogicalPlanSQLExporter::Export(*connection.context, *join),
+	                       LogicalPlanVerificationIssueCode::UNSUPPORTED_EXPORT_FEATURE);
+	connection.Rollback();
+}
+
 TEST_CASE("Logical plan SQL export preserves join output maps and empty sides",
           "[sql_export][logical_plan_sql_export][join_sql_export]") {
 	DuckDB db(nullptr);

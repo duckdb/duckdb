@@ -18,8 +18,10 @@ struct ICUMakeDate : public ICUDateFunc {
 	static date_t Operation(Calendar *calendar, timestamp_tz_t instant);
 
 	static bool CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	static bool CastNsToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 	static BoundCastInfo BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo BindCastNsToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 
 	static void AddCasts(ExtensionLoader &loader);
 

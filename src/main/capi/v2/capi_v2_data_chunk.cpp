@@ -115,6 +115,13 @@ DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_size(duckdb_v2_data_chunk_handle chunk,
 	return WithErrorHandler(err, [&]() { *out_size = Convert(chunk)->size(); });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_capacity(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(chunk);
+	DUCKDB_CHECK_ARG(out_capacity);
+	return WithErrorHandler(err, [&]() { *out_capacity = Convert(chunk)->GetCapacity(); });
+}
+
 DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_vector_count(duckdb_v2_data_chunk_handle chunk, idx_t *out_count,
                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(chunk);

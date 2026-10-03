@@ -379,6 +379,10 @@ struct LogicalType {
 	DUCKDB_API static LogicalType DefaultForceMaxLogicalType(const LogicalType &left, const LogicalType &right);
 	//! Normalize a type - removing literals
 	DUCKDB_API static LogicalType NormalizeType(const LogicalType &type);
+	//! Nested type children with Parquet style names
+	DUCKDB_API static child_list_t<LogicalType> GetNamedChildTypes(const LogicalType &type);
+	//! Rebuild a nested type with new children
+	DUCKDB_API static LogicalType ConstructNestedType(const LogicalType &type, child_list_t<LogicalType> children);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -445,19 +449,19 @@ public:
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
-	DUCKDB_API static LogicalType DECIMAL(uint8_t width, uint8_t scale);                 // NOLINT
-	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);                   // NOLINT
-	DUCKDB_API static LogicalType LIST(const LogicalType &child);                        // NOLINT
-	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);            // NOLINT
+	DUCKDB_API static LogicalType DECIMAL(uint8_t width, uint8_t scale);      // NOLINT
+	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);        // NOLINT
+	DUCKDB_API static LogicalType LIST(const LogicalType &child);             // NOLINT
+	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children); // NOLINT
 	//! Unnamed struct - shares the physical representation of STRUCT but is a distinct logical type
-	DUCKDB_API static LogicalType TUPLE(child_list_t<LogicalType> children); // NOLINT
-	DUCKDB_API static LogicalType TUPLE(vector<LogicalType> children);       // NOLINT
-	DUCKDB_API static LogicalType MAP(const LogicalType &child);                         // NOLINT
-	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);               // NOLINT
-	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);              // NOLINT
-	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index);   // NOLINT
-	DUCKDB_API static LogicalType ENUM(const Vector &ordered_data, idx_t size);          // NOLINT
-	DUCKDB_API static LogicalType GEOMETRY();                                            // NOLINT
+	DUCKDB_API static LogicalType TUPLE(child_list_t<LogicalType> children);           // NOLINT
+	DUCKDB_API static LogicalType TUPLE(vector<LogicalType> children);                 // NOLINT
+	DUCKDB_API static LogicalType MAP(const LogicalType &child);                       // NOLINT
+	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value);             // NOLINT
+	DUCKDB_API static LogicalType UNION(child_list_t<LogicalType> members);            // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, optional_idx index); // NOLINT
+	DUCKDB_API static LogicalType ENUM(const Vector &ordered_data, idx_t size);        // NOLINT
+	DUCKDB_API static LogicalType GEOMETRY();                                          // NOLINT
 	DUCKDB_API static LogicalType GEOMETRY(const string &crs);
 	DUCKDB_API static LogicalType GEOMETRY(const CoordinateReferenceSystem &crs);
 	// ANY but with special rules (default is LogicalType::ANY, 5)

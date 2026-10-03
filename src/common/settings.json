@@ -294,6 +294,14 @@
         ]
     },
     {
+        "name": "debug_abort_on_wal_failure",
+        "description": "Whether or not to abort if a serialization exception is thrown during WAL playback.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "internal_setting": "abort_on_wal_failure",
+        "is_debug": true
+    },
+    {
         "name": "debug_asof_iejoin",
         "description": "Force the use of an IEJoin to implement ASOF joins.",
         "type": "BOOLEAN",
@@ -1195,7 +1203,7 @@
     },
     {
         "name": "max_streaming_buffer_size",
-        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, and each engine thread may hold one more unit, in construction or finished and waiting.",
+        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, and each engine thread may hold, beyond the queue, the units it is still building or handing over from its current chunk.",
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true,

@@ -70,8 +70,8 @@ public:
 	TableIndexList delete_indexes;
 	//! Set to INSERT_DUPLICATES, if we are skipping constraint checking during, e.g., WAL replay.
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
-	//! The number of deleted rows
-	idx_t deleted_rows;
+	//! The number of deleted rows (parallel DELETEs update it concurrently)
+	atomic<idx_t> deleted_rows;
 	//! Statement number of the currently tracked append range
 	transaction_t append_query_number = MAXIMUM_QUERY_ID;
 	//! Start (local row position) of the append range tracked in append_query_number

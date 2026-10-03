@@ -52,17 +52,17 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64;job.priority=2' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
-      runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.runners.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.runners.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.runners.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.runners.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.runners.outputs.runners }}
+      runner_linux_small: ${{ fromJSON(steps.selection.outputs.runners).linux_small }}
+      runner_linux_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_x64 }}
+      runner_linux_22_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_22_x64 }}
+      runner_linux_arm64: ${{ fromJSON(steps.selection.outputs.runners).linux_arm64 }}
+      runner_windows_2022_x64: ${{ fromJSON(steps.selection.outputs.runners).windows_2022_x64 }}
+      runner_macos_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_arm64 }}
+      runner_macos_14_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_14_arm64 }}
+      runners: ${{ steps.selection.outputs.runners }}
       images: ${{ steps.config.outputs.images }}
       image_version: ${{ steps.config.outputs.image_version }}
       linux_release_matrix: ${{ steps.selection.outputs.linux_release_matrix }}
@@ -177,7 +177,8 @@ jobs:
             --skip-tests "$skip_tests" \
             --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
             --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
-            --runners '${{ steps.runners.outputs.runners }}'
+            --runners '${{ steps.runners.outputs.runners }}' \
+            --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
       - name: Configure CI
         id: config
@@ -1494,6 +1495,7 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+          BRANCH: ${{ github.ref_name }}
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
           DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
@@ -1520,6 +1522,18 @@ jobs:
             --header-upload "Cache-Control: no-cache" \
             "$pointer_file" \
             ":s3:duckdb-staging/latest_alpha_version.txt"
+
+          rclone copyto \
+            --s3-provider "$s3_provider" \
+            --s3-endpoint "$AWS_ENDPOINT_URL" \
+            --s3-access-key-id "$AWS_ACCESS_KEY_ID" \
+            --s3-secret-access-key "$AWS_SECRET_ACCESS_KEY" \
+            --s3-no-check-bucket \
+            --s3-no-head \
+            --header-upload "Content-Type: text/plain" \
+            --header-upload "Cache-Control: no-cache" \
+            "$pointer_file" \
+            ":s3:duckdb-staging/release/$BRANCH/latest_alpha_version.txt"
 
           target="${DUCKDB_COMMIT:0:10}"
           printf '%s\n' "$DUCKDB_VERSION" > "$pointer_file"

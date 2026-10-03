@@ -628,6 +628,7 @@ public:
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
+	static LogicalType ApplyColumnCollation(const optional<LogicalType> &type, unique_ptr<ParsedExpression> collation);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
 	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);
 	static vector<GroupingSet> GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
@@ -1708,6 +1709,14 @@ public:
 	static void InitializeKeyActionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeKeyActionsTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
+	static void InitializeUpdateFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeUpdateFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
+	static void InitializeDeleteFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDeleteFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
 	static void InitializeUpdateActionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUpdateActionTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
@@ -1923,6 +1932,9 @@ public:
 	static void InitializeTargetOptAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeTargetOptAliasTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
+	static void InitializeTargetAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTargetAliasTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
 	static void InitializeDeleteUsingClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeDeleteUsingClauseTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -4156,6 +4168,7 @@ public:
 	static string TransformSetNullability(PEGTransformer &transformer);
 	static unique_ptr<AlterTableInfo> TransformAlterType(PEGTransformer &transformer, const bool &has_result,
 	                                                     const optional<LogicalType> &type,
+	                                                     optional<ColumnConstraintEntry> column_collation,
 	                                                     optional<unique_ptr<ParsedExpression>> using_expression);
 	static unique_ptr<ParsedExpression> TransformUsingExpression(PEGTransformer &transformer,
 	                                                             unique_ptr<ParsedExpression> expression);
@@ -4586,13 +4599,15 @@ public:
 	static ColumnConstraintEntry TransformForeignKeyConstraint(PEGTransformer &transformer,
 	                                                           unique_ptr<BaseTableRef> base_table_name,
 	                                                           const optional<vector<string>> &column_list,
-	                                                           const KeyActions &key_actions);
+	                                                           const optional<KeyActions> &key_actions);
 	static ColumnConstraintEntry TransformColumnCollation(PEGTransformer &transformer,
 	                                                      const vector<string> &dotted_identifier);
 	static ColumnConstraintEntry TransformColumnCompression(PEGTransformer &transformer,
 	                                                        const Identifier &col_id_or_string);
-	static KeyActions TransformKeyActions(PEGTransformer &transformer, const optional<string> &update_action,
-	                                      const optional<string> &delete_action);
+	static KeyActions TransformUpdateFirstKeyActions(PEGTransformer &transformer, const string &update_action,
+	                                                 const optional<string> &delete_action);
+	static KeyActions TransformDeleteFirstKeyActions(PEGTransformer &transformer, const string &delete_action,
+	                                                 const optional<string> &update_action);
 	static string TransformUpdateAction(PEGTransformer &transformer, const string &key_action);
 	static string TransformDeleteAction(PEGTransformer &transformer, const string &key_action);
 	static string TransformNoKeyAction(PEGTransformer &transformer);
@@ -4681,7 +4696,9 @@ public:
 	                                                           unique_ptr<BaseTableRef> base_table_name);
 	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
 	                                                        unique_ptr<BaseTableRef> base_table_name,
-	                                                        const bool &has_result, const optional<Identifier> &col_id);
+	                                                        const optional<Identifier> &target_alias);
+	static Identifier TransformTargetAlias(PEGTransformer &transformer, const bool &has_result,
+	                                       const Identifier &col_id);
 	static vector<unique_ptr<TableRef>> TransformDeleteUsingClause(PEGTransformer &transformer,
 	                                                               vector<unique_ptr<TableRef>> table_ref);
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
@@ -5102,7 +5119,8 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformInSelectStatement(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<ParsedExpression>
-	TransformBetweenClause(PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+	TransformBetweenClause(PEGTransformer &transformer, const bool &,
+	                       unique_ptr<ParsedExpression> other_operator_expression,
 	                       unique_ptr<ParsedExpression> other_operator_expression_1);
 	static unique_ptr<ParsedExpression>
 	TransformInfixOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,

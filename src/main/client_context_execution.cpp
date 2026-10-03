@@ -190,6 +190,8 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	D_ASSERT(active_query);
 	auto &statement_data = *statement_data_p;
 	BindPreparedStatementParameters(*this, statement_data, parameters);
+	// The plan must outlive the executor, also when Initialize throws
+	active_query->prepared = std::move(statement_data_p);
 
 	// Create the query executor.
 	active_query->executor = make_uniq<Executor>(*this);
@@ -263,9 +265,8 @@ unique_ptr<QueryResult> ClientContext::SubmitPreparedStatementInternal(
 	D_ASSERT(executor.GetTypes() == statement_data.types);
 	D_ASSERT(!active_query->HasOpenResult());
 
-	auto result = make_uniq<QueryResult>(shared_from_this(), *statement_data_p, std::move(types),
+	auto result = make_uniq<QueryResult>(shared_from_this(), statement_data, std::move(types),
 	                                     std::move(client_properties), std::move(buffer));
-	active_query->prepared = std::move(statement_data_p);
 	active_query->SetOpenResult(*result);
 	if (delegating) {
 		// The collector builds its own result object: run the query and hand that object out. The
