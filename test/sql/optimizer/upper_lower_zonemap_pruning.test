@@ -106,11 +106,11 @@ SELECT count(*) FROM case_truncated_distinct WHERE upper(s) = 'BBBBBBBBBBBB00250
 ----
 1
 
-# A constant that matches no prefix prunes every row group.
+# A constant that matches no prefix prunes every row group (fold or a 0-scan).
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM case_truncated_distinct WHERE upper(s) = 'ZZZZ';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 0 / 3.*
+analyzed_plan	<!REGEX>:.*Row Groups Scanned: [1-9].*
 
 query I
 SELECT count(*) FROM case_truncated_distinct WHERE upper(s) = 'ZZZZ';

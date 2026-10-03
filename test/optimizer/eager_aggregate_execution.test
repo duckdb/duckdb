@@ -51,6 +51,36 @@ EXPLAIN SELECT count(*), min(i), max(i) FROM t WHERE i > 100
 ----
 physical_plan	<REGEX>:.*AGGREGATE.*
 
+# the filter cuts the first row group, but its all-rows maximum (2047) is dominated by the exact
+# candidate (8191) from the aligned row groups: the fold still happens
+query II
+EXPLAIN SELECT max(i) FROM t WHERE i > 100
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(i) FROM t WHERE i > 100
+----
+8191
+
+# the true minimum lives in the surviving part of the cut row group: its all-rows bound (0) is not
+# dominated by the exact candidate (2048), so the fold is vetoed
+query II
+EXPLAIN SELECT min(i) FROM t WHERE i > 100
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(i) FROM t WHERE i > 100
+----
+101
+
+# count(*) cannot be folded over a partition the filter cuts: the surviving row count is unknown
+query II
+EXPLAIN SELECT max(i), count(*) FROM t WHERE i > 100
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
 query III
 SELECT count(*), min(i), max(i) FROM t
 ----
@@ -75,6 +105,25 @@ query II
 explain SELECT count(*),max(i),min(i) FROM t where i >=2048 and j > 20000
 ----
 physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# a single-column filter that prunes every partition is intercepted earlier (the scan becomes an
+# empty result); two filters that each kill different row groups are not: every partition is
+# filtered out entirely, the surviving set is empty and the aggregates fold to their empty-input
+# results
+query II
+EXPLAIN SELECT max(i) FROM t WHERE i > 3000 AND j < 100
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(i) FROM t WHERE i > 3000 AND j < 100
+----
+NULL
+
+query I
+SELECT count(*) FROM t WHERE i > 3000 AND j < 100
+----
+0
 
 statement ok
 INSERT INTO t VALUES (9999, 9999)

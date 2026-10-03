@@ -123,6 +123,152 @@ SELECT count(*) FROM big
 ----
 100999
 
+# Unloaded (persisted) deletes leave a superset bound over the surviving rows: when the bound of
+# every deleted partition is strictly dominated by an exact partition, min/max still folds. The
+# deleted ids must sit in an interior row group: a deleted row group whose all-rows min/max bound
+# is not strictly dominated by the exact partitions holding the global extremes vetoes the fold.
+statement ok
+CREATE TABLE voted AS SELECT i AS id FROM range(0, 500_000) t(i);
+
+# deletes inside an interior row group: its all-rows min/max are strictly dominated by the exact
+# partitions holding the global minimum and maximum
+statement ok
+DELETE FROM voted WHERE id BETWEEN 200_000 AND 200_010;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM voted
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM voted
+----
+0	499999
+
+# deletes that are not yet committed only shrink the set of rows the scanning transaction will
+# read, so the statistics remain a superset bound over the surviving rows and the fold still
+# happens. Had the deleted rows held the extremum, the all-rows bound of the partition would not
+# be dominated and would veto the fold.
+statement ok
+BEGIN
+
+statement ok
+DELETE FROM voted WHERE id BETWEEN 300_000 AND 300_010;
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM voted
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM voted
+----
+0	499999
+
+statement ok
+ROLLBACK
+
+# the deleted partition holds the global maximum: its bound is not dominated, so the fold is vetoed
+statement ok
+CREATE TABLE vetoed AS SELECT i AS id FROM range(0, 500_000) t(i);
+
+statement ok
+DELETE FROM vetoed WHERE id = 499_999;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM vetoed
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM vetoed
+----
+0	499998
+
+# a deleted partition whose all-rows bound ties the candidate is excluded as well: the exact
+# partition attains the extremum, so a surviving row equal to the candidate cannot change it.
+# the extremum 499999 lives in the first and in the (deleted) third row group; the deleted
+# partition's bound ties the exact candidate and no longer vetoes the fold
+statement ok
+CREATE TABLE tied (id BIGINT);
+
+statement ok
+INSERT INTO tied SELECT CASE WHEN i = 0 THEN 499999 ELSE i - 1 END FROM range(0, 122880) t(i);
+
+statement ok
+INSERT INTO tied SELECT i FROM range(122879, 245759) t(i);
+
+statement ok
+INSERT INTO tied SELECT i FROM range(245759, 368638) t(i);
+
+statement ok
+INSERT INTO tied SELECT 499999;
+
+statement ok
+INSERT INTO tied SELECT i FROM range(368638, 491518) t(i);
+
+statement ok
+DELETE FROM tied WHERE id BETWEEN 250000 AND 250010;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT min(id), max(id) FROM tied
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query II
+SELECT min(id), max(id) FROM tied
+----
+0	499999
+
+# a row group that is both deleted and cut by the filter is still a bound: its all-rows maximum is
+# dominated by the exact candidate from the aligned row groups, so max folds - the minimum, whose
+# true value lives in the surviving part of that row group, vetoes
+statement ok
+CREATE TABLE resdel AS SELECT i AS id FROM range(0, 500_000) t(i);
+
+statement ok
+DELETE FROM resdel WHERE id BETWEEN 11 AND 20;
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query II
+EXPLAIN SELECT max(id) FROM resdel WHERE id > 10
+----
+physical_plan	<!REGEX>:.*Sequential Scan.*
+
+query I
+SELECT max(id) FROM resdel WHERE id > 10
+----
+499999
+
+query II
+EXPLAIN SELECT min(id) FROM resdel WHERE id > 10
+----
+physical_plan	<REGEX>:.*Sequential Scan.*
+
+query I
+SELECT min(id) FROM resdel WHERE id > 10
+----
+21
+
 # Loaded deletes make min/max inexact, so offset pruning must not use stale row group ordering stats.
 statement ok
 CREATE TABLE rg_order AS
