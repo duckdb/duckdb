@@ -164,3 +164,63 @@ statement error
 COMMIT;
 ----
 Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
+
+# ALTER statements that rebuild the transaction-local storage keep its rows and delete index
+statement ok
+CREATE TABLE add_column(i INTEGER PRIMARY KEY DEFERRED, j INTEGER);
+
+statement ok
+CREATE TABLE alter_type(i INTEGER PRIMARY KEY DEFERRED, j INTEGER);
+
+statement ok
+CREATE TABLE drop_column(i INTEGER PRIMARY KEY DEFERRED, j INTEGER);
+
+statement ok
+INSERT INTO add_column VALUES (1, 10); INSERT INTO alter_type VALUES (1, 10); INSERT INTO drop_column VALUES (1, 10);
+
+statement ok
+BEGIN; INSERT INTO add_column VALUES (2, 20), (2, 21); ALTER TABLE add_column ADD COLUMN k INTEGER;
+
+statement error
+COMMIT;
+----
+Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
+
+statement ok
+BEGIN; DELETE FROM add_column WHERE i = 1; ALTER TABLE add_column ADD COLUMN k INTEGER; INSERT INTO add_column VALUES (1, 11, 0);
+
+statement ok
+COMMIT;
+
+statement ok
+BEGIN; INSERT INTO alter_type VALUES (2, 20), (2, 21); ALTER TABLE alter_type ALTER j TYPE BIGINT;
+
+statement error
+COMMIT;
+----
+Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
+
+statement ok
+BEGIN; DELETE FROM alter_type WHERE i = 1; ALTER TABLE alter_type ALTER j TYPE BIGINT; INSERT INTO alter_type VALUES (1, 11);
+
+statement ok
+COMMIT;
+
+statement ok
+BEGIN; INSERT INTO drop_column VALUES (2, 20), (2, 21); ALTER TABLE drop_column DROP COLUMN j;
+
+statement error
+COMMIT;
+----
+Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
+
+statement ok
+BEGIN; DELETE FROM drop_column WHERE i = 1; ALTER TABLE drop_column DROP COLUMN j; INSERT INTO drop_column VALUES (1);
+
+statement ok
+COMMIT;
+
+query III
+SELECT (SELECT count(*) FROM add_column), (SELECT count(*) FROM alter_type), (SELECT count(*) FROM drop_column);
+----
+1	1	1
