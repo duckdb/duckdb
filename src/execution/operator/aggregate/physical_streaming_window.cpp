@@ -444,8 +444,8 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	}
 }
 
-OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContext &context, DataChunk &output,
-                                                                 GlobalOperatorState &gstate_p, OperatorState &) const {
+OperatorFinalizeResultType PhysicalStreamingWindow::FinalOperatorExecute(ExecutionContext &context, DataChunk &output,
+                                                                         GlobalOperatorState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = gstate.local_state->Cast<StreamingWindowState>();
 

@@ -169,6 +169,12 @@ private:
 	idx_t flushing_idx;
 	//! Whether the current flushing_idx should be flushed: this needs to be stored to make flushing code re-entrant
 	bool should_flush_current_idx = true;
+	//! Whether the current flushing_idx is flushed through FinalOperatorExecute (after FinalExecute)
+	bool flushing_final_operator = false;
+	//! Whether this executor has registered as finished with the operators that require FinalOperatorExecute
+	bool registered_final_operators = false;
+	//! For every operator, whether this executor is the last one and must run FinalOperatorExecute
+	vector<bool> run_final_operator;
 	//! Whether this executor has already run at least once
 	bool has_executed = false;
 	//! Whether an externally-fed sink has observed its initial batch
@@ -212,6 +218,7 @@ private:
 	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
 	//! case of a blocked sink.
 	bool TryFlushCachingOperators(ExecutionBudget &chunk_budget);
+	void RegisterFinalOperators();
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);

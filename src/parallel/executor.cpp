@@ -179,6 +179,52 @@ void Executor::AddRecursiveCTE(PhysicalOperator &rec_cte) {
 	recursive_ctes.push_back(rec_cte);
 }
 
+void Executor::InitializeFinalOperators(MetaPipeline &root_pipeline) {
+	vector<shared_ptr<Pipeline>> all_pipelines;
+	root_pipeline.GetPipelines(all_pipelines, true);
+	for (auto &rec_cte_ref : recursive_ctes) {
+		auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
+		rec_cte.recursive_meta_pipeline->GetPipelines(all_pipelines, true);
+	}
+	reference_set_t<const Pipeline> counted_pipelines;
+	for (auto &pipeline : all_pipelines) {
+		if (!counted_pipelines.insert(*pipeline).second) {
+			continue;
+		}
+		for (auto &op_ref : pipeline->GetIntermediateOperators()) {
+			auto &op = op_ref.get();
+			if (!op.RequiresFinalOperatorExecute()) {
+				continue;
+			}
+			// Counting pipelines relies on each pipeline running a single executor
+			D_ASSERT(!op.ParallelOperator());
+			final_operator_pipeline_counts[op]++;
+		}
+	}
+}
+
+bool Executor::FinishFinalOperatorPipeline(PhysicalOperator &op) {
+	auto entry = final_operator_pipeline_counts.find(op);
+	if (entry == final_operator_pipeline_counts.end()) {
+		throw InternalException("FinishFinalOperatorPipeline called for an operator that is not in any pipeline");
+	}
+	lock_guard<mutex> guard(op.lock);
+	D_ASSERT(op.op_state);
+	auto &finished_pipelines = op.op_state->finished_pipelines;
+	finished_pipelines++;
+	D_ASSERT(finished_pipelines <= entry->second);
+	return finished_pipelines == entry->second;
+}
+
+bool Executor::HasPendingFinalOperator(const PhysicalOperator &op) const {
+	auto entry = final_operator_pipeline_counts.find(op);
+	if (entry == final_operator_pipeline_counts.end()) {
+		return false;
+	}
+	auto finished_pipelines = op.op_state->finished_pipelines;
+	return finished_pipelines > 0 && finished_pipelines < entry->second;
+}
+
 void Executor::ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines_p,
                                    vector<shared_ptr<Event>> &events_p) {
 	ScheduleEventData event_data(pipelines_p, events_p, false);
@@ -266,6 +312,7 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
 			rec_cte.recursive_meta_pipeline->Ready();
 		}
+		InitializeFinalOperators(*root_pipeline);
 
 		// set root pipelines, i.e., all pipelines that end in the final sink
 		root_pipeline->GetPipelines(root_pipelines, false);
@@ -551,6 +598,7 @@ void Executor::Reset() {
 	error_manager.Reset();
 	progress_verifier.reset();
 	pipelines.clear();
+	final_operator_pipeline_counts.clear();
 	events.clear();
 	to_be_rescheduled_tasks.clear();
 	execution_result = QueryResultState::NOT_READY;

@@ -271,3 +271,107 @@ statement error
 SELECT LAG(i, (-9223372036854775808)::BIGINT) OVER () FROM range(3) t(i);
 ----
 Overflow in subtraction
+
+# LEAD over UNION ALL is flushed once, after all input pipelines
+query II
+WITH src AS (
+	SELECT 0 AS i
+	UNION ALL
+	SELECT 1 AS i
+)
+SELECT i, LEAD(i, 1, -1) OVER () AS x
+FROM src;
+----
+0	1
+1	-1
+
+query II
+SELECT i, LEAD(i, 1, -1) OVER () AS x
+FROM (
+	(SELECT 0 AS i UNION ALL SELECT 1 AS i)
+	UNION ALL
+	(SELECT 2 AS i UNION ALL SELECT 3 AS i)
+) src;
+----
+0	1
+1	2
+2	3
+3	-1
+
+# More than a vector of delayed rows over UNION ALL
+query III
+SELECT count(*), sum(x), count(*) FILTER (x = -1)
+FROM (
+	SELECT LEAD(i, 1, -1) OVER () AS x
+	FROM (SELECT range AS i FROM range(3000) UNION ALL SELECT range + 3000 FROM range(3000))
+);
+----
+6000	17996999	1
+
+# Repeated executions start with a fresh pipeline count
+statement ok
+PREPARE p AS WITH src AS (SELECT 0 AS i UNION ALL SELECT 1 AS i)
+SELECT i, LEAD(i, 1, -1) OVER () AS x FROM src;
+
+query II
+EXECUTE p;
+----
+0	1
+1	-1
+
+query II
+EXECUTE p;
+----
+0	1
+1	-1
+
+# The union pipelines run one at a time and are flushed before the hash join releases its hash table
+statement ok
+CREATE TABLE p AS SELECT range AS k FROM range(3000);
+
+query II
+SELECT count(*), sum(x)
+FROM p JOIN (
+	SELECT i, LEAD(i, 1, -1) OVER () AS x
+	FROM (SELECT range AS i FROM range(1500) UNION ALL SELECT range + 1500 FROM range(1500))
+) b ON p.k = b.i;
+----
+3000	4498499
+
+# Stacked streaming windows are flushed in order, including the caching filter between them
+query II
+SELECT count(*), sum(y)
+FROM (
+	SELECT LEAD(x, 1, -1) OVER () AS y
+	FROM (SELECT LEAD(i, 1, -1) OVER () AS x FROM range(3000) t(i))
+	WHERE x % 997 = 0 OR x = -1
+);
+----
+4	4983
+
+# The recursive step pushes several UNION ALL pipelines into the same streaming window
+query III
+WITH RECURSIVE c(n, m) AS (
+	SELECT 0, 0
+	UNION ALL
+	SELECT n + 1, LEAD(n, 1, -1) OVER ()
+	FROM (SELECT n FROM c WHERE n < 5 UNION ALL SELECT n + 100 FROM c WHERE n < 5)
+)
+SELECT count(*), sum(m), count(*) FILTER (m = -1) FROM c;
+----
+11	505	5
+
+# The same recursive query on the single-thread inline path
+statement ok
+SET threads=1;
+
+query III
+WITH RECURSIVE c(n, m) AS (
+	SELECT 0, 0
+	UNION ALL
+	SELECT n + 1, LEAD(n, 1, -1) OVER ()
+	FROM (SELECT n FROM c WHERE n < 5 UNION ALL SELECT n + 100 FROM c WHERE n < 5)
+)
+SELECT count(*), sum(m), count(*) FILTER (m = -1) FROM c;
+----
+11	505	5

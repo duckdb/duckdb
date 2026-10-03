@@ -108,6 +108,10 @@ public:
 	void AddEvent(shared_ptr<Event> event);
 
 	void AddRecursiveCTE(PhysicalOperator &rec_cte);
+	//! Registers that a pipeline finished pushing into 'op', returns true if it was the last such pipeline
+	bool FinishFinalOperatorPipeline(PhysicalOperator &op);
+	//! Whether some, but not all, pipelines that push into 'op' have finished (requires holding op.lock)
+	bool HasPendingFinalOperator(const PhysicalOperator &op) const;
 	void ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
 	//! Whether or not the root of the pipeline is a result collector object
@@ -150,6 +154,7 @@ private:
 	//! retained never parks, so the retained hot path skips the readiness checks
 	bool ResultStoreCanPark();
 	void InitializeInternal(PhysicalOperator &physical_plan);
+	void InitializeFinalOperators(MetaPipeline &root_pipeline);
 
 	void ScheduleEvents(const vector<shared_ptr<MetaPipeline>> &meta_pipelines);
 	void ScheduleEventsInternal(ScheduleEventData &event_data);
@@ -182,6 +187,8 @@ private:
 	vector<shared_ptr<Pipeline>> root_pipelines;
 	//! The recursive CTE's in this query plan
 	vector<reference<PhysicalOperator>> recursive_ctes;
+	//! The number of pipelines that push into each operator that requires FinalOperatorExecute
+	reference_map_t<const PhysicalOperator, idx_t> final_operator_pipeline_counts;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index

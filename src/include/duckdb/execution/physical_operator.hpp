@@ -106,6 +106,9 @@ public:
 	                                   GlobalOperatorState &gstate, OperatorState &state) const;
 	virtual OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk,
 	                                                GlobalOperatorState &gstate, OperatorState &state) const;
+	//! Flushes operator-wide state, called once after all pipelines that push into this operator have finished
+	virtual OperatorFinalizeResultType FinalOperatorExecute(ExecutionContext &context, DataChunk &chunk,
+	                                                        GlobalOperatorState &gstate) const;
 	virtual OperatorFinalResultType OperatorFinalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                                 OperatorFinalizeInput &input) const;
 
@@ -125,6 +128,10 @@ public:
 	}
 
 	virtual bool RequiresFinalExecute() const {
+		return false;
+	}
+
+	virtual bool RequiresFinalOperatorExecute() const {
 		return false;
 	}
 
