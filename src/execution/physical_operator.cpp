@@ -115,6 +115,11 @@ OperatorFinalizeResultType PhysicalOperator::FinalExecute(ExecutionContext &cont
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");
 }
 
+OperatorFinalizeResultType PhysicalOperator::FinalOperatorExecute(ExecutionContext &context, DataChunk &chunk,
+                                                                  GlobalOperatorState &gstate) const {
+	throw InternalException("Calling FinalOperatorExecute on a node that is not an operator!");
+}
+
 OperatorFinalResultType PhysicalOperator::OperatorFinalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                            OperatorFinalizeInput &input) const {
 	throw InternalException("Calling FinalExecute on a node that is not an operator!");

@@ -413,7 +413,12 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	for (auto &op_ref : operators) {
 		auto &op = op_ref.get();
 		lock_guard<mutex> guard(op.lock);
+		if (op.op_state && executor.HasPendingFinalOperator(op)) {
+			// Another pipeline already pushed into this operator in the current round
+			continue;
+		}
 		if (allow_reuse && op.op_state && op.ResetGlobalOperatorState(client, *op.op_state)) {
+			op.op_state->finished_pipelines = 0;
 			continue;
 		}
 		op.op_state = op.GetGlobalOperatorState(client);

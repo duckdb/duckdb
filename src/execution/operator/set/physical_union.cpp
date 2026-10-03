@@ -46,6 +46,12 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	if (current.IsOrderDependent()) {
 		order_matters = true;
 	}
+	for (auto &op : meta_pipeline.GetState().GetPipelineOperators(current)) {
+		if (op.get().RequiresFinalOperatorExecute()) {
+			// The operator-wide state must be fed by one union pipeline at a time
+			order_matters = true;
+		}
+	}
 	if (sink) {
 		if (Settings::Get<PreserveInsertionOrderSetting>(current.GetClientContext()) && sink->SinkOrderDependent()) {
 			order_matters = true;

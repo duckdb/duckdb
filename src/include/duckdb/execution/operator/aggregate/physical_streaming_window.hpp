@@ -35,10 +35,10 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	OperatorFinalizeResultType FinalExecute(ExecutionContext &context, DataChunk &chunk, GlobalOperatorState &gstate,
-	                                        OperatorState &state) const final;
+	OperatorFinalizeResultType FinalOperatorExecute(ExecutionContext &context, DataChunk &chunk,
+	                                                GlobalOperatorState &gstate) const final;
 
-	bool RequiresFinalExecute() const final {
+	bool RequiresFinalOperatorExecute() const final {
 		return true;
 	}
 

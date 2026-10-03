@@ -94,6 +94,8 @@ void PipelineExecutor::Reset() {
 	source_finish_notification_state = SourceFinishNotificationState::PENDING;
 	should_flush_current_idx = true;
 	unsampled_progress_rows = 0;
+	flushing_final_operator = false;
+	registered_final_operators = false;
 	while (!in_process_operators.empty()) {
 		in_process_operators.pop();
 	}
@@ -164,28 +166,32 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 		D_ASSERT(in_process_operators.empty());
 		started_flushing = true;
 		flushing_idx = IsFinished() ? idx_t(finished_processing_idx) : 0;
+		RegisterFinalOperators();
 	}
 
-	// For each operator that supports FinalExecute,
+	// For each operator that supports FinalExecute or FinalOperatorExecute,
 	// extract every chunk from it and push it through the rest of the pipeline
-	// before moving onto the next operators' FinalExecute
+	// before moving onto the next operator. FinalExecute runs before FinalOperatorExecute.
 	while (flushing_idx < pipeline.operators.size()) {
-		if (!pipeline.operators[flushing_idx].get().RequiresFinalExecute()) {
-			flushing_idx++;
-			continue;
-		}
+		auto &current_operator = pipeline.operators[flushing_idx].get();
+		const bool requires_flush =
+		    flushing_final_operator ? bool(run_final_operator[flushing_idx]) : current_operator.RequiresFinalExecute();
 
 		// This slightly awkward way of increasing the flushing idx is to make the code re-entrant: We need to call this
 		// method again in the case of a Sink returning BLOCKED.
-		if (!should_flush_current_idx && in_process_operators.empty()) {
+		if (!requires_flush || (!should_flush_current_idx && in_process_operators.empty())) {
 			should_flush_current_idx = true;
-			flushing_idx++;
+			if (flushing_final_operator) {
+				flushing_final_operator = false;
+				flushing_idx++;
+			} else {
+				flushing_final_operator = true;
+			}
 			continue;
 		}
 
 		auto &curr_chunk =
 		    flushing_idx + 1 >= intermediate_chunks.size() ? final_chunk : *intermediate_chunks[flushing_idx + 1];
-		auto &current_operator = pipeline.operators[flushing_idx].get();
 
 		// In-process operators here mean an earlier push of curr_chunk was interrupted (the chunk budget
 		// ran out, or the Sink blocked). We resume that push rather than flushing the operator again, and
@@ -195,8 +201,11 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 		if (!resuming_push) {
 			curr_chunk.Reset();
 			StartOperator(current_operator);
-			auto finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
-			                                                     *intermediate_states[flushing_idx]);
+			auto &gstate = *current_operator.op_state;
+			auto finalize_result =
+			    flushing_final_operator
+			        ? current_operator.FinalOperatorExecute(context, curr_chunk, gstate)
+			        : current_operator.FinalExecute(context, curr_chunk, gstate, *intermediate_states[flushing_idx]);
 			EndOperator(current_operator, &curr_chunk);
 			should_flush_current_idx = finalize_result == OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		}
@@ -223,6 +232,20 @@ bool PipelineExecutor::TryFlushCachingOperators(ExecutionBudget &chunk_budget) {
 		}
 	}
 	return true;
+}
+
+void PipelineExecutor::RegisterFinalOperators() {
+	if (registered_final_operators) {
+		return;
+	}
+	registered_final_operators = true;
+	run_final_operator.assign(pipeline.operators.size(), false);
+	for (idx_t i = 0; i < pipeline.operators.size(); i++) {
+		auto &op = pipeline.operators[i].get();
+		if (op.RequiresFinalOperatorExecute()) {
+			run_final_operator[i] = pipeline.executor.FinishFinalOperatorPipeline(op);
+		}
+	}
 }
 
 SinkNextBatchType PipelineExecutor::NextBatch(DataChunk &source_chunk, const SourceFetchResult &source_result) {
@@ -428,7 +451,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		}
 	} while (chunk_budget.Next());
 
-	if ((!exhausted_pipeline || !done_flushing) && !IsFinished()) {
+	if (exhausted_pipeline ? !done_flushing : !IsFinished()) {
 		return PipelineExecuteResult::NOT_FINISHED;
 	}
 
@@ -688,6 +711,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	if (finalized) {
 		throw InternalException("Calling PushFinalize on a pipeline that has been finalized already");
 	}
+	RegisterFinalOperators();
 
 	D_ASSERT(local_sink_state);
 

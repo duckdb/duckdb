@@ -72,6 +72,10 @@ public:
 	virtual idx_t MaxThreads(idx_t source_max_threads) {
 		return source_max_threads;
 	}
+
+public:
+	//! Number of pipelines that finished pushing into the operator, used to trigger FinalOperatorExecute
+	idx_t finished_pipelines = 0;
 };
 
 class GlobalSinkState : public StateWithBlockableTasks {
