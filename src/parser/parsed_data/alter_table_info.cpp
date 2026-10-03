@@ -241,7 +241,9 @@ string AddColumnInfo::ToString() const {
 	if (add_column_constraints.add_not_null) {
 		result += " NOT NULL";
 	}
-	if (add_column_constraints.add_unique) {
+	if (add_column_constraints.add_primary_key) {
+		result += " PRIMARY KEY";
+	} else if (add_column_constraints.add_unique) {
 		result += " UNIQUE";
 	}
 	if (this->new_column.HasDefaultValue()) {
