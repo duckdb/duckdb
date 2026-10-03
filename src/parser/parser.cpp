@@ -12,6 +12,16 @@
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/statement/prepare_statement.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/parser/statement/call_statement.hpp"
+#include "duckdb/parser/statement/execute_statement.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
@@ -253,40 +263,42 @@ string Parser::NormalizeSQLString(const string &query) {
 	return query;
 }
 
-// Iteratively (i.e. without recursing on the C stack) verify that an expression tree does not
-// exceed max_expression_depth. The transformer builds arbitrarily deep trees, and downstream passes
-// (star expansion, column qualification, hashing, ...) walk them recursively - rejecting an over-deep
-// tree here, at the parser/binder interface, keeps every one of those passes from overflowing.
-static void VerifyExpressionDepth(const ParsedExpression &root, idx_t max_expression_depth) {
-	vector<reference<const ParsedExpression>> expr_stack;
-	vector<idx_t> depth_stack;
-	expr_stack.emplace_back(root);
-	depth_stack.emplace_back(1);
+// Iteratively (without recursing on the C stack) verify that no expression tree exceeds max_expression_depth.
+// Depth keeps counting into the body of a subquery expression, so nested scalar subqueries are bounded too.
+static void VerifyExpressionDepth(ParsedExpression &root, idx_t max_expression_depth) {
+	vector<pair<reference<ParsedExpression>, idx_t>> expr_stack;
+	expr_stack.emplace_back(root, 1);
 	while (!expr_stack.empty()) {
-		auto &expr = expr_stack.back().get();
-		auto depth = depth_stack.back();
+		auto entry = expr_stack.back();
 		expr_stack.pop_back();
-		depth_stack.pop_back();
+		auto &expr = entry.first.get();
+		auto depth = entry.second;
 		if (depth > max_expression_depth) {
 			throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" "
 			                      "to increase the maximum expression depth.",
 			                      max_expression_depth);
 		}
-		ParsedExpressionIterator::EnumerateChildren(expr, [&](const ParsedExpression &child) {
-			expr_stack.emplace_back(child);
-			depth_stack.emplace_back(depth + 1);
-		});
+		auto push = [&](unique_ptr<ParsedExpression> &child) {
+			if (child) {
+				expr_stack.emplace_back(*child, depth + 1);
+			}
+		};
+		ParsedExpressionIterator::EnumerateChildren(expr, push);
+		if (expr.GetExpressionClass() == ExpressionClass::SUBQUERY) {
+			auto &subquery = expr.Cast<SubqueryExpression>().SubqueryMutable();
+			if (subquery && subquery->node) {
+				ParsedExpressionIterator::EnumerateQueryNodeChildren(*subquery->node, push);
+			}
+		}
 	}
 }
 
 static void VerifyStatementDepth(SQLStatement &statement, idx_t max_expression_depth) {
-	auto verify = [&](const unique_ptr<ParsedExpression> &expr) {
+	auto verify = [&](unique_ptr<ParsedExpression> &expr) {
 		if (expr) {
 			VerifyExpressionDepth(*expr, max_expression_depth);
 		}
 	};
-	// EnumerateQueryNodeChildren yields every expression of a query tree (select list, WHERE, GROUP BY,
-	// HAVING, QUALIFY, modifiers, CTEs and nested subqueries), so one pass covers a whole node.
 	auto verify_node = [&](optional_ptr<QueryNode> node) {
 		if (node) {
 			ParsedExpressionIterator::EnumerateQueryNodeChildren(*node, verify);
@@ -295,6 +307,48 @@ static void VerifyStatementDepth(SQLStatement &statement, idx_t max_expression_d
 	switch (statement.type) {
 	case StatementType::SELECT_STATEMENT:
 		verify_node(statement.Cast<SelectStatement>().node.get());
+		break;
+	case StatementType::INSERT_STATEMENT:
+		verify_node(statement.Cast<InsertStatement>().node.get());
+		break;
+	case StatementType::UPDATE_STATEMENT:
+		verify_node(statement.Cast<UpdateStatement>().node.get());
+		break;
+	case StatementType::DELETE_STATEMENT:
+		verify_node(statement.Cast<DeleteStatement>().node.get());
+		break;
+	case StatementType::MERGE_INTO_STATEMENT:
+		verify_node(statement.Cast<MergeIntoStatement>().node.get());
+		break;
+	case StatementType::EXPLAIN_STATEMENT:
+		VerifyStatementDepth(*statement.Cast<ExplainStatement>().stmt, max_expression_depth);
+		break;
+	case StatementType::PREPARE_STATEMENT:
+		VerifyStatementDepth(*statement.Cast<PrepareStatement>().statement, max_expression_depth);
+		break;
+	case StatementType::COPY_STATEMENT: {
+		auto &info = *statement.Cast<CopyStatement>().info;
+		verify_node(info.select_statement.get());
+		verify(info.file_path_expression);
+		for (auto &option : info.parsed_options) {
+			verify(option.second);
+		}
+		break;
+	}
+	case StatementType::SET_STATEMENT: {
+		auto &set = statement.Cast<SetStatement>();
+		if (set.set_type == SetType::SET) {
+			verify(set.Cast<SetVariableStatement>().value);
+		}
+		break;
+	}
+	case StatementType::CALL_STATEMENT:
+		verify(statement.Cast<CallStatement>().function);
+		break;
+	case StatementType::EXECUTE_STATEMENT:
+		for (auto &value : statement.Cast<ExecuteStatement>().named_values) {
+			verify(value.second);
+		}
 		break;
 	case StatementType::CREATE_STATEMENT: {
 		auto &info = *statement.Cast<CreateStatement>().info;
@@ -327,7 +381,7 @@ static void VerifyStatementDepth(SQLStatement &statement, idx_t max_expression_d
 			break;
 		}
 		case CatalogType::TABLE_ENTRY: {
-			// CREATE TABLE AS SELECT - column defaults / CHECK constraints are depth-checked by the binder
+			// column defaults and CHECK constraints are depth-checked by the binder
 			auto &table = info.Cast<CreateTableInfo>();
 			verify_node(table.query ? table.query->node.get() : nullptr);
 			break;
