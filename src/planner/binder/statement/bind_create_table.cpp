@@ -480,11 +480,6 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 	bool found_deferred = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
 	bool find_primary_key = fk.pk_columns.empty();
-	if (!find_primary_key && fk.pk_columns.size() != fk.fk_columns.size()) {
-		throw BinderException(
-		    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
-		    StringUtil::Join(fk.fk_columns, ","), StringUtil::Join(fk.pk_columns, ","));
-	}
 	for (auto &constr : constraints) {
 		if (constr->type != ConstraintType::UNIQUE) {
 			continue;
