@@ -34,6 +34,14 @@ myschema	mytable	False	False	0	1	0	0
 main	mytemp	True	False	0	1	0	0
 main	pk	False	True	0	2	1	1
 
+query TTT
+SELECT schema_name, table_name, table_type FROM duckdb_tables() ORDER BY table_name;
+----
+main	integers	BASE TABLE
+myschema	mytable	BASE TABLE
+main	mytemp	LOCAL TEMPORARY
+main	pk	BASE TABLE
+
 query I
 SELECT database_name = current_database() OR database_name = 'temp'
 FROM duckdb_tables();
