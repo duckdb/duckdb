@@ -265,6 +265,10 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 			} else if (cc_entry.constraint_name == "ForeignKeyConstraint") {
 				auto &fk_constraint = cc_entry.constraint->Cast<ForeignKeyConstraint>();
 				fk_constraint.fk_columns.push_back(qualified_name.Name());
+				if (!fk_constraint.pk_columns.empty() && fk_constraint.pk_columns.size() != 1) {
+					throw ParserException(
+					    "The number of referencing and referenced columns for foreign keys must be the same");
+				}
 				accumulated_constraints.constraints.push_back(std::move(cc_entry.constraint));
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
 				if (has_generated) {

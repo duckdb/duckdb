@@ -184,10 +184,6 @@ void Binder::VerifyConstraintTimingStorageVersion(const Constraint &constraint, 
 unique_ptr<BoundConstraint> Binder::BindUniqueConstraint(const Constraint &constraint, const Identifier &table,
                                                          const ColumnList &columns) {
 	auto &unique = constraint.Cast<UniqueConstraint>();
-	if (unique.IsDeferred()) {
-		throw NotImplementedException("Deferred %s constraints are not implemented yet",
-		                              unique.IsPrimaryKey() ? "PRIMARY KEY" : "UNIQUE");
-	}
 
 	// Resolve the columns.
 	vector<PhysicalIndex> indexes;
@@ -472,10 +468,16 @@ static void FindForeignKeyIndexes(const ColumnList &columns, const vector<Identi
 	}
 }
 
+static void ThrowDeferredReferencedKey() {
+	throw BinderException(
+	    "Failed to create foreign key: the referenced PRIMARY KEY or UNIQUE constraint cannot be DEFERRED");
+}
+
 static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints,
                                           ForeignKeyConstraint &fk) {
 	// find the matching primary key constraint
 	bool found_constraint = false;
+	bool found_deferred = false;
 	// if no columns are defined, we will automatically try to bind to the primary key
 	bool find_primary_key = fk.pk_columns.empty();
 	for (auto &constr : constraints) {
@@ -503,25 +505,25 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
 			}
+			if (unique.IsDeferred()) {
+				ThrowDeferredReferencedKey();
+			}
 			fk.pk_columns = pk_names;
 			return;
 		}
-		if (pk_names.size() != fk.fk_columns.size()) {
-			// the number of referencing and referenced columns for foreign keys must be the same
+		if (pk_names != fk.pk_columns) {
 			continue;
 		}
-		bool equals = true;
-		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
-			if (fk.pk_columns[i] != pk_names[i]) {
-				equals = false;
-				break;
-			}
-		}
-		if (!equals) {
+		if (unique.IsDeferred()) {
+			// keep looking for a matching constraint that is not deferred
+			found_deferred = true;
 			continue;
 		}
 		// found match
 		return;
+	}
+	if (found_deferred) {
+		ThrowDeferredReferencedKey();
 	}
 	// no match found! examine why
 	if (!found_constraint) {

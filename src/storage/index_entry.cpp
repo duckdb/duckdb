@@ -18,7 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p) : owned_index(std::move(index_p)) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, const bool deferred_p)
+    : owned_index(std::move(index_p)), deferred(deferred_p) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -104,6 +105,15 @@ void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 }
 
 void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
+	InitializeLocalIndexesInternal(delete_indexes, &append_indexes);
+}
+
+void IndexEntry::InitializeLocalDeleteIndex(TableIndexList &delete_indexes) const {
+	InitializeLocalIndexesInternal(delete_indexes, nullptr);
+}
+
+void IndexEntry::InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
+                                                optional_ptr<TableIndexList> append_indexes) const {
 	auto entry_lock = lock.GetSharedLock();
 	if (owned_index->GetConstraintType() == IndexConstraintType::NONE || !owned_index->IsBound()) {
 		return;
@@ -114,8 +124,11 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableInd
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
-	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferred=*/false);
+	// Deferred constraints have no append index: transaction-local rows are verified when committing.
+	if (append_indexes && !deferred) {
+		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferred=*/false);
+	}
 }
 
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
@@ -280,9 +293,18 @@ bool IndexEntry::IsUnique() const {
 	return owned_index->IsUnique();
 }
 
+bool IndexEntry::IsDeferred() const {
+	return deferred;
+}
+
 bool IndexEntry::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) const {
 	auto entry_lock = lock.GetSharedLock();
-	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !owned_index->IsUnique() : !owned_index->IsForeign()) {
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+		// Foreign keys cannot reference a deferred key.
+		if (!owned_index->IsUnique() || deferred) {
+			return false;
+		}
+	} else if (!owned_index->IsForeign()) {
 		return false;
 	}
 	const auto &column_ids = owned_index->GetColumnIds();
@@ -456,6 +478,7 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	result.is_primary = owned_index->IsPrimary();
 	result.is_unique = owned_index->IsUnique() || result.is_primary;
 	result.is_foreign = owned_index->IsForeign();
+	result.is_deferred = deferred;
 	result.column_set = owned_index->GetColumnIdSet();
 	return result;
 }
