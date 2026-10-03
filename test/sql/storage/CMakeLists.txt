@@ -5,6 +5,7 @@ add_library_unity(
   test_buffer_manager.cpp
   test_checksum.cpp
   test_storage.cpp
+  test_rle_batch_fetch.cpp
   test_database_size.cpp
   wal_checkpoint_marker.cpp
   wal_prescan.cpp

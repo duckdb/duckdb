@@ -741,9 +741,11 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 	optional_ptr<SegmentNode<ColumnSegment>> current_segment;
 	idx_t segment_start = 0;
 	idx_t segment_end = 0;
-	for (idx_t idx = 0; idx < fetch_count; idx++) {
+	vector<row_t> batch_offsets;
+	bool prefers_batch_fetch = false;
+	for (idx_t idx = 0; idx < fetch_count;) {
 		const idx_t offset = offsets[sel.get_index(idx)];
-		if (offset > count) {
+		if (offset >= count) {
 			throw InternalException("ColumnData::FetchRowsAtSegmentLevel - row_id %lld out of range for count %lld",
 			                        offset, count);
 		}
@@ -751,9 +753,30 @@ void ColumnData::FetchRowsAtSegmentLevel(TransactionData transaction, ColumnFetc
 			current_segment = data.GetSegment(offset);
 			segment_start = current_segment->GetRowStart();
 			segment_end = segment_start + current_segment->GetNode().count;
+			prefers_batch_fetch = current_segment->GetNode().GetCompressionFunction().prefers_batch_fetch;
 		}
-		const idx_t index_in_segment = offset - segment_start;
-		current_segment->GetNode().FetchRow(state, NumericCast<row_t>(index_in_segment), result, result_offset + idx);
+		auto &segment = current_segment->GetNode();
+		// A single lookup cannot reuse decoding state; retain the allocation-free fetch path.
+		if (!prefers_batch_fetch || fetch_count == 1) {
+			segment.FetchRow(state, NumericCast<row_t>(offset - segment_start), result, result_offset + idx);
+			idx++;
+			continue;
+		}
+
+		// Collect offsets only for codecs that benefit from batching. Preserve selection order, including
+		// duplicates and backwards requests; a size limit or segment change ends the current batch.
+		batch_offsets.clear();
+		const auto batch_start = idx;
+		while (idx < fetch_count && batch_offsets.size() < STANDARD_VECTOR_SIZE) {
+			const auto next_offset = offsets[sel.get_index(idx)];
+			if (next_offset < segment_start || next_offset >= segment_end) {
+				break;
+			}
+			batch_offsets.push_back(NumericCast<row_t>(next_offset - segment_start));
+			idx++;
+		}
+		segment.FetchRows(state, unsafe_array_ptr<row_t>(batch_offsets.data(), batch_offsets.size()),
+		                  batch_offsets.size(), result, result_offset + batch_start);
 	}
 	{
 		const lock_guard<mutex> update_guard(update_lock);

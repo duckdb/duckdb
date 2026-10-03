@@ -69,6 +69,9 @@ public:
 	            const TableFilter &filter, TableFilterState &filter_state);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+	//! Fetch segment-relative offsets without changing their order.
+	void FetchRows(ColumnFetchState &state, const unsafe_array_ptr<row_t> &row_ids, idx_t fetch_count, Vector &result,
+	               idx_t result_offset);
 
 	[[deprecated("UnifiedVectorFormat parameter is ignored")]] static idx_t
 	FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata, const TableFilter &filter,
