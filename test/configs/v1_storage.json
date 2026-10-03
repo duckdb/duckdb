@@ -16,6 +16,7 @@
       "paths": [
         "test/sql/constraints/deferred/test_alter_constraint_timing.test",
         "test/sql/constraints/deferred/test_deferred_alter.test",
+        "test/sql/constraints/deferred/test_deferred_checkpoint.test_slow",
         "test/sql/constraints/deferred/test_deferred_compatibility.test",
         "test/sql/constraints/deferred/test_deferred_delete_reinsert.test",
         "test/sql/constraints/deferred/test_deferred_large.test_slow",
