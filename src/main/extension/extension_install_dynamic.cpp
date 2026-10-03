@@ -9,6 +9,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/client_status.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
@@ -239,6 +240,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
 	get_request.try_request = true;
 
+	// downloading may take a while - say so on the progress display
+	unique_ptr<ClientStatus> status;
+	if (context) {
+		status = make_uniq<ClientStatus>(*context, "Installing extension " + extension_name);
+	}
 	auto response = session.Request(get_request);
 	if (!response->Success()) {
 		// if we should not retry or exceeded the number of retries - bubble up the error

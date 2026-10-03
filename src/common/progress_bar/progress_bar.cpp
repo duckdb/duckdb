@@ -1,5 +1,6 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_status.hpp"
 #include "duckdb/common/progress_bar/display/terminal_progress_bar_display.hpp"
 
 namespace duckdb {
@@ -61,6 +62,17 @@ ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after,
     : executor(executor), show_progress_after(show_progress_after) {
 	if (create_display_func) {
 		display = create_display_func();
+	}
+	if (display) {
+		// status messages are shown next to the progress while the query executes
+		status_state = ClientStatusState::Get(executor.context);
+		status_state->RegisterQueryDisplay(*display);
+	}
+}
+
+ProgressBar::~ProgressBar() {
+	if (status_state) {
+		status_state->UnregisterQueryDisplay(*display);
 	}
 }
 
@@ -140,6 +152,7 @@ void ProgressBar::Update(bool final) {
 
 void ProgressBar::PrintProgress(double current_percentage_p) {
 	D_ASSERT(display);
+	lock_guard<mutex> guard(status_state->DisplayLock());
 	display->Update(current_percentage_p);
 }
 
@@ -148,7 +161,10 @@ void ProgressBar::FinishProgressBarPrint() {
 		return;
 	}
 	D_ASSERT(display);
-	display->Finish();
+	{
+		lock_guard<mutex> guard(status_state->DisplayLock());
+		display->Finish();
+	}
 	finished = true;
 	if (query_progress.percentage == 0) {
 		query_progress.Initialize();

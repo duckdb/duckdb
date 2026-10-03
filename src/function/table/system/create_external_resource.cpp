@@ -6,6 +6,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_status.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/external_resource_type_registry.hpp"
@@ -173,6 +174,10 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	if (!type) {
 		throw InvalidInputException("create_external_resource: unknown resource type \"%s\"", bind_data.type_name);
 	}
+	// Report the steps on the progress display: provisioning and awaiting readiness can take minutes
+	const auto &resource_label = bind_data.resource_name.empty() ? bind_data.type_name : bind_data.resource_name;
+	ClientStatus status(context, (bind_data.adopt_handle.IsNull() ? "Creating resource " : "Registering resource ") +
+	                                 resource_label);
 	// Separate internal connection: the current connection's context lock is held here.
 	Connection con(DatabaseInstance::GetDatabase(context));
 	// Resolve the callbacks in the search path captured at registration, so unqualified names in a non-default
@@ -270,6 +275,7 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 	// Blocking: poll status(handle) until `state` is terminal ('ready' / 'failed'). A synchronous type's
 	// status simply returns 'ready' on the first poll.
 	Value status_result;
+	string status_message;
 	bool has_deadline = bind_data.timeout_seconds > 0;
 	auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(bind_data.timeout_seconds);
 	while (true) {
@@ -294,6 +300,11 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 			auto status_rows = sres->Collection().GetRows();
 			auto state_val = status_rows.GetValue(0, 0);
 			auto status_state = state_val.IsNull() ? string() : state_val.ToString();
+			status_message = "Waiting for resource " + resource_label;
+			if (!status_state.empty() && status_state != "ready") {
+				status_message += " (" + status_state + ")";
+			}
+			status.Update(status_message);
 			if (status_state == "failed") {
 				throw IOException("create_external_resource: resource \"%s\" reported state 'failed'",
 				                  bind_data.type_name);
@@ -319,9 +330,15 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 		// The slice is small so InterruptCheck() is called often enough to honor max_execution_time promptly
 		// (its deadline check is throttled to run every Nth call).
 		auto poll_until = std::chrono::steady_clock::now() + std::chrono::seconds(bind_data.poll_interval_seconds);
+		auto next_heartbeat = std::chrono::steady_clock::now() + std::chrono::seconds(1);
 		while (std::chrono::steady_clock::now() < poll_until) {
 			context.InterruptCheck();
 			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+			if (std::chrono::steady_clock::now() >= next_heartbeat) {
+				// the same message again keeps the elapsed time on the display moving
+				status.Update(status_message);
+				next_heartbeat += std::chrono::seconds(1);
+			}
 		}
 	}
 

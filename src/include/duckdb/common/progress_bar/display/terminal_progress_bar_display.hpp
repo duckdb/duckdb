@@ -61,7 +61,12 @@ public:
 public:
 	void Update(double percentage) override;
 	void Finish() override;
+	void UpdateStatus(const string &message) override;
 	static string FormatETA(double seconds, bool elapsed = false);
+	//! A short elapsed time for a status line: "42s", "3m 05s"
+	static string FormatElapsed(double seconds);
+	//! The spinner shown next to a status message while there is no progress, one frame per redraw
+	static const char *SpinnerFrame(idx_t frame);
 	static string FormatProgressBar(const ProgressBarDisplayInfo &display_info, int32_t percentage);
 	static double EstimateRemainingSeconds(double percentage, double elapsed_seconds,
 	                                       double observed_progress_per_second = 0.0);
@@ -76,7 +81,24 @@ protected:
 	virtual void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds,
 	                                   bool is_finished = false);
 
+	//! Prints the status message on its own (while there is no progress), with a spinner and the elapsed time. An empty
+	//! message clears the line
+	virtual void PrintStatusInternal(const string &message, double elapsed_seconds);
+
 	static int32_t NormalizePercentage(double percentage);
+
+	//! The status message shown next to the progress, if any
+	string status_message;
+	//! Whether progress was displayed - the status message is then shown next to it
+	bool has_percentage = false;
+	int32_t displayed_percentage = 0;
+	double displayed_remaining_seconds = 0;
+	//! Whether the status message changed since the progress was printed - the next Update reprints it
+	bool status_changed = false;
+	//! The next spinner frame
+	idx_t spinner_frame = 0;
+	//! The render length of the previous status line, to clear what is left of it
+	idx_t previous_status_length = 0;
 	double GetElapsedDuration() {
 		auto now = std::chrono::steady_clock::now();
 		return std::chrono::duration<double>(now - start_time).count();

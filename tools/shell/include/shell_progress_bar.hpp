@@ -32,6 +32,8 @@ private:
 	duckdb::ProgressBarDisplayInfo display_info;
 	int32_t percentage = 0;
 	double estimated_remaining_seconds = 0;
+	//! The status message shown next to the progress (see duckdb::ClientStatus), if any
+	string status_message;
 	unique_ptr<duckdb::Connection> connection;
 };
 
@@ -42,9 +44,13 @@ public:
 
 public:
 	void Finish() override;
+	//! Next to the progress, the message is shown at the next update: the progress components may run queries, which
+	//! should not happen from the (possibly worker) thread that reports the message
+	void UpdateStatus(const string &message) override;
 
 protected:
 	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds, bool is_finished) override;
+	void PrintStatusInternal(const string &message, double elapsed_seconds) override;
 
 private:
 	optional_idx previous_terminal_width;
@@ -61,6 +67,8 @@ public:
 
 public:
 	void Finish() override;
+	//! Prints a status line to stderr when the message changes - a repeated message at most every few seconds
+	void UpdateStatus(const string &message) override;
 
 protected:
 	void PrintProgressInternal(int32_t percentage, double estimated_remaining_seconds, bool is_finished) override;
@@ -68,6 +76,9 @@ protected:
 private:
 	//! When the previous line was printed (seconds since the display was created), if any
 	double last_print_time = -1;
+	//! The previous status line's message, and when it was printed
+	string last_status;
+	double last_status_time = -1;
 };
 
 } // namespace duckdb_shell
