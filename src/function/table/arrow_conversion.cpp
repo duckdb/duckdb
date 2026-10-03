@@ -842,7 +842,15 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDB(Vector &vector, ArrowArray &ar
 	if (!ignore_extensions && arrow_type.HasExtension()) {
 		if (arrow_type.extension_data->arrow_to_duckdb) {
 			// Convert the storage and then call the cast function
-			Vector input_data(arrow_type.extension_data->GetInternalType());
+			// `size` is the child's own count, which for a nested child is not bounded by
+			// STANDARD_VECTOR_SIZE -- size the storage vector for it (as ArrowAppendData::AppendChild does).
+			Vector input_data(arrow_type.extension_data->GetInternalType(),
+			                  MaxValue<idx_t>(size, STANDARD_VECTOR_SIZE));
+			// Every caller has already established this column's top-level validity on `vector` — transfer
+			// it onto the storage vector, since the cast function is responsible for carrying it through to
+			// its result (a conversion that rebuilds the result does not preserve the pre-set validity, and
+			// a spec-clean writer need not mirror a parent NULL in the storage children's own validity).
+			FlatVector::CopyValidity(input_data, vector, size);
 			ColumnArrowToDuckDB(input_data, array, chunk_offset, array_state, size, arrow_type, nested_offset,
 			                    parent_mask, parent_offset, /*ignore_extensions*/ true);
 			arrow_type.extension_data->arrow_to_duckdb(array_state.context, input_data, vector, size);
@@ -1443,23 +1451,22 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBDictionary(Vector &vector, Arro
 		//! so the buffer must be large enough and that entry must be marked invalid.
 		auto dict_length = NumericCast<idx_t>(array.dictionary->length);
 		auto base_vector = make_uniq<Vector>(vector.GetType(), dict_length + 1);
-		ArrowToDuckDBConversion::SetValidityMask(*base_vector, *array.dictionary, chunk_offset, dict_length, 0, 0,
-		                                         has_nulls);
+		ArrowToDuckDBConversion::SetValidityMask(*base_vector, *array.dictionary, 0, dict_length, 0, 0, has_nulls);
 		FlatVector::ValidityMutable(*base_vector).SetInvalid(dict_length);
 		auto &dictionary_type = arrow_type.GetDictionary();
 		auto arrow_physical_type = dictionary_type.GetPhysicalType();
 		;
 		switch (arrow_physical_type) {
 		case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-			ColumnArrowToDuckDBDictionary(*base_vector, *array.dictionary, chunk_offset, array_state,
+			ColumnArrowToDuckDBDictionary(*base_vector, *array.dictionary, 0, array_state,
 			                              NumericCast<idx_t>(array.dictionary->length), dictionary_type);
 			break;
 		case ArrowArrayPhysicalType::RUN_END_ENCODED:
-			ColumnArrowToDuckDBRunEndEncoded(*base_vector, *array.dictionary, chunk_offset, array_state,
+			ColumnArrowToDuckDBRunEndEncoded(*base_vector, *array.dictionary, 0, array_state,
 			                                 NumericCast<idx_t>(array.dictionary->length), dictionary_type);
 			break;
 		case ArrowArrayPhysicalType::DEFAULT:
-			ColumnArrowToDuckDB(*base_vector, *array.dictionary, chunk_offset, array_state,
+			ColumnArrowToDuckDB(*base_vector, *array.dictionary, 0, array_state,
 			                    NumericCast<idx_t>(array.dictionary->length), dictionary_type);
 			break;
 		default:

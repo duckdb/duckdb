@@ -40,6 +40,10 @@ bool CanInferConstantFromNumericBounds(const Value &value) {
 }
 
 bool TryInferConstantBounds(const BaseStatistics &stats, Value &constant) {
+	if (stats.CanHaveNull() && !stats.CanHaveNoNull()) {
+		constant = Value(stats.GetType());
+		return true;
+	}
 	if (stats.CanHaveNull()) {
 		return false;
 	}

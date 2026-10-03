@@ -393,7 +393,7 @@ bool RowGroup::InitializeScanInternal(CollectionScanState &state, SegmentNode<Ro
 	D_ASSERT(state.prepared_vector.prepare_state == VectorPrepareState::NONE);
 	state.prepared_vector.Reset();
 	state.assignment_io_registered = false;
-	state.row_group = node;
+	state.SetRowGroup(node);
 	state.vector_index = vector_offset;
 	auto row_start = node.GetRowStart();
 	state.max_row_group_row = row_start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - row_start);
@@ -924,7 +924,7 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 					continue;
 				}
 				if (rate < 1) {
-					auto row_group_start = state.row_group->GetRowStart();
+					auto row_group_start = state.GetRowGroup()->GetRowStart();
 					sample_count =
 					    SystemRowsSelection(sampling_info, row_group_start + current_row, max_count, sample_sel);
 					if (sample_count == 0) {
@@ -946,10 +946,8 @@ bool RowGroup::PrepareScan(ScanOptions options, CollectionScanState &state) {
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		auto &current_row_group = state.row_group->GetNode();
-
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
-		idx_t count = current_row_group.GetSelVector(options, state.vector_index, state.valid_sel, max_count);
+		idx_t count = GetSelVector(options, state.vector_index, state.valid_sel, max_count);
 		if (count == 0) {
 			// nothing to scan for this vector, skip the entire vector
 			NextVector(state);
@@ -1623,7 +1621,7 @@ bool RowGroup::HasUnchangedColumns() const {
 
 RowGroupWriteData RowGroup::WriteToDisk(RowGroupWriter &writer) {
 	bool can_reuse_metadata = CanReuseMetadata(writer);
-	if (can_reuse_metadata && !HasChanges()) {
+	if (can_reuse_metadata && !HasChanges(writer.GetCheckpointOptions().visibility_bound)) {
 		RowGroupWriteData result;
 		result.write_action = RowGroupWriteAction::REUSE_EXISTING_ROW_GROUP_METADATA;
 		if (GetCollection().SupportsPerColumnWrites()) {
@@ -1911,12 +1909,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriteData write_data, RowGroupWrite
 	return row_group_pointer;
 }
 
-bool RowGroup::HasChanges() const {
+bool RowGroup::HasChanges(VisibilityBound bound) const {
 	if (has_changes) {
 		return true;
 	}
 	auto version_info_loaded = version_info.load();
-	if (version_info_loaded && version_info_loaded->HasUnserializedChanges()) {
+	if (version_info_loaded && version_info_loaded->HasUnserializedChanges(bound)) {
 		// we have deletes
 		return true;
 	}
@@ -2044,7 +2042,7 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool HasPendingWrites() override {
-		return row_group->HasChanges();
+		return row_group->HasChanges(VisibilityBound::AllCommitted());
 	}
 };
 

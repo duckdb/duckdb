@@ -56,13 +56,14 @@ static void TemplatedCheckpointFunction(ClientContext &context, TableFunctionInp
 void CheckpointFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet checkpoint("checkpoint");
 	checkpoint.AddFunction(TableFunction({}, TemplatedCheckpointFunction<false>, CheckpointBind));
-	checkpoint.AddFunction(TableFunction({LogicalType::VARCHAR}, TemplatedCheckpointFunction<false>, CheckpointBind));
+	checkpoint.AddFunction(TableFunction(FunctionSignature().AddPositionalOnly("database", LogicalType::VARCHAR),
+	                                     TemplatedCheckpointFunction<false>, CheckpointBind));
 	set.AddFunction(checkpoint);
 
 	TableFunctionSet force_checkpoint("force_checkpoint");
 	force_checkpoint.AddFunction(TableFunction({}, TemplatedCheckpointFunction<true>, CheckpointBind));
-	force_checkpoint.AddFunction(
-	    TableFunction({LogicalType::VARCHAR}, TemplatedCheckpointFunction<true>, CheckpointBind));
+	force_checkpoint.AddFunction(TableFunction(FunctionSignature().AddPositionalOnly("database", LogicalType::VARCHAR),
+	                                           TemplatedCheckpointFunction<true>, CheckpointBind));
 	set.AddFunction(force_checkpoint);
 }
 

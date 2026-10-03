@@ -126,7 +126,7 @@ idx_t StandardBufferManager::GetOperatorMemoryLimit() const {
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(QueryContext context, MemoryTag tag,
                                                                     idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
-                                                                    ARGS... args) {
+                                                                    const ARGS &...args) {
 	auto r = buffer_pool.EvictBlocks(context, tag, memory_delta, buffer_pool.maximum_memory, buffer);
 	if (!r.success) {
 		string extra_text = StringUtil::Format(" (%s/%s used)", StringUtil::BytesToHumanReadableString(GetUsedMemory()),
@@ -688,13 +688,11 @@ void StandardBufferManager::DeleteTemporaryFile(BlockMemory &memory) {
 	// The file is not in the shared pool of files.
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto path = GetTemporaryPath(id);
-	if (fs.FileExists(path)) {
+	auto metadata = fs.GetStatsIfExists(path);
+	if (metadata) {
 		evicted_data_per_tag[uint8_t(memory.GetMemoryTag())] -= memory.GetMemoryUsage();
-		auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-		auto content_size = handle->GetFileSize();
-		handle.reset();
 		fs.RemoveFile(path);
-		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(content_size);
+		temporary_directory.handle->GetTempFile().DecreaseSizeOnDisk(NumericCast<idx_t>(metadata->file_size));
 	}
 }
 
@@ -745,15 +743,15 @@ vector<TemporaryFileInformation> StandardBufferManager::GetTemporaryFiles() {
 		}
 
 		// Another process or thread can delete the file before we can get its file size.
-		auto handle = fs.OpenFile(name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS);
-		if (!handle) {
+		auto path = fs.JoinPath(temporary_directory.path, name);
+		auto metadata = fs.GetStatsIfExists(path);
+		if (!metadata) {
 			return;
 		}
 
 		TemporaryFileInformation info;
-		info.path = name;
-		info.size = NumericCast<idx_t>(fs.GetFileSize(*handle));
-		handle.reset();
+		info.path = std::move(path);
+		info.size = NumericCast<idx_t>(metadata->file_size);
 		result.push_back(info);
 	});
 	return result;
@@ -796,7 +794,7 @@ data_ptr_t StandardBufferManager::BufferAllocatorAllocate(PrivateAllocatorData *
 	                                                   StringUtil::BytesToHumanReadableString(size));
 	// We rely on manual tracking of this one. :(
 	reservation.size = 0;
-	return Allocator::Get(data.manager.db).AllocateData(size);
+	return BlockAllocator::Get(data.manager.db).AllocateData(size);
 }
 
 void StandardBufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
@@ -804,7 +802,7 @@ void StandardBufferManager::BufferAllocatorFree(PrivateAllocatorData *private_da
 	BufferPoolReservation r(MemoryTag::ALLOCATOR, data.manager.GetBufferPool());
 	r.size = size;
 	r.Resize(0);
-	return Allocator::Get(data.manager.db).FreeData(pointer, size);
+	return BlockAllocator::Get(data.manager.db).FreeData(pointer, size);
 }
 
 data_ptr_t StandardBufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
@@ -817,7 +815,7 @@ data_ptr_t StandardBufferManager::BufferAllocatorRealloc(PrivateAllocatorData *p
 	r.size = old_size;
 	r.Resize(size);
 	r.size = 0;
-	return Allocator::Get(data.manager.db).ReallocateData(pointer, old_size, size);
+	return BlockAllocator::Get(data.manager.db).ReallocateData(pointer, old_size, size);
 }
 
 Allocator &BufferAllocator::Get(ClientContext &context) {

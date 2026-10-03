@@ -7,7 +7,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/function/scalar/variant_functions.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
@@ -138,6 +138,7 @@ unique_ptr<Expression> CMHelper::CreateDefaultStatsAwareCast(ClientContext &cont
 		throw InternalException("Expected a cast in CMHelper::CreateDefaultStatsAwareCast");
 	} // LCOV_EXCL_STOP
 	auto &cast = result->Cast<BoundFunctionExpression>();
+	CMUtils::MarkCast(cast);
 	result_stats = BoundCastExpression::PropagateStatistics(cast, input_stats, context);
 	if (!result_stats) { // LCOV_EXCL_START
 		throw InternalException("Could not propagate cast statistics in compressed materialization");
@@ -992,7 +993,8 @@ unique_ptr<Expression> CompressedMaterialization::GetGeometryDecompress(unique_p
 
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_ptr<Expression> input,
@@ -1008,7 +1010,8 @@ unique_ptr<Expression> CompressedMaterialization::GetIntegralDecompress(unique_p
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr<Expression> input,
@@ -1022,7 +1025,8 @@ unique_ptr<Expression> CompressedMaterialization::GetStringDecompress(unique_ptr
 	BoundScalarFunction bound_function(decompress_function);
 	bound_function.SetReturnType(result_type);
 
-	return make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	auto result = make_uniq<BoundFunctionExpression>(std::move(bound_function), std::move(arguments), nullptr);
+	return std::move(result);
 }
 
 unique_ptr<Expression> CompressedMaterialization::GetVariantDecompress(unique_ptr<Expression> input,

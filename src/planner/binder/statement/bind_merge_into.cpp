@@ -368,24 +368,15 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		// if we have "has_not_matched_by_source" we need to push an extra marker into the source
 		// this marker tells us if we have found a source match or not
 		auto new_proj_index = GenerateTableIndex();
-
-		source->ResolveOperatorTypes();
 		auto source_bindings = source->GetColumnBindings();
-		vector<unique_ptr<Expression>> select_list;
-		for (idx_t c = 0; c < source_bindings.size(); c++) {
-			select_list.push_back(make_uniq<BoundColumnRefExpression>(source->types[c], source_bindings[c]));
-		}
+		auto proj = LogicalProjection::CreateIdentity(new_proj_index, std::move(source));
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
 		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
-		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
+		auto source_marker_idx = ColumnBinding::PushExpression(proj->expressions, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
-
-		// construct the new projection
-		auto proj = make_uniq<LogicalProjection>(new_proj_index, std::move(select_list));
-		proj->children.push_back(std::move(source));
 		source = std::move(proj);
 
 		// rewrite "column_bindings" in the join to refer to the new projection we have just pushed
@@ -463,7 +454,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	result.types = {LogicalType::BIGINT};
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

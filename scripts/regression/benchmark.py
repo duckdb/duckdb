@@ -9,6 +9,7 @@ BENCHMARK_DATA_DIRECTORY = "duckdb_benchmark_data"
 DEFAULT_PROCESS_TIMEOUT = 600
 DISABLED_RUNNER_TIMEOUT = 3600
 EXTENSION_DIRECTORY_ENV = "DUCKDB_BENCHMARK_EXTENSION_DIRECTORY"
+BENCHMARK_NOT_FOUND_MESSAGE = "Benchmark to run could not be found."
 
 STDERR_HEADER = '''====================================================
 ==============         STDERR          =============
@@ -19,6 +20,10 @@ STDOUT_HEADER = '''====================================================
 ==============         STDOUT          =============
 ====================================================
 '''
+
+
+def benchmark_not_found(error: Optional[str]) -> bool:
+    return error is not None and BENCHMARK_NOT_FOUND_MESSAGE in (line.strip() for line in error.splitlines())
 
 
 def benchmark_failure_message(

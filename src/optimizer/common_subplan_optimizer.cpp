@@ -250,6 +250,9 @@ private:
 			auto &get = op.Cast<LogicalGet>();
 			switch (TYPE) {
 			case ConversionType::TO_CANONICAL: {
+				// Source ordinality is represented by the bound operators.
+				source_ordinality = get.source_ordinality;
+				get.source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 				D_ASSERT(column_ids.empty());
 				// Grab selected GET columns and populate with all possible columns
 				column_ids = std::move(get.GetMutableColumnIds());
@@ -327,6 +330,7 @@ private:
 				break;
 			}
 			case ConversionType::RESTORE_ORIGINAL:
+				get.source_ordinality = source_ordinality;
 				D_ASSERT(!column_ids.empty());
 				get.GetMutableColumnIds() = std::move(column_ids);
 				D_ASSERT(get.projection_ids.empty());
@@ -480,6 +484,7 @@ private:
 	vector<vector<ProjectionIndex>> projection_maps;
 
 	//! Utility to temporarily store column ids, projection_ids, table indices, expression info and children
+	OrdinalityType source_ordinality = OrdinalityType::WITHOUT_ORDINALITY;
 	vector<ColumnIndex> column_ids;
 	vector<column_t> chunk_column_ids;
 	vector<ProjectionIndex> projection_ids;
@@ -612,12 +617,12 @@ private:
 			return true;
 		case LogicalOperatorType::LOGICAL_GET: {
 			auto &get = op.Cast<LogicalGet>();
-			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty() &&
-			    get.named_parameters.empty()) {
+			if (get.bind_data && !get.function.HasSerializationCallbacks() && get.parameters.empty()) {
 				// Without serialization callbacks, the serialized form carries only the call parameters
-				// (see LogicalGet::Serialize). A parameter-less scan - e.g., one created through an
-				// attached catalog - keeps its identity solely in the bind data, so equal serialized
-				// bytes cannot prove that two scans read the same table.
+				// (see LogicalGet::Serialize). A scan without positional parameters - e.g., one created through
+				// an attached catalog - keeps its identity solely in the bind data, and its options do not
+				// identify what it reads, so equal serialized bytes cannot prove that two scans read the same
+				// table.
 				return false;
 			}
 			return true;

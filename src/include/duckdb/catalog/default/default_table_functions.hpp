@@ -42,6 +42,13 @@ public:
 	//! Overload taking ParserOptions, so the caller's compiled grammar is reused instead of rebuilt per macro.
 	static unique_ptr<CreateMacroInfo> CreateTableMacroInfo(const DefaultTableMacro &default_macro,
 	                                                        const ParserOptions &options);
+	//! Finds a macro in a nullptr-terminated list
+	static optional_ptr<const DefaultTableMacro> FindTableMacro(const DefaultTableMacro macros[],
+	                                                            const Identifier &name,
+	                                                            optional_ptr<const Identifier> schema_name = nullptr);
+	static unique_ptr<CatalogEntry> CreateTableMacroEntry(Catalog &catalog, SchemaCatalogEntry &schema,
+	                                                      const DefaultTableMacro &default_macro,
+	                                                      const ParserOptions &options = ParserOptions());
 
 private:
 	static unique_ptr<CreateMacroInfo> CreateInternalTableMacroInfo(const DefaultTableMacro &default_macro,

@@ -421,6 +421,94 @@ TEST_CASE("Stable C++API: typed Value leaf ctors/getters round trip", "[cpp_api]
 	REQUIRE_THROWS_MATCHES(Value::Create(conn, bool(true)).Get<interval_t>(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+TEST_CASE("Stable C++API: typed Value numeric widths round trip", "[cpp_api][types_values]") {
+	using namespace duckdb::cxx;
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	REQUIRE(Value::Create(conn, uint8_t(255)).Get<uint8_t>() == 255);
+	REQUIRE(Value::Create(conn, uint16_t(65535)).Get<uint16_t>() == 65535);
+	REQUIRE(Value::Create(conn, uint32_t(4000000000U)).Get<uint32_t>() == 4000000000U);
+	REQUIRE(Value::Create(conn, int8_t(-128)).Get<int8_t>() == -128);
+	REQUIRE(Value::Create(conn, int16_t(-32768)).Get<int16_t>() == -32768);
+	REQUIRE(Value::Create(conn, int32_t(-2000000000)).Get<int32_t>() == -2000000000);
+	REQUIRE(Value::Create(conn, float(1.25)).Get<float>() == 1.25f);
+}
+
+TEST_CASE("Stable C++API: precise temporal and decimal Values round trip", "[cpp_api][types_values]") {
+	using namespace duckdb::cxx;
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	REQUIRE(Value::Create(conn, dtime_ns_t {123456789}).Get<dtime_ns_t>().nanos == 123456789);
+	auto time_tz = dtime_tz_t(12LL * 60 * 60 * 1000000, 90 * 60);
+	auto read_time_tz = Value::Create(conn, time_tz).Get<dtime_tz_t>();
+	REQUIRE(read_time_tz.GetMicros() == time_tz.GetMicros());
+	REQUIRE(read_time_tz.GetOffset() == time_tz.GetOffset());
+	REQUIRE(Value::Create(conn, timestamp_s_t {-7}).Get<timestamp_s_t>().seconds == -7);
+	REQUIRE(Value::Create(conn, timestamp_ms_t {1234}).Get<timestamp_ms_t>().millis == 1234);
+	REQUIRE(Value::Create(conn, timestamp_ns_t {123456789}).Get<timestamp_ns_t>().nanos == 123456789);
+	REQUIRE(Value::Create(conn, timestamp_tz_t {-42}).Get<timestamp_tz_t>().micros == -42);
+	REQUIRE(Value::Create(conn, timestamp_tz_ns_t {987654321}).Get<timestamp_tz_ns_t>().nanos == 987654321);
+
+	auto small = Value::Create(conn, decimal_t<4, 2> {-1234});
+	REQUIRE(small.Get<4, 2>().value == -1234);
+	REQUIRE(small.ToText() == "-12.34");
+	auto medium = Value::Create(conn, decimal_t<9, 3> {123456789});
+	REQUIRE(medium.Get<9, 3>().value == 123456789);
+	auto large = Value::Create(conn, decimal_t<18, 4> {-123456789012345678LL});
+	REQUIRE(large.Get<18, 4>().value == -123456789012345678LL);
+	auto huge = Value::Create(conn, decimal_t<38, 6> {int128_t {123, 0}});
+	REQUIRE(huge.Get<38, 6>().value.lower == 123);
+	REQUIRE_THROWS_MATCHES((huge.Get<18, 6>()), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+
+TEST_CASE("Stable C++API: composite and encoded Values cover empty and non-empty forms", "[cpp_api][types_values]") {
+	using namespace duckdb::cxx;
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	auto empty_list = Value::CreateList(conn, conn.ParseType("INTEGER"));
+	REQUIRE(empty_list.GetLogicalType() == conn.ParseType("INTEGER[]"));
+	REQUIRE(empty_list.GetChildCount() == 0);
+	auto empty_map = Value::CreateMap(conn, conn.ParseType("VARCHAR"), conn.ParseType("BIGINT"));
+	REQUIRE(empty_map.GetLogicalType() == conn.ParseType("MAP(VARCHAR, BIGINT)"));
+	REQUIRE(empty_map.GetChildCount() == 0);
+
+	std::vector<Value> array_values;
+	array_values.push_back(Value::Create(conn, int32_t(10)));
+	array_values.push_back(Value::Create(conn, int32_t(20)));
+	auto array = Value::CreateArray(conn, array_values);
+	REQUIRE(array.GetChildCount() == 2);
+	REQUIRE(array[1].Get<int32_t>() == 20);
+
+	std::vector<std::pair<std::string, Value>> fields;
+	fields.emplace_back("id", Value::Create(conn, int32_t(7)));
+	fields.emplace_back("name", Value::Create(conn, varchar_t("duck")));
+	auto structure = Value::CreateStruct(conn, fields);
+	REQUIRE(structure.GetChildCount() == 2);
+	REQUIRE(structure[1].Get<varchar_t>().view() == "duck");
+
+	auto empty_tuple = Value::CreateTuple(conn);
+	REQUIRE(empty_tuple.GetChildCount() == 0);
+
+	auto bit_value = Value::Create(conn, varchar_t("101001")).Cast(conn, conn.ParseType("BIT"));
+	auto bits = bit_value.Get<bit_t>();
+	REQUIRE(bits.GetBitCount() == 6);
+	REQUIRE(bits.GetBitsSize() == 1);
+	REQUIRE(bits.GetPaddingBits() == 2);
+	REQUIRE(Value::Create(conn, bits).ToText() == "101001");
+
+	auto uuid_value =
+	    Value::Create(conn, varchar_t("00112233-4455-6677-8899-aabbccddeeff")).Cast(conn, conn.ParseType("UUID"));
+	auto uuid = uuid_value.Get<uuid_t>();
+	REQUIRE(Value::Create(conn, uuid).ToText() == uuid_value.ToText());
+	REQUIRE(uuid_t::Encode(uuid.Decode()).value.lower == uuid.value.lower);
+	REQUIRE(uuid_t::Encode(uuid.Decode()).value.upper == uuid.value.upper);
+}
 TEST_CASE("Stable C++API: typed Value 128-bit getters round trip", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
 	Environment env;

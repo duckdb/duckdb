@@ -291,8 +291,10 @@ public:
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
 	              IndexStorageInfo index_info);
-	//! AddIndex moves an index to this table's index list.
-	void AddIndex(unique_ptr<Index> index);
+	//! AddIndex moves a catalog index to this table's index list.
+	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
+	//! AddConstraintIndex moves a constraint-backed index to this table's index list.
+	void AddConstraintIndex(unique_ptr<Index> index);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);

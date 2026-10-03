@@ -524,6 +524,9 @@ vector<SimplifiedToken> Parser::Tokenize(const string &query) {
 	vector<SimplifiedToken> result;
 	result.reserve(tokens.size());
 	for (auto &token : tokens) {
+		if (token.type == TokenType::END_OF_INPUT || token.type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
+			continue;
+		}
 		SimplifiedToken simplified;
 		simplified.start = token.offset;
 		switch (token.type) {
@@ -695,21 +698,7 @@ vector<SimplifiedToken> Parser::TokenizeError(const string &error_msg) {
 }
 
 KeywordCategory Parser::ToKeywordCategory(const string &text) {
-	auto &helper = DuckDBKeywordHelper::Instance();
-
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_RESERVED)) {
-		return KeywordCategory::KEYWORD_RESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_UNRESERVED)) {
-		return KeywordCategory::KEYWORD_UNRESERVED;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_TYPE_FUNC)) {
-		return KeywordCategory::KEYWORD_TYPE_FUNC;
-	}
-	if (helper.KeywordCategoryType(text, PEGKeywordCategory::KEYWORD_COL_NAME)) {
-		return KeywordCategory::KEYWORD_COL_NAME;
-	}
-	return KeywordCategory::KEYWORD_NONE;
+	return DuckDBKeywordHelper::Instance().GetKeywordCategory(text);
 }
 
 KeywordCategory Parser::IsKeyword(const string &text) {
@@ -719,6 +708,15 @@ KeywordCategory Parser::IsKeyword(const string &text) {
 vector<ParserKeyword> Parser::KeywordList() {
 	auto &keyword_helper = DuckDBKeywordHelper::Instance();
 	return keyword_helper.KeywordList();
+}
+
+unique_ptr<QueryNode> Parser::ParseSelectNode(const string &query, const ParserOptions &options) {
+	Parser parser(options);
+	parser.ParseQuery(query);
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		throw InternalException("Expected a single select statement");
+	}
+	return std::move(parser.statements[0]->Cast<SelectStatement>().node);
 }
 
 vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &select_list,
@@ -756,6 +754,14 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 		throw ParserException("Cannot have a SAMPLE clause in the expression list");
 	}
 	return std::move(select_node.select_list);
+}
+
+unique_ptr<ParsedExpression> Parser::ParseSingleExpression(const string &expression, const ParserOptions &options) {
+	auto expressions = ParseExpressionList(expression, options);
+	if (expressions.size() != 1) {
+		throw InternalException("Expected a single expression");
+	}
+	return std::move(expressions[0]);
 }
 
 GroupByNode Parser::ParseGroupByList(const string &group_by, const ParserOptions &options) {

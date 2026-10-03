@@ -681,7 +681,9 @@ public:
 		unsafe_array_ptr<const uint8_t> GetAlgorithmGroup() const {
 			D_ASSERT(!AtEnd());
 			D_ASSERT(width > 0);
-			D_ASSERT(payload);
+			if (!payload) {
+				throw InternalException("Bitpacking algorithm group has no payload");
+			}
 			auto algorithm_group_index = offset / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 			D_ASSERT(algorithm_group_index < algorithm_group_count);
 			auto algorithm_group_offset = algorithm_group_index * algorithm_group_size;

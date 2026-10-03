@@ -1,4 +1,6 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+
+#include "duckdb/parser/peg/passthrough_dialect.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -22,6 +24,10 @@ CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGK
 shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 	auto &client_config = ClientConfig::GetConfig(context);
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
+	if (client_config.connected_grammar) {
+		// while CONNECT-ed, the database being talked to decides how its statements are parsed
+		return client_config.connected_grammar;
+	}
 	if (client_config.current_dialect) {
 		auto dialect_extension = callback_manager.GetDialectExtension(*client_config.current_dialect);
 		if (!dialect_extension) {
@@ -120,6 +126,8 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	AddTerminalRuleOverride(overrides, "NumberLiteral", make_uniq<NumberLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "StringLiteral", make_uniq<StringLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "OperatorLiteral", make_uniq<OperatorMatcher>());
+	AddTerminalRuleOverride(overrides, "AnyOperatorLiteral",
+	                        make_uniq<OperatorMatcher>(OperatorMatcherMode::ALL_OPERATORS));
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
@@ -131,10 +139,9 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	return overrides;
 }
 
-shared_ptr<CompiledGrammar>
-CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions) {
+shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<GrammarExtension>> &grammar_extensions) {
 	auto grammar = ParsedGrammar::CreateDefault();
-	for (auto &[_, extension] : grammar_extensions) {
+	for (auto &extension : grammar_extensions) {
 		auto changes = extension.get().GetChanges();
 		for (auto &change : changes) {
 			change.Apply(grammar);
@@ -152,12 +159,12 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 	compiled_rules_map_t rules;
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process));
+		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process, rule.collapsible));
 	}
 
 	MatcherAllocator allocator;
 	auto terminal_rule_overrides = grammar.BuildTerminalRuleOverrides(*keyword_helper);
-	MatcherFactory factory(allocator, grammar, rules, std::move(terminal_rule_overrides));
+	MatcherFactory factory(allocator, grammar, rules, *keyword_helper, std::move(terminal_rule_overrides));
 
 	auto &program_matcher = factory.CreateRootMatcher("Program");
 	auto &top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
@@ -173,16 +180,31 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
 }
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
-                                                    const case_insensitive_set_t &active_extensions) {
-	case_insensitive_map_t<reference<GrammarExtension>> selected_extensions;
+                                                    const vector<string> &active_extensions) {
+	vector<reference<GrammarExtension>> selected_extensions;
 	auto &callback_manager = ExtensionCallbackManager::Get(context);
 	for (auto &name : active_extensions) {
 		auto grammar_extension = callback_manager.FindGrammarExtension(name);
 		if (grammar_extension) {
-			selected_extensions.emplace(name, *grammar_extension);
+			selected_extensions.emplace_back(*grammar_extension);
 		}
 	}
 	return Create(selected_extensions);
+}
+
+ParserCache::ParserCache() {
+}
+
+ParserCache::~ParserCache() {
+}
+
+shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientContext &context) {
+	lock_guard<std::mutex> lock(passthrough_mutex);
+	if (!passthrough_dialect) {
+		passthrough_dialect = make_uniq<PassthroughDialect>();
+	}
+	// the dialect caches the compiled grammar itself
+	return passthrough_dialect->GetCompiledGrammar(context);
 }
 
 shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {

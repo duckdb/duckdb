@@ -20,6 +20,11 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -355,6 +360,10 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	ParseOrderBys(order_entry->second, column_count, orders);
 	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
 	const idx_t argument_count = inner->aggr.GetArguments().size();
+	if (argument_count > column_count) {
+		throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
+		                      (uint64_t)argument_count, (uint64_t)column_count);
+	}
 
 	auto reconstructed = FunctionBinder::BindSortedAggregateState(context, inner->aggr, std::move(inner->bind_data),
 	                                                              buffer_struct, orders, argument_count);
@@ -766,6 +775,55 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 }
 
 } // namespace
+
+unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalType &type,
+                                                                 unique_ptr<ParsedExpression> value) {
+	auto info = type.GetExtensionInfo();
+	if (!type.IsAggregateState() || !info) {
+		return nullptr;
+	}
+	auto name = info->properties.find("function_name");
+	auto parameters = info->properties.find("parameters");
+	const bool has_function_name =
+	    name != info->properties.end() && !name->second.IsNull() && name->second.type().id() == LogicalTypeId::VARCHAR;
+	const bool has_parameters = parameters != info->properties.end() && !parameters->second.IsNull() &&
+	                            parameters->second.type().id() == LogicalTypeId::LIST;
+	if (!has_function_name || !has_parameters) {
+		return nullptr;
+	}
+	vector<LogicalType> types;
+	map<idx_t, Value> constants;
+	ParseStateParameters(parameters->second, types, constants);
+	vector<Value> signature;
+	vector<unique_ptr<ParsedExpression>> constant_arguments;
+	for (idx_t i = 0; i < types.size(); i++) {
+		if (!TypeExpression::CanRepresent(types[i]) || TypeVisitor::Contains(types[i], [](const LogicalType &child) {
+			    return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
+		    })) {
+			return nullptr;
+		}
+		signature.emplace_back(types[i].ToString());
+		auto entry = constants.find(i);
+		unique_ptr<ParsedExpression> constant;
+		try {
+			constant = ConstantExpression::FromValue(entry == constants.end() ? Value() : entry->second);
+		} catch (const NotImplementedException &) {
+			return nullptr;
+		}
+		constant_arguments.push_back(make_uniq<CastExpression>(LogicalType::VARIANT(), std::move(constant)));
+	}
+	vector<unique_ptr<ParsedExpression>> arguments;
+	arguments.push_back(std::move(value));
+	arguments.push_back(ConstantExpression::FromValue(name->second));
+	arguments.push_back(ConstantExpression::FromValue(Value::LIST(LogicalType::VARCHAR, std::move(signature))));
+	arguments.push_back(
+	    make_uniq<FunctionExpression>(QualifiedName("system", "main", "list_value"), std::move(constant_arguments)));
+	auto orders = info->properties.find("order_bys");
+	if (orders != info->properties.end()) {
+		arguments.push_back(ConstantExpression::FromValue(orders->second));
+	}
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "to_aggregate_state"), std::move(arguments));
+}
 
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();

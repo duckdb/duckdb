@@ -10,8 +10,8 @@ namespace duckdb {
 namespace {
 
 struct UnionExtractBindData : public FunctionData {
-	UnionExtractBindData(Identifier key, idx_t index, LogicalType type)
-	    : key(std::move(key)), index(index), type(std::move(type)) {
+	UnionExtractBindData(const Identifier &key, idx_t index, LogicalType type)
+	    : key(key), index(index), type(std::move(type)) {
 	}
 
 	string key;
@@ -81,6 +81,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 	}
 
 	if (!found_key) {
+		// LCOV_EXCL_START
 		vector<string> candidates;
 		candidates.reserve(union_member_count);
 		for (idx_t i = 0; i < union_member_count; i++) {
@@ -89,6 +90,7 @@ unique_ptr<FunctionData> UnionExtractBind(BindScalarFunctionInput &input) {
 		auto closest_settings = StringUtil::TopNJaroWinkler(candidates, key);
 		auto message = StringUtil::CandidatesMessage(closest_settings, "Candidate Entries");
 		throw BinderException("Could not find key %s in union\n%s", key, message);
+		// LCOV_EXCL_STOP
 	}
 
 	bound_function.SetReturnType(return_type);

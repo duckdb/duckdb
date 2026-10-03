@@ -18,8 +18,6 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
-#include "duckdb/parser/expression/type_expression.hpp"
-#include "duckdb/catalog/default/default_types.hpp"
 
 namespace duckdb {
 
@@ -157,19 +155,19 @@ ColumnElements
 PEGTransformerFactory::TransformCreateTableColumnList(PEGTransformer &transformer,
                                                       vector<CreateTableColumnElement> create_table_column_element) {
 	ColumnElements result;
-	for (idx_t col_idx = 0; col_idx < create_table_column_element.size(); ++col_idx) {
-		auto &column_element = create_table_column_element[col_idx];
+	for (auto &column_element : create_table_column_element) {
 		if (column_element.column_definition) {
 			auto &column_result = *column_element.column_definition;
+			auto column_index = LogicalIndex(result.columns.LogicalColumnCount());
 			for (auto &constraint : column_result.constraints) {
 				result.constraints.push_back(std::move(constraint));
 			}
 			for (auto constraint_type : column_result.constraint_types) {
 				if (constraint_type.second == ConstraintType::NOT_NULL) {
-					result.constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(col_idx)));
+					result.constraints.push_back(make_uniq<NotNullConstraint>(column_index));
 				} else if (constraint_type.second == ConstraintType::UNIQUE) {
 					result.constraints.push_back(make_uniq<UniqueConstraint>(
-					    LogicalIndex(col_idx), column_result.column_definition.GetName(), constraint_type.first));
+					    column_index, column_result.column_definition.GetName(), constraint_type.first));
 				}
 			}
 			result.columns.AddColumn(std::move(column_result.column_definition));
@@ -210,11 +208,6 @@ Identifier PEGTransformerFactory::TransformStringLiteralIdentifier(PEGTransforme
 	return Identifier(string_literal);
 }
 
-string PEGTransformerFactory::TransformIdentifier(PEGTransformer &transformer, ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	return list_pr.Child<IdentifierParseResult>(0).identifier.GetIdentifierName();
-}
-
 vector<string> PEGTransformerFactory::TransformDottedIdentifier(PEGTransformer &transformer,
                                                                 const Identifier &identifier,
                                                                 const optional<vector<string>> &dot_col_label) {
@@ -242,6 +235,7 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 	}
 	auto column_type = has_type ? *type : LogicalType::ANY;
 	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
+	bool has_collation = false;
 	ColumnConstraint accumulated_constraints;
 	if (column_constraint) {
 		for (auto &cc_entry : *column_constraint) {
@@ -266,28 +260,14 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 				fk_constraint.fk_columns.push_back(qualified_name.Name());
 				accumulated_constraints.constraints.push_back(std::move(cc_entry.constraint));
 			} else if (cc_entry.constraint_name == "ColumnCollation") {
+				if (has_collation) {
+					throw ParserException("multiple COLLATE clauses not allowed");
+				}
+				has_collation = true;
 				if (has_generated) {
 					throw ParserException("Collations are not supported on generated columns");
 				}
-				if (column_type.id() == LogicalTypeId::ANY) {
-					throw ParserException("Specify the VARCHAR type for column \"%s\" with collation.",
-					                      qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA));
-				} else if (column_type.IsUnbound()) {
-					auto &expr = UnboundType::GetTypeExpression(column_type);
-					if (expr->GetExpressionClass() != ExpressionClass::TYPE) {
-						throw InternalException("Expected a type expression");
-					}
-					auto &type_expr = expr->Cast<TypeExpression>();
-					if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
-						throw ParserException("Only VARCHAR columns can have collations!");
-					}
-				} else {
-					throw InternalException("Expected only unbound types here");
-				}
-				vector<unique_ptr<ParsedExpression>> type_children;
-				type_children.push_back(std::move(cc_entry.expression));
-				column_type =
-				    LogicalType::UNBOUND(make_uniq<TypeExpression>(Identifier("VARCHAR"), std::move(type_children)));
+				column_type = ApplyColumnCollation(column_type, std::move(cc_entry.expression));
 			} else {
 				accumulated_constraints.constraints.push_back(std::move(cc_entry.constraint));
 			}
@@ -296,14 +276,14 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 	if (has_generated) {
 		auto generated = std::move(*generated_column);
 		if (generated.expr->HasSubquery()) {
-			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			throw ParserException("Expression of generated column %s contains a subquery, which isn't allowed",
 			                      qualified_name.Name());
 		}
 		if (column_type != LogicalType::ANY) {
 			generated.expr = make_uniq<CastExpression>(column_type, std::move(generated.expr));
 		}
 		if (generated.expr->HasSubquery()) {
-			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			throw ParserException("Expression of generated column %s contains a subquery, which isn't allowed",
 			                      qualified_name.Name());
 		}
 
@@ -406,7 +386,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformColumnCompression(PEGTrans
 ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTransformer &transformer,
                                                                            unique_ptr<BaseTableRef> base_table_name,
                                                                            const optional<vector<string>> &column_list,
-                                                                           const KeyActions &key_actions) {
+                                                                           const optional<KeyActions> &key_actions) {
 	ForeignKeyInfo fk_info;
 	fk_info.schema = base_table_name->GetQualifiedName().Schema();
 	fk_info.table = base_table_name->Table();
@@ -422,17 +402,26 @@ ColumnConstraintEntry PEGTransformerFactory::TransformForeignKeyConstraint(PEGTr
 	return entry;
 }
 
-KeyActions PEGTransformerFactory::TransformKeyActions(PEGTransformer &transformer,
-                                                      const optional<string> &update_action,
-                                                      const optional<string> &delete_action) {
-	KeyActions results;
-	if (update_action) {
-		results.update_action = *update_action;
-	}
+KeyActions PEGTransformerFactory::TransformUpdateFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &update_action,
+                                                                 const optional<string> &delete_action) {
+	KeyActions result;
+	result.update_action = update_action;
 	if (delete_action) {
-		results.delete_action = *delete_action;
+		result.delete_action = *delete_action;
 	}
-	return results;
+	return result;
+}
+
+KeyActions PEGTransformerFactory::TransformDeleteFirstKeyActions(PEGTransformer &transformer,
+                                                                 const string &delete_action,
+                                                                 const optional<string> &update_action) {
+	KeyActions result;
+	result.delete_action = delete_action;
+	if (update_action) {
+		result.update_action = *update_action;
+	}
+	return result;
 }
 
 string PEGTransformerFactory::TransformUpdateAction(PEGTransformer &transformer, const string &key_action) {

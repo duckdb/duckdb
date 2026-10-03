@@ -13,10 +13,12 @@ TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog &catalog, SchemaCat
                                                      CreateTableFunctionInfo &info)
     : FunctionEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, info), functions(std::move(info.functions)) {
 	D_ASSERT(this->functions.Size() > 0);
-	functions.ApplyToFunctions([&](TableFunction &function) {
-		function.SetCatalogName(catalog.GetAttached().GetName());
-		function.SetSchemaName(schema.name);
-	});
+	functions.name = name;
+	functions.ApplyToFunctions([&](TableFunction &function) { FinalizeFunction(function); });
+}
+
+void TableFunctionCatalogEntry::FinalizeFunction(TableFunction &function) const {
+	function.SetQualifiedName(schema.GetQualifiedName(name));
 }
 
 unique_ptr<CatalogEntry> TableFunctionCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
@@ -35,6 +37,7 @@ unique_ptr<CatalogEntry> TableFunctionCatalogEntry::AlterEntry(CatalogTransactio
 		throw BinderException("Failed to add new function overloads to function \"%s\": function already exists", name);
 	}
 	CreateTableFunctionInfo new_info(std::move(new_set));
+	new_info.internal = internal;
 	return make_uniq<TableFunctionCatalogEntry>(catalog, schema, new_info);
 }
 

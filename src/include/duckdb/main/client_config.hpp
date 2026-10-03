@@ -65,7 +65,7 @@ struct ClientConfig {
 	vector<shared_ptr<ReplacementScan>> replacement_scans;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 10mb.
-	idx_t max_streaming_buffer_size = 10 * 1024 * 1024;
+	idx_t max_streaming_buffer_size = idx_t(10) * 1024 * 1024;
 
 	//! The maximum memory for query intermediates (sorts, hash tables) per connection (in bytes). Default: Global
 	//! memory limit.
@@ -89,9 +89,11 @@ struct ClientConfig {
 
 	optional<string> current_dialect;
 	//! The (ordered) list of grammar extensions currently used by the parser
-	case_insensitive_set_t active_grammar_extensions;
+	vector<string> active_grammar_extensions;
 	//! The compiled grammar active for the connection
 	shared_ptr<CompiledGrammar> cached_grammar;
+	//! The grammar of the database this client is CONNECT-ed to; unset when not connected
+	shared_ptr<CompiledGrammar> connected_grammar;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);

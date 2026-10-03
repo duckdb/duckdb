@@ -55,7 +55,7 @@ struct GrammarChangesInput {
 class DialectExtension {
 public:
 	explicit DialectExtension(string name_p, optional<DialectCompatibilityMode> compatibility_mode = std::nullopt)
-	    : name(std::move(name_p)), compatibility_mode(std::move(compatibility_mode)) {
+	    : name(std::move(name_p)), compatibility_mode(compatibility_mode) {
 	}
 	virtual ~DialectExtension() = default;
 
