@@ -3361,8 +3361,9 @@ AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const 
 	duckdb::vector<StatisticsCatalogGroup> catalogs;
 	idx_t schema_count = 0;
 	idx_t stat_count = 0;
+	auto rows = result->Collection().GetRows();
 	for (idx_t row_idx = 0; row_idx < result->RowCount(); row_idx++) {
-		auto size_value = result->GetValue(3, row_idx);
+		auto size_value = rows.GetValue(3, row_idx);
 		if (size_value.IsNull()) {
 			continue;
 		}
@@ -3370,9 +3371,9 @@ AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const 
 		if (estimated_size < 0) {
 			continue;
 		}
-		auto catalog_name = result->GetValue(0, row_idx).GetValue<duckdb::string>();
-		auto schema_name = result->GetValue(1, row_idx).GetValue<duckdb::string>();
-		auto current_table = result->GetValue(2, row_idx).GetValue<duckdb::string>();
+		auto catalog_name = rows.GetValue(0, row_idx).GetValue<duckdb::string>();
+		auto schema_name = rows.GetValue(1, row_idx).GetValue<duckdb::string>();
+		auto current_table = rows.GetValue(2, row_idx).GetValue<duckdb::string>();
 		if (catalogs.empty() || catalogs.back().name != catalog_name) {
 			catalogs.push_back({catalog_name, {}});
 		}

@@ -146,7 +146,7 @@ public:
 	void CommitDrop();
 
 	void InitializeEmpty(const vector<LogicalType> &types, ColumnDataType data_type);
-	bool HasChanges() const;
+	bool HasChanges(VisibilityBound bound) const;
 
 	//! Initialize a scan over this row_group
 	bool InitializeScan(CollectionScanState &state, SegmentNode<RowGroup> &node);

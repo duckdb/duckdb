@@ -127,6 +127,9 @@ public:
 	//! directly to disambiguate "never connected" from "was connected, target was detached elsewhere").
 	DUCKDB_API shared_ptr<AttachedDatabase> TryGetConnectedCatalog() const;
 
+	bool HasActiveTransaction() const {
+		return transaction.HasActiveTransaction();
+	}
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
@@ -150,6 +153,9 @@ public:
 	//! Blocking. Runs the query to completion and returns its handle. The result is retained
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, QueryParameters query_parameters);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, QueryParameters query_parameters);
+	//! As above, in the given result format
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, shared_ptr<ResultFormat> format);
+	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format);
 
 	//! Non-blocking. Submits the query and returns its handle. The engine runs it iff threads - external_threads > 0,
 	//! but produces no data until the caller either calls a materializing method on the handle or opens a
@@ -158,6 +164,9 @@ public:
 	//! Non-blocking. As above, for a parsed statement
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
 	                                          const QueryParameters &query_parameters);
+	//! Non-blocking. As above, in the given result format
+	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, shared_ptr<ResultFormat> format);
+	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format);
 
 	//! Non-blocking. As above, for bound parameter values
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
@@ -241,6 +250,16 @@ public:
 
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) const;
+	//! Typed variant, leaves result untouched if not found
+	template <class TYPE>
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, TYPE &result) const {
+		Value output;
+		auto lookup_result = TryGetCurrentSetting(key, output);
+		if (lookup_result) {
+			result = output.GetValue<TYPE>();
+		}
+		return lookup_result;
+	}
 	//! Returns the value of the current setting set by the user - if the user has set it.
 	DUCKDB_API SettingLookupResult TryGetCurrentUserSetting(idx_t setting_index, Value &result) const;
 

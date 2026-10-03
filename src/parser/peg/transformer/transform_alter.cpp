@@ -1,3 +1,4 @@
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/peg/ast/add_column_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/peg/ast/column_constraint_entry.hpp"
@@ -7,6 +8,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_database_info.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
@@ -40,16 +42,19 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	}
 	auto &add_column = alter_table.Cast<AddColumnInfo>();
 	auto &column_entry = add_column.new_column;
-	const bool add_not_null = add_column.add_not_null;
+	const auto follow_ups = add_column.add_column_constraints;
 	const bool materialize_default =
 	    column_entry.HasDefaultValue() && !IsSimpleDefaultValue(column_entry.DefaultValue());
-	if (!add_not_null && !materialize_default) {
+	if (!follow_ups.add_not_null && !follow_ups.add_unique && !materialize_default) {
 		return std::move(result);
 	}
 
 	if (add_column.if_column_not_exists) {
-		if (add_not_null) {
+		if (follow_ups.add_not_null) {
 			throw NotImplementedException("Adding a NOT NULL column with IF NOT EXISTS is not supported");
+		}
+		if (follow_ups.add_unique) {
+			throw NotImplementedException("Adding a UNIQUE column with IF NOT EXISTS is not supported");
 		}
 		// IF NOT EXISTS is not supported by the multi-statement rewrite - keep the plain ALTER
 		return std::move(result);
@@ -64,15 +69,22 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 		multi_statement = TransformAndMaterializeAlter(
 		    alter_entry_data,
 		    make_uniq<AddColumnInfo>(add_column.GetAlterEntryData(), std::move(null_column),
-		                             add_column.if_column_not_exists, /*add_not_null=*/false),
+		                             add_column.if_column_not_exists, AddColumnConstraints()),
 		    column_name.GetIdentifierName(), column_entry.DefaultValue().Copy());
 	} else {
 		multi_statement = make_uniq<MultiStatement>();
-		add_column.add_not_null = false;
+		add_column.add_column_constraints = AddColumnConstraints();
 		AddToMultiStatement(multi_statement, std::move(result->info));
 	}
-	if (add_not_null) {
+	if (follow_ups.add_not_null) {
 		AddToMultiStatement(multi_statement, make_uniq<SetNotNullInfo>(alter_entry_data, column_name));
+	}
+	if (follow_ups.add_unique) {
+		vector<Identifier> unique_columns;
+		unique_columns.push_back(column_name);
+		auto unique_constraint = make_uniq<UniqueConstraint>(std::move(unique_columns), /*is_primary_key=*/false);
+		AddToMultiStatement(multi_statement,
+		                    make_uniq<AddConstraintInfo>(alter_entry_data, std::move(unique_constraint)));
 	}
 	return std::move(multi_statement);
 }
@@ -116,8 +128,22 @@ unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransform
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
                                                                       const optional<bool> &if_exists,
                                                                       const QualifiedName &qualified_name,
-                                                                      unique_ptr<AlterTableInfo> rename_alter) {
-	throw NotImplementedException("Altering schemas is not yet supported");
+                                                                      unique_ptr<AlterTableInfo> alter_schema_options) {
+	// the new schema is stored in the Schema() slot, matching the layout used by CreateSchemaInfo
+	auto if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+	AlterEntryData data(QualifiedName(qualified_name.Path(), Identifier()), if_not_found);
+	switch (alter_schema_options->alter_table_type) {
+	case AlterTableType::SET_TABLE_OPTIONS: {
+		auto &set_options = alter_schema_options->Cast<SetTableOptionsInfo>();
+		return make_uniq<SetSchemaOptionsInfo>(data, std::move(set_options.table_options));
+	}
+	case AlterTableType::RESET_TABLE_OPTIONS: {
+		auto &reset_options = alter_schema_options->Cast<ResetTableOptionsInfo>();
+		return make_uniq<ResetSchemaOptionsInfo>(data, std::move(reset_options.table_options));
+	}
+	default:
+		throw NotImplementedException("Altering schemas is not yet supported");
+	}
 }
 
 unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
@@ -251,10 +277,13 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAddColumn(PEGTransfor
 
 	if (add_column_entry.column_path.size() == 1) {
 		result = make_uniq<AddColumnInfo>(AlterEntryData(), std::move(column_definition), if_not_exists_value,
-		                                  add_column_entry.is_not_null);
+		                                  add_column_entry.add_column_constraints);
 	} else {
-		if (add_column_entry.is_not_null) {
+		if (add_column_entry.add_column_constraints.add_not_null) {
 			throw NotImplementedException("Adding NOT NULL constraints to nested fields is not supported");
+		}
+		if (add_column_entry.add_column_constraints.add_unique) {
+			throw NotImplementedException("Adding UNIQUE constraints to nested fields is not supported");
 		}
 		if (add_column_entry.compression_type != CompressionType::COMPRESSION_AUTO) {
 			throw NotImplementedException("Adding compression to nested fields is not supported");
@@ -294,10 +323,11 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 				}
 				new_column.default_value = std::move(constraint.expression);
 			} else if (constraint_type == ConstraintType::NOT_NULL) {
-				new_column.is_not_null = true;
+				new_column.add_column_constraints.add_not_null = true;
+			} else if (constraint_type == ConstraintType::UNIQUE && !constraint.constraint_type_info.first) {
+				new_column.add_column_constraints.add_unique = true;
 			} else if (constraint_type == ConstraintType::UNIQUE) {
-				throw ParserException("Adding columns with %s constraints is not supported yet",
-				                      constraint.constraint_type_info.first ? "PRIMARY KEY" : "UNIQUE");
+				throw ParserException("Adding columns with PRIMARY KEY constraints is not supported yet");
 			} else if (constraint_type == ConstraintType::CHECK) {
 				throw ParserException("Adding columns with CHECK constraints is not supported yet");
 			} else if (constraint_type == ConstraintType::FOREIGN_KEY) {
@@ -307,6 +337,8 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 				if (new_column.compression_type == CompressionType::COMPRESSION_AUTO) {
 					throw ParserException("Unrecognized option for column compression");
 				}
+			} else if (constraint.constraint_name == "ColumnCollation") {
+				new_column.type = ApplyColumnCollation(new_column.type, std::move(constraint.expression));
 			}
 		}
 	}
@@ -356,10 +388,6 @@ PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const b
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
 		change_column_type->column_name = nested_column_name->ColumnNames()[0];
-		if (!change_column_type->expression) {
-			change_column_type->expression =
-			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
-		}
 		return std::move(change_column_type);
 	} else {
 		throw NotImplementedException("Unrecognized type for alter column encountered");
@@ -379,14 +407,16 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEG
 	}
 }
 
-unique_ptr<AlterTableInfo>
-PEGTransformerFactory::TransformAlterType(PEGTransformer &transformer, const bool &has_result,
-                                          const optional<LogicalType> &type,
-                                          optional<unique_ptr<ParsedExpression>> using_expression) {
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(
+    PEGTransformer &transformer, const bool &has_result, const optional<LogicalType> &type,
+    optional<ColumnConstraintEntry> column_collation, optional<unique_ptr<ParsedExpression>> using_expression) {
 	if (!type && !using_expression) {
 		throw ParserException("Omitting the type is only possible in combination with USING");
 	}
 	auto alter_type = type ? *type : LogicalType::UNKNOWN;
+	if (column_collation) {
+		alter_type = ApplyColumnCollation(type, std::move(column_collation->expression));
+	}
 	unique_ptr<ParsedExpression> expression;
 	if (using_expression) {
 		expression = std::move(*using_expression);

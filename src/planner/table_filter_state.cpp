@@ -547,17 +547,15 @@ static unique_ptr<ExpressionFilterExecutor> TryCreateFunctionExecutor(const Boun
 		return make_uniq<OptionalFilterExecutor>();
 	}
 	if (func_name == SelectivityOptionalFilterScalarFun::NAME) {
-		if (!func.BindInfo()) {
+		auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+		if (!optional_child) {
 			return make_uniq<OptionalFilterExecutor>();
 		}
-		auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-		if (!data.child_filter_expr) {
-			return make_uniq<OptionalFilterExecutor>();
-		}
-		auto child = TryCreateFastExecutor(*data.child_filter_expr, true);
+		auto child = TryCreateFastExecutor(*optional_child, true);
 		if (!child) {
 			return nullptr;
 		}
+		auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
 		return make_uniq<SelectivityOptionalFilterExecutor>(std::move(child), data.n_vectors_to_check,
 		                                                    data.selectivity_threshold);
 	}

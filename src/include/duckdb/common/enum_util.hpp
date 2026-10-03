@@ -66,6 +66,8 @@ enum class AlterForeignKeyType : uint8_t;
 
 enum class AlterScalarFunctionType : uint8_t;
 
+enum class AlterSchemaType : uint8_t;
+
 enum class AlterTableFunctionType : uint8_t;
 
 enum class AlterTableType : uint8_t;
@@ -176,6 +178,8 @@ enum class DebugInitialize : uint8_t;
 
 enum class DebugOrderVerification : uint8_t;
 
+enum class DebugProgressVerification : uint8_t;
+
 enum class DebugStatementVerification : uint8_t;
 
 enum class DebugVectorVerification : uint8_t;
@@ -215,6 +219,8 @@ enum class ExplainType : uint8_t;
 enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
+
+enum class ExpressionTailType : uint8_t;
 
 enum class ExpressionType : uint8_t;
 
@@ -263,6 +269,8 @@ enum class FunctionCollationHandling : uint8_t;
 enum class FunctionErrors : uint8_t;
 
 enum class FunctionNullHandling : uint8_t;
+
+enum class FunctionParameterKind : uint8_t;
 
 enum class FunctionStability : uint8_t;
 
@@ -333,6 +341,12 @@ enum class LoggingTargetTable : uint8_t;
 enum class LogicalOperatorRepeatability : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
+
+enum class LogicalPlanVerificationIssueCode : int32_t;
+
+enum class LogicalPlanVerificationPathComponentType : int32_t;
+
+enum class LogicalPlanVerificationPhase : int32_t;
 
 enum class LogicalTypeId : uint8_t;
 
@@ -442,6 +456,8 @@ enum class ProfilingCoverage : uint8_t;
 
 enum class ProfilingParameterNames : uint8_t;
 
+enum class ProgressInvariant : uint8_t;
+
 enum class PushdownExtractSupport : uint8_t;
 
 enum class QualifiedNameToStringMode : uint8_t;
@@ -453,8 +469,6 @@ enum class QueryNodeType : uint8_t;
 enum class QueryResultMemoryType : uint8_t;
 
 enum class QueryResultState : uint8_t;
-
-enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
@@ -473,6 +487,8 @@ enum class RemoteCapability : uint8_t;
 enum class RemoveUnusedColumnsMode : uint8_t;
 
 enum class RenderMode : uint8_t;
+
+enum class RequestSizing : uint8_t;
 
 enum class RequestType : uint8_t;
 
@@ -701,6 +717,9 @@ template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
 
 template<>
+const char* EnumUtil::ToChars<AlterSchemaType>(AlterSchemaType value);
+
+template<>
 const char* EnumUtil::ToChars<AlterTableFunctionType>(AlterTableFunctionType value);
 
 template<>
@@ -866,6 +885,9 @@ template<>
 const char* EnumUtil::ToChars<DebugOrderVerification>(DebugOrderVerification value);
 
 template<>
+const char* EnumUtil::ToChars<DebugProgressVerification>(DebugProgressVerification value);
+
+template<>
 const char* EnumUtil::ToChars<DebugStatementVerification>(DebugStatementVerification value);
 
 template<>
@@ -924,6 +946,9 @@ const char* EnumUtil::ToChars<ExponentType>(ExponentType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
+
+template<>
+const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value);
@@ -996,6 +1021,9 @@ const char* EnumUtil::ToChars<FunctionErrors>(FunctionErrors value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
+
+template<>
+const char* EnumUtil::ToChars<FunctionParameterKind>(FunctionParameterKind value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionStability>(FunctionStability value);
@@ -1101,6 +1129,15 @@ const char* EnumUtil::ToChars<LogicalOperatorRepeatability>(LogicalOperatorRepea
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationIssueCode>(LogicalPlanVerificationIssueCode value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPathComponentType>(LogicalPlanVerificationPathComponentType value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalPlanVerificationPhase>(LogicalPlanVerificationPhase value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
@@ -1265,6 +1302,9 @@ template<>
 const char* EnumUtil::ToChars<ProfilingParameterNames>(ProfilingParameterNames value);
 
 template<>
+const char* EnumUtil::ToChars<ProgressInvariant>(ProgressInvariant value);
+
+template<>
 const char* EnumUtil::ToChars<PushdownExtractSupport>(PushdownExtractSupport value);
 
 template<>
@@ -1281,9 +1321,6 @@ const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value
 
 template<>
 const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
-
-template<>
-const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
@@ -1311,6 +1348,9 @@ const char* EnumUtil::ToChars<RemoveUnusedColumnsMode>(RemoveUnusedColumnsMode v
 
 template<>
 const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
+
+template<>
+const char* EnumUtil::ToChars<RequestSizing>(RequestSizing value);
 
 template<>
 const char* EnumUtil::ToChars<RequestType>(RequestType value);
@@ -1626,6 +1666,9 @@ template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
 
 template<>
+AlterSchemaType EnumUtil::FromString<AlterSchemaType>(const char *value);
+
+template<>
 AlterTableFunctionType EnumUtil::FromString<AlterTableFunctionType>(const char *value);
 
 template<>
@@ -1791,6 +1834,9 @@ template<>
 DebugOrderVerification EnumUtil::FromString<DebugOrderVerification>(const char *value);
 
 template<>
+DebugProgressVerification EnumUtil::FromString<DebugProgressVerification>(const char *value);
+
+template<>
 DebugStatementVerification EnumUtil::FromString<DebugStatementVerification>(const char *value);
 
 template<>
@@ -1849,6 +1895,9 @@ ExponentType EnumUtil::FromString<ExponentType>(const char *value);
 
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
+
+template<>
+ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value);
@@ -1921,6 +1970,9 @@ FunctionErrors EnumUtil::FromString<FunctionErrors>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);
+
+template<>
+FunctionParameterKind EnumUtil::FromString<FunctionParameterKind>(const char *value);
 
 template<>
 FunctionStability EnumUtil::FromString<FunctionStability>(const char *value);
@@ -2026,6 +2078,15 @@ LogicalOperatorRepeatability EnumUtil::FromString<LogicalOperatorRepeatability>(
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
+
+template<>
+LogicalPlanVerificationIssueCode EnumUtil::FromString<LogicalPlanVerificationIssueCode>(const char *value);
+
+template<>
+LogicalPlanVerificationPathComponentType EnumUtil::FromString<LogicalPlanVerificationPathComponentType>(const char *value);
+
+template<>
+LogicalPlanVerificationPhase EnumUtil::FromString<LogicalPlanVerificationPhase>(const char *value);
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value);
@@ -2190,6 +2251,9 @@ template<>
 ProfilingParameterNames EnumUtil::FromString<ProfilingParameterNames>(const char *value);
 
 template<>
+ProgressInvariant EnumUtil::FromString<ProgressInvariant>(const char *value);
+
+template<>
 PushdownExtractSupport EnumUtil::FromString<PushdownExtractSupport>(const char *value);
 
 template<>
@@ -2206,9 +2270,6 @@ QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *va
 
 template<>
 QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
-
-template<>
-QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);
@@ -2236,6 +2297,9 @@ RemoveUnusedColumnsMode EnumUtil::FromString<RemoveUnusedColumnsMode>(const char
 
 template<>
 RenderMode EnumUtil::FromString<RenderMode>(const char *value);
+
+template<>
+RequestSizing EnumUtil::FromString<RequestSizing>(const char *value);
 
 template<>
 RequestType EnumUtil::FromString<RequestType>(const char *value);

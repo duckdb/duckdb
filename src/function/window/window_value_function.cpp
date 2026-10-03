@@ -186,6 +186,9 @@ struct WindowValueExecutor {
 	static unique_ptr<LocalSinkState> GetLocal(ExecutionContext &context, const GlobalSinkState &gstate);
 
 	//! Streaming APIs
+	static bool ArgumentIsStreamable(const BoundWindowExpression &wexpr) {
+		return !wexpr.IsVolatile();
+	}
 	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
 	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowValueStreamingState>(client, input, wexpr);
@@ -368,6 +371,9 @@ public:
 				return false;
 			}
 			offset = bigint_value->GetValue<int64_t>();
+			if (offset == NumericLimits<int64_t>::Minimum()) {
+				return false;
+			}
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -533,6 +539,9 @@ public:
 			}
 			int64_t offset;
 			if (!WindowLeadLagStreamingState::ComputeOffset(client, wexpr, offset)) {
+				return false;
+			}
+			if (offset < 0 && !ArgumentIsStreamable(wexpr)) {
 				return false;
 			}
 
@@ -790,6 +799,9 @@ struct WindowFirstValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		if (wexpr.IgnoreNulls()) {
 			// We can stream first values ignoring NULLs if they are "running totals"
 			return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
@@ -919,6 +931,9 @@ struct WindowLastValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		// We can stream last values if they are "running totals"
 		return wexpr.WindowStart() == WindowBoundary::UNBOUNDED_PRECEDING &&
 		       wexpr.WindowEnd() == WindowBoundary::CURRENT_ROW_ROWS;
@@ -1082,6 +1097,9 @@ struct WindowNthValueExecutor : public WindowValueExecutor {
 
 	//! Streaming APIs
 	static bool CanStream(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta) {
+		if (!ArgumentIsStreamable(wexpr)) {
+			return false;
+		}
 		// We can only stream Nth Value if N is positive constant.
 		idx_t nth_index;
 		if (!WindowNthValueStreamingState::ComputeNthIndex(client, wexpr, nth_index)) {

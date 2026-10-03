@@ -899,6 +899,15 @@ unique_ptr<DataChunk> ReservoirSamplePercentage::GetChunk() {
 	return nullptr;
 }
 
+idx_t ReservoirSamplePercentage::GetActiveSampleCount() const {
+	D_ASSERT(is_finalized);
+	idx_t count = 0;
+	for (auto &sample : finished_samples) {
+		count += sample->GetActiveSampleCount();
+	}
+	return count;
+}
+
 unique_ptr<BlockingSample> ReservoirSamplePercentage::Copy() const {
 	throw InternalException("Cannot call Copy on ReservoirSample Percentage");
 }

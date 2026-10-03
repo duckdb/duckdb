@@ -360,8 +360,12 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index));
+void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
+	info->indexes.AddIndex(std::move(index), index_oid);
+}
+
+void DataTable::AddConstraintIndex(unique_ptr<Index> index) {
+	info->indexes.AddIndex(std::move(index), /*index_oid=*/optional_idx());
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
@@ -661,10 +665,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Get the column types in their physical order. A foreign key always references a table in the same (possibly
 	// nested) schema, so we qualify it with this table's schema path.
-	auto schema_path = info->GetSchemaPath();
-	schema_path.insert(schema_path.begin(), db.GetName());
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(std::move(schema_path), bound_foreign_key.info.table));
+	    context, QualifiedName::FromCatalogSchema(db.GetName(), info->GetSchemaPath(), bound_foreign_key.info.table));
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());
@@ -1686,7 +1688,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art));
+	info->indexes.AddIndex(std::move(art), /*index_oid=*/optional_idx());
 }
 
 } // namespace duckdb

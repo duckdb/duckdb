@@ -1066,13 +1066,13 @@ PEGTransformerFactory::FinalizeWithClauseTrampoline(PEGTransformer &transformer,
 
 pair<Identifier, unique_ptr<CommonTableExpressionInfo>>
 PEGTransformerFactory::TransformWithStatement(PEGTransformer &transformer, const Identifier &col_id_or_string,
-                                              const optional<vector<string>> &insert_column_list,
+                                              const optional<vector<string>> &column_aliases,
                                               optional<vector<unique_ptr<ParsedExpression>>> using_key,
                                               const optional<bool> &materialized, unique_ptr<TableRef> cte_body) {
 	auto result = make_uniq<CommonTableExpressionInfo>();
 	auto cte_name = col_id_or_string;
-	if (insert_column_list) {
-		result->aliases = StringsToIdentifiers(*insert_column_list);
+	if (column_aliases) {
+		result->aliases = StringsToIdentifiers(*column_aliases);
 	}
 	if (using_key) {
 		result->key_targets = std::move(*using_key);
@@ -1223,6 +1223,12 @@ PEGTransformerFactory::TransformOffsetLimitClause(PEGTransformer &transformer, L
 unique_ptr<ResultModifier> PEGTransformerFactory::TransformOffsetFetchClause(PEGTransformer &transformer,
                                                                              LimitPercentResult offset_clause,
                                                                              LimitPercentResult fetch_clause) {
+	return VerifyLimitOffset(fetch_clause, offset_clause);
+}
+
+unique_ptr<ResultModifier> PEGTransformerFactory::TransformFetchOffsetClause(PEGTransformer &transformer,
+                                                                             LimitPercentResult fetch_clause,
+                                                                             LimitPercentResult offset_clause) {
 	return VerifyLimitOffset(fetch_clause, offset_clause);
 }
 
@@ -1782,6 +1788,12 @@ LimitPercentResult PEGTransformerFactory::TransformFetchValue(PEGTransformer &tr
                                                               unique_ptr<ParsedExpression> expression) {
 	LimitPercentResult result;
 	result.expression = std::move(expression);
+	return result;
+}
+
+LimitPercentResult PEGTransformerFactory::TransformFetchClauseWithoutValue(PEGTransformer &transformer) {
+	LimitPercentResult result;
+	result.expression = ConstantExpression::Integer(1);
 	return result;
 }
 

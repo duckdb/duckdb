@@ -29,7 +29,8 @@ TEST_CASE("Rolled-back DELETE must not stick uncheckpointed_delete_commit flag",
 			auto &storage = table.Cast<DuckTableEntry>().GetStorage();
 			auto row_group = storage.GetRowGroupCollection()->GetRowGroup(0);
 			REQUIRE(row_group);
-			result = row_group->GetOrCreateVersionInfo().HasUnserializedChanges();
+			result =
+			    row_group->GetOrCreateVersionInfo().HasUnserializedChanges(VisibilityBound::IncludingUncommitted());
 		});
 		return result;
 	};
