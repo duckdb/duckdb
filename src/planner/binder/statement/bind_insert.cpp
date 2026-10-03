@@ -367,7 +367,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			if (!index.is_unique) {
 				continue;
 			}
-			if (index.is_deferrable) {
+			if (index.check_time == ConstraintCheckTime::COMMIT) {
 				// Without a conflict target, every constraint is a conflict target.
 				throw BinderException("DEFERRED PRIMARY KEY or UNIQUE constraints cannot be ON CONFLICT targets, "
 				                      "specify the ON CONFLICT columns of a constraint that is not DEFERRED");
@@ -446,20 +446,20 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			}
 		}
 		bool index_references_columns = false;
-		bool deferrable_index_matches = false;
+		bool deferred_index_matches = false;
 		for (auto &index : storage_info.index_info) {
 			if (!index.is_unique || on_conflict_filter != index.column_set) {
 				continue;
 			}
-			if (index.is_deferrable) {
-				deferrable_index_matches = true;
+			if (index.check_time == ConstraintCheckTime::COMMIT) {
+				deferred_index_matches = true;
 				continue;
 			}
 			index_references_columns = true;
 			break;
 		}
 		if (!index_references_columns) {
-			if (deferrable_index_matches) {
+			if (deferred_index_matches) {
 				throw BinderException("DEFERRED PRIMARY KEY or UNIQUE constraints cannot be ON CONFLICT targets");
 			}
 			// Same as before, this is essentially a no-op, turning this into a DO THROW instead

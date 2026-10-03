@@ -153,13 +153,13 @@ public:
 				// DELETE + INSERT of the same key: commit appends the new row first, then
 				// commit-delete cleanup removes the old row ID. No other main-ART append should
 				// enter during that window because commit-time main-index appends are serialized
-				// by the WAL lock or transaction manager commit lock. The same commit may append
-				// the deleted key again, which is a constraint violation.
+				// by the WAL lock or transaction manager commit lock.
 				//
 				// Local append and delete indexes should not contain such gates either.
 				// Note that VerifyLeaf may still legitimately observe the temporary duplicate
 				// leaf state.
 				if (IsDeleted(key, delete_index_info)) {
+					// The commit appends the deleted key more than once, e.g., for a deferred constraint.
 					return ARTConflictType::CONSTRAINT;
 				}
 				throw FatalException("Corrupted unique ART index \"%s\": encountered an existing gated leaf in unique "

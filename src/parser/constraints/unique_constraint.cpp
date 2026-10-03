@@ -56,9 +56,16 @@ bool UniqueConstraint::IsDeferred() const {
 	return timing == ConstraintTiming::DEFERRED;
 }
 
-bool UniqueConstraint::IsDeferrable() const {
-	// DEFERRED is DEFERRABLE INITIALLY DEFERRED, while DEFAULT and IMMEDIATE are NOT DEFERRABLE.
-	return IsDeferred();
+ConstraintCheckTime UniqueConstraint::GetCheckTime() const {
+	switch (timing) {
+	case ConstraintTiming::DEFAULT:
+	case ConstraintTiming::IMMEDIATE:
+		return ConstraintCheckTime::IMMEDIATE;
+	case ConstraintTiming::DEFERRED:
+		return ConstraintCheckTime::COMMIT;
+	default:
+		throw InternalException("Unrecognized constraint timing");
+	}
 }
 
 IndexConstraintType UniqueConstraint::GetIndexConstraintType() const {

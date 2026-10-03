@@ -67,9 +67,9 @@ public:
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid,
-		                bool deferrable)
+		                ConstraintCheckTime check_time)
 		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
-		      deferrable(deferrable) {
+		      check_time(check_time) {
 		}
 
 		reference<TableIndexList> index_list;
@@ -80,8 +80,8 @@ public:
 		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
 		//! targeted by DROP INDEX.
 		optional_idx index_oid;
-		//! Whether the index enforces a deferrable constraint.
-		bool deferrable;
+		//! When the constraint enforced by the index is checked.
+		ConstraintCheckTime check_time;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -631,7 +631,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index), info.deferrable);
+					info.index_list.get().AddIndex(std::move(info.index), info.check_time);
 				}
 				state.replay_index_infos.clear();
 
@@ -998,7 +998,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx(), unique_info.IsDeferrable());
+	                                      /*index_oid=*/optional_idx(), unique_info.GetCheckTime());
 
 	catalog.Alter(context, alter_info);
 }
@@ -1264,7 +1264,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid,
-	                                      /*deferrable=*/false);
+	                                      ConstraintCheckTime::IMMEDIATE);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

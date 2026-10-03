@@ -29,9 +29,6 @@ struct IndexStorageInfo;
 //! IndexBindState transitions index binding phases and marks entries whose physical index has been destroyed.
 enum class IndexBindState : uint8_t { UNBOUND, BINDING, BOUND, RETIRED };
 
-//! ConstraintCheckTime is the point at which the constraint enforced by an index is checked.
-enum class ConstraintCheckTime : uint8_t { IMMEDIATE, COMMIT };
-
 using IndexRebuildAppend = std::function<void(DataChunk &chunk, Vector &row_ids)>;
 using IndexRebuildScan = std::function<void(const vector<column_t> &column_ids, const IndexRebuildAppend &append)>;
 using IndexRemapApply = std::function<void(DataChunk &chunk, Vector &old_row_ids, Vector &new_row_ids)>;
@@ -114,7 +111,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	IndexEntry(unique_ptr<Index> index, bool deferrable);
+	IndexEntry(unique_ptr<Index> index, ConstraintCheckTime check_time);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -129,8 +126,6 @@ public:
 	                     optional_idx active_checkpoint);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
-	//! Returns whether the constraint enforced by the physical index is deferrable.
-	bool IsDeferrable() const;
 	//! Returns when the constraint enforced by the physical index is checked.
 	ConstraintCheckTime GetCheckTime() const;
 	//! Returns whether the physical index matches the foreign key columns and role.
@@ -174,7 +169,8 @@ public:
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
-	//! Adds transaction-local copies of the physical index to the target lists when required.
+	//! Adds transaction-local copies of the physical index to the delete indexes, and to the append indexes (if any)
+	//! if the constraint is checked immediately.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, optional_ptr<TableIndexList> append_indexes) const;
 
 public:
@@ -206,8 +202,8 @@ private:
 	mutable StorageLock lock;
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
-	//! Whether the enforced constraint is deferrable. Derived from the catalog constraint, not serialized.
-	const bool deferrable;
+	//! When the enforced constraint is checked. Derived from the catalog constraint, not serialized.
+	const ConstraintCheckTime check_time;
 	IndexDeltas deltas;
 };
 

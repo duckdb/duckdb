@@ -39,8 +39,8 @@ public:
 	bool IsPrimaryKey() const;
 	//! Returns true if the constraint was declared with the DEFERRED modifier.
 	bool IsDeferred() const;
-	//! Returns true if the constraint can be deferred, i.e., it may be violated until the transaction commits.
-	bool IsDeferrable() const;
+	//! Returns when the constraint is checked, based on its declared timing.
+	ConstraintCheckTime GetCheckTime() const;
 	//! Returns the index constraint type used to enforce this constraint.
 	IndexConstraintType GetIndexConstraintType() const;
 	//! Returns true, if the constraint is defined on a single column.

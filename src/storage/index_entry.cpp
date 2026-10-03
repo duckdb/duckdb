@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, const bool deferrable_p)
-    : owned_index(std::move(index_p)), deferrable(deferrable_p) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, const ConstraintCheckTime check_time_p)
+    : owned_index(std::move(index_p)), check_time(check_time_p) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -116,9 +116,10 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes,
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferrable=*/false);
-	if (append_indexes && GetCheckTime() == ConstraintCheckTime::IMMEDIATE) {
-		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferrable=*/false);
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintCheckTime::IMMEDIATE);
+	// Constraints checked when committing have no append index: transaction-local rows are verified at commit.
+	if (append_indexes && check_time == ConstraintCheckTime::IMMEDIATE) {
+		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintCheckTime::IMMEDIATE);
 	}
 }
 
@@ -284,20 +285,15 @@ bool IndexEntry::IsUnique() const {
 	return owned_index->IsUnique();
 }
 
-bool IndexEntry::IsDeferrable() const {
-	return deferrable;
-}
-
 ConstraintCheckTime IndexEntry::GetCheckTime() const {
-	// Deferrable constraints are initially deferred.
-	return deferrable ? ConstraintCheckTime::COMMIT : ConstraintCheckTime::IMMEDIATE;
+	return check_time;
 }
 
 bool IndexEntry::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) const {
 	auto entry_lock = lock.GetSharedLock();
 	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
-		// Foreign keys never reference a deferrable key.
-		if (!owned_index->IsUnique() || deferrable) {
+		// Foreign keys cannot reference a key that is only checked when committing.
+		if (!owned_index->IsUnique() || check_time == ConstraintCheckTime::COMMIT) {
 			return false;
 		}
 	} else if (!owned_index->IsForeign()) {
@@ -474,7 +470,7 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	result.is_primary = owned_index->IsPrimary();
 	result.is_unique = owned_index->IsUnique() || result.is_primary;
 	result.is_foreign = owned_index->IsForeign();
-	result.is_deferrable = deferrable;
+	result.check_time = check_time;
 	result.column_set = owned_index->GetColumnIdSet();
 	return result;
 }
