@@ -2,8 +2,11 @@
 # description: Test COPY DATABASE with foreign key constraint
 # group: [copy_database]
 
-# FIXME - this is not working right now - we need to correctly take dependencies into account for COPY FROM DATABASE
-mode skip instable
+statement ok
+ATTACH ':memory:' AS src
+
+statement ok
+USE src
 
 statement ok
 CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
@@ -22,7 +25,7 @@ statement ok
 ATTACH ':memory:' AS db1
 
 statement ok
-COPY FROM DATABASE memory TO db1
+COPY FROM DATABASE src TO db1
 
 statement ok
 USE db1
@@ -50,11 +53,7 @@ UPDATE pk_integers SET i=5 WHERE i=2
 ----
 
 statement error
-UPDATE fk_integers SET i=4 WHERE j=2
-----
-
-statement error
-UPDATE fk_integers SET i=4 WHERE j=2
+UPDATE fk_integers SET j=4 WHERE j=2
 ----
 
 statement error

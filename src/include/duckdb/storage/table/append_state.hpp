@@ -16,6 +16,7 @@
 #include "duckdb/transaction/transaction_data.hpp"
 
 namespace duckdb {
+class ClientContext;
 class ColumnSegment;
 class DataTable;
 class LocalTableStorage;
@@ -131,6 +132,8 @@ struct LocalAppendState {
 	TableAppendState append_state;
 	LocalTableStorage *storage;
 	unique_ptr<ConstraintState> constraint_state;
+	//! The client context this append belongs to
+	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb
