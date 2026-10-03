@@ -318,6 +318,12 @@ QualifiedName PEGTransformerFactory::TransformCatalogReservedSchemaTypeName(
 
 unique_ptr<ParsedExpression> PEGTransformerFactory::TransformMapType(PEGTransformer &transformer,
                                                                      const optional<vector<LogicalType>> &type) {
+	transformer.stack_depth += 1;
+	if (transformer.stack_depth >= transformer.options.max_expression_depth) {
+		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      transformer.options.max_expression_depth);
+	}
 	vector<unique_ptr<ParsedExpression>> map_children;
 	if (type) {
 		for (auto &child_type : *type) {
@@ -394,6 +400,12 @@ PEGTransformerFactory::TransformColIdTypeList(PEGTransformer &transformer,
 pair<Identifier, LogicalType> PEGTransformerFactory::TransformColIdType(PEGTransformer &transformer,
                                                                         const Identifier &col_id,
                                                                         const LogicalType &type) {
+	transformer.stack_depth += 1;
+	if (transformer.stack_depth >= transformer.options.max_expression_depth) {
+		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      transformer.options.max_expression_depth);
+	}
 	return make_pair(Identifier(col_id), type);
 }
 
