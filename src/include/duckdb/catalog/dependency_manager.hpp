@@ -93,6 +93,9 @@ public:
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
+	//! Add a single dependency from entry to dependency (used e.g. when ALTER TABLE adds a FK constraint).
+	void AddDependency(CatalogTransaction transaction, CatalogEntry &entry, CatalogEntry &dependency);
+
 	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first
 	void ReorderEntries(catalog_entry_vector_t &entries);
 	void ReorderEntries(catalog_entry_vector_t &entries, ClientContext &context);
