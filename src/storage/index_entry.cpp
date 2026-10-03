@@ -104,8 +104,16 @@ void IndexEntry::RevertAppend(DataChunk &chunk, Vector &row_ids) {
 	}
 }
 
-void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes,
-                                        optional_ptr<TableIndexList> append_indexes) const {
+void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const {
+	InitializeLocalIndexesInternal(delete_indexes, &append_indexes);
+}
+
+void IndexEntry::InitializeLocalDeleteIndex(TableIndexList &delete_indexes) const {
+	InitializeLocalIndexesInternal(delete_indexes, nullptr);
+}
+
+void IndexEntry::InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
+                                                optional_ptr<TableIndexList> append_indexes) const {
 	auto entry_lock = lock.GetSharedLock();
 	if (owned_index->GetConstraintType() == IndexConstraintType::NONE || !owned_index->IsBound()) {
 		return;

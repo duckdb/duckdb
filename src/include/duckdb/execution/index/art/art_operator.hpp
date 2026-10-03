@@ -160,6 +160,7 @@ public:
 				// leaf state.
 				if (IsDeleted(key, delete_index_info)) {
 					// The commit appends the deleted key more than once, e.g., for a deferred constraint.
+					D_ASSERT(GateContainsDeletedRowId(arena, art, active_node_ptr, key, delete_index_info));
 					return ARTConflictType::CONSTRAINT;
 				}
 				throw FatalException("Corrupted unique ART index \"%s\": encountered an existing gated leaf in unique "
@@ -346,6 +347,26 @@ private:
 		for (auto &delete_index : *delete_index_info.delete_indexes) {
 			auto &delete_art = delete_index.get().Cast<ART>();
 			if (Lookup(delete_art, delete_art.root_ptr, key, 0)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	//! Returns true, if the gate contains the row ID that a delete index stores for the key.
+	static bool GateContainsDeletedRowId(ArenaAllocator &arena, const ART &art, const NodePtr &gate_ptr,
+	                                     const ARTKey &key, DeleteIndexInfo delete_index_info) {
+		if (!delete_index_info.delete_indexes) {
+			return false;
+		}
+		for (auto &delete_index : *delete_index_info.delete_indexes) {
+			auto &delete_art = delete_index.get().Cast<ART>();
+			auto delete_leaf_ptr = Lookup(delete_art, delete_art.root_ptr, key, 0);
+			if (!delete_leaf_ptr || delete_leaf_ptr.Get().GetType() != NType::LEAF_INLINED) {
+				continue;
+			}
+			auto deleted_row_id = ARTKey::CreateARTKey<row_t>(arena, delete_leaf_ptr.Get().GetRowId());
+			if (LookupInLeaf(art, gate_ptr, deleted_row_id)) {
 				return true;
 			}
 		}

@@ -147,7 +147,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto &schema = table.schema;
 	info->column_ids = storage_ids;
 
-	// The ALTER moves the transaction-local storage of the table, so we get it upfront.
+	// Read local storage before ALTER moves it; CREATE UNIQUE INDEX also needs it for the delete index.
 	auto &local_storage = LocalStorage::Get(context, storage.db);
 	auto local_table_storage = local_storage.GetStorage(storage);
 
@@ -195,7 +195,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), deferred);
 	if (local_table_storage) {
 		// Existing transaction-local rows are verified when committing, so we only add a delete index.
-		index_entry->InitializeLocalIndexes(local_table_storage->delete_indexes, nullptr);
+		index_entry->InitializeLocalDeleteIndex(local_table_storage->delete_indexes);
 	}
 
 	return SinkFinalizeType::READY;

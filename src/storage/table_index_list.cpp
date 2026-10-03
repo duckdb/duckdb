@@ -102,7 +102,7 @@ void TableIndexList::InitializeLocalIndexes(TableIndexList &delete_indexes, Tabl
 
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
-		entry->InitializeLocalIndexes(delete_indexes, &append_indexes);
+		entry->InitializeLocalIndexes(delete_indexes, append_indexes);
 	}
 }
 

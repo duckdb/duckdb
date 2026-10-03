@@ -16,6 +16,7 @@
       "reason": "Explicit constraint timing requires storage version v2.0.0 or higher.",
       "paths": [
         "test/sql/constraints/deferred/test_alter_constraint_timing.test",
+        "test/sql/constraints/deferred/test_deferred_alter.test",
         "test/sql/constraints/deferred/test_deferred_compatibility.test",
         "test/sql/constraints/deferred/test_deferred_delete_reinsert.test",
         "test/sql/constraints/deferred/test_deferred_large.test_slow",

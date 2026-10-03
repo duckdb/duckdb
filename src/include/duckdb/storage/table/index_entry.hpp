@@ -169,9 +169,10 @@ public:
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
-	//! Adds transaction-local copies of the physical index to the delete indexes, and to the append indexes (if any)
-	//! unless the constraint is deferred.
-	void InitializeLocalIndexes(TableIndexList &delete_indexes, optional_ptr<TableIndexList> append_indexes) const;
+	//! Adds the required transaction-local delete and append indexes.
+	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
+	//! Adds only the transaction-local delete index.
+	void InitializeLocalDeleteIndex(TableIndexList &delete_indexes) const;
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -196,6 +197,8 @@ private:
 	friend class IndexReadHandle;
 	template <class>
 	friend class IndexWriteHandle;
+	void InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
+	                                    optional_ptr<TableIndexList> append_indexes) const;
 
 	atomic<IndexBindState> bind_state;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
