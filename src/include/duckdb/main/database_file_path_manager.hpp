@@ -41,6 +41,9 @@ public:
 	void EraseDatabasePath(const string &path);
 	//! Called when a database is detached, but before it is fully finished being used
 	void DetachDatabase(DatabaseManager &manager, const string &path);
+	//! Rewrite `path`'s tracked name from `old_name` to `new_name`.
+	//! Silent no-op if `path` is not tracked or the tracked name is not `old_name`.
+	void RenameDatabasePath(const string &path, const Identifier &old_name, const Identifier &new_name);
 
 private:
 	//! The lock to add entries to the db_paths map
