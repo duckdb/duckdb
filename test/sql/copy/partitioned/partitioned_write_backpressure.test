@@ -1,0 +1,49 @@
+# name: test/sql/copy/partitioned/partitioned_write_backpressure.test
+# description: Partitioned COPY must drain a flush before buffering the next run
+# group: [partitioned]
+
+require parquet
+
+require vector_size 2048
+
+statement ok
+SET threads=4;
+
+statement ok
+SET memory_limit='1GB';
+
+statement ok
+COPY (
+	SELECT i, 'one' AS p, repeat(md5(i::VARCHAR), 32) AS payload
+	FROM range(524288) t(i)
+) TO '{TEST_DIR}/wide_source.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+
+statement ok
+SET memory_limit='128MB';
+
+statement ok
+SET max_temp_directory_size='0B';
+
+statement ok
+SET partitioned_write_flush_threshold=2048;
+
+# The next input run must not accumulate while another worker is preparing or flushing this run.
+# Without backpressure this spills even though each individual flush fits in memory.
+query I
+COPY (SELECT * FROM read_parquet('{TEST_DIR}/wide_source.parquet'))
+TO '{TEST_DIR}/wide_partitioned' (FORMAT PARQUET, PARTITION_BY(p), ROW_GROUP_SIZE 2048);
+----
+524288
+
+# Also check the COPY result count: a parked producer's input chunk is delivered again on resume.
+query III
+SELECT count(*), count(DISTINCT i), sum(i)
+FROM read_parquet('{TEST_DIR}/wide_partitioned/**/*.parquet');
+----
+524288	524288	137438691328
+
+query I
+SELECT count(*) FROM read_parquet('{TEST_DIR}/wide_partitioned/**/*.parquet')
+WHERE payload IS DISTINCT FROM repeat(md5(i::VARCHAR), 32);
+----
+0
