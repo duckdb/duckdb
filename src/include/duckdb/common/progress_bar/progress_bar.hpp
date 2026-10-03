@@ -16,6 +16,7 @@
 namespace duckdb {
 
 struct ClientConfig;
+class ClientStatusState;
 typedef std::function<unique_ptr<ProgressBarDisplay>()> progress_bar_display_create_func_t;
 
 struct QueryProgress {
@@ -45,6 +46,7 @@ public:
 	explicit ProgressBar(
 	    Executor &executor, idx_t show_progress_after,
 	    const progress_bar_display_create_func_t &create_display_func = ProgressBar::DefaultProgressBarDisplay);
+	~ProgressBar();
 
 	//! Starts the thread
 	void Start();
@@ -67,6 +69,8 @@ private:
 	QueryProgress query_progress;
 	//! The display used to print the progress
 	unique_ptr<ProgressBarDisplay> display;
+	//! The status messages of the client, which the display shows next to the progress (see ClientStatus)
+	shared_ptr<ClientStatusState> status_state;
 	//! Whether or not profiling is supported for the current query
 	bool supported = true;
 	//! Whether the bar has already finished

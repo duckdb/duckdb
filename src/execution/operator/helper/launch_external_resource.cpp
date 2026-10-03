@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_status.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/external_resources_manager.hpp"
@@ -30,6 +31,8 @@ LaunchedResource ProvisionExternalResource(ClientContext &client, const string &
 
 	// Provision on a separate internal connection (the current connection's context lock is held).
 	Connection con(DatabaseInstance::GetDatabase(client));
+	// what provisioning reports (creating, awaiting readiness) is shown on the statement's progress display
+	ClientStatusState::ShareWith(*con.context, client);
 	// resource_name is forwarded only for observability (it labels the recipe-call log entries).
 	auto name_arg = resource_name.empty() ? string() : ", resource_name := " + Value(resource_name).ToSQLString();
 	// A handle skips create and resolves the given one instead (REGISTER).
