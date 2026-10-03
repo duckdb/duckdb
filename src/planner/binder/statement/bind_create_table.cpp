@@ -505,7 +505,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 				    "Failed to create foreign key: number of referencing (%s) and referenced columns (%s) differ",
 				    fk_name_str, pk_name_str);
 			}
-			if (unique.GetCheckTime() == ConstraintCheckTime::COMMIT) {
+			if (unique.IsDeferred()) {
 				ThrowDeferredReferencedKey();
 			}
 			fk.pk_columns = pk_names;
@@ -525,7 +525,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 		if (!equals) {
 			continue;
 		}
-		if (unique.GetCheckTime() == ConstraintCheckTime::COMMIT) {
+		if (unique.IsDeferred()) {
 			// keep looking for a matching constraint that is not deferred
 			found_deferred = true;
 			continue;

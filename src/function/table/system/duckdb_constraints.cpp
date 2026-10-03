@@ -331,8 +331,8 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 			constraint_name_vec.Append(Value(std::move(constraint_name)));
 			referenced_table.Append(info.referenced_table.empty() ? Value() : Value(info.referenced_table));
 			referenced_column_names.Append(Value::LIST(LogicalType::VARCHAR, std::move(referenced_column_name_list)));
-			bool deferred = constraint->type == ConstraintType::UNIQUE &&
-			                constraint->Cast<UniqueConstraint>().GetCheckTime() == ConstraintCheckTime::COMMIT;
+			bool deferred =
+			    constraint->type == ConstraintType::UNIQUE && constraint->Cast<UniqueConstraint>().IsDeferred();
 			is_deferred.Append(Value::BOOLEAN(deferred));
 			count++;
 		}

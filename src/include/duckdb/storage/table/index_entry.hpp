@@ -111,7 +111,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	IndexEntry(unique_ptr<Index> index, ConstraintCheckTime check_time);
+	IndexEntry(unique_ptr<Index> index, bool deferred);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -126,8 +126,8 @@ public:
 	                     optional_idx active_checkpoint);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
-	//! Returns when the constraint enforced by the physical index is checked.
-	ConstraintCheckTime GetCheckTime() const;
+	//! Returns whether the constraint enforced by the physical index is only checked when committing.
+	bool IsDeferred() const;
 	//! Returns whether the physical index matches the foreign key columns and role.
 	bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type) const;
 	//! Returns the name of the physical index.
@@ -170,7 +170,7 @@ public:
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
 	//! Adds transaction-local copies of the physical index to the delete indexes, and to the append indexes (if any)
-	//! if the constraint is checked immediately.
+	//! unless the constraint is deferred.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, optional_ptr<TableIndexList> append_indexes) const;
 
 public:
@@ -202,8 +202,8 @@ private:
 	mutable StorageLock lock;
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
-	//! When the enforced constraint is checked. Derived from the catalog constraint, not serialized.
-	const ConstraintCheckTime check_time;
+	//! Whether the enforced constraint is deferred. Derived from the catalog constraint, not serialized.
+	const bool deferred;
 	IndexDeltas deltas;
 };
 

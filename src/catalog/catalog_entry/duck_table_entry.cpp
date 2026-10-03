@@ -186,8 +186,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			auto column_indexes = unique.GetLogicalIndexes(columns);
 			if (info.indexes.empty()) {
 				auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
-				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info),
-				                  unique.GetCheckTime());
+				storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info), unique.IsDeferred());
 				continue;
 			}
 
@@ -199,7 +198,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 			}
 
 			storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_storage_info),
-			                  unique.GetCheckTime());
+			                  unique.IsDeferred());
 			continue;
 		}
 
@@ -218,7 +217,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					auto constraint_type = IndexConstraintType::FOREIGN;
 					auto index_info = GetIndexInfo(constraint_type, false, info.base, i);
 					storage->AddIndex(columns, column_indexes, constraint_type, std::move(index_info),
-					                  ConstraintCheckTime::IMMEDIATE);
+					                  /*deferred=*/false);
 					continue;
 				}
 
@@ -230,7 +229,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				}
 
 				storage->AddIndex(columns, column_indexes, IndexConstraintType::FOREIGN, std::move(index_storage_info),
-				                  ConstraintCheckTime::IMMEDIATE);
+				                  /*deferred=*/false);
 			}
 		}
 	}

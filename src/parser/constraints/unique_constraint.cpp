@@ -56,18 +56,6 @@ bool UniqueConstraint::IsDeferred() const {
 	return timing == ConstraintTiming::DEFERRED;
 }
 
-ConstraintCheckTime UniqueConstraint::GetCheckTime() const {
-	switch (timing) {
-	case ConstraintTiming::DEFAULT:
-	case ConstraintTiming::IMMEDIATE:
-		return ConstraintCheckTime::IMMEDIATE;
-	case ConstraintTiming::DEFERRED:
-		return ConstraintCheckTime::COMMIT;
-	default:
-		throw InternalException("Unrecognized constraint timing");
-	}
-}
-
 IndexConstraintType UniqueConstraint::GetIndexConstraintType() const {
 	return IsPrimaryKey() ? IndexConstraintType::PRIMARY : IndexConstraintType::UNIQUE;
 }

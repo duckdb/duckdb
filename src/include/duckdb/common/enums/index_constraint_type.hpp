@@ -23,15 +23,6 @@ enum class IndexConstraintType : uint8_t {
 };
 
 //===--------------------------------------------------------------------===//
-// Constraint Check Times
-//===--------------------------------------------------------------------===//
-//! The point at which the constraint enforced by an index is checked.
-enum class ConstraintCheckTime : uint8_t {
-	IMMEDIATE = 0, // checked when rows are appended
-	COMMIT = 1     // checked when the transaction commits
-};
-
-//===--------------------------------------------------------------------===//
 // Index Types
 //===--------------------------------------------------------------------===//
 // NOTE: deprecated. Still necessary to read older duckdb files.
