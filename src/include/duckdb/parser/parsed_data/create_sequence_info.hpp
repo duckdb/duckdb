@@ -53,6 +53,8 @@ struct CreateSequenceInfo : public CreateInfo {
 	bool cycle;
 	//! The most recently returned value
 	optional<int64_t> last_value;
+	//! Whether the final value in range has been returned
+	bool exhausted = false;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;
