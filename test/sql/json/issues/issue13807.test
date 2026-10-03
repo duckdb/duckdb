@@ -1,0 +1,148 @@
+# name: test/sql/json/issues/issue13807.test
+# description: Test issue 13807 - ignore_case to merge JSON keys that only differ in case
+# group: [issues]
+
+require json
+
+statement error
+FROM read_json('{DATA_DIR}/json/13807.json');
+----
+<REGEX>:Not implemented Error:.*Duplicate name "Name".*differs in case from "name".*ignore_case=true.*
+
+query I
+SELECT keyA FROM read_json('{DATA_DIR}/json/13807.json', ignore_case=true);
+----
+[{'name': foo}, {'name': bar}]
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE FROM read_json('{DATA_DIR}/json/13807.json', ignore_case=true));
+----
+keyA	STRUCT("name" VARCHAR)[]
+
+# the first casing that is encountered is used as the name
+query III
+FROM read_json('{DATA_DIR}/json/13807.ndjson', ignore_case=true);
+----
+1	a	{'Key': 1}
+2	b	{'Key': 2}
+3	c	{'Key': 3}
+
+statement error
+FROM read_json('{DATA_DIR}/json/13807.ndjson');
+----
+<REGEX>:Not implemented Error:.*Duplicate name.*
+
+statement error
+FROM read_json('{DATA_DIR}/json/13807.ndjson', ignore_case=false);
+----
+<REGEX>:Not implemented Error:.*Duplicate name.*
+
+# explicitly specified columns
+query II
+FROM read_json('{DATA_DIR}/json/13807.ndjson', columns={id: 'INTEGER', value: 'VARCHAR'}, ignore_case=true);
+----
+1	a
+2	b
+3	c
+
+query II
+FROM read_json('{DATA_DIR}/json/13807.ndjson', columns={id: 'INTEGER', value: 'VARCHAR'});
+----
+1	NULL
+NULL	b
+NULL	NULL
+
+# keys that only differ in case within the same object are duplicates
+statement error
+FROM read_json('{DATA_DIR}/json/13807_duplicate.ndjson', ignore_case=true);
+----
+<REGEX>:Invalid Input Error:.*duplicate key.*
+
+query I
+FROM read_json('{DATA_DIR}/json/13807_duplicate.ndjson', ignore_case=true, ignore_errors=true);
+----
+1
+
+statement error
+FROM read_json('{DATA_DIR}/json/13807_duplicate_nested.ndjson', ignore_case=true);
+----
+<REGEX>:Invalid Input Error:.*duplicate key "A".*
+
+query I
+FROM read_json('{DATA_DIR}/json/13807_duplicate_nested.ndjson', ignore_case=true, ignore_errors=true);
+----
+{'a': 1}
+
+statement error
+FROM read_json('{DATA_DIR}/json/13807_duplicate_list.ndjson', ignore_case=true);
+----
+<REGEX>:Invalid Input Error:.*duplicate key "A".*
+
+query I
+FROM read_json('{DATA_DIR}/json/13807_duplicate_list.ndjson', ignore_case=true, ignore_errors=true);
+----
+[{'a': 1}]
+
+# COPY FROM
+statement ok
+CREATE TABLE tbl (id INTEGER, value VARCHAR, nested STRUCT(key INTEGER));
+
+statement ok
+COPY tbl FROM '{DATA_DIR}/json/13807.ndjson' (FORMAT json, IGNORE_CASE true);
+
+query III
+FROM tbl;
+----
+1	a	{'key': 1}
+2	b	{'key': 2}
+3	c	{'key': 3}
+
+statement error
+FROM read_json('{DATA_DIR}/json/13807.json', ignore_case=NULL);
+----
+<REGEX>:Binder Error:.*Cannot use NULL.*
+
+# root and deeply nested keys (including structs inside lists) are merged
+query I
+FROM read_json('{DATA_DIR}/json/13807_deep.ndjson', ignore_case=true);
+----
+{'Level1': {'Level2': [{'Leaf': 1}]}}
+{'Level1': {'Level2': [{'Leaf': 2}, {'Leaf': 3}]}}
+{'Level1': {'Level2': [{'Leaf': 4}]}}
+
+query II
+SELECT column_name, column_type FROM (DESCRIBE FROM read_json('{DATA_DIR}/json/13807_deep.ndjson', ignore_case=true));
+----
+Root	STRUCT(Level1 STRUCT(Level2 STRUCT(Leaf BIGINT)[]))
+
+# different casing in different files
+query III
+SELECT * FROM read_json('{DATA_DIR}/json/13807_multi/*.ndjson', ignore_case=true) ORDER BY id;
+----
+1	a	{'Key': 1, 'List': [{'Leaf': 10}]}
+2	b	{'Key': 2, 'List': [{'Leaf': 20}]}
+3	c	{'Key': 3, 'List': [{'Leaf': 30}]}
+
+query III
+SELECT * FROM read_json('{DATA_DIR}/json/13807_multi/*.ndjson', ignore_case=true, union_by_name=true) ORDER BY id;
+----
+1	a	{'Key': 1, 'List': [{'Leaf': 10}]}
+2	b	{'Key': 2, 'List': [{'Leaf': 20}]}
+3	c	{'Key': 3, 'List': [{'Leaf': 30}]}
+
+# type detection uses the first of two keys that only differ in case, like reading does
+query II
+SELECT d, typeof(d) FROM read_json('{DATA_DIR}/json/13807_duplicate_refine.ndjson', ignore_case=true, ignore_errors=true);
+----
+hello	VARCHAR
+
+# keys that only differ in case are also merged in objects that are inferred as MAP
+statement error
+FROM read_json('{DATA_DIR}/json/13807_map.ndjson');
+----
+<REGEX>:Not implemented Error:.*Duplicate name.*
+
+query I
+SELECT column_type FROM (DESCRIBE FROM read_json('{DATA_DIR}/json/13807_map.ndjson', ignore_case=true));
+----
+MAP(VARCHAR, STRUCT(x BIGINT))
