@@ -534,12 +534,37 @@ static T PythonDivMod(const T &x, const T &y, T &r) {
 	return quo;
 }
 
-static date_t GetISOWeekOne(int32_t year) {
-	const auto first_day = Date::FromDate(year, 1, 1); /* ord of 1/1 */
-	/* 0 if 1/1 is a Monday, 1 if a Tue, etc. */
-	const auto first_weekday = Date::ExtractISODayOfTheWeek(first_day) - 1;
-	/* ordinal of closest Monday at or before 1/1 */
-	auto week1_monday = first_day - first_weekday;
+// Day-ordinal of the Monday of ISO week 1 for the given year, computed in int64.
+// The previous implementation materialized Jan 1 of the year via Date::FromDate and
+// stored the week-1 Monday as a date_t: for the minimum representable year
+// (-5877641) Jan 1 falls below the date range so Date::FromDate throws, and the int32
+// arithmetic overflows - both surfaced as spurious "Date out of range" errors / signed
+// integer overflow in weekofyear, isoyear, yearweek and date_trunc for dates near the
+// minimum. (#25107, #25110) The result is only ever used for day-of-week arithmetic
+// and comparisons against date_t.days, never as a user-visible date, so an int64
+// ordinal that never materializes an out-of-range date_t is correct and range-safe.
+static int64_t GetISOWeekOne(int32_t year) {
+	// ordinal of Jan 1 of the year, computed via int64 so the minimum year does not overflow.
+	// Date::TryFromDate rejects year-1-1 when it lies below the representable range, so we
+	// cannot use Date::FromDate(year, 1, 1) here - compute the epoch day directly.
+	int64_t first_day = 0;
+	if (year < 1970) {
+		int64_t diff_from_base = 1970 - year;
+		int64_t year_index = 400 - (diff_from_base % 400);
+		int64_t fractions = diff_from_base / 400;
+		first_day = Date::CUMULATIVE_YEAR_DAYS[year_index] - Date::DAYS_PER_YEAR_INTERVAL - fractions * Date::DAYS_PER_YEAR_INTERVAL;
+	} else if (year >= 2370) {
+		int64_t diff_from_base = year - 2370;
+		int64_t year_index = diff_from_base % 400;
+		int64_t fractions = diff_from_base / 400;
+		first_day = Date::CUMULATIVE_YEAR_DAYS[year_index] + Date::DAYS_PER_YEAR_INTERVAL + fractions * Date::DAYS_PER_YEAR_INTERVAL;
+	} else {
+		first_day = Date::CUMULATIVE_YEAR_DAYS[year - 1970];
+	}
+	// 0 if 1/1 is a Monday, 1 if a Tue, etc. Mirror ExtractISODayOfTheWeek on the int64 ordinal.
+	const auto first_weekday = ((first_day + 3) % 7 + 7) % 7;
+	// ordinal of closest Monday at or before 1/1
+	int64_t week1_monday = first_day - first_weekday;
 
 	if (first_weekday > 3) { /* if 1/1 was Fri, Sat, Sun */
 		week1_monday += 7;
@@ -551,17 +576,18 @@ static date_t GetISOWeekOne(int32_t year) {
 static int32_t GetISOYearWeek(const date_t date, int32_t &year) {
 	int32_t month, day;
 	Date::Convert(date, year, month, day);
-	auto week1_monday = GetISOWeekOne(year);
-	auto week = PythonDivMod((date.days - week1_monday.days), 7, day);
+	int64_t week1_monday = GetISOWeekOne(year);
+	int64_t remainder;
+	int64_t week = PythonDivMod((int64_t(date.days) - week1_monday), int64_t(7), remainder);
 	if (week < 0) {
 		week1_monday = GetISOWeekOne(--year);
-		week = PythonDivMod((date.days - week1_monday.days), 7, day);
-	} else if (week >= 52 && date >= GetISOWeekOne(year + 1)) {
+		week = PythonDivMod((int64_t(date.days) - week1_monday), int64_t(7), remainder);
+	} else if (week >= 52 && int64_t(date.days) >= GetISOWeekOne(year + 1)) {
 		++year;
 		week = 0;
 	}
 
-	return week + 1;
+	return UnsafeNumericCast<int32_t>(week + 1);
 }
 
 void Date::ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week) {
@@ -615,7 +641,16 @@ int32_t Date::ExtractWeekNumberRegular(date_t date, bool monday_first) {
 // Returns the date of the monday of the current week.
 date_t Date::GetMondayOfCurrentWeek(date_t date) {
 	int32_t dotw = Date::ExtractISODayOfTheWeek(date);
-	return date - (dotw - 1);
+	// The Monday falling in the first (partial) week of the date range can be below the
+	// minimum representable date_t (e.g. 5877642-06-25 (BC) is a Thursday, so its Monday is
+	// -2147483649, one day below INT32_MIN). That Monday does not correspond to a valid date,
+	// so compute it in int64 and reject it, matching the range errors the other date_trunc
+	// operators (month/year/quarter) raise, instead of overflowing the raw int32 subtraction. (#25107)
+	const auto monday = int64_t(date.days) - (dotw - 1);
+	if (monday <= date_t::ninfinity().days || monday >= date_t::infinity().days) {
+		throw ConversionException("Date out of range");
+	}
+	return date_t(UnsafeNumericCast<int32_t>(monday));
 }
 
 } // namespace duckdb

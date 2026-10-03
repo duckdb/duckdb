@@ -1,0 +1,69 @@
+# name: test/sql/function/date/date_iso_week_boundary.test
+# description: Week-based date parts and date_trunc at the minimum/maximum date range
+# group: [date]
+
+# #25110: weekofyear / isoyear / yearweek for dates in the minimum year threw
+# "Date out of range" because GetISOWeekOne materialized Jan 1 of the year as a
+# date_t, which is below the representable range for the minimum year. The
+# week-based components are representable integers, so they must be returned.
+
+query I
+SELECT weekofyear(DATE '5877642-06-25 (BC)')
+----
+26
+
+query I
+SELECT isoyear(DATE '5877642-06-25 (BC)')
+----
+-5877641
+
+query I
+SELECT yearweek(DATE '5877642-06-25 (BC)')
+----
+-587764126
+
+# Consistency: weekofyear and isoyear must agree with the date_part variants
+query I
+SELECT date_part('week', DATE '5877642-06-25 (BC)')
+----
+26
+
+query I
+SELECT date_part('isoyear', DATE '5877642-06-25 (BC)')
+----
+-5877641
+
+# The maximum boundary is unaffected (already worked)
+query I
+SELECT weekofyear(DATE '5881580-07-10')
+----
+28
+
+query I
+SELECT isoyear(DATE '5881580-07-10')
+----
+5881580
+
+# #25107: date_trunc('week'/'isoyear') for the minimum date performed a raw int32
+# subtraction (date - weekday offset) that overflowed. The resulting Monday is below
+# the representable date range, so this must raise a clean range error, not overflow.
+statement error
+SELECT date_trunc('week', DATE '5877642-06-25 (BC)')
+----
+Date out of range
+
+statement error
+SELECT date_trunc('isoyear', DATE '5877642-06-25 (BC)')
+----
+Date out of range
+
+# Ordinary dates still truncate to the correct week / ISO year
+query I
+SELECT date_trunc('week', DATE '2024-01-15')
+----
+2024-01-15 00:00:00
+
+query I
+SELECT date_trunc('isoyear', DATE '2024-01-15')
+----
+2024-01-01 00:00:00
