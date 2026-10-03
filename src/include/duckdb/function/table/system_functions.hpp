@@ -157,6 +157,10 @@ struct DuckDBIndexesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DuckDBLiveQueryMetricsFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DuckDBMemoryFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

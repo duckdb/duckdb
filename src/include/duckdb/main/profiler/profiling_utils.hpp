@@ -116,6 +116,8 @@ public:
 
 	//! Write all query-level metrics into the given GatheredMetrics.
 	void FinalizeMetrics(GatheredMetrics &info);
+	//! The metrics backed by atomic counters, which can be read from any thread while the query runs
+	profiler_metrics_t GetLiveMetrics() const;
 
 	void Merge(const QueryMetrics &other) {
 		for (const auto &entry : other.string_timings) {

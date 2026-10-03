@@ -102,6 +102,8 @@ public:
 	DUCKDB_API void EndQuery();
 	//! Finalize query metrics for output; safe to call multiple times.
 	DUCKDB_API void FinalizeMetrics();
+	//! Snapshot the query-level metrics that are kept up to date while the query runs, keyed by metric name.
+	DUCKDB_API profiler_metrics_t GetLiveMetrics() const;
 
 	//! Track bytes read (always tracked, even when profiling disabled).
 	DUCKDB_API void TrackBytesRead(idx_t amount);
