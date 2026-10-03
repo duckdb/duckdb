@@ -264,8 +264,11 @@ void BoxRendererImplementation::ComputeRowFooter(idx_t row_count, idx_t rendered
 	bool has_limited_rows = config.limit > 0 && row_count == config.limit;
 	if (has_limited_rows) {
 		footer.row_count_str = "? rows";
+	} else if (config.row_count_is_lower_bound) {
+		footer.row_count_str = FormatNumber(to_string(row_count)) + "+ rows";
 	}
-	if (config.large_number_rendering == LargeNumberRendering::FOOTER && !has_limited_rows) {
+	if (config.large_number_rendering == LargeNumberRendering::FOOTER && !has_limited_rows &&
+	    !config.row_count_is_lower_bound) {
 		string readable_str = TryFormatLargeNumber(to_string(row_count));
 		if (!readable_str.empty()) {
 			footer.readable_rows_str = to_string(row_count) + " total";
@@ -279,7 +282,8 @@ void BoxRendererImplementation::ComputeRowFooter(idx_t row_count, idx_t rendered
 		}
 		footer.shown_str += FormatNumber(to_string(rendered_rows)) + " shown";
 	}
-	footer.must_show_footer = has_limited_rows || footer.has_hidden_rows || row_count == 0;
+	footer.must_show_footer =
+	    has_limited_rows || config.row_count_is_lower_bound || footer.has_hidden_rows || row_count == 0;
 	footer.render_length = MaxValue<idx_t>(MaxValue<idx_t>(footer.row_count_str.size(), footer.shown_str.size() + 2),
 	                                       footer.readable_rows_str.size() + 2) +
 	                       4;
@@ -330,6 +334,9 @@ void BoxRendererImplementation::Initialize() {
 	}
 	if (rows_to_render == row_count) {
 		top_rows = row_count;
+		bottom_rows = 0;
+	} else if (config.render_head_only) {
+		top_rows = rows_to_render;
 		bottom_rows = 0;
 	} else {
 		top_rows = rows_to_render / 2 + (rows_to_render % 2 != 0 ? 1 : 0);
@@ -2216,6 +2223,11 @@ void BoxRendererImplementation::RenderValues(BaseResultRenderer &ss, vector<Rend
 			}
 			last_rendered_rows = std::move(rows_to_render);
 		}
+	}
+	if (config.render_head_only && config.render_mode == RenderMode::ROWS && footer.has_hidden_rows &&
+	    !last_rendered_rows.empty()) {
+		// the rows after the head are not rendered - end with a divider to show that the result continues
+		RenderDivider(ss, last_rendered_rows.back(), last_rendered_rows.back());
 	}
 }
 

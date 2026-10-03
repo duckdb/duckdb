@@ -421,6 +421,8 @@ ShellState::~ShellState() {
 }
 
 void ShellState::Destroy() {
+	pending_result_stream.reset();
+	pending_result_input.reset();
 	db.reset();
 	conn.reset();
 	last_result.reset();
@@ -711,6 +713,8 @@ string ShellState::ModeToString(RenderMode mode) {
 		return "jsonlines";
 	case RenderMode::DUCKBOX:
 		return "duckbox";
+	case RenderMode::DUCKBOX_PREVIEW:
+		return "duckbox_preview";
 	}
 	return "invalid";
 }
@@ -961,7 +965,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
 	unique_ptr<duckdb::QueryResultStream<>> stream;
-	const bool render_materialized = renderer->RequireMaterializedResult();
+	// .materialize full fetches the whole result first, also for a mode that could stream it
+	const bool render_materialized = materialize == MaterializeMode::FULL || renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
 		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
@@ -1023,7 +1028,68 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		PrintDatabaseError(stream->GetError());
 		return SuccessState::FAILURE;
 	}
+	auto retained = renderer->TakeRetainedResult();
+	if (retained) {
+		if (stream && renderer->KeepStreamOpen()) {
+			// the query may still be reading the previous last result through `_` - keep it until the stream ends
+			pending_result_input = std::move(last_result);
+			pending_result_stream = std::move(stream);
+		}
+		last_result = std::move(retained);
+	}
 	return render_state;
+}
+
+SuccessState ShellState::ResolvePendingResult(bool consume) {
+	if (!pending_result_stream) {
+		return SuccessState::SUCCESS;
+	}
+	// the stream must end before its input goes - it may still be reading it
+	auto input = std::move(pending_result_input);
+	auto stream = std::move(pending_result_stream);
+	if (!consume || !last_result) {
+		// nothing refers to the rest of the result (or the fetched rows were already released) - cancel the query
+		stream->Close();
+		return SuccessState::SUCCESS;
+	}
+	auto &collection = last_result->Collection();
+	while (!seenInterrupt) {
+		auto chunk = stream->Fetch();
+		if (!chunk) {
+			break;
+		}
+		collection.Append(*chunk);
+	}
+	if (seenInterrupt || stream->HasError()) {
+		// `_` would only hold part of the result - rather than silently using that, drop it
+		if (seenInterrupt) {
+			PrintF(PrintOutput::STDERR, "Interrupt\n");
+		} else {
+			PrintDatabaseError(stream->GetError());
+		}
+		stream->Close();
+		last_result.reset();
+		return SuccessState::FAILURE;
+	}
+	return SuccessState::SUCCESS;
+}
+
+bool ShellState::MayReferenceLastResult(const string &sql) {
+	// a `_` that is not part of a longer identifier - anywhere, including in a string (e.g. query('FROM _'))
+	auto is_identifier_char = [](char c) {
+		return duckdb::StringUtil::CharacterIsAlphaNumeric(c) || c == '_' || static_cast<unsigned char>(c) >= 0x80;
+	};
+	for (idx_t i = 0; i < sql.size(); i++) {
+		if (sql[i] != '_') {
+			continue;
+		}
+		bool starts = i == 0 || !is_identifier_char(sql[i - 1]);
+		bool ends = i + 1 == sql.size() || !is_identifier_char(sql[i + 1]);
+		if (starts && ends) {
+			return true;
+		}
+	}
+	return false;
 }
 
 /*
@@ -1091,12 +1157,20 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::EXPLAIN;
 				SetupPrettyExplain(*statement);
 			}
-			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
+			if ((mode == RenderMode::DUCKBOX || mode == RenderMode::DUCKBOX_PREVIEW) &&
+			    UseDescribeRenderMode(*statement, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
 			if (agent_mode_active) {
 				PrintQueryEstimate(zStmtSql, *statement);
+			}
+
+			// the previous query may still be open (duckbox_preview) - executing this statement would cancel it, so
+			// first fetch the rest of it into `_` if this statement may refer to `_`
+			if (ResolvePendingResult(MayReferenceLastResult(!zStmtSql.empty() ? zStmtSql : zSql)) !=
+			    SuccessState::SUCCESS) {
+				return SuccessState::FAILURE;
 			}
 
 			// Reset before bind; the `_` replacement scan sets it to true if it fires.
@@ -1804,6 +1878,8 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 		mode = RenderMode::BOX;
 	} else if (c2 == 'd' && strncmp(mode_str, "duckbox", n2) == 0) {
 		mode = RenderMode::DUCKBOX;
+	} else if (c2 == 'd' && strncmp(mode_str, "duckbox_preview", n2) == 0) {
+		mode = RenderMode::DUCKBOX_PREVIEW;
 	} else if (c2 == 'j' && strncmp(mode_str, "json", n2) == 0) {
 		mode = RenderMode::JSON;
 	} else if (c2 == 'l' && strncmp(mode_str, "latex", n2) == 0) {
@@ -1813,9 +1889,10 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 	} else if (c2 == 'j' && strncmp(mode_str, "jsonlines", n2) == 0) {
 		mode = RenderMode::JSONLINES;
 	} else {
-		PrintF(PrintOutput::STDERR, "Error: mode should be one of: "
-		                            "ascii box column csv duckbox html insert json jsonlines latex line "
-		                            "list markdown quote table tabs tcl trash \n");
+		PrintF(PrintOutput::STDERR,
+		       "Error: mode should be one of: "
+		       "ascii box column csv duckbox duckbox_preview html insert json jsonlines latex line "
+		       "list markdown quote table tabs tcl trash \n");
 		return false;
 	}
 	cMode = mode;
@@ -3972,6 +4049,8 @@ int RunShell(int argc, const char **argv) {
 	// before ResetOutput, which forgets that stdout was not a console
 	data.PrintExitHint(rc);
 	data.SetTableName(0);
+	data.pending_result_stream.reset();
+	data.pending_result_input.reset();
 	data.last_result.reset();
 	data.db.reset();
 	data.conn.reset();
