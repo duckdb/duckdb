@@ -70,6 +70,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -262,8 +263,8 @@ static void ParseParquetFooter(const_data_ptr_t buffer, const string &file_path,
 }
 
 static shared_ptr<ParquetFileMetadataCache>
-LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
-             const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
+LoadMetadata(ClientContext &context, Allocator &allocator, BufferManager &buffer_manager,
+             CachingFileHandle &file_handle, const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
              shared_ptr<EncryptionUtil> &encryption_util, optional_idx footer_size) {
 	auto file_proto = CreateThriftFileProtocol(context, file_handle, false);
 	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
@@ -292,14 +293,15 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		}
 
 		ResizeableBuffer buf;
-		buf.resize(allocator, 8);
-		buf.zero();
+		buf.Resize(buffer_manager, 8);
+		buf.Zero();
 
 		transport.Prefetch(file_size - prefetch_size, prefetch_size);
 		transport.SetLocation(file_size - 8);
-		transport.read(buf.ptr, 8);
+		transport.read(buf.GetCurrentLoc(), 8);
 
-		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
+		ParseParquetFooter(buf.GetCurrentLoc(), file_handle.GetPath(), file_size, encryption_config, footer_len,
+		                   footer_encrypted);
 
 		auto metadata_pos = file_size - (footer_len + 8);
 		transport.SetLocation(metadata_pos);
@@ -1445,8 +1447,8 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
                              shared_ptr<ParquetFileMetadataCache> metadata_p,
                              unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions_p)
     : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
-      allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)),
-      projection_expressions(std::move(projection_expressions_p)) {
+      allocator(BufferAllocator::Get(context_p)), buffer_manager(BufferManager::GetBufferManager(context_p)),
+      parquet_options(std::move(parquet_options_p)), projection_expressions(std::move(projection_expressions_p)) {
 	file_handle = fs.OpenFile(context_p, file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
@@ -1472,13 +1474,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 	// or if the cached version already expired
 	if (!metadata_p) {
 		if (!MetadataCacheEnabled(context_p)) {
-			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-			                        encryption_util, footer_size);
+			metadata = LoadMetadata(context_p, allocator, buffer_manager, *file_handle,
+			                        parquet_options.encryption_config, encryption_util, footer_size);
 		} else {
 			metadata = ObjectCache::GetObjectCache(context_p).GetWithTypePrefix<ParquetFileMetadataCache>(file.path);
 			if (!metadata || !metadata->IsValid(*file_handle)) {
-				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-				                        encryption_util, footer_size);
+				metadata = LoadMetadata(context_p, allocator, buffer_manager, *file_handle,
+				                        parquet_options.encryption_config, encryption_util, footer_size);
 				ObjectCache::GetObjectCache(context_p).PutWithTypePrefix<ParquetFileMetadataCache>(file.path, metadata);
 			}
 		}
@@ -1548,7 +1550,8 @@ unique_ptr<BaseStatistics> ParquetUnionData::GetStatistics(ClientContext &contex
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
-      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
+      buffer_manager(BufferManager::GetBufferManager(context_p)), metadata(std::move(metadata_p)),
+      parquet_options(std::move(parquet_options_p)), rows_read(0) {
 	can_use_metadata_statistics = CanUseParquetMetadataStatistics(context_p, metadata, parquet_options);
 	interval_bloom_filter_version = ParquetStatisticsUtils::GetIntervalBloomFilterVersion(*GetFileMetadata());
 	InitializeSchema(context_p);
@@ -1944,7 +1947,7 @@ void ParquetReader::PrepareRowGroupBuffer(ClientContext &context, ParquetReaderS
 				    bloom_reader->ColumnIndex() < group.columns.size() && hash_strategy &&
 				    ParquetStatisticsUtils::BloomFilterExcludes(
 				        *bloom_filter, group.columns[bloom_reader->ColumnIndex()].meta_data, *state.thrift_file_proto,
-				        allocator, bloom_reader->Schema(), *hash_strategy)) {
+				        buffer_manager, bloom_reader->Schema(), *hash_strategy)) {
 					prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 				}
 			}
@@ -2079,8 +2082,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		}
 	}
 
-	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
-	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
+	state.define_buf.Resize(buffer_manager, STANDARD_VECTOR_SIZE);
+	state.repeat_buf.Resize(buffer_manager, STANDARD_VECTOR_SIZE);
 }
 
 void ParquetReader::GetPartitionStats(vector<PartitionStatistics> &result) {
@@ -2531,11 +2534,11 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 
 	auto &deletion_filter = this->deletion_filter;
 
-	state.define_buf.zero();
-	state.repeat_buf.zero();
+	state.define_buf.Zero();
+	state.repeat_buf.Zero();
 
-	auto define_ptr = (uint8_t *)state.define_buf.ptr;
-	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
+	auto define_ptr = (uint8_t *)state.define_buf.GetCurrentLoc();
+	auto repeat_ptr = (uint8_t *)state.repeat_buf.GetCurrentLoc();
 
 	if (filters || deletion_filter) {
 		auto res = ProcessFilters(state, result, scan_count, define_ptr, repeat_ptr, log_prefetch);
