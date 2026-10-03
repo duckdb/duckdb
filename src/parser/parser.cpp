@@ -29,6 +29,9 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/query_node/update_query_node.hpp"
+#include "duckdb/parser/query_node/insert_query_node.hpp"
+#include "duckdb/parser/query_node/delete_query_node.hpp"
+#include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
@@ -265,7 +268,7 @@ string Parser::NormalizeSQLString(const string &query) {
 
 // Iteratively (without recursing on the C stack) verify that no expression tree exceeds max_expression_depth.
 // Depth keeps counting into the body of a subquery expression, so nested scalar subqueries are bounded too.
-static void VerifyExpressionDepth(ParsedExpression &root, idx_t max_expression_depth) {
+void Parser::VerifyExpressionDepth(ParsedExpression &root, idx_t max_expression_depth) {
 	vector<pair<reference<ParsedExpression>, idx_t>> expr_stack;
 	expr_stack.emplace_back(root, 1);
 	while (!expr_stack.empty()) {
@@ -296,7 +299,7 @@ static void VerifyExpressionDepth(ParsedExpression &root, idx_t max_expression_d
 static void VerifyStatementDepth(SQLStatement &statement, idx_t max_expression_depth) {
 	auto verify = [&](unique_ptr<ParsedExpression> &expr) {
 		if (expr) {
-			VerifyExpressionDepth(*expr, max_expression_depth);
+			Parser::VerifyExpressionDepth(*expr, max_expression_depth);
 		}
 	};
 	auto verify_node = [&](optional_ptr<QueryNode> node) {
