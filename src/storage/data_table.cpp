@@ -298,7 +298,13 @@ idx_t DataTable::MaxThreads(ClientContext &context) const {
 		parallel_scan_vector_count = 1;
 	}
 	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
-	return GetTotalRows() / parallel_scan_tuple_count + 1;
+	idx_t total_rows = GetTotalRows();
+	auto local_storage = LocalStorage::Get(context, db).GetStorage(*this);
+	if (local_storage) {
+		// transaction-local rows are scanned in parallel as well
+		total_rows += local_storage->GetCollection().GetTotalRows();
+	}
+	return total_rows / parallel_scan_tuple_count + 1;
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
