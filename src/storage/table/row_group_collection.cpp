@@ -2247,8 +2247,10 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	result->next_row_id = next_row_id.load();
 	result->stats.InitializeRemoveColumn(stats, col_idx);
 
-	auto result_lock = result->stats.GetLock();
-	result->stats.DestroyTableSample(*result_lock);
+	{
+		auto result_lock = result->stats.GetLock();
+		result->stats.DestroyTableSample(*result_lock);
+	}
 
 	auto result_row_groups = result->GetRowGroups();
 	for (auto &node : row_groups->SegmentNodes()) {
