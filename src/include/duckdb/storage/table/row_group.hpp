@@ -51,6 +51,7 @@ class TableFilterSet;
 struct ColumnFetchState;
 struct PrefetchState;
 struct RowGroupAppendState;
+struct SuballocationBlock;
 class MetadataManager;
 class RowVersionManager;
 class CommitDropState;
@@ -327,6 +328,8 @@ private:
 	bool has_per_column_metadata_blocks = false;
 	PerColumnMetadataBlocks per_column_metadata_blocks;
 	atomic<idx_t> allocation_size;
+	//! A sub-allocation block for transient storage, allocated on first append
+	unique_ptr<SuballocationBlock> transient;
 	//! The row id column data (mutable because `const` can lazy load)
 	mutable unique_ptr<ColumnData> row_id_column_data;
 	//! Whether or not `row_id_column_data` is loaded (mutable because `const` can lazy load)
