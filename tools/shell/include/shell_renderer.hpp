@@ -128,7 +128,8 @@ public:
 	virtual void RenderFooter(PrintStream &out, ResultMetadata &result);
 	virtual const char *NullValue();
 	virtual bool RequireMaterializedResult() const = 0;
-	//! The rows a streaming renderer retained while rendering, to become the last result (`_`). Null if it retained none
+	//! The rows a streaming renderer retained while rendering, to become the last result (`_`). Null if it retained
+	//! none
 	virtual unique_ptr<duckdb::QueryResult> TakeRetainedResult() {
 		return nullptr;
 	}

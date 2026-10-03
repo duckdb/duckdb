@@ -53,25 +53,25 @@ enum class HighlightElementType : uint32_t;
 using idx_t = uint64_t;
 
 enum class RenderMode : uint32_t {
-	LINE = 0,  /* One column per line.  Blank line between records */
-	COLUMN,    /* One record per line in neat columns */
-	LIST,      /* One record per line with a separator */
-	SEMI,      /* Same as RenderMode::List but append ";" to each line */
-	HTML,      /* Generate an XHTML table */
-	INSERT,    /* Generate SQL "insert" statements */
-	QUOTE,     /* Quote values as for SQL */
-	TCL,       /* Generate ANSI-C or TCL quoted elements */
-	CSV,       /* Quote strings, numbers are plain */
-	EXPLAIN,   /* Like RenderMode::Column, but do not truncate data */
-	DESCRIBE,  /* Special DESCRIBE Renderer */
-	ASCII,     /* Use ASCII unit and record separators (0x1F/0x1E) */
-	EQP,       /* Converts EXPLAIN QUERY PLAN output into a graph */
-	JSON,      /* Output JSON */
-	MARKDOWN,  /* Markdown formatting */
-	TABLE,     /* MySQL-style table formatting */
-	BOX,       /* Unicode box-drawing characters */
-	LATEX,     /* Latex tabular formatting */
-	TRASH,     /* Discard output */
+	LINE = 0,       /* One column per line.  Blank line between records */
+	COLUMN,         /* One record per line in neat columns */
+	LIST,           /* One record per line with a separator */
+	SEMI,           /* Same as RenderMode::List but append ";" to each line */
+	HTML,           /* Generate an XHTML table */
+	INSERT,         /* Generate SQL "insert" statements */
+	QUOTE,          /* Quote values as for SQL */
+	TCL,            /* Generate ANSI-C or TCL quoted elements */
+	CSV,            /* Quote strings, numbers are plain */
+	EXPLAIN,        /* Like RenderMode::Column, but do not truncate data */
+	DESCRIBE,       /* Special DESCRIBE Renderer */
+	ASCII,          /* Use ASCII unit and record separators (0x1F/0x1E) */
+	EQP,            /* Converts EXPLAIN QUERY PLAN output into a graph */
+	JSON,           /* Output JSON */
+	MARKDOWN,       /* Markdown formatting */
+	TABLE,          /* MySQL-style table formatting */
+	BOX,            /* Unicode box-drawing characters */
+	LATEX,          /* Latex tabular formatting */
+	TRASH,          /* Discard output */
 	JSONLINES,      /* Output JSON Lines */
 	DUCKBOX,        /* Unicode box drawing - using DuckDB's own renderer */
 	DUCKBOX_PREVIEW /* Like DUCKBOX, but only the first rows of the result are fetched */
