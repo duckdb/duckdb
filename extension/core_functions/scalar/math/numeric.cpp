@@ -2213,6 +2213,7 @@ ScalarFunction FactorialOperatorFun::GetFunction() {
 	    ScalarFunction({}, LogicalType::HUGEINT, ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>),
 	    LogicalType::INTEGER);
 	function.SetFallible();
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return function;
 }
 
@@ -2242,9 +2243,11 @@ struct EvenOperator {
 } // namespace
 
 ScalarFunction EvenFun::GetFunction() {
-	return NameXArgument(
+	auto function = NameXArgument(
 	    ScalarFunction({}, LogicalType::DOUBLE, ScalarFunction::UnaryFunction<double, double, EvenOperator>),
 	    LogicalType::DOUBLE);
+	function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	return function;
 }
 
 //===--------------------------------------------------------------------===//
