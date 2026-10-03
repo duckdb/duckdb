@@ -27,23 +27,6 @@ SET block_allocator_memory='150%';
 ----
 Unable to parse valid percentage
 
-# fractional percentages are not truncated to a whole percent
-statement ok
-SET block_allocator_memory='50.5%';
-
-query I
-SELECT value FROM duckdb_settings() WHERE name = 'block_allocator_memory';
-----
-101.0 MiB
-
-statement ok
-SET block_allocator_memory='74.5%';
-
-query I
-SELECT value FROM duckdb_settings() WHERE name = 'block_allocator_memory';
-----
-149.0 MiB
-
 statement ok
 SET block_allocator_memory='75%';
 

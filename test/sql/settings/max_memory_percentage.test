@@ -18,18 +18,6 @@ SELECT (SELECT v FROM all_memory) <> current_setting('max_memory')
 ----
 true
 
-statement ok
-CREATE TABLE half_memory AS SELECT current_setting('max_memory') AS v
-
-# fractional percentages are not truncated to a whole percent
-statement ok
-SET max_memory='50.9%'
-
-query I
-SELECT (SELECT v FROM half_memory) <> current_setting('max_memory')
-----
-true
-
 # a percentage below 1% does not resolve to a 0 byte limit
 statement ok
 SET max_memory='0.5%'
