@@ -328,10 +328,12 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				provider_message = message_val.IsNull() ? string() : message_val.ToString();
 			}
 			// shown while waiting: what the provider says about this check (e.g. "CloudFormation describe #{check},
-			// status: CREATE_IN_PROGRESS" - {check} is how many status calls were made so far), or the state it reported
+			// status: CREATE_IN_PROGRESS" - {check} is how many status calls were made so far), or the state it
+			// reported
 			auto check = to_string(++status_updates);
 			if (provider_message.empty()) {
-				provider_message = "Status check #{check}, status: " + (status_state.empty() ? string("(none)") : status_state);
+				provider_message =
+				    "Status check #{check}, status: " + (status_state.empty() ? string("(none)") : status_state);
 			}
 			status_message = StringUtil::Format("Waiting for resource %s. %s", adopting ? "registration" : "creation",
 			                                    StringUtil::Replace(provider_message, "{check}", check));
@@ -341,8 +343,8 @@ static void CreateExternalResourceFunction(ClientContext &context, TableFunction
 				                  bind_data.type_name);
 			}
 			if (status_state == "ready") {
-				status_result =
-				    RequireResourceMap(status_rows.GetValue(result_column.GetIndex(), 0), type->status_function, "result");
+				status_result = RequireResourceMap(status_rows.GetValue(result_column.GetIndex(), 0),
+				                                   type->status_function, "result");
 				ready = true;
 			} else if (has_deadline && std::chrono::steady_clock::now() >= deadline) {
 				throw IOException("create_external_resource: timed out awaiting readiness for \"%s\" (last state '%s')",

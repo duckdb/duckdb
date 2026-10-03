@@ -160,8 +160,8 @@ ClientStatus::~ClientStatus() {
 	try {
 		state->Pop(id, std::uncaught_exceptions() > uncaught_exceptions);
 	} catch (...) { // LCOV_EXCL_START
-		// a display failure must not escape a destructor
-	} // LCOV_EXCL_STOP
+		            // a display failure must not escape a destructor
+	}               // LCOV_EXCL_STOP
 }
 
 void ClientStatus::Update(string message) {
