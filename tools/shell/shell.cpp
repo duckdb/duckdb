@@ -966,8 +966,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	unique_ptr<duckdb::QueryResult> result;
 	unique_ptr<duckdb::QueryResultStream<>> stream;
 	// .materialize full fetches the whole result first, also for a mode that could stream it
-	const bool render_materialized =
-	    materialize == MaterializeMode::FULL || renderer->RequireMaterializedResult();
+	const bool render_materialized = materialize == MaterializeMode::FULL || renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
 		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
@@ -1890,9 +1889,10 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 	} else if (c2 == 'j' && strncmp(mode_str, "jsonlines", n2) == 0) {
 		mode = RenderMode::JSONLINES;
 	} else {
-		PrintF(PrintOutput::STDERR, "Error: mode should be one of: "
-		                            "ascii box column csv duckbox duckbox_preview html insert json jsonlines latex line "
-		                            "list markdown quote table tabs tcl trash \n");
+		PrintF(PrintOutput::STDERR,
+		       "Error: mode should be one of: "
+		       "ascii box column csv duckbox duckbox_preview html insert json jsonlines latex line "
+		       "list markdown quote table tabs tcl trash \n");
 		return false;
 	}
 	cMode = mode;

@@ -1050,7 +1050,8 @@ static const MetadataCommand metadata_commands[] = {
      "How much of a result is fetched before rendering. Without argument: fetch the rest of the previous result", 0,
      "auto (the default) fetches what the mode needs: all rows for duckbox and the other aligned modes, none ahead "
      "for streamed modes like csv. full always fetches the whole result first. rows N (duckbox, and markdown in -agent "
-     "mode, e.g. rows 100K) fetches about the first N rows, and preview is rows 1M: a result with more rows is rendered as its first rows, "
+     "mode, e.g. rows 100K) fetches about the first N rows, and preview is rows 1M: a result with more rows is "
+     "rendered as its first rows, "
      "and the rest is only fetched if the next "
      "statement refers to the last result _, by .last, or by .materialize without argument (which reports the row "
      "count, and any error)"},
