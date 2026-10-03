@@ -2315,9 +2315,12 @@ struct HugeIntegerCastOperation {
 		e = exponent - state.decimal_total_digits;
 		if (e < 0) {
 			if (e < -38) {
-				return false;
+				// all of decimal is fractional
+				remainder = state.decimal;
+				state.decimal = 0;
+			} else {
+				state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
 			}
-			state.decimal = T::Operation::DivMod(state.decimal, T::Operation::POWERS_OF_TEN[-e], remainder);
 			state.decimal_total_digits -= (exponent);
 		} else {
 			if (e > 38 ||
@@ -2341,6 +2344,11 @@ struct HugeIntegerCastOperation {
 	static bool HandleDecimal(T &state, uint8_t digit) {
 		if (!state.Flush()) {
 			return false;
+		}
+		// digits past this position cannot affect the result for any int16_t exponent. Ignore them!
+		static constexpr uint16_t MAX_DECIMAL_DIGITS = -NumericLimits<int16_t>::Minimum();
+		if (DUCKDB_UNLIKELY(state.decimal_total_digits + state.decimal_intermediate_digits == MAX_DECIMAL_DIGITS)) {
+			return true;
 		}
 		if (DUCKDB_UNLIKELY(state.decimal_intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 10)) {
 			if (!state.FlushDecimal()) {
