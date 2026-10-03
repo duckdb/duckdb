@@ -1,28 +1,31 @@
 # name: test/optimizer/test_issue_25886.test
-# description: Test for issue #25886 - null pointer in CompressedMaterialization for zero-row queries
+# description: Issue #25886 - use-after-free in compressed materialization when the root LIMIT is removed
 # group: [optimizer]
 
 statement ok
-CREATE TABLE t (ts TIMESTAMP, k BIGINT);
+CREATE TABLE t (ts TIMESTAMP, k BIGINT, ns VARCHAR, b VARCHAR);
 
-# Test the original crash case: empty table with ORDER BY LIMIT should not crash
-statement ok
+# the LIMIT at the root of the plan is redundant and removed during statistics propagation
+query IIII
+SELECT * FROM t WHERE ((ns = 'n0' AND b LIKE '%|d0|%')) ORDER BY ts, k LIMIT 10001;
+----
+
+query IIII
 SELECT * FROM t ORDER BY ts, k LIMIT 10001;
-
-# Test with filter that eliminates all rows
-statement ok
-SELECT * FROM t WHERE k > 100 ORDER BY ts, k LIMIT 10;
-
-# Test with data to verify correctness
-statement ok
-INSERT INTO t VALUES ('2023-01-01 00:00:00', 1), ('2023-01-02 00:00:00', 2), ('2023-01-03 00:00:00', 3);
-
-query I
-SELECT COUNT(*) FROM t;
 ----
-3
 
-query I
-SELECT COUNT(*) FROM t WHERE k > 100;
+statement ok
+INSERT INTO t VALUES ('2023-01-02', 2, 'n0', 'x|d0|y'), ('2023-01-01', 1, 'n0', 'x|d0|y'), ('2023-01-03', 3, 'n1', 'z');
+
+query IIII
+SELECT * FROM t WHERE ((ns = 'n0' AND b LIKE '%|d0|%')) ORDER BY ts, k LIMIT 10001;
 ----
-0
+2023-01-01 00:00:00	1	n0	x|d0|y
+2023-01-02 00:00:00	2	n0	x|d0|y
+
+query IIII
+SELECT * FROM t ORDER BY ts, k LIMIT 10001;
+----
+2023-01-01 00:00:00	1	n0	x|d0|y
+2023-01-02 00:00:00	2	n0	x|d0|y
+2023-01-03 00:00:00	3	n1	z

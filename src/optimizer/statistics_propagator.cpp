@@ -47,6 +47,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperat
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOperator &node,
                                                                      unique_ptr<LogicalOperator> &node_ptr) {
 	unique_ptr<NodeStatistics> result;
+	const bool is_root = RefersToSameObject(node, *root);
 	switch (node.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		result = PropagateStatistics(node.Cast<LogicalAggregate>(), node_ptr);
@@ -101,6 +102,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		break;
 	default:
 		result = PropagateChildren(node, node_ptr);
+	}
+	if (is_root) {
+		// the root operator may have been replaced
+		root = node_ptr.get();
 	}
 
 	if (mode == StatisticsPropagationMode::FULL &&
