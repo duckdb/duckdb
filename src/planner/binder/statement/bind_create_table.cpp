@@ -511,18 +511,7 @@ static void FindMatchingPrimaryKeyColumns(const ColumnList &columns, const vecto
 			fk.pk_columns = pk_names;
 			return;
 		}
-		if (pk_names.size() != fk.fk_columns.size()) {
-			// the number of referencing and referenced columns for foreign keys must be the same
-			continue;
-		}
-		bool equals = true;
-		for (idx_t i = 0; i < fk.pk_columns.size(); i++) {
-			if (fk.pk_columns[i] != pk_names[i]) {
-				equals = false;
-				break;
-			}
-		}
-		if (!equals) {
+		if (pk_names != fk.pk_columns) {
 			continue;
 		}
 		if (unique.IsDeferred()) {
