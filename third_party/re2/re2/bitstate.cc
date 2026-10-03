@@ -48,7 +48,11 @@ class BitState {
 
  private:
   inline bool ShouldVisit(int id, const char* p);
-  void Push(int id, const char* p);
+  inline void Push(int id, const char* p);
+  inline void PushRun(int id, const char* p, size_t n);
+  size_t VisitRun(int list, const char* pfirst, size_t m);
+  size_t FirstVisited(int list, const char* pfirst, size_t m);
+  void SetVisited(int list, const char* pfirst, size_t m);
   void GrowStack();
   bool TrySearch(int id, const char* p);
 
@@ -133,6 +137,128 @@ void BitState::Push(int id, const char* p) {
   top->p = p;
 }
 
+// Bulk equivalent of Push(id, p), Push(id, p+1), ..., Push(id, p+n-1) with
+// id >= 0 and n >= 1, which the run length encoding collapses into at most
+// one new job (or a pure extension of the top job's run).
+void BitState::PushRun(int id, const char* p, size_t n) {
+  if (njob_ > 0) {
+    Job* top = &job_[njob_-1];
+    if (id == top->id &&
+        p == top->p + top->rle + 1 &&
+        n <= static_cast<size_t>(std::numeric_limits<int>::max() - top->rle)) {
+      top->rle += static_cast<int>(n);
+      return;
+    }
+  }
+
+  if (njob_ >= job_.size()) {
+    GrowStack();
+    if (njob_ >= job_.size()) {
+      LOG(DFATAL) << "GrowStack() failed: "
+                  << "njob_ = " << njob_ << ", "
+                  << "job_.size() = " << job_.size();
+      return;
+    }
+  }
+
+  Job* top = &job_[njob_++];
+  top->id = id;
+  top->rle = static_cast<int>(n - 1);
+  top->p = p;
+}
+
+// Bulk equivalent of m consecutive ShouldVisit(id, ...) check-and-set calls
+// for the positions pfirst, pfirst+1, ..., pfirst+m-1, all belonging to the
+// instruction list `list`.  Returns m after setting all m bits if none were
+// already set; otherwise returns the index k of the first already-set bit,
+// having set only the k bits before it (mirroring where a sequential search
+// would have stopped visiting).
+size_t BitState::VisitRun(int list, const char* pfirst, size_t m) {
+  size_t base = static_cast<size_t>(list) * (text_.size()+1) +
+                static_cast<size_t>(pfirst - text_.data());
+  size_t done = 0;
+  while (done < m) {
+    size_t bit = base + done;
+    size_t word = bit / kVisitedBits;
+    unsigned off = static_cast<unsigned>(bit % kVisitedBits);
+    size_t span = m - done;
+    if (span > kVisitedBits - off)
+      span = kVisitedBits - off;
+    uint64_t mask = span == kVisitedBits
+                        ? ~uint64_t{0}
+                        : ((uint64_t{1} << span) - 1) << off;
+    uint64_t hit = visited_[word] & mask;
+    if (hit != 0) {
+      unsigned first = 0;
+#if defined(__GNUC__) || defined(__clang__)
+      first = static_cast<unsigned>(__builtin_ctzll(hit));
+#else
+      while (!(hit & (uint64_t{1} << first)))
+        first++;
+#endif
+      // Set only the bits of this word that come before the first set bit.
+      visited_[word] |= mask & ((uint64_t{1} << first) - 1);
+      return done + (first - off);
+    }
+    visited_[word] |= mask;
+    done += span;
+  }
+  return m;
+}
+
+// Like VisitRun, but only probes: returns the index of the first already-set
+// bit among the m bits for pfirst, pfirst+1, ..., pfirst+m-1 in list `list`,
+// or m if none is set.  Does not modify the bitmap.
+size_t BitState::FirstVisited(int list, const char* pfirst, size_t m) {
+  size_t base = static_cast<size_t>(list) * (text_.size()+1) +
+                static_cast<size_t>(pfirst - text_.data());
+  size_t done = 0;
+  while (done < m) {
+    size_t bit = base + done;
+    size_t word = bit / kVisitedBits;
+    unsigned off = static_cast<unsigned>(bit % kVisitedBits);
+    size_t span = m - done;
+    if (span > kVisitedBits - off)
+      span = kVisitedBits - off;
+    uint64_t mask = span == kVisitedBits
+                        ? ~uint64_t{0}
+                        : ((uint64_t{1} << span) - 1) << off;
+    uint64_t hit = visited_[word] & mask;
+    if (hit != 0) {
+      unsigned first = 0;
+#if defined(__GNUC__) || defined(__clang__)
+      first = static_cast<unsigned>(__builtin_ctzll(hit));
+#else
+      while (!(hit & (uint64_t{1} << first)))
+        first++;
+#endif
+      return done + (first - off);
+    }
+    done += span;
+  }
+  return m;
+}
+
+// Sets the m visited bits for pfirst, pfirst+1, ..., pfirst+m-1 in `list`.
+void BitState::SetVisited(int list, const char* pfirst, size_t m) {
+  size_t base = static_cast<size_t>(list) * (text_.size()+1) +
+                static_cast<size_t>(pfirst - text_.data());
+  size_t done = 0;
+  while (done < m) {
+    size_t bit = base + done;
+    size_t word = bit / kVisitedBits;
+    unsigned off = static_cast<unsigned>(bit % kVisitedBits);
+    size_t span = m - done;
+    if (span > kVisitedBits - off)
+      span = kVisitedBits - off;
+    uint64_t mask = span == kVisitedBits
+                        ? ~uint64_t{0}
+                        : ((uint64_t{1} << span) - 1) << off;
+    visited_[word] |= mask;
+    done += span;
+  }
+}
+
 // Try a search from instruction id0 in state p0.
 // Return whether it succeeded.
 bool BitState::TrySearch(int id0, const char* p0) {
@@ -196,6 +322,143 @@ bool BitState::TrySearch(int id0, const char* p0) {
           c = *p & 0xFF;
         if (!ip->Matches(c))
           goto Next;
+
+        // Greedy self-loop acceleration: when this byte range jumps straight
+        // back to the head of its own instruction list (the shape that x*,
+        // x+ and character-class loops compile to), a maximal run of input
+        // bytes that (a) match this range and (b) do not match any earlier
+        // byte-range alternative in the list (which the sequential search
+        // would have taken first) is consumed in bulk.  The per-position
+        // backtrack alternatives collapse into a single RLE job - the same
+        // encoding that per-position Push() calls would have produced - and
+        // the visited bits for the run are set word-wise, stopping (exactly
+        // like the per-position code) at the first already-visited position.
+        {
+          bool dead = false;
+          do {
+            if (ip->foldcase())
+              break;
+            // Two loop-back shapes: (A) this byte range's out points straight
+            // at the head of its own list; (B) it points at a kInstNop (the
+            // head of another list) whose out points back at the head of this
+            // instruction's list, as x+ compiles to.  In shape B the nop's
+            // list gets its own per-position visited checks and (if the nop
+            // is not last in its list) per-position backtrack pushes.
+            // Find the head of this instruction's list by walking back to
+            // the previous list's last instruction (lists are short).
+            // list_heads() is only meaningful for head ids.
+            int h = id;
+            while (h > 0 && !prog_->inst(h-1)->last())
+              h--;
+            int head = ip->out();
+            int nopid = -1;
+            if (head != h) {
+              Prog::Inst* np = prog_->inst(head);
+              if (np->opcode() != kInstNop || ip->hint() != 0)
+                break;
+              nopid = head;
+              head = np->out();
+              if (head != h)
+                break;
+            }
+            // Collect the byte ranges of the alternatives that precede this
+            // instruction in its list; bail out on anything non-trivial.
+            int nb = 0;
+            uint8_t blo[4], bhi[4];
+            bool simple = true;
+            for (int j = head; j < id; j++) {
+              Prog::Inst* jp = prog_->inst(j);
+              if (nb == 4 || jp->opcode() != kInstByteRange || jp->foldcase()) {
+                simple = false;
+                break;
+              }
+              blo[nb] = static_cast<uint8_t>(jp->lo());
+              bhi[nb] = static_cast<uint8_t>(jp->hi());
+              nb++;
+            }
+            if (!simple)
+              break;
+            const uint8_t lo = static_cast<uint8_t>(ip->lo());
+            const uint8_t hi = static_cast<uint8_t>(ip->hi());
+            const char* q = p + 1;
+            while (q < end) {
+              uint8_t cc = static_cast<uint8_t>(*q);
+              if (cc < lo || cc > hi)
+                break;
+              bool earlier = false;
+              for (int k = 0; k < nb; k++) {
+                if (cc >= blo[k] && cc <= bhi[k]) {
+                  earlier = true;
+                  break;
+                }
+              }
+              if (earlier)
+                break;
+              q++;
+            }
+            const size_t m = static_cast<size_t>(q - p);  // >= 1
+            if (m == 1)
+              break;  // no run to speak of; take the per-position path
+            if (nopid < 0) {
+              // Shape A.  Each consumed byte at pos pushes the backtrack
+              // alternative at pos, then check-and-sets the visited bit for
+              // pos+1, dying at the first already-set bit.
+              const size_t k = VisitRun(prog_->list_heads()[h], p + 1, m);
+              if (k < m) {
+                // The sequential search would die at the already-visited
+                // position, after pushing alternatives for the first k+1
+                // bytes.
+                if (ip->hint() != 0)
+                  PushRun(id + ip->hint(), p, k + 1);
+                dead = true;
+                break;
+              }
+              if (ip->hint() != 0)
+                PushRun(id + ip->hint(), p, m);
+            } else {
+              // Shape B.  Each consumed byte at pos check-and-sets the nop
+              // list's visited bit for pos+1, pushes the alternative after
+              // the nop (if any) at pos+1, then check-and-sets this list's
+              // visited bit for pos+1; execution dies at the first
+              // already-set bit, in that order.
+              const int list_nop = prog_->list_heads()[nopid];
+              const int list_head = prog_->list_heads()[h];
+              const size_t kn = FirstVisited(list_nop, p + 1, m);
+              const size_t kh = FirstVisited(list_head, p + 1, kn);
+              const bool nop_push = !prog_->inst(nopid)->last();
+              if (kh < kn) {
+                // Dies at this list's check, after the nop list's
+                // check-and-set and the nop push for the same position.
+                SetVisited(list_nop, p + 1, kh + 1);
+                SetVisited(list_head, p + 1, kh);
+                if (nop_push)
+                  PushRun(nopid + 1, p + 1, kh + 1);
+                dead = true;
+                break;
+              }
+              if (kn < m) {
+                // Dies at the nop list's check.
+                SetVisited(list_nop, p + 1, kn);
+                SetVisited(list_head, p + 1, kn);
+                if (nop_push && kn > 0)
+                  PushRun(nopid + 1, p + 1, kn);
+                dead = true;
+                break;
+              }
+              SetVisited(list_nop, p + 1, m);
+              SetVisited(list_head, p + 1, m);
+              if (nop_push)
+                PushRun(nopid + 1, p + 1, m);
+            }
+            id = head;
+            p += m;
+            // The run has already set the visited bit for (list, p),
+            // just as the last per-position iteration would have.
+            goto Loop;
+          } while (0);
+          if (dead)
+            break;
+        }
 
         if (ip->hint() != 0)
           Push(id+ip->hint(), p);  // try the next when we're done
