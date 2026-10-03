@@ -1589,6 +1589,13 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 	return iprot.getTransport()->read(buffer, buffer_size);
 }
 
+const_data_ptr_t ParquetReader::TryDirectRead(duckdb_apache::thrift::protocol::TProtocol &iprot,
+                                              const uint32_t buffer_size) const {
+	auto transport = iprot.getTransport();
+	auto &file_transport = reinterpret_cast<ThriftFileTransport &>(*transport);
+	return file_transport.TryDirectRead(buffer_size);
+}
+
 uint32_t ParquetReader::ReadDataEncrypted(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
                                           const uint32_t buffer_size, CryptoMetaData &aad_crypto_metadata) const {
 	ParquetCrypto::GenerateAdditionalAuthenticatedData(allocator, aad_crypto_metadata);
