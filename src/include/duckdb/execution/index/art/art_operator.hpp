@@ -339,7 +339,7 @@ public:
 	}
 
 private:
-	//! Returns true, if the key is in any of the delete indexes.
+	//! Returns true if a delete index supplied for this append contains the key.
 	static bool IsDeleted(const ARTKey &key, DeleteIndexInfo delete_index_info) {
 		if (!delete_index_info.delete_indexes) {
 			return false;
