@@ -123,7 +123,10 @@ def enabled_jobs(selection_input: JobSelectionInput, reduced_ci_mode: str) -> li
 
     extensions_need_osx = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
     osx_changed = selection_input.event_name in {"push", "pull_request"} and "osx" in selection_input.changed_keys
-    if (extensions_need_osx or osx_changed) and "osx" not in selected_jobs:
+    extensions_changed = (
+        selection_input.event_name in {"push", "pull_request"} and "extensions" in selection_input.changed_keys
+    )
+    if (extensions_need_osx or osx_changed or extensions_changed) and "osx" not in selected_jobs:
         selected_jobs.append("osx")
 
     override = parse_job_selection_override(os.getenv("OVERRIDE_JOBS"))
@@ -251,6 +254,7 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
                 "image": "alpine_amd64_main",
                 "name": "amd64",
                 "artifact_suffix": "linux-amd64-musl",
+                "build_artifact": "linux-release-musl-amd64-build",
                 "cache_suffix": "amd64-musl",
             }
         )
@@ -261,6 +265,7 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
             "image": "alpine_arm64_main",
             "name": "arm64",
             "artifact_suffix": "linux-arm64-musl",
+            "build_artifact": "linux-release-musl-arm64-build",
             "cache_suffix": "arm64-musl",
         }
     )
