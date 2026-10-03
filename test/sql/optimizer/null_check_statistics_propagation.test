@@ -1,0 +1,87 @@
+# name: test/sql/optimizer/null_check_statistics_propagation.test
+# description: Statistics must not fold IS (NOT) NULL over a child that is volatile or can throw
+# group: [optimizer]
+
+statement ok
+CREATE TABLE t AS SELECT 300::INTEGER i;
+
+# The multiplication overflows - folding the NULL check to a constant would suppress the error
+statement error
+SELECT (i * i * i * i * i) IS NOT NULL FROM t;
+----
+<REGEX>:.*Overflow in multiplication.*
+
+statement error
+SELECT (i * i * i * i * i) IS NULL FROM t;
+----
+<REGEX>:.*Overflow in multiplication.*
+
+# The cast in "CAST(<oversized literal> AS VARIANT) IS NOT NULL" throws for the same reason, but
+# that query needs more than 4 GB of memory so it cannot be tested here
+
+# Do not change the number of volatile function evaluations
+statement ok
+CREATE SEQUENCE s;
+
+query I
+SELECT nextval('s') IS NOT NULL FROM t;
+----
+true
+
+query I
+SELECT currval('s');
+----
+1
+
+# Children that cannot throw are still folded
+query II
+EXPLAIN SELECT i IS NOT NULL FROM t;
+----
+physical_plan	<REGEX>:.*Projections: true.*
+
+query I
+SELECT i IS NOT NULL FROM t;
+----
+true
+
+query I
+SELECT i IS NULL FROM t;
+----
+false
+
+# Empty statistics are not "NULL for every row": a throwing child must stay in the plan
+statement ok
+CREATE TABLE empty(i INTEGER);
+
+query II
+EXPLAIN SELECT (i * i * i * i * i) IS NOT NULL FROM empty;
+----
+physical_plan	<!REGEX>:.*Projections: true.*
+
+query I
+SELECT (i * i * i * i * i) IS NOT NULL FROM empty;
+----
+
+# All-NULL children that propagate NULLs can still be folded (e.g. list_extract row-group pruning)
+statement ok
+CREATE TABLE all_null_list AS SELECT NULL::INTEGER[] AS l;
+
+query II
+EXPLAIN SELECT list_extract(l, 1) IS NULL FROM all_null_list;
+----
+physical_plan	<REGEX>:.*Projections: true.*
+
+query I
+SELECT list_extract(l, 1) IS NULL FROM all_null_list;
+----
+true
+
+query II
+EXPLAIN SELECT list_extract(l, 1) IS NOT NULL FROM all_null_list;
+----
+physical_plan	<REGEX>:.*Projections: false.*
+
+query I
+SELECT list_extract(l, 1) IS NOT NULL FROM all_null_list;
+----
+false
