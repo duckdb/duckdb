@@ -109,6 +109,9 @@ public:
 	//! non-ASCII Unicode spaces
 	static string NormalizeSQLString(const string &query);
 
+	//! Iteratively check that an expression tree, counted through subqueries, does not exceed max_expression_depth
+	static void VerifyExpressionDepth(ParsedExpression &root, idx_t max_expression_depth);
+
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
