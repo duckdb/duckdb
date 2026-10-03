@@ -156,9 +156,9 @@ SELECT count(*) FROM t;
 ----
 3
 
-# a table with an immediate and a deferred constraint on the same columns
+# a deferred constraint comes before an immediate constraint on the same columns
 statement ok
-CREATE TABLE both_timings(i INTEGER PRIMARY KEY, UNIQUE(i) DEFERRED);
+CREATE TABLE both_timings(i INTEGER, UNIQUE(i) DEFERRED, PRIMARY KEY(i));
 
 statement ok
 BEGIN TRANSACTION;
@@ -189,6 +189,14 @@ INSERT INTO both_child VALUES (1);
 
 statement ok
 COMMIT;
+
+statement ok
+INSERT INTO both_timings VALUES (1) ON CONFLICT (i) DO NOTHING;
+
+query I
+SELECT count(*) FROM both_timings;
+----
+1
 
 statement error
 DELETE FROM both_timings WHERE i = 1;

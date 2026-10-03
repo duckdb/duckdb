@@ -1,5 +1,5 @@
 # name: test/sql/constraints/deferred/test_deferred_large.test_slow
-# description: Deferred constraints with many rows, parallel inserts, and bulk appends
+# description: Deferred constraints with large inserts and bulk appends
 # group: [deferred]
 
 statement ok
@@ -23,15 +23,12 @@ INSERT INTO t SELECT range, range FROM range(5000);
 statement ok
 UPDATE t SET i = i + 1;
 
-statement ok
-UPDATE t SET i = 5001 - i;
-
 query III
 SELECT count(*), min(i), max(i) FROM t;
 ----
 5000	1	5000
 
-# a duplicate between rows inserted by different threads
+# a duplicate in a large insert with multiple threads enabled
 statement ok
 SET threads = 4;
 

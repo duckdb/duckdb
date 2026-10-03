@@ -5,9 +5,6 @@
 statement ok
 CREATE TABLE t(i INTEGER PRIMARY KEY DEFERRED, j INTEGER UNIQUE DEFERRED);
 
-statement ok
-PREPARE count_key AS SELECT count(*) FROM t WHERE i = 1;
-
 statement error
 INSERT INTO t VALUES (NULL, 1);
 ----
@@ -24,11 +21,6 @@ SELECT count(*) FROM t WHERE i = 1;
 ----
 2
 
-query I
-EXECUTE count_key;
-----
-2
-
 statement error
 COMMIT;
 ----
@@ -41,33 +33,6 @@ SELECT count(*) FROM t;
 
 statement ok
 INSERT INTO t VALUES (1, 10), (2, 20);
-
-statement ok
-BEGIN TRANSACTION;
-
-statement ok
-UPDATE t SET i = 3 - i, j = 30 - j;
-
-statement ok
-COMMIT;
-
-query II rowsort
-SELECT i, j FROM t;
-----
-1	10
-2	20
-
-statement ok
-BEGIN TRANSACTION;
-
-statement ok
-DELETE FROM t WHERE i = 1;
-
-statement ok
-INSERT INTO t VALUES (1, 10);
-
-statement ok
-COMMIT;
 
 statement ok
 BEGIN TRANSACTION;

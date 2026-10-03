@@ -3,7 +3,7 @@
 # group: [deferred]
 
 statement ok
-CREATE TABLE t(i INTEGER, j INTEGER, k INTEGER, l INTEGER);
+CREATE TABLE t(i INTEGER, j INTEGER, k INTEGER);
 
 statement ok
 ALTER TABLE t ADD UNIQUE(i) DEFERRED;

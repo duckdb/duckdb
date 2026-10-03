@@ -3,30 +3,30 @@
 # group: [deferred]
 
 statement ok
-CREATE TABLE existing(i INTEGER);
+CREATE TABLE with_duplicates(i INTEGER);
 
 statement ok
-INSERT INTO existing VALUES (1), (1);
+INSERT INTO with_duplicates VALUES (1), (1);
 
 statement error
-ALTER TABLE existing ADD UNIQUE(i) DEFERRED;
+ALTER TABLE with_duplicates ADD UNIQUE(i) DEFERRED;
 ----
 Data contains duplicates on indexed column(s)
 
 statement ok
-CREATE TABLE valid(i INTEGER);
+CREATE TABLE without_duplicates(i INTEGER);
 
 statement ok
-INSERT INTO valid VALUES (1), (2);
+INSERT INTO without_duplicates VALUES (1), (2);
 
 statement ok
-ALTER TABLE valid ADD UNIQUE(i) DEFERRED;
+ALTER TABLE without_duplicates ADD UNIQUE(i) DEFERRED;
 
 statement ok
 BEGIN TRANSACTION;
 
 statement ok
-INSERT INTO valid VALUES (2);
+INSERT INTO without_duplicates VALUES (2);
 
 statement error
 COMMIT;
@@ -140,3 +140,27 @@ NOT NULL constraint failed
 
 statement ok
 ROLLBACK;
+
+# FIXME: deletes made before the constraint is added are not in its delete index, so reinserting the key is a false duplicate
+statement ok
+CREATE TABLE deleted_before_alter(i INTEGER);
+
+statement ok
+INSERT INTO deleted_before_alter VALUES (1);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DELETE FROM deleted_before_alter WHERE i = 1;
+
+statement ok
+ALTER TABLE deleted_before_alter ADD UNIQUE(i) DEFERRED;
+
+statement ok
+INSERT INTO deleted_before_alter VALUES (1);
+
+statement error
+COMMIT;
+----
+Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key

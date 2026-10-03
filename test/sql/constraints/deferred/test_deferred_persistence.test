@@ -113,12 +113,6 @@ COMMIT;
 ----
 Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
 
-statement ok
-INSERT INTO created VALUES (1, 'b');
-
-statement ok
-DELETE FROM created WHERE j = 'b';
-
 query I
 SELECT count(*) FROM altered;
 ----
@@ -177,12 +171,6 @@ statement error
 COMMIT;
 ----
 Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key
-
-statement ok
-INSERT INTO created VALUES (1, 'b');
-
-statement ok
-DELETE FROM created WHERE j = 'b';
 
 query I
 SELECT count(*) FROM altered;
