@@ -62,8 +62,9 @@ struct TableStreams {
 	int stream[MAX_STREAM + 1];
 };
 
+static constexpr int TABLE_COUNT = sizeof(DBGenContext::tdefs) / sizeof(DBGenContext::tdefs[0]);
+
 static const TableStreams &table_streams(int t, DBGenContext *ctx) {
-	constexpr int TABLE_COUNT = sizeof(ctx->tdefs) / sizeof(ctx->tdefs[0]);
 	static const std::array<TableStreams, TABLE_COUNT> streams = [ctx]() {
 		std::array<TableStreams, TABLE_COUNT> result;
 		for (int table = 0; table < TABLE_COUNT; table++) {
