@@ -635,6 +635,10 @@ void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 
+	if (!info.HasPrev()) {
+		// never linked (the update failed): data may be partial and the vector root may belong to another update
+		return;
+	}
 	// move the data from the UpdateInfo back into the base info
 	auto entry = GetUpdateNode(*lock_handle, info.vector_index);
 	if (!entry.IsSet()) {
