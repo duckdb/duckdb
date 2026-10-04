@@ -11,17 +11,10 @@
 // so V2 refuses to build it; V2 inspection degrades gracefully), plus the
 // MakeV1* seed builders those pins use.
 //
-// INVARIANT THIS TEST RELIES ON:
-//   Both V1 and V2 logical_type handles are `new duckdb::LogicalType(...)`
-//   cast to `void *`. V1's `duckdb_destroy_logical_type` and V2's
-//   `duckdb_v2_logical_type_destroy` both perform
-//   `delete static_cast<duckdb::LogicalType *>(handle)`. As long as that
-//   stays true, destroying a V1-built handle through V2 destroy (and vice
-//   versa) is correct. If V2 ever wraps the LogicalType in its own
-//   struct, this file must change.
-//
-// We do NOT pass V2-built handles into V1 functions; the casting direction
-// here is one-way V1 -> V2 for fixture setup only.
+// V1 and V2 logical_type handles have different representations: V1 seeds are
+// converted with ConvertToV2, which consumes the V1 handle. We do NOT pass
+// V2-built handles into V1 functions; the direction here is one-way V1 -> V2
+// for fixture setup only.
 // ---------------------------------------------------------------------------
 
 namespace test_capi_v2 {
@@ -1467,7 +1460,7 @@ TEST_CASE("V2: DECIMAL storage tier by width matches the documented table", "[ca
 	};
 	for (auto &c : cases) {
 		auto t = V2TypeFromText(f.conn, "DECIMAL(" + std::to_string(c.width) + ",2)");
-		REQUIRE(reinterpret_cast<duckdb::LogicalType *>(t)->InternalType() == c.expected);
+		REQUIRE(V2LogicalType(t).InternalType() == c.expected);
 		duckdb_v2_logical_type_destroy(&t);
 	}
 }
@@ -1490,7 +1483,7 @@ TEST_CASE("V2: ENUM storage tier by dictionary size matches the documented table
 			values.push_back(MakeVarcharValue(f.conn, ("v" + std::to_string(i)).c_str()));
 		}
 		auto t = MakeType(f.conn, "enum", nullptr, std::move(values));
-		REQUIRE(reinterpret_cast<duckdb::LogicalType *>(t)->InternalType() == c.expected);
+		REQUIRE(V2LogicalType(t).InternalType() == c.expected);
 		REQUIRE(V2ParamCount(t) == c.entries);
 		duckdb_v2_logical_type_destroy(&t);
 	}
@@ -1499,7 +1492,7 @@ TEST_CASE("V2: ENUM storage tier by dictionary size matches the documented table
 	// reports the uint8 tier through V2 inspection.
 	const char *none[] = {nullptr};
 	auto empty = MakeV1Enum(none, 0);
-	REQUIRE(reinterpret_cast<duckdb::LogicalType *>(empty)->InternalType() == duckdb::PhysicalType::UINT8);
+	REQUIRE(V2LogicalType(empty).InternalType() == duckdb::PhysicalType::UINT8);
 	duckdb_v2_logical_type_destroy(&empty);
 }
 
@@ -1639,7 +1632,7 @@ TEST_CASE("V2 bench: 100k-entry enum inspection cost", "[.][capi_v2_bench]") {
 	// borrowed enum getter handed out per entry.
 	size_t borrowed_bytes = 0;
 	start = bench_clock::now();
-	auto &lt = *reinterpret_cast<duckdb::LogicalType *>(t);
+	auto lt = V2LogicalType(t);
 	auto &dict = duckdb::EnumType::GetValuesInsertOrder(lt);
 	auto *data = duckdb::FlatVector::GetData<duckdb::string_t>(dict);
 	for (idx_t i = 0; i < N; i++) {

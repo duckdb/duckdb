@@ -13,6 +13,9 @@
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/atomic.hpp"
+
+#include <limits>
 
 namespace duckdb {
 
@@ -257,25 +260,122 @@ enum class LogicalTypeId : uint8_t {
 	TUPLE = 110 /* unnamed struct - shares the physical representation of STRUCT */
 };
 
-struct ExtraTypeInfo;
 struct ExtensionTypeInfo;
+
+//! The kind of a LogicalTypeInfo
+enum class LogicalTypeInfoType : uint8_t {
+	INVALID_TYPE_INFO = 0,
+	GENERIC_TYPE_INFO = 1,
+	DECIMAL_TYPE_INFO = 2,
+	STRING_TYPE_INFO = 3,
+	LIST_TYPE_INFO = 4,
+	STRUCT_TYPE_INFO = 5,
+	ENUM_TYPE_INFO = 6,
+	UNBOUND_TYPE_INFO = 7,
+	LEGACY_AGGREGATE_STATE_TYPE_INFO = 8,
+	ARRAY_TYPE_INFO = 9,
+	ANY_TYPE_INFO = 10,
+	INTEGER_LITERAL_TYPE_INFO = 11,
+	TEMPLATE_TYPE_INFO = 12,
+	GEO_TYPE_INFO = 13
+};
+
+//! The intrusively ref-counted data behind a LogicalType. Types without parameters use an INVALID_TYPE_INFO.
+//! Once adopted by a LogicalType the info is shared and only ever accessed as const.
+struct LogicalTypeInfo {
+	explicit LogicalTypeInfo(LogicalTypeInfoType type);
+	explicit LogicalTypeInfo(LogicalTypeInfoType type, string alias);
+	virtual ~LogicalTypeInfo();
+
+	// the 1-byte fields and the ref count are declared first so they pack into one word after the vtable pointer
+	const LogicalTypeInfoType type;
+
+private:
+	friend struct LogicalType;
+	//! The id and physical type of the LogicalType that owns this info - set when a LogicalType adopts it
+	LogicalTypeId id = LogicalTypeId::INVALID;
+	PhysicalType physical_type = PhysicalType::INVALID;
+	//! Immortal infos (e.g. the one behind LogicalType::INTEGER) are shared without ref-counting and never freed.
+	bool immortal = false;
+	//! Atomic intrusive ref-count. This comes after the other members to avoid extra padding.
+	mutable atomic<uint32_t> ref_count {0};
+
+public:
+	string alias;
+	unique_ptr<ExtensionTypeInfo> extension_info;
+
+protected:
+	// copy	constructor (protected)
+	LogicalTypeInfo(const LogicalTypeInfo &other);
+
+public:
+	LogicalTypeInfo &operator=(const LogicalTypeInfo &other) = delete;
+
+	inline void AddRef() const {
+		if (immortal) {
+			return;
+		}
+		auto previous = ref_count.fetch_add(1, std::memory_order_relaxed);
+		D_ASSERT(previous < std::numeric_limits<uint32_t>::max());
+		(void)previous;
+	}
+	inline void Release() const {
+		if (immortal) {
+			return;
+		}
+		auto previous = ref_count.fetch_sub(1, std::memory_order_acq_rel);
+		D_ASSERT(previous > 0);
+		if (previous == 1) {
+			delete this;
+		}
+	}
+
+	bool Equals(const LogicalTypeInfo &other) const;
+
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<LogicalTypeInfo> Deserialize(Deserializer &source);
+	//! Creates an unshared copy of the info - nested types are shared with the original
+	virtual unique_ptr<LogicalTypeInfo> Copy() const;
+	//! Copy the base fields (alias, extension info) into "target" - used by Copy implementations that
+	//! reconstruct the type info instead of copy-constructing it
+	void CopyBaseInfo(LogicalTypeInfo &target) const;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+protected:
+	virtual bool EqualsInternal(const LogicalTypeInfo *other_p) const;
+};
 
 struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
-	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<const ExtraTypeInfo> type_info);
-	DUCKDB_API LogicalType(const LogicalType &other);
+	DUCKDB_API LogicalType(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info);
+	inline LogicalType(const LogicalType &other) : type_info_(other.type_info_) {
+		type_info_.get().AddRef();
+	}
 	DUCKDB_API LogicalType(LogicalType &&other) noexcept;
 
-	DUCKDB_API ~LogicalType();
+	inline ~LogicalType() {
+		type_info_.get().Release();
+	}
 
 	inline LogicalTypeId id() const { // NOLINT: mimic std casing
-		return id_;
+		return type_info_.get().id;
 	}
 	inline PhysicalType InternalType() const {
-		return physical_type_;
+		return type_info_.get().physical_type;
 	}
-	inline optional_ptr<const ExtraTypeInfo> AuxInfo() const {
+	//! The type info - always present, of type INVALID_TYPE_INFO for types without parameters
+	inline const LogicalTypeInfo &GetTypeInfo() const {
 		return type_info_.get();
 	}
 	inline bool IsNested() const {
@@ -292,33 +392,34 @@ struct LogicalType {
 		return false;
 	}
 	inline bool IsUnknown() const {
-		return id_ == LogicalTypeId::UNKNOWN;
+		return id() == LogicalTypeId::UNKNOWN;
 	}
 	inline bool IsUnbound() const {
-		return id_ == LogicalTypeId::UNBOUND;
+		return id() == LogicalTypeId::UNBOUND;
 	}
+	//! Gives up this type's reference to its info without releasing it - the reference must be taken back with
+	//! AdoptTypeInfo. Used to hand types across an ABI boundary (e.g. the C API) without copying them.
+	DUCKDB_API const LogicalTypeInfo &ReleaseTypeInfo() &&;
+	//! Creates a type that takes over a reference given up by ReleaseTypeInfo
+	DUCKDB_API static LogicalType AdoptTypeInfo(const LogicalTypeInfo &type_info);
+	//! Whether this type carries the type info its id is parameterized by (e.g. the child type of a LIST). Does not
+	//! look at child types - false for a bare LogicalTypeId::LIST, true for LIST(ANY).
+	DUCKDB_API bool HasParameters() const;
 
-	//! Copies the logical type, making a new ExtraTypeInfo
+	//! Copies the logical type, making a new (unshared) LogicalTypeInfo
 	LogicalType Copy() const;
-	//! DeepCopy() will make a unique copy of any nested ExtraTypeInfo as well
-	LogicalType DeepCopy() const;
 
 	bool EqualTypeInfo(const LogicalType &rhs) const;
 
 	// copy assignment
 	inline LogicalType &operator=(const LogicalType &other) {
-		if (this == &other) {
-			return *this;
-		}
-		id_ = other.id_;
-		physical_type_ = other.physical_type_;
+		other.type_info_.get().AddRef();
+		type_info_.get().Release();
 		type_info_ = other.type_info_;
 		return *this;
 	}
 	// move assignment
 	inline LogicalType &operator=(LogicalType &&other) noexcept {
-		id_ = other.id_;
-		physical_type_ = other.physical_type_;
 		std::swap(type_info_, other.type_info_);
 		return *this;
 	}
@@ -400,12 +501,19 @@ struct LogicalType {
 	bool SupportsRegularUpdate() const;
 
 private:
-	LogicalTypeId id_;                          // NOLINT: allow this naming for legacy reasons
-	PhysicalType physical_type_;                // NOLINT: allow this naming for legacy reasons
-	shared_ptr<const ExtraTypeInfo> type_info_; // NOLINT: allow this naming for legacy reasons
+	//! Takes over a reference to "type_info"
+	explicit LogicalType(const LogicalTypeInfo &type_info) : type_info_(type_info) {
+	}
+
+	const_reference<LogicalTypeInfo> type_info_; // NOLINT: allow this naming for legacy reasons
 
 private:
-	PhysicalType GetInternalType();
+	//! The immortal type info of a type without parameters - created once per id
+	DUCKDB_API static const LogicalTypeInfo &GetBuiltinTypeInfo(LogicalTypeId id);
+	//! Takes ownership of a new info for a type with the given id - or returns the builtin info if there is none
+	static const LogicalTypeInfo &AdoptNewTypeInfo(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info);
+	//! Creates a type whose info is never ref-counted or freed - for types that are built once and shared
+	static LogicalType CreateImmortal(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info);
 
 public:
 	static constexpr const LogicalTypeId SQLNULL = LogicalTypeId::SQLNULL;

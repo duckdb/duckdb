@@ -975,7 +975,7 @@ Value Value::BIGNUM(const string &data) {
 
 Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenceSystem &crs) {
 	Value result;
-	result.type_ = LogicalType::GEOMETRY(crs); // construct type explicitly so that we get the ExtraTypeInfo
+	result.type_ = LogicalType::GEOMETRY(crs); // construct type explicitly so that we get the LogicalTypeInfo
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
@@ -983,7 +983,7 @@ Value Value::GEOMETRY(const_data_ptr_t data, idx_t len, const CoordinateReferenc
 
 Value Value::GEOMETRY(const_data_ptr_t data, idx_t len) {
 	Value result;
-	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the ExtraTypeInfo
+	result.type_ = LogicalType::GEOMETRY(); // construct type explicitly so that we get the LogicalTypeInfo
 	result.is_null = false;
 	result.value_info_ = make_shared_ptr<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;

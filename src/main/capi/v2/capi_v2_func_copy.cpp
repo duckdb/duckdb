@@ -855,7 +855,7 @@ static auto GetColumnType(INFO &args, idx_t index, const char *function) -> duck
 	if (index >= types.size()) {
 		throw InvalidInputException("Index out of bounds in %s", function);
 	}
-	return Convert(new LogicalType(types[index]));
+	return Convert(types[index]);
 }
 
 template <class INFO>
