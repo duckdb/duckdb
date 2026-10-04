@@ -60,7 +60,7 @@ FilterPropagateResult ColumnData::CheckValidityZonemap(ColumnScanState &state, T
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                        ColumnDataType data_type_p, optional_ptr<ColumnData> parent_p)
     : count(0), block_manager(block_manager), info(info), column_index(column_index), type(std::move(type_p)),
-      allocation_size(0),
+      allocation_size(0), stats_inexact(false),
       data_type(data_type_p == ColumnDataType::CHECKPOINT_TARGET ? ColumnDataType::MAIN_TABLE : data_type_p),
       parent(parent_p) {
 	if (!parent) {
@@ -127,6 +127,11 @@ bool ColumnData::HasChanges() const {
 
 bool ColumnData::HasAnyChanges() const {
 	return HasChanges();
+}
+
+bool ColumnData::HasInexactStatistics() const {
+	// updates still in the segment may have widened the statistics as well
+	return stats_inexact || HasUpdates();
 }
 
 idx_t ColumnData::GetMaxEntry() {
@@ -334,6 +339,9 @@ void ColumnData::UpdateInternal(TransactionData transaction, DuckTableEntry &tab
 	}
 	updates->Update(transaction, table_entry, column_index, update_vector, row_ids, update_count, base_vector,
 	                row_group_start);
+	if (updates->HasUpdates()) {
+		stats_inexact = true;
+	}
 }
 
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

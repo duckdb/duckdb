@@ -329,6 +329,10 @@ bool StandardColumnData::HasAnyChanges() const {
 	return ColumnData::HasAnyChanges() || validity->HasAnyChanges();
 }
 
+bool StandardColumnData::HasInexactStatistics() const {
+	return ColumnData::HasInexactStatistics() || validity->HasInexactStatistics();
+}
+
 PersistentColumnData StandardColumnData::Serialize() {
 	auto persistent_data = ColumnData::Serialize();
 	persistent_data.child_columns.push_back(validity->Serialize());

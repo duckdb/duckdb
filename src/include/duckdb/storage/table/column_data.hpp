@@ -136,6 +136,8 @@ public:
 
 	//! Whether or not the column has ANY changes, including in child columns
 	virtual bool HasAnyChanges() const;
+	//! Whether updates may have widened the statistics of this column or of a column nested in it
+	virtual bool HasInexactStatistics() const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
@@ -288,6 +290,8 @@ protected:
 	mutable mutex stats_lock;
 	//! Total transient allocation size
 	atomic<idx_t> allocation_size;
+	//! Whether updates widened the statistics; only a rewrite of the column makes them exact again
+	atomic<bool> stats_inexact;
 	//! The stats of the root segment
 	unique_ptr<SegmentStatistics> stats;
 

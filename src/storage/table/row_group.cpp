@@ -1936,6 +1936,16 @@ bool RowGroup::HasChanges(VisibilityBound bound) const {
 	return false;
 }
 
+bool RowGroup::HasInexactStatistics() const {
+	for (idx_t c = 0; c < columns.size(); c++) {
+		// unloaded columns have no in-memory changes
+		if (ColumnIsLoaded(c) && columns[c]->HasInexactStatistics()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool RowGroup::IsPersistent() const {
 	for (auto &column : columns) {
 		if (!column->IsPersistent()) {
@@ -2048,7 +2058,8 @@ struct DuckDBPartitionRowGroup : public PartitionRowGroup {
 	}
 
 	bool HasPendingWrites() override {
-		return row_group->HasChanges(VisibilityBound::AllCommitted());
+		// statistics that updates widened may list values no longer in the row group
+		return row_group->HasChanges(VisibilityBound::AllCommitted()) || row_group->HasInexactStatistics();
 	}
 };
 
