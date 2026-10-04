@@ -68,3 +68,24 @@ query I
 SELECT CAST('\x12' AS BLOB)
 ----
 \x12
+
+# blob to bit: empty blob cannot be cast, try_cast returns NULL
+query I
+SELECT TRY_CAST(''::BLOB AS BIT)
+----
+NULL
+
+query I
+SELECT TRY_CAST('AAAA'::BLOB AS BIT)
+----
+01000001010000010100000101000001
+
+query I
+SELECT TRY_CAST(NULL::BLOB AS BIT)
+----
+NULL
+
+statement error
+SELECT CAST(''::BLOB AS BIT)
+----
+Conversion Error: Cannot cast empty BLOB to BIT

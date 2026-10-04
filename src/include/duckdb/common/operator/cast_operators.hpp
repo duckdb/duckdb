@@ -913,14 +913,14 @@ struct CastFromBlob {
 template <>
 duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, StringHeap &heap);
 
-struct CastFromBlobToBit {
-	template <class SRC>
-	static inline string_t Operation(SRC input, StringHeap &heap) {
-		throw NotImplementedException("Cast from blob could not be performed!");
+struct TryCastBlobToBit {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
+		throw InternalException("Unsupported type for try cast blob to bit");
 	}
 };
 template <>
-string_t CastFromBlobToBit::Operation(string_t input, StringHeap &heap);
+bool TryCastBlobToBit::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters);
 
 struct TryCastToBlob {
 	template <class SRC, class DST>
