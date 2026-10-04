@@ -214,7 +214,13 @@ static LogicalPlanSQLExportResult ExportJoin(LogicalOperator &op, LogicalPlanSQL
 			expression = make_uniq<ColumnRefExpression>(Identifier("__mark_join_marker"));
 		} else {
 			auto resolved = expression_context.resolve_binding(field.source_binding);
-			D_ASSERT(resolved && resolved->type == field.type);
+			if (!resolved || resolved->type != field.type) {
+				auto issue = SQLExportHelpers::MakeIssue(
+				    LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT, LogicalPlanVerificationPhase::PLAN_EXPORT,
+				    path, LogicalPlanVerificationConstructIdentity::LogicalOperator(op.type),
+				    "Join output field has no matching SQL column binding");
+				return LogicalPlanSQLExportResult::Failure({std::move(issue)});
+			}
 			expression = make_uniq<ColumnRefExpression>(resolved->names);
 		}
 		expression->SetAlias(LogicalPlanSQLExportHelpers::FieldIdentifier(select->select_list.size()));

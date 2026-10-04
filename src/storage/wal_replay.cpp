@@ -483,6 +483,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	ReplayState checkpoint_state(database, *con.context, replay_state);
 	idx_t last_wal_flush_end = 0;
 	idx_t checkpoint_truncate_offset = 0;
+	idx_t last_wal_flush_row_group_blocks = 0;
 	try {
 		idx_t replay_entry_count = 0;
 		while (true) {
@@ -497,6 +498,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 			}
 			if (is_wal_flush) {
 				last_wal_flush_end = reader.CurrentOffset();
+				last_wal_flush_row_group_blocks = checkpoint_state.row_group_blocks.size();
 				// check if the file is exhausted
 				if (reader.Finished()) {
 					// we finished reading the file: break
@@ -512,10 +514,16 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		ErrorData error(ex);
 		// ignore serialization exceptions - they signal a torn WAL
-		if (error.Type() != ExceptionType::SERIALIZATION) {
+		if (config.options.abort_on_wal_failure || error.Type() != ExceptionType::SERIALIZATION) {
+			con.Rollback();
 			error.Throw("Failure while replaying WAL file \"" + wal_path + "\": ");
 		}
 	} // LCOV_EXCL_STOP
+
+	// Discard row group blocks from uncommitted transactions.
+	// Notice, this must happen before apply any WAL entries to block manager.
+	checkpoint_state.row_group_blocks.resize(last_wal_flush_row_group_blocks);
+
 	unique_ptr<FileHandle> checkpoint_handle;
 	bool truncate_failed_checkpoint_marker = false;
 	// A serialization error can leave a partially deserialized checkpoint marker in the replay state. Only reconcile
@@ -619,6 +627,12 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 		block_manager.MarkBlockAsUsed(block_id);
 	}
 
+	// If there are no committed transactions in the WAL, rollback and truncate.
+	if (last_wal_flush_end == 0) {
+		con.Rollback();
+		return make_uniq<WriteAheadLog>(storage_manager, wal_path, 0, WALInitState::UNINITIALIZED_REQUIRES_TRUNCATE);
+	}
+
 	// we need to recover from the WAL: actually set up the replay state
 	ReplayState state(database, *con.context, replay_state);
 
@@ -632,7 +646,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 	idx_t successful_offset = 0;
 	bool all_succeeded = false;
 	try {
-		while (true) {
+		while (wal_reader.CurrentOffset() < last_wal_flush_end) {
 			// read the current entry
 			auto deserializer = WriteAheadLogDeserializer::GetEntryDeserializer(state, wal_reader);
 			if (deserializer.ReplayEntry()) {
@@ -645,10 +659,10 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 				state.replay_index_infos.clear();
 
 				successful_offset = wal_reader.CurrentOffset();
-				// check if the file is exhausted
-				if (wal_reader.Finished()) {
+				// check if the file is exhausted or all committed entries were replayed
+				if (wal_reader.Finished() || wal_reader.CurrentOffset() >= last_wal_flush_end) {
 					// we finished reading the file: break
-					all_succeeded = true;
+					all_succeeded = wal_reader.Finished();
 					break;
 				}
 				con.BeginTransaction();
@@ -825,16 +839,9 @@ void WriteAheadLogDeserializer::ReplayVersion() {
 	}
 }
 
-//! Qualify a name stored in the WAL as [schema_path..., name] (i.e. without a catalog component) with the catalog we
-//! are replaying into, so nested schemas can be navigated. Do not use WithCatalog() here: that treats the leading
-//! component of a 3-element path as a catalog, which would drop the outermost schema of a nested path.
+//! WAL names carry schema paths without a catalog component.
 static QualifiedName ReplayEntryName(Catalog &catalog, const QualifiedName &entry_name) {
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	for (idx_t i = 0; i + 1 < entry_name.Path().size(); i++) {
-		path.push_back(entry_name.Path()[i]);
-	}
-	return QualifiedName(std::move(path), entry_name.Name());
+	return QualifiedName::FromCatalogSchema(catalog.GetName(), entry_name.Parent().Path(), entry_name.Name());
 }
 
 //! Re-qualify a serialized [catalog, schema_path..., name] entry name (as carried by a CreateInfo) for the catalog it
@@ -869,16 +876,7 @@ void WriteAheadLogDeserializer::ReplayDropTable() {
 	DropInfo info;
 
 	info.type = CatalogType::TABLE_ENTRY;
-	// build the DropInfo path [catalog, schema_path..., name]; the qualified name's path is [schema_path..., name]
-	// (older WALs that only stored the immediate schema + table name are folded into it during deserialization)
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	for (auto &component : entry.qualified_name.Path()) {
-		path.push_back(component);
-	}
-	Identifier table_name = std::move(path.back());
-	path.pop_back();
-	info.SetQualifiedName(QualifiedName(std::move(path), std::move(table_name)));
+	info.SetQualifiedName(ReplayEntryName(catalog, entry.qualified_name));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1041,19 +1039,12 @@ void WriteAheadLogDeserializer::ReplayDropView() {
 void WriteAheadLogDeserializer::ReplayCreateSchema() {
 	auto entry = WALCreateSchema::Deserialize(deserializer);
 	CreateSchemaInfo info;
-	// build the CreateSchemaInfo path [catalog, parent schemas..., new schema, <empty name>]
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	if (!entry.qualified_name.Path().empty()) {
-		// v2.0.0+: the qualified name's path is [parent schemas..., new schema]
-		for (auto &component : entry.qualified_name.Path()) {
-			path.push_back(component);
-		}
-	} else {
-		// legacy: only the (top-level) schema name was serialized
-		path.push_back(std::move(entry.schema));
+	auto schema_path = entry.qualified_name.Path();
+	if (schema_path.empty()) {
+		// Legacy WALs only store a top-level schema name.
+		schema_path.push_back(std::move(entry.schema));
 	}
-	info.SetQualifiedName(QualifiedName(std::move(path), Identifier()));
+	info.SetQualifiedName(QualifiedName::FromCatalogSchema(catalog.GetName(), std::move(schema_path), Identifier()));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1065,22 +1056,11 @@ void WriteAheadLogDeserializer::ReplayDropSchema() {
 	auto entry = WALDropSchema::Deserialize(deserializer);
 	DropInfo info;
 	info.type = CatalogType::SCHEMA_ENTRY;
-	// build the DropInfo path [catalog, parent schemas..., schema] with the schema name in the name slot
-	vector<Identifier> path;
-	path.push_back(catalog.GetName());
-	Identifier schema_name;
-	if (!entry.qualified_name.Path().empty()) {
-		// v2.0.0+: the qualified name's path is [parent schemas..., schema]
-		auto &qpath = entry.qualified_name.Path();
-		for (idx_t i = 0; i + 1 < qpath.size(); i++) {
-			path.push_back(qpath[i]);
-		}
-		schema_name = qpath.back();
-	} else {
-		// legacy: only the (top-level) schema name was serialized
-		schema_name = std::move(entry.schema);
-	}
-	info.SetQualifiedName(QualifiedName(std::move(path), std::move(schema_name)));
+	auto schema_name =
+	    entry.qualified_name.Path().empty() ? QualifiedName(std::move(entry.schema)) : std::move(entry.qualified_name);
+	auto path = schema_name.Path();
+	path.insert(path.begin(), catalog.GetName());
+	info.SetQualifiedName(QualifiedName::FromPath(std::move(path)));
 	if (DeserializeOnly()) {
 		return;
 	}
@@ -1303,13 +1283,7 @@ void WriteAheadLogDeserializer::ReplayUseTable() {
 	if (DeserializeOnly()) {
 		return;
 	}
-	// the qualified name holds the (possibly nested) schema path followed by the table name - prepend the catalog
-	auto path = entry.qualified_name.Path();
-	auto table_name = std::move(path.back());
-	path.pop_back();
-	path.insert(path.begin(), catalog.GetName());
-	state.current_table =
-	    &catalog.GetEntry<DuckTableEntry>(context, QualifiedName(std::move(path), std::move(table_name)));
+	state.current_table = &catalog.GetEntry<DuckTableEntry>(context, ReplayEntryName(catalog, entry.qualified_name));
 }
 
 void WriteAheadLogDeserializer::ReplayInsert() {

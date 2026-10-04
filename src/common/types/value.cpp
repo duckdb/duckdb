@@ -1788,31 +1788,12 @@ string Value::ToSQLString() const {
 		return "CAST(CAST(" + val.ToSQLString() + " AS " + val.type().ToString() + ") AS VARIANT)";
 	}
 	case LogicalTypeId::TUPLE:
-	case LogicalTypeId::STRUCT: {
-		// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
-		bool is_unnamed = type_.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type_);
-		string ret = is_unnamed ? "(" : "{";
-		auto &child_types = StructType::GetChildTypes(type_);
-		auto &struct_values = StructValue::GetChildren(*this);
-		for (idx_t i = 0; i < struct_values.size(); i++) {
-			auto &name = child_types[i].first;
-			auto &child = struct_values[i];
-			if (is_unnamed) {
-				ret += child.ToSQLString();
-			} else {
-				ret += "'" + StringUtil::Replace(name.GetIdentifierName(), "'", "''") + "': " + child.ToSQLString();
-			}
-			if (i < struct_values.size() - 1) {
-				ret += ", ";
-			}
-		}
-		// a single-element tuple needs a trailing comma to round-trip: (1,) - otherwise (1) is just grouping
-		if (is_unnamed && struct_values.size() == 1) {
-			ret += ",";
-		}
-		ret += is_unnamed ? ")" : "}";
-		return ret;
-	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::ARRAY:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
+		return NestedToSQLString(*this, [](const Value &child) { return child.ToSQLString(); });
 	case LogicalTypeId::FLOAT:
 		if (!FloatIsFinite(FloatValue::Get(*this)) ||
 		    (FloatValue::Get(*this) == 0 && std::signbit(FloatValue::Get(*this)))) {
@@ -1834,61 +1815,75 @@ string Value::ToSQLString() const {
 		}
 		return ToString();
 	}
-	case LogicalTypeId::LIST: {
-		string ret = "[";
-		auto &list_values = ListValue::GetChildren(*this);
-		for (idx_t i = 0; i < list_values.size(); i++) {
-			auto &child = list_values[i];
-			ret += child.ToSQLString();
-			if (i < list_values.size() - 1) {
+	default:
+		return ToString();
+	}
+}
+
+string Value::NestedToSQLString(const Value &value, const std::function<string(const Value &)> &child_to_sql) {
+	auto &type = value.type();
+	switch (type.id()) {
+	case LogicalTypeId::TUPLE:
+	case LogicalTypeId::STRUCT: {
+		// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
+		bool is_unnamed = type.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type);
+		string ret = is_unnamed ? "(" : "{";
+		auto &child_types = StructType::GetChildTypes(type);
+		auto &struct_values = StructValue::GetChildren(value);
+		for (idx_t i = 0; i < struct_values.size(); i++) {
+			auto &name = child_types[i].first;
+			auto &child = struct_values[i];
+			if (is_unnamed) {
+				ret += child_to_sql(child);
+			} else {
+				ret += "'" + StringUtil::Replace(name.GetIdentifierName(), "'", "''") + "': " + child_to_sql(child);
+			}
+			if (i < struct_values.size() - 1) {
 				ret += ", ";
 			}
 		}
-		ret += "]";
+		// a single-element tuple needs a trailing comma to round-trip: (1,) - otherwise (1) is just grouping
+		if (is_unnamed && struct_values.size() == 1) {
+			ret += ",";
+		}
+		ret += is_unnamed ? ")" : "}";
 		return ret;
 	}
+	case LogicalTypeId::LIST:
 	case LogicalTypeId::ARRAY: {
-		string ret = "[";
-		auto &array_values = ArrayValue::GetChildren(*this);
-		for (idx_t i = 0; i < array_values.size(); i++) {
-			auto &child = array_values[i];
-			ret += child.ToSQLString();
-			if (i < array_values.size() - 1) {
-				ret += ", ";
-			}
-		}
-		ret += "]";
-		return ret;
+		auto &children =
+		    type.id() == LogicalTypeId::LIST ? ListValue::GetChildren(value) : ArrayValue::GetChildren(value);
+		return "[" + StringUtil::Join(children, children.size(), ", ", child_to_sql) + "]";
 	}
 	case LogicalTypeId::MAP: {
 		// A bare `MAP {...}` literal infers its element types from the entries
 		// (and `MAP {}` infers MAP(INTEGER, INTEGER)), so it does not faithfully
 		// round-trip on its own. Append an explicit cast to the real type
-		auto &entries = MapValue::GetChildren(*this);
+		auto &entries = MapValue::GetChildren(value);
 		string ret = "MAP {";
 		for (idx_t i = 0; i < entries.size(); i++) {
 			auto &kv = StructValue::GetChildren(entries[i]);
 			if (i > 0) {
 				ret += ", ";
 			}
-			ret += kv[0].ToSQLString();
+			ret += child_to_sql(kv[0]);
 			ret += ": ";
-			ret += kv[1].ToSQLString();
+			ret += child_to_sql(kv[1]);
 		}
-		ret += "}::" + type_.ToString();
+		ret += "}::" + type.ToString();
 		return ret;
 	}
 	case LogicalTypeId::UNION: {
 		string ret = "union_value(";
-		auto union_tag = UnionValue::GetTag(*this);
-		auto &tag_name = UnionType::GetMemberName(type(), union_tag);
+		auto union_tag = UnionValue::GetTag(value);
+		auto &tag_name = UnionType::GetMemberName(type, union_tag);
 		ret += SQLIdentifier(tag_name) + " := ";
-		ret += UnionValue::GetValue(*this).ToSQLString();
-		ret += ")::" + type_.ToString();
+		ret += child_to_sql(UnionValue::GetValue(value));
+		ret += ")::" + type.ToString();
 		return ret;
 	}
 	default:
-		return ToString();
+		throw InternalException("Value::NestedToSQLString called on non-nested type %s", type.ToString());
 	}
 }
 

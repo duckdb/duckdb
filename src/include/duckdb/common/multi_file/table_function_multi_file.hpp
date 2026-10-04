@@ -152,6 +152,15 @@ public:
 	bool multi_file_scan = false;
 };
 
+//! What the bind of a wrapped single-file table function reports about the file it binds, beyond its names and types
+struct TableFunctionFileBindInfo {
+	//! The columns of the file, one per bound column, e.g. to attach the field ids of the columns and their nested
+	//! fields. Left empty, the columns are derived from the bound names and types
+	vector<MultiFileColumnDefinition> columns;
+	//! The key-value metadata of the file, exposed as the metadata of the reader of the file
+	InsertionOrderPreservingMap<Value> metadata;
+};
+
 //! Bind data of a multi-file function that wraps a single-file table function
 struct TableFunctionMultiFileData : public TableFunctionData {
 	TableFunctionFileReaderOptions options;
@@ -289,6 +298,8 @@ public:
 	optional_idx cardinality;
 	//! The virtual columns that are read, as a map of the index they are projected in to their virtual column id
 	unordered_map<column_t, column_t> virtual_columns;
+	//! The key-value metadata the wrapped function reported for this file
+	InsertionOrderPreservingMap<Value> metadata;
 	//! The operator this file is scanned for, and the number of files that scan reads
 	optional_ptr<const PhysicalOperator> scan_op;
 	idx_t scan_file_count = 1;

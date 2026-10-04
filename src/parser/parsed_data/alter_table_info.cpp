@@ -391,7 +391,7 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
-	                                                       expression->Copy());
+	                                                       expression ? expression->Copy() : nullptr);
 }
 
 string ChangeColumnTypeInfo::ToString() const {

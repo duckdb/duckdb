@@ -246,8 +246,7 @@ DUCKDB_V2_ERROR duckdb_v2_vector_constant_set_valid(duckdb_v2_vector_handle vect
 //
 // Per-kind child counts:
 //   LIST    → 1 child  ([0] = elements)
-//   MAP     → 2 children ([0] = keys, [1] = values; V2 hides MAP's
-//                         internal LIST<STRUCT(K,V)>)
+//   MAP     → 1 child  ([0] = entries, a STRUCT(key, value))
 //   ARRAY   → 1 child  ([0] = elements)
 //   STRUCT  → N children ([i] = field i)
 //   UNION   → N+1 children ([0] = tag, [1..N] = members)
@@ -262,11 +261,9 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_child_count(duckdb_v2_vector_handle vector,
 		auto *vec = Convert(vector);
 		switch (vec->GetType().id()) {
 		case duckdb::LogicalTypeId::LIST:
+		case duckdb::LogicalTypeId::MAP:
 		case duckdb::LogicalTypeId::ARRAY:
 			*out_count = 1;
-			return;
-		case duckdb::LogicalTypeId::MAP:
-			*out_count = 2;
 			return;
 		case duckdb::LogicalTypeId::STRUCT:
 		case duckdb::LogicalTypeId::TUPLE:
@@ -298,6 +295,15 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_child(duckdb_v2_vector_handle vector, idx_t
 			*out_child = Convert(&child);
 			return;
 		}
+		case duckdb::LogicalTypeId::MAP: {
+			if (index != 0) {
+				throw duckdb::InvalidInputException(
+				    "duckdb_v2_vector_get_child: MAP has only child [0] (entries, a STRUCT(key, value))");
+			}
+			auto &entries = duckdb::ListVector::GetChildMutable(*vec);
+			*out_child = Convert(&entries);
+			return;
+		}
 		case duckdb::LogicalTypeId::ARRAY: {
 			if (index != 0) {
 				throw duckdb::InvalidInputException("duckdb_v2_vector_get_child: ARRAY has only child [0] (elements)");
@@ -305,21 +311,6 @@ DUCKDB_V2_ERROR duckdb_v2_vector_get_child(duckdb_v2_vector_handle vector, idx_t
 			auto &child = duckdb::ArrayVector::GetChildMutable(*vec);
 			*out_child = Convert(&child);
 			return;
-		}
-		case duckdb::LogicalTypeId::MAP: {
-			// V2 hides MAP's internal LIST<STRUCT(K,V)>: child [0] is the
-			// key vector, child [1] is the value vector.
-			if (index == 0) {
-				auto &keys = duckdb::MapVector::GetKeys(*vec);
-				*out_child = Convert(&keys);
-				return;
-			}
-			if (index == 1) {
-				auto &values = duckdb::MapVector::GetValues(*vec);
-				*out_child = Convert(&values);
-				return;
-			}
-			throw duckdb::InvalidInputException("duckdb_v2_vector_get_child: MAP children are [0]=keys, [1]=values");
 		}
 		case duckdb::LogicalTypeId::STRUCT:
 		case duckdb::LogicalTypeId::TUPLE: {

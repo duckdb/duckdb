@@ -337,6 +337,8 @@ AddColumnEntry PEGTransformerFactory::TransformAddColumnEntry(
 				if (new_column.compression_type == CompressionType::COMPRESSION_AUTO) {
 					throw ParserException("Unrecognized option for column compression");
 				}
+			} else if (constraint.constraint_name == "ColumnCollation") {
+				new_column.type = ApplyColumnCollation(new_column.type, std::move(constraint.expression));
 			}
 		}
 	}
@@ -386,10 +388,6 @@ PEGTransformerFactory::TransformAlterColumn(PEGTransformer &transformer, const b
 	} else if (alter_column_entry->alter_table_type == AlterTableType::ALTER_COLUMN_TYPE) {
 		auto change_column_type = unique_ptr_cast<AlterTableInfo, ChangeColumnTypeInfo>(std::move(alter_column_entry));
 		change_column_type->column_name = nested_column_name->ColumnNames()[0];
-		if (!change_column_type->expression) {
-			change_column_type->expression =
-			    make_uniq<CastExpression>(change_column_type->target_type, std::move(nested_column_name));
-		}
 		return std::move(change_column_type);
 	} else {
 		throw NotImplementedException("Unrecognized type for alter column encountered");
@@ -409,14 +407,16 @@ unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformChangeNullability(PEG
 	}
 }
 
-unique_ptr<AlterTableInfo>
-PEGTransformerFactory::TransformAlterType(PEGTransformer &transformer, const bool &has_result,
-                                          const optional<LogicalType> &type,
-                                          optional<unique_ptr<ParsedExpression>> using_expression) {
+unique_ptr<AlterTableInfo> PEGTransformerFactory::TransformAlterType(
+    PEGTransformer &transformer, const bool &has_result, const optional<LogicalType> &type,
+    optional<ColumnConstraintEntry> column_collation, optional<unique_ptr<ParsedExpression>> using_expression) {
 	if (!type && !using_expression) {
 		throw ParserException("Omitting the type is only possible in combination with USING");
 	}
 	auto alter_type = type ? *type : LogicalType::UNKNOWN;
+	if (column_collation) {
+		alter_type = ApplyColumnCollation(type, std::move(column_collation->expression));
+	}
 	unique_ptr<ParsedExpression> expression;
 	if (using_expression) {
 		expression = std::move(*using_expression);

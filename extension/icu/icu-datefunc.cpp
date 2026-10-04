@@ -18,18 +18,9 @@ ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_se
 	InitCalendar();
 }
 
-ICUDateFunc::BindData::BindData(ClientContext &context) {
-	Value tz_value;
-	if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-		tz_setting = tz_value.ToString();
-	}
-
-	Value cal_value;
-	if (context.TryGetCurrentSetting("Calendar", cal_value)) {
-		cal_setting = cal_value.ToString();
-	} else {
-		cal_setting = "gregorian";
-	}
+ICUDateFunc::BindData::BindData(ClientContext &context) : cal_setting("gregorian") {
+	context.TryGetCurrentSetting("TimeZone", tz_setting);
+	context.TryGetCurrentSetting("Calendar", cal_setting);
 
 	InitCalendar();
 }
