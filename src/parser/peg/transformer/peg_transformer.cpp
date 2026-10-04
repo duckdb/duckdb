@@ -268,6 +268,7 @@ void PEGTransformer::Clear() {
 	ClearParameters();
 	pivot_entries.clear();
 	stored_cte_map.clear();
+	window_clauses.clear();
 }
 
 idx_t PEGTransformer::ParamCount() const {
@@ -368,9 +369,13 @@ bool PEGTransformer::IsWindowFrameDefault(WindowBoundary start, WindowBoundary e
 }
 
 unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const Identifier &window_name) {
-	auto it = window_clauses.find(window_name);
-	if (it == window_clauses.end()) {
-		throw ParserException("window \"%s\" does not exist", window_name);
+	if (window_clauses.empty()) {
+		throw ParserException("window %s does not exist", window_name);
+	}
+	auto &current_windows = window_clauses.back();
+	auto it = current_windows.find(window_name);
+	if (it == current_windows.end()) {
+		throw ParserException("window %s does not exist", window_name);
 	}
 	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
 }
