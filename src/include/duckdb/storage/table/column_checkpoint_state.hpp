@@ -43,6 +43,7 @@ public:
 	virtual shared_ptr<ColumnData> CreateEmptyColumnData();
 	virtual ColumnData &GetResultColumn();
 	virtual shared_ptr<ColumnData> GetFinalResult();
+	void CheckpointUpdates(VisibilityBound visibility_bound);
 
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 

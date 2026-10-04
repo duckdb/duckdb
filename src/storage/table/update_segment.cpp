@@ -23,7 +23,8 @@ static UpdateSegment::fetch_rows_function_t GetFetchRowsFunction(PhysicalType ty
 static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(PhysicalType type);
 
 UpdateSegment::UpdateSegment(ColumnData &column_data)
-    : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager), stats(column_data.type),
+    : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager),
+      newest_uncheckpointed_update_commit(0), stats(column_data.type),
       heap(BufferAllocator::Get(column_data.GetDatabase())) {
 	auto physical_type = type.InternalType();
 
@@ -1586,6 +1587,26 @@ bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {
 		}
 	}
 	return false;
+}
+
+//===--------------------------------------------------------------------===//
+// Checkpoint interaction
+//===--------------------------------------------------------------------===//
+bool UpdateSegment::HasUnserializedChanges() const {
+	return newest_uncheckpointed_update_commit.load() != 0;
+}
+
+void UpdateSegment::MarkCommitted(transaction_t commit_id) {
+	// commits are serialized under the transaction lock, so commit ids only grow
+	newest_uncheckpointed_update_commit = commit_id;
+}
+
+void UpdateSegment::MarkCheckpointed(VisibilityBound visibility_bound) {
+	auto current = newest_uncheckpointed_update_commit.load();
+	if (current != 0 && current < visibility_bound) {
+		// a commit at or above the bound that races with this call keeps its id
+		newest_uncheckpointed_update_commit.compare_exchange_strong(current, 0);
+	}
 }
 
 } // namespace duckdb

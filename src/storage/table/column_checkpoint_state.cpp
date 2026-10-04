@@ -16,6 +16,10 @@ ColumnCheckpointState::ColumnCheckpointState(const RowGroup &row_group, ColumnDa
 ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
+void ColumnCheckpointState::CheckpointUpdates(VisibilityBound visibility_bound) {
+	original_column_mutable.CheckpointUpdates(visibility_bound);
+}
+
 unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	D_ASSERT(global_stats);
 	return std::move(global_stats);

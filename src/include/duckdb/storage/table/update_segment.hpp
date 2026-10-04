@@ -11,6 +11,7 @@
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/common/types/string_heap.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/transaction/undo_buffer_allocator.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 
@@ -42,6 +43,10 @@ public:
 	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
+	//! Whether a committed update in this segment still has to be written by a checkpoint
+	bool HasUnserializedChanges() const;
+	void MarkCommitted(transaction_t commit_id);
+	void MarkCheckpointed(VisibilityBound visibility_bound);
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
@@ -67,6 +72,8 @@ private:
 	vector<column_t> nested_column_path;
 	//! The buffer manager the root node allocates from
 	BufferManager &buffer_manager;
+	//! The newest commit id of an update on this segment that no checkpoint has written yet, or 0
+	atomic<transaction_t> newest_uncheckpointed_update_commit;
 	//! The lock for the update segment
 	mutable StorageLock lock;
 	//! The root node (if any)

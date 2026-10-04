@@ -435,15 +435,14 @@ void ColumnDataCheckpointer::Checkpoint() {
 }
 
 void ColumnDataCheckpointer::FinalizeCheckpoint() {
-	if (has_changes) {
-		// something has undergone changes, we rewrote everything
-		// write the new data - not the old data
-		return;
-	}
-	// no changes - copy over the original columns
+	auto visibility_bound = checkpoint_info.GetVisibilityBound();
 	for (idx_t i = 0; i < checkpoint_states.size(); i++) {
 		auto &state = checkpoint_states[i].get();
-		WritePersistentSegments(state);
+		if (!has_changes) {
+			// no changes - copy over the original columns
+			WritePersistentSegments(state);
+		}
+		state.CheckpointUpdates(visibility_bound);
 	}
 }
 

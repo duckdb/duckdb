@@ -97,30 +97,37 @@ optional_ptr<UpdateSegment> ColumnData::GetUpdates() const {
 	return updates.get();
 }
 
-bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+void ColumnData::CheckpointUpdates(VisibilityBound visibility_bound) {
 	auto updates_ref = GetUpdates();
 	if (!updates_ref) {
-		return false;
+		return;
 	}
-	if (updates_ref->HasUpdates(start_row, end_row)) {
-		return true;
-	}
-	return false;
+	// marked before the checkpoint is durable, which is safe: a failed checkpoint invalidates the whole database
+	updates_ref->MarkCheckpointed(visibility_bound);
 }
 
 bool ColumnData::HasChanges() const {
+	auto updates_ref = GetUpdates();
+	bool has_unserialized_updates = updates_ref && updates_ref->HasUnserializedChanges();
 	for (auto &segment_node : data.SegmentNodes()) {
 		auto &segment = segment_node.GetNode();
 		if (segment.GetSegmentType() == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
 		}
-		// persistent segment; check if there were any updates or deletions in this segment
+		if (!has_unserialized_updates) {
+			continue;
+		}
+		// persistent segment; check if there were any updates in this segment
 		idx_t start_row_idx = segment_node.GetRowStart();
 		idx_t end_row_idx = start_row_idx + segment.count;
-		if (HasChanges(start_row_idx, end_row_idx)) {
+		if (updates_ref->HasUpdates(start_row_idx, end_row_idx)) {
 			return true;
 		}
+	}
+	if (stats_inexact) {
+		// a rewrite makes the statistics exact again
+		return true;
 	}
 	return false;
 }

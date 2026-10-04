@@ -130,8 +130,7 @@ public:
 
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
-	bool HasChanges(idx_t start_row, idx_t end_row) const;
-	//! Whether or not the column has changes at this level
+	//! Whether a checkpoint has to write this column: appended data, updates not yet on disk, or inexact statistics
 	bool HasChanges() const;
 
 	//! Whether or not the column has ANY changes, including in child columns
@@ -207,6 +206,7 @@ public:
 
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector,
 	                            VisibilityBound visibility_bound) const;
+	void CheckpointUpdates(VisibilityBound visibility_bound);
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
