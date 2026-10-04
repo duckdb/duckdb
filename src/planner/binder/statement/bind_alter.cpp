@@ -157,7 +157,7 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 	}
 	if (!entry->temporary) {
 		// We can only alter temporary tables and views in read-only mode.
-		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
+		properties.RegisterDBModify(catalog, context, stmt.info->GetModifications());
 	}
 	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
