@@ -455,6 +455,7 @@ UnreservedKeyword <- 'ABORT' /
 'DELIMITER' /
 'DELIMITERS' /
 'DEPENDS' /
+'DESTROY' /
 'DETACH' /
 'DICTIONARY' /
 'DISABLE' /
@@ -616,6 +617,7 @@ UnreservedKeyword <- 'ABORT' /
 'REF' /
 'REFERENCING' /
 'REFRESH' /
+'REGISTER' /
 'REINDEX' /
 'RELATIVE' /
 'RELEASE' /
@@ -625,6 +627,7 @@ UnreservedKeyword <- 'ABORT' /
 'REPLICA' /
 'RESET' /
 'RESOURCE' /
+'RESOURCES' /
 'RESPECT' /
 'RESTART' /
 'RESTRICT' /
