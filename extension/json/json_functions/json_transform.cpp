@@ -470,7 +470,8 @@ static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
                                     const vector<string> &names, const vector<Vector *> &result_vectors,
                                     JSONTransformOptions &options,
-                                    optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key) {
+                                    optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key,
+                                    const vector<shared_ptr<const JSONKeyTree>> *key_trees) {
 	if (column_indices && column_indices->empty()) {
 		column_indices = nullptr;
 	}
@@ -571,8 +572,9 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		auto child_column_index = column_indices ? &(*column_indices)[col_idx] : nullptr;
+		auto child_key_tree = key_trees && (*key_trees)[col_idx] ? (*key_trees)[col_idx].get() : nullptr;
 		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options,
-		                              child_column_index)) {
+		                              child_column_index, child_key_tree)) {
 			success = false;
 		}
 	}
@@ -585,7 +587,8 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 }
 
 static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                    JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index) {
+                                    JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index,
+                                    optional_ptr<const JSONKeyTree> key_tree) {
 	if (column_index && column_index->ChildIndexCount() == 0) {
 		column_index = nullptr;
 	}
@@ -613,7 +616,12 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 		const auto actual_i = column_index ? column_index->GetChildIndex(child_i).GetPrimaryIndex() : child_i;
 		projected_indices.insert(actual_i);
 
-		child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
+		// The field name may have been renamed to resolve a case-insensitive duplicate, so prefer the JSON key
+		if (key_tree) {
+			child_names.emplace_back(key_tree->keys[actual_i]);
+		} else {
+			child_names.emplace_back(StructType::GetChildName(result.GetType(), actual_i));
+		}
 		child_vectors.push_back(&child_vs[actual_i]);
 	}
 
@@ -626,11 +634,11 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	auto child_indices = column_index ? &column_index->GetChildIndexes() : nullptr;
 	const auto error_unknown_key = child_count == child_vs.size(); // Nothing projected out, error if unknown
 	return JSONTransform::TransformObject(objects, alc, count, child_names, child_vectors, options, child_indices,
-	                                      error_unknown_key);
+	                                      error_unknown_key, key_tree ? &key_tree->children : nullptr);
 }
 
 static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                 JSONTransformOptions &options) {
+                                 JSONTransformOptions &options, optional_ptr<const JSONKeyTree> key_tree) {
 	bool success = true;
 
 	// Initialize list vector
@@ -696,7 +704,9 @@ static bool TransformArrayToList(yyjson_val *arrays[], yyjson_alc *alc, Vector &
 	}
 
 	// Transform array values
-	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetChildMutable(result), offset, options, nullptr)) {
+	auto child_key_tree = key_tree && !key_tree->children.empty() ? key_tree->children[0].get() : nullptr;
+	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetChildMutable(result), offset, options, nullptr,
+	                              child_key_tree)) {
 		success = false;
 	}
 
@@ -762,7 +772,7 @@ static bool TransformArrayToTuple(yyjson_val *arrays[], yyjson_alc *alc, Vector 
 }
 
 static bool TransformArrayToArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                  JSONTransformOptions &options) {
+                                  JSONTransformOptions &options, optional_ptr<const JSONKeyTree> key_tree) {
 	bool success = true;
 
 	// Initialize array vector
@@ -840,8 +850,9 @@ static bool TransformArrayToArray(yyjson_val *arrays[], yyjson_alc *alc, Vector 
 	}
 
 	// Transform array values
+	auto child_key_tree = key_tree && !key_tree->children.empty() ? key_tree->children[0].get() : nullptr;
 	if (!JSONTransform::Transform(nested_vals, alc, ArrayVector::GetChildMutable(result), child_count, options,
-	                              nullptr)) {
+	                              nullptr, child_key_tree)) {
 		success = false;
 	}
 
@@ -1013,7 +1024,8 @@ static bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &
 }
 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-                              JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index) {
+                              JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index,
+                              optional_ptr<const JSONKeyTree> key_tree) {
 	auto result_type = result.GetType();
 	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map &&
 	    options.date_format_map->HasFormats(result_type.id())) {
@@ -1091,17 +1103,17 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObjectInternal(vals, alc, result, count, options, column_index);
+		return TransformObjectInternal(vals, alc, result, count, options, column_index, key_tree);
 	case LogicalTypeId::TUPLE:
 		return TransformArrayToTuple(vals, alc, result, count, options);
 	case LogicalTypeId::LIST:
-		return TransformArrayToList(vals, alc, result, count, options);
+		return TransformArrayToList(vals, alc, result, count, options, key_tree);
 	case LogicalTypeId::MAP:
 		return TransformObjectToMap(vals, alc, result, count, options);
 	case LogicalTypeId::UNION:
 		return TransformValueIntoUnion(vals, alc, result, count, options);
 	case LogicalTypeId::ARRAY:
-		return TransformArrayToArray(vals, alc, result, count, options);
+		return TransformArrayToArray(vals, alc, result, count, options, key_tree);
 	default:
 		throw NotImplementedException("Cannot read a value of type %s from a json file", result_type.ToString());
 	}
