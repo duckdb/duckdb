@@ -12,6 +12,7 @@
 #include "duckdb/common/progress_bar/progress_bar.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/transaction/shared_transaction_guard.hpp"
 
 namespace duckdb {
 class BaseQueryResult;
@@ -26,6 +27,8 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Holds a shared transaction's statement lock for the duration of this query.
+	unique_ptr<SharedTransactionGuard> statement_guard;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {

@@ -503,7 +503,12 @@ void VariantColumnData::FetchRows(TransactionData transaction, ColumnFetchState 
 		}
 
 		//! Need to perform the cast here as well
-		auto context = transaction.transaction->context.lock();
+		// The reading connection's context: the transaction's own may belong to a connection that is gone.
+		auto context = state.context.GetClientContext();
+		if (!context) {
+			throw InternalException("VariantColumnData::FetchRow: casting a variant requires a client context on "
+			                        "the fetch state");
+		}
 		auto fetched_row = extracted_variant.GetValue(0).CastAs(*context, result.GetType());
 		result.SetValue(result_idx, fetched_row);
 	}

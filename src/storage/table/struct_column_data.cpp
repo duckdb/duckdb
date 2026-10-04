@@ -350,7 +350,12 @@ void StructColumnData::FetchRows(TransactionData transaction, ColumnFetchState &
 		auto &child_type = StructType::GetChildTypes(type)[child_index].second;
 		if (!child_storage_index.HasChildren() && child_storage_index.HasType() &&
 		    child_storage_index.GetType() != child_type) {
-			auto context = transaction.transaction->context.lock();
+			// The reading connection's context: the transaction's own may belong to a connection that is gone.
+			auto context = state.context.GetClientContext();
+			if (!context) {
+				throw InternalException("StructColumnData::FetchRow: casting a child column requires a client "
+				                        "context on the fetch state");
+			}
 			for (idx_t idx = 0; idx < fetch_count; idx++) {
 				const idx_t offset = offsets[sel.get_index(idx)];
 				Vector intermediate(child_type, 1);

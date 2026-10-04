@@ -42,9 +42,13 @@ public:
 
 	void BeginTransaction();
 	void Commit();
-	void Rollback(optional_ptr<ErrorData>);
+	//! `allow_hand_off` is for paths that cannot wait, such as connection teardown: rather than blocking until
+	//! participants finish reading a shared transaction, hand it to the last one out.
+	void Rollback(optional_ptr<ErrorData> error, bool allow_hand_off = false);
 	void ClearTransaction();
 	void SetAutocheckpointError(ErrorData error);
+	//! Take part, read-only, in the transaction another connection shared with duckdb_export_transaction_snapshot().
+	void SetTransactionSnapshot(const string &snapshot_id);
 
 	void SetAutoCommit(bool value);
 	bool IsAutoCommit() const {

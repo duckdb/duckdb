@@ -52,6 +52,10 @@ public:
 	//! Get an attached database by its name
 	optional_ptr<AttachedDatabase> GetDatabase(ClientContext &context, const Identifier &name);
 	shared_ptr<AttachedDatabase> GetDatabase(const Identifier &name);
+	//! Route an opaque shared-transaction capability to its owning database.
+	bool RegisterSharedTransaction(const string &token, AttachedDatabase &database);
+	shared_ptr<AttachedDatabase> GetSharedTransactionDatabase(const string &token);
+	void UnregisterSharedTransaction(const string &token, AttachedDatabase &database);
 	//! Attach a new database
 	shared_ptr<AttachedDatabase> AttachDatabase(ClientContext &context, AttachInfo &info, AttachOptions &options);
 
@@ -148,6 +152,10 @@ private:
 	identifier_map_t<shared_ptr<AttachedDatabase>> databases;
 	//! The default database for new connections; empty when none is set (guarded by databases_lock)
 	Identifier default_database;
+	//! Routes transaction snapshot tokens to their database across rename and detach. The exporter's transaction
+	//! owns the database; this map never keeps one alive.
+	mutex shared_transactions_lock;
+	unordered_map<string, weak_ptr<AttachedDatabase>> shared_transactions;
 	//! The next object id handed out by the NextOid method
 	atomic<idx_t> next_oid;
 	//! The current query number

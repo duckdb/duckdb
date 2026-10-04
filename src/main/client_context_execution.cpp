@@ -25,6 +25,7 @@
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/transaction/shared_transaction_state.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
 
 namespace duckdb {
@@ -36,7 +37,45 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	if (ValidChecker::IsInvalidated(db_inst)) {
 		throw ErrorManager::InvalidatedDatabase(*this, ValidChecker::InvalidatedMessage(db_inst));
 	}
+	// Set query deadline if max_execution_time is configured
+	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
+	if (max_execution_time > 0) {
+		auto now = steady_clock::now();
+		auto deadline_tp = now + milliseconds(max_execution_time);
+		query_deadline = NumericCast<idx_t>(duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count());
+	} else {
+		query_deadline.SetInvalid();
+	}
+
+	// Protect the shared transaction during binding and reject statements once its owner has ended it.
+	// This runs before the query is registered so that a failure here leaves nothing to clean up.
+	unique_ptr<SharedTransactionGuard> statement_guard;
+	if (transaction.HasActiveTransaction()) {
+		auto &meta_transaction = transaction.ActiveTransaction();
+		auto shared_state = meta_transaction.GetSharedTransactionState();
+		if (shared_state) {
+			// Binding starts shared; modification metadata selects an exclusive hold before execution.
+			auto mode =
+			    !meta_transaction.IsSharedParticipant() && statement.type == StatementType::TRANSACTION_STATEMENT
+			        ? SharedTransactionGuardMode::ACQUIRE_EXCLUSIVE
+			        : SharedTransactionGuardMode::ACQUIRE_SHARED;
+			statement_guard = make_uniq<SharedTransactionGuard>(*this, shared_state->GetStatementLock(), mode);
+			if (statement.type != StatementType::TRANSACTION_STATEMENT) {
+				if (shared_state->IsEnded()) {
+					throw TransactionException("Shared transaction has ended: the owning connection has committed "
+					                           "or rolled back. COMMIT or ROLLBACK detaches from it");
+				}
+				if (meta_transaction.IsSharedParticipant() && shared_state->IsInvalidated()) {
+					throw TransactionException("Shared transaction is no longer readable: a statement on the owning "
+					                           "connection failed, so its transaction will roll back. COMMIT or "
+					                           "ROLLBACK detaches from it");
+				}
+			}
+		}
+	}
+
 	active_query = make_uniq<ActiveQueryContext>();
+	active_query->statement_guard = std::move(statement_guard);
 	if (transaction.IsAutoCommit() && !transaction.HasActiveTransaction()) {
 		transaction.BeginTransaction();
 	}
@@ -47,15 +86,6 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	active_query->query = query;
 
 	query_progress.Initialize();
-	// Set query deadline if max_execution_time is configured
-	auto max_execution_time = Settings::Get<MaxExecutionTimeSetting>(*this);
-	if (max_execution_time > 0) {
-		auto now = steady_clock::now();
-		auto deadline_tp = now + milliseconds(max_execution_time);
-		query_deadline = NumericCast<idx_t>(duration_cast<milliseconds>(deadline_tp.time_since_epoch()).count());
-	} else {
-		query_deadline.SetInvalid();
-	}
 	// Notify any registered state of query begin
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);
@@ -79,6 +109,10 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	active_query->progress_bar.reset();
+	if (!success && invalidate_transaction && transaction.HasActiveTransaction() && !transaction.IsAutoCommit()) {
+		// Reject new participant statements; existing readers may finish before the owner rolls back.
+		MarkSharedTransactionInvalidated();
+	}
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_deadline.SetInvalid();
