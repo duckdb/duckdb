@@ -534,7 +534,6 @@ public:
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 
-	//! Named windows per SELECT nesting level; a SELECT only sees its own WINDOW clause
 	vector<identifier_map_t<unique_ptr<WindowExpression>>> window_clauses;
 
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
