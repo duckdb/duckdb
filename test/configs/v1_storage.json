@@ -18,6 +18,12 @@
       ]
     },
     {
+      "reason": "View column tags require v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/tag_on.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/extension/autoloading_types.test",

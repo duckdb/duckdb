@@ -50,6 +50,8 @@ public:
 
 	//! Returns the view column info, if the view is bound. Otherwise returns `nullptr`
 	virtual shared_ptr<ViewColumnInfo> GetColumnInfo() const;
+	//! Returns the effective public column names, including aliases and deduplication
+	vector<Identifier> GetPublicColumnNames() const;
 	//! Bind a view so we know the types / names returned by it
 	virtual void BindView(ClientContext &context, BindViewAction action = BindViewAction::BIND_IF_UNBOUND);
 	//! Update the view with a new set of types / names
@@ -57,6 +59,7 @@ public:
 	Value GetColumnComment(idx_t column_index);
 	//! Returns the bound name of a visible column
 	Identifier ResolveColumnName(const Identifier &column_name) const;
+	Value GetColumnTags(idx_t column_index);
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
@@ -79,8 +82,11 @@ private:
 	atomic<thread_id> bind_thread;
 	//! The comments on the columns of the view: can be empty if there are no comments
 	identifier_map_t<Value> column_comments;
+	//! The tags on the columns of the view: can be empty if there are no tags
+	identifier_map_t<InsertionOrderPreservingMap<string>> column_tags;
 
 private:
 	void Initialize(CreateViewInfo &info);
+	Identifier ResolveTagColumnName(const Identifier &column_name) const;
 };
 } // namespace duckdb

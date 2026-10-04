@@ -44,6 +44,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	result->types = types;
 	result->names = names;
 	result->column_comments_map = column_comments_map;
+	result->column_tags_map = column_tags_map;
 	result->binding_mode = binding_mode;
 	result->security_type = security_type;
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());

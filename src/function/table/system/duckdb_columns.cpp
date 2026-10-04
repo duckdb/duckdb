@@ -192,9 +192,8 @@ public:
 		}
 		auto view_columns = entry.GetColumnInfo();
 		if (view_columns) {
-			column_names = view_columns->names;
+			column_names = entry.GetPublicColumnNames();
 			types = view_columns->types;
-			QueryResult::DeduplicateColumns(column_names);
 			bound_view = true;
 		} else {
 			// view is not bound - emit a single placeholder column
@@ -212,7 +211,7 @@ public:
 		if (types[0].id() == LogicalTypeId::INVALID) {
 			return Value();
 		}
-		return Value(col < entry.aliases.size() ? entry.aliases[col] : column_names[col]);
+		return Value(column_names[col]);
 	}
 	const LogicalType &ColumnType(idx_t col) override {
 		return types[col];
@@ -227,8 +226,7 @@ public:
 		return bound_view ? entry.GetColumnComment(col) : Value();
 	}
 	const Value ColumnTags(idx_t col) override {
-		InsertionOrderPreservingMap<string> empty;
-		return Value::MAP(empty);
+		return bound_view ? entry.GetColumnTags(col) : Value::MAP(InsertionOrderPreservingMap<string>());
 	}
 	bool IsGenerated(idx_t col) override {
 		return false;

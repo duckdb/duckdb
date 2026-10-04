@@ -145,6 +145,12 @@
       "paths": [
         "test/sql/alter/alter_schema_set_schema_options.test"
       ]
+    },
+    {
+      "reason": "View column tags require storage version v2.0.0 but encrypted databases use an older default storage version",
+      "paths": [
+        "test/sql/catalog/tag_on.test"
+      ]
     }
   ]
 }
