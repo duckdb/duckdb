@@ -1,0 +1,53 @@
+# name: test/optimizer/unnest_cardinality.test
+# description: Test cardinality estimation for UNNEST
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY
+
+# Constant list constructors have an exact cardinality
+query II
+EXPLAIN SELECT UNNEST([1, 2, 3]) FROM range(100)
+----
+physical_plan	<REGEX>:.*~300 rows.*
+
+# Empty lists produce no rows
+query II
+EXPLAIN SELECT UNNEST([]::INTEGER[]) FROM range(100)
+----
+physical_plan	<REGEX>:.*~0 rows.*
+
+# Multiple UNNEST expressions are padded to the longest list
+query II
+EXPLAIN SELECT UNNEST([1, 2]), UNNEST([1, 2, 3, 4, 5]) FROM range(100)
+----
+physical_plan	<REGEX>:.*~500 rows.*
+
+# Fixed-size arrays use their declared size
+query II
+EXPLAIN SELECT UNNEST(values::INTEGER[4]) FROM (SELECT [1, 2, 3, 4] values FROM range(100))
+----
+physical_plan	<REGEX>:.*~400 rows.*
+
+# Lists with an unknown length use the default cardinality
+statement ok
+CREATE TABLE list_data AS SELECT range(0, i % 5) values FROM range(100) t(i)
+
+query II
+EXPLAIN SELECT UNNEST(values) FROM list_data
+----
+physical_plan	<REGEX>:.*~1,000 rows.*
+
+# Standalone table-function UNNEST uses its constant parameter
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+query II
+EXPLAIN SELECT * FROM UNNEST([1, 2, 3])
+----
+logical_opt	<REGEX>:.*~3 rows.*
+
+query II
+EXPLAIN SELECT * FROM UNNEST([]::INTEGER[])
+----
+logical_opt	<REGEX>:.*~0 rows.*
