@@ -1,0 +1,35 @@
+diff --git a/src/sqlite_db.cpp b/src/sqlite_db.cpp
+index 2db0e7a..350f935 100644
+--- a/src/sqlite_db.cpp
++++ b/src/sqlite_db.cpp
+@@ -316,7 +316,7 @@ void SQLiteDB::GetTableInfo(const string &table_name, ColumnList &columns, vecto
+ 		}
+ 		ColumnDefinition column(Identifier(std::move(sqlite_colname)), std::move(column_type));
+ 		if (!default_value.empty() && default_value != "\"\"") {
+-			auto expressions = Parser::ParseExpressionList(default_value);
++			auto expressions = Parser::GetBuiltinParser().ParseExpressionList(default_value);
+ 			if (expressions.empty()) {
+ 				throw InternalException("Expression list is empty");
+ 			}
+diff --git a/src/storage/sqlite_transaction.cpp b/src/storage/sqlite_transaction.cpp
+index 8cfa5b1..f61a576 100644
+--- a/src/storage/sqlite_transaction.cpp
++++ b/src/storage/sqlite_transaction.cpp
+@@ -125,7 +125,7 @@ SQLiteTransaction &SQLiteTransaction::Get(ClientContext &context, Catalog &catal
+ }
+ 
+ string ExtractSelectStatement(const string &create_view) {
+-	Parser parser;
++	auto parser = Parser::GetBuiltinParser();
+ 	parser.ParseQuery(create_view);
+ 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {
+ 		throw BinderException(
+@@ -159,7 +159,7 @@ void ExtractColumnIds(const ParsedExpression &expr, TableCatalogEntry &table, Cr
+ 
+ unique_ptr<CreateIndexInfo> FromCreateIndex(ClientContext &context, TableCatalogEntry &table, string sql) {
+ 	// parse the SQL statement
+-	Parser parser;
++	auto parser = Parser::GetBuiltinParser();
+ 	parser.ParseQuery(sql);
+ 
+ 	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::CREATE_STATEMENT) {
