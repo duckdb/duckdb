@@ -95,6 +95,10 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Whether QueryBegin has not yet been called on all registered states
+	bool begin_pending = true;
+	//! The states on which QueryBegin completed, while begin_pending is set
+	vector<shared_ptr<ClientContextState>> begun_states;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {
@@ -326,7 +330,10 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const SQLStateme
 	// Notify any registered state of query begin
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);
+		active_query->begun_states.push_back(state);
 	}
+	active_query->begin_pending = false;
+	active_query->begun_states.clear();
 
 	// Flush the old logger.
 	logger->Flush();
@@ -347,6 +354,8 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	}
 	active_query->progress_bar.reset();
 	D_ASSERT(active_query.get());
+	// if QueryBegin failed part-way, only the states that began are notified of the end
+	auto end_states = active_query->begin_pending ? std::move(active_query->begun_states) : registered_state->States();
 	active_query.reset();
 	query_deadline.SetInvalid();
 	query_progress.Initialize();
@@ -384,7 +393,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
-	for (auto const &s : registered_state->States()) {
+	for (auto const &s : end_states) {
 		if (error.HasError()) {
 			s->QueryEnd(*this, &error);
 		} else {
@@ -1050,6 +1059,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatement(ClientContextLock
 			// fatal exceptions invalidate the entire database
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
+		}
+		if (active_query) {
+			EndQueryInternal(lock, false, ErrorInvalidatesTransaction(error.Type()), error);
 		}
 		return ErrorResult<PendingQueryResult>(std::move(error), query);
 	}
