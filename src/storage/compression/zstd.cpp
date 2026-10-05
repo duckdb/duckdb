@@ -2,6 +2,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/settings.hpp"
@@ -674,6 +675,10 @@ void ZSTDStorage::FinalizeCompress(CompressionState &state_p) {
 	throw DataCorruptionException("Corrupted ZSTD vector: compressed data ended before decompression finished");
 }
 
+[[noreturn]] static void ThrowZSTDPageCycle() {
+	throw DataCorruptionException("Corrupted ZSTD vector: cycle in overflow page chain");
+}
+
 [[noreturn]] static void ThrowZSTDFrameEndedEarly() {
 	throw DataCorruptionException("Corrupted ZSTD vector: frame ended before producing the requested bytes");
 }
@@ -714,6 +719,8 @@ public:
 	ZSTDVectorScanMetadata metadata;
 	//! The (pinned) buffer handle(s) for this vectors data
 	vector<BufferHandle> buffer_handles;
+	//! Blocks visited by this vector
+	unordered_set<block_id_t> visited_blocks;
 	//! The (uncompressed) string lengths for this vector
 	unsafe_array_ptr<const string_length_t> string_lengths;
 	//! Reader for the current page.
@@ -833,11 +840,15 @@ public:
 			compressed_size = data_remaining;
 		}
 		auto compressed_data = reader.ReadBytes(compressed_size);
+
 		current_vector = make_uniq<ZSTDVectorScanState>(metadata, string_lengths, reader);
 		auto &scan_state = *current_vector;
+		const auto first_id = metadata.block_id == INVALID_BLOCK ? segment.GetBlockId() : metadata.block_id;
+		scan_state.visited_blocks.insert(first_id);
 		if (data_handle.IsValid()) {
 			scan_state.buffer_handles.push_back(std::move(data_handle));
 		}
+
 		// Update the in_buffer to point to the start of the compressed data frame
 		scan_state.in_buffer.src = compressed_data.data();
 		scan_state.in_buffer.pos = 0;
@@ -863,6 +874,10 @@ public:
 		}
 		// Read the next block id from the end of the page
 		const auto next_id = scan_state.reader.Read<block_id_t>();
+		// Check if we have a cycle
+		if (!scan_state.visited_blocks.insert(next_id).second) {
+			ThrowZSTDPageCycle();
+		}
 
 		// Load the next page
 		auto block = LoadPage(next_id);
