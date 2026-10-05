@@ -722,14 +722,14 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
-	// Bind indexes before serialization so buffered index operations are persisted by contextual checkpoints.
+	// Bind indexes with buffered operations so these are persisted. Other unbound indexes are serialized as-is.
 	if (checkpoint_context) {
 		D_ASSERT(checkpoint_context->transaction.HasActiveTransaction());
 		// Bind indexes with checkpoint transaction, which is already running and read-only, so any transaction the
 		// binder still starts skips start_transaction_lock.
 		D_ASSERT(MetaTransaction::Get(*checkpoint_context).IsReadOnly());
 		auto &info = table.GetStorage().GetDataTableInfo();
-		info->BindIndexes(*checkpoint_context);
+		info->GetIndexes().BindBufferedReplays(*checkpoint_context, *info);
 	}
 	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 

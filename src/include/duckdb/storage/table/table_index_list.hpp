@@ -80,6 +80,8 @@ public:
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
+	//! Binds only the unbound indexes with buffered WAL operations.
+	void BindBufferedReplays(ClientContext &context, DataTableInfo &table_info);
 	//! Returns true, if there are no index entries.
 	bool Empty() const {
 		return Count() == 0;
@@ -161,6 +163,10 @@ private:
 	template <class>
 	friend class TableIndexIterationHelper;
 
+	void BindInternal(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type,
+	                  bool buffered_replays_only);
+
+private:
 	//! A lock to prevent any concurrent changes to the index entries.
 	mutable annotated_mutex index_entries_lock;
 	//! The index entries of the table.

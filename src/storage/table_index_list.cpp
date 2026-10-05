@@ -404,6 +404,15 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const 
 }
 
 void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type) {
+	BindInternal(context, table_info, index_type, /*buffered_replays_only=*/false);
+}
+
+void TableIndexList::BindBufferedReplays(ClientContext &context, DataTableInfo &table_info) {
+	BindInternal(context, table_info, optional<string>(), /*buffered_replays_only=*/true);
+}
+
+void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type,
+                                  bool buffered_replays_only) {
 	{
 		// Early-out, if we have no unbound indexes.
 		annotated_lock_guard lock(index_entries_lock);
@@ -432,7 +441,8 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		shared_ptr<IndexEntry> index_entry;
 		for (auto &entry : index_entries) {
 			if (entry->GetBindState() != IndexBindState::BOUND &&
-			    (!index_type || entry->GetIndexType() == *index_type)) {
+			    (!index_type || entry->GetIndexType() == *index_type) &&
+			    (!buffered_replays_only || entry->HasBufferedReplays())) {
 				index_entry = entry;
 				break;
 			}
