@@ -8114,46 +8114,25 @@ unique_ptr<TransformResultValue> PEGTransformerFactory::FinalizeCopyDataTrampoli
 void PEGTransformerFactory::InitializeCreateIndexStmtTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto &list_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
-	idx_t dynamic_child_count = 0;
-	if (list_opt.HasResult()) {
-		auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_opt.GetResult()));
-		dynamic_child_count = list_items.size();
-		process.ReserveChildSlots(8 + dynamic_child_count - 1);
-		auto &where_clause_opt = list_pr.GetChild(10).Cast<OptionalParseResult>();
-		if (where_clause_opt.HasResult()) {
-			process.PushChild({transformer.GetRule("WhereClause"), where_clause_opt.GetResult()},
-			                  7 + dynamic_child_count - 1);
-		}
-		auto &with_list_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
-		if (with_list_opt.HasResult()) {
-			process.PushChild({transformer.GetRule("WithList"), with_list_opt.GetResult()},
-			                  6 + dynamic_child_count - 1);
-		}
-		for (idx_t i = list_items.size(); i > 0; i--) {
-			auto child_idx = i - 1;
-			process.PushChild({transformer.GetRule("IndexElement"), list_items[child_idx].get()}, 5 + child_idx);
-		}
-	} else {
-		process.ReserveChildSlots(8 - 1);
-		auto &where_clause_opt = list_pr.GetChild(10).Cast<OptionalParseResult>();
-		if (where_clause_opt.HasResult()) {
-			process.PushChild({transformer.GetRule("WhereClause"), where_clause_opt.GetResult()},
-			                  7 + dynamic_child_count - 1);
-		}
-		auto &with_list_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
-		if (with_list_opt.HasResult()) {
-			process.PushChild({transformer.GetRule("WithList"), with_list_opt.GetResult()},
-			                  6 + dynamic_child_count - 1);
-		}
+	auto list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(7)));
+	auto dynamic_child_count = list_items.size();
+	process.ReserveChildSlots(7 + dynamic_child_count - 1);
+	auto &where_clause_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
+	if (where_clause_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("WhereClause"), where_clause_opt.GetResult()},
+		                  6 + dynamic_child_count - 1);
 	}
-	auto &index_type_opt = list_pr.GetChild(7).Cast<OptionalParseResult>();
+	auto &with_list_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
+	if (with_list_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("WithList"), with_list_opt.GetResult()}, 5 + dynamic_child_count - 1);
+	}
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule("IndexElement"), list_items[child_idx].get()}, 4 + child_idx);
+	}
+	auto &index_type_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
 	if (index_type_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("IndexType"), index_type_opt.GetResult()}, 4);
-	}
-	auto &insert_column_list_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
-	if (insert_column_list_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("InsertColumnList"), insert_column_list_opt.GetResult()}, 3);
+		process.PushChild({transformer.GetRule("IndexType"), index_type_opt.GetResult()}, 3);
 	}
 	process.PushChild({transformer.GetRule("BaseTableName"), list_pr.GetChild(5)}, 2);
 	auto &if_not_exists_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
@@ -8170,12 +8149,8 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeCreateIndexStmtTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	idx_t dynamic_child_count = 0;
-	auto &dynamic_list_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
-	if (dynamic_list_opt.HasResult()) {
-		auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(dynamic_list_opt.GetResult()));
-		dynamic_child_count = dynamic_list_items.size();
-	}
+	auto dynamic_list_items = ExtractParseResultsFromList(ExtractResultFromParens(list_pr.GetChild(7)));
+	auto dynamic_child_count = dynamic_list_items.size();
 	optional<bool> unique_index {};
 	if (process.child_results[0]) {
 		unique_index = process.TakeResult<bool>(0);
@@ -8190,35 +8165,26 @@ PEGTransformerFactory::FinalizeCreateIndexStmtTrampoline(PEGTransformer &transfo
 		index_name = index_name_opt.GetResult().Cast<IdentifierParseResult>().identifier;
 	}
 	auto base_table_name = process.TakeResult<unique_ptr<BaseTableRef>>(2);
-	optional<vector<string>> insert_column_list {};
-	if (process.child_results[3]) {
-		insert_column_list = process.TakeResult<vector<string>>(3);
-	}
 	optional<Identifier> index_type {};
-	if (process.child_results[4]) {
-		index_type = process.TakeResult<Identifier>(4);
+	if (process.child_results[3]) {
+		index_type = process.TakeResult<Identifier>(3);
 	}
-	optional<vector<unique_ptr<ParsedExpression>>> index_element {};
-	auto &index_element_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
-	if (index_element_opt.HasResult()) {
-		vector<unique_ptr<ParsedExpression>> index_element_value;
-		for (idx_t i = 5; i < 5 + dynamic_child_count; i++) {
-			index_element_value.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
-		}
-		index_element = std::move(index_element_value);
+	vector<unique_ptr<ParsedExpression>> index_element;
+	for (idx_t i = 4; i < 4 + dynamic_child_count; i++) {
+		index_element.push_back(process.TakeResult<unique_ptr<ParsedExpression>>(i));
 	}
 	optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list {};
-	if (process.child_results[6 + dynamic_child_count - 1]) {
+	if (process.child_results[5 + dynamic_child_count - 1]) {
 		with_list =
-		    process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(6 + dynamic_child_count - 1);
+		    process.TakeResult<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(5 + dynamic_child_count - 1);
 	}
 	optional<unique_ptr<ParsedExpression>> where_clause {};
-	if (process.child_results[7 + dynamic_child_count - 1]) {
-		where_clause = process.TakeResult<unique_ptr<ParsedExpression>>(7 + dynamic_child_count - 1);
+	if (process.child_results[6 + dynamic_child_count - 1]) {
+		where_clause = process.TakeResult<unique_ptr<ParsedExpression>>(6 + dynamic_child_count - 1);
 	}
-	auto result = TransformCreateIndexStmt(transformer, unique_index, if_not_exists, index_name,
-	                                       std::move(base_table_name), insert_column_list, index_type,
-	                                       std::move(index_element), std::move(with_list), std::move(where_clause));
+	auto result =
+	    TransformCreateIndexStmt(transformer, unique_index, if_not_exists, index_name, std::move(base_table_name),
+	                             index_type, std::move(index_element), std::move(with_list), std::move(where_clause));
 	return make_uniq<TypedTransformResult<unique_ptr<CreateStatement>>>(std::move(result));
 }
 
