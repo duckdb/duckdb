@@ -67,6 +67,9 @@ functions:
         description: The connection supplying the grammar.
       sql:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The SQL text. Borrowed for the call only; may contain interior null bytes. {NULL, 0} is the empty input.
       out_iterator:
         type: token_iterator

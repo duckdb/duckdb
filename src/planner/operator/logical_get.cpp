@@ -43,7 +43,7 @@ static void MapLegacyTableFilterKeys(LogicalGet &get) {
 	auto &column_ids = get.GetColumnIds();
 	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> filters;
 	for (auto &entry : get.table_filters) {
-		auto table_column = entry.GetIndex().GetIndex();
+		auto table_column = entry.GetIndex().GetIndexUnsafe();
 		optional_idx projection_index;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto &column_index = column_ids[i];
@@ -68,7 +68,7 @@ static void MapLegacyTableFilterKeys(LogicalGet &get) {
 LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
-LogicalGet::LogicalGet(TableIndex table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+LogicalGet::LogicalGet(TableIndex table_index, BoundTableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<Identifier> returned_names,
                        virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
@@ -362,6 +362,8 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(216, "source_ordinality", source_ordinality,
 	                                    OrdinalityType::WITHOUT_ORDINALITY);
 	serializer.WriteProperty(217, "table_filters_by_projection", true);
+	serializer.WritePropertyWithDefault(218, "has_pushed_projection", has_pushed_projection, false);
+	serializer.WritePropertyWithDefault(219, "at_clause", at_clause);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -374,8 +376,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(203, "column_ids", legacy_column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
-	auto entry = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
-	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
+	auto entry = FunctionSerializer::DeserializeTableFunction(deserializer);
 	result->function = entry.first;
 	auto &function = result->function;
 	auto has_serialize = entry.second;
@@ -385,6 +386,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadPropertyWithDefault(206, "parameters", result->parameters);
 	deserializer.ReadPropertyWithDefault(207, "named_parameters", result->named_parameters);
+	// a plan written by an older version holds only the arguments the call passed
+	function.GetSignature().FillNamedDefaults(deserializer.Get<ClientContext &>(), result->named_parameters);
 	deserializer.ReadPropertyWithDefault(208, "input_table_types", result->input_table_types);
 	deserializer.ReadPropertyWithDefault(209, "input_table_names", result->input_table_names);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
@@ -399,6 +402,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	    216, "source_ordinality", OrdinalityType::WITHOUT_ORDINALITY);
 	auto table_filters_by_projection =
 	    deserializer.ReadPropertyWithExplicitDefault<bool>(217, "table_filters_by_projection", false);
+	result->has_pushed_projection =
+	    deserializer.ReadPropertyWithExplicitDefault<bool>(218, "has_pushed_projection", false);
+	result->at_clause = deserializer.ReadPropertyWithDefault<unique_ptr<BoundAtClause>>(219, "at_clause");
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -422,7 +428,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		vector<LogicalType> bind_return_types;
 		vector<Identifier> bind_names;
 		if (!function.bind) {
-			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
+			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.GetName());
 		}
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
 		if (result->ordinality_idx.IsValid()) {
@@ -447,7 +453,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 				if (bind_return_types[idx] != ret_type) {
 					throw SerializationException("Table function deserialization failure in function %s - column with "
 					                             "name %s was serialized with type %s, but now has type %s",
-					                             function.name, col_name, ret_type, bind_return_types[idx]);
+					                             function.GetName(), col_name, ret_type, bind_return_types[idx]);
 				}
 			}
 		}
@@ -474,10 +480,11 @@ vector<TableIndex> LogicalGet::GetTableIndex() const {
 string LogicalGet::GetName() const {
 #ifdef DEBUG
 	if (DBConfigOptions::debug_print_bindings) {
-		return StringUtil::Upper(function.name.GetIdentifierName()) + StringUtil::Format(" #%llu", table_index.index);
+		return StringUtil::Upper(function.GetName().GetIdentifierName()) +
+		       StringUtil::Format(" #%llu", table_index.index);
 	}
 #endif
-	return StringUtil::Upper(function.name.GetIdentifierName());
+	return StringUtil::Upper(function.GetName().GetIdentifierName());
 }
 
 } // namespace duckdb

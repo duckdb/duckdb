@@ -8,8 +8,9 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "duckdb/main/profiler/profiler_print_format.hpp"
-#include "duckdb/common/enums/query_result_memory_type.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/prepared_statement.hpp"
@@ -27,6 +28,7 @@ class ClientContext;
 class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
+class ResultFormat;
 class SelectStatement;
 struct CSVReaderOptions;
 struct TableFunctionInfo;
@@ -78,12 +80,19 @@ public:
 	//! repeatedly and at random.
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement,
-	                                         QueryResultMemoryType memory_type = QueryResultMemoryType::IN_MEMORY);
+	                                         shared_ptr<ResultFormat> format = nullptr);
+	//! As above, in the given result format
+	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, shared_ptr<ResultFormat> format);
 	// prepared statements
 	template <typename... ARGS>
 	unique_ptr<QueryResult> Query(const string &query, ARGS... args) {
 		vector<Value> values;
 		return QueryParamsRecursive(query, values, args...);
+	}
+	//! Overload resolution otherwise prefers the prepared-statement template above for a derived format pointer
+	template <class FORMAT, typename std::enable_if<std::is_base_of<ResultFormat, FORMAT>::value, int>::type = 0>
+	unique_ptr<QueryResult> Query(const string &query, shared_ptr<FORMAT> format) {
+		return Query(query, shared_ptr<ResultFormat>(std::move(format)));
 	}
 
 	//! Non-blocking. Submits the query and returns its handle. The engine runs it iff threads - external_threads > 0,
@@ -93,6 +102,9 @@ public:
 	//! Non-blocking. As above, for a parsed statement and for bound parameter values
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
 	                                          const QueryParameters &query_parameters = {});
+	//! Non-blocking. As above, in the given result format
+	DUCKDB_API unique_ptr<QueryResult> Submit(const string &query, shared_ptr<ResultFormat> format);
+	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format);
 	DUCKDB_API unique_ptr<QueryResult> Submit(unique_ptr<SQLStatement> statement,
 	                                          identifier_map_t<BoundParameterData> &named_values,
 	                                          const QueryParameters &query_parameters = {});

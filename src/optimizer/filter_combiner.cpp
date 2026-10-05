@@ -25,6 +25,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
@@ -114,6 +115,18 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	return result;
 }
 
+FilterResult FilterCombiner::AddConjuncts(unique_ptr<Expression> expr) {
+	vector<unique_ptr<Expression>> conjuncts;
+	conjuncts.push_back(std::move(expr));
+	LogicalFilter::SplitPredicates(conjuncts);
+	for (auto &conjunct : conjuncts) {
+		if (AddFilter(std::move(conjunct)) == FilterResult::UNSATISFIABLE) {
+			return FilterResult::UNSATISFIABLE;
+		}
+	}
+	return FilterResult::SUCCESS;
+}
+
 void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
                                                const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	if (filter.IsVolatile()) {
@@ -138,14 +151,7 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 		auto &col = col_ref.get();
 		auto set_id = equivalence_set_map.find(col)->second;
 		for (auto &item : equivalence_map[set_id]) {
-			auto copy = filter.Copy();
-			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-			    copy, [&](BoundColumnRefExpression &cref, unique_ptr<Expression> &child) {
-				    if (cref.Equals(col)) {
-					    child = item.get().Copy();
-				    }
-			    });
-			callback(std::move(copy));
+			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
 		}
 	}
 }

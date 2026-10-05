@@ -165,7 +165,7 @@ TEST_CASE("ParseIterator: statement query text is populated and normalized", "[a
 	REQUIRE(s0->stmt_location.offset == 0);
 	REQUIRE(s0->stmt_location.length == s0->query.size());
 
-	Parser reparser(ctx.GetParserOptions());
+	Parser reparser(ctx);
 	reparser.ParseQuery(s0->query);
 	REQUIRE(reparser.statements.size() == 1);
 }

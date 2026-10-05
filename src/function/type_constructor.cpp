@@ -34,7 +34,7 @@ TypeConstructor TypeConstructor::Identity(Identifier name) {
 TypeConstructor TypeConstructor::Unchecked(Identifier name, bind_logical_type_function_t bind) {
 	// accepts anything, the bind function validates the arguments itself
 	auto signature = Signature();
-	signature.AddArgsParameter("args", LogicalType::ANY).AddKwargsParameter("kwargs", LogicalType::ANY);
+	signature.AddArgs("args", LogicalType::ANY).AddKwargs("kwargs", LogicalType::ANY);
 	return TypeConstructor(std::move(name), std::move(signature), bind);
 }
 
@@ -208,7 +208,7 @@ vector<TypeArgument> NormalizeArguments(const Identifier &type_name, const TypeC
 		auto arg_name = ArgumentName(Identifier(arg.GetName()), entry.first);
 		auto location = arg.GetQueryLocation();
 		// a named modifier is received by "**kwargs", an unnamed one by "*args"
-		auto param = arg.HasName() ? sig.GetKwargsParameter() : sig.GetArgsParameter();
+		auto param = arg.HasName() ? sig.GetKwargs() : sig.GetArgs();
 		auto &target = param ? param->GetType() : LogicalType::ANY;
 		result.emplace_back(arg.GetName(), CastArgument(type_name, arg_name, arg.GetValue(), target, location),
 		                    location);

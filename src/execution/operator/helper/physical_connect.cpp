@@ -86,6 +86,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 				options.deleter_resource_type = resource_type;
 			}
 			options.borrowed_resource_name = borrowed_resource_name;
+			options.original_path = attach_info.path;
 			if (options.db_type.empty()) {
 				DBPathAndType::ExtractExtensionPrefix(attach_info.path, options.db_type);
 			}
@@ -125,6 +126,7 @@ SourceResultType PhysicalConnect::GetDataInternal(ExecutionContext &context, Dat
 		AttachOptions options(attach_info.options, config.options.access_mode);
 		options.visibility = AttachVisibility::HIDDEN;
 		options.ephemeral = true;
+		options.original_path = attach_info.path;
 		if (options.db_type.empty()) {
 			DBPathAndType::ExtractExtensionPrefix(attach_info.path, options.db_type);
 		}

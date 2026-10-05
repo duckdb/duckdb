@@ -92,7 +92,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			auto parser = Parser();
+			Parser parser(state.GetContext());
 			parser.ParseQuery(input.GetString());
 
 			auto statements_arr = yyjson_mut_arr(doc);
@@ -269,8 +269,9 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 }
 
 PragmaFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
-	return PragmaFunctionSet(PragmaFunction::PragmaCall(
-	    "json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction, {LogicalType::VARCHAR}));
+	return PragmaFunctionSet(
+	    PragmaFunction::PragmaCall("json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction,
+	                               FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR)));
 }
 
 //----------------------------------------------------------------------
@@ -309,7 +310,7 @@ struct ExecuteSqlTableFunction {
 	}
 
 	static void Function(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &data = (BindData &)*data_p.bind_data;
+		auto &data = data_p.bind_data->CastNoConst<BindData>();
 		if (!data.result) {
 			data.result = data.plan->Execute();
 		}
@@ -322,8 +323,9 @@ struct ExecuteSqlTableFunction {
 };
 
 TableFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
-	TableFunction func("json_execute_serialized_sql", {LogicalType::VARCHAR}, ExecuteSqlTableFunction::Function,
-	                   ExecuteSqlTableFunction::Bind);
+	TableFunction func("json_execute_serialized_sql",
+	                   FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR),
+	                   ExecuteSqlTableFunction::Function, ExecuteSqlTableFunction::Bind);
 	return TableFunctionSet(func);
 }
 
