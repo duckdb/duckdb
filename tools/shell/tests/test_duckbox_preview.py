@@ -54,7 +54,6 @@ def test_preview_last_result_consumes_rest(shell):
         "WITH c AS (FROM _) SELECT count(*) AS cnt FROM c",
         "SELECT count(*) AS cnt FROM range(3_000_000) t(i) JOIN _ USING (i)",
         "SELECT count(*) AS cnt FROM range(3_000_000) t(i) WHERE i IN (SELECT i FROM _)",
-        "COPY (SELECT count(*) AS cnt FROM _) TO '/dev/stdout' (FORMAT csv)",
     ],
 )
 def test_preview_last_result_reference(shell, statement):
@@ -63,6 +62,19 @@ def test_preview_last_result_reference(shell, statement):
         .statement(".mode duckbox_preview")
         .statement("SELECT * FROM range(3_000_000) t(i)")
         .statement(statement)
+    )
+    result = test.run()
+    result.check_stdout("3000000")
+
+
+def test_preview_last_result_copy(shell, tmp_path):
+    file = (tmp_path / "count.csv").as_posix()
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox_preview")
+        .statement("SELECT * FROM range(3_000_000) t(i)")
+        .statement(f"COPY (SELECT count(*) AS cnt FROM _) TO '{file}' (FORMAT csv)")
+        .statement(f"SELECT cnt FROM read_csv('{file}')")
     )
     result = test.run()
     result.check_stdout("3000000")
