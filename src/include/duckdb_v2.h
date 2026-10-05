@@ -8740,13 +8740,13 @@ typedef struct _duckdb_v2_scalar_function {
 } * duckdb_v2_scalar_function_handle;
 
 /*!
- * A borrowed opaque handle to the result of a scalar function's "bind" phase. The "bind" callback receives this handle
- * next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments, the user data and the bind
- * data, and can use it to set the return type of the call site being bound.
+ * A borrowed opaque handle to the result of a scalar function's "resolve types" phase. The "resolve types" callback
+ * receives this handle next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments and the
+ * user data, and can use it to set the return type of the call site being bound.
  */
-typedef struct _duckdb_v2_scalar_function_bind_info {
+typedef struct _duckdb_v2_scalar_function_resolve_types_info {
 	void *internal_ptr;
-} * duckdb_v2_scalar_function_bind_info_handle;
+} * duckdb_v2_scalar_function_resolve_types_info_handle;
 
 /*!
  * A borrowed opaque handle to the arguments supplied to a scalar function during the local state initialization "init"
@@ -8770,8 +8770,11 @@ typedef struct _duckdb_v2_scalar_function_exec_info {
 
 /* --- Function pointer typedefs for scalar --- */
 
+typedef void (*duckdb_v2_scalar_function_resolve_types_callback_fn)(
+    duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_resolve_types_info_handle result,
+    duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err);
+
 typedef void (*duckdb_v2_scalar_function_bind_callback_fn)(duckdb_v2_function_bind_info_handle info,
-                                                           duckdb_v2_scalar_function_bind_info_handle result,
                                                            duckdb_v2_context_handle context,
                                                            duckdb_v2_error_info_handle *err);
 
@@ -8914,12 +8917,35 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_property(duckdb_v2_sc
                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
+ * Sets the optional resolve types callback of the scalar function.
+ *
+ * The resolve types callback is invoked during query planning for each call site of the function, before the arguments
+ * are cast to the parameter types of the signature. Through its `duckdb_v2_function_bind_info_handle` it can inspect
+ * the argument types as they were passed and constant argument values. Through its
+ * `duckdb_v2_scalar_function_resolve_types_info_handle` it can set a concrete return type. It cannot set "bind data",
+ * use the bind callback for that.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the resolve types callback of.
+ * @param callback The resolve types callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_resolve_types_callback(
+    duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_resolve_types_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
  * Sets the optional bind callback of the scalar function.
  *
- * The bind callback is invoked during query planning for each call site of the function. Through its
+ * The bind callback is invoked during query planning for each call site of the function, after the resolve types
+ * callback and after the arguments have been cast to the parameter types of the signature. Through its
  * `duckdb_v2_function_bind_info_handle` it can inspect the argument types and constant argument values and set "bind
- * data" that is shared with the init and exec callbacks. Through its `duckdb_v2_scalar_function_bind_info_handle` it
- * can set a concrete return type.
+ * data" that is shared with the init and exec callbacks. It cannot change the types of the call site, use the resolve
+ * types callback for that.
  *
  * history:
  * - stable: v2.0.0
@@ -8983,14 +9009,14 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
  * history:
  * - stable: v2.0.0
  *
- * @param info The bind info handle.
+ * @param info The resolve types info handle.
  * @param return_type The return type to set. Borrowed for the call only.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_return_type(
-    duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_resolve_types_set_return_type(
+    duckdb_v2_scalar_function_resolve_types_info_handle info, duckdb_v2_logical_type_handle return_type,
     duckdb_v2_error_info_handle *err);
 
 /*!
@@ -9174,9 +9200,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2
  *
  * The function is registered on the target given at creation: the connection's database or the loading extension.
  * Registration requires a name, an exec callback, and a signature with a complete return type; an ANY return type is
- * accepted only together with a bind callback that sets the concrete type per call site. The caller still owns the
- * handle after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect the
- * registered function.
+ * accepted only together with a resolve types callback that sets the concrete type per call site. The caller still owns
+ * the handle after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect
+ * the registered function.
  *
  * history:
  * - stable: v2.0.0

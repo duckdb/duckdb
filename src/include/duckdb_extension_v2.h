@@ -636,9 +636,6 @@ typedef struct {
 	 duckdb_v2_value_handle value, DUCKDB_V2_FUNCTION_PARAMETER_KIND kind, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_function_signature_set_return_type)
 	(duckdb_v2_function_signature_handle sig, duckdb_v2_logical_type_handle type, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_bind_set_return_type)
-	(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create_with_connection)
 	(duckdb_v2_connection_handle connection, duckdb_v2_scalar_function_handle *function,
 	 duckdb_v2_error_info_handle *err);
@@ -1370,6 +1367,12 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_order_preservation)
 	(duckdb_v2_table_function_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_resolve_types_set_return_type)
+	(duckdb_v2_scalar_function_resolve_types_info_handle info, duckdb_v2_logical_type_handle return_type,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_resolve_types_callback)
+	(duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_resolve_types_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
 	// capigen:end appended
 } duckdb_ext_api_v2;
 
@@ -1622,7 +1625,6 @@ typedef struct {
 #define duckdb_v2_context_log                            duckdb_ext_api.duckdb_v2_context_log
 #define duckdb_v2_function_signature_add_parameter       duckdb_ext_api.duckdb_v2_function_signature_add_parameter
 #define duckdb_v2_function_signature_set_return_type     duckdb_ext_api.duckdb_v2_function_signature_set_return_type
-#define duckdb_v2_scalar_function_bind_set_return_type   duckdb_ext_api.duckdb_v2_scalar_function_bind_set_return_type
 #define duckdb_v2_scalar_function_create_with_connection duckdb_ext_api.duckdb_v2_scalar_function_create_with_connection
 #define duckdb_v2_scalar_function_create_with_extension  duckdb_ext_api.duckdb_v2_scalar_function_create_with_extension
 #define duckdb_v2_scalar_function_destroy                duckdb_ext_api.duckdb_v2_scalar_function_destroy
@@ -2005,6 +2007,10 @@ typedef struct {
 #define duckdb_v2_function_bind_set_bind_data duckdb_ext_api.duckdb_v2_function_bind_set_bind_data
 #define duckdb_v2_table_function_bind_set_order_preservation                                                           \
 	duckdb_ext_api.duckdb_v2_table_function_bind_set_order_preservation
+#define duckdb_v2_scalar_function_resolve_types_set_return_type                                                        \
+	duckdb_ext_api.duckdb_v2_scalar_function_resolve_types_set_return_type
+#define duckdb_v2_scalar_function_set_resolve_types_callback                                                           \
+	duckdb_ext_api.duckdb_v2_scalar_function_set_resolve_types_callback
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION
 

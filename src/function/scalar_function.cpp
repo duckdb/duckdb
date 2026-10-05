@@ -33,6 +33,15 @@ const LogicalType &ResolveScalarFunctionTypesInput::GetArgumentType(idx_t arg_id
 	return GetArgument(arg_idx).GetReturnType();
 }
 
+vector<LogicalType> ResolveScalarFunctionTypesInput::GetArgumentTypes() const {
+	vector<LogicalType> result;
+	result.reserve(arguments.size());
+	for (auto &argument : arguments) {
+		result.push_back(argument->GetReturnType());
+	}
+	return result;
+}
+
 bool ScalarFunctionCallbacks::operator==(const ScalarFunctionCallbacks &rhs) const {
 	return resolve_types == rhs.resolve_types && bind == rhs.bind && init_local_state == rhs.init_local_state &&
 	       statistics == rhs.statistics && bind_lambda == rhs.bind_lambda && bind_expression == rhs.bind_expression &&

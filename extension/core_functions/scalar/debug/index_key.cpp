@@ -115,16 +115,32 @@ struct IndexKeyBindData : public FunctionData {
 	vector<LogicalType> key_types;
 };
 
-static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
+// index_key resolves index metadata during binding.
+// Register the owning catalog so cached prepared statements rebind after catalog changes.
+static void RegisterIndexKeyRead(BindScalarFunctionInput &input, TableCatalogEntry &table_entry) {
+	if (input.HasBinder()) {
+		auto &binder = input.GetBinder();
+		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), input.GetClientContext());
+	}
+}
+
+static void RegisterIndexKeyRead(ResolveScalarFunctionTypesInput &input, TableCatalogEntry &table_entry) {
+}
+
+//! Called from both resolve_types and bind - the key types and the bind data both come from the index
+template <class INPUT>
+static unique_ptr<FunctionData> IndexKeyBind(INPUT &input) {
+	ClientContext &context = input.GetClientContext();
+	BoundScalarFunction &bound_function = input.GetBoundFunction();
+	const vector<unique_ptr<Expression>> &arguments = input.GetArguments();
 	if (arguments.size() < INDEX_KEY_FIXED_ARGS) {
 		throw BinderException("index_key: requires at least two arguments - path (STRUCT), index_name");
 	}
 
-	auto path = EvaluateTableDescription(input.GetConstant(0));
-	auto index_name = GetStringArgument(input.GetConstant(1), "index_name");
+	const Value path_value = input.GetConstant(0);
+	const Value index_name_value = input.GetConstant(1);
+	auto path = EvaluateTableDescription(path_value);
+	auto index_name = GetStringArgument(index_name_value, "index_name");
 
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context, path.qualified_name);
@@ -132,12 +148,7 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 		throw BinderException("index_key: table '%s' is not a DuckDB table", qualified_table);
 	}
 
-	// index_key resolves index metadata during binding.
-	// Register the owning catalog so cached prepared statements rebind after catalog changes.
-	if (input.HasBinder()) {
-		auto &binder = input.GetBinder();
-		binder.GetStatementProperties().RegisterDBRead(table_entry.ParentCatalog(), context);
-	}
+	RegisterIndexKeyRead(input, table_entry);
 	auto &duck_table = table_entry.Cast<DuckTableEntry>();
 	auto &data_table = duck_table.GetStorage();
 	auto &data_table_info = *data_table.GetDataTableInfo();
@@ -180,6 +191,10 @@ static unique_ptr<FunctionData> IndexKeyBind(BindScalarFunctionInput &input) {
 	return make_uniq<IndexKeyBindData>(index_entry, std::move(key_types));
 }
 
+static void IndexKeyResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	IndexKeyBind(input);
+}
+
 static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &bind_data = func_expr.BindInfo()->Cast<IndexKeyBindData>();
@@ -216,9 +231,10 @@ static void IndexKeyFunction(DataChunk &args, ExpressionState &state, Vector &re
 } // namespace
 
 ScalarFunction IndexKeyFun::GetFunction() {
-	ScalarFunction fun("index_key", {}, LogicalType::BLOB, IndexKeyFunction, IndexKeyBind);
+	ScalarFunction fun("index_key", {}, LogicalType::BLOB, IndexKeyFunction, IndexKeyBind<BindScalarFunctionInput>);
 	fun.GetSignature().AddParameter("path", LogicalTypeId::STRUCT).AddParameter("name", LogicalType::VARCHAR);
 	fun.GetSignature().AddArgs("args", LogicalTypeId::ANY);
+	fun.SetResolveTypesCallback(IndexKeyResolveTypes);
 	return fun;
 }
 

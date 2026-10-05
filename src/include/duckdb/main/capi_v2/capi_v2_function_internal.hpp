@@ -38,6 +38,8 @@ public:
 
 public:
 	void *in_user_data;
+	//! Whether the callback can set the bind data
+	bool can_set_bind_data = true;
 	//! The bind data the callback set, or nullptr
 	shared_ptr<CV2UserData> out_bind_data;
 

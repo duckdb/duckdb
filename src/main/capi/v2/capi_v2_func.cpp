@@ -84,6 +84,9 @@ DUCKDB_V2_ERROR duckdb_v2_function_bind_set_bind_data(duckdb_v2_function_bind_in
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() {
+		if (!Convert(info)->can_set_bind_data) {
+			throw duckdb::InvalidInputException("The bind data can only be set from the bind callback");
+		}
 		Convert(info)->out_bind_data =
 		    data->ptr ? duckdb::make_shared_ptr<CV2UserData>(data->ptr, data->destroy, data->equals) : nullptr;
 	});

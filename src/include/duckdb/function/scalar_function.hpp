@@ -378,7 +378,7 @@ public:
 		function_info = std::move(info);
 	}
 	template <class T, class... ARGS>
-	void SetExtraFunctionInfo(ARGS &&... args) {
+	void SetExtraFunctionInfo(ARGS &&...args) {
 		function_info = make_shared_ptr<T>(std::forward<ARGS>(args)...);
 	}
 	shared_ptr<ScalarFunctionInfo> GetFunctionInfo() const {
@@ -708,12 +708,17 @@ public:
 	BoundScalarFunction &GetBoundFunction() const {
 		return bound_function;
 	}
+	//! The argument expressions - these must not be modified
+	const vector<unique_ptr<Expression>> &GetArguments() const {
+		return arguments;
+	}
 	idx_t GetArgumentCount() const {
 		return arguments.size();
 	}
 	DUCKDB_API const Expression &GetArgument(idx_t arg_idx) const;
 	//! The type of the argument expression, before it is cast to the argument type of the bound function
 	DUCKDB_API const LogicalType &GetArgumentType(idx_t arg_idx) const;
+	DUCKDB_API vector<LogicalType> GetArgumentTypes() const;
 
 private:
 	BoundScalarFunction &bound_function;
