@@ -11,7 +11,7 @@ namespace duckdb {
 struct ColumnConstraintTypeInfo {
 	bool is_primary_key = false;
 	ConstraintType type = ConstraintType::INVALID;
-	ConstraintTiming timing = ConstraintTiming::DEFAULT;
+	ConstraintTiming timing = ConstraintTiming::EAGER;
 };
 
 struct ColumnConstraintEntry {

@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, const bool deferred_p)
-    : owned_index(std::move(index_p)), deferred(deferred_p) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, const ConstraintTiming timing_p)
+    : owned_index(std::move(index_p)), timing(timing_p) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -124,10 +124,10 @@ void IndexEntry::InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferred=*/false);
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintTiming::EAGER);
 	// Deferred constraints have no append index: transaction-local rows are verified when committing.
-	if (append_indexes && !deferred) {
-		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), /*deferred=*/false);
+	if (append_indexes && !IsDeferred()) {
+		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintTiming::EAGER);
 	}
 }
 
@@ -294,14 +294,14 @@ bool IndexEntry::IsUnique() const {
 }
 
 bool IndexEntry::IsDeferred() const {
-	return deferred;
+	return timing == ConstraintTiming::DEFERRED;
 }
 
 bool IndexEntry::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) const {
 	auto entry_lock = lock.GetSharedLock();
 	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
 		// Foreign keys cannot reference a deferred key.
-		if (!owned_index->IsUnique() || deferred) {
+		if (!owned_index->IsUnique() || IsDeferred()) {
 			return false;
 		}
 	} else if (!owned_index->IsForeign()) {
@@ -478,7 +478,7 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	result.is_primary = owned_index->IsPrimary();
 	result.is_unique = owned_index->IsUnique() || result.is_primary;
 	result.is_foreign = owned_index->IsForeign();
-	result.is_deferred = deferred;
+	result.timing = timing;
 	result.column_set = owned_index->GetColumnIdSet();
 	return result;
 }

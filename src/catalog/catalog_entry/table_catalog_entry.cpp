@@ -174,7 +174,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			// single column pk: insert constraint here
 			for (auto timing : pk_columns.at(column.Logical())) {
 				ss << " PRIMARY KEY";
-				if (timing != ConstraintTiming::DEFAULT) {
+				if (timing != ConstraintTiming::EAGER) {
 					ss << " " << EnumUtil::ToString(timing);
 				}
 			}
@@ -183,7 +183,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			// single column unique: insert constraint here
 			for (auto timing : unique_columns.at(column.Logical())) {
 				ss << " UNIQUE";
-				if (timing != ConstraintTiming::DEFAULT) {
+				if (timing != ConstraintTiming::EAGER) {
 					ss << " " << EnumUtil::ToString(timing);
 				}
 			}

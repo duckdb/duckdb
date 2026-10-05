@@ -15,18 +15,18 @@ statement ok
 CREATE TABLE child(x INTEGER REFERENCES p(a));
 
 query III rowsort
-SELECT table_name, constraint_text, is_deferred FROM duckdb_constraints()
+SELECT table_name, constraint_text, constraint_timing FROM duckdb_constraints()
 WHERE constraint_type IN ('PRIMARY KEY', 'UNIQUE');
 ----
-p	PRIMARY KEY(a)	false
-p	UNIQUE(b) IMMEDIATE	false
-p	UNIQUE(c) DEFERRED	true
-q	PRIMARY KEY(i) DEFERRED	true
-q	UNIQUE(j) DEFERRED	true
+p	PRIMARY KEY(a)	EAGER
+p	UNIQUE(b) IMMEDIATE	IMMEDIATE
+p	UNIQUE(c) DEFERRED	DEFERRED
+q	PRIMARY KEY(i) DEFERRED	DEFERRED
+q	UNIQUE(j) DEFERRED	DEFERRED
 
 # NOT NULL, CHECK and FOREIGN KEY constraints are never deferred
 query I
-SELECT count(*) FROM duckdb_constraints() WHERE is_deferred AND constraint_type NOT IN ('PRIMARY KEY', 'UNIQUE');
+SELECT count(*) FROM duckdb_constraints() WHERE constraint_timing <> 'EAGER' AND constraint_type NOT IN ('PRIMARY KEY', 'UNIQUE');
 ----
 0
 

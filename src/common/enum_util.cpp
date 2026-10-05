@@ -26,6 +26,7 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/enums/constraint_timing.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -186,7 +187,6 @@
 #include "duckdb/parallel/scan_read_ahead.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
-#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -1465,7 +1465,7 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 
 const StringUtil::EnumStringLiteral *GetConstraintTimingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ConstraintTiming::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ConstraintTiming::EAGER), "EAGER" },
 		{ static_cast<uint32_t>(ConstraintTiming::IMMEDIATE), "IMMEDIATE" },
 		{ static_cast<uint32_t>(ConstraintTiming::DEFERRED), "DEFERRED" }
 	};

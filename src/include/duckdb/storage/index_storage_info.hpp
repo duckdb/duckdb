@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enums/constraint_timing.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -91,7 +92,7 @@ struct IndexInfo {
 	bool is_unique;
 	bool is_primary;
 	bool is_foreign;
-	bool is_deferred = false;
+	ConstraintTiming timing = ConstraintTiming::EAGER;
 	unordered_set<column_t> column_set;
 };
 

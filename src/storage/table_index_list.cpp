@@ -82,10 +82,10 @@ TableIndexList::~TableIndexList() {
 	}
 }
 
-shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, const bool deferred) {
+shared_ptr<IndexEntry> TableIndexList::AddIndex(unique_ptr<Index> index, const ConstraintTiming timing) {
 	D_ASSERT(index);
 	annotated_lock_guard lock(index_entries_lock);
-	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), deferred);
+	auto index_entry = make_shared_ptr<IndexEntry>(std::move(index), timing);
 	if (index_entry->GetBindState() != IndexBindState::BOUND) {
 		unbound_count++;
 	}
@@ -220,7 +220,7 @@ void TableIndexList::VerifyUniqueIndexes(optional_ptr<const TableIndexList> dele
 	const auto &conflict_info = manager->GetConflictInfo();
 	for (const auto &entry : index_entries) {
 		auto index_info = entry->GetStorageInfo();
-		if (!index_info.is_unique || index_info.is_deferred || entry->GetIndexType() != ART::TYPE_NAME ||
+		if (!index_info.is_unique || index_info.timing == ConstraintTiming::DEFERRED || entry->GetIndexType() != ART::TYPE_NAME ||
 		    !conflict_info.ConflictTargetMatches(index_info.is_unique, index_info.column_set)) {
 			continue;
 		}
@@ -494,7 +494,7 @@ vector<unordered_set<column_t>> TableIndexList::GetConflictTargetColumns(const C
 	vector<unordered_set<column_t>> result;
 	for (const auto &entry : index_entries) {
 		auto index_info = entry->GetStorageInfo();
-		if (!index_info.is_unique || index_info.is_deferred ||
+		if (!index_info.is_unique || index_info.timing == ConstraintTiming::DEFERRED ||
 		    !conflict_info.ConflictTargetMatches(index_info.is_unique, index_info.column_set)) {
 			continue;
 		}

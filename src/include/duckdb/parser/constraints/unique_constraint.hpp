@@ -9,13 +9,12 @@
 #pragma once
 
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enums/constraint_timing.hpp"
 #include "duckdb/common/enums/index_constraint_type.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/constraint.hpp"
 
 namespace duckdb {
-
-enum class ConstraintTiming : uint8_t { DEFAULT, IMMEDIATE, DEFERRED };
 
 class UniqueConstraint : public Constraint {
 public:
@@ -23,11 +22,11 @@ public:
 
 public:
 	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key,
-	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
+	                            ConstraintTiming timing = ConstraintTiming::EAGER);
 	DUCKDB_API UniqueConstraint(const LogicalIndex index, Identifier column_name, const bool is_primary_key,
-	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
+	                            ConstraintTiming timing = ConstraintTiming::EAGER);
 	DUCKDB_API UniqueConstraint(vector<Identifier> columns, const bool is_primary_key,
-	                            ConstraintTiming timing = ConstraintTiming::DEFAULT);
+	                            ConstraintTiming timing = ConstraintTiming::EAGER);
 
 public:
 	DUCKDB_API string ToString() const override;
@@ -71,7 +70,7 @@ public:
 	vector<Identifier> columns;
 	//! Whether this is a PRIMARY KEY constraint, or a UNIQUE constraint.
 	bool is_primary_key;
-	//! The declared constraint timing, or DEFAULT when no modifier was specified.
+	//! The declared constraint timing, or EAGER when no modifier was specified.
 	ConstraintTiming timing;
 };
 

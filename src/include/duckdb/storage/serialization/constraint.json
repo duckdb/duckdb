@@ -110,7 +110,7 @@
         "id": 203,
         "name": "timing",
         "type": "ConstraintTiming",
-        "default": "ConstraintTiming::DEFAULT",
+        "default": "ConstraintTiming::EAGER",
         "version": "v2.0.0"
       }
     ]

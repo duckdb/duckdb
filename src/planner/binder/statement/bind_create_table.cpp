@@ -172,7 +172,7 @@ void Binder::VerifyConstraintTimingStorageVersion(const Constraint &constraint, 
 		return;
 	}
 	auto &unique = constraint.Cast<UniqueConstraint>();
-	if (unique.timing == ConstraintTiming::DEFAULT) {
+	if (unique.timing == ConstraintTiming::EAGER) {
 		return;
 	}
 	if (StorageManager::Get(catalog).GetStorageVersion() < StorageVersion::V2_0_0) {

@@ -50,7 +50,7 @@ public:
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries, and returns it.
-	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, bool deferred);
+	shared_ptr<IndexEntry> AddIndex(unique_ptr<Index> index, ConstraintTiming timing);
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.

@@ -7,7 +7,7 @@ namespace duckdb {
 
 UniqueConstraint::UniqueConstraint()
     : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), is_primary_key(false),
-      timing(ConstraintTiming::DEFAULT) {
+      timing(ConstraintTiming::EAGER) {
 }
 
 UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key, ConstraintTiming timing)
@@ -34,7 +34,7 @@ string UniqueConstraint::ToString() const {
 		base += SQLIdentifier(columns[i]);
 	}
 	base += ")";
-	if (timing != ConstraintTiming::DEFAULT) {
+	if (timing != ConstraintTiming::EAGER) {
 		base += " " + EnumUtil::ToString(timing);
 	}
 	return base;

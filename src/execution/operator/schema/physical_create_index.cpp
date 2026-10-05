@@ -151,7 +151,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto &local_storage = LocalStorage::Get(context, storage.db);
 	auto local_table_storage = local_storage.GetStorage(storage);
 
-	bool deferred = false;
+	auto timing = ConstraintTiming::EAGER;
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
 		auto entry =
@@ -185,14 +185,14 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 			}
 		}
 		auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
-		deferred = constraint_info.constraint->Cast<UniqueConstraint>().IsDeferred();
+		timing = constraint_info.constraint->Cast<UniqueConstraint>().timing;
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);
 	}
 
 	// Add the index to the storage.
-	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), deferred);
+	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), timing);
 	if (local_table_storage) {
 		// Existing transaction-local rows are verified when committing, so we only add a delete index.
 		index_entry->InitializeLocalDeleteIndex(local_table_storage->delete_indexes);

@@ -366,14 +366,14 @@ unique_ptr<Constraint>
 PEGTransformerFactory::TransformTopPrimaryKeyConstraint(PEGTransformer &transformer,
                                                         const vector<string> &column_id_list,
                                                         const optional<ConstraintTiming> &constraint_timing) {
-	auto timing = constraint_timing.value_or(ConstraintTiming::DEFAULT);
+	auto timing = constraint_timing.value_or(ConstraintTiming::EAGER);
 	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), true, timing);
 }
 
 unique_ptr<Constraint>
 PEGTransformerFactory::TransformTopUniqueConstraint(PEGTransformer &transformer, const vector<string> &column_id_list,
                                                     const optional<ConstraintTiming> &constraint_timing) {
-	auto timing = constraint_timing.value_or(ConstraintTiming::DEFAULT);
+	auto timing = constraint_timing.value_or(ConstraintTiming::EAGER);
 	return make_uniq<UniqueConstraint>(StringsToIdentifiers(column_id_list), false, timing);
 }
 
@@ -477,7 +477,7 @@ PEGTransformerFactory::TransformPrimaryKeyConstraint(PEGTransformer &transformer
                                                      const optional<ConstraintTiming> &constraint_timing) {
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "PrimaryKeyConstraint";
-	entry.constraint_type_info = {true, ConstraintType::UNIQUE, constraint_timing.value_or(ConstraintTiming::DEFAULT)};
+	entry.constraint_type_info = {true, ConstraintType::UNIQUE, constraint_timing.value_or(ConstraintTiming::EAGER)};
 	return entry;
 }
 
@@ -486,7 +486,7 @@ PEGTransformerFactory::TransformUniqueConstraint(PEGTransformer &transformer,
                                                  const optional<ConstraintTiming> &constraint_timing) {
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "UniqueConstraint";
-	entry.constraint_type_info = {false, ConstraintType::UNIQUE, constraint_timing.value_or(ConstraintTiming::DEFAULT)};
+	entry.constraint_type_info = {false, ConstraintType::UNIQUE, constraint_timing.value_or(ConstraintTiming::EAGER)};
 	return entry;
 }
 
@@ -511,7 +511,7 @@ ColumnConstraintEntry PEGTransformerFactory::TransformNotNullConstraint(PEGTrans
 	ColumnConstraintEntry entry;
 	entry.constraint_name = "NotNullConstraint";
 	entry.constraint_type_info = {false, child ? ConstraintType::NOT_NULL : ConstraintType::INVALID,
-	                              ConstraintTiming::DEFAULT};
+	                              ConstraintTiming::EAGER};
 	return entry;
 }
 
