@@ -10,6 +10,7 @@
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/logging/logging.hpp"
+#include "duckdb/logging/log_format_writer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
@@ -173,86 +174,30 @@ private:
 	bool flush_contexts_on_next_entry_flush = false;
 };
 
-//! The CSVLogSink implements an additional layer on the BufferingLogSink which will handle converting the log
-//! entries and contexts to CSV lines. It provides functionality to write log data in CSV format with automatic type
-//! casting and configuration of CSV writers. This class serves as a base for both file-based and stdout-based CSV
-//! logging.
-class CSVLogSink : public BufferingLogSink {
-public:
-	explicit CSVLogSink(DatabaseInstance &db, bool normalize, idx_t buffer_size);
-	~CSVLogSink() override;
-
-protected:
-	/// Implement the BufferingLogSink interface
-
-	//! Flushes the Chunk to the CSV writers
-	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) final;
-	//! Resets all buffers and state
-	void ResetAllBuffers() override;
-	//! Implements CSVLogSink specific config handling
-	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
-
-	/// Interface to child classes
-
-	//! Hooks for child class to run code pre-flush
-	virtual void BeforeFlush(LoggingTargetTable table, DataChunk &chunk) {};
-	virtual void AfterFlush(LoggingTargetTable table, DataChunk &chunk) {};
-
-	/// Helper functions
-
-	//! To be called by child classed to register the CSV writers used to write to.
-	void RegisterWriter(LoggingTargetTable table, unique_ptr<CSVWriter> writer);
-	//! Returns the writer for a table
-	CSVWriter &GetWriter(LoggingTargetTable table);
-	//! Configure a CSV writer by initializing its settings with the `writer_options` and `reader_options` settings
-	void SetWriterConfigs(CSVWriter &Writer, vector<Identifier> column_names);
-	//! Allows child classes to manipulate options
-	CSVWriterOptions &GetCSVWriterOptions();
-	//! Allows child classes to manipulate options
-	CSVReaderOptions &GetCSVReaderOptions();
-
-private:
-	//! Perform the cast (does not reset input chunk!)
-	void ExecuteCast(LoggingTargetTable table, DataChunk &chunk);
-	//! Reset the Cast chunks
-	void ResetCastChunk();
-	//! Initialize the cast chunks
-	void InitializeCastChunk(LoggingTargetTable table);
-
-	//! The cast buffers used to cast from the original types to the VARCHAR types ready to write to CSV format
-	map<LoggingTargetTable, unique_ptr<DataChunk>> cast_buffers;
-	//! The writers to be registered by child classes
-	map<LoggingTargetTable, unique_ptr<CSVWriter>> writers;
-
-	//! CSV Options to initialize the CSVWriters with. TODO: cleanup, this is now a little bit of a mixed bag of
-	//! settings
-	unique_ptr<CSVWriterOptions> writer_options;
-	unique_ptr<CSVReaderOptions> reader_options;
-};
-
-//! Implements a stdout-based log sink using log lines written in CSV format to allow for easy parsing of the log
-//! messages Note that this only supports denormalized logging since there is only 1 practical output stream.
-class StdOutLogSink : public CSVLogSink {
+//! stdout sink using log lines in CSV. Denormalized only (single stream).
+class StdOutLogSink : public BufferingLogSink {
 public:
 	explicit StdOutLogSink(DatabaseInstance &db);
 	~StdOutLogSink() override;
-
+ 
 	const string GetSinkName() override {
 		return "StdOutLogSink";
 	}
-
+ 
+protected:
+	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) override;
+	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
+ 
 private:
 	class StdOutWriteStream : public WriteStream {
 		void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
 	};
-
+ 
 	StdOutWriteStream stdout_stream;
+	unique_ptr<CSVFormatWriter> writer; // single writer, ALL_LOGS table only
 };
 
-//! FileLogSink implements a file-based logging system in CSV format.
-//! It implements CSVLogSink to provide persistent log sink in CSV files. The FileLogSink can operate in
-//! normalized (separate files for entries and contexts) or denormalized mode (single file)
-class FileLogSink : public CSVLogSink {
+class FileLogSink : public BufferingLogSink {
 public:
 	explicit FileLogSink(DatabaseInstance &db);
 	~FileLogSink() override;
@@ -261,56 +206,37 @@ public:
 		return "FileLogSink";
 	}
 
-	/// Implement LogSink interface
-
-	//! Truncates the csv files
 	void Truncate() override;
-	//! Bind replace function to scan the different tables
 	unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input,
 	                                 LoggingTargetTable table) override;
 
 protected:
-	/// Implement CSVLogSink interface
-
-	//! Handles the config related to the FileLogSink
+	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) override;
 	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
-	//! Lazily initializes the CSV files before first flush
-	void BeforeFlush(LoggingTargetTable table, DataChunk &chunk) override;
-	//! Calls `Sync` on the FileWriters to ensure a LogSink Flush is flushed to disk immediately
-	void AfterFlush(LoggingTargetTable table, DataChunk &chunk) override;
+	// ResetAllBuffers: inherited from BufferingLogSink unchanged — no CSV-specific
+	// cast-buffer reset here anymore, that's CSVFormatWriter's own concern now.
 
 private:
-	//! Initialize the csv file for `table`
-	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
-	//! Initialize the filewriter to be passed to the CSVWriter
-	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);
-	//! Ensures the table is initialized, used in lazy initialization. If already initialized this will NOP
+	// Lazily creates file_writer + LogFormatWriter for `table`, if not already done.
 	void Initialize(LoggingTargetTable table);
-	//! Internal helper function to handle the BindReplace generation
-	unique_ptr<TableRef> BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input, const string &path,
-	                                         const string &select_clause, const string &csv_columns);
+	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
+	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);
+	unique_ptr<TableRef> BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
+	                                         const string &path, const string &select_clause,
+	                                         const string &csv_columns);
+	void SetPaths(const string &base_path);
 
-	//! DB reference to get the DB filesystem
 	DatabaseInstance &db;
 
-	//! Writer for a table
 	struct TableWriter {
-		//! Passed as WriteStreams to the CSVWriter in the base class
+		unique_ptr<CSVFormatWriter> writer;
 		unique_ptr<BufferedFileWriter> file_writer;
-		//! Path to initialize the file_writer from
 		string path;
-		//! Whether the file_writer has been (lazily) initialized
 		bool initialized = false;
 	};
-
-	//! The table info per table
 	map<LoggingTargetTable, TableWriter> tables;
 
-	//! Base path to generate the file paths from
 	string base_path;
-
-private:
-	void SetPaths(const string &base_path);
 };
 
 //! State for scanning the in memory buffers
