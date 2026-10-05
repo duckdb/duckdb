@@ -1,9 +1,6 @@
 # name: test/sql/alter/add_pk/test_add_pk_naming_conflict.test
-# description: Test adding a PRIMARY KEY to a table that already has an index with that name.
+# description: Test that explicit index names do not conflict with the names of constraint-backed indexes.
 # group: [add_pk]
-
-# There is also a catalog dependency conflict,
-# which prevents altering a table with a dependency (index) on it.
 
 load {TEST_DIR}/test_add_pk_naming_conflict.db
 
@@ -16,17 +13,18 @@ INSERT INTO tbl VALUES (1);
 statement ok
 CREATE INDEX PRIMARY_tbl_i ON tbl(i);
 
+# The index name does not matter, but the catalog dependency prevents altering a table with an index on it.
 statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
 ----
-<REGEX>:Catalog Error.*already exists.*
+<REGEX>:Dependency Error.*depend on it.*
 
 restart
 
 statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
 ----
-<REGEX>:Catalog Error.*already exists.*
+<REGEX>:Dependency Error.*depend on it.*
 
 # Let's do it the other way around now.
 
@@ -39,7 +37,46 @@ INSERT INTO test VALUES (1);
 statement ok
 ALTER TABLE test ADD PRIMARY KEY (i);
 
-statement error
+statement ok
 CREATE INDEX PRIMARY_test_i ON test(i);
+
+query TT
+SELECT table_name, index_name FROM duckdb_indexes() WHERE table_name = 'test';
 ----
-<REGEX>:Catalog Error.*index with the name PRIMARY_test_i already exists.*
+test	PRIMARY_test_i
+
+statement error
+INSERT INTO test VALUES (1);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+restart
+
+statement error
+INSERT INTO test VALUES (1);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+# Dropping the explicit index keeps the primary key.
+statement ok
+DROP INDEX PRIMARY_test_i;
+
+statement error
+INSERT INTO test VALUES (1);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT count(*) FROM duckdb_indexes() WHERE table_name = 'test';
+----
+0
+
+statement error
+INSERT INTO test VALUES (1);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*

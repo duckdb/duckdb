@@ -1,0 +1,143 @@
+# name: test/sql/index/art/storage/test_art_if_not_exists_constraint_name.test
+# description: CREATE INDEX IF NOT EXISTS with the name of a constraint-backed index creates an independent index
+# group: [storage]
+
+load __TEST_DIR__/test_art_if_not_exists_constraint_name.db
+
+statement ok
+CREATE TABLE parent (id INTEGER PRIMARY KEY, val INTEGER UNIQUE);
+
+statement ok
+CREATE TABLE child (id INTEGER REFERENCES parent(id));
+
+statement ok
+INSERT INTO parent VALUES (1, 1);
+
+statement ok
+INSERT INTO child VALUES (1);
+
+statement ok
+CREATE INDEX IF NOT EXISTS FOREIGN_child_0 ON child(id);
+
+statement ok
+CREATE INDEX IF NOT EXISTS PRIMARY_parent_0 ON parent(id);
+
+statement ok
+CREATE UNIQUE INDEX IF NOT EXISTS UNIQUE_parent_1 ON parent(val);
+
+query TT
+SELECT table_name, index_name FROM duckdb_indexes() ORDER BY ALL;
+----
+child	FOREIGN_child_0
+parent	PRIMARY_parent_0
+parent	UNIQUE_parent_1
+
+# The database must reopen after a WAL replay and after a checkpoint.
+restart
+
+query TT
+SELECT table_name, index_name FROM duckdb_indexes() ORDER BY ALL;
+----
+child	FOREIGN_child_0
+parent	PRIMARY_parent_0
+parent	UNIQUE_parent_1
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query TT
+SELECT table_name, index_name FROM duckdb_indexes() ORDER BY ALL;
+----
+child	FOREIGN_child_0
+parent	PRIMARY_parent_0
+parent	UNIQUE_parent_1
+
+# Dropping the explicit indexes keeps the constraint-backed indexes.
+statement ok
+DROP INDEX FOREIGN_child_0;
+
+statement ok
+DROP INDEX PRIMARY_parent_0;
+
+statement ok
+DROP INDEX UNIQUE_parent_1;
+
+statement error
+DELETE FROM parent WHERE id = 1;
+----
+<REGEX>:Constraint Error.*still referenced by a foreign key.*
+
+statement error
+INSERT INTO parent VALUES (1, 2);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement error
+INSERT INTO parent VALUES (2, 1);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+statement error
+INSERT INTO child VALUES (42);
+----
+<REGEX>:Constraint Error.*does not exist in the referenced table.*
+
+restart
+
+statement error
+DELETE FROM parent WHERE id = 1;
+----
+<REGEX>:Constraint Error.*still referenced by a foreign key.*
+
+statement error
+INSERT INTO parent VALUES (1, 2);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+# A deletion marker for an index on another table does not affect the constraint-backed index.
+statement ok
+CREATE TABLE other (id INTEGER);
+
+statement ok
+CREATE INDEX PRIMARY_parent_0 ON other(id);
+
+statement ok
+BEGIN;
+
+statement ok
+DROP INDEX PRIMARY_parent_0;
+
+statement ok
+CREATE INDEX IF NOT EXISTS PRIMARY_parent_0 ON parent(id);
+
+statement ok
+COMMIT;
+
+query TT
+SELECT table_name, index_name FROM duckdb_indexes() ORDER BY ALL;
+----
+parent	PRIMARY_parent_0
+
+statement ok
+DROP INDEX PRIMARY_parent_0;
+
+statement error
+INSERT INTO parent VALUES (1, 2);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+# IF NOT EXISTS keeps ignoring clashes with explicit indexes.
+statement ok
+CREATE INDEX regular_id ON other(id);
+
+statement ok
+CREATE INDEX IF NOT EXISTS regular_id ON other(id);
+
+restart
+
+query TT
+SELECT table_name, index_name FROM duckdb_indexes() ORDER BY ALL;
+----
+other	regular_id
