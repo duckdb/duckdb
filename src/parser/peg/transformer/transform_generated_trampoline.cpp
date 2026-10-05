@@ -9941,24 +9941,23 @@ void PEGTransformerFactory::InitializeColumnDefinitionTrampoline(PEGTransformer 
 		auto &repeat_pr = repeat_opt.GetResult().Cast<RepeatParseResult>();
 		auto repeat_children = repeat_pr.GetChildren();
 		dynamic_child_count = repeat_children.size();
-		process.ReserveChildSlots(4 + dynamic_child_count - 1);
+		process.ReserveChildSlots(3 + dynamic_child_count - 1);
 		for (idx_t i = repeat_children.size(); i > 0; i--) {
 			auto child_idx = i - 1;
 			process.PushChild({transformer.GetRule("ColumnConstraint"), repeat_children[child_idx].get()},
-			                  3 + child_idx);
+			                  2 + child_idx);
 		}
 	} else {
-		process.ReserveChildSlots(4 - 1);
+		process.ReserveChildSlots(3 - 1);
 	}
 	auto &generated_column_opt = list_pr.GetChild(2).Cast<OptionalParseResult>();
 	if (generated_column_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("GeneratedColumn"), generated_column_opt.GetResult()}, 2);
+		process.PushChild({transformer.GetRule("GeneratedColumn"), generated_column_opt.GetResult()}, 1);
 	}
 	auto &type_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (type_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("Type"), type_opt.GetResult()}, 1);
+		process.PushChild({transformer.GetRule("Type"), type_opt.GetResult()}, 0);
 	}
-	process.PushChild({transformer.GetRule("DottedIdentifier"), list_pr.GetChild(0)}, 0);
 }
 
 unique_ptr<TransformResultValue>
@@ -9972,14 +9971,14 @@ PEGTransformerFactory::FinalizeColumnDefinitionTrampoline(PEGTransformer &transf
 		auto dynamic_repeat_children = dynamic_repeat_pr.GetChildren();
 		dynamic_child_count = dynamic_repeat_children.size();
 	}
-	auto dotted_identifier = process.TakeResult<vector<string>>(0);
+	auto identifier = list_pr.GetChild(0).Cast<IdentifierParseResult>().identifier;
 	optional<LogicalType> type {};
-	if (process.child_results[1]) {
-		type = process.TakeResult<LogicalType>(1);
+	if (process.child_results[0]) {
+		type = process.TakeResult<LogicalType>(0);
 	}
 	optional<GeneratedColumnDefinition> generated_column {};
-	if (process.child_results[2]) {
-		generated_column = process.TakeResult<GeneratedColumnDefinition>(2);
+	if (process.child_results[1]) {
+		generated_column = process.TakeResult<GeneratedColumnDefinition>(1);
 	}
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
@@ -9987,13 +9986,13 @@ PEGTransformerFactory::FinalizeColumnDefinitionTrampoline(PEGTransformer &transf
 	optional<vector<ColumnConstraintEntry>> column_constraint {};
 	if (dynamic_child_count > 0) {
 		vector<ColumnConstraintEntry> column_constraint_value;
-		for (idx_t i = 3; i < 3 + dynamic_child_count; i++) {
+		for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
 			column_constraint_value.push_back(process.TakeResult<ColumnConstraintEntry>(i));
 		}
 		column_constraint = std::move(column_constraint_value);
 	}
-	auto result = TransformColumnDefinition(transformer, dotted_identifier, type, std::move(generated_column),
-	                                        has_result, std::move(column_constraint));
+	auto result = TransformColumnDefinition(transformer, identifier, type, std::move(generated_column), has_result,
+	                                        std::move(column_constraint));
 	return make_uniq<TypedTransformResult<ConstraintColumnDefinition>>(std::move(result));
 }
 

@@ -24,3 +24,16 @@ CALL check_peg_parser($TEST_PEG_PARSER$CREATE TEMPORARY TABLE integers(i INTEGER
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE tbl8 AS SELECT 42 WITH NO DATA$TEST_PEG_PARSER$);
+
+statement error
+CREATE TABLE dotted_column_name(a.b INTEGER);
+----
+Parser Error: syntax error at or near "."
+
+statement ok
+CREATE TABLE dotted_column_name("a.b" INTEGER);
+
+query IIIIII
+DESCRIBE dotted_column_name;
+----
+a.b	INTEGER	YES	NULL	NULL	NULL

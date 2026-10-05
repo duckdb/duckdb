@@ -225,10 +225,10 @@ string PEGTransformerFactory::TransformDotColLabel(PEGTransformer &transformer, 
 }
 
 ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
-    PEGTransformer &transformer, const vector<string> &dotted_identifier, const optional<LogicalType> &type,
+    PEGTransformer &transformer, const Identifier &identifier, const optional<LogicalType> &type,
     optional<GeneratedColumnDefinition> generated_column, const bool &has_result,
     optional<vector<ColumnConstraintEntry>> column_constraint) {
-	auto qualified_name = StringToQualifiedName(dotted_identifier);
+	auto qualified_name = QualifiedName(identifier);
 	bool has_type = type.has_value();
 	bool has_generated = generated_column && generated_column->expr != nullptr;
 	if (!has_type && !has_generated) {

@@ -4574,7 +4574,7 @@ public:
 	static CreateTableColumnElement TransformCreateTableConstraint(PEGTransformer &transformer,
 	                                                               unique_ptr<Constraint> top_level_constraint);
 	static ConstraintColumnDefinition
-	TransformColumnDefinition(PEGTransformer &transformer, const vector<string> &dotted_identifier,
+	TransformColumnDefinition(PEGTransformer &transformer, const Identifier &identifier,
 	                          const optional<LogicalType> &type, optional<GeneratedColumnDefinition> generated_column,
 	                          const bool &has_result, optional<vector<ColumnConstraintEntry>> column_constraint);
 	static ColumnConstraintEntry TransformNotNullConstraint(PEGTransformer &transformer, const bool &child);
