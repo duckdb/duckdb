@@ -14,7 +14,8 @@
 
 namespace duckdb {
 
-//! Token classes for FIRST-set checks; each is a superset of what the matching atomic matchers accept
+//! Token classes for FIRST-set checks, derived from the TokenType assigned by the tokenizer
+//! Each class is a superset of the tokens the corresponding atomic matchers accept
 struct MatcherTokenClass {
 	static constexpr uint8_t WORD = 1;
 	static constexpr uint8_t OPERATOR = 2;
@@ -24,14 +25,16 @@ struct MatcherTokenClass {
 	static constexpr uint8_t NUMBER = 16;
 };
 
-uint8_t ComputeMatcherTokenClass(const string &text);
+//! The token class of a token as emitted by the tokenizer (implemented in base_tokenizer.cpp)
+uint8_t ComputeMatcherTokenClass(TokenType type, const string &text);
 
+//! text, length and token_class are set together on construction: replace a token instead of editing its text
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
 	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
 	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
 		length = text.length();
-		token_class = ComputeMatcherTokenClass(text);
+		token_class = ComputeMatcherTokenClass(type, text);
 	}
 
 	TokenType type;
@@ -41,7 +44,7 @@ struct MatcherToken {
 	bool unterminated = false;
 	bool preceded_by_newline = false;
 	bool preceded_by_block_comment = false;
-	//! MatcherTokenClass bits
+	//! MatcherTokenClass bits - fixed at tokenization, unaffected by later re-typing of the token
 	uint8_t token_class = 0;
 
 	LiteralInfo GetLiteralInfo(const GrammarLiteralTable &table) {

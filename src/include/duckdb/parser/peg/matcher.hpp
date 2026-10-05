@@ -340,6 +340,13 @@ public:
 	bool IsCollapsible() const {
 		return collapsible;
 	}
+	//! The matcher runs the built-in implementation of its type (set by MatcherFactory, never for derived matchers)
+	void SetStructural() {
+		structural = true;
+	}
+	bool IsStructural() const {
+		return structural;
+	}
 
 public:
 	template <class TARGET>
@@ -368,6 +375,7 @@ protected:
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
 	bool collapsible = false;
+	bool structural = false;
 	optional_ptr<const CompiledGrammarRule> rule;
 };
 

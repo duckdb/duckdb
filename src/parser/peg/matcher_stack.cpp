@@ -117,7 +117,7 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	if (child->state.BuildParseResult()) {
 		// skip sub-matchers that certainly cannot match at the current token (see MatcherFirstSet); such an attempt
 		// would fail without consuming a token, so skipping it changes neither the result nor the error position
-		if (child->matcher.Type() == MatcherType::OPTIONAL &&
+		if (child->matcher.Type() == MatcherType::OPTIONAL && child->matcher.IsStructural() &&
 		    !child->matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(child->state)) {
 			// what the optional's own process returns when its element fails
 			child->state.rule = child->matcher.GetRule();
