@@ -1543,7 +1543,9 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 // List Type
 //===--------------------------------------------------------------------===//
 const LogicalType &ListType::GetChildType(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP);
+	if (type.id() != LogicalTypeId::LIST && type.id() != LogicalTypeId::MAP) {
+		throw InternalException("ListType::GetChildType called on a non-LIST type: %s", type.ToString());
+	}
 	auto &info = type.GetTypeInfo();
 	return info.Cast<ListTypeInfo>().child_type;
 }
@@ -1557,8 +1559,10 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::TUPLE ||
-	         type.id() == LogicalTypeId::UNION || type.id() == LogicalTypeId::VARIANT);
+	if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::TUPLE &&
+	    type.id() != LogicalTypeId::UNION && type.id() != LogicalTypeId::VARIANT) {
+		throw InternalException("StructType::GetChildTypes called on a non-STRUCT type: %s", type.ToString());
+	}
 
 	auto &info = type.GetTypeInfo();
 	return info.Cast<StructTypeInfo>().child_types;
