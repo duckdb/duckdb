@@ -9,7 +9,6 @@
 #include "duckdb/common/operator/subtract.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/error_data.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/blob.hpp"
@@ -1846,19 +1845,20 @@ hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
-	// Pass the query location of the cast source if available.
-	auto query_location = parameters.cast_source ? parameters.cast_source->GetQueryLocation() : QueryLocation();
 	auto &heap = StringVector::GetStringHeap(result_vector);
 	if (!parameters.error_message) {
-		return Geometry::FromString(input, result, heap, parameters.strict, query_location);
+		// Pass the query location of the cast source if available.
+		return Geometry::FromString(input, result, heap, parameters.strict,
+		                            parameters.cast_source ? parameters.cast_source->GetQueryLocation()
+		                                                   : QueryLocation());
 	}
-	// the caller collects errors (e.g. TRY_CAST) - report malformed WKT as a cast error instead of throwing
-	try {
-		return Geometry::FromString(input, result, heap, parameters.strict, query_location);
-	} catch (InvalidInputException &ex) {
-		HandleCastError::AssignError(ErrorData(ex).RawMessage(), parameters);
-		return false;
+	// the caller collects errors (e.g. TRY_CAST) - report malformed WKT as a cast error
+	string error_message;
+	if (Geometry::TryFromString(input, result, heap, error_message)) {
+		return true;
 	}
+	HandleCastError::AssignError(error_message, parameters);
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
