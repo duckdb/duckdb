@@ -1,8 +1,14 @@
 # name: test/sql/alter/add_pk/test_add_pk_naming_conflict.test
-# description: Test adding a PRIMARY KEY to a table that already has an index with that name.
+# description: Constraint index names do not conflict with explicit index names.
 # group: [add_pk]
 
 load {TEST_DIR}/test_add_pk_naming_conflict.db
+
+statement ok
+CREATE TABLE other (i INTEGER);
+
+statement ok
+CREATE INDEX PRIMARY_tbl_i ON other(i);
 
 statement ok
 CREATE TABLE tbl (i INTEGER);
@@ -11,20 +17,7 @@ statement ok
 INSERT INTO tbl VALUES (1);
 
 statement ok
-CREATE INDEX PRIMARY_tbl_i ON tbl(i);
-
-# The explicit index blocks ALTER TABLE regardless of its name.
-statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
-----
-<REGEX>:Dependency Error.*Cannot alter entry "tbl" because there are entries that depend on it.*
-
-restart
-
-statement error
-ALTER TABLE tbl ADD PRIMARY KEY (i);
-----
-<REGEX>:Dependency Error.*Cannot alter entry "tbl" because there are entries that depend on it.*
 
 # Let's do it the other way around now.
 
@@ -37,6 +30,17 @@ INSERT INTO test VALUES (1);
 statement ok
 ALTER TABLE test ADD PRIMARY KEY (i);
 
-# Constraint index names are not identifiers, so an explicit index can reuse them.
 statement ok
 CREATE INDEX PRIMARY_test_i ON test(i);
+
+restart
+
+statement error
+INSERT INTO tbl VALUES (1);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement error
+INSERT INTO test VALUES (1);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*

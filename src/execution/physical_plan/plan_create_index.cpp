@@ -95,7 +95,7 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// Early-out, if the index already exists.
-	// Indexes added by ALTER TABLE back constraints and are not catalog entries.
+	// ALTER TABLE ADD PRIMARY KEY / UNIQUE creates a constraint index, which has no catalog entry.
 	if (!op.alter_table_info) {
 		auto &schema = op.table.schema;
 		auto entry =
