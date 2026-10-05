@@ -725,9 +725,6 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 				                            "or STRUCT (for OBJECT Variant values), not %s",
 				                            type.ToString());
 			}
-			if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
-				throw InvalidInputException("STRUCT types in the shredding can not be empty");
-			}
 			return false;
 		}
 		switch (type.id()) {
