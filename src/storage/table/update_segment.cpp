@@ -339,9 +339,12 @@ static void MergeUpdateInfoRangeValidity(UpdateInfo &current, idx_t start, idx_t
 	}
 }
 
-static void FetchCommittedRangeValidity(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset, Vector &result) {
+static void FetchCommittedRangeValidity(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end,
+                                        idx_t result_offset, Vector &result) {
 	auto &result_mask = FlatVector::ValidityMutable(result);
-	MergeUpdateInfoRangeValidity(info, start, end, result_offset, result_mask);
+	UpdateInfo::UpdatesForTransaction(info, view, [&](UpdateInfo &current) {
+		MergeUpdateInfoRangeValidity(current, start, end, result_offset, result_mask);
+	});
 }
 
 template <class T>
@@ -361,10 +364,12 @@ static void MergeUpdateInfoRange(UpdateInfo &current, idx_t start, idx_t end, id
 }
 
 template <class T>
-static void TemplatedFetchCommittedRange(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
-                                         Vector &result) {
+static void TemplatedFetchCommittedRange(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end,
+                                         idx_t result_offset, Vector &result) {
 	auto result_data = FlatVector::GetDataMutable<T>(result);
-	MergeUpdateInfoRange<T>(info, start, end, result_offset, result_data);
+	UpdateInfo::UpdatesForTransaction(info, view, [&](UpdateInfo &current) {
+		MergeUpdateInfoRange<T>(current, start, end, result_offset, result_data);
+	});
 }
 
 static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFunction(PhysicalType type) {
@@ -405,7 +410,7 @@ static UpdateSegment::fetch_committed_range_function_t GetFetchCommittedRangeFun
 	}
 }
 
-void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &result) {
+void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_row, idx_t count, Vector &result) {
 	D_ASSERT(count > 0);
 	if (!root) {
 		return;
@@ -432,7 +437,7 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 		D_ASSERT(start_in_vector < end_in_vector);
 		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
 		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
-		fetch_committed_range(UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
+		fetch_committed_range(view, UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
 	}
 }
 

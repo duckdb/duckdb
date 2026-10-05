@@ -1444,6 +1444,10 @@ CompressionType ColumnCheckpointInfo::GetCompressionType() {
 	return info.compression_types[column_idx];
 }
 
+VisibilityBound ColumnCheckpointInfo::GetVisibilityBound() const {
+	return info.options.visibility_bound;
+}
+
 shared_ptr<ColumnData> RowGroup::CheckpointColumn(const RowGroup &row_group, idx_t column_idx, RowGroupWriteInfo &info,
                                                   RowGroupWriteData &write_data) {
 	auto &column = row_group.GetColumn(column_idx);

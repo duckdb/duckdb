@@ -39,7 +39,7 @@ public:
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
-	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
+	void FetchCommittedRange(const SnapshotView &view, idx_t start_row, idx_t count, Vector &result);
 	void Update(TransactionData transaction, DuckTableEntry &table_entry, idx_t column_index, Vector &update,
 	            row_t *ids, idx_t count, Vector &base_data, idx_t row_group_start);
 	void FetchRows(TransactionData transaction, const idx_t *offsets, const SelectionVector &sel, idx_t count,
@@ -76,8 +76,8 @@ public:
 	                                        const SelectionVector &sel, idx_t row_group_start);
 	typedef void (*fetch_update_function_t)(const SnapshotView &view, UpdateInfo &info, Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo &info, Vector &result);
-	typedef void (*fetch_committed_range_function_t)(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
-	                                                 Vector &result);
+	typedef void (*fetch_committed_range_function_t)(const SnapshotView &view, UpdateInfo &info, idx_t start, idx_t end,
+	                                                 idx_t result_offset, Vector &result);
 	typedef void (*fetch_rows_function_t)(const SnapshotView &view, UpdateInfo &info, const idx_t *offsets,
 	                                      const SelectionVector &sel, idx_t fetch_offset, idx_t count,
 	                                      idx_t vector_offset, Vector &result, idx_t result_offset);
