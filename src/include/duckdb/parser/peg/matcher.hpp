@@ -384,6 +384,10 @@ public:
 	}
 	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const final;
 	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
+	//! Describes the tokens this matcher can start with; the default (no information) never skips the matcher
+	virtual void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const {
+		first_set.any = true;
+	}
 };
 
 class KeywordInfo {

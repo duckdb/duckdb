@@ -39,6 +39,11 @@ public:
 		return "OPERATOR";
 	}
 
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		first_set.class_mask = mode == OperatorMatcherMode::GENERIC_PRECEDENCE ? MatcherTokenClass::GENERIC_OPERATOR
+		                                                                       : MatcherTokenClass::OPERATOR;
+	}
+
 private:
 	bool MatchOperator(MatchState &state) const {
 		auto token = state.token_iterator.Current();
@@ -61,9 +66,6 @@ private:
 
 public:
 	static bool HasSpecialPrecedence(const string &operator_name);
-	bool IsGenericPrecedence() const {
-		return mode == OperatorMatcherMode::GENERIC_PRECEDENCE;
-	}
 
 private:
 	OperatorMatcherMode mode;

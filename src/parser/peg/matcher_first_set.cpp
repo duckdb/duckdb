@@ -142,37 +142,11 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 		auto &first = matcher.first_set;
 		first = MatcherFirstSet();
 		first.table = &table;
-		switch (matcher.Type()) {
-		case MatcherType::KEYWORD: {
-			auto literal = matcher.Cast<KeywordMatcher>().GetDispatchLiteral(table);
-			if (literal.IsValid()) {
-				first.AddLiteral(literal.GetIndex());
-			} else {
-				first.any = true;
-			}
-			break;
-		}
-		case MatcherType::VARIABLE:
-			first.class_mask = MatcherTokenClass::WORD;
-			break;
-		case MatcherType::OPERATOR: {
-			auto op = dynamic_cast<const OperatorMatcher *>(&matcher);
-			first.class_mask =
-			    op && op->IsGenericPrecedence() ? MatcherTokenClass::GENERIC_OPERATOR : MatcherTokenClass::OPERATOR;
-			break;
-		}
-		case MatcherType::STRING_LITERAL:
-			first.class_mask = MatcherTokenClass::STRING;
-			break;
-		case MatcherType::NUMBER_LITERAL:
-			first.class_mask = MatcherTokenClass::NUMBER;
-			break;
-		default:
-			if (!IsComposite(matcher.Type())) {
-				// end of input and custom matchers: no information
-				first.any = true;
-			}
-			break;
+		if (matcher.IsAtomic()) {
+			static_cast<const AtomicMatcher &>(matcher).InitializeFirstSet(first, table);
+		} else if (!IsComposite(matcher.Type())) {
+			// custom matchers: no information
+			first.any = true;
 		}
 	}
 	// composite matchers: least fixed point, the grammar is recursive

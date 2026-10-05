@@ -42,6 +42,10 @@ public:
 		return "NUMBER_LITERAL";
 	}
 
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		first_set.class_mask = MatcherTokenClass::NUMBER;
+	}
+
 private:
 	static bool MatchNumberLiteral(MatchState &state) {
 		auto token = state.token_iterator.Current();
