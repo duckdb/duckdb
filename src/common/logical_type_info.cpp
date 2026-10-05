@@ -79,7 +79,7 @@ bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> lhs, optional_ptr
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
-LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type) : type(type) {
+LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type) noexcept : type(type) {
 }
 LogicalTypeInfo::LogicalTypeInfo(LogicalTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
 }

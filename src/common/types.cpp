@@ -181,29 +181,37 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 
 namespace {
 
+constexpr idx_t BUILTIN_TYPE_INFO_COUNT = NumericLimits<uint8_t>::Maximum() + 1;
+
 struct BuiltinTypeInfos {
-	const LogicalTypeInfo *infos[NumericLimits<uint8_t>::Maximum() + 1] = {};
+	//! The info for each id - nullptr for an invalid id
+	const LogicalTypeInfo *infos[BUILTIN_TYPE_INFO_COUNT] = {};
+	//! The infos are created in place, so creating them never allocates
+	alignas(LogicalTypeInfo) char storage[BUILTIN_TYPE_INFO_COUNT][sizeof(LogicalTypeInfo)];
 };
 
 } // namespace
 
-const LogicalTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
-	// intentionally leaked - types can still be destroyed during static destruction
-	static const auto *builtins = [] {
-		auto result = new BuiltinTypeInfos();
-		for (idx_t i = 0; i <= NumericLimits<uint8_t>::Maximum(); i++) {
+const LogicalTypeInfo *LogicalType::TryGetBuiltinTypeInfo(LogicalTypeId id) noexcept {
+	static const auto *builtins = []() noexcept {
+		// zero-initialized and never destroyed - types can still be destroyed during static destruction
+		static BuiltinTypeInfos result;
+		for (idx_t i = 0; i < BUILTIN_TYPE_INFO_COUNT; i++) {
 			auto builtin_id = static_cast<LogicalTypeId>(i);
-			auto info = make_uniq<LogicalTypeInfo>(LogicalTypeInfoType::INVALID_TYPE_INFO);
-			if (!TryGetPhysicalType(builtin_id, *info, info->physical_type)) {
-				continue;
+			auto &info = *new (result.storage[i]) LogicalTypeInfo(LogicalTypeInfoType::INVALID_TYPE_INFO);
+			if (TryGetPhysicalType(builtin_id, info, info.physical_type)) {
+				info.id = builtin_id;
+				info.immortal = true;
+				result.infos[i] = &info;
 			}
-			info->id = builtin_id;
-			info->immortal = true;
-			result->infos[i] = info.release();
 		}
-		return result;
+		return &result;
 	}();
-	auto info = builtins->infos[static_cast<uint8_t>(id)];
+	return builtins->infos[static_cast<uint8_t>(id)];
+}
+
+const LogicalTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
+	auto info = TryGetBuiltinTypeInfo(id);
 	if (!info) {
 		throw InternalException("Invalid LogicalType %d", static_cast<uint8_t>(id));
 	}
@@ -236,14 +244,14 @@ LogicalType::LogicalType(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info
 
 LogicalType::LogicalType(LogicalType &&other) noexcept : type_info_(other.type_info_) {
 	// the moved-from type keeps its id, but loses its parameters
-	// it may come from another copy of DuckDB (e.g. the host of a statically linked extension) - so the builtins of
-	// this copy might not exist yet, and creating them can only throw when out of memory
-	other.type_info_ = GetBuiltinTypeInfo(type_info_.get().id);
+	// it may come from another copy of DuckDB (e.g. the host of a loadable extension that statically links its own
+	// copy), so this can be the first use of the builtins of this copy
+	other.type_info_ = *TryGetBuiltinTypeInfo(type_info_.get().id);
 }
 
 const LogicalTypeInfo &LogicalType::ReleaseTypeInfo() && {
 	auto &result = type_info_.get();
-	type_info_ = GetBuiltinTypeInfo(result.id);
+	type_info_ = *TryGetBuiltinTypeInfo(result.id);
 	return result;
 }
 
