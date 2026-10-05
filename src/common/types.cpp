@@ -1559,8 +1559,8 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::TUPLE &&
-	    type.id() != LogicalTypeId::UNION && type.id() != LogicalTypeId::VARIANT) {
+	if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::TUPLE && type.id() != LogicalTypeId::UNION &&
+	    type.id() != LogicalTypeId::VARIANT) {
 		throw InternalException("StructType::GetChildTypes called on a non-STRUCT type: %s", type.ToString());
 	}
 
