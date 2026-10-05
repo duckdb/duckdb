@@ -902,7 +902,7 @@ static void ExtractCollationFromType(const LogicalType &source_type, const Logic
 	}
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::TUPLE: {
-		auto &target_type = StructType::IsStruct(target) && target.AuxInfo() ? target : source_type;
+		auto &target_type = StructType::IsStruct(target) && target.HasParameters() ? target : source_type;
 		auto &source_children = StructType::GetChildTypes(source_type);
 		auto &target_children = StructType::GetChildTypes(target_type);
 

@@ -109,27 +109,15 @@ void CollationBinding::RegisterCollation(CollationCallback callback) {
 	collations.push_back(callback);
 }
 
-static unique_ptr<Expression> BindCollationFunction(ClientContext &context, const string &function_name,
-                                                    vector<unique_ptr<Expression>> children) {
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
-	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(function_name)));
-	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto function = function_binder.BindScalarFunction(function_entry, std::move(children), error);
-	if (!function) {
-		error.Throw();
-	}
-	return function;
-}
-
 //! Binds the scalar function with the given name (looked up from the system catalog) around "source".
 static unique_ptr<Expression> ApplyCollationFunction(ClientContext &context, const string &function_name,
                                                      unique_ptr<Expression> source) {
 	auto source_alias = source->GetAlias();
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
-	auto function = BindCollationFunction(context, function_name, std::move(children));
+	FunctionBinder function_binder(context);
+	auto function =
+	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(function_name), std::move(children));
 	function->SetAlias(source_alias);
 	return function;
 }
@@ -142,6 +130,7 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	auto lambda_parameter_expr = make_uniq<BoundReferenceExpression>(lambda_parameter, sql_type, idx_t(0));
 	const bool is_tuple = sql_type.id() == LogicalTypeId::TUPLE;
 	vector<unique_ptr<Expression>> fields;
+	FunctionBinder function_binder(context);
 
 	bool requires_collation = false;
 	auto &child_types = StructType::GetChildTypes(sql_type);
@@ -149,8 +138,9 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 		vector<unique_ptr<Expression>> arguments;
 		arguments.push_back(lambda_parameter_expr->Copy());
 		arguments.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(NumericCast<int64_t>(i + 1))));
-		auto field =
-		    BindCollationFunction(context, is_tuple ? "struct_extract" : "struct_extract_at", std::move(arguments));
+		auto field = function_binder.BindScalarFunction(Identifier::DefaultSchema(),
+		                                                Identifier(is_tuple ? "struct_extract" : "struct_extract_at"),
+		                                                std::move(arguments));
 		// Wrap the extracted field in its collation functions, recursing into nested fields.
 		requires_collation |= binding.PushCollation(context, field, child_types[i].second, type);
 		field->SetAlias(Identifier(child_types[i].first));
@@ -162,7 +152,8 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	}
 
 	// Rebuild with the transformed field types, as the fields type can change
-	auto result = BindCollationFunction(context, is_tuple ? "row" : "struct_pack", std::move(fields));
+	auto result = function_binder.BindScalarFunction(Identifier::DefaultSchema(),
+	                                                 Identifier(is_tuple ? "row" : "struct_pack"), std::move(fields));
 	// A NULL struct must remain distinct from a struct containing only NULL fields.
 	auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
 	is_null->GetChildrenMutable().push_back(lambda_parameter_expr->Copy());
@@ -176,7 +167,7 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(lambda));
 	arguments.push_back(std::move(source));
-	source = BindCollationFunction(context, "invoke", std::move(arguments));
+	source = function_binder.BindScalarFunction(Identifier::DefaultSchema(), "invoke", std::move(arguments));
 	source->SetAlias(source_alias);
 	return true;
 }
