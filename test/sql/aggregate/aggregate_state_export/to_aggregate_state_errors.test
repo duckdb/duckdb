@@ -53,3 +53,8 @@ SELECT to_aggregate_state(
 );
 ----
 ordered aggregate state value must be a LIST of STRUCTs
+
+statement error
+SELECT to_aggregate_state([{'v0': 'a'}], 'string_agg', ['VARCHAR'], NULL, [{'column': 0, 'order': 42}]);
+----
+the ORDER BY 'order' field must be a VARCHAR

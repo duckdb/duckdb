@@ -684,6 +684,10 @@ void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAg
 		if (column.IsNull() || order.IsNull()) {
 			throw BinderException("to_aggregate_state: each ORDER BY entry must have a non-NULL 'column' and 'order'");
 		}
+		if (order.type().id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("to_aggregate_state: the ORDER BY 'order' field must be a VARCHAR, e.g. 'DESC NULLS "
+			                      "LAST'");
+		}
 		SortedAggregateStateOrder state_order;
 		state_order.column = column.GetValue<uint32_t>();
 		if (state_order.column >= column_count) {
