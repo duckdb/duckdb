@@ -5,7 +5,14 @@
 namespace duckdb {
 
 //! RFC 7396 merge patch; a missing or non-object orig is treated as an empty object
-static yyjson_mut_val *MergePatchRecursive(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
+static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
+	if ((yyjson_mut_get_tag(orig) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) ||
+	    (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE))) {
+		// If either is not an object, we just return the second argument
+		return patch;
+	}
+
+	// Both are object, do the merge
 	auto root_builder = yyjson_mut_obj(doc);
 
 	struct stack_item {
@@ -20,7 +27,6 @@ static yyjson_mut_val *MergePatchRecursive(yyjson_mut_doc *doc, yyjson_mut_val *
 	while (!stack.Empty()) {
 		auto nodes = stack.Pop();
 
-		// auto builder = yyjson_mut_obj(doc);
 		if (!yyjson_mut_is_obj(nodes.orig)) {
 			// yyjson_mut_obj_getn on a non-object returns nullptr, so lookups below need no special case
 			nodes.orig = nullptr;
@@ -32,10 +38,10 @@ static yyjson_mut_val *MergePatchRecursive(yyjson_mut_doc *doc, yyjson_mut_val *
 			yyjson_mut_val *key, *orig_val;
 			yyjson_mut_obj_foreach(nodes.orig, idx, max, key, orig_val) {
 				auto patch_val =
-				    yyjson_mut_obj_getn(nodes.patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+					yyjson_mut_obj_getn(nodes.patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 				if (!patch_val) {
 					yyjson_mut_obj_add(nodes.builder, yyjson_mut_val_mut_copy(doc, key),
-					                   yyjson_mut_val_mut_copy(doc, orig_val));
+									   yyjson_mut_val_mut_copy(doc, orig_val));
 				}
 			}
 		}
@@ -60,17 +66,6 @@ static yyjson_mut_val *MergePatchRecursive(yyjson_mut_doc *doc, yyjson_mut_val *
 	}
 
 	return root_builder;
-}
-
-static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
-	if ((yyjson_mut_get_tag(orig) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE)) ||
-	    (yyjson_mut_get_tag(patch) != (YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE))) {
-		// If either is not an object, we just return the second argument
-		return patch;
-	}
-
-	// Both are object, do the merge
-	return MergePatchRecursive(doc, orig, patch);
 }
 
 static inline void ReadObjects(yyjson_mut_doc *doc, const Vector &input, yyjson_mut_val *objs[]) {
