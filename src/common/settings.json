@@ -1411,6 +1411,13 @@
         ]
     },
     {
+        "name": "redact_logs",
+        "description": "Redact potentially sensitive information in logs.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "default_value": "true"
+    },
+    {
         "name": "regex_match_operator_semantics",
         "description": "Configures whether regex match operators use partial or full string matching.",
         "type": "ENUM<RegexMatchOperatorSemantics>",

@@ -2285,6 +2285,18 @@ struct ReadAheadDepthSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
+struct RedactLogsSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "redact_logs";
+	static constexpr const char *Description = "Redact potentially sensitive information in logs.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "true";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::GLOBAL_ONLY;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct RegexMatchOperatorSemanticsSetting {
 	using RETURN_TYPE = RegexMatchOperatorSemantics;
 	static constexpr const char *Name = "regex_match_operator_semantics";
