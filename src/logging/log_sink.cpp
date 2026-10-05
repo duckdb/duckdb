@@ -1,4 +1,5 @@
 #include "duckdb/logging/log_sink.hpp"
+#include "duckdb/logging/log_format_writer.hpp"
 #include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/csv_writer.hpp"
@@ -94,20 +95,7 @@ unique_ptr<TableRef> LogSink::BindReplace(ClientContext &context, TableFunctionB
 	return nullptr;
 }
 
-CSVLogSink::~CSVLogSink() {
-}
 
-CSVLogSink::CSVLogSink(DatabaseInstance &db, bool normalize, idx_t buffer_size)
-    : BufferingLogSink(db, buffer_size, normalize) {
-	reader_options = make_uniq<CSVReaderOptions>();
-	writer_options = make_uniq<CSVWriterOptions>(*reader_options);
-
-	reader_options->dialect_options.state_machine_options.escape = '\"';
-	reader_options->dialect_options.state_machine_options.quote = '\"';
-	reader_options->dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
-
-	ResetCastChunk();
-}
 
 void BufferingLogSink::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	lock_guard<mutex> lck(lock);
@@ -129,109 +117,6 @@ bool BufferingLogSink::IsEnabledInternal(LoggingTargetTable table) {
 
 idx_t BufferingLogSink::GetBufferLimit() const {
 	return buffer_limit;
-}
-
-void CSVLogSink::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
-	// Reset the cast buffer before use
-	cast_buffers[table]->Reset();
-
-	auto &cast_buffer = *cast_buffers[table];
-	idx_t count = chunk.size();
-
-	// Do default casts
-	for (idx_t i = 0; i < chunk.data.size(); i++) {
-		VectorOperations::DefaultCast(chunk.data[i], cast_buffer.data[i], count, false);
-	}
-}
-
-void CSVLogSink::ResetAllBuffers() {
-	BufferingLogSink::ResetAllBuffers();
-	ResetCastChunk();
-}
-
-void CSVLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
-	auto config_copy = config;
-
-	bool changed_writer_settings = false;
-
-	vector<string> to_remove;
-	for (const auto &it : config_copy) {
-		auto key = StringUtil::Lower(it.first);
-		if (key == "delim") {
-			changed_writer_settings = true;
-			reader_options->dialect_options.state_machine_options.delimiter = CSVOption<string>(it.second.ToString());
-			to_remove.push_back(it.first);
-		}
-	}
-
-	if (changed_writer_settings) {
-		for (auto &writer : writers) {
-			SetWriterConfigs(*writer.second, GetColumnNames(writer.first));
-		}
-	}
-
-	for (const auto &it : to_remove) {
-		config_copy.erase(it);
-	}
-
-	return BufferingLogSink::UpdateConfigInternal(db, config_copy);
-}
-
-void CSVLogSink::RegisterWriter(LoggingTargetTable table, unique_ptr<CSVWriter> writer) {
-	writers[table] = std::move(writer);
-}
-
-CSVWriter &CSVLogSink::GetWriter(LoggingTargetTable table) {
-	return *writers[table];
-}
-
-void CSVLogSink::InitializeCastChunk(LoggingTargetTable table) {
-	cast_buffers[table] = make_uniq<DataChunk>();
-
-	vector<LogicalType> types;
-	types.resize(GetSchema(table).size(), LogicalType::VARCHAR);
-	idx_t buffer_size = MaxValue<idx_t>(GetBufferLimit(), 1);
-	cast_buffers[table]->Initialize(Allocator::DefaultAllocator(), types, buffer_size);
-}
-
-void CSVLogSink::ResetCastChunk() {
-	InitializeCastChunk(LoggingTargetTable::LOG_ENTRIES);
-	InitializeCastChunk(LoggingTargetTable::LOG_CONTEXTS);
-	InitializeCastChunk(LoggingTargetTable::ALL_LOGS);
-}
-
-void CSVLogSink::SetWriterConfigs(CSVWriter &writer, vector<Identifier> column_names) {
-	writer.options = *reader_options;
-	writer.writer_options = *writer_options;
-
-	// Update the config with the column names since that is different per schema
-	writer.options.name_list = std::move(column_names);
-	writer.options.force_quote = vector<bool>(writer.options.name_list.size(), false);
-}
-
-CSVReaderOptions &CSVLogSink::GetCSVReaderOptions() {
-	return *reader_options;
-}
-
-CSVWriterOptions &CSVLogSink::GetCSVWriterOptions() {
-	return *writer_options;
-}
-
-void CSVLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
-	BeforeFlush(table, chunk);
-
-	// Execute the cast
-	ExecuteCast(table, chunk);
-
-	// Write the chunk to the CSVWriter
-	writers[table]->WriteChunk(*cast_buffers[table]);
-	writers[table]->Flush();
-
-	// Call child class to implement any post flushing behaviour (e.g. calling sync)
-	AfterFlush(table, chunk);
-
-	// Reset the cast buffer
-	cast_buffers[table]->Reset();
 }
 
 void BufferingLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
@@ -257,120 +142,46 @@ void StdOutLogSink::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t 
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 }
 
-StdOutLogSink::StdOutLogSink(DatabaseInstance &db) : CSVLogSink(db, false, 1) {
-	// StdOutLogSink is denormalized only
+StdOutLogSink::StdOutLogSink(DatabaseInstance &db) : BufferingLogSink(db, 1, /*normalize=*/false) {
 	auto target_table = LoggingTargetTable::ALL_LOGS;
-
-	// Set sink specific defaults
-	GetCSVWriterOptions().newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
-	GetCSVReaderOptions().dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
-
-	// Create and configure writer
-	auto writer = make_uniq<CSVWriter>(stdout_stream, GetColumnNames(target_table), false);
-	SetWriterConfigs(*writer, GetColumnNames(target_table));
-
-	RegisterWriter(target_table, std::move(writer));
+	auto column_names = GetColumnNames(target_table);
+	writer = make_uniq<CSVFormatWriter>(stdout_stream, target_table, column_names);
 }
-
+ 
 StdOutLogSink::~StdOutLogSink() {
 }
+ 
+void StdOutLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
+	writer->WriteChunk(chunk);
+}
+ 
+void StdOutLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+	auto config_copy = config;
 
-FileLogSink::FileLogSink(DatabaseInstance &db_p) : CSVLogSink(db_p, true, STANDARD_VECTOR_SIZE), db(db_p) {
+	vector<string> to_remove;
+	for (const auto &it : config_copy) {
+		auto key = StringUtil::Lower(it.first);
+		if (key == "delim") {
+			writer->UpdateConfig({it});
+			to_remove.push_back(it.first);
+		}
+	}
+
+	for (const auto &it : to_remove) {
+		config_copy.erase(it);
+	}
+ 
+	BufferingLogSink::UpdateConfigInternal(db, config_copy);
+}
+
+FileLogSink::FileLogSink(DatabaseInstance &db_p)
+    : BufferingLogSink(db_p, STANDARD_VECTOR_SIZE, /*normalize=*/true), db(db_p) {
 	tables[LoggingTargetTable::ALL_LOGS] = TableWriter();
 	tables[LoggingTargetTable::LOG_CONTEXTS] = TableWriter();
 	tables[LoggingTargetTable::LOG_ENTRIES] = TableWriter();
-
-	// Set sink specific defaults
-	GetCSVWriterOptions().newline_writing_mode = CSVNewLineMode::WRITE_BEFORE;
-	GetCSVReaderOptions().dialect_options.state_machine_options.delimiter = CSVOption<string>(",");
 }
 
 FileLogSink::~FileLogSink() {
-}
-
-void FileLogSink::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
-	auto &table_writer = tables[table];
-
-	// reset the files writer, we may be re-initializing it here and otherwise we hold 2 handles to the same file
-	table_writer.file_writer.reset();
-
-	// (re)initialize the file writer
-	table_writer.file_writer = InitializeFileWriter(db, table_writer.path);
-	auto file_writer = table_writer.file_writer.get();
-
-	// Create CSV writer that writes to file
-	auto column_names = GetColumnNames(table);
-
-	// Configure writer
-	auto csv_writer = make_uniq<CSVWriter>(*file_writer, column_names, false);
-	SetWriterConfigs(*csv_writer, column_names);
-	bool should_write_header = file_writer->handle->GetFileSize() == 0;
-
-	// We write the header only if the file was empty: when appending to the file we don't
-	csv_writer->options.dialect_options.header = {should_write_header, true};
-
-	// Initialize the writer, this writes out the header if required
-	csv_writer->Initialize();
-
-	// Needed to ensure we correctly start with a newline
-	csv_writer->SetWrittenAnything(true);
-
-	RegisterWriter(table, std::move(csv_writer));
-
-	// Ensures that the file is fully initialized when this function returns
-	file_writer->Sync();
-
-	table_writer.initialized = true;
-}
-
-unique_ptr<BufferedFileWriter> FileLogSink::InitializeFileWriter(DatabaseInstance &db, const string &path) {
-	auto &fs = db.GetFileSystem();
-
-	// Create parent directories if non existent
-	auto pos = path.find_last_of("/\\");
-	if (pos != path.npos) {
-		fs.CreateDirectoriesRecursive(path.substr(0, pos));
-	}
-
-	FileOpenFlags flags;
-	if (!fs.FileExists(path)) {
-		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE |
-		        FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileCompressionType::UNCOMPRESSED;
-	} else {
-		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND;
-	}
-
-	return make_uniq<BufferedFileWriter>(fs, path, flags);
-}
-
-void FileLogSink::Truncate() {
-	lock_guard<mutex> lck(lock);
-
-	// Reset buffers
-	ResetAllBuffers();
-
-	for (const auto &it : tables) {
-		auto &file_writer = it.second.file_writer;
-		if (!file_writer) {
-			continue;
-		}
-		// Truncate the file writer
-		file_writer->Truncate(0);
-		auto &writer = GetWriter(it.first);
-		// Reset writer and header option, then re-initialize
-		writer.Reset(nullptr);
-		writer.options.dialect_options.header = CSVOption<bool>(true);
-		writer.Initialize(true);
-	}
-}
-
-void FileLogSink::BeforeFlush(LoggingTargetTable table, DataChunk &) {
-	// Lazily initialize the files
-	Initialize(table);
-}
-
-void FileLogSink::AfterFlush(LoggingTargetTable table, DataChunk &) {
-	tables[table].file_writer->Sync();
 }
 
 void FileLogSink::Initialize(LoggingTargetTable table) {
@@ -379,27 +190,53 @@ void FileLogSink::Initialize(LoggingTargetTable table) {
 		if (table_writer.path.empty()) {
 			throw InvalidConfigurationException("Failed to initialize file log sink table, path wasn't set");
 		}
-
 		InitializeFile(db, table);
 	}
 }
 
-void FileLogSink::SetPaths(const string &base_path) {
-	for (auto &it : tables) {
-		it.second.path.clear();
-	}
+void FileLogSink::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
+	auto &table_writer = tables[table];
+	table_writer.file_writer.reset();
+	table_writer.file_writer = InitializeFileWriter(db, table_writer.path);
 
-	LocalFileSystem fs;
-	if (normalize_contexts) {
-		tables[LoggingTargetTable::LOG_CONTEXTS].path = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
-		tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
-	} else {
-		if (StringUtil::EndsWith(base_path, ".csv")) {
-			tables[LoggingTargetTable::ALL_LOGS].path = base_path;
-		} else {
-			tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
-		}
+	auto file_writer = table_writer.file_writer.get();
+
+	auto column_names = GetColumnNames(table);
+	auto format_writer =
+	    make_uniq<CSVFormatWriter>(*file_writer, table, column_names);
+
+	bool should_write_header = file_writer->handle->GetFileSize() == 0;
+	format_writer->Initialize(should_write_header);
+
+	table_writer.writer = std::move(format_writer);
+	file_writer->Sync();
+	table_writer.initialized = true;
+}
+
+unique_ptr<BufferedFileWriter> FileLogSink::InitializeFileWriter(DatabaseInstance &db, const string &path) {
+	auto &fs = db.GetFileSystem();
+ 
+	// Create parent directories if non existent
+	auto pos = path.find_last_of("/\\");
+	if (pos != path.npos) {
+		fs.CreateDirectoriesRecursive(path.substr(0, pos));
 	}
+ 
+	FileOpenFlags flags;
+	if (!fs.FileExists(path)) {
+		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE |
+		        FileFlags::FILE_FLAGS_FILE_CREATE_NEW | FileCompressionType::UNCOMPRESSED;
+	} else {
+		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND;
+	}
+ 
+	return make_uniq<BufferedFileWriter>(fs, path, flags);
+}
+
+void FileLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
+	Initialize(table);
+	tables[table].writer->WriteChunk(chunk);
+	tables[table].file_writer->Sync();
 }
 
 void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
@@ -409,13 +246,13 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 	bool normalize_contexts_new_value = normalize_contexts;
 	bool normalize_set_explicitly = false;
 	bool require_reinitializing_files = false;
-
+	bool changed_writer_settings = false;
+	case_insensitive_map_t<Value> writer_config;
 	vector<string> to_remove;
 	for (const auto &it : config_copy) {
 		auto key = StringUtil::Lower(it.first);
 		if (key == "path") {
 			auto path_value = it.second.ToString();
-			//! We implicitly set normalize to false when a path ending in .csv is specified
 			if (!normalize_set_explicitly && StringUtil::EndsWith(path_value, ".csv")) {
 				normalize_contexts_new_value = false;
 			}
@@ -426,22 +263,19 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 			normalize_contexts_new_value = it.second.GetValue<bool>();
 			to_remove.push_back(it.first);
 		} else if (key == "delim") {
-			require_reinitializing_files = true;
+			writer_config[it.first] = it.second;
+			to_remove.push_back(it.first);
 		}
 	}
 
 	if (StringUtil::EndsWith(new_path, ".csv") && normalize_contexts_new_value) {
 		throw InvalidConfigurationException(
-		    "Can not set path to '%s' while normalize is true. Normalize will make DuckDB write multiple log files to "
-		    "more efficiently store log entries. Please specify a directory path instead of a csv file path, or set "
-		    "normalize to false.",
+		    "Can not set path to '%s' while normalize is true. Normalize will make DuckDB write multiple log files "
+		    "to more efficiently store log entries. Please specify a directory path instead of a csv file path, or "
+		    "set normalize to false.",
 		    new_path);
 	}
 
-	// If any writer is initialized, we flush first:
-	// - when switching between normalized and denormalized, this is necessary since we are changing the buffer schema
-	// - when simply changing the path, it avoids writing log entries written before this change to end up in the new
-	// file
 	bool initialized = false;
 	for (auto &it : tables) {
 		initialized |= it.second.initialized;
@@ -453,17 +287,20 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 	require_reinitializing_files |= normalize_contexts != normalize_contexts_new_value;
 	normalize_contexts = normalize_contexts_new_value;
 
-	// Reset the buffers to ensure they have the correct schema
 	if (require_reinitializing_files) {
 		ResetAllBuffers();
-
-		// Mark tables as uninitialized
 		for (auto &table : tables) {
 			table.second.initialized = false;
+			table.second.writer.reset(); // new: writer is now owned per-table, must drop it too
+		}
+	} else if (!writer_config.empty()) {
+		for (auto &it : tables) {
+			if (it.second.writer) {
+				it.second.writer->UpdateConfig(writer_config);
+			}
 		}
 	}
 
-	// Apply any path change
 	if (new_path != base_path) {
 		base_path = new_path;
 		SetPaths(new_path);
@@ -473,7 +310,7 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 		config_copy.erase(it);
 	}
 
-	CSVLogSink::UpdateConfigInternal(db, config_copy);
+	BufferingLogSink::UpdateConfigInternal(db, config_copy);
 }
 
 unique_ptr<TableRef> FileLogSink::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
@@ -531,6 +368,40 @@ unique_ptr<TableRef> FileLogSink::BindReplace(ClientContext &context, TableFunct
 	}
 
 	return BindReplaceInternal(context, input, path, select, columns);
+}
+
+void FileLogSink::SetPaths(const string &base_path) {
+	for (auto &it : tables) {
+		it.second.path.clear();
+	}
+
+	LocalFileSystem fs;
+	if (normalize_contexts) {
+		tables[LoggingTargetTable::LOG_CONTEXTS].path = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
+		tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
+	} else {
+		if (StringUtil::EndsWith(base_path, ".csv")) {
+			tables[LoggingTargetTable::ALL_LOGS].path = base_path;
+		} else {
+			tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
+		}
+	}
+}
+
+void FileLogSink::Truncate() {
+	lock_guard<mutex> lck(lock);
+
+	// Reset buffers
+	ResetAllBuffers();
+
+	for (auto &it : tables) {
+		auto &file_writer = it.second.file_writer;
+		if (!file_writer) {
+			continue;
+		}
+		file_writer->Truncate(0);
+		it.second.writer->Truncate();
+	}
 }
 
 BufferingLogSink::BufferingLogSink(DatabaseInstance &db_p, idx_t buffer_size, bool normalize)
