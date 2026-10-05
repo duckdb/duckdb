@@ -39,7 +39,6 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	return std::move(result);
 }
 
-<<<<<<< HEAD
 vector<unique_ptr<ParsedExpression>> CreateTableInfo::GetLegacySortKeys() const {
 	vector<unique_ptr<ParsedExpression>> result;
 	for (auto &order : sort_keys) {
@@ -55,7 +54,8 @@ void CreateTableInfo::SetLegacySortKeys(vector<unique_ptr<ParsedExpression>> leg
 	for (auto &expr : legacy_sort_keys) {
 		sort_keys.emplace_back(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT, std::move(expr));
 	}
-=======
+}
+
 optional_idx CreateTableInfo::FindNotNullConstraint(LogicalIndex column) const {
 	for (idx_t constraint_idx = 0; constraint_idx < constraints.size(); constraint_idx++) {
 		auto &constraint = *constraints[constraint_idx];
@@ -64,7 +64,6 @@ optional_idx CreateTableInfo::FindNotNullConstraint(LogicalIndex column) const {
 		}
 	}
 	return optional_idx();
->>>>>>> origin/v2.0-cyanoptera
 }
 
 string CreateTableInfo::ExtraOptionsToString() const {
