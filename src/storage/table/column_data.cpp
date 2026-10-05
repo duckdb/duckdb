@@ -397,7 +397,8 @@ idx_t ColumnData::GetVectorCount(idx_t vector_index) const {
 	return MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - current_row);
 }
 
-void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result) {
+void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t s_count, Vector &result,
+                                    VisibilityBound visibility_bound) {
 	ColumnScanState child_state(nullptr);
 	InitializeScanWithOffset(child_state, offset_in_row_group);
 	bool has_updates = HasUpdates();
@@ -405,7 +406,8 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	if (has_updates) {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.Flatten();
-		updates->FetchCommittedRange(offset_in_row_group, s_count, result);
+		updates->FetchCommittedRange(SnapshotView::CommittedBefore(visibility_bound), offset_in_row_group, s_count,
+		                             result);
 	}
 }
 
@@ -972,13 +974,14 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(const RowGro
 	return make_uniq<ColumnCheckpointState>(row_group, *this, context, partial_block_manager);
 }
 
-void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count,
-                                Vector &scan_vector) const {
+void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector,
+                                VisibilityBound visibility_bound) const {
 	segment.Scan(state, count, scan_vector, 0, ScanVectorType::SCAN_FLAT_VECTOR);
 
 	if (updates) {
 		D_ASSERT(scan_vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		updates->FetchCommittedRange(state.offset_in_column, count, scan_vector);
+		updates->FetchCommittedRange(SnapshotView::CommittedBefore(visibility_bound), state.offset_in_column, count,
+		                             scan_vector);
 	}
 }
 

@@ -58,6 +58,7 @@ public:
 	Context &GetContext();
 	PartialBlockManager &GetPartialBlockManager();
 	CompressionType GetCompressionType();
+	VisibilityBound GetVisibilityBound() const;
 
 private:
 	RowGroupWriteInfo &info;
@@ -159,7 +160,8 @@ public:
 	virtual idx_t Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                   idx_t scan_count);
 
-	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
+	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result,
+	                                VisibilityBound visibility_bound);
 	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
 
 	//! Select
@@ -217,7 +219,8 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(const RowGroup &row_group, ColumnCheckpointInfo &info,
 	                                                     const BaseStatistics &stats);
 
-	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector) const;
+	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector,
+	                            VisibilityBound visibility_bound) const;
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
