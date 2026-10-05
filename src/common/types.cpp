@@ -37,8 +37,8 @@ namespace duckdb {
 constexpr idx_t ArrayType::MAX_ARRAY_SIZE;
 const idx_t UnionType::MAX_UNION_MEMBERS;
 
-//! Computes the physical type of a type with the given id and info - returns false for an unknown id
-static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, PhysicalType &result) {
+//! Computes the physical type of a type with the given id and no parameters - returns false for an unknown id
+static bool TryGetBuiltinPhysicalType(LogicalTypeId id, PhysicalType &result) noexcept {
 	switch (id) {
 	case LogicalTypeId::BOOLEAN:
 		result = PhysicalType::BOOL;
@@ -91,26 +91,6 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 	case LogicalTypeId::DOUBLE:
 		result = PhysicalType::DOUBLE;
 		return true;
-	case LogicalTypeId::DECIMAL: {
-		if (info.type != LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
-			result = PhysicalType::INVALID;
-			return true;
-		}
-		auto width = info.Cast<DecimalTypeInfo>().width;
-		if (width <= Decimal::MAX_WIDTH_INT16) {
-			result = PhysicalType::INT16;
-		} else if (width <= Decimal::MAX_WIDTH_INT32) {
-			result = PhysicalType::INT32;
-		} else if (width <= Decimal::MAX_WIDTH_INT64) {
-			result = PhysicalType::INT64;
-		} else if (width <= Decimal::MAX_WIDTH_INT128) {
-			result = PhysicalType::INT128;
-		} else {
-			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
-			                        width, DecimalType::MaxWidth());
-		}
-		return true;
-	}
 	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
@@ -137,31 +117,19 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 		result = PhysicalType::ARRAY;
 		return true;
 	case LogicalTypeId::POINTER:
-		// LCOV_EXCL_START
-		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
-			result = PhysicalType::UINT32;
-		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
-			result = PhysicalType::UINT64;
-		} else {
-			throw InternalException("Unsupported pointer size");
-		}
+		static_assert(sizeof(uintptr_t) == sizeof(uint32_t) || sizeof(uintptr_t) == sizeof(uint64_t),
+		              "Unsupported pointer size");
+		result = sizeof(uintptr_t) == sizeof(uint32_t) ? PhysicalType::UINT32 : PhysicalType::UINT64;
 		return true;
-		// LCOV_EXCL_STOP
 	case LogicalTypeId::VALIDITY:
 		result = PhysicalType::BIT;
 		return true;
-	case LogicalTypeId::ENUM: {
-		if (info.type != LogicalTypeInfoType::ENUM_TYPE_INFO) {
-			result = PhysicalType::INVALID;
-			return true;
-		}
-		result = EnumTypeInfo::DictType(info.Cast<EnumTypeInfo>().GetDictSize());
-		return true;
-	}
 	case LogicalTypeId::LAMBDA:
 		// a lambda has no value of its own - it occupies an argument slot that holds a constant placeholder
 		result = PhysicalType::UINT8;
 		return true;
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
@@ -177,6 +145,40 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 	default:
 		return false;
 	}
+}
+
+//! Computes the physical type of a type with the given id and info - returns false for an unknown id
+static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, PhysicalType &result) {
+	switch (id) {
+	case LogicalTypeId::DECIMAL: {
+		if (info.type != LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
+			break;
+		}
+		auto width = info.Cast<DecimalTypeInfo>().width;
+		if (width <= Decimal::MAX_WIDTH_INT16) {
+			result = PhysicalType::INT16;
+		} else if (width <= Decimal::MAX_WIDTH_INT32) {
+			result = PhysicalType::INT32;
+		} else if (width <= Decimal::MAX_WIDTH_INT64) {
+			result = PhysicalType::INT64;
+		} else if (width <= Decimal::MAX_WIDTH_INT128) {
+			result = PhysicalType::INT128;
+		} else {
+			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
+			                        width, DecimalType::MaxWidth());
+		}
+		return true;
+	}
+	case LogicalTypeId::ENUM:
+		if (info.type != LogicalTypeInfoType::ENUM_TYPE_INFO) {
+			break;
+		}
+		result = EnumTypeInfo::DictType(info.Cast<EnumTypeInfo>().GetDictSize());
+		return true;
+	default:
+		break;
+	}
+	return TryGetBuiltinPhysicalType(id, result);
 }
 
 namespace {
@@ -199,7 +201,7 @@ const LogicalTypeInfo *LogicalType::TryGetBuiltinTypeInfo(LogicalTypeId id) noex
 		for (idx_t i = 0; i < BUILTIN_TYPE_INFO_COUNT; i++) {
 			auto builtin_id = static_cast<LogicalTypeId>(i);
 			auto &info = *new (result.storage[i]) LogicalTypeInfo(LogicalTypeInfoType::INVALID_TYPE_INFO);
-			if (TryGetPhysicalType(builtin_id, info, info.physical_type)) {
+			if (TryGetBuiltinPhysicalType(builtin_id, info.physical_type)) {
 				info.id = builtin_id;
 				info.immortal = true;
 				result.infos[i] = &info;
