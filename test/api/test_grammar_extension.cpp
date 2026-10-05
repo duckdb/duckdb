@@ -11,10 +11,12 @@
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
+#include "duckdb/parser/peg/matcher/list.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
@@ -1012,6 +1014,204 @@ TEST_CASE("FIRST sets do not assume built-in semantics for derived matchers", "[
 	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
 	MatchState state(iterator, context);
 	REQUIRE(list.MatchParseResult(state).IsSuccess());
+}
+
+static vector<MatcherToken> TokenizeFirstSetTestInput(const CompiledGrammar &grammar, const string &sql) {
+	vector<MatcherToken> tokens;
+	ParserTokenizerBehavior behavior(sql, tokens);
+	grammar.GetTokenizer().TokenizeInput(behavior);
+	return tokens;
+}
+
+TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto token_class = [&](const string &sql) {
+		auto tokens = TokenizeFirstSetTestInput(*grammar, sql);
+		REQUIRE(tokens.size() == 2);
+		return tokens[0].token_class;
+	};
+	const uint8_t generic_operator = MatcherTokenClass::OPERATOR | MatcherTokenClass::GENERIC_OPERATOR;
+	const uint8_t string_literal = MatcherTokenClass::STRING | MatcherTokenClass::WORD;
+
+	REQUIRE(token_class("select") == MatcherTokenClass::WORD);
+	REQUIRE(token_class("some_column") == MatcherTokenClass::WORD);
+	REQUIRE(token_class("\"quoted name\"") == MatcherTokenClass::WORD);
+	// string literals are accepted in identifier positions
+	REQUIRE(token_class("'str'") == string_literal);
+	REQUIRE(token_class("E'str'") == string_literal);
+	REQUIRE(token_class("$$str$$") == string_literal);
+	REQUIRE(token_class("42") == MatcherTokenClass::NUMBER);
+	REQUIRE(token_class(".5") == MatcherTokenClass::NUMBER);
+	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
+	REQUIRE(token_class("+") == generic_operator);
+	REQUIRE(token_class("||") == generic_operator);
+	REQUIRE(token_class("(") == generic_operator);
+	// operators with their own precedence level are not generic operators
+	REQUIRE(token_class("<=") == MatcherTokenClass::OPERATOR);
+	REQUIRE(token_class("=") == MatcherTokenClass::OPERATOR);
+	// terminators and the end of input are only matched as literals
+	auto tokens = TokenizeFirstSetTestInput(*grammar, ";");
+	REQUIRE(tokens.size() == 2);
+	REQUIRE(tokens[0].type == TokenType::TERMINATOR);
+	REQUIRE(tokens[0].token_class == 0);
+	REQUIRE(tokens[1].type == TokenType::END_OF_INPUT);
+	REQUIRE(tokens[1].token_class == 0);
+	// re-typing a matched token does not change its class
+	tokens = TokenizeFirstSetTestInput(*grammar, "'path'");
+	TokenIterator iterator(tokens);
+	iterator.Advance();
+	iterator.SetPreviousTokenType(TokenType::TABLE_NAME);
+	REQUIRE(tokens[0].token_class == string_literal);
+}
+
+//! Checks MightMatch against the expectation, and that a rejected matcher indeed fails to match
+static void CheckFirstSet(const CompiledGrammar &grammar, const Matcher &matcher, const string &sql, bool expected) {
+	INFO("Matcher " << matcher.ToString() << " on input \"" << sql << "\"");
+	auto tokens = TokenizeFirstSetTestInput(grammar, sql);
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	auto might_match = matcher.first_set.MightMatch(state);
+	REQUIRE(might_match == expected);
+	if (!might_match) {
+		REQUIRE_FALSE(matcher.MatchParseResult(state).IsSuccess());
+	}
+}
+
+TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto &helper = grammar->GetKeywordHelper();
+
+	// keyword matchers created by the factory are matched by literal id
+	auto keyword_grammar = ParsedGrammar::Parse("Program <- 'SELECT'");
+	auto keyword_rules = CompileTestProgramRule(keyword_grammar);
+	MatcherAllocator matcher_allocator;
+	MatcherFactory factory(matcher_allocator, keyword_grammar, keyword_rules, helper, {});
+	auto &select = factory.CreateRootMatcher("Program").Cast<ListMatcher>().matchers[0].get();
+	REQUIRE(select.Type() == MatcherType::KEYWORD);
+	// other keyword matchers can have their own semantics
+	KeywordMatcher custom_keyword("SELECT", KeywordInfo(), helper);
+	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	NumberLiteralMatcher number;
+	StringLiteralMatcher string_literal;
+	OperatorMatcher generic_operator;
+	OperatorMatcher any_operator(OperatorMatcherMode::ALL_OPERATORS);
+	ArithmeticOperatorMatcher arithmetic_operator;
+	GrammarExtensionTestMatcher custom;
+
+	// SELECT / NUMBER
+	ChoiceMatcher choice({select, number});
+	// NUMBER? IDENTIFIER
+	OptionalMatcher optional_number(number);
+	ListMatcher optional_prefix({optional_number, identifier});
+	// NUMBER?
+	ListMatcher nullable_list({optional_number});
+	// STRING*
+	RepeatMatcher repeat(string_literal);
+	// (SELECT / NUMBER) IDENTIFIER: the identifier is not part of the FIRST set
+	ListMatcher sequence({choice, identifier});
+	// custom matchers provide no information
+	ListMatcher custom_list({custom, number});
+	// a list that is not known to run the built-in list semantics
+	ListMatcher unmarked_list({number});
+	ListMatcher uncomputed_list({number});
+
+	ChoiceMatcher root({choice, optional_prefix, nullable_list, repeat, sequence, custom_list, unmarked_list,
+	                    identifier, string_literal, generic_operator, any_operator, arithmetic_operator,
+	                    custom_keyword});
+	for (auto matcher : vector<reference<Matcher>> {choice, optional_number, optional_prefix, nullable_list, repeat,
+	                                                sequence, custom_list, root}) {
+		matcher.get().SetStructural();
+	}
+	ComputeFirstSets(root, helper.GetLiteralTable());
+
+	SECTION("Atomic matchers") {
+		CheckFirstSet(*grammar, identifier, "some_column", true);
+		CheckFirstSet(*grammar, identifier, "\"quoted name\"", true);
+		CheckFirstSet(*grammar, identifier, "'path'", true);
+		CheckFirstSet(*grammar, identifier, "42", false);
+		CheckFirstSet(*grammar, identifier, "+", false);
+		CheckFirstSet(*grammar, identifier, ";", false);
+		CheckFirstSet(*grammar, identifier, "", false);
+
+		CheckFirstSet(*grammar, string_literal, "'str'", true);
+		CheckFirstSet(*grammar, string_literal, "E'str'", true);
+		CheckFirstSet(*grammar, string_literal, "$$str$$", true);
+		CheckFirstSet(*grammar, string_literal, "some_column", false);
+		CheckFirstSet(*grammar, string_literal, "42", false);
+
+		CheckFirstSet(*grammar, generic_operator, "+", true);
+		CheckFirstSet(*grammar, generic_operator, "<=", false);
+		CheckFirstSet(*grammar, generic_operator, "some_column", false);
+		CheckFirstSet(*grammar, any_operator, "+", true);
+		CheckFirstSet(*grammar, any_operator, "<=", true);
+		CheckFirstSet(*grammar, any_operator, "42", false);
+		CheckFirstSet(*grammar, arithmetic_operator, "*", true);
+		CheckFirstSet(*grammar, arithmetic_operator, "'str'", false);
+	}
+	SECTION("Choices merge the FIRST sets of their alternatives") {
+		CheckFirstSet(*grammar, choice, "select", true);
+		CheckFirstSet(*grammar, choice, "SELECT", true);
+		CheckFirstSet(*grammar, choice, "42", true);
+		CheckFirstSet(*grammar, choice, "from", false);
+		CheckFirstSet(*grammar, choice, "some_column", false);
+		CheckFirstSet(*grammar, choice, "'str'", false);
+		CheckFirstSet(*grammar, choice, "+", false);
+		CheckFirstSet(*grammar, choice, "", false);
+	}
+	SECTION("Lists look past nullable elements only") {
+		CheckFirstSet(*grammar, optional_prefix, "42 some_column", true);
+		CheckFirstSet(*grammar, optional_prefix, "some_column", true);
+		CheckFirstSet(*grammar, optional_prefix, "+", false);
+		CheckFirstSet(*grammar, sequence, "select some_column", true);
+		CheckFirstSet(*grammar, sequence, "42 some_column", true);
+		CheckFirstSet(*grammar, sequence, "some_column", false);
+	}
+	SECTION("Nullable matchers are never rejected") {
+		REQUIRE(optional_number.first_set.nullable);
+		REQUIRE(nullable_list.first_set.nullable);
+		REQUIRE_FALSE(optional_prefix.first_set.nullable);
+		CheckFirstSet(*grammar, optional_number, "+", true);
+		CheckFirstSet(*grammar, nullable_list, "+", true);
+		CheckFirstSet(*grammar, nullable_list, "", true);
+	}
+	SECTION("Repeats start like their element") {
+		REQUIRE_FALSE(repeat.first_set.nullable);
+		CheckFirstSet(*grammar, repeat, "'a' 'b'", true);
+		CheckFirstSet(*grammar, repeat, "some_column", false);
+	}
+	SECTION("Matchers without FIRST set information are never rejected") {
+		REQUIRE(custom_keyword.first_set.any);
+		CheckFirstSet(*grammar, custom_keyword, "+", true);
+		REQUIRE(custom_list.first_set.any);
+		CheckFirstSet(*grammar, custom_list, "+", true);
+		REQUIRE(unmarked_list.first_set.any);
+		CheckFirstSet(*grammar, unmarked_list, "+", true);
+		REQUIRE(root.first_set.any);
+		CheckFirstSet(*grammar, root, ";", true);
+		REQUIRE_FALSE(uncomputed_list.first_set.computed);
+		CheckFirstSet(*grammar, uncomputed_list, "+", true);
+	}
+	SECTION("Nothing can start past the last token") {
+		vector<MatcherToken> tokens;
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE_FALSE(choice.first_set.MightMatch(state));
+		REQUIRE(nullable_list.first_set.MightMatch(state));
+	}
 }
 
 TEST_CASE("Matcher stack supports variable-sized aligned arena processes", "[api][grammar_extension]") {
