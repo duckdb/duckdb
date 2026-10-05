@@ -712,8 +712,8 @@ void DependencyManager::DropObject(CatalogTransaction transaction, CatalogEntry 
 			continue;
 		}
 		// remove the foreign key references to the dropped table from the referenced tables
-		auto &schema = entry.Cast<TableCatalogEntry>().schema;
 		for (auto &fk_info : fk_references) {
+			auto &schema = entry.ParentSchema();
 			// the referenced table can be dropped by the cascade of the dropped table
 			if (!schema.GetEntry(transaction, CatalogType::TABLE_ENTRY, fk_info->GetQualifiedName().Name())) {
 				continue;
