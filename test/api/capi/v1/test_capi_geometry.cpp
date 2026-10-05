@@ -103,12 +103,15 @@ TEST_CASE("Test C API GEOMETRY vector cast to and from BLOB", "[capi]") {
 	// Append a GEOMETRY vector to a BLOB column: the appender casts it to WKB
 	result = tester.Query("SELECT g FROM geoms");
 	REQUIRE_NO_FAIL(*result);
-	auto chunk = result->FetchChunk(0);
-	REQUIRE(chunk);
+	REQUIRE(result->ChunkCount() > 0);
 
 	duckdb_appender appender;
 	REQUIRE(duckdb_appender_create(tester.connection, nullptr, "blobs", &appender) == DuckDBSuccess);
-	REQUIRE(duckdb_append_data_chunk(appender, chunk->GetChunk()) == DuckDBSuccess);
+	for (idx_t chunk_idx = 0; chunk_idx < result->ChunkCount(); chunk_idx++) {
+		auto chunk = result->FetchChunk(chunk_idx);
+		REQUIRE(chunk);
+		REQUIRE(duckdb_append_data_chunk(appender, chunk->GetChunk()) == DuckDBSuccess);
+	}
 	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
 	duckdb_appender_destroy(&appender);
 
