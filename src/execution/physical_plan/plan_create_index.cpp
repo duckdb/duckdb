@@ -98,7 +98,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	auto &schema = op.table.schema;
 	auto entry =
 	    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->GetIndexName());
-	if (entry) {
+	if (entry && !op.alter_table_info) {
 		if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 			throw CatalogException("Index with name %s already exists!", op.info->GetIndexName());
 		}
