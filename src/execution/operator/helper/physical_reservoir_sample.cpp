@@ -83,7 +83,7 @@ class SampleGlobalSourceState : public GlobalSourceState {
 public:
 	atomic<idx_t> total_rows {0};
 	atomic<idx_t> rows_scanned {0};
-	atomic<double> progress {0.0};
+	atomic<bool> finished {false};
 };
 
 unique_ptr<GlobalSourceState> PhysicalReservoirSample::GetGlobalSourceState(ClientContext &context) const {
@@ -91,11 +91,20 @@ unique_ptr<GlobalSourceState> PhysicalReservoirSample::GetGlobalSourceState(Clie
 }
 
 ProgressData PhysicalReservoirSample::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
-	return ProgressData {gstate.Cast<SampleGlobalSourceState>().progress.load(), 1.0, false};
+	auto &state = gstate.Cast<SampleGlobalSourceState>();
+	if (state.finished.load(std::memory_order_relaxed)) {
+		return ProgressData {1.0, 1.0, false};
+	}
+	auto total_rows = state.total_rows.load(std::memory_order_relaxed);
+	if (total_rows == 0) {
+		return ProgressData {0.0, 1.0, false};
+	}
+	auto rows_scanned = MinValue<idx_t>(state.rows_scanned.load(std::memory_order_relaxed), total_rows);
+	return ProgressData {double(rows_scanned), double(total_rows), false};
 }
 
 void PhysicalReservoirSample::SourceFinished(ClientContext &context, GlobalSourceState &gstate) const {
-	gstate.Cast<SampleGlobalSourceState>().progress = 1.0;
+	gstate.Cast<SampleGlobalSourceState>().finished = true;
 }
 
 SourceResultType PhysicalReservoirSample::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -104,13 +113,13 @@ SourceResultType PhysicalReservoirSample::GetDataInternal(ExecutionContext &cont
 	auto &state = input.global_state.Cast<SampleGlobalSourceState>();
 	lock_guard<mutex> glock(sink.lock);
 	if (!sink.sample) {
-		state.progress = 1.0;
+		state.finished = true;
 		return SourceResultType::FINISHED;
 	}
 	auto sample_chunk = sink.sample->GetChunk();
 
 	if (!sample_chunk) {
-		state.progress = 1.0;
+		state.finished = true;
 		return SourceResultType::FINISHED;
 	}
 	if (state.total_rows == 0) {
@@ -119,8 +128,7 @@ SourceResultType PhysicalReservoirSample::GetDataInternal(ExecutionContext &cont
 		state.total_rows = sample_chunk->size() + remaining;
 	}
 	chunk.Move(*sample_chunk);
-	state.rows_scanned += chunk.size();
-	state.progress = double(state.rows_scanned.load()) / double(state.total_rows.load());
+	state.rows_scanned.fetch_add(chunk.size(), std::memory_order_relaxed);
 
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }

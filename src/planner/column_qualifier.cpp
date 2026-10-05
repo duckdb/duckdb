@@ -225,7 +225,7 @@ void ColumnQualifier::QualifyColumnNames(unique_ptr<ParsedExpression> &expr, vec
 	}
 	case ExpressionType::POSITIONAL_REFERENCE: {
 		auto &ref = expr->Cast<PositionalReferenceExpression>();
-		if (ref.GetAlias().empty()) {
+		if (ref.GetAlias().empty() && !within_function_expression) {
 			Identifier table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
 			if (error.empty()) {

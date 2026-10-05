@@ -91,9 +91,10 @@ struct MultiFileReaderInterface {
 template <class OP>
 class MultiFileFunction : public TableFunction {
 public:
-	explicit MultiFileFunction(Identifier name_p)
-	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
-	                    MultiFileInitLocal) {
+	explicit MultiFileFunction(
+	    Identifier name_p, MultiFileReader::MultiFileParameters parameters = MultiFileReader::MultiFileParameters::ALL)
+	    : TableFunction(std::move(name_p), FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	                    MultiFileScan, MultiFileBind, MultiFileInitGlobal, MultiFileInitLocal) {
 		cardinality = MultiFileCardinality;
 		table_scan_progress = MultiFileProgress;
 		get_partition_data = MultiFileGetPartitionData;
@@ -103,7 +104,7 @@ public:
 		get_partition_info = MultiFileGetPartitionInfo;
 		get_virtual_columns = MultiFileGetVirtualColumns;
 		get_metrics = MultiFileGetMetrics;
-		MultiFileReader::AddParameters(*this);
+		MultiFileReader::AddParameters(*this, parameters);
 	}
 
 	static bool IsEmptyResult(const MultiFileBindData &bind_data) {
@@ -136,7 +137,9 @@ public:
 			return std::move(result);
 		}
 
-		if (result->file_list->IsEmpty() && !return_types.empty()) {
+		// NOTE: the types are checked first on purpose - asking a file list whether it is empty expands it, and a
+		// list that is built lazily (e.g. Iceberg's) is not ready to be expanded before its reader has bound
+		if (!return_types.empty() && result->file_list->IsEmpty()) {
 			// restoring a serialized plan whose files were all pruned away by filter pushdown - there is no file
 			// left to bind the readers on, but the schema is already known so we can use it as-is
 			result->types = return_types;
@@ -160,6 +163,16 @@ public:
 			interface.BindReader(context, result->types, result->names, *result);
 		}
 		interface.FinalizeBindData(*result);
+		if (result->file_options.file_row_number) {
+			// the column is read from the row number virtual column, which not every reader provides
+			virtual_column_map_t virtual_columns;
+			interface.GetVirtualColumns(context, *result, virtual_columns);
+			auto entry = virtual_columns.find(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+			if (entry == virtual_columns.end()) {
+				throw BinderException("The file_row_number option is not supported by this reader");
+			}
+			result->virtual_columns.insert(*entry);
+		}
 
 		if (return_types.empty()) {
 			// no expected types - just copy the types
@@ -279,6 +292,9 @@ public:
 		file_options.auto_detect_hive_partitioning = false;
 
 		for (auto &[option_name, option_values] : input.info.options) {
+			if (multi_file_reader->ParseCopyOption(option_name, option_values, file_options)) {
+				continue;
+			}
 			if (interface->ParseCopyOption(context, option_name, option_values, *options, expected_names,
 			                               expected_types)) {
 				continue;
@@ -435,6 +451,7 @@ public:
 			}
 			PushAsyncOpenError(gstate, ErrorData("Unknown exception while opening a file"));
 		} // LCOV_EXCL_STOP
+		gstate.async_open_settled.notify_all();
 	}
 
 	//! Schedule async opens for upcoming unopened files on the async pool, ahead of decoding. Lock held on entry.
@@ -466,6 +483,7 @@ public:
 					    [&gstate]() {
 						    // the reader stays in OPENING, so tell every waiter to stop instead of polling forever
 						    gstate.error_opening_file = true;
+						    gstate.async_open_settled.notify_all();
 					    });
 				}
 				progress_guaranteed = true;
@@ -549,14 +567,23 @@ public:
 	                             unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		auto &read_ahead = *gstate.read_ahead;
-		while (HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
-		       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING) {
+		auto still_opening = [&]() {
+			return HasFilesToRead(gstate, parallel_lock) && !gstate.error_opening_file &&
+			       gstate.readers[gstate.file_index]->file_state == MultiFileFileState::OPENING;
+		};
+		while (still_opening()) {
 			parallel_lock.unlock();
 			// the open may be queued behind other async work or the async pool may be gone, so run tasks inline
-			if (!read_ahead.TryRunPendingTask()) {
-				context.InterruptCheck();
-				TaskScheduler::YieldThread();
+			const bool ran_task = read_ahead.TryRunPendingTask();
+			parallel_lock.lock();
+			if (ran_task || !still_opening()) {
+				continue;
 			}
+			// the open is in flight: sleep until it settles; the timeout bounds interrupt latency and
+			// covers a cancellation that signals without the lock
+			gstate.async_open_settled.wait_for(parallel_lock, std::chrono::milliseconds(10));
+			parallel_lock.unlock();
+			context.InterruptCheck();
 			parallel_lock.lock();
 		}
 	}
@@ -1071,6 +1098,23 @@ public:
 
 	static unique_ptr<BaseStatistics> MultiFileScanStatsExtended(ClientContext &context,
 	                                                             TableFunctionGetStatisticsInput &input) {
+		auto result = MultiFileScanStatsInternal(context, input);
+		if (!result) {
+			return nullptr;
+		}
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		auto &column_index = input.column_index;
+		if (!column_index.IsVirtualColumn() && !column_index.IsPushdownExtract() &&
+		    result->GetType() != bind_data.types[column_index.GetPrimaryIndex()]) {
+			// the column is read as a type other than the one the file stores it as - the statistics of the file
+			// describe the stored type, so they say nothing about the column the scan produces
+			return nullptr;
+		}
+		return result;
+	}
+
+	static unique_ptr<BaseStatistics> MultiFileScanStatsInternal(ClientContext &context,
+	                                                             TableFunctionGetStatisticsInput &input) {
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &column_index = input.column_index;
 
@@ -1085,6 +1129,15 @@ public:
 
 		auto primary_index = column_index.GetPrimaryIndex();
 		const auto &col_name = bind_data.names[primary_index];
+		auto &file_row_number_idx = bind_data.reader_bind.file_row_number_idx;
+		if (file_row_number_idx.IsValid() && file_row_number_idx.GetIndex() == primary_index) {
+			// the column is read from the row number virtual column of the reader
+			if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+				return nullptr;
+			}
+			return bind_data.initial_reader->GetVirtualColumnStatistics(
+			    context, MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+		}
 
 		// a hive partitioning column overrides any file column of the same name - the statistics stored in the
 		// file describe the overridden column and can even have a different type, so they cannot be used here
@@ -1095,28 +1148,22 @@ public:
 		}
 
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			if (!bind_data.file_options.union_by_name) {
-				// multiple files, but no union_by_name: no luck!
-				return nullptr;
-			}
-
-			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
-			if (!merged_stats) {
-				return nullptr;
-			}
-
+		const bool multiple_files = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
+		if (multiple_files && !bind_data.file_options.union_by_name) {
+			// multiple files, but no union_by_name: no luck!
+			return nullptr;
+		}
+		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (result && multiple_files) {
 			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
 				auto &union_reader = *bind_data.union_readers[i];
 				auto stats = union_reader.GetStatistics(context, col_name);
-				if (!stats || merged_stats->GetType() != stats->GetType()) {
+				if (!stats || result->GetType() != stats->GetType()) {
 					return nullptr;
 				}
-				merged_stats->Merge(*stats);
+				result->Merge(*stats);
 			}
-			return merged_stats;
 		}
-		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
 		if (!result || !column_index.IsPushdownExtract()) {
 			return result;
 		}

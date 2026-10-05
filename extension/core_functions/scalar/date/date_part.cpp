@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/date_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -2431,11 +2432,20 @@ ScalarFunctionSet GetCachedDatepartFunction() {
 	    OP::template PropagateStatistics<timestamp_t>);
 }
 
+void SetNonDecreasingExceptInterval(ScalarFunctionSet &functions) {
+	functions.ApplyToFunctions([](ScalarFunction &function) {
+		// Interval components need not preserve the normalized interval ordering.
+		if (function.GetSignature().GetParameter(0).GetType() != LogicalType::INTERVAL) {
+			function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+		}
+	});
+}
+
 } // namespace
 
 ScalarFunctionSet YearFun::GetFunctions() {
 	auto set = GetCachedDatepartFunction<DatePart::YearOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
@@ -2449,19 +2459,19 @@ ScalarFunctionSet DayFun::GetFunctions() {
 
 ScalarFunctionSet DecadeFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::DecadeOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
 ScalarFunctionSet CenturyFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::CenturyOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
 ScalarFunctionSet MillenniumFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::MillenniumOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
@@ -2524,7 +2534,7 @@ ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 
 ScalarFunctionSet EpochFun::GetFunctions() {
 	auto set = GetTimePartFunction<DatePart::EpochOperator, double>(LogicalType::DOUBLE, "temporal");
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
@@ -2583,7 +2593,7 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	inverse_fun.GetSignature().AddParameter("temporal", LogicalType::BIGINT);
 	operator_set.AddFunction(inverse_fun);
 
-	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(operator_set);
 	// these overflow at the representable extremes, so the failure must be reportable
 	operator_set.SetFallible();
 	return operator_set;
@@ -2716,9 +2726,23 @@ ScalarFunctionSet JulianDayFun::GetFunctions() {
 	return operator_set;
 }
 
+//! Binding date_part with a constant part replaces it with the unary part function (year, month, ...), so the bound
+//! call has one argument and must be rendered under the replacement's own name
+static unique_ptr<ParsedExpression> DatePartUnbind(FunctionUnbindInput &input) {
+	auto &function = input.expression.Function();
+	if (input.children.size() == 1) {
+		return make_uniq<FunctionExpression>(function.GetQualifiedName(), std::move(input.children));
+	}
+	if (input.children.size() != 2) {
+		return nullptr;
+	}
+	return make_uniq<FunctionExpression>(function.GetDefinition()->GetQualifiedName(), std::move(input.children));
+}
+
 // Names the "part,ts" pair shared by date_part's per-type overloads.
 static ScalarFunction NamePartTsArguments(ScalarFunction fun, const LogicalType &type) {
 	fun.GetSignature().AddParameter("part", LogicalType::VARCHAR).AddParameter("ts", type);
+	fun.SetUnbindCallback(DatePartUnbind);
 	return fun;
 }
 

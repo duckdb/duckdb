@@ -14,6 +14,10 @@ namespace duckdb {
 ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(verify_only) {
 }
 
+ColumnBindingResolver::ColumnBindingResolver(vector<ColumnBinding> bindings_p, vector<LogicalType> types_p)
+    : bindings(std::move(bindings_p)), types(std::move(types_p)), verify_only(false) {
+}
+
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
@@ -228,6 +232,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.Binding() == bindings[i]) {
 			if (!types.empty()) {
+				// LCOV_EXCL_START
 				if (bindings.size() != types.size()) {
 					throw InternalException(
 					    "Failed to bind column reference %s [%d.%d]: inequal num bindings/types (%llu != %llu)",
@@ -240,6 +245,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 					                        expr.Binding().column_index, expr.GetReturnType().ToString(),
 					                        types[i].ToString());
 				}
+				// LCOV_EXCL_STOP
 			}
 			if (verify_only) {
 				// in verification mode

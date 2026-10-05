@@ -617,7 +617,7 @@ SourceResultType PhysicalTopN::GetDataInternal(ExecutionContext &context, DataCh
 	}
 
 	sink.heap.Scan(gstate.state, chunk, lstate.pos);
-	gstate.rows_scanned += chunk.size();
+	gstate.rows_scanned.fetch_add(chunk.size(), std::memory_order_relaxed);
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }

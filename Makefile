@@ -5,8 +5,10 @@ opt: release
 unit: unittest
 
 EXTENSION_CONFIG_STEP ?=
+ifndef DUCKDB_NEW_EXTENSION_BUILD
 ifdef USE_MERGED_VCPKG_MANIFEST
 	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
+endif
 endif
 
 GENERATOR ?=
@@ -156,16 +158,11 @@ ifneq (${EXTENSION_STATIC_BUILD}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
+$(warning DISABLE_BUILTIN_EXTENSIONS is deprecated, use STATICALLY_LINK_EXTENSIONS=core_functions)
+	STATICALLY_LINK_EXTENSIONS ?= core_functions
 endif
 ifeq (${GENERATE_EXTENSION_ENTRIES}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DGENERATE_EXTENSION_ENTRIES=1
-endif
-ifneq ("${ENABLE_EXTENSION_AUTOLOADING}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOLOADING=${ENABLE_EXTENSION_AUTOLOADING}
-endif
-ifneq ("${ENABLE_EXTENSION_AUTOINSTALL}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOINSTALL=${ENABLE_EXTENSION_AUTOINSTALL}
 endif
 ifneq (${UNSAFE_NUMERIC_CAST}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DUNSAFE_NUMERIC_CAST=1
@@ -256,12 +253,22 @@ endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
 endif
+ifneq ($(EXTENSION_CONFIG_BASE_DIR),)
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_CONFIG_BASE_DIR="$(EXTENSION_CONFIG_BASE_DIR)"
+endif
 ifeq ($(SHADOW_FORBIDDEN_FUNCTIONS),1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSHADOW_FORBIDDEN_FUNCTIONS=1
 endif
 ifneq ($(SKIP_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_EXTENSIONS="$(SKIP_EXTENSIONS)"
 endif
+# LINK_CORE_EXTENSIONS=1 also links the extensions named in BUILD_EXTENSIONS / CORE_EXTENSIONS, which otherwise are only
+# built; always passed, so leaving it out turns it off again
+CMAKE_VARS:=${CMAKE_VARS} -DLINK_CORE_EXTENSIONS=$(if $(filter 1 ON on TRUE true,$(LINK_CORE_EXTENSIONS)),ON,OFF)
+# what the DuckDB targets link (space or semicolon separated, or none); always passed, so leaving them out restores the
+# defaults
+CMAKE_VARS:=${CMAKE_VARS} -DSTATICALLY_LINK_EXTENSIONS="$(STATICALLY_LINK_EXTENSIONS)"
+CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_CAPABILITIES="$(DUCKDB_CAPABILITIES)"
 ifneq ($(EXTENSION_CONFIGS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS="$(EXTENSION_CONFIGS)"
 endif
@@ -338,10 +345,10 @@ ifeq (${DISABLE_CORE_FUNCTIONS}, 1)
 	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};core_functions
 endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_LOAD=0
 endif
 ifeq (${DISABLE_BUILTIN_HTTPLIB}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_HTTPLIB=1
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_BUILTIN_HTTPLIB=0
 endif
 ifeq (${DISABLE_SHELL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_SHELL=0
@@ -394,13 +401,15 @@ endif
 ifneq ("${VCPKG_TARGET_TRIPLET}", "")
 	CMAKE_VARS_BUILD:=${CMAKE_VARS_BUILD} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
 endif
+ifndef DUCKDB_NEW_EXTENSION_BUILD
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
+endif
 endif
 sync_extensions_into =
 vcpkg_cmake_flag =
 ifdef DUCKDB_NEW_EXTENSION_BUILD
-sync_extensions_into = $(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '$(1)' &&
+sync_extensions_into = $(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") $(if $(EXTENSION_CONFIG_BASE_DIR),--extension-config-base-dir "$(EXTENSION_CONFIG_BASE_DIR)") --output-dir '$(1)' &&
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
 vcpkg_cmake_flag = -DVCPKG_MANIFEST_DIR='$(1)'
 endif
@@ -461,12 +470,12 @@ WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 # The wasm targets do not go through CMAKE_VARS, so DISABLE_RTTI is forwarded explicitly.
@@ -508,7 +517,7 @@ clreldebug:
 
 SYNC_OUTPUT_DIR ?= build
 sync_out_of_tree_extensions:
-	$(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '${PROJ_DIR}$(SYNC_OUTPUT_DIR)'
+	$(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") $(if $(EXTENSION_CONFIG_BASE_DIR),--extension-config-base-dir "$(EXTENSION_CONFIG_BASE_DIR)") --output-dir '${PROJ_DIR}$(SYNC_OUTPUT_DIR)'
 
 extension_configuration: build/extension_configuration/vcpkg.json
 
@@ -534,6 +543,7 @@ unittest_release:
 	build/release/test/run $(T)
 
 TEST_CONFIGS_QUERY_VERIFICATION := \
+	test/configs/verify_statement_explain_sql.json \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \
 	test/configs/verify_statement_explain.json \
@@ -590,6 +600,7 @@ test_configs:
 
 test_configs_query_verification:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_QUERY_VERIFICATION),--test-config=$(cfg))
+
 
 test_configs_execution:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_EXECUTION),--test-config=$(cfg))
@@ -678,6 +689,25 @@ cli-release-artifact:
 shared-libs-release-artifact:
 	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
 
+# Writes a C source defining duckdb_register_static_extensions(), which links statically built extensions and
+# capabilities into a program: compile it next to your own sources, put their archives before libduckdb_static.a, and
+# call the function before opening a database (or compile extension/loader/static_extension_autoregister.cpp too to have
+# it called before main). DUCKDB_CAPABILITIES and STATICALLY_LINK_EXTENSIONS pick them (LINK_EXTENSIONS is
+# the older name for the latter, 'none' picks nothing); each defaults to every archive of its kind in
+# STATIC_EXTENSION_LOADER_BUILD_DIR.
+LOADER_BUILT_CAPABILITIES = $(if $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/src/main/http/libduckdb_httplib.a),httplib) $(if $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/src/main/extension/libduckdb_loadable_extensions.a),loadable_extensions)
+LOADER_BUILT_EXTENSIONS = $(patsubst lib%_extension.a,%,$(notdir $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/extension/*/lib*_extension.a)))
+LOADER_CAPABILITIES = $(if $(strip $(DUCKDB_CAPABILITIES)),$(subst ;, ,$(DUCKDB_CAPABILITIES)),$(LOADER_BUILT_CAPABILITIES))
+LOADER_EXTENSIONS = $(or $(strip $(subst ;, ,$(STATICALLY_LINK_EXTENSIONS) $(LINK_EXTENSIONS))),$(LOADER_BUILT_EXTENSIONS))
+STATIC_EXTENSION_LOADER_BUILD_DIR ?= build/release
+STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.c
+
+.PHONY: static_extension_loader
+static_extension_loader:
+	$(PYTHON) scripts/generate_static_extension_loader.py --output "$(STATIC_EXTENSION_LOADER_FILE)" \
+		$(filter-out none,$(LOADER_CAPABILITIES) $(LOADER_EXTENSIONS))
+	@echo "Wrote $(STATIC_EXTENSION_LOADER_FILE)"
+
 .PHONY: static-libs-release-artifact
 
 static-libs-release-artifact:
@@ -692,6 +722,11 @@ symbol-leakage-check:
 
 banned-symbol-check:
 	$(PYTHON) scripts/banned_symbols_check.py --directory build/release/src
+
+.PHONY: linux-release-link-checks
+
+linux-release-link-checks:
+	bash scripts/ci/linux_release_link_checks.sh
 
 define ensure_apt_commands
 	missing=0; \
@@ -941,52 +976,6 @@ generate-files: $(CAPIGEN_SETUP_DEPS)
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
-bundle-setup:
-	cd build/release && \
-	rm -rf bundle && \
-	mkdir -p bundle && \
-	cp src/libduckdb_static.a bundle/. && \
-	cp third_party/*/libduckdb_*.a bundle/. && \
-	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
-	cp extension/*/lib*_extension.a bundle/. && \
-	mkdir -p vcpkg_installed && \
-	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
-	mkdir -p _deps && \
-	if [ -f linked_libs.txt ]; then \
-		while IFS= read -r libline || [ -n "$$libline" ]; do \
-			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
-		done < linked_libs.txt; \
-	fi && \
-	cd bundle && \
-	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
-	find . -name '*.a' -execdir ${AR} -x {} \;
-
-bundle-library-o: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library-obj: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library: release
-	make bundle-library-o
-
-.PHONY: gather-libs
-
-GATHER_LIBS_BUILD_DIR ?= build/release
-GATHER_LIBS_PREFIX ?= lib
-GATHER_LIBS_EXTENSION ?= a
-
-gather-libs:
-	cd $(GATHER_LIBS_BUILD_DIR) && \
-	rm -rf libs && \
-	mkdir -p libs && \
-	cp src/$(GATHER_LIBS_PREFIX)duckdb_static.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp third_party/*/$(GATHER_LIBS_PREFIX)duckdb_*.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp extension/$(GATHER_LIBS_PREFIX)duckdb_generated_extension_loader.$(GATHER_LIBS_EXTENSION) libs/. && \
-	cp extension/*/$(GATHER_LIBS_PREFIX)*_extension.$(GATHER_LIBS_EXTENSION) libs/.
-
 #### Setup VCPKG to correct version 2026.06.24 tag is cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3
 vcpkg/scripts/buildsystems/vcpkg.cmake:
 	if [ -d vcpkg/.git ]; then \
@@ -1004,4 +993,4 @@ cleanup-vcpkg:
 	rm -rf vcpkg
 
 test-utils:
-	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
+	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpcds;tpch;autocomplete;httpfs;inet;test_utils' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'

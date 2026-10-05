@@ -292,7 +292,8 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_argument(duckdb_v2_replacement_sc
 }
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckdb_v2_replacement_scan_info_handle info,
-                                                              duckdb_v2_identifier_t name, duckdb_v2_value_handle value,
+                                                              const duckdb_v2_identifier_t *name,
+                                                              duckdb_v2_value_handle value,
                                                               duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(name);
@@ -300,7 +301,7 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_add_named_argument(duckdb_v2_replacem
 	return WithErrorHandler(err, [&]() {
 		auto &args = *Convert(info);
 		args.RequireFunctionClaim("duckdb_v2_replacement_scan_add_named_argument");
-		args.out_named_arguments.emplace_back(duckdb::Identifier(Convert(name)), *Convert(value));
+		args.out_named_arguments.emplace_back(duckdb::Identifier(ConvertIdentifierName(name)), *Convert(value));
 	});
 }
 
@@ -326,7 +327,7 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(duckdb_v2_replacement_
 		}
 		duckdb::vector<duckdb::Identifier> names;
 		for (idx_t i = 0; i < column_count; i++) {
-			auto name = duckdb::Identifier(Convert(column_names[i]));
+			auto name = duckdb::Identifier(ConvertIdentifierName(column_names[i]));
 			if (name.empty()) {
 				throw duckdb::InvalidInputException("Column names cannot be empty.");
 			}
@@ -339,8 +340,8 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_collection(duckdb_v2_replacement_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_str sql,
-                                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_scan_info_handle info,
+                                                        const duckdb_v2_str *sql, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(sql);
 	return WithErrorHandler(err, [&]() {
@@ -348,7 +349,7 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_sc
 
 		// Parsed here rather than when the claim is materialized, so a bad query fails this call instead of
 		// surfacing later as an opaque binding error.
-		duckdb::Parser parser(args.in_context->GetParserOptions());
+		duckdb::Parser parser(*args.in_context);
 		parser.ParseQuery(duckdb::string(Convert(sql)));
 		if (parser.statements.size() != 1) {
 			throw duckdb::InvalidInputException("The replacement subquery must be exactly one SELECT statement.");
@@ -364,10 +365,12 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_subquery(duckdb_v2_replacement_sc
 }
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_replacement_scan_info_handle info,
-                                                     duckdb_v2_identifier_t alias, duckdb_v2_error_info_handle *err) {
+                                                     const duckdb_v2_identifier_t *alias,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(alias);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_alias = duckdb::Identifier(Convert(alias)); });
+	return WithErrorHandler(err,
+	                        [&]() { Convert(info)->out_alias = duckdb::Identifier(ConvertIdentifierName(alias)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_replacement_scan_register(duckdb_v2_replacement_scan_handle scan,

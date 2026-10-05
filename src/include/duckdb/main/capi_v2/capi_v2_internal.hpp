@@ -33,6 +33,10 @@
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
 
+// The engine implements the whole V2 C API, including the unstable surface
+#ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
+#define DUCKDB_V2_API_ALLOW_UNSTABLE 1
+#endif
 // V2 C API header -- all types use duckdb_v2_ prefix, no collision with V1.
 #include "duckdb_v2.h"
 
@@ -74,6 +78,22 @@ inline auto Convert(duckdb_v2_str str) -> std::string_view {
 	}
 	return std::string_view(str.ptr, str.len);
 }
+inline auto Convert(const duckdb_v2_str *str) -> std::string_view {
+	if (!str) {
+		throw InvalidInputException("byte range cannot be null");
+	}
+	return Convert(*str);
+}
+
+// Validates identifier UTF-8 and returns its text; throws on invalid input. Defined in capi_v2_utf8.cpp.
+auto ConvertIdentifierName(duckdb_v2_identifier_t name) -> std::string_view;
+inline auto ConvertIdentifierName(const duckdb_v2_identifier_t *name) -> std::string_view {
+	if (!name) {
+		throw InvalidInputException("identifier cannot be null");
+	}
+	return ConvertIdentifierName(*name);
+}
+
 inline auto Convert(std::string_view str) -> duckdb_v2_str {
 	return duckdb_v2_str {str.data(), str.size()};
 }
@@ -88,6 +108,18 @@ inline auto Convert(duckdb_v2_hugeint_t value) -> hugeint_t {
 }
 inline auto Convert(duckdb_v2_uhugeint_t value) -> uhugeint_t {
 	return uhugeint_t(value.upper, value.lower);
+}
+inline auto Convert(const duckdb_v2_hugeint_t *value) -> hugeint_t {
+	if (!value) {
+		throw InvalidInputException("hugeint value cannot be null");
+	}
+	return Convert(*value);
+}
+inline auto Convert(const duckdb_v2_uhugeint_t *value) -> uhugeint_t {
+	if (!value) {
+		throw InvalidInputException("uhugeint value cannot be null");
+	}
+	return Convert(*value);
 }
 inline auto Convert(hugeint_t value) -> duckdb_v2_hugeint_t {
 	return duckdb_v2_hugeint_t {value.lower, value.upper};
@@ -105,9 +137,15 @@ inline auto Convert(duckdb_v2_interval_t value) -> interval_t {
 	out.micros = value.micros;
 	return out;
 }
+inline auto Convert(const duckdb_v2_interval_t *value) -> interval_t {
+	if (!value) {
+		throw InvalidInputException("interval value cannot be null");
+	}
+	return Convert(*value);
+}
 
-// The V2 enum surfaces core's StatementType under the same numeric values; every spec member is pinned. Core has no
-// count sentinel, so a member appended in core is caught by the test over the values past the last spec member.
+// The V2 enum surfaces core's StatementType under the same numeric values; every spec member is pinned, and the count
+// pins the highest one - appending a member in core fails to compile until the v2 spec mirrors it.
 #define DUCKDB_V2_ASSERT_STATEMENT_TYPE(member)                                                                        \
 	static_assert(static_cast<uint8_t>(StatementType::member##_STATEMENT) == DUCKDB_V2_STATEMENT_TYPE_##member,        \
 	              "StatementType::" #member "_STATEMENT must mirror DUCKDB_V2_STATEMENT_TYPE_" #member)
@@ -145,7 +183,10 @@ DUCKDB_V2_ASSERT_STATEMENT_TYPE(MERGE_INTO);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(CONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(DISCONNECT);
 DUCKDB_V2_ASSERT_STATEMENT_TYPE(EXTERNAL_RESOURCE);
+DUCKDB_V2_ASSERT_STATEMENT_TYPE(PASSTHROUGH);
 #undef DUCKDB_V2_ASSERT_STATEMENT_TYPE
+static_assert(static_cast<uint8_t>(StatementType::ENUM_SIZE) == DUCKDB_V2_STATEMENT_TYPE_PASSTHROUGH + 1,
+              "a StatementType was added: give it a DUCKDB_V2_STATEMENT_TYPE id in the v2 spec and pin it above");
 inline auto Convert(StatementType type) -> DUCKDB_V2_STATEMENT_TYPE {
 	return static_cast<DUCKDB_V2_STATEMENT_TYPE>(type);
 }
@@ -336,11 +377,52 @@ inline auto Convert(CV2Option *opt) -> duckdb_v2_option_handle {
 
 using CV2LogicalType = duckdb::LogicalType;
 
-inline auto Convert(duckdb_v2_logical_type_handle opt) -> CV2LogicalType * {
-	return reinterpret_cast<CV2LogicalType *>(opt);
+//! A logical type handle is the LogicalTypeInfo of the type. An owned handle holds one reference to it; a borrowed
+//! handle holds none and stays valid for as long as the type it was taken from.
+
+//! Views the type behind a handle without touching its reference count
+class CV2LogicalTypeRef {
+public:
+	explicit CV2LogicalTypeRef(duckdb_v2_logical_type_handle handle)
+	    : type(CV2LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::LogicalTypeInfo *>(handle))) {
+	}
+	~CV2LogicalTypeRef() {
+		std::move(type).ReleaseTypeInfo();
+	}
+	CV2LogicalTypeRef(const CV2LogicalTypeRef &) = delete;
+	CV2LogicalTypeRef &operator=(const CV2LogicalTypeRef &) = delete;
+
+	//! Only on a named view - a reference into a temporary view would dangle
+	const CV2LogicalType &operator*() const & {
+		return type;
+	}
+	const CV2LogicalType &operator*() const && = delete;
+	const CV2LogicalType *operator->() const {
+		return &type;
+	}
+
+private:
+	CV2LogicalType type;
+};
+
+inline auto Convert(duckdb_v2_logical_type_handle handle) -> CV2LogicalTypeRef {
+	return CV2LogicalTypeRef(handle);
 }
-inline auto Convert(CV2LogicalType *opt) -> duckdb_v2_logical_type_handle {
-	return reinterpret_cast<duckdb_v2_logical_type_handle>(opt);
+inline auto ConvertTypeInfo(const duckdb::LogicalTypeInfo &type_info) -> duckdb_v2_logical_type_handle {
+	// the handle is opaque - the type info is only ever read through it
+	return reinterpret_cast<duckdb_v2_logical_type_handle>(reinterpret_cast<uintptr_t>(&type_info));
+}
+//! Creates an owned handle, transferring the reference of "type" to it
+inline auto Convert(CV2LogicalType type) -> duckdb_v2_logical_type_handle {
+	return ConvertTypeInfo(std::move(type).ReleaseTypeInfo());
+}
+//! Creates a borrowed handle to "type"
+inline auto ConvertBorrowed(const CV2LogicalType &type) -> duckdb_v2_logical_type_handle {
+	return ConvertTypeInfo(type.GetTypeInfo());
+}
+//! Takes back the reference held by an owned handle
+inline auto TakeOwnership(duckdb_v2_logical_type_handle handle) -> CV2LogicalType {
+	return CV2LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::LogicalTypeInfo *>(handle));
 }
 
 using CV2QualifiedName = duckdb::QualifiedName;
@@ -449,14 +531,15 @@ auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, c
 auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &raw_message) noexcept -> void;
 
 // The null test behind DUCKDB_CHECK_ARG: a pointer/handle is invalid when null; a string/identifier view is invalid
-// when its pointer is null while it carries a non-zero length.
+// when it is null, or when its pointer is null while it carries a non-zero length.
 template <class T>
 bool IsNullArgument(const T &arg) {
-	if constexpr (std::is_pointer_v<T>) {
-		return arg == nullptr;
-	} else {
-		return !arg.ptr && arg.len > 0;
-	}
+	static_assert(std::is_pointer_v<T>, "DUCKDB_CHECK_ARG takes a pointer or handle");
+	return arg == nullptr;
+}
+
+inline bool IsNullArgument(const duckdb_v2_str *arg) {
+	return !arg || (!arg->ptr && arg->len > 0);
 }
 
 // Check if an argument is null and return DUCKDB_V2_ERROR_INPUT_INVALID with a message if it is.
@@ -587,7 +670,7 @@ inline void InvokeTextSink(duckdb_v2_text_sink_fn sink, duckdb_v2_str text, void
 	// The slot is always live: sinks populate it, they never allocate or destroy it.
 	CV2ErrorInfo info;
 	auto handle = Convert(&info);
-	sink(text, user_data, &handle);
+	sink(&text, user_data, &handle);
 	if (info.HasError()) {
 		info.ThrowAsException();
 	}
@@ -715,7 +798,7 @@ inline void BuildParameterMap(const duckdb_v2_identifier_t *parameter_names,
 			throw InvalidInputException("null parameter value passed to %s", function_name);
 		}
 		// Named iff the name view is non-empty; otherwise positional
-		auto str = Convert(name);
+		auto str = ConvertIdentifierName(name);
 		Identifier key = (name.ptr && name.len > 0) ? Identifier(str) : Identifier(std::to_string(i + 1));
 		out[key] = BoundParameterData(*Convert(parameter_values[i]));
 	}
