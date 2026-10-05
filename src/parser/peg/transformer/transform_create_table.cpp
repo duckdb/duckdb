@@ -329,9 +329,12 @@ ConstraintColumnDefinition PEGTransformerFactory::TransformColumnDefinition(
 }
 
 GeneratedColumnDefinition PEGTransformerFactory::TransformGeneratedColumn(PEGTransformer &transformer,
-                                                                          const bool &has_result,
+                                                                          const optional<bool> &generated_always,
                                                                           unique_ptr<ParsedExpression> expression,
                                                                           const optional<bool> &generated_column_type) {
+	if (generated_always && !*generated_always) {
+		throw ParserException("for a generated column, GENERATED ALWAYS must be specified");
+	}
 	GeneratedColumnDefinition generated;
 	generated.expr = std::move(expression);
 	VerifyColumnRefs(*generated.expr);
@@ -522,6 +525,14 @@ bool PEGTransformerFactory::TransformPreserveRows(PEGTransformer &transformer) {
 
 bool PEGTransformerFactory::TransformDeleteRows(PEGTransformer &transformer) {
 	throw NotImplementedException("Only ON COMMIT PRESERVE ROWS is supported");
+}
+
+bool PEGTransformerFactory::TransformGeneratedAlways(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformGeneratedByDefault(PEGTransformer &transformer) {
+	throw ParserException("for a generated column, GENERATED ALWAYS must be specified");
 }
 
 bool PEGTransformerFactory::TransformVirtualGeneratedColumn(PEGTransformer &transformer) {

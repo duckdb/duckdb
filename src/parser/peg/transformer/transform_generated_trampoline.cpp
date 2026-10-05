@@ -990,6 +990,14 @@ static const TransformFrameOps STRING_LITERAL_IDENTIFIER_OPS = {
 static const TransformFrameOps GENERATED_COLUMN_OPS = {"GeneratedColumn",
                                                        &PEGTransformerFactory::InitializeGeneratedColumnTrampoline,
                                                        &PEGTransformerFactory::FinalizeGeneratedColumnTrampoline};
+static const TransformFrameOps GENERATED_OPS = {"Generated", &PEGTransformerFactory::InitializeGeneratedTrampoline,
+                                                &PEGTransformerFactory::FinalizeGeneratedTrampoline};
+static const TransformFrameOps GENERATED_ALWAYS_OPS = {"GeneratedAlways",
+                                                       &PEGTransformerFactory::InitializeGeneratedAlwaysTrampoline,
+                                                       &PEGTransformerFactory::FinalizeGeneratedAlwaysTrampoline};
+static const TransformFrameOps GENERATED_BY_DEFAULT_OPS = {
+    "GeneratedByDefault", &PEGTransformerFactory::InitializeGeneratedByDefaultTrampoline,
+    &PEGTransformerFactory::FinalizeGeneratedByDefaultTrampoline};
 static const TransformFrameOps GENERATED_COLUMN_TYPE_OPS = {
     "GeneratedColumnType", &PEGTransformerFactory::InitializeGeneratedColumnTypeTrampoline,
     &PEGTransformerFactory::FinalizeGeneratedColumnTypeTrampoline};
@@ -3389,6 +3397,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"ColLabelIdentifier", &COL_LABEL_IDENTIFIER_OPS},
 	    {"StringLiteralIdentifier", &STRING_LITERAL_IDENTIFIER_OPS},
 	    {"GeneratedColumn", &GENERATED_COLUMN_OPS},
+	    {"Generated", &GENERATED_OPS},
+	    {"GeneratedAlways", &GENERATED_ALWAYS_OPS},
+	    {"GeneratedByDefault", &GENERATED_BY_DEFAULT_OPS},
 	    {"GeneratedColumnType", &GENERATED_COLUMN_TYPE_OPS},
 	    {"CommitAction", &COMMIT_ACTION_OPS},
 	    {"PreserveOrDelete", &PRESERVE_OR_DELETE_OPS},
@@ -10778,28 +10789,76 @@ PEGTransformerFactory::FinalizeStringLiteralIdentifierTrampoline(PEGTransformer 
 void PEGTransformerFactory::InitializeGeneratedColumnTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
+	process.ReserveChildSlots(3);
 	auto &generated_column_type_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
 	if (generated_column_type_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("GeneratedColumnType"), generated_column_type_opt.GetResult()}, 1);
+		process.PushChild({transformer.GetRule("GeneratedColumnType"), generated_column_type_opt.GetResult()}, 2);
 	}
-	process.PushChild({transformer.GetRule("Expression"), ExtractResultFromParens(list_pr.GetChild(2))}, 0);
+	process.PushChild({transformer.GetRule("Expression"), ExtractResultFromParens(list_pr.GetChild(2))}, 1);
+	auto &generated_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	if (generated_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("Generated"), generated_opt.GetResult()}, 0);
+	}
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeGeneratedColumnTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	bool has_result {};
-	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
-	has_result = has_result_opt.HasResult();
-	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(0);
-	optional<bool> generated_column_type {};
-	if (process.child_results[1]) {
-		generated_column_type = process.TakeResult<bool>(1);
+	optional<bool> generated {};
+	if (process.child_results[0]) {
+		generated = process.TakeResult<bool>(0);
 	}
-	auto result = TransformGeneratedColumn(transformer, has_result, std::move(expression), generated_column_type);
+	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
+	optional<bool> generated_column_type {};
+	if (process.child_results[2]) {
+		generated_column_type = process.TakeResult<bool>(2);
+	}
+	auto result = TransformGeneratedColumn(transformer, generated, std::move(expression), generated_column_type);
 	return make_uniq<TypedTransformResult<GeneratedColumnDefinition>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeGeneratedTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.name);
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGeneratedTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<bool>(0);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeGeneratedAlwaysTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGeneratedAlwaysTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	auto result = TransformGeneratedAlways(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
+}
+
+void PEGTransformerFactory::InitializeGeneratedByDefaultTrampoline(PEGTransformer &transformer,
+                                                                   GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeGeneratedByDefaultTrampoline(PEGTransformer &transformer,
+                                                            GeneratedTransformProcess &process) {
+	auto result = TransformGeneratedByDefault(transformer);
+	return make_uniq<TypedTransformResult<bool>>(result);
 }
 
 void PEGTransformerFactory::InitializeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,

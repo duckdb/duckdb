@@ -1795,6 +1795,15 @@ public:
 	static void InitializeGeneratedColumnTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeGeneratedAlwaysTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedAlwaysTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedByDefaultTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedByDefaultTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
 	                                                    GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
@@ -4619,9 +4628,12 @@ public:
 	static string TransformDotColLabel(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformColLabelIdentifier(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformStringLiteralIdentifier(PEGTransformer &transformer, const string &string_literal);
-	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, const bool &has_result,
+	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer,
+	                                                          const optional<bool> &generated_always,
 	                                                          unique_ptr<ParsedExpression> expression,
 	                                                          const optional<bool> &generated_column_type);
+	static bool TransformGeneratedAlways(PEGTransformer &transformer);
+	static bool TransformGeneratedByDefault(PEGTransformer &transformer);
 	static bool TransformCommitAction(PEGTransformer &transformer, const bool &preserve_or_delete);
 	static bool TransformPreserveRows(PEGTransformer &transformer);
 	static bool TransformDeleteRows(PEGTransformer &transformer);
