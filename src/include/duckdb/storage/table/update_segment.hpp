@@ -25,6 +25,19 @@ struct UpdateInfo;
 struct UpdateNode;
 struct UndoBufferAllocator;
 
+class UpdateSegment;
+
+//! The update segment of a column, shared with the column a checkpoint rewrites it into
+struct ColumnUpdates {
+	mutex lock;
+	unique_ptr<UpdateSegment> segment;
+	//! The column a checkpoint last wrote the segment's values into; null once that column is gone
+	optional_ptr<ColumnData> newest_column;
+
+	//! Clears the segment if only the newest column holds it and nothing needs its versions anymore
+	void ClearIfLastHolder(const unique_lock<mutex> &guard, idx_t holders);
+};
+
 //! The updates to one column of a row group: per vector, a root with the newest values and a chain of older ones
 class UpdateSegment {
 public:
@@ -45,6 +58,10 @@ public:
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
 	//! Whether a committed update in this segment still has to be written by a checkpoint
 	bool HasUnserializedChanges() const;
+	//! Whether nothing needs the contents anymore: no older versions remain and every committed update is checkpointed
+	bool CanBeCleared() const;
+	//! Drops the contents unless something still needs them; keeps the segment object, which undo entries point to
+	void ClearIfUnused();
 	void MarkCommitted(transaction_t commit_id);
 	void MarkCheckpointed(VisibilityBound visibility_bound);
 
@@ -61,9 +78,6 @@ public:
 	void CleanupUpdate(UpdateInfo &info);
 
 	unique_ptr<BaseStatistics> GetStatistics();
-	StringHeap &GetStringHeap() {
-		return heap;
-	}
 
 private:
 	//! The type of the column
@@ -84,8 +98,8 @@ private:
 	mutex stats_lock;
 	//! Internal type size
 	idx_t type_size;
-	//! String heap, only used for strings
-	StringHeap heap;
+	//! String heap, only used for strings; a clear replaces it, scan results holding its strings keep the old one alive
+	shared_ptr<StringHeap> heap;
 
 public:
 	typedef void (*initialize_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
@@ -119,6 +133,11 @@ private:
 
 private:
 	UndoBufferPointer GetUpdateNode(StorageLockKey &lock, idx_t vector_idx) const;
+	bool IsUnused(StorageLockKey &lock) const;
+	//! Keeps the string heap alive for as long as the result holds strings from it
+	void AddHeapReference(Vector &result);
+	//! Copies the old values of an update into the heap
+	friend struct UpdateSelectElement;
 	void InitializeUpdateInfo(idx_t vector_idx);
 	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
 	                          idx_t vector_offset);

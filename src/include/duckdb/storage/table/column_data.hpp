@@ -41,6 +41,8 @@ struct RowGroupWriteInfo;
 struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
+class UpdateSegment;
+struct ColumnUpdates;
 class ValidityColumnData;
 struct ColumnDataFinalizeAppendState;
 struct SuballocationBlock;
@@ -206,7 +208,7 @@ public:
 
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t count, Vector &scan_vector,
 	                            VisibilityBound visibility_bound) const;
-	void CheckpointUpdates(VisibilityBound visibility_bound);
+	void CheckpointUpdates(ColumnData &target, VisibilityBound visibility_bound);
 
 	virtual bool IsPersistent();
 	vector<DataPointer> GetDataPointers();
@@ -282,10 +284,8 @@ private:
 protected:
 	//! The segments holding the data of this column segment
 	ColumnSegmentTree data;
-	//! The lock for the updates
-	mutable mutex update_lock;
-	//! The updates for this column segment
-	unique_ptr<UpdateSegment> updates;
+	//! The updates of this column, shared with the column a checkpoint rewrote it into
+	shared_ptr<ColumnUpdates> updates;
 	//! The lock for the stats
 	mutable mutex stats_lock;
 	//! Total transient allocation size

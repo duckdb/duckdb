@@ -1357,7 +1357,11 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 		} else {
 			col_data.Update(transaction, table_entry, column.index, update_chunk.data[i], ids, count, row_group_start);
 		}
-		MergeStatistics(column.index, *col_data.GetUpdateStatistics());
+		// a no-op update leaves no update statistics behind
+		auto update_stats = col_data.GetUpdateStatistics();
+		if (update_stats) {
+			MergeStatistics(column.index, *update_stats);
+		}
 	}
 }
 
@@ -1380,7 +1384,10 @@ void RowGroup::UpdateColumn(TransactionData transaction, DuckTableEntry &table_e
 		col_data.UpdateColumn(transaction, table_entry, column_path, updates.data[0], ids, count, depth,
 		                      row_group_start);
 	}
-	MergeStatistics(primary_column_idx, *col_data.GetUpdateStatistics());
+	auto update_stats = col_data.GetUpdateStatistics();
+	if (update_stats) {
+		MergeStatistics(primary_column_idx, *update_stats);
+	}
 }
 
 unique_ptr<BaseStatistics> RowGroup::GetStatistics(idx_t column_idx) const {

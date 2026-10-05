@@ -17,7 +17,8 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
 void ColumnCheckpointState::CheckpointUpdates(VisibilityBound visibility_bound) {
-	original_column_mutable.CheckpointUpdates(visibility_bound);
+	auto &target = result_column ? *result_column : original_column_mutable;
+	original_column_mutable.CheckpointUpdates(target, visibility_bound);
 }
 
 unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {

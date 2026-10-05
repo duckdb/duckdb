@@ -25,7 +25,7 @@ static UpdateSegment::get_effective_updates_t GetEffectiveUpdatesFunction(Physic
 UpdateSegment::UpdateSegment(ColumnData &column_data)
     : type(column_data.type), buffer_manager(column_data.block_manager.buffer_manager),
       newest_uncheckpointed_update_commit(0), stats(column_data.type),
-      heap(BufferAllocator::Get(column_data.GetDatabase())) {
+      heap(make_shared_ptr<StringHeap>(BufferAllocator::Get(column_data.GetDatabase()))) {
 	auto physical_type = type.InternalType();
 
 	// the WAL writer describes the updated column through the segment
@@ -248,6 +248,22 @@ UndoBufferPointer UpdateSegment::GetUpdateNode(StorageLockKey &, idx_t vector_id
 	return root->info[vector_idx];
 }
 
+//! Keeps the string heap of an update segment alive for a vector holding strings from it
+class UpdateStringHeapHolder : public AuxiliaryDataHolder {
+public:
+	explicit UpdateStringHeapHolder(shared_ptr<StringHeap> heap_p) : heap(std::move(heap_p)) {
+	}
+
+private:
+	shared_ptr<StringHeap> heap;
+};
+
+void UpdateSegment::AddHeapReference(Vector &result) {
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+		result.AddAuxiliaryData(make_uniq<UpdateStringHeapHolder>(heap));
+	}
+}
+
 void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
 	auto node = GetUpdateNode(*lock_handle, vector_index);
@@ -258,6 +274,7 @@ void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pin = node.Pin();
 	fetch_update_function(transaction.view, UpdateInfo::Get(pin), result);
+	AddHeapReference(result);
 }
 
 UpdateNode::UpdateNode(BufferManager &manager) : allocator(manager) {
@@ -433,6 +450,7 @@ void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_ro
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
 	D_ASSERT(start_vector <= end_vector);
 
+	bool fetched = false;
 	for (idx_t vector_idx = start_vector; vector_idx <= end_vector; vector_idx++) {
 		auto entry = GetUpdateNode(*lock_handle, vector_idx);
 		if (!entry.IsSet()) {
@@ -446,6 +464,10 @@ void UpdateSegment::FetchCommittedRange(const SnapshotView &view, idx_t start_ro
 		D_ASSERT(end_in_vector > 0 && end_in_vector <= STANDARD_VECTOR_SIZE);
 		idx_t result_offset = ((vector_idx * STANDARD_VECTOR_SIZE) + start_in_vector) - start_row;
 		fetch_committed_range(view, UpdateInfo::Get(pin), start_in_vector, end_in_vector, result_offset, result);
+		fetched = true;
+	}
+	if (fetched) {
+		AddHeapReference(result);
 	}
 }
 
@@ -551,6 +573,7 @@ void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets,
 	if (!root) {
 		return;
 	}
+	bool fetched = false;
 	for (idx_t idx = 0; idx < fetch_count;) {
 		const idx_t offset = offsets[sel.get_index(idx)];
 		const idx_t vector_index = offset / STANDARD_VECTOR_SIZE;
@@ -569,8 +592,12 @@ void UpdateSegment::FetchRows(TransactionData transaction, const idx_t *offsets,
 			auto pin = entry.Pin();
 			fetch_rows_function(transaction.view, UpdateInfo::Get(pin), offsets, sel, idx, vector_count, vector_offset,
 			                    result, result_offset);
+			fetched = true;
 		}
 		idx += vector_count;
+	}
+	if (fetched) {
+		AddHeapReference(result);
 	}
 }
 
@@ -774,7 +801,7 @@ struct UpdateSelectElement {
 
 template <>
 string_t UpdateSelectElement::Operation(UpdateSegment &segment, string_t element) {
-	return segment.GetStringHeap().AddBlob(element);
+	return segment.heap->AddBlob(element);
 }
 
 template <class T>
@@ -1074,6 +1101,10 @@ static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalTyp
 // Update statistics
 //===--------------------------------------------------------------------===//
 unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
+	auto read_lock = lock.GetSharedLock();
+	if (!root) {
+		return nullptr;
+	}
 	lock_guard<mutex> stats_guard(stats_lock);
 	return stats.statistics.ToUnique();
 }
@@ -1420,7 +1451,7 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
-			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
+			update_data[idx] = heap->AddBlob(update_data[idx]);
 		}
 		update_p.ToUnifiedFormat(update_format);
 	}
@@ -1607,6 +1638,52 @@ void UpdateSegment::MarkCheckpointed(VisibilityBound visibility_bound) {
 		// a commit at or above the bound that races with this call keeps its id
 		newest_uncheckpointed_update_commit.compare_exchange_strong(current, 0);
 	}
+}
+
+void ColumnUpdates::ClearIfLastHolder(const unique_lock<mutex> &guard, idx_t holders) {
+	D_ASSERT(guard.owns_lock() && guard.mutex() == &lock);
+	if (holders != 1 || !newest_column || !segment) {
+		return;
+	}
+	segment->ClearIfUnused();
+}
+
+bool UpdateSegment::IsUnused(StorageLockKey &lock_key) const {
+	if (HasUnserializedChanges()) {
+		return false;
+	}
+	if (!root) {
+		return true;
+	}
+	for (idx_t vector_idx = 0; vector_idx < root->info.size(); vector_idx++) {
+		auto entry = GetUpdateNode(lock_key, vector_idx);
+		if (!entry.IsSet()) {
+			continue;
+		}
+		auto pin = entry.Pin();
+		if (UpdateInfo::Get(pin).HasNext()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool UpdateSegment::CanBeCleared() const {
+	auto read_lock = lock.GetSharedLock();
+	return IsUnused(*read_lock);
+}
+
+void UpdateSegment::ClearIfUnused() {
+	// checked under the same lock that the clear holds, so no update can slip in between
+	auto write_lock = lock.GetExclusiveLock();
+	if (!IsUnused(*write_lock)) {
+		return;
+	}
+	root.reset();
+	// results that scans filled from the old heap keep it alive for as long as they need it
+	heap = make_shared_ptr<StringHeap>(buffer_manager.GetBufferAllocator());
+	lock_guard<mutex> stats_guard(stats_lock);
+	stats.statistics = BaseStatistics::CreateEmpty(type);
 }
 
 } // namespace duckdb
