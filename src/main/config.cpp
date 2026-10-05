@@ -3,6 +3,7 @@
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -105,8 +106,10 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
+    DUCKDB_GLOBAL(DebugAbortOnWalFailureSetting),
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
+    DUCKDB_SETTING(DebugCheckpointScanSleepMsSetting),
     DUCKDB_SETTING(DebugCheckpointSleepMsSetting),
     DUCKDB_GLOBAL(DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING(DebugDisableOptimizerSetting),
@@ -130,6 +133,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugVerifyAggregateStateExportSetting),
     DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING(DebugVerifyColumnBindingsSetting),
+    DUCKDB_SETTING_CALLBACK(DebugVerifyProgressSetting),
+    DUCKDB_SETTING(DebugVerifyProgressIgnoreSetting),
     DUCKDB_SETTING(DebugVerifySerializerSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyStatementSetting),
     DUCKDB_SETTING(DebugVerifyStatsSetting),
@@ -172,8 +177,9 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ExtensionDirectoriesSetting),
     DUCKDB_SETTING_CALLBACK(ExtensionDirectorySetting),
     DUCKDB_SETTING_CALLBACK(ExtensionRepositoryDirectorySetting),
-    DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalBlockSizeSetting),
-    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalMaxBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMaxBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMinBlockSizeSetting),
     DUCKDB_SETTING(ExternalFileCacheSpillSetting),
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
@@ -590,6 +596,11 @@ CastFunctionSet &DBConfig::GetCastFunctions() {
 	return type_manager->GetCastFunctions();
 }
 
+const CastFunctionSet &DBConfig::GetCastFunctions() const {
+	const auto &manager = *type_manager;
+	return manager.GetCastFunctions();
+}
+
 TypeManager &DBConfig::GetTypeManager() {
 	return *type_manager;
 }
@@ -1004,6 +1015,17 @@ SerializationOptions::SerializationOptions(AttachedDatabase &db) {
 
 void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
 	http_transport_manager->SetHTTPUtil(new_http_util);
+}
+
+void DBConfig::SetExternalExtensionProvider(const shared_ptr<ExternalExtensionProvider> &new_provider) {
+	if (!new_provider) {
+		throw InvalidInputException("External extension provider cannot be null");
+	}
+	external_extension_provider = new_provider;
+}
+
+ExternalExtensionProvider &DBConfig::GetExternalExtensionProvider() const {
+	return *external_extension_provider;
 }
 
 HTTPUtil &DBConfig::GetHTTPUtil() const {

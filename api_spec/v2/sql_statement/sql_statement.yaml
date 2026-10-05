@@ -110,6 +110,8 @@ enums:
         value: 32
       STATEMENT_TYPE_EXTERNAL_RESOURCE:
         value: 33
+      STATEMENT_TYPE_PASSTHROUGH:
+        value: 34
 functions:
   parse_sql:
     lifecycle:

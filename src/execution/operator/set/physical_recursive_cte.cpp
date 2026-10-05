@@ -10,6 +10,8 @@
 
 #include "duckdb/main/settings.hpp"
 
+#include <cmath>
+
 namespace duckdb {
 
 RecursiveCTEPartialKeySpec::RecursiveCTEPartialKeySpec(vector<idx_t> indices_p, idx_t full_key_count)
@@ -156,13 +158,9 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 		source_distinct_rows.Initialize(Allocator::DefaultAllocator(), op.hash_key_types);
 		source_aggregate_rows.Initialize(Allocator::DefaultAllocator(), op.aggregate_types);
 	}
-	source_result.Initialize(Allocator::DefaultAllocator(), op.GetTypes());
 	if (op.using_key) {
 		InitializeIntermediateAppend();
 		op.working_table->InitializeAppend(working_append_state);
-	}
-	if (op.recurring_table) {
-		op.recurring_table->InitializeAppend(recurring_append_state);
 	}
 }
 
@@ -1164,6 +1162,9 @@ public:
 	mutex lock;
 	AggregateHTScanState scan_state;
 	bool initialized = false;
+	//! The number of groups in the hash table and the number of groups scanned (for progress)
+	atomic<idx_t> total_groups {0};
+	atomic<idx_t> scanned_groups {0};
 };
 
 class RecursiveCTEStateScanLocalState : public LocalSourceState {
@@ -1233,11 +1234,13 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataFromState(DataChunk &chun
 			lock_guard<mutex> guard(gstate.lock);
 			if (!gstate.initialized) {
 				recursive_state.GetHashTable().InitializeScan(gstate.scan_state);
+				gstate.total_groups = recursive_state.GetHashTable().Count();
 				gstate.initialized = true;
 			}
 			if (!recursive_state.GetHashTable().ScanGroups(gstate.scan_state, lstate.distinct_rows)) {
 				return SourceResultType::FINISHED;
 			}
+			gstate.scanned_groups.fetch_add(lstate.distinct_rows.size(), std::memory_order_relaxed);
 		}
 		if (lstate.distinct_rows.size() == 0) {
 			continue;
@@ -1256,6 +1259,15 @@ SourceResultType PhysicalRecursiveCTEStateScan::GetDataFromState(DataChunk &chun
 		}
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
+}
+
+ProgressData PhysicalRecursiveCTEStateScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<RecursiveCTEStateScanGlobalState>();
+	idx_t total_groups = gstate.total_groups;
+	ProgressData progress;
+	progress.total = static_cast<double>(MaxValue<idx_t>(total_groups, 1));
+	progress.done = static_cast<double>(MinValue<idx_t>(gstate.scanned_groups, total_groups));
+	return progress;
 }
 
 InsertionOrderPreservingMap<string> PhysicalRecursiveCTEStateScan::ParamsToString() const {
@@ -1350,30 +1362,38 @@ SinkCombineResultType PhysicalRecursiveCTE::Combine(ExecutionContext &context, O
 SourceResultType PhysicalRecursiveCTE::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                        OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<RecursiveCTEState>();
-	return gstate.GetData(context, chunk);
+	return gstate.GetData(context, chunk, input.global_state.Cast<RecursiveCTEGlobalSourceState>());
 }
 
-SourceResultType RecursiveCTEState::GetData(ExecutionContext &context, DataChunk &chunk) {
+unique_ptr<GlobalSourceState> PhysicalRecursiveCTE::GetGlobalSourceState(ClientContext &context) const {
+	return make_uniq<RecursiveCTEGlobalSourceState>();
+}
+
+SourceResultType RecursiveCTEState::GetData(ExecutionContext &context, DataChunk &chunk,
+                                            RecursiveCTEGlobalSourceState &source) {
 	if (source_phase == RecursiveCTESourcePhase::INITIAL) {
 		if (op.using_key) {
 			source_phase = RecursiveCTESourcePhase::RECURSING_KEY;
 		} else {
 			CurrentOutputTable().InitializeScan(scan_state);
+			source.StartIteration(CurrentOutputTable().Count());
 			source_phase = RecursiveCTESourcePhase::SCANNING_UNION;
 		}
 	}
-	return op.using_key ? GetUsingKeyData(context, chunk) : GetUnionData(context, chunk);
+	return op.using_key ? GetUsingKeyData(context, chunk, source) : GetUnionData(context, chunk, source);
 }
 
-SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, DataChunk &chunk) {
+SourceResultType RecursiveCTEState::GetUsingKeyData(ExecutionContext &context, DataChunk &chunk,
+                                                    RecursiveCTEGlobalSourceState &source) {
 	if (metrics.Enabled()) {
-		return GetUsingKeyDataInternal<true>(context, chunk);
+		return GetUsingKeyDataInternal<true>(context, chunk, source);
 	}
-	return GetUsingKeyDataInternal<false>(context, chunk);
+	return GetUsingKeyDataInternal<false>(context, chunk, source);
 }
 
 template <bool COLLECT_METRICS>
-SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk) {
+SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &context, DataChunk &chunk,
+                                                            RecursiveCTEGlobalSourceState &source) {
 	D_ASSERT(op.using_key);
 	while (true) {
 		switch (source_phase) {
@@ -1388,6 +1408,7 @@ SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &co
 				expected_new = op.working_table->Count();
 				if (expected_new == 0) {
 					ht->InitializeScan(ht_scan_state);
+					source.StartFinalDrain(ht->Count());
 					source_phase = RecursiveCTESourcePhase::DRAINING_FINAL_KEY_STATE;
 					break;
 				}
@@ -1405,6 +1426,7 @@ SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &co
 			const auto next_count = op.union_all ? intermediate_table.Count() : op.working_table->Count();
 			if (next_count == 0) {
 				ht->InitializeScan(ht_scan_state);
+				source.StartFinalDrain(ht->Count());
 				source_phase = RecursiveCTESourcePhase::DRAINING_FINAL_KEY_STATE;
 			}
 			break;
@@ -1417,6 +1439,7 @@ SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &co
 					continue;
 				}
 				AssembleStateRows(source_distinct_rows, source_aggregate_rows, chunk);
+				source.AddEmittedRows(chunk.size());
 				if constexpr (COLLECT_METRICS) {
 					metrics.RecordFinalStateRows(chunk.size());
 					const auto drain_end = std::chrono::steady_clock::now();
@@ -1431,6 +1454,7 @@ SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &co
 				    std::chrono::duration_cast<std::chrono::nanoseconds>(drain_end - drain_start).count()));
 			}
 			source_phase = RecursiveCTESourcePhase::FINISHED;
+			source.Finish();
 			break;
 		}
 		case RecursiveCTESourcePhase::FINISHED:
@@ -1441,13 +1465,15 @@ SourceResultType RecursiveCTEState::GetUsingKeyDataInternal(ExecutionContext &co
 	}
 }
 
-SourceResultType RecursiveCTEState::GetUnionData(ExecutionContext &context, DataChunk &chunk) {
+SourceResultType RecursiveCTEState::GetUnionData(ExecutionContext &context, DataChunk &chunk,
+                                                 RecursiveCTEGlobalSourceState &source) {
 	D_ASSERT(!op.using_key);
 	while (chunk.size() == 0) {
 		if (source_phase == RecursiveCTESourcePhase::SCANNING_UNION) {
 			// scan any chunks we have collected so far
 			CurrentOutputTable().Scan(scan_state, chunk);
 			if (chunk.size() != 0) {
+				source.AddEmittedRows(chunk.size());
 				break;
 			}
 		} else if (source_phase == RecursiveCTESourcePhase::FINISHED) {
@@ -1465,16 +1491,8 @@ SourceResultType RecursiveCTEState::GetUnionData(ExecutionContext &context, Data
 			// After an iteration, we reset the recurring table
 			// and fill it up with the new hash table rows for the next iteration.
 			if (op.ref_recurring && current_output.Count() != 0) {
-				// we need to populate the recurring table from the intermediate table
-				// careful: we can not just use Combine here, because this destroys the intermediate table
-				// instead we need to scan and append to create a copy
-				// Note: as we are in the "normal" recursion case here, not the USING KEY case,
-				// we can just scan the intermediate table directly, instead of going through the HT
-				ColumnDataScanState recurring_scan_state;
-				current_output.InitializeScan(recurring_scan_state);
-				while (current_output.Scan(recurring_scan_state, source_result)) {
-					op.recurring_table->Append(recurring_append_state, source_result);
-				}
+				// copy since Combine would destroy the intermediate table
+				op.recurring_table->Append(current_output);
 			}
 
 			AdvanceIterationBuffers();
@@ -1514,14 +1532,73 @@ SourceResultType RecursiveCTEState::GetUnionData(ExecutionContext &context, Data
 			// if not, we are done
 			if (CurrentOutputTable().Count() == 0) {
 				source_phase = RecursiveCTESourcePhase::FINISHED;
+				source.Finish();
 				break;
 			}
 			// set up the scan again
 			CurrentOutputTable().InitializeScan(scan_state);
+			source.StartIteration(CurrentOutputTable().Count());
 		}
 	}
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+}
+
+void RecursiveCTEGlobalSourceState::StartIteration(idx_t row_count) {
+	lock_guard<mutex> guard(iteration_lock);
+	if (iterations == 0) {
+		anchor_rows = row_count;
+	}
+	iterations++;
+	iteration_start_rows = emitted_rows.load(std::memory_order_relaxed);
+	previous_iteration_rows = iteration_rows;
+	iteration_rows = row_count;
+}
+
+void RecursiveCTEGlobalSourceState::StartFinalDrain(idx_t row_count) {
+	lock_guard<mutex> guard(iteration_lock);
+	draining = true;
+	iteration_start_rows = emitted_rows.load(std::memory_order_relaxed);
+	iteration_rows = row_count;
+}
+
+ProgressData RecursiveCTEGlobalSourceState::GetProgress() {
+	if (finished.load(std::memory_order_relaxed)) {
+		return ProgressData {1.0, 1.0, false};
+	}
+	auto emitted = static_cast<double>(emitted_rows.load(std::memory_order_relaxed));
+	double fraction;
+	{
+		lock_guard<mutex> guard(iteration_lock);
+		if (draining) {
+			// the final state of a USING KEY recursion is emitted in one go - its size is known
+			auto total = static_cast<double>(iteration_start_rows + iteration_rows);
+			fraction = total == 0 ? 1.0 : emitted / total;
+		} else {
+			// the total number of rows is unknown - converge towards 100% as rows are emitted, logarithmically in the
+			// number of rows relative to the first iteration (50% after one anchor's worth of rows, 67% after 3, 91%
+			// after ~1000)
+			auto anchor = static_cast<double>(MaxValue<idx_t>(anchor_rows, 1));
+			fraction = 1 - 1 / (1 + std::log2(1 + emitted / anchor));
+			// if the iterations are shrinking, extrapolate the remaining rows as a geometric series
+			if (iteration_rows < previous_iteration_rows) {
+				auto current = static_cast<double>(iteration_rows);
+				auto ratio = current / static_cast<double>(previous_iteration_rows);
+				auto total = static_cast<double>(iteration_start_rows) + current + current * ratio / (1 - ratio);
+				if (total > 0) {
+					fraction = MaxValue<double>(fraction, emitted / total);
+				}
+			}
+			// we are not done until the recursion finishes
+			fraction = MinValue<double>(fraction, 0.999);
+		}
+	}
+	// the estimate can drop when an iteration is larger than expected
+	return progress.Update(ProgressData {MinValue<double>(fraction, 1.0), 1.0, false});
+}
+
+ProgressData PhysicalRecursiveCTE::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	return gstate.Cast<RecursiveCTEGlobalSourceState>().GetProgress();
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() const {

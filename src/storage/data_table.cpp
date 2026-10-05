@@ -298,7 +298,13 @@ idx_t DataTable::MaxThreads(ClientContext &context) const {
 		parallel_scan_vector_count = 1;
 	}
 	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
-	return GetTotalRows() / parallel_scan_tuple_count + 1;
+	idx_t total_rows = GetTotalRows();
+	auto local_storage = LocalStorage::Get(context, db).GetStorage(*this);
+	if (local_storage) {
+		// transaction-local rows are scanned in parallel as well
+		total_rows += local_storage->GetCollection().GetTotalRows();
+	}
+	return total_rows / parallel_scan_tuple_count + 1;
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
@@ -360,8 +366,12 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index));
+void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
+	info->indexes.AddIndex(std::move(index), index_oid);
+}
+
+void DataTable::AddConstraintIndex(unique_ptr<Index> index) {
+	info->indexes.AddIndex(std::move(index), /*index_oid=*/optional_idx());
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
@@ -661,10 +671,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Get the column types in their physical order. A foreign key always references a table in the same (possibly
 	// nested) schema, so we qualify it with this table's schema path.
-	auto schema_path = info->GetSchemaPath();
-	schema_path.insert(schema_path.begin(), db.GetName());
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(std::move(schema_path), bound_foreign_key.info.table));
+	    context, QualifiedName::FromCatalogSchema(db.GetName(), info->GetSchemaPath(), bound_foreign_key.info.table));
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());
@@ -1686,7 +1694,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art));
+	info->indexes.AddIndex(std::move(art), /*index_oid=*/optional_idx());
 }
 
 } // namespace duckdb

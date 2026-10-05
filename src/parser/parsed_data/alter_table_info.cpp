@@ -1,7 +1,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 #include "duckdb/common/sql_identifier.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 
@@ -211,10 +211,10 @@ AddColumnInfo::AddColumnInfo(ColumnDefinition new_column_p)
     : AlterTableInfo(AlterTableType::ADD_COLUMN), new_column(std::move(new_column_p)) {
 }
 
-AddColumnInfo::AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists,
-                             bool add_not_null)
-    : AlterTableInfo(AlterTableType::ADD_COLUMN, data), new_column(std::move(new_column)),
-      if_column_not_exists(if_column_not_exists), add_not_null(add_not_null) {
+AddColumnInfo::AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column_p, bool if_column_not_exists_p,
+                             AddColumnConstraints add_column_constraints_p)
+    : AlterTableInfo(AlterTableType::ADD_COLUMN, data), new_column(std::move(new_column_p)),
+      if_column_not_exists(if_column_not_exists_p), add_column_constraints(add_column_constraints_p) {
 }
 
 AddColumnInfo::~AddColumnInfo() {
@@ -222,7 +222,7 @@ AddColumnInfo::~AddColumnInfo() {
 
 unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
 	return make_uniq_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists,
-	                                                add_not_null);
+	                                                add_column_constraints);
 }
 
 string AddColumnInfo::ToString() const {
@@ -238,8 +238,11 @@ string AddColumnInfo::ToString() const {
 	}
 	result += " " + SQLIdentifier(this->new_column.GetName());
 	result += " " + this->new_column.GetType().ToString();
-	if (add_not_null) {
+	if (add_column_constraints.add_not_null) {
 		result += " NOT NULL";
+	}
+	if (add_column_constraints.add_unique) {
+		result += " UNIQUE";
 	}
 	if (this->new_column.HasDefaultValue()) {
 		result += " DEFAULT ";
@@ -388,7 +391,7 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
 	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
-	                                                       expression->Copy());
+	                                                       expression ? expression->Copy() : nullptr);
 }
 
 string ChangeColumnTypeInfo::ToString() const {
@@ -404,9 +407,9 @@ string ChangeColumnTypeInfo::ToString() const {
 	if (target_type.IsValid()) {
 		result += target_type.ToString();
 	}
-	auto extra_type_info = target_type.AuxInfo();
-	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
-		auto &string_info = extra_type_info->Cast<StringTypeInfo>();
+	auto &type_info = target_type.GetTypeInfo();
+	if (type_info.type == LogicalTypeInfoType::STRING_TYPE_INFO) {
+		auto &string_info = type_info.Cast<StringTypeInfo>();
 		if (!string_info.collation.empty()) {
 			result += " COLLATE " + string_info.collation;
 		}

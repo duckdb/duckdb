@@ -33,7 +33,7 @@ static compiled_rules_map_t CompileTestProgramRule(const ParsedGrammar &grammar)
 	if (!rule) {
 		throw InternalException("Test grammar is missing the Program rule");
 	}
-	rules.emplace(rule->name, make_uniq<CompiledGrammarRule>(rule->name, rule->transform_process));
+	rules.emplace(rule->name, make_uniq<CompiledGrammarRule>(rule->name, rule->transform_process, rule->collapsible));
 	return rules;
 }
 
@@ -647,7 +647,7 @@ TEST_CASE("Literal caches respect active grammar extensions", "[api][grammar_ext
 static void CheckGrammarExtensionTestSyntax(Connection &con) {
 	auto result = con.Query("ANSWER");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(42));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(42));
 }
 
 TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_extension]") {
@@ -656,6 +656,61 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
+}
+
+class ConstantSevenTransformProcess final : public TransformProcess {
+public:
+	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		return TransformStep::Complete(
+		    make_uniq<TypedTransformResult<unique_ptr<ParsedExpression>>>(ConstantExpression::Integer(7)));
+	}
+};
+
+static unique_ptr<TransformProcess> StartConstantSevenTransform(PEGTransformer &, ParseResult &) {
+	return make_uniq<ConstantSevenTransformProcess>();
+}
+
+//! Replaces the transform of a rule the default grammar marks as collapsible with one that does not forward its
+//! operand
+class OverrideAdditiveExpressionTransform final : public GrammarExtension {
+public:
+	OverrideAdditiveExpressionTransform(const string &name, bool collapsible_p)
+	    : GrammarExtension(name, "OverrideAdditiveExpressionTransform"), collapsible(collapsible_p) {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(
+		    GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantSevenTransform, collapsible));
+		return changes;
+	}
+
+private:
+	bool collapsible;
+};
+
+TEST_CASE("Overriding a transform opts its rule out of collapsing", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideAdditiveExpressionTransform>("seven", false));
+	GrammarExtension::Register(*db.instance,
+	                           make_shared_ptr<OverrideAdditiveExpressionTransform>("collapsible_seven", true));
+	// separate connections, because once an extension is active it also rewrites the literals of a later SET
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['seven']"));
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+
+	// the extension promised the collapse is safe, so an operand without a tail skips its transform
+	Connection collapsible_con(db);
+	REQUIRE_NO_FAIL(*collapsible_con.Query("SET active_grammar_extensions = ['collapsible_seven']"));
+	result = collapsible_con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	result = collapsible_con.Query("SELECT 1 + 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
 }
 
 struct MatchProcessLifetimeState {
@@ -1196,7 +1251,14 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
 
-	auto options = con.context->GetParserOptions();
+	Parser context_parser(*con.context);
+	REQUIRE_NOTHROW(context_parser.ParseQuery("ANSWER"));
+	REQUIRE(context_parser.statements.size() == 1);
+	auto &context_select = context_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
+	REQUIRE(context_select.select_list[0]->GetExpressionClass() == ExpressionClass::CONSTANT);
+
+	auto options = ParserOptions::Builtin();
+	options.compiled_grammar = CompiledGrammar::Get(*con.context);
 	REQUIRE(options.compiled_grammar == CompiledGrammar::Get(*con.context));
 	options.extensions = nullptr;
 
@@ -1204,9 +1266,13 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
-	Parser base_parser;
-	REQUIRE_NOTHROW(base_parser.ParseQuery("SELECT 42"));
+	auto base_parser = Parser::GetBuiltinParser();
+	REQUIRE_NOTHROW(base_parser.ParseQuery("ANSWER"));
 	REQUIRE(base_parser.statements.size() == 1);
+	auto &base_select = base_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
+	// Without the extension, ANSWER is a table name in a FROM-first query.
+	REQUIRE(base_select.select_list[0]->GetExpressionClass() == ExpressionClass::STAR);
+	REQUIRE(base_select.from_table->type == TableReferenceType::BASE_TABLE);
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {
@@ -1230,6 +1296,6 @@ TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_
 	auto result = con.Query("SET active_grammar_extensions = ['invalid_grammar_extension']");
 	REQUIRE_FAIL(result);
 	CheckGrammarExtensionTestSyntax(con);
-	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->GetValue(0, 0);
+	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
 	REQUIRE(ListValue::GetChildren(setting).size() == 2);
 }

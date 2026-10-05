@@ -69,6 +69,9 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 	for (const auto &param : input.named_parameters) {
 		auto &key = param.first;
 		if (key == "level") {
+			if (param.second.IsNull()) {
+				throw InvalidInputException("EnableLogging: level cannot be NULL");
+			}
 			result->config.level = EnumUtil::FromString<LogLevel>(param.second.ToString());
 		} else if (key == "storage") {
 			storage_isset = true;
@@ -174,17 +177,18 @@ static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFu
 void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	auto enable_fun = TableFunction("enable_logging", {}, EnableLogging, BindEnableLogging, nullptr, nullptr);
 
-	// Base config
-	enable_fun.named_parameters.emplace("level", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage_config", LogicalType::ANY);
+	enable_fun.GetSignature()
+	    .AddArgs("args", LogicalType::ANY)
+	    .AddKeywordOnly("level", LogicalType::VARCHAR, Value("INFO"))
+	    .WithTypedKwargs("options", [](TypedKwargs &options) {
+		    options.Add("storage", LogicalType::VARCHAR)
+		        .Add("storage_config", LogicalType::ANY)
+		        // forwarded to the storage_config struct as syntactic sugar
+		        .Add("storage_path", LogicalType::VARCHAR)
+		        .Add("storage_normalize", LogicalType::BOOLEAN)
+		        .Add("storage_buffer_size", LogicalType::UBIGINT);
+	    });
 
-	// Config that is forwarded to the storage_config struct as syntactic sugar
-	enable_fun.named_parameters.emplace("storage_path", LogicalType::VARCHAR);
-	enable_fun.named_parameters.emplace("storage_normalize", LogicalType::BOOLEAN);
-	enable_fun.named_parameters.emplace("storage_buffer_size", LogicalType::UBIGINT);
-
-	enable_fun.SetVarArgs(LogicalType::ANY);
 	set.AddFunction(enable_fun);
 
 	auto disable_fun = TableFunction("disable_logging", {}, DisableLogging, BindDisableLogging, nullptr, nullptr);

@@ -76,16 +76,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
-#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
-	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
-#else
-	    {"autoload_known_extensions", {true}},
-#endif
-#ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
-	    {"autoinstall_known_extensions", {!DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT}},
-#else
-	    {"autoinstall_known_extensions", {true}},
-#endif
+	    {"autoload_known_extensions", {false}},
+	    {"autoinstall_known_extensions", {false}},
 	    {"enable_profiling", {"json"}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
 	    {"file_search_path", {"test"}},
@@ -139,8 +131,9 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allocator_bulk_deallocation_flush_threshold", {"4.0 GiB"}},
 	    {"arrow_output_version", {"1.5"}},
 	    {"enable_external_file_cache", {false}},
-	    {"external_file_cache_local_block_size", {Value::UBIGINT(4096)}},
-	    {"external_file_cache_remote_block_size", {Value::UBIGINT(4096)}},
+	    {"external_file_cache_local_max_block_size", {Value::UBIGINT(4096)}},
+	    {"external_file_cache_remote_max_block_size", {Value::UBIGINT(4096)}},
+	    {"external_file_cache_remote_min_block_size", {Value::UBIGINT(8192)}},
 	    {"validate_external_file_cache", {"NO_VALIDATION"}},
 	    {"experimental_metadata_reuse", {false}},
 	    {"storage_block_prefetch", {"always_prefetch"}},

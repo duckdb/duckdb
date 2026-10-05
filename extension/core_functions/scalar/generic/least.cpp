@@ -224,11 +224,11 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 
 	auto result = NumericStats::CreateEmpty(return_type);
 	if constexpr (IS_LEAST) {
-		NumericStats::SetMin(result, std::move(loose));
-		NumericStats::SetMax(result, std::move(anchored));
+		NumericStats::SetMin(result, loose);
+		NumericStats::SetMax(result, anchored);
 	} else {
-		NumericStats::SetMin(result, std::move(anchored));
-		NumericStats::SetMax(result, std::move(loose));
+		NumericStats::SetMin(result, anchored);
+		NumericStats::SetMax(result, loose);
 	}
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
 	if (!has_nonnull_input) {
@@ -305,9 +305,9 @@ unique_ptr<FunctionData> BindLeastGreatest(BindScalarFunctionInput &input) {
 
 template <class OP>
 ScalarFunction GetLeastGreatestFunction() {
-	ScalarFunction fun({}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>, PropagateLeastGreatestStats<OP>, nullptr,
-	                   LogicalType::ANY, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
-	fun.GetSignature().AddParameter("arg1", LogicalType::ANY);
+	ScalarFunction fun({{"arg1", LogicalType::ANY}}, LogicalType::ANY, nullptr, BindLeastGreatest<OP>,
+	                   PropagateLeastGreatestStats<OP>, nullptr, LogicalType::ANY, FunctionStability::CONSISTENT,
+	                   FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 

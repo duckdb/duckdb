@@ -41,27 +41,29 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	length_idx = 0;
 }
 
+bool IsContinuationByte(uint8_t b) {
+	return (b & 0xC0) == 0x80;
+}
+
+bool TouchesUtf8Boundary(const char *data, uint32_t len) {
+	if (len == 0) {
+		return false;
+	}
+	const uint8_t first = static_cast<uint8_t>(data[0]);
+	const uint8_t last = static_cast<uint8_t>(data[len - 1]);
+	return IsContinuationByte(first) || (last & 0x80) != 0;
+}
+
 void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
                                        Vector &result, idx_t result_offset) {
-	bool validate_individually =
-	    reader.Type().IsJSONType() || reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option !=
-	                                      StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
 	if (defines) {
-		if (validate_individually) {
-			ReadInternal<true, true>(block_ref, defines, read_count, result, result_offset);
-		} else {
-			ReadInternal<true, false>(block_ref, defines, read_count, result, result_offset);
-		}
+		ReadInternal<true>(block_ref, defines, read_count, result, result_offset);
 	} else {
-		if (validate_individually) {
-			ReadInternal<false, true>(block_ref, defines, read_count, result, result_offset);
-		} else {
-			ReadInternal<false, false>(block_ref, defines, read_count, result, result_offset);
-		}
+		ReadInternal<false>(block_ref, defines, read_count, result, result_offset);
 	}
 }
 
-template <bool HAS_DEFINES, bool VALIDATE_INDIVIDUAL_STRINGS>
+template <bool HAS_DEFINES>
 void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *const defines,
                                                const idx_t read_count, Vector &result, const idx_t result_offset) {
 	auto &block = *block_ref;
@@ -80,8 +82,15 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 	const auto &string_column_reader = reader.Cast<StringColumnReader>();
 	string_column_reader.SetCurrentResult(result);
 
+	// JSON and non-strict modes require individual validation: bytes are rewritten and the fast path discards its
+	// return value so it can't sanitize
+	const bool needs_full_individual_validation =
+	    reader.Type().IsJSONType() || reader.Cast<StringColumnReader>().reader.parquet_options.utf8_validation_option !=
+	                                      StringColumnReader::Utf8ValidationOption::STRICT_UTF8;
+
 	const auto start_ptr = block.ptr;
 	auto result_data = FlatVector::Writer<string_t>(result, read_count, result_offset);
+
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
 		const auto result_idx = result_offset + row_idx;
 		if (HAS_DEFINES) {
@@ -97,19 +106,22 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			}
 		}
 		const auto &str_len = length_data[length_idx++];
-		if (VALIDATE_INDIVIDUAL_STRINGS) {
+
+		if (needs_full_individual_validation) {
 			auto verified = string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
 			result_data.WriteValue(verified);
 		} else {
+			if (TouchesUtf8Boundary(char_ptr_cast(block.ptr), str_len)) {
+				string_column_reader.VerifyString(char_ptr_cast(block.ptr), str_len);
+			}
 			result_data.WriteValue(string_t(char_ptr_cast(block.ptr), str_len));
 		}
 		block.unsafe_inc(str_len);
 	}
 
-	if (!VALIDATE_INDIVIDUAL_STRINGS) {
+	if (!needs_full_individual_validation) {
 		string_column_reader.VerifyString(char_ptr_cast(start_ptr), NumericCast<uint32_t>(block.ptr - start_ptr));
 	}
-
 	StringColumnReader::ReferenceBlock(result, block_ref);
 }
 

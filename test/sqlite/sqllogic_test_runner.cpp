@@ -4,7 +4,6 @@
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
-#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension_helper.hpp"
@@ -248,6 +247,7 @@ NewDatabaseConnection SQLLogicTestRunner::CreateDatabase(const string &db_path, 
 	try {
 		result.db = make_uniq<DuckDB>(db_path, config.get());
 		LoadStaticExtensions(*result.db);
+		ConfigureDefaultInMemoryTemporaryDirectory(*result.db, db_path);
 
 		// always load core functions
 		auto &test_config = TestConfiguration::Get();
@@ -451,6 +451,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 
 	if (param == "windows") {
 #ifndef _WIN32
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
+
+	if (param == "linux") {
+#ifndef __linux__
 		return RequireResult::MISSING;
 #else
 		return RequireResult::PRESENT;
@@ -746,14 +754,16 @@ void add_env_tag(vector<string> &tags, const string &name, const string *value =
 	}
 }
 
-void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(const string &script) {
-	if (!dbpath.empty() || !config->options.use_temporary_directory || config->options.temporary_directory != ".tmp") {
+void SQLLogicTestRunner::ConfigureDefaultInMemoryTemporaryDirectory(DuckDB &database, const string &db_path) {
+	auto &db_config = DBConfig::GetConfig(*database.instance);
+	if (!db_path.empty() || !db_config.options.use_temporary_directory ||
+	    db_config.options.temporary_directory != ".tmp" || !Settings::Get<EnableExternalAccessSetting>(db_config)) {
 		return;
 	}
-	auto normalized_script = StringUtil::Replace(script, "\\", "/");
+	auto normalized_script = StringUtil::Replace(file_name, "\\", "/");
 	auto temp_directory_name = StringUtil::Replace(normalized_script, "/", "_");
-	auto temp_directory = TestJoinPath(TestJoinPath(TestDirectoryPath(), "sqllogic_temp"), temp_directory_name);
-	config->SetOptionByName("temp_directory", temp_directory);
+	auto temp_directory = TestJoinPath(TestDirectoryPath(), "sqllogic_temp_" + temp_directory_name);
+	db_config.SetOption(database.instance.get(), *DBConfig::GetOptionByName("temp_directory"), temp_directory);
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
@@ -800,10 +810,6 @@ void SQLLogicTestRunner::ExecuteInternal(SQLLogicParser &parser, const string &s
 	for (auto ignore : test_config.ErrorMessagesToBeSkipped()) {
 		ignore_error_messages.insert(ignore);
 	}
-
-	// In-memory sqllogictests otherwise share ".tmp" across unittest processes.
-	// Give each script its own spill directory under the per-process TEST_DIR.
-	ConfigureDefaultInMemoryTemporaryDirectory(script);
 
 	// initialize the database with the default dbpath
 	LoadDatabase(dbpath, true);
@@ -1186,14 +1192,19 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 			environment_variables[env_var] = env_actual;
 			add_env_tag(file_tags, env_var, &env_actual);
 
-		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
+		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV ||
+		           token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV_NOT) {
+			auto exclude_values = token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV_NOT;
+			string directive = exclude_values ? "require-env-not" : "require-env";
 			if (InLoop()) {
-				parser.Fail("require-env cannot be called in a loop");
+				parser.Fail("%s cannot be called in a loop", directive);
 			}
 
-			if (token.parameters.size() != 1 && token.parameters.size() != 2) {
-				parser.Fail("require-env requires 1 argument: <env name> [optional: <expected env val>]");
+			if (token.parameters.empty()) {
+				parser.Fail(exclude_values ? "require-env-not requires <env name> [excluded value ...]"
+				                           : "require-env requires <env name> [expected value ...]");
 			}
+			auto skip_reason = directive + " " + StringUtil::Join(token.parameters, " ");
 
 			auto &test_config = TestConfiguration::Get();
 			auto env_var = token.parameters[0];
@@ -1215,29 +1226,41 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 				// variables
 				env_actual = default_local_repo.c_str();
 			}
+			if (exclude_values && token.parameters.size() == 1) {
+				if (env_actual != nullptr) {
+					SkipTest(skip_reason);
+					return;
+				}
+				// An absent variable has no value to register for substitution or tagging.
+				continue;
+			}
 			if (env_actual == nullptr) {
 				// Environment variable was not found, this test should not be run
-				SkipTest("require-env " + token.parameters[0]);
+				SkipTest(skip_reason);
 				return;
 			}
 
-			if (token.parameters.size() == 2) {
-				// Check that the value is the same as the expected value
-				auto env_value = token.parameters[1];
-				if (std::strcmp(env_actual, env_value.c_str()) != 0) {
-					// It's not, check the test
-					SkipTest("require-env " + token.parameters[0] + " " + token.parameters[1]);
+			if (token.parameters.size() > 1) {
+				bool matches = false;
+				for (idx_t i = 1; i < token.parameters.size(); i++) {
+					if (token.parameters[i] == env_actual) {
+						matches = true;
+						break;
+					}
+				}
+				if (matches == exclude_values) {
+					SkipTest(skip_reason);
 					return;
 				}
 
-				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", token.parameters[0], token.parameters[1]));
+				file_tags.emplace_back(StringUtil::Format("env[%s]=%s", env_var, env_actual));
 			}
 
 			if (!test_env_defined && !env_passed_through && environment_variables.count(env_var)) {
 				parser.Fail(StringUtil::Format("Environment variable '%s' has already been defined", env_var));
 			}
 			environment_variables[env_var] = env_actual;
-			add_env_tag(file_tags, token.parameters[0], token.parameters.size() == 2 ? &token.parameters[1] : nullptr);
+			add_env_tag(file_tags, env_var, token.parameters.size() > 1 ? &environment_variables[env_var] : nullptr);
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
 			auto &test_config = TestConfiguration::Get();

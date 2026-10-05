@@ -2,6 +2,7 @@
 
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/path.hpp"
 #include "duckdb/common/optional.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/sorting/sort_strategy.hpp"
@@ -89,15 +90,14 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 //===--------------------------------------------------------------------===//
 struct GlobalFileState {
 public:
-	explicit GlobalFileState(unique_ptr<GlobalFunctionData> data_p, const string &path_p, idx_t lifecycle_file_index_p)
-	    : data(std::move(data_p)), path(path_p), lifecycle_file_index(lifecycle_file_index_p), num_batches(0) {
+	explicit GlobalFileState(unique_ptr<GlobalFunctionData> data_p, const string &path_p)
+	    : data(std::move(data_p)), path(path_p), num_batches(0) {
 	}
 
 public:
 	annotated_mutex lock;
 	unique_ptr<GlobalFunctionData> data;
 	const string path;
-	const idx_t lifecycle_file_index;
 	idx_t num_batches DUCKDB_GUARDED_BY(lock);
 };
 
@@ -503,6 +503,7 @@ private:
 public:
 	const PhysicalCopyToFile &op;
 	ClientContext &context;
+	//! Destroy after file states so their handles close before cleanup.
 	CopyOutputLifecycle output_lifecycle;
 
 	//! Lock guarding the global state
@@ -677,7 +678,7 @@ public:
 	ReservationLock LockForReservation() DUCKDB_EXCLUDES(lock);
 	PartitionFileStateReservation ReserveFileState(ReservationLock &reservation_lock, const vector<Value> &values,
 	                                               FileCreationReason reason) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
-	//! Claims the directory of a partition, throws if it equals, contains or is inside another partition's directory
+	//! Claims the directory of a partition, throws if another partition already owns it
 	void ClaimDirectory(ReservationLock &reservation_lock, const vector<Value> &values,
 	                    const string &directory) DUCKDB_NO_THREAD_SAFETY_ANALYSIS;
 	FileStateHandle TryTakeInactiveFileState(const vector<Value> &values) DUCKDB_EXCLUDES(lock);
@@ -696,7 +697,7 @@ private:
 	idx_t global_offset DUCKDB_GUARDED_BY(lock) = 0;
 	//! The claimed directory of each partition, and the partition owning each directory
 	vector_of_value_map_t<string> partition_directories DUCKDB_GUARDED_BY(lock);
-	map<string, vector<Value>> directory_partitions DUCKDB_GUARDED_BY(lock);
+	unordered_map<string, vector<Value>> directory_partitions DUCKDB_GUARDED_BY(lock);
 
 	friend class PartitionWriteLease;
 };
@@ -834,8 +835,10 @@ public:
 	}
 
 	const vector<Value> &Values() const {
-		D_ASSERT(values);
-		return values.value();
+		if (!values) {
+			throw InternalException("Partitioned copy batch has no partition values");
+		}
+		return *values;
 	}
 
 	idx_t AddCollectionSlot(PartitionedCopyCollectionSchema schema, idx_t row_count) {
@@ -1619,7 +1622,7 @@ CreateColumnStatistics(const case_insensitive_map_t<case_insensitive_map_t<Value
 // Copy File Lifecycle
 //===--------------------------------------------------------------------===//
 static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_t finalize, FunctionData &bind_data,
-                                       CopyOutputLifecycle &output_lifecycle, unique_ptr<GlobalFileState> state) {
+                                       unique_ptr<GlobalFileState> state) {
 	if (!finalize) {
 		throw InternalException("COPY file lifecycle finalize requires a finalize callback");
 	}
@@ -1627,7 +1630,6 @@ static void FinalizeLifecycleFileState(ClientContext &context, copy_to_finalize_
 		throw InternalException("COPY file lifecycle finalize reached an empty file state");
 	}
 	finalize(context, bind_data, *state->data);
-	output_lifecycle.MarkFileFinalized(state->lifecycle_file_index);
 }
 void CopyFileLifecycleExecutor::WaitForJob(CopyFileLifecycleJob &job, CopyFileLifecycleWaitMode mode) {
 	while (!job.IsFinished()) {
@@ -1897,29 +1899,11 @@ void PartitionWriteManager::ClaimDirectory(ReservationLock &reservation_lock, co
 	if (claimed != partition_directories.end() && claimed->second == directory) {
 		return;
 	}
-	auto throw_overlap = [&](const string &other_directory, const vector<Value> &other_values) {
-		if (other_directory == directory) {
-			throw InvalidInputException("PARTITION_PATH puts partitions (%s) and (%s) in the same directory \"%s\"",
-			                            PartitionValuesToString(op, other_values), PartitionValuesToString(op, values),
-			                            directory);
-		}
-		throw InvalidInputException(
-		    "PARTITION_PATH puts partitions (%s) and (%s) in overlapping directories \"%s\" and \"%s\"",
-		    PartitionValuesToString(op, other_values), PartitionValuesToString(op, values), other_directory, directory);
-	};
-	// the same directory, or a directory containing it
-	string ancestor;
-	for (auto &component : StringUtil::Split(directory, '/')) {
-		ancestor += ancestor.empty() ? component : "/" + component;
-		auto owner = directory_partitions.find(ancestor);
-		if (owner != directory_partitions.end()) {
-			throw_overlap(owner->first, owner->second);
-		}
-	}
-	// a directory inside it - those all start with the directory and a separator, so they are adjacent in the map
-	auto descendant = directory_partitions.lower_bound(directory + "/");
-	if (descendant != directory_partitions.end() && StringUtil::StartsWith(descendant->first, directory + "/")) {
-		throw_overlap(descendant->first, descendant->second);
+	auto owner = directory_partitions.find(directory);
+	if (owner != directory_partitions.end()) {
+		throw InvalidInputException("PARTITION_PATH puts partitions (%s) and (%s) in the same directory \"%s\"",
+		                            PartitionValuesToString(op, owner->second), PartitionValuesToString(op, values),
+		                            directory);
 	}
 	directory_partitions.emplace(directory, values);
 	partition_directories[values] = directory;
@@ -3229,13 +3213,19 @@ PartitionDirectory PartitionFileRequestBuilder::BuildDirectory(string path) cons
 	auto &context = partitioned_copy.context;
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto partition_path = EvaluatePartitionPath(context, partitioned_copy.op, *partitioned_copy.partition_path, values);
-	if (fs.IsPathAbsolute(partition_path) || FileSystem::IsRemoteFile(partition_path)) {
+	// This is a relative path fragment, not a file to resolve through the VFS. Resolving it
+	// would require the local filesystem even when the COPY target is remote.
+	auto parsed_path = Path::FromString(partition_path);
+	if (parsed_path.IsAbsolute() || FileSystem::IsRemoteFile(partition_path)) {
 		throw InvalidInputException("PARTITION_PATH must be relative to the COPY target, but got \"%s\"",
 		                            partition_path);
 	}
-	auto separator = fs.PathSeparator(partition_path);
+	auto separator = fs.PathSeparator(result.path);
+	if (!FileSystem::IsRemoteFile(result.path)) {
+		partition_path = fs.ConvertSeparators(partition_path);
+	}
 	vector<string> components;
-	for (auto &component : StringUtil::Split(fs.ConvertSeparators(partition_path), separator)) {
+	for (auto &component : StringUtil::Split(partition_path, separator)) {
 		if (component.empty() || component == ".") {
 			continue;
 		}
@@ -3581,7 +3571,7 @@ void CopyToFileGlobalState::RegisterPendingFileStatePathLocked(PendingFileState 
 }
 
 unique_ptr<GlobalFileState> CopyToFileGlobalState::InitializeFileState(PendingFileState pending_file_state) {
-	auto lifecycle_file_index = output_lifecycle.RegisterFile(pending_file_state.output_path);
+	output_lifecycle.RegisterFile(pending_file_state.output_path);
 	auto data = op.function.copy_to_initialize_global(context, *op.bind_data, pending_file_state.output_path);
 	if (pending_file_state.written_file_info && pending_file_state.written_file_info->file_stats) {
 		op.function.copy_to_get_written_statistics(context, *op.bind_data, *data,
@@ -3591,7 +3581,7 @@ unique_ptr<GlobalFileState> CopyToFileGlobalState::InitializeFileState(PendingFi
 		op.function.initialize_operator(*data, op);
 	}
 
-	return make_uniq<GlobalFileState>(std::move(data), pending_file_state.output_path, lifecycle_file_index);
+	return make_uniq<GlobalFileState>(std::move(data), pending_file_state.output_path);
 }
 
 void CopyToFileGlobalState::RegisterPrepareGlobalStateLocked(GlobalFileState &file_state) {
@@ -3746,19 +3736,16 @@ void CopyToFileGlobalState::FinalizeFileState(FileStateHandle file_state) {
 		auto finalize = op.function.copy_to_finalize;
 		auto &context_ref = context;
 		auto &bind_data = *op.bind_data;
-		auto &output_lifecycle_ref = output_lifecycle;
 		try {
-			lifecycle_executor.Schedule(
-			    finalize_job, CopyFileLifecycleWaitMode::DRAIN,
-			    [finalize, &context_ref, &bind_data, &output_lifecycle_ref, state_holder]() mutable {
-				    FinalizeLifecycleFileState(context_ref, finalize, bind_data, output_lifecycle_ref,
-				                               std::move(*state_holder));
-			    });
+			lifecycle_executor.Schedule(finalize_job, CopyFileLifecycleWaitMode::DRAIN,
+			                            [finalize, &context_ref, &bind_data, state_holder]() mutable {
+				                            FinalizeLifecycleFileState(context_ref, finalize, bind_data,
+				                                                       std::move(*state_holder));
+			                            });
 		} catch (...) {
 			if (!finalize_job->IsFinished() && state_holder && *state_holder) {
 				try {
-					FinalizeLifecycleFileState(context_ref, finalize, bind_data, output_lifecycle_ref,
-					                           std::move(*state_holder));
+					FinalizeLifecycleFileState(context_ref, finalize, bind_data, std::move(*state_holder));
 				} catch (...) {
 				}
 			}

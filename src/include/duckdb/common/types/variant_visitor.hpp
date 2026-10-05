@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/types/variant.hpp"
 #include "duckdb/common/types/variant_iterator.hpp"
 #include "duckdb/function/scalar/variant_utils.hpp"
@@ -256,6 +257,11 @@ public:
 
 			object_items.emplace_back(key.GetString(), std::move(val));
 		}
+		std::stable_sort(
+		    object_items.begin(), object_items.end(),
+		    [](const std::pair<Identifier, ReturnType> &lhs, const std::pair<Identifier, ReturnType> &rhs) {
+			    return lhs.first.GetIdentifierName() < rhs.first.GetIdentifierName();
+		    });
 		return object_items;
 	}
 

@@ -683,20 +683,25 @@ TEST_CASE("V2: MAP(VARCHAR, INTEGER) via get_child", "[capi_v2][data_chunk]") {
 	duckdb_v2_vector_handle mvec = nullptr;
 	duckdb_v2_data_chunk_get_vector(chunk, 0, &mvec, nullptr);
 
-	// MAP exposes 2 children: [0]=keys, [1]=values.
+	// MAP exposes 1 child: [0]=entries, a STRUCT(key, value).
 	idx_t nch = 0;
 	REQUIRE(duckdb_v2_vector_get_child_count(mvec, &nch, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(nch == 2);
+	REQUIRE(nch == 1);
 
 	// Parent's view.data is list_entry[] (one entry per parent row).
 	duckdb_v2_vector_view mview {};
 	duckdb_v2_vector_get_view(mvec, &mview, nullptr);
 	const duckdb_v2_list_entry *entries = static_cast<const duckdb_v2_list_entry *>(mview.data);
 
+	duckdb_v2_vector_handle kv = nullptr;
+	REQUIRE(duckdb_v2_vector_get_child(mvec, 0, &kv, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_get_child_count(kv, &nch, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(nch == 2);
+
 	duckdb_v2_vector_handle keys = nullptr;
 	duckdb_v2_vector_handle values = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(mvec, 0, &keys, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vector_get_child(mvec, 1, &values, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_get_child(kv, 0, &keys, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_get_child(kv, 1, &values, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// row count of children returns the K/V pair count = sum of valid list lengths.
 	idx_t map_size = 0;
@@ -733,9 +738,9 @@ TEST_CASE("V2: MAP(VARCHAR, INTEGER) via get_child", "[capi_v2][data_chunk]") {
 		REQUIRE(vdata[SelAt(vview.sel, e.offset + 0)] == 3);
 	}
 
-	// Out-of-range MAP child index rejected (only [0] and [1] are valid).
+	// Out-of-range MAP child index rejected (only [0] is valid).
 	duckdb_v2_vector_handle oor = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(mvec, 2, &oor, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_get_child(mvec, 1, &oor, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(oor == nullptr);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
@@ -1181,11 +1186,11 @@ TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][d
 
 	{
 		duckdb_v2_environment_handle env = nullptr;
-		duckdb_v2_database_handle db = nullptr;
+		duckdb_v2_instance_handle instance = nullptr;
 		duckdb_v2_connection_handle conn = nullptr;
 		duckdb_v2_environment_create(&env, nullptr);
-		OpenDatabase(env, duckdb_v2_str {nullptr, 0}, &db, nullptr);
-		duckdb_v2_connection_create(db, &conn, nullptr);
+		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
+		duckdb_v2_connection_create(instance, &conn, nullptr);
 
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(Query(conn, "SELECT * FROM (VALUES (1), (2), (3)) t(i)", &r, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1194,7 +1199,7 @@ TEST_CASE("V2: data_chunk outlives result + connection + database", "[capi_v2][d
 		// Tear everything down except the chunk itself.
 		duckdb_v2_result_destroy(&r);
 		duckdb_v2_connection_destroy(&conn);
-		duckdb_v2_database_destroy(&db);
+		duckdb_v2_instance_destroy(&instance);
 		duckdb_v2_environment_destroy(&env);
 	}
 

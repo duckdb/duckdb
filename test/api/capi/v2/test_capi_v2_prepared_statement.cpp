@@ -394,7 +394,7 @@ TEST_CASE("V2: a prepared statement outlives its connection", "[capi_v2][prepare
 	PsSeedTable(fx.conn);
 
 	duckdb_v2_connection_handle other = nullptr;
-	REQUIRE(duckdb_v2_connection_create(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.instance, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto prepared = PsPrepare(other, "SELECT x FROM t ORDER BY x");
 	REQUIRE(prepared != nullptr);
 

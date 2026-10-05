@@ -100,6 +100,9 @@ static void ApplyFileFlag(CV2FileOpenOptions &options, DUCKDB_V2_FILE_FLAG flag)
 	case DUCKDB_V2_FILE_FLAG_PARALLEL_ACCESS:
 		options.flags |= FileOpenFlags::FILE_FLAGS_PARALLEL_ACCESS;
 		break;
+	case DUCKDB_V2_FILE_FLAG_EXTERNAL_FILE_CACHE:
+		options.flags.SetCachingMode(CachingMode::ALWAYS_CACHE);
+		break;
 	default:
 		// Includes FILE_FLAG_INVALID, which names no behaviour.
 		throw InvalidInputException("'%d' is not a file flag.", static_cast<int>(flag));
@@ -151,8 +154,9 @@ DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_flag(duckdb_v2_file_open_options
 	return WithErrorHandler(err, [&]() { ApplyFileFlag(*Convert(options), flag); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_value(duckdb_v2_file_open_options_handle options, duckdb_v2_str name,
-                                                      duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_file_open_options_set_value(duckdb_v2_file_open_options_handle options,
+                                                      const duckdb_v2_str *name, duckdb_v2_value_handle value,
+                                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(options);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(value);
@@ -177,7 +181,7 @@ DUCKDB_V2_ERROR duckdb_v2_file_open_options_destroy(duckdb_v2_file_open_options_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_system, duckdb_v2_str file_path,
+DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_system, const duckdb_v2_str *file_path,
                                            duckdb_v2_file_open_options_handle options,
                                            duckdb_v2_file_handle *out_file_handle, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(file_system);
@@ -191,6 +195,11 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 		if (!opts.has_flags) {
 			throw duckdb::InvalidInputException(
 			    "The open options carry no flags, so they cannot say whether the file is being read or written.");
+		}
+		if (opts.flags.GetCachingMode() != duckdb::CachingMode::NO_CACHING &&
+		    (opts.flags.OpenForWriting() || opts.flags.OpenForAppending())) {
+			throw duckdb::InvalidInputException("Only a file opened for reading can be read through the external file "
+			                                    "cache.");
 		}
 
 		duckdb::OpenFileInfo info(duckdb::string(Convert(file_path)));

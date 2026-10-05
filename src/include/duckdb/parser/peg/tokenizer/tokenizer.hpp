@@ -74,9 +74,9 @@ private:
 	//! `TokenizeInput()` is the one that appends `GetTerminator()` (clean) or `END_OF_INPUT`
 	//! (dirty) based on the return value.
 	bool TokenizeInputInternal(TokenizerBehavior &behavior) const;
+	bool IsCompoundColonToken(const string &sql, idx_t pos, idx_t &token_length) const;
 
 public:
-	bool IsSpecialOperator(const string &sql, idx_t pos, idx_t &op_len) const;
 	static bool IsSingleByteOperator(char c);
 	static bool CharacterIsInitialNumber(char c);
 	static bool CharacterIsNumber(char c);
