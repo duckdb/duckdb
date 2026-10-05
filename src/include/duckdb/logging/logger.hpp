@@ -100,6 +100,7 @@ public:
 		throw InternalException("Cannot update the config of this logger!");
 	}
 	DUCKDB_API virtual const LogConfig &GetConfig() const = 0;
+	DUCKDB_API bool ShouldRedactLogs() const;
 
 protected:
 	virtual void WriteLogInternal(const char *log_type, LogLevel log_level, const char *message) = 0;

@@ -241,6 +241,10 @@ LogConfig LogManager::GetConfig() {
 	return config;
 }
 
+bool LogManager::ShouldRedactLogs() const {
+	return Settings::Get<RedactLogsSetting>(db_instance);
+}
+
 optional_ptr<const LogType> LogManager::LookupLogType(const string &type) {
 	unique_lock<mutex> lck(lock);
 	return LookupLogTypeInternal(type);

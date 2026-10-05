@@ -86,12 +86,14 @@ LogicalType HTTPLogType::GetLogType() {
 	return LogicalType::STRUCT(child_list);
 }
 
-static Value CreateHTTPHeadersValue(const HTTPHeaders &headers) {
+static Value CreateHTTPHeadersValue(const HTTPHeaders &headers, const case_insensitive_set_t &allow_list,
+                                    bool redact_logs) {
 	vector<Value> keys;
 	vector<Value> values;
 	for (const auto &header : headers) {
 		keys.emplace_back(header.first);
-		values.emplace_back(header.second);
+		const bool allow_value = !redact_logs || allow_list.find(header.first) != allow_list.end();
+		values.emplace_back(allow_value ? header.second : HTTPLogType::REDACTED_VALUE);
 	}
 	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, keys, values);
 }
@@ -104,11 +106,11 @@ static string HTTPStatusToLogString(HTTPStatusCode status) {
 	}
 }
 
-string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response) {
+string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response, bool redact_logs) {
 	child_list_t<Value> request_child_list = {
 	    {"type", Value(EnumUtil::ToString(request.type))},
 	    {"url", Value(request.url)},
-	    {"headers", CreateHTTPHeadersValue(request.headers)},
+	    {"headers", CreateHTTPHeadersValue(request.headers, RequestHeaderAllowList(), redact_logs)},
 	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_system_start) : Value()},
 	    {"duration_ms",
 	     request.have_request_timing
@@ -121,7 +123,7 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 		child_list_t<Value> response_child_list = {
 		    {"status", Value(HTTPStatusToLogString(response->status))},
 		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
-		    {"headers", CreateHTTPHeadersValue(response->headers)},
+		    {"headers", CreateHTTPHeadersValue(response->headers, ResponseHeaderAllowList(), redact_logs)},
 		};
 		response_value = Value::STRUCT(response_child_list);
 	}
