@@ -1,0 +1,43 @@
+# name: test/sql/settings/max_memory_percentage.test
+# description: Test percentage values for max_memory
+# group: [settings]
+
+# a percentage is accepted and resolves to a concrete size
+statement ok
+SET max_memory='100%'
+
+statement ok
+CREATE TABLE all_memory AS SELECT current_setting('max_memory') AS v
+
+# a smaller percentage resolves to a smaller size
+statement ok
+SET max_memory='50%'
+
+query I
+SELECT (SELECT v FROM all_memory) <> current_setting('max_memory')
+----
+true
+
+# absolute values still work
+statement ok
+SET max_memory='1GiB'
+
+query I
+SELECT current_setting('max_memory')
+----
+1.0 GiB
+
+statement error
+SET max_memory='150%'
+----
+<REGEX>:.*Unable to parse valid percentage.*
+
+statement error
+SET max_memory='-3%'
+----
+<REGEX>:.*Unable to parse valid percentage.*
+
+statement error
+SET max_memory='abc%'
+----
+<REGEX>:.*Unable to parse valid percentage.*

@@ -1,0 +1,23 @@
+# name: test/sql/storage/compression/alp/alp_corrupt_vector_size.test
+# group: [alp]
+
+require vector_size 2048
+
+unzip data/storage/corrupt/alp_corrupt_vector_size.db.gz {TEST_DIR}/alp_corrupt_vector_size.db
+
+statement ok
+ATTACH '{TEST_DIR}/alp_corrupt_vector_size.db' AS db2
+
+statement ok
+USE db2;
+
+query I
+SELECT compression FROM pragma_storage_info('two_alp') WHERE compression='ALP';
+----
+ALP
+ALP
+
+statement error
+SELECT * FROM two_alp LIMIT 1;
+----
+Data Corruption Error: Corrupted ALP segment: vector offsets do not describe a data range

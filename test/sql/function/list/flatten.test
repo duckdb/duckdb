@@ -156,3 +156,29 @@ select v.*, flatten(v.list_of_lists) from v_list_of_lists v;
 a	[1, 2, 3]	[[1, 2, 3]]	[1, 2, 3]
 a	[2, 6]	[[1, 2, 3], [2, 6]]	[1, 2, 3, 2, 6]
 b	[4, 5]	[[4, 5]]	[4, 5]
+
+# Output validity follows the outer list, not its inner lists.
+statement ok
+ATTACH '{TEST_DIR}/flatten_validity.duckdb' AS flatten_db (ROW_GROUP_SIZE 2048)
+
+statement ok
+CREATE TABLE flatten_db.inputs AS
+SELECT CASE
+           WHEN i < 2048 THEN NULL::INTEGER[][]
+           WHEN i < 4096 THEN [NULL::INTEGER[]]
+           ELSE [[i::INTEGER]]
+       END AS nested
+FROM range(6144) tbl(i)
+
+query I
+SELECT count(*) FROM flatten_db.inputs WHERE flatten(nested) IS NOT NULL;
+----
+4096
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(array_length(flatten(nested)))
+FROM flatten_db.inputs
+WHERE flatten(nested) IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*

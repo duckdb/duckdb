@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
+class MultiFileList;
 
 // The OpenerFileSystem is wrapper for a file system that pushes an appropriate FileOpener into the various API calls
 class OpenerFileSystem : public FileSystem {
@@ -31,8 +31,15 @@ public:
 		}
 	}
 
+	//! Reserved for DuckDB's extension trust domain: the loadable binary and every file that decides whether it may
+	//! be loaded (install provenance, trusted repositories). These can only be written through INSTALL / CREATE
+	//! EXTENSION REPOSITORY, which pass FILE_FLAGS_ENABLE_EXTENSION_INSTALL.
+	//! To add a file to the trust domain, give it a ".duckdb_extension." segment, e.g.
+	//! "<name>.duckdb_extension.info" or "<name>.duckdb_extension.repo.json". Matching is on the file name only, so a
+	//! directory that happens to contain the marker does not reserve the files inside it
 	bool IsDuckDBExtensionName(const string &path) {
-		return StringUtil::EndsWith(path, ".duckdb_extension");
+		auto name = FileSystem::ExtractName(path);
+		return StringUtil::EndsWith(name, ".duckdb_extension") || StringUtil::Contains(name, ".duckdb_extension.");
 	}
 
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
@@ -138,6 +145,9 @@ public:
 	void MoveFile(const string &source, const string &target) {
 		MoveFile(source, target, nullptr);
 	}
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file) {
+		return GetStatsIfExists(file, nullptr);
+	}
 	bool FileExists(const string &filename) {
 		return FileExists(filename, nullptr);
 	}
@@ -166,6 +176,12 @@ public:
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(filename);
 		return GetFileSystem().FileExists(filename, GetOpener());
+	}
+
+	optional<FileMetadata> GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(file.path);
+		return GetFileSystem().GetStatsIfExists(file, GetOpener());
 	}
 
 	bool IsPipe(const string &filename, optional_ptr<FileOpener> opener) override {
@@ -269,11 +285,7 @@ protected:
 	}
 
 	unique_ptr<MultiFileList> GlobFilesExtended(const string &path, const FileGlobInput &input,
-	                                            optional_ptr<FileOpener> opener) override {
-		VerifyNoOpener(opener);
-		VerifyCanAccessFile(path);
-		return GetFileSystem().Glob(path, input, GetOpener());
-	}
+	                                            optional_ptr<FileOpener> opener) override;
 
 	bool SupportsGlobExtended() const override {
 		return true;

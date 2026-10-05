@@ -1,7 +1,7 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_geojson.hpp"
 #include "json_scan.hpp"
@@ -665,8 +665,9 @@ static void StructureFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type}, LogicalType::JSON(), StructureFunction, nullptr, nullptr,
-	                               JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::JSON(), StructureFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {

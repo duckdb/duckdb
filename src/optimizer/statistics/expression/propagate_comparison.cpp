@@ -24,6 +24,15 @@ static Value GetStringStatsMax(const BaseStatistics &stats) {
 	return Value();
 }
 
+static bool RangesDoNotOverlap(const Value &lmin, const Value &lmax, const Value &rmin, const Value &rmax) {
+	return (!lmin.IsNull() && !rmax.IsNull() && lmin > rmax) || (!rmin.IsNull() && !lmax.IsNull() && rmin > lmax);
+}
+
+static bool RangesAreEqualConstants(const Value &lmin, const Value &lmax, const Value &rmin, const Value &rmax) {
+	return !lmin.IsNull() && !lmax.IsNull() && !rmin.IsNull() && !rmax.IsNull() && lmin == lmax && rmin == rmax &&
+	       lmin == rmin;
+}
+
 static FilterPropagateResult PropagateValueComparison(const Value &lmin, const Value &lmax, const Value &rmin,
                                                       const Value &rmax, ExpressionType comparison, bool has_null) {
 	const auto always_true =
@@ -32,8 +41,16 @@ static FilterPropagateResult PropagateValueComparison(const Value &lmin, const V
 	    has_null ? FilterPropagateResult::FILTER_FALSE_OR_NULL : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	switch (comparison) {
 	case ExpressionType::COMPARE_EQUAL:
-		if ((!lmin.IsNull() && !rmax.IsNull() && lmin > rmax) || (!rmin.IsNull() && !lmax.IsNull() && rmin > lmax)) {
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
 			return always_false;
+		}
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	case ExpressionType::COMPARE_NOTEQUAL:
+		if (RangesAreEqualConstants(lmin, lmax, rmin, rmax)) {
+			return always_false;
+		}
+		if (RangesDoNotOverlap(lmin, lmax, rmin, rmax)) {
+			return always_true;
 		}
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	case ExpressionType::COMPARE_GREATERTHAN:
@@ -115,6 +132,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -150,14 +168,14 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFuncti
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(left));
 		children.push_back(std::move(right));
-		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(context, std::move(children), Value::BOOLEAN(true));
 		return nullptr;
 	}
 	case FilterPropagateResult::FILTER_FALSE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(left));
 		children.push_back(std::move(right));
-		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(context, std::move(children), Value::BOOLEAN(false));
 		return nullptr;
 	}
 	default:

@@ -121,6 +121,8 @@ public:
 	//! Registers a new type
 	DUCKDB_API void RegisterType(string type_name, LogicalType type,
 	                             bind_logical_type_function_t bind_function = nullptr);
+	//! Registers a new type together with the constructors that bind its type modifiers
+	DUCKDB_API void RegisterType(string type_name, LogicalType type, TypeConstructorSet constructors);
 
 	//! Registers a new secret type
 	DUCKDB_API void RegisterSecretType(SecretType secret_type);
@@ -138,6 +140,8 @@ public:
 	DUCKDB_API void RegisterMetric(MetricInfo info);
 
 private:
+	void RegisterType(CreateTypeInfo &info);
+
 	void FinalizeLoad();
 
 private:

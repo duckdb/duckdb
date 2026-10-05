@@ -128,7 +128,7 @@ public:
 	static constexpr uint8_t ROW_ID_SIZE = sizeof(row_t);
 
 public:
-	explicit Iterator(ART &art) : art(art), status(GateStatus::GATE_NOT_SET) {};
+	explicit Iterator(const ART &art) : art(art), status(GateStatus::GATE_NOT_SET) {};
 	//! Holds the current key leading down to the top node on the stack.
 	IteratorKey current_key;
 
@@ -151,7 +151,7 @@ public:
 
 private:
 	//! The ART.
-	ART &art;
+	const ART &art;
 	//! Stack of nodes from the root to the currently active node.
 	stack<IteratorEntry> nodes;
 	//! Last visited leaf node.

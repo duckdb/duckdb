@@ -120,7 +120,7 @@ protected:
 	//! Helper
 	template <typename... ARGS>
 	TempBufferPoolReservation EvictBlocksOrThrow(QueryContext context, MemoryTag tag, idx_t memory_delta,
-	                                             unique_ptr<FileBuffer> *buffer, ARGS...);
+	                                             unique_ptr<FileBuffer> *buffer, const ARGS &...);
 
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed instead of evicted,
@@ -174,7 +174,7 @@ protected:
 		vector<shared_ptr<BlockHandle>> handles;
 	};
 	//! Computes the contiguous runs of blocks that still need to be loaded, without performing any I/O
-	vector<PrefetchRun> RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles);
+	static vector<PrefetchRun> RegisterPrefetch(vector<shared_ptr<BlockHandle>> &handles);
 	//! Synchronously executes every run in the plan through BatchRead
 	void ExecutePrefetch(QueryContext context, vector<PrefetchRun> &plan);
 	void BatchRead(QueryContext context, PrefetchRun &run);

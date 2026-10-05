@@ -6,6 +6,6 @@
 #
 
 set(DUCKDB_MAIN_EXTENSION_CONFIG_TYPE "IN_TREE")
-include("${CMAKE_CURRENT_LIST_DIR}/main_core.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/main_cloud.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/core.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/cloud.cmake")
 unset(DUCKDB_MAIN_EXTENSION_CONFIG_TYPE)

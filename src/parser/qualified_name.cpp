@@ -1,6 +1,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/planner/binding_alias.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
@@ -18,10 +19,7 @@ QualifiedName QualifiedName::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
-	if (path.empty()) {
-		return string();
-	}
+string QualifiedName::QualificationToString(QualifiedNameToStringMode mode) const {
 	string result;
 	// render every qualification component (the path can hold a nested schema chain)
 	for (idx_t i = 0; i + 1 < path.size(); i++) {
@@ -36,8 +34,14 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 		}
 		result += SQLIdentifier(component) + ".";
 	}
-	result += SQLIdentifier(Name());
 	return result;
+}
+
+string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
+	if (path.empty()) {
+		return string();
+	}
+	return QualificationToString(mode) + SQLIdentifier(Name());
 }
 
 //! This parses a superset of the strings that the actual SQL parser accepts: it allows whitespace, most special
@@ -47,58 +51,32 @@ string QualifiedName::ToString(QualifiedNameToStringMode mode) const {
 vector<Identifier> QualifiedName::ParseComponents(const string &input) {
 	vector<Identifier> result;
 	idx_t idx = 0;
-	string entry;
-
-normal:
-	//! quote
-	for (; idx < input.size(); idx++) {
+	while (idx < input.size()) {
+		string entry;
 		if (input[idx] == '"') {
-			if (!entry.empty()) {
-				//! a quote may only open a component, e.g. abc"xyz" is not a valid identifier
-				throw ParserException("Unexpected quote in the middle of a qualified name component! (input: %s)",
-				                      input);
-			}
-			idx++;
-			goto quoted;
-		} else if (input[idx] == '.') {
-			goto separator;
-		}
-		entry += input[idx];
-	}
-	goto end;
-separator:
-	result.push_back(Identifier(entry));
-	entry = "";
-	idx++;
-	goto normal;
-quoted:
-	//! look for another quote
-	for (; idx < input.size(); idx++) {
-		if (input[idx] == '"') {
-			if (idx + 1 < input.size() && input[idx + 1] == '"') {
-				//! escaped quote ("" inside a quoted identifier is a literal ")
-				entry += '"';
-				idx++;
-				continue;
+			if (!StringUtil::TryParseQuotedString(input, idx, entry)) {
+				throw ParserException("Unterminated quote in qualified name! (input: %s)", input);
 			}
 			if (entry.empty()) {
-				//! the SQL parser also rejects "" as a zero-length delimited identifier
 				throw ParserException("Zero-length delimited identifier in qualified name! (input: %s)", input);
 			}
-			//! unquote; a closing quote must end the component, e.g. "abc"xyz is not a valid identifier
-			idx++;
 			if (idx < input.size() && input[idx] != '.') {
 				throw ParserException("Unexpected character after a quoted identifier in a qualified name! (input: %s)",
 				                      input);
 			}
-			goto normal;
+		} else {
+			for (; idx < input.size() && input[idx] != '.'; idx++) {
+				if (input[idx] == '"') {
+					throw ParserException("Unexpected quote in the middle of a qualified name component! (input: %s)",
+					                      input);
+				}
+				entry += input[idx];
+			}
 		}
-		entry += input[idx];
-	}
-	throw ParserException("Unterminated quote in qualified name! (input: %s)", input);
-end:
-	if (!entry.empty()) {
-		result.push_back(Identifier(entry));
+		result.emplace_back(std::move(entry));
+		if (idx < input.size()) {
+			idx++;
+		}
 	}
 	return result;
 }
@@ -130,18 +108,7 @@ bool QualifiedName::operator!=(const QualifiedName &rhs) const {
 }
 
 QualifiedName QualifiedName::Parse(const string &input) {
-	auto entries = ParseComponents(input);
-	if (entries.size() > 3) {
-		throw ParserException("Expected catalog.entry, schema.entry or entry: too many entries found (input: %s)",
-		                      input);
-	}
-	if (entries.empty()) {
-		return QualifiedName();
-	}
-	// the last component is the name, anything before it is the schema path (at most [catalog, schema])
-	Identifier name = std::move(entries.back());
-	entries.pop_back();
-	return QualifiedName(std::move(entries), std::move(name));
+	return FromPath(ParseComponents(input));
 }
 
 QualifiedColumnName::QualifiedColumnName() {
@@ -193,6 +160,21 @@ string QualifiedColumnName::ToString() const {
 		result += SQLIdentifier(table) + ".";
 	}
 	result += SQLIdentifier(column);
+	return result;
+}
+
+string QualifiedColumnName::ToDisplayString() const {
+	string result;
+	if (!catalog.empty()) {
+		result += SQLQuotedIdentifier::ToString(catalog) + ".";
+	}
+	if (!schema.empty()) {
+		result += SQLQuotedIdentifier::ToString(schema) + ".";
+	}
+	if (!table.empty()) {
+		result += SQLQuotedIdentifier::ToString(table) + ".";
+	}
+	result += SQLQuotedIdentifier::ToString(column);
 	return result;
 }
 

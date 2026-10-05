@@ -124,13 +124,13 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractMicrosecond(Calendar *calendar, const uint64_t micros) {
-		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + micros;
+		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + NumericCast<int64_t>(micros);
 	}
 
 	static double ExtractEpoch(Calendar *calendar, const uint64_t micros) {
 		// the milliseconds carry the fraction of a second, so the division has to keep it
 		auto result = double(calendar->GetTime()) / double(Interval::MSECS_PER_SEC);
-		result += micros / double(Interval::MICROS_PER_SEC);
+		result += static_cast<double>(micros) / double(Interval::MICROS_PER_SEC);
 		return result;
 	}
 
@@ -162,7 +162,7 @@ struct ICUDatePart : public ICUDateFunc {
 		frac *= Interval::MICROS_PER_MINUTE;
 		frac += ExtractMicrosecond(calendar, micros);
 
-		double result = frac;
+		double result = static_cast<double>(frac);
 		result /= Interval::MICROS_PER_DAY;
 		result += days;
 
@@ -347,12 +347,12 @@ struct ICUDatePart : public ICUDateFunc {
 		using bigints_t = vector<part_bigint_t>;
 		using doubles_t = vector<part_double_t>;
 
-		BindStructData(ClientContext &context, part_codes_t &&part_codes_p)
-		    : BindData(context), part_codes(part_codes_p) {
+		BindStructData(ClientContext &context, part_codes_t part_codes_p)
+		    : BindData(context), part_codes(std::move(part_codes_p)) {
 			InitFactories();
 		}
-		BindStructData(const string &tz_setting_p, const string &cal_setting_p, part_codes_t &&part_codes_p)
-		    : BindData(tz_setting_p, cal_setting_p), part_codes(part_codes_p) {
+		BindStructData(const string &tz_setting_p, const string &cal_setting_p, part_codes_t part_codes_p)
+		    : BindData(tz_setting_p, cal_setting_p), part_codes(std::move(part_codes_p)) {
 			InitFactories();
 		}
 		BindStructData(const BindStructData &other)
@@ -564,8 +564,9 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetUnaryPartCodeFunction(const LogicalType &temporal_type,
 	                                               const LogicalType &result_type = LogicalType::BIGINT) {
-		return ScalarFunction({temporal_type}, result_type, UnaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>,
-		                      BindUnaryDatePart);
+		ScalarFunction fun({}, result_type, UnaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, BindUnaryDatePart);
+		fun.GetSignature().AddParameter("ts", temporal_type);
+		return fun;
 	}
 
 	template <typename RESULT_TYPE = int64_t>
@@ -580,16 +581,18 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static ScalarFunction GetBinaryPartCodeFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({LogicalType::VARCHAR, temporal_type}, LogicalType::DOUBLE,
-		                      BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>, BindBinaryDatePart);
+		ScalarFunction fun({}, LogicalType::DOUBLE, BinaryTimestampFunction<INPUT_TYPE, RESULT_TYPE>,
+		                   BindBinaryDatePart);
+		fun.GetSignature().AddParameter("part", LogicalType::VARCHAR).AddParameter("ts", temporal_type);
+		return fun;
 	}
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetStructFunction(const LogicalType &temporal_type) {
 		auto part_type = LogicalType::LIST(LogicalType::VARCHAR);
 		auto result_type = LogicalType::STRUCT({});
-		ScalarFunction result({{"part_list", part_type}, {"ts", temporal_type}}, result_type,
-		                      StructFunction<INPUT_TYPE>, BindStruct);
+		ScalarFunction result({}, result_type, StructFunction<INPUT_TYPE>, BindStruct);
+		result.GetSignature().AddParameter("part_list", part_type).AddParameter("ts", temporal_type);
 		result.SetSerializeCallback(SerializeStructFunction);
 		result.SetDeserializeCallback(DeserializeStructFunction);
 		return result;
@@ -614,8 +617,9 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetLastDayFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>,
-		                      BindLastDate);
+		ScalarFunction fun({}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>, BindLastDate);
+		fun.GetSignature().AddParameter("ts", temporal_type);
+		return fun;
 	}
 	static void AddLastDayFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
@@ -633,8 +637,9 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetMonthNameFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
-		                      BindMonthName);
+		ScalarFunction fun({}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>, BindMonthName);
+		fun.GetSignature().AddParameter("ts", temporal_type);
+		return fun;
 	}
 	static void AddMonthNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
@@ -652,8 +657,9 @@ struct ICUDatePart : public ICUDateFunc {
 
 	template <typename INPUT_TYPE>
 	static ScalarFunction GetDayNameFunction(const LogicalType &temporal_type) {
-		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
-		                      BindDayName);
+		ScalarFunction fun({}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>, BindDayName);
+		fun.GetSignature().AddParameter("ts", temporal_type);
+		return fun;
 	}
 	static void AddDayNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};

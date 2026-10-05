@@ -2,8 +2,8 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/types/bignum.hpp"
-#include <cmath>
 #include "duckdb/common/bignum.hpp"
+#include "duckdb/common/bit_utils.hpp"
 
 namespace duckdb {
 
@@ -23,10 +23,11 @@ static bignum_t IntToBignum(StringHeap &heap, T int_value) {
 		abs_value = static_cast<uint64_t>(int_value);
 	}
 	uint32_t data_byte_size;
-	if (abs_value != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size = (abs_value == 0) ? 1 : static_cast<uint32_t>(std::ceil(std::log2(abs_value + 1) / 8.0));
+	if (abs_value == 0) {
+		data_byte_size = 1;
 	} else {
-		data_byte_size = static_cast<uint32_t>(std::ceil(std::log2(abs_value) / 8.0));
+		const uint32_t bits_needed = 64 - static_cast<uint32_t>(CountZeros<uint64_t>::Leading(abs_value));
+		data_byte_size = (bits_needed + 7) / 8;
 	}
 
 	uint32_t blob_size = data_byte_size + Bignum::BIGNUM_HEADER_SIZE;
@@ -51,11 +52,11 @@ static bignum_t IntToBignum(StringHeap &heap, T int_value) {
 template <>
 bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, StringHeap &heap) {
 	uint32_t data_byte_size;
-	if (int_value.upper != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size =
-		    (int_value.upper == 0) ? 0 : static_cast<uint32_t>(std::ceil(std::log2(int_value.upper + 1) / 8.0));
+	if (int_value.upper == 0) {
+		data_byte_size = 0;
 	} else {
-		data_byte_size = static_cast<uint32_t>(std::ceil(std::log2(int_value.upper) / 8.0));
+		const uint32_t bits_needed = 64 - static_cast<uint32_t>(CountZeros<uint64_t>::Leading(int_value.upper));
+		data_byte_size = (bits_needed + 7) / 8;
 	}
 
 	uint32_t upper_byte_size = data_byte_size;
@@ -63,10 +64,9 @@ bignum_t HugeintCastToBignum::Operation(uhugeint_t int_value, StringHeap &heap) 
 		// If we have at least one byte on the upper side, the bottom side is complete
 		data_byte_size += 8;
 	} else {
-		if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
-			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
-		} else {
-			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		if (int_value.lower != 0) {
+			const uint32_t bits_needed = 64 - static_cast<uint32_t>(CountZeros<uint64_t>::Leading(int_value.lower));
+			data_byte_size += (bits_needed + 7) / 8;
 		}
 	}
 	if (data_byte_size == 0) {
@@ -115,11 +115,11 @@ bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, StringHeap &heap) {
 	uint64_t abs_value_upper = static_cast<uint64_t>(int_value.upper);
 
 	uint32_t data_byte_size;
-	if (abs_value_upper != NumericLimits<uint64_t>::Maximum()) {
-		data_byte_size =
-		    (abs_value_upper == 0) ? 0 : static_cast<uint32_t>(std::ceil(std::log2(abs_value_upper + 1) / 8.0));
+	if (abs_value_upper == 0) {
+		data_byte_size = 0;
 	} else {
-		data_byte_size = static_cast<uint32_t>(std::ceil(std::log2(abs_value_upper) / 8.0));
+		const uint32_t bits_needed = 64 - static_cast<uint32_t>(CountZeros<uint64_t>::Leading(abs_value_upper));
+		data_byte_size = (bits_needed + 7) / 8;
 	}
 
 	uint32_t upper_byte_size = data_byte_size;
@@ -127,10 +127,9 @@ bignum_t HugeintCastToBignum::Operation(hugeint_t int_value, StringHeap &heap) {
 		// If we have at least one byte on the upper side, the bottom side is complete
 		data_byte_size += 8;
 	} else {
-		if (int_value.lower != NumericLimits<uint64_t>::Maximum()) {
-			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower + 1) / 8.0));
-		} else {
-			data_byte_size += static_cast<uint32_t>(std::ceil(std::log2(int_value.lower) / 8.0));
+		if (int_value.lower != 0) {
+			const uint32_t bits_needed = 64 - static_cast<uint32_t>(CountZeros<uint64_t>::Leading(int_value.lower));
+			data_byte_size += (bits_needed + 7) / 8;
 		}
 	}
 

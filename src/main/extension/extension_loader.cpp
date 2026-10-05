@@ -297,13 +297,15 @@ void ExtensionLoader::RegisterCoordinateSystem(CreateCoordinateSystemInfo &info)
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunction function) {
 	auto &scalar_function = GetFunction(function.name);
-	scalar_function.functions.AddFunction(std::move(function));
+	scalar_function.functions.AddFunction(scalar_function.FinalizeFunction(std::move(function)));
 }
 
 void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLINT
 	D_ASSERT(!functions.name.empty());
 	auto &scalar_function = GetFunction(functions.name);
-	functions.ApplyToFunctions([&](ScalarFunction &function) { function.name = functions.name; });
+	for (auto &function : functions.functions) {
+		function = scalar_function.FinalizeFunction(*function);
+	}
 	for (auto &function : functions.functions) {
 		scalar_function.functions.AddFunction(std::move(function));
 	}
@@ -311,7 +313,7 @@ void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLI
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT
 	auto &table_function = GetTableFunction(functions.name);
-	functions.ApplyToFunctions([&](TableFunction &function) { function.name = functions.name; });
+	functions.ApplyToFunctions([&](TableFunction &function) { table_function.FinalizeFunction(function); });
 	for (auto &function : functions.functions) {
 		table_function.functions.AddFunction(std::move(function));
 	}
@@ -352,6 +354,16 @@ TableFunctionCatalogEntry &ExtensionLoader::GetTableFunction(const Identifier &n
 void ExtensionLoader::RegisterType(string type_name, LogicalType type, bind_logical_type_function_t bind_modifiers) {
 	D_ASSERT(!type_name.empty());
 	CreateTypeInfo info(std::move(type_name), std::move(type), bind_modifiers);
+	RegisterType(info);
+}
+
+void ExtensionLoader::RegisterType(string type_name, LogicalType type, TypeConstructorSet constructors) {
+	D_ASSERT(!type_name.empty());
+	CreateTypeInfo info(std::move(type_name), std::move(type), std::move(constructors));
+	RegisterType(info);
+}
+
+void ExtensionLoader::RegisterType(CreateTypeInfo &info) {
 	info.temporary = true;
 	info.internal = true;
 	info.extension_name = GetRegisteredExtensionName();

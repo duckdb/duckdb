@@ -25,10 +25,11 @@ namespace duckdb {
 namespace alp {
 
 struct AlpEncodingIndices {
-	uint8_t exponent;
-	uint8_t factor;
+	AlpConstants::EXPONENT_TYPE exponent;
+	AlpConstants::FACTOR_TYPE factor;
 
-	AlpEncodingIndices(uint8_t exponent, uint8_t factor) : exponent(exponent), factor(factor) {
+	AlpEncodingIndices(AlpConstants::EXPONENT_TYPE exponent, AlpConstants::FACTOR_TYPE factor)
+	    : exponent(exponent), factor(factor) {
 	}
 
 	AlpEncodingIndices() : exponent(0), factor(0) {
@@ -43,8 +44,8 @@ struct AlpEncodingIndicesEquality {
 
 struct AlpEncodingIndicesHash {
 	hash_t operator()(const AlpEncodingIndices &encoding_indices) const {
-		hash_t h1 = Hash<uint8_t>(encoding_indices.exponent);
-		hash_t h2 = Hash<uint8_t>(encoding_indices.factor);
+		hash_t h1 = Hash<AlpConstants::EXPONENT_TYPE>(encoding_indices.exponent);
+		hash_t h2 = Hash<AlpConstants::FACTOR_TYPE>(encoding_indices.factor);
 		return CombineHash(h1, h2);
 	}
 };
@@ -78,13 +79,13 @@ public:
 
 public:
 	AlpEncodingIndices vector_encoding_indices;
-	uint16_t exceptions_count;
+	AlpConstants::EXCEPTIONS_COUNT_TYPE exceptions_count;
 	uint16_t bit_width;
 	uint64_t bp_size;
-	uint64_t frame_of_reference;
+	AlpConstants::FRAME_OF_REFERENCE_TYPE frame_of_reference;
 	int64_t encoded_integers[AlpConstants::ALP_VECTOR_SIZE];
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
-	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
+	AlpConstants::EXCEPTION_POSITION_TYPE exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
 	vector<AlpCombination> best_k_combinations;
 	uint32_t values_encoded[AlpConstants::ALP_VECTOR_SIZE * 2];
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
@@ -389,9 +390,12 @@ struct AlpCompression {
 
 template <class T>
 struct AlpDecompression {
-	static void Decompress(uint8_t *for_encoded, T *output, idx_t count, uint8_t vector_factor, uint8_t vector_exponent,
-	                       uint16_t exceptions_count, T *exceptions, const uint16_t *exceptions_positions,
-	                       uint64_t frame_of_reference, uint8_t bit_width) {
+	static void Decompress(const_data_ptr_t for_encoded, T *output, idx_t count,
+	                       AlpConstants::FACTOR_TYPE vector_factor, AlpConstants::EXPONENT_TYPE vector_exponent,
+	                       AlpConstants::EXCEPTIONS_COUNT_TYPE exceptions_count, T *exceptions,
+	                       const AlpConstants::EXCEPTION_POSITION_TYPE *exceptions_positions,
+	                       AlpConstants::FRAME_OF_REFERENCE_TYPE frame_of_reference,
+	                       AlpConstants::BIT_WIDTH_TYPE bit_width) {
 		AlpEncodingIndices encoding_indices = {vector_exponent, vector_factor};
 
 		// Bit Unpacking

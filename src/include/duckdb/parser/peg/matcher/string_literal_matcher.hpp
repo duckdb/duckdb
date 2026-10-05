@@ -6,16 +6,16 @@
 
 namespace duckdb {
 
-class StringLiteralMatcher : public Matcher {
+class StringLiteralMatcher : public AtomicMatcher {
 public:
 	static constexpr MatcherType TYPE = MatcherType::STRING_LITERAL;
 
 public:
-	explicit StringLiteralMatcher() : Matcher(TYPE) {
+	explicit StringLiteralMatcher() : AtomicMatcher(TYPE) {
 		name = "StringLiteral";
 	}
 
-	MatcherResult MatchParseResultInternal(MatchState &state) const override {
+	MatcherResult MatchAtomic(MatchState &state) const override {
 		auto token = state.token_iterator.Current();
 		if (!token) {
 			return MatcherResult::Failure();

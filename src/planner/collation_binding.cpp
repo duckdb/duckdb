@@ -109,19 +109,13 @@ void CollationBinding::RegisterCollation(CollationCallback callback) {
 //! Binds the scalar function with the given name (looked up from the system catalog) around "source".
 static unique_ptr<Expression> ApplyCollationFunction(ClientContext &context, const string &function_name,
                                                      unique_ptr<Expression> source) {
-	auto &catalog = Catalog::GetSystemCatalog(context);
-	auto &function_entry = catalog.GetEntry<ScalarFunctionCatalogEntry>(
-	    context, QualifiedName(catalog.GetName(), Identifier::DefaultSchema(), Identifier(function_name)));
 	auto source_alias = source->GetAlias();
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));
 
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto function = function_binder.BindScalarFunction(function_entry, std::move(children), error);
-	if (!function) {
-		error.Throw();
-	}
+	auto function =
+	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(function_name), std::move(children));
 	function->SetAlias(source_alias);
 	return function;
 }
@@ -149,7 +143,7 @@ static bool PushNestedCollation(ClientContext &context, unique_ptr<Expression> &
 	}
 
 	auto bound_lambda =
-	    make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(lambda_body), 1);
+	    make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(lambda_body), idx_t(1));
 	bound_lambda->SetParameterNames({lambda_parameter});
 	vector<unique_ptr<Expression>> children;
 	children.push_back(std::move(source));

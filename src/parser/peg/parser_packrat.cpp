@@ -12,38 +12,26 @@ ParserPackratCache::ParserPackratCache() = default;
 
 ParserPackratCache::~ParserPackratCache() = default;
 
-MatcherResult ParserPackratCache::Match(const Matcher &matcher, MatchState &state) {
+optional_ptr<const ParserPackratEntry> ParserPackratCache::Lookup(const Matcher &matcher, idx_t token_index) const {
 	D_ASSERT(matcher.IsPackratMemoized());
-	if (!matcher.IsPackratMemoized()) {
-		return matcher.MatchParseResultInternal(state);
-	}
 	auto packrat_id = matcher.GetPackratId();
-	if (!packrat_id.IsValid()) {
-		return matcher.MatchParseResultInternal(state);
-	}
-
+	D_ASSERT(packrat_id.IsValid());
 	auto matcher_id = packrat_id.GetIndex();
-	ParserPackratKey key {matcher_id, state.token_iterator.Position()};
+	ParserPackratKey key {matcher_id, token_index};
 	auto entry = entries.find(key);
-	if (entry != entries.end()) {
-		auto &cached = entry->second;
-		state.token_iterator.SetPosition(cached.token_index_after);
-		state.max_token_index = MaxValue(state.max_token_index, cached.max_token_index_seen);
-		if (cached.success) {
-			return MatcherResult::Success(cached.result);
-		}
-		return MatcherResult::Failure();
+	if (entry == entries.end()) {
+		return nullptr;
 	}
+	return optional_ptr<const ParserPackratEntry>(&entry->second);
+}
 
-	auto max_token_index_before = state.GetMaxTokenIndex();
-	auto result = matcher.MatchParseResultInternal(state);
-	ParserPackratEntry cached;
-	cached.success = result.IsSuccess();
-	cached.token_index_after = state.token_iterator.Position();
-	cached.max_token_index_seen = MaxValue(max_token_index_before, state.GetMaxTokenIndex());
-	cached.result = result.GetParseResult();
-	entries.insert(make_pair(key, cached));
-	return result;
+void ParserPackratCache::Store(const Matcher &matcher, idx_t token_index, ParserPackratEntry entry) {
+	D_ASSERT(matcher.IsPackratMemoized());
+	auto packrat_id = matcher.GetPackratId();
+	D_ASSERT(packrat_id.IsValid());
+	auto matcher_id = packrat_id.GetIndex();
+	ParserPackratKey key {matcher_id, token_index};
+	entries.insert(make_pair(key, entry));
 }
 
 } // namespace duckdb

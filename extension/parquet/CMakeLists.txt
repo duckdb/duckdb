@@ -23,6 +23,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_file_metadata_cache.cpp
     parquet_float16.cpp
     parquet_multi_file_info.cpp
+    read_single_parquet_file.cpp
     parquet_metadata.cpp
     parquet_prefetch_cost_model.cpp
     parquet_reader.cpp
@@ -85,10 +86,7 @@ if(NOT CLANG_TIDY)
       ../../third_party/brotli/dec/bit_reader.cpp)
 endif()
 
-build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
-set(PARAMETERS "-warnings")
-
-build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
+build_extension_library(parquet ${PARQUET_EXTENSION_FILES})
 target_link_libraries(parquet_loadable_extension duckdb_mbedtls duckdb_zstd)
 
 install(

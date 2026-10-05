@@ -43,6 +43,12 @@ PIVOT Cities USING SUM(Population) GROUP BY Country;
 NL	3228
 US	26872
 
+query IIII rowsort
+PIVOT Cities ON Year USING SUM(Population) GROUP BY (Country);
+----
+NL	1005	1065	1158
+US	8579	8783	9510
+
 query I rowsort
 PIVOT Cities GROUP BY Country;
 ----

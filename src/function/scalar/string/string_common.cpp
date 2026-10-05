@@ -34,7 +34,7 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	// Handle empty prefix
 	auto prefix = StringValue::Get(constant);
 	if (prefix.empty()) {
-		return column_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+		return column_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
 		                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 
@@ -50,7 +50,8 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	const auto max = StringStats::Max(*column_stats);
 
 	// prefix > max, always false
-	if (StringStats::CompareStringStats(string_t(prefix.c_str(), prefix.size()), string_t(max.c_str(), max.size()),
+	if (StringStats::CompareStringStats(string_t(prefix.c_str(), NumericCast<uint32_t>(prefix.size())),
+	                                    string_t(max.c_str(), NumericCast<uint32_t>(max.size())),
 	                                    StringStats::GetMaxType(*column_stats)) > 0) {
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
@@ -58,9 +59,9 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	// next(prefix) <= min, always false
 	auto upper_bound = prefix;
 	if (StringUtil::FindNextPrefix(upper_bound)) {
-		const auto min_compare =
-		    StringStats::CompareStringStats(string_t(upper_bound.c_str(), upper_bound.size()),
-		                                    string_t(min.c_str(), min.size()), StringStats::GetMinType(*column_stats));
+		const auto min_compare = StringStats::CompareStringStats(
+		    string_t(upper_bound.c_str(), NumericCast<uint32_t>(upper_bound.size())),
+		    string_t(min.c_str(), NumericCast<uint32_t>(min.size())), StringStats::GetMinType(*column_stats));
 		if (min_compare < 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
@@ -73,7 +74,7 @@ FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &inpu
 	    memcmp(min.c_str(), prefix.c_str(), prefix.size()) == 0 &&
 	    memcmp(max.c_str(), prefix.c_str(), prefix.size()) == 0) {
 		// NULL values produce NULL rather than true, so they prevent an always-true result
-		return column_stats->CanHaveNull() ? FilterPropagateResult::NO_PRUNING_POSSIBLE
+		return column_stats->CanHaveNull() ? FilterPropagateResult::FILTER_TRUE_OR_NULL
 		                                   : FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;

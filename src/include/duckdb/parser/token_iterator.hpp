@@ -22,7 +22,7 @@ class TokenIterator {
 public:
 	DUCKDB_API explicit TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens);
 	DUCKDB_API explicit TokenIterator(vector<MatcherToken> &tokens);
-	DUCKDB_API TokenIterator(TokenIterator &other);
+	DUCKDB_API TokenIterator(const TokenIterator &other);
 	DUCKDB_API TokenIterator(TokenIterator &&other) noexcept;
 	TokenIterator &operator=(const TokenIterator &) = delete;
 	TokenIterator &operator=(TokenIterator &&) = delete;
@@ -34,6 +34,12 @@ public:
 	DUCKDB_API idx_t EndOffset() const;
 
 	DUCKDB_API optional_ptr<const MatcherToken> Current() const;
+	LiteralInfo CurrentLiteralInfo(const GrammarLiteralTable &table) {
+		if (position >= tokens.size()) {
+			return LiteralInfo();
+		}
+		return tokens[position].GetLiteralInfo(table);
+	}
 	DUCKDB_API const MatcherToken &Previous() const;
 	DUCKDB_API const MatcherToken &GetToken(idx_t index) const;
 

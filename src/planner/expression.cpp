@@ -13,6 +13,13 @@ Expression::Expression(ExpressionType type, ExpressionClass expression_class, Lo
     : BaseExpression(type, expression_class), return_type(std::move(return_type)) {
 }
 
+unique_ptr<Expression> Expression::PreserveReturnType(const LogicalType &type, unique_ptr<Expression> replacement) {
+	D_ASSERT(replacement);
+	D_ASSERT(replacement->GetReturnType() == type);
+	replacement->SetReturnType(type);
+	return replacement;
+}
+
 Expression::~Expression() {
 }
 

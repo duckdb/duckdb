@@ -465,6 +465,7 @@ struct ColumnStatsUnifier {
 	idx_t column_size_bytes = 0;
 	bool can_have_nan = false;
 	bool has_nan = false;
+	idx_t nan_count = 0;
 
 	unique_ptr<GeometryStatsData> geo_stats;
 
@@ -482,7 +483,7 @@ public:
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
                                                      vector<unique_ptr<Expression>> expressions_p)
-    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(std::move(types)),
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(types),
       expressions(std::move(expressions_p)), executor(context, expressions) {
 	chunk.Initialize(buffer.GetAllocator(), this->types);
 }
@@ -797,9 +798,11 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
                                  const string &offset_name) {
 	if (offset >= file_length) {
+		// LCOV_EXCL_START
 		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
 		                  "%s (offset=%llu file_size=%llu).",
 		                  filename, col_idx, offset_name, offset, file_length);
+		// LCOV_EXCL_STOP
 	}
 }
 
@@ -813,18 +816,22 @@ static void ValidateColumnOffsets(const string &filename, idx_t file_length, con
 			ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.dictionary_page_offset,
 			                     "dictionary page offset");
 			if (NumericCast<idx_t>(col_chunk.meta_data.dictionary_page_offset) >= col_start) {
+				// LCOV_EXCL_START
 				throw IOException("Parquet file '%s': metadata is corrupt. Dictionary "
 				                  "page (offset=%llu) must come before any data pages (offset=%llu).",
 				                  filename, col_chunk.meta_data.dictionary_page_offset, col_start);
+				// LCOV_EXCL_STOP
 			}
 			col_start = col_chunk.meta_data.dictionary_page_offset;
 		}
 		auto col_len = NumericCast<idx_t>(col_chunk.meta_data.total_compressed_size);
 		auto col_end = col_start + col_len;
 		if (col_end <= 0 || col_end > file_length) {
+			// LCOV_EXCL_START
 			throw IOException("Parquet file '%s': metadata is corrupt. Column %llu has "
 			                  "invalid column offsets (offset=%llu, size=%llu, file_size=%llu).",
 			                  filename, i, col_start, col_len, file_length);
+			// LCOV_EXCL_STOP
 		}
 	}
 }
@@ -1212,7 +1219,9 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 	if (writer_stats) {
 		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
 		has_nan = writer_stats->HasNaN();
-		stats_unifier->has_nan = has_nan;
+		// this is called once per row group: accumulate, so NaNs in earlier row groups are not lost
+		stats_unifier->has_nan = stats_unifier->has_nan || has_nan;
+		stats_unifier->nan_count += writer_stats->GetNaNCount();
 	}
 	if (column.meta_data.__isset.statistics) {
 		if (has_nan && writer_stats->HasStats()) {
@@ -1274,6 +1283,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 		}
 		if (stats_unifier->can_have_nan) {
 			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
+			column_stats["nan_count"] = Value::UBIGINT(stats_unifier->nan_count);
 		}
 		if (stats_unifier->geo_stats) {
 			const auto &bbox = stats_unifier->geo_stats->extent;
@@ -1427,7 +1437,7 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	uint32_t footer_size = writer->GetTotalWritten() - metadata_start_offset;
+	auto footer_size = NumericCast<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
 	writer->Write<uint32_t>(footer_size);
 
 	if (options.encryption_config) {

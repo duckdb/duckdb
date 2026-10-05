@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -17,26 +18,11 @@
 
 namespace duckdb {
 
-static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) {
-	if (!expr) {
+static unique_ptr<Expression> CastWindowExpression(unique_ptr<Expression> bound, const LogicalType &type) {
+	if (!bound) {
 		return nullptr;
 	}
-	D_ASSERT(expr.get());
-	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-	return std::move(BoundExpression::GetExpression(*expr));
-}
-
-static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> &expr, const LogicalType &type) {
-	if (!expr) {
-		return nullptr;
-	}
-	D_ASSERT(expr.get());
-	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-
-	auto &bound = BoundExpression::GetExpression(*expr);
-	bound = BoundCastExpression::AddDefaultCastToType(std::move(bound), type);
-
-	return std::move(bound);
+	return BoundCastExpression::AddDefaultCastToType(std::move(bound), type);
 }
 
 static bool IsRangeType(const LogicalType &type) {
@@ -60,35 +46,33 @@ static bool IsRangeType(const LogicalType &type) {
 	}
 }
 
-static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
-                                       unique_ptr<ParsedExpression> &order_expr) {
+static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<Expression> &bound,
+                                       unique_ptr<Expression> &bound_order,
+                                       optional_ptr<unique_ptr<WindowRangeBoundary>> origin = nullptr) {
 	vector<unique_ptr<Expression>> children;
 
-	D_ASSERT(order_expr.get());
-	D_ASSERT(order_expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound_order = BoundExpression::GetExpression(*order_expr);
+	D_ASSERT(bound_order);
 	children.emplace_back(bound_order->Copy());
 
-	D_ASSERT(expr.get());
-	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = BoundExpression::GetExpression(*expr);
+	D_ASSERT(bound);
 	QueryErrorContext error_context(bound->GetQueryLocation());
 	if (bound->GetReturnType() == LogicalType::SQLNULL) {
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
 	children.emplace_back(std::move(bound));
+	optional_ptr<const Expression> order_input = children[0].get();
+	optional_ptr<const Expression> offset_input = children[1].get();
 
-	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name),
-	                                                   std::move(children), error, true);
-	if (!function) {
-		error.Throw();
-	}
+	auto function =
+	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name), std::move(children), true);
 	// +/- can be applied to non-scalar types,
 	// so we can't rely on function binding to catch all problems.
 	if (!IsRangeType(function->GetReturnType())) {
 		throw BinderException(error_context, "Invalid type for Window RANGE expression");
+	}
+	if (origin) {
+		*origin = WindowRangeBoundary::Capture(*function, order_input, offset_input);
 	}
 	bound = std::move(function);
 	return bound->GetReturnType();
@@ -98,15 +82,17 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	QueryErrorContext error_context(window.GetQueryLocation());
 
 	//	Check for macros pretending to be aggregates
-	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, QualifiedName(window.FunctionName()),
-	                                error_context);
-	auto entry = GetCatalogEntry(window.GetQualifiedName().Catalog(), window.GetQualifiedName().Schema(),
-	                             function_lookup, OnEntryNotFound::RETURN_NULL);
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.GetQualifiedName(), error_context);
+	auto entry = GetCatalogEntry(function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (entry && entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro_expr = window.Copy();
 		auto macro = make_uniq<FunctionExpression>(window.GetQualifiedName(), std::move(window.GetArgumentsMutable()),
 		                                           std::move(window.FilterMutable()), nullptr, window.Distinct());
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
+	}
+	auto count_star = binder.TryRewriteQualifiedCountStar(window);
+	if (count_star) {
+		return BindWindowExpression(count_star->Cast<WindowExpression>(), depth);
 	}
 
 	auto name = window.GetAlias();
@@ -147,36 +133,40 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	// we set the inside_window flag to true to prevent binding nested window functions
 	inside_window = true;
 	ErrorData error;
+	vector<unique_ptr<Expression>> bound_args;
 	for (auto &child : window.GetArgumentsMutable()) {
-		BindChild(child.GetExpressionMutable(), depth, error);
+		bound_args.push_back(BindChild(child.GetExpressionMutable(), depth, error));
 	}
+	vector<unique_ptr<Expression>> bound_partitions;
 	for (auto &child : window.PartitionsMutable()) {
-		BindChild(child, depth, error);
+		bound_partitions.push_back(BindChild(child, depth, error));
 	}
+	vector<unique_ptr<Expression>> bound_orders;
 	for (auto &order : window.OrderByMutable()) {
-		BindChild(order.expression, depth, error);
+		auto bound_order = BindChild(order.expression, depth, error);
 
 		//	If the frame is a RANGE frame and the type is a time,
 		//	then we have to convert the time to a timestamp to avoid wrapping.
 		if (!is_range || error.HasError()) {
+			bound_orders.push_back(std::move(bound_order));
 			continue;
 		}
-		auto &order_expr = order.expression;
-		auto &bound_order = BoundExpression::GetExpression(*order_expr);
 		const auto type_id = bound_order->GetReturnType().id();
 		if (type_id == LogicalTypeId::TIME || type_id == LogicalTypeId::TIME_TZ) {
 			//	Convert to time + epoch and rebind
-			unique_ptr<ParsedExpression> epoch = make_uniq<ConstantExpression>(Value::DATE(date_t::epoch()));
-			BindChild(epoch, depth, error);
-			BindRangeExpression(context, "+", order.expression, epoch);
+			unique_ptr<ParsedExpression> epoch = ConstantExpression::FromValue(Value::DATE(date_t::epoch()));
+			auto bound_epoch = BindChild(epoch, depth, error);
+			BindRangeExpression(context, "+", bound_order, bound_epoch);
 		}
+		bound_orders.push_back(std::move(bound_order));
 	}
-	BindChild(window.FilterMutable(), depth, error);
-	BindChild(window.StartExprMutable(), depth, error);
-	BindChild(window.EndExprMutable(), depth, error);
+	auto bound_filter = BindChild(window.FilterMutable(), depth, error);
+	auto bound_start = BindChild(window.StartExprMutable(), depth, error);
+	auto bound_end = BindChild(window.EndExprMutable(), depth, error);
 
+	vector<unique_ptr<Expression>> bound_arg_orders;
 	for (auto &order : window.ArgOrdersMutable()) {
-		BindChild(order.expression, depth, error);
+		bound_arg_orders.push_back(BindChild(order.expression, depth, error));
 	}
 
 	inside_window = false;
@@ -186,25 +176,21 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	}
 
 	//	Restore any collation expressions
-	for (auto &order : window.ArgOrdersMutable()) {
-		auto &order_expr = order.expression;
-		auto &bound_order = BoundExpression::GetExpression(*order_expr);
+	for (auto &bound_order : bound_arg_orders) {
 		ExpressionBinder::PushCollation(context, bound_order, bound_order->GetReturnType());
 	}
-	for (auto &part_expr : window.PartitionsMutable()) {
-		auto &bound_partition = BoundExpression::GetExpression(*part_expr);
+	for (auto &bound_partition : bound_partitions) {
 		ExpressionBinder::PushCollation(context, bound_partition, bound_partition->GetReturnType());
 	}
-	for (auto &order : window.OrderByMutable()) {
-		auto &order_expr = order.expression;
-		auto &bound_order = BoundExpression::GetExpression(*order_expr);
+	for (auto &bound_order : bound_orders) {
 		ExpressionBinder::PushCollation(context, bound_order, bound_order->GetReturnType());
 	}
 
 	vector<pair<Identifier, unique_ptr<Expression>>> arguments;
 	arguments.reserve(window.GetArguments().size());
-	for (auto &arg : window.GetArgumentsMutable()) {
-		auto &bound_arg = BoundExpression::GetExpression(*arg.GetExpressionMutable());
+	for (idx_t arg_idx = 0; arg_idx < window.GetArgumentsMutable().size(); arg_idx++) {
+		auto &arg = window.GetArgumentsMutable()[arg_idx];
+		auto bound_arg = std::move(bound_args[arg_idx]);
 
 		// legacy function calls cannot have named arguments, so we ignore the names of the arguments during binding
 		// and pass them all positionally. We do alias them by their name though, so that alias-capturing functions
@@ -255,8 +241,17 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		auto &func = entry->Cast<WindowFunctionCatalogEntry>();
 
 		FunctionBinder function_binder(binder);
-		auto window_bound_function = function_binder.BindWindowFunction(
-		    func, std::move(arguments), error, window.OrderByMutable(), window.ArgOrdersMutable());
+		// resolve the types of the ORDER BY expressions for the function's bind callback
+		vector<LogicalType> order_types;
+		for (auto &bound_order : bound_orders) {
+			order_types.push_back(bound_order->GetReturnType());
+		}
+		vector<LogicalType> arg_order_types;
+		for (auto &bound_order : bound_arg_orders) {
+			arg_order_types.push_back(bound_order->GetReturnType());
+		}
+		auto window_bound_function =
+		    function_binder.BindWindowFunction(func, std::move(arguments), error, order_types, arg_order_types);
 
 		if (!window_bound_function) {
 			error.AddQueryLocation(window);
@@ -296,11 +291,20 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 	auto result =
 	    make_uniq<BoundWindowExpression>(sql_type, std::move(aggregate), std::move(window_func), std::move(bind_info));
 	result->GetChildrenMutable() = std::move(children);
-	for (auto &child : window.PartitionsMutable()) {
-		result->PartitionsMutable().push_back(GetExpression(child));
+	for (auto &bound_partition : bound_partitions) {
+		result->PartitionsMutable().push_back(std::move(bound_partition));
 	}
 	result->IgnoreNullsMutable() = window.IgnoreNulls();
 	result->DistinctMutable() = window.Distinct();
+
+	const bool range_start = window.WindowStart() == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                         window.WindowStart() == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	const bool range_end = window.WindowEnd() == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                       window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE;
+	if ((range_start || range_end) && bound_orders.size() == 1) {
+		result->RetainSQLRange(range_start ? bound_start.get() : nullptr, range_end ? bound_end.get() : nullptr,
+		                       bound_orders[0]->GetReturnType());
+	}
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions.
 	// Note that PRECEDING and FOLLOWING refer to the sequential order in the frame,
@@ -313,15 +317,15 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		D_ASSERT(window.OrderBy().size() == 1);
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
-		start_type =
-		    BindRangeExpression(context, range_name, window.StartExprMutable(), window.OrderByMutable()[0].expression);
+		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0],
+		                                 &result->SQLRangeStartBoundaryMutable());
 
 	} else if (window.WindowStart() == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
-		start_type =
-		    BindRangeExpression(context, range_name, window.StartExprMutable(), window.OrderByMutable()[0].expression);
+		start_type = BindRangeExpression(context, range_name, bound_start, bound_orders[0],
+		                                 &result->SQLRangeStartBoundaryMutable());
 	}
 
 	LogicalType end_type = LogicalType::BIGINT;
@@ -330,24 +334,31 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
 		end_type =
-		    BindRangeExpression(context, range_name, window.EndExprMutable(), window.OrderByMutable()[0].expression);
+		    BindRangeExpression(context, range_name, bound_end, bound_orders[0], &result->SQLRangeEndBoundaryMutable());
 
 	} else if (window.WindowEnd() == WindowBoundary::EXPR_FOLLOWING_RANGE) {
 		D_ASSERT(window.OrderBy().size() == 1);
 		range_sense = config.ResolveOrder(context, window.OrderByMutable()[0].type);
 		const auto range_name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
 		end_type =
-		    BindRangeExpression(context, range_name, window.EndExprMutable(), window.OrderByMutable()[0].expression);
+		    BindRangeExpression(context, range_name, bound_end, bound_orders[0], &result->SQLRangeEndBoundaryMutable());
+	}
+
+	if (result->SQLRangeStartBoundary()) {
+		result->SQLRangeStartBoundaryMutable()->boundary = window.WindowStart();
+		result->SQLRangeStartBoundaryMutable()->direction = range_sense;
+	}
+	if (result->SQLRangeEndBoundary()) {
+		result->SQLRangeEndBoundaryMutable()->boundary = window.WindowEnd();
+		result->SQLRangeEndBoundaryMutable()->direction = range_sense;
 	}
 
 	// Cast ORDER and boundary expressions to the same type
 	if (range_sense != OrderType::INVALID) {
 		D_ASSERT(window.OrderBy().size() == 1);
 
-		auto &order_expr = window.OrderByMutable()[0].expression;
-		D_ASSERT(order_expr.get());
-		D_ASSERT(order_expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
-		auto &bound_order = BoundExpression::GetExpression(*order_expr);
+		auto &bound_order = bound_orders[0];
+		D_ASSERT(bound_order);
 		auto order_type = bound_order->GetReturnType();
 		if (window.StartExpr()) {
 			order_type = LogicalType::MaxLogicalType(context, order_type, start_type);
@@ -357,28 +368,45 @@ BindResult BaseSelectBinder::BindWindowExpression(WindowExpression &window, idx_
 		}
 
 		// Cast all three to match
+		optional_ptr<const Expression> original_order = bound_order.get();
 		bound_order = BoundCastExpression::AddCastToType(context, std::move(bound_order), order_type);
+		if (!WindowRangeCast::Capture(*bound_order, original_order, result->SQLRangeOrderCastsMutable())) {
+			result->SQLRangeStartBoundaryMutable().reset();
+			result->SQLRangeEndBoundaryMutable().reset();
+		}
 		start_type = end_type = order_type;
 	}
 
-	for (auto &order : window.OrderByMutable()) {
+	for (idx_t order_idx = 0; order_idx < window.OrderByMutable().size(); order_idx++) {
+		auto &order = window.OrderByMutable()[order_idx];
 		auto type = config.ResolveOrder(context, order.type);
 		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
-		auto expression = GetExpression(order.expression);
-		result->OrderByMutable().emplace_back(type, null_order, std::move(expression));
+		result->OrderByMutable().emplace_back(type, null_order, std::move(bound_orders[order_idx]));
 	}
 
 	// Argument orders are just like arguments, not frames
-	for (auto &order : window.ArgOrdersMutable()) {
+	for (idx_t order_idx = 0; order_idx < window.ArgOrdersMutable().size(); order_idx++) {
+		auto &order = window.ArgOrdersMutable()[order_idx];
 		auto type = config.ResolveOrder(context, order.type);
 		auto null_order = config.ResolveNullOrder(context, type, order.null_order);
-		auto expression = GetExpression(order.expression);
-		result->ArgOrdersMutable().emplace_back(type, null_order, std::move(expression));
+		result->ArgOrdersMutable().emplace_back(type, null_order, std::move(bound_arg_orders[order_idx]));
 	}
 
-	result->FilterMutable() = CastWindowExpression(window.FilterMutable(), LogicalType::BOOLEAN);
-	result->StartExprMutable() = CastWindowExpression(window.StartExprMutable(), start_type);
-	result->EndExprMutable() = CastWindowExpression(window.EndExprMutable(), end_type);
+	result->FilterMutable() = CastWindowExpression(std::move(bound_filter), LogicalType::BOOLEAN);
+	optional_ptr<const Expression> original_start = bound_start.get();
+	optional_ptr<const Expression> original_end = bound_end.get();
+	result->StartExprMutable() = CastWindowExpression(std::move(bound_start), start_type);
+	result->EndExprMutable() = CastWindowExpression(std::move(bound_end), end_type);
+	if (result->SQLRangeStartBoundary() &&
+	    !WindowRangeCast::Capture(*result->StartExpr(), original_start,
+	                              result->SQLRangeStartBoundaryMutable()->result_casts)) {
+		result->SQLRangeStartBoundaryMutable().reset();
+	}
+	if (result->SQLRangeEndBoundary() &&
+	    !WindowRangeCast::Capture(*result->EndExpr(), original_end,
+	                              result->SQLRangeEndBoundaryMutable()->result_casts)) {
+		result->SQLRangeEndBoundaryMutable().reset();
+	}
 	result->WindowStartMutable() = window.WindowStart();
 	result->WindowEndMutable() = window.WindowEnd();
 	result->WindowExcludeMutable() = window.WindowExclude();

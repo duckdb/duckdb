@@ -7,3 +7,5 @@ dependencies = []
 
 [dependency-groups]
 generate = ["capigen==0.7.0", "black==24.*", "clang_format==11.0.1", "cmake-format"]
+dev = ["clang_format==11.0.1", "cmake-format"]
+

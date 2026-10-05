@@ -6,56 +6,56 @@
 
 namespace duckdb {
 
-//! A per-type name, used to identify transform results without RTTI.
-//! The address of a static member cannot be used for this: a loadable extension links its own copy of
-//! DuckDB, so the same instantiation exists at a different address in each image. Comparing the name
-//! keeps a transform result created in one image castable in the other.
+template <class T>
+struct TransformResultTypeIdentifier {
+	static const char *GetName() {
+		static_assert(AlwaysFalse<T>::VALUE,
+		              "Transform result types must be registered with DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE");
+		return nullptr;
+	}
+};
+
+//! Registers a stable name for a transform result type. Invoke this macro from namespace duckdb.
+#define DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE(NAME, ...)                                                               \
+	template <>                                                                                                        \
+	struct TransformResultTypeIdentifier<__VA_ARGS__> {                                                                \
+		static constexpr const char *GetName() {                                                                       \
+			return NAME;                                                                                               \
+		}                                                                                                              \
+	};
+
+//! A stable per-type name, used to identify transform results across loadable extension boundaries without RTTI.
 template <class T>
 const char *TransformResultTypeName() {
-#ifdef _MSC_VER
-	return __FUNCSIG__;
-#else
-	return __PRETTY_FUNCTION__;
-#endif
+	return TransformResultTypeIdentifier<T>::GetName();
 }
 
-struct TransformResultValue {
+struct DUCKDB_API TransformResultValue {
 	virtual ~TransformResultValue() = default;
 
-	//! Identifies the concrete TypedTransformResult<T> without relying on RTTI
-	virtual const char *TypeTag() const = 0;
+	//! Returns a pointer to the value if its type matches, without relying on RTTI
+	virtual void *GetValuePointer(const char *type_name) = 0;
 };
 
 template <class T>
-struct TypedTransformResult : public TransformResultValue {
+struct DUCKDB_API TypedTransformResult : public TransformResultValue {
 	explicit TypedTransformResult(T value_p) : value(std::move(value_p)) {
 	}
+	TypedTransformResult(const TypedTransformResult &) = delete;
+	TypedTransformResult &operator=(const TypedTransformResult &) = delete;
 
-	const char *TypeTag() const override {
-		return TransformResultTypeName<T>();
+	void *GetValuePointer(const char *type_name) override {
+		auto expected = TransformResultTypeName<T>();
+		return type_name == expected || std::strcmp(type_name, expected) == 0 ? &value : nullptr;
 	}
 
 	T value;
 };
 
-//! Casts to TypedTransformResult<T> if the result holds exactly that type, and returns nullptr otherwise
+//! Returns a pointer to the contained value if the result holds exactly T, and nullptr otherwise
 template <class T>
-TypedTransformResult<T> *TryCastTransformResult(TransformResultValue *result) {
-	if (!result) {
-		return nullptr;
-	}
-	auto tag = result->TypeTag();
-	auto expected = TransformResultTypeName<T>();
-	// the pointers are equal whenever both sides come from the same image, which is the common case
-	if (tag != expected && std::strcmp(tag, expected) != 0) {
-		return nullptr;
-	}
-	return static_cast<TypedTransformResult<T> *>(result);
-}
-
-template <class T>
-TypedTransformResult<T> *TryCastTransformResult(TransformResultValue &result) {
-	return TryCastTransformResult<T>(&result);
+T *TryGetTransformResult(TransformResultValue &result) {
+	return reinterpret_cast<T *>(result.GetValuePointer(TransformResultTypeName<T>()));
 }
 
 } // namespace duckdb

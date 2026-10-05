@@ -106,7 +106,7 @@ int mbedtls_pem_read_buffer(mbedtls_pem_context *ctx, const char *header, const 
  * \note            The returned pointer remains valid only until \p ctx is
                     modified or freed.
  */
-inline const unsigned char *mbedtls_pem_get_buffer(mbedtls_pem_context *ctx, size_t *buflen)
+static inline const unsigned char *mbedtls_pem_get_buffer(mbedtls_pem_context *ctx, size_t *buflen)
 {
     *buflen = ctx->MBEDTLS_PRIVATE(buflen);
     return ctx->MBEDTLS_PRIVATE(buf);

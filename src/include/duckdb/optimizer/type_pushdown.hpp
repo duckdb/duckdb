@@ -88,9 +88,13 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 
 struct GetBinding {
 	GetAnalysis &analysis;
+	// Column index within LogicalGet
 	ProjectionIndex column_index;
 	// If column binding was part of a projection, this is non-nullptr
 	LogicalProjection *projection;
+	// If column binding was part of projection, column index within
+	// LogicalProjection wrapping a LogicalGet
+	ProjectionIndex projection_column_index;
 };
 
 /*
@@ -121,6 +125,7 @@ unique_ptr<LogicalOperator> PushdownOptimize(ClientContext &context, unique_ptr<
 			}
 			TableFunctionProjectionExpressionInput input {analysis.get, *expr, column_index};
 			if (analysis.get.function.projection_expression_pushdown(context, input)) {
+				analysis.get.has_pushed_projection = true;
 				analysis.get.returned_types[analysis.StorageIndex(column_index)] = expr->GetReturnType();
 				if (!analysis.get.types.empty()) {
 					analysis.get.ResolveOperatorTypes();

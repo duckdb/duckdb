@@ -4,6 +4,7 @@ add_subdirectory(expression_binder)
 add_subdirectory(filter)
 add_subdirectory(operator)
 add_subdirectory(subquery)
+add_subdirectory(sql_export)
 
 add_library_unity(
   duckdb_planner
@@ -13,6 +14,8 @@ add_library_unity(
   bound_parameter_map.cpp
   collation_binding.cpp
   column_binding.cpp
+  logical_plan_verification_result.cpp
+  logical_plan_verifier.cpp
   column_qualifier.cpp
   expression_iterator.cpp
   expression.cpp

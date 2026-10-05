@@ -160,7 +160,7 @@ physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*
 query II
 EXPLAIN SELECT o.k, d.label, sum(f.v)
 FROM reuse_owner o JOIN reuse_dim d ON o.dim_id = d.id JOIN reuse_fact f USING (k)
-WHERE o.k IN (SELECT CAST(sum(v) AS INTEGER) FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
+WHERE o.k IN (SELECT CAST(count(*) AS INTEGER) FROM reuse_fact GROUP BY k HAVING sum(v) > 25)
 GROUP BY o.k, d.label
 ----
 physical_plan	<REGEX>:(?s).*reuse_fact.*reuse_fact.*

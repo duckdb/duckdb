@@ -111,6 +111,8 @@ public:
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
 	//! Add to a metric counter (profiling-only).
 	DUCKDB_API void AddToMetricCounter(const string &key, idx_t amount);
+	//! Add parser time measured before the per-statement profiler was started.
+	void AddParserTime(const Profiler &parser_timer);
 
 	//! Set an arbitrary metric value (profiling-only; no-op when profiling is disabled).
 	DUCKDB_API void SetMetric(const string &key, Value new_value);
@@ -132,6 +134,8 @@ public:
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
 	//! Adds the top level query information to the global profiler.
 	DUCKDB_API void SetBlockedTime(const double &blocked_thread_time);
+	//! Record the peak bytes a streaming result buffered. Called just before the query ends
+	DUCKDB_API void SetStreamingPeakBufferSize(idx_t peak_bytes);
 
 	DUCKDB_API void Initialize(const PhysicalOperator &root);
 
@@ -176,6 +180,14 @@ private:
 	//! Print the profiler output directly via the renderer's print sink (nullptr prints nothing), handling the
 	//! disabled case. Only used on the terminal-print paths.
 	void PrintProfilerOutput(optional_ptr<TreeRenderer> renderer) const;
+
+public:
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
+	//! This can be useful when implementing continuous profiling or making customizations
+	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
+		lock_guard<std::mutex> guard(lock);
+		callback(root.get());
+	}
 
 private:
 	ClientContext &context;

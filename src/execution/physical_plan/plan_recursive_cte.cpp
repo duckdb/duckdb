@@ -11,7 +11,8 @@
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
@@ -105,7 +106,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(make_uniq<BoundReferenceExpression>(distinct_types[key_idx], distinct_idx[key_idx]));
 		auto representative = function_binder.BindAggregateFunction(
-		    FirstFunctionGetter::GetFunction(distinct_types[key_idx]), std::move(children));
+		    GetBuiltinAggregateFunction(context, FirstFun::Name, {distinct_types[key_idx]}), std::move(children));
 		key_representative_indices[key_idx] = payload_aggregates.size();
 		aggregate_types.push_back(representative->GetReturnType());
 		payload_aggregates.push_back(std::move(representative));
@@ -119,8 +120,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 			unique_ptr<Expression> current =
 			    make_uniq<BoundReferenceExpression>(payload_types[i], payload_types.size() + i);
 			const auto normalize_previous = ExpressionBinder::PushCollation(context, previous, payload_types[i]);
+#ifdef D_ASSERT_IS_ENABLED
 			const auto normalize_current = ExpressionBinder::PushCollation(context, current, payload_types[i]);
 			D_ASSERT(normalize_previous == normalize_current);
+#else
+			ExpressionBinder::PushCollation(context, current, payload_types[i]);
+#endif
 			if (normalize_previous) {
 				payload_comparisons.push_back(BoundComparisonExpression::Create(
 				    ExpressionType::COMPARE_DISTINCT_FROM, std::move(previous), std::move(current)));

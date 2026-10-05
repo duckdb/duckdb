@@ -433,6 +433,11 @@ statement error
 SELECT strptime('2000/10/10', '%Y-%m-%d')
 ----
 
+# truncated literal part
+statement error
+SELECT strptime('202301011200', '%Y%m%d%H%M-')
+----
+
 # incorrect date
 statement error
 SELECT strptime('2001-02-30', '%Y-%m-%d')
@@ -481,6 +486,12 @@ SELECT strptime('2000-10-01 23:59:59.1000000000000000000000000000', '%Y-%m-%d %H
 statement error
 SELECT strptime('', '%Y-%m-%d %H:%M:%S.%f')
 ----
+
+# all-whitespace input, issue #25082
+statement error
+SELECT strptime('            ', '%d')
+----
+<REGEX>:Invalid Input Error:.*Could not parse string.*
 
 # empty string with am/pm
 statement error

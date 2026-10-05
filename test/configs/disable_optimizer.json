@@ -5,6 +5,13 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
+      "reason": "Checks evaluation counts after optimizer filter pushdown.",
+      "paths": [
+        "test/optimizer/pushdown/lateral_projection_evaluation.test",
+        "test/optimizer/pushdown/cte_domain_join_filter.test"
+      ]
+    },
+    {
       "reason": "Requires the join order optimizer to enforce debug_force_no_cross_product.",
       "paths": [
         "test/optimizer/joins/required_cross_product_activation.test"
@@ -14,6 +21,7 @@
       "reason": "Zone map pruning requires filter pushdown from optimizer.",
       "paths": [
         "test/sql/optimizer/nested_null_segment_pruning.test",
+        "test/sql/optimizer/false_or_null_segment_pruning.test",
         "test/sql/optimizer/struct_segment_pruning.test",
         "test/sql/optimizer/list_contains_row_group_pruning.test",
         "test/sql/copy/parquet/list_contains_row_group_pruning.test",
@@ -23,7 +31,8 @@
         "test/sql/types/geo/geometry_parquet_pushdown.test",
         "test/optimizer/statistics/statistics_filter_pruning.test",
         "test/sql/copy/parquet/parquet_expression_filter_pruning.test",
-        "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test"
+        "test/sql/copy/parquet/parquet_virtual_file_row_group_number.test",
+        "test/sql/storage/prefetch/async_native_scan_read_ahead_pruning.test"
       ]
     },
     {
@@ -39,8 +48,11 @@
         "test/sql/copy/parquet/parquet_filename_filter.test",
         "test/sql/copy/parquet/parquet_hive.test",
         "test/sql/copy/parquet/union_by_name_hive_partitioning.test",
+        "test/sql/function/generic/test_barrier.test",
         "test/sql/join/asof/test_asof_limit.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
         "test/sql/optimizer/test_in_rewrite_rule.test",
+        "test/optimizer/unused_window_columns.test",
         "test/sql/storage/compression/rle/rle_constant.test",
         "test/sql/types/geo/geometry_stats.test",
         "test/sql/types/geo/geometry_shred.test",
@@ -54,7 +66,8 @@
         "test/sql/types/geo/geometry_vertex_extract.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
         "test/optimizer/joins/fkpk_composite_key_ce.test",
-        "test/sql/cast/signed_cast_repro.test"
+        "test/sql/cast/signed_cast_repro.test",
+        "test/optimizer/remove_redundant_order_keys_side_effects.test"
       ]
     },
     {
@@ -129,6 +142,28 @@
       "reason": "FIXME: binding bug.",
       "paths": [
         "test/sql/join/natural/natural_join.test"
+      ]
+    },
+    {
+      "reason": "SQL export of these recursive plans requires CTE inlining to preserve evaluation.",
+      "paths": [
+        "test/sql/sql_export/explain_sql_roundtrip.test",
+        "test/sql/sql_export/correlated_metadata.test",
+        "test/sql/sql_export/cte_result_matrices.test",
+        "test/sql/sql_export/recursive_payload_results.test"
+      ]
+    },
+    {
+      "reason": "Checks pruning of a throwing unused secure-view output and safe caller filter pushdown.",
+      "paths": [
+        "test/sql/sql_export/secure_view_sql_export.test"
+      ]
+    },
+    {
+      "reason": "An early LIMIT over an unbounded recursion only terminates through the optimizer's limit pushdown",
+      "paths": [
+        "test/sql/sql_export/recursive_state.test",
+        "test/sql/sql_export/single_child_union.test"
       ]
     }
   ]

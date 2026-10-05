@@ -135,33 +135,37 @@ static unique_ptr<FunctionData> BindEnumRangeBoundaryFunction(BindScalarFunction
 }
 
 ScalarFunction EnumFirstFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction);
+	auto fun = ScalarFunction({}, LogicalType::VARCHAR, EnumFirstFunction, BindEnumFunction);
+	fun.GetSignature().AddParameter("enum", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
 ScalarFunction EnumLastFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
+	auto fun = ScalarFunction({}, LogicalType::VARCHAR, EnumLastFunction, BindEnumFunction);
+	fun.GetSignature().AddParameter("enum", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
 ScalarFunction EnumCodeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::ANY, EnumCodeFunction, BindEnumCodeFunction);
+	auto fun = ScalarFunction({}, LogicalType::ANY, EnumCodeFunction, BindEnumCodeFunction);
+	fun.GetSignature().AddParameter("enum", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
 ScalarFunction EnumRangeFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR), EnumRangeFunction,
-	                          BindEnumFunction);
+	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::VARCHAR), EnumRangeFunction, BindEnumFunction);
+	fun.GetSignature().AddParameter("enum", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
 
 ScalarFunction EnumRangeBoundaryFun::GetFunction() {
-	auto fun = ScalarFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::LIST(LogicalType::VARCHAR),
-	                          EnumRangeBoundaryFunction, BindEnumRangeBoundaryFunction);
+	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalType::VARCHAR), EnumRangeBoundaryFunction,
+	                          BindEnumRangeBoundaryFunction);
+	fun.GetSignature().AddParameter("start", LogicalType::ANY).AddParameter("end", LogicalType::ANY);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

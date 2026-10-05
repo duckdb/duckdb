@@ -14,6 +14,7 @@
 #include "json_geojson.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -1117,7 +1118,7 @@ static bool TransformFunctionInternal(const Vector &input, const idx_t count, Ve
 	auto vals = JSONCommon::AllocateArray<yyjson_val *>(alc, count);
 	auto &result_validity = FlatVector::ValidityMutable(result);
 	auto read_flags = JSONCommon::READ_FLAG;
-	if (result.GetType().id() == LogicalTypeId::DECIMAL) {
+	if (TypeVisitor::Contains(result.GetType(), LogicalTypeId::DECIMAL)) {
 		read_flags &= ~YYJSON_READ_BIGNUM_AS_RAW;
 		read_flags |= YYJSON_READ_NUMBER_AS_RAW;
 	}
@@ -1149,8 +1150,10 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({{"json", input_type}, {"structure", LogicalType::VARCHAR}}, LogicalType::ANY,
-	                               TransformFunction<false>, JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<false>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformFunction() {
@@ -1162,8 +1165,10 @@ ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 }
 
 static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::ANY, TransformFunction<true>,
-	                               JSONTransformBind, nullptr, JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::ANY, TransformFunction<true>, JSONTransformBind, nullptr,
+	                   JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("json", input_type).AddParameter("structure", LogicalType::VARCHAR);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {

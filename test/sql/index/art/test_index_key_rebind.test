@@ -1,5 +1,5 @@
 # name: test/sql/index/art/test_index_key_rebind.test
-# description: Test index_key prepared statement invalidation on DROP INDEX
+# description: Test index_key prepared statement invalidation on index and database removal
 # group: [art]
 
 statement ok
@@ -24,3 +24,28 @@ statement error
 EXECUTE stmt
 ----
 index "idx" was not found
+
+statement ok
+ATTACH '{TEST_DIR}/index_key_detach.db' AS aux;
+
+statement ok
+CREATE TABLE aux.t(a INTEGER);
+
+statement ok
+CREATE INDEX idx ON aux.t(a);
+
+statement ok
+INSERT INTO aux.t VALUES (1), (2), (3);
+
+statement ok
+CHECKPOINT aux;
+
+statement ok
+PREPARE detached_stmt AS
+SELECT index_key({'catalog': 'aux', 'table': 't'}, 'idx', CAST(random() * 0 AS INTEGER) + 42);
+
+statement ok
+DETACH aux;
+
+statement ok
+DEALLOCATE detached_stmt;

@@ -236,8 +236,6 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "BOUND_UNNEST";
 	case ExpressionClass::BOUND_LAMBDA:
 		return "BOUND_LAMBDA";
-	case ExpressionClass::BOUND_EXPRESSION:
-		return "BOUND_EXPRESSION";
 	case ExpressionClass::BOUND_EXPANDED:
 		return "BOUND_EXPANDED";
 	default:

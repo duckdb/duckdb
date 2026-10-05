@@ -80,6 +80,22 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Abort On Wal Failure
+//===----------------------------------------------------------------------===//
+void DebugAbortOnWalFailureSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.abort_on_wal_failure = input.GetValue<bool>();
+}
+
+void DebugAbortOnWalFailureSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.abort_on_wal_failure = DBConfigOptions().abort_on_wal_failure;
+}
+
+Value DebugAbortOnWalFailureSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.abort_on_wal_failure);
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
 void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -87,6 +103,16 @@ void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parame
 		throw InvalidInputException("debug_checkpoint_abort setting cannot be NULL");
 	}
 	EnumUtil::FromString<CheckpointAbort>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
+// Force Bitpacking Mode
+//===----------------------------------------------------------------------===//
+void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_force_bitpacking_mode setting cannot be NULL");
+	}
+	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -117,6 +143,16 @@ void DebugPhysicalTableScanExecutionStrategySetting::OnSet(SettingCallbackInfo &
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Verify Progress
+//===----------------------------------------------------------------------===//
+void DebugVerifyProgressSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+	if (parameter.IsNull()) {
+		throw InvalidInputException("debug_verify_progress setting cannot be NULL");
+	}
+	EnumUtil::FromString<DebugProgressVerification>(StringValue::Get(parameter));
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Verify Statement
 //===----------------------------------------------------------------------===//
 void DebugVerifyStatementSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -144,16 +180,6 @@ void DebugWindowModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) 
 		throw InvalidInputException("debug_window_mode setting cannot be NULL");
 	}
 	EnumUtil::FromString<WindowAggregationMode>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
-// Default Io Mode
-//===----------------------------------------------------------------------===//
-void DefaultIoModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("default_io_mode setting cannot be NULL");
-	}
-	EnumUtil::FromString<FileIOMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -210,13 +236,13 @@ void ExplainOutputSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// Force Bitpacking Mode
+// Fsync Mode
 //===----------------------------------------------------------------------===//
-void ForceBitpackingModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
+void FsyncModeSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 	if (parameter.IsNull()) {
-		throw InvalidInputException("force_bitpacking_mode setting cannot be NULL");
+		throw InvalidInputException("fsync_mode setting cannot be NULL");
 	}
-	EnumUtil::FromString<BitpackingMode>(StringValue::Get(parameter));
+	EnumUtil::FromString<FileSyncMode>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//
@@ -248,16 +274,6 @@ void PinThreadsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
 }
 
 //===----------------------------------------------------------------------===//
-// Regex Match Operator Semantics
-//===----------------------------------------------------------------------===//
-void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
-	}
-	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
 // Show Behavior
 //===----------------------------------------------------------------------===//
 void ShowBehaviorSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
@@ -275,16 +291,6 @@ void StorageBlockPrefetchSetting::OnSet(SettingCallbackInfo &info, Value &parame
 		throw InvalidInputException("storage_block_prefetch setting cannot be NULL");
 	}
 	EnumUtil::FromString<StorageBlockPrefetch>(StringValue::Get(parameter));
-}
-
-//===----------------------------------------------------------------------===//
-// Table Function Identifier Conversion
-//===----------------------------------------------------------------------===//
-void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {
-	if (parameter.IsNull()) {
-		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
-	}
-	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(parameter));
 }
 
 //===----------------------------------------------------------------------===//

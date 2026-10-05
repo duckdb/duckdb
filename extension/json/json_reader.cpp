@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-JSONBufferHandle::JSONBufferHandle(JSONReader &reader, idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p,
+JSONBufferHandle::JSONBufferHandle(JSONReader &reader, idx_t buffer_index_p, idx_t readers_p, AllocatedData buffer_p,
                                    idx_t buffer_size_p, idx_t buffer_start_p)
     : reader(reader), buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)),
       buffer_size(buffer_size_p), buffer_start(buffer_start_p) {
@@ -20,8 +20,9 @@ JSONBufferHandle::JSONBufferHandle(JSONReader &reader, idx_t buffer_index_p, idx
 
 JSONFileHandle::JSONFileHandle(QueryContext context_p, unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
     : context(context_p), file_handle(std::move(file_handle_p)), allocator(allocator_p),
-      can_seek(file_handle->CanSeek()), file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0),
-      actual_reads(0), last_read_requested(false), cached_size(0) {
+      can_seek(file_handle->CanSeek()), file_size(file_handle->GetFileSize()),
+      compressed(file_handle->GetFileCompressionType() != FileCompressionType::UNCOMPRESSED), read_position(0),
+      requested_reads(0), actual_reads(0), last_read_requested(false), cached_size(0) {
 }
 
 bool JSONFileHandle::IsOpen() const {
@@ -60,6 +61,23 @@ idx_t JSONFileHandle::FileSize() const {
 
 idx_t JSONFileHandle::Remaining() const {
 	return file_size - read_position;
+}
+
+double JSONFileHandle::GetProgress() const {
+	if (file_size == 0) {
+		return 0;
+	}
+	idx_t position;
+	if (compressed) {
+		if (!IsOpen()) {
+			return last_read_requested ? 1 : 0;
+		}
+		// the progress of a compressed file is the position in the compressed stream
+		position = file_handle->GetProgress();
+	} else {
+		position = read_position;
+	}
+	return MinValue<double>(static_cast<double>(position) / static_cast<double>(file_size), 1.0);
 }
 
 bool JSONFileHandle::CanSeek() const {
@@ -179,7 +197,7 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &
 }
 
 JSONReader::JSONReader(ClientContext &context, JSONReaderOptions options_p, OpenFileInfo file_p)
-    : BaseFileReader(std::move(file_p)), context(context), options(std::move(options_p)), initialized(0),
+    : file(std::move(file_p)), context(context), options(std::move(options_p)), initialized(false),
       next_buffer_index(0), thrown(false) {
 }
 
@@ -256,7 +274,7 @@ JSONFileHandle &JSONReader::GetFileHandle() const {
 	return *file_handle;
 }
 
-void JSONReader::InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer) {
+void JSONReader::InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> buffer) {
 	lock_guard<mutex> guard(lock);
 	D_ASSERT(buffer_map.find(buffer_idx) == buffer_map.end());
 	buffer_map.insert(make_pair(buffer_idx, std::move(buffer)));
@@ -288,7 +306,7 @@ void JSONReader::SetBufferLineOrObjectCount(JSONBufferHandle &handle, idx_t coun
 	D_ASSERT(buffer_map.find(handle.buffer_index) != buffer_map.end());
 	D_ASSERT(RefersToSameObject(handle, *buffer_map.find(handle.buffer_index)->second));
 	D_ASSERT(buffer_line_or_object_counts[handle.buffer_index] == -1);
-	buffer_line_or_object_counts[handle.buffer_index] = count;
+	buffer_line_or_object_counts[handle.buffer_index] = NumericCast<int64_t>(count);
 	// if we have any errors - try to report them after finishing a buffer
 	ThrowErrorsIfPossible();
 }
@@ -377,11 +395,7 @@ double JSONReader::GetProgress() const {
 	if (!HasFileHandle()) {
 		return 0;
 	}
-	const auto file_size = file_handle->FileSize();
-	if (file_size == 0) {
-		return 0;
-	}
-	return 100.0 - 100.0 * double(file_handle->Remaining()) / double(file_size);
+	return 100.0 * file_handle->GetProgress();
 }
 
 static inline void TrimWhitespace(JSONString &line) {
@@ -851,10 +865,12 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	}
 	if (!options.ignore_errors && options.record_type == JSONRecordType::RECORDS &&
 	    GetRecordType() != JSONRecordType::RECORDS) {
+		// LCOV_EXCL_START
 		string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 		throw InvalidInputException(
 		    "JSON auto-detection error in file \"%s\": Expected records, detected non-record JSON instead",
 		    GetFileName());
+		// LCOV_EXCL_STOP
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
 	if (!file_handle->IsPipe()) {
@@ -866,10 +882,12 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 }
 
 void JSONReader::ThrowObjectSizeError(const idx_t object_size) {
+	// LCOV_EXCL_START
 	throw InvalidInputException(
 	    "\"maximum_object_size\" of %llu bytes exceeded while reading file \"%s\" (>%llu bytes)."
 	    "\n Try increasing \"maximum_object_size\".",
 	    options.maximum_object_size, GetFileName(), object_size);
+	// LCOV_EXCL_STOP
 }
 
 bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state) {

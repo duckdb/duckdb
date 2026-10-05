@@ -243,6 +243,10 @@ MetadataResult ToggleHighlightResult(ShellState &state, const vector<string> &ar
 
 MetadataResult ShowHelp(ShellState &state, const vector<string> &args) {
 	if (args.size() >= 2) {
+		if (duckdb::StringUtil::CIEquals(args[1], "agent")) {
+			state.PrintAgentHelp(PrintOutput::STDOUT, false);
+			return MetadataResult::SUCCESS;
+		}
 #ifdef HAVE_LINENOISE
 		if (duckdb::StringUtil::CIEquals(args[1], "shortcuts")) {
 			auto shortcuts = duckdb::GetShellShortcuts();
@@ -315,9 +319,10 @@ MetadataResult PrintHistory(ShellState &state, const vector<string> &args) {
 			start = row_count - limit;
 		}
 	}
+	auto rows = result->Collection().GetRows();
 	for (idx_t row = start; row < row_count; row++) {
-		auto id = result->GetValue(0, row).GetValue<int64_t>();
-		auto sql = result->GetValue(1, row).GetValue<string>();
+		auto id = rows.GetValue(0, row).GetValue<int64_t>();
+		auto sql = rows.GetValue(1, row).GetValue<string>();
 		state.HighlightSQL(sql);
 		// prefix each entry with its index - align any continuation lines (from multi-line
 		// statements) underneath the SQL by padding them with spaces to the prefix width
@@ -336,6 +341,30 @@ MetadataResult ToggleLog(ShellState &state, const vector<string> &args) {
 	const char *zFile = args[1].c_str();
 	state.CloseOutputFile(state.pLog);
 	state.pLog = state.OpenOutputFile(zFile, 0);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxBytes(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 1) {
+		state.PrintF("current max bytes: %zu\n", state.max_bytes);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_bytes = (size_t)ShellState::StringToInt(args[1]);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetMaxCellWidth(ShellState &state, const vector<string> &args) {
+	if (args.size() > 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	if (args.size() == 1) {
+		state.PrintF("current max cell width: %zu\n", state.max_cell_width);
+		return MetadataResult::SUCCESS;
+	}
+	state.max_cell_width = (size_t)ShellState::StringToInt(args[1]);
 	return MetadataResult::SUCCESS;
 }
 
@@ -582,10 +611,7 @@ MetadataResult ShowTables(ShellState &state, const vector<string> &args) {
 	return state.DisplayTables(args);
 }
 
-MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
-	if (args.size() < 1) {
-		return MetadataResult::PRINT_USAGE;
-	}
+static string JoinArguments(const vector<string> &args) {
 	string command;
 	for (idx_t i = 1; i < args.size(); i++) {
 		if (i > 1) {
@@ -593,7 +619,30 @@ MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
 		}
 		command += args[i];
 	}
-	state.ui_command = "CALL " + command;
+	return command;
+}
+
+MetadataResult SetUICommand(ShellState &state, const vector<string> &args) {
+	if (args.size() < 1) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	state.ui_command = "CALL " + JoinArguments(args);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetServeCommand(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	state.serve_command = JoinArguments(args);
+	return MetadataResult::SUCCESS;
+}
+
+MetadataResult SetConnectCommand(ShellState &state, const vector<string> &args) {
+	if (args.size() < 2) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	state.connect_command = JoinArguments(args);
 	return MetadataResult::SUCCESS;
 }
 
@@ -649,32 +698,41 @@ enum class DeprecatedHighlightColors {
 template <DeprecatedHighlightColors T>
 MetadataResult SetHighlightingColor(ShellState &state, const vector<string> &args) {
 	string literal;
+	string hint;
 	switch (T) {
 	case DeprecatedHighlightColors::COMMENT:
 		literal = "comment";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::CONSTANT:
-		literal = "constant";
-		break;
+		state.PrintF(PrintOutput::STDERR,
+		             ".constant has been split into numeric_constant and string_constant, use .highlight_colors "
+		             "numeric_constant %s and .highlight_colors string_constant %s instead\n",
+		             args[1].c_str(), args[1].c_str());
+		return MetadataResult::FAIL;
 	case DeprecatedHighlightColors::KEYWORD:
 		literal = "keyword";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::ERROR:
 		literal = "error";
+		hint = literal;
 		break;
 	case DeprecatedHighlightColors::CONT:
 		literal = "cont";
+		hint = "continuation";
 		break;
 	case DeprecatedHighlightColors::CONT_SEL:
 		literal = "cont_sel";
+		hint = "continuation_selected";
 		break;
 	default:
 		throw std::runtime_error("eek");
 	}
 	state.PrintF(PrintOutput::STDERR,
-	             "WARNING: .%s [COLOR] will be removed in a future release, use .render_color %s %s instead\n",
-	             literal.c_str(), literal.c_str(), args[1].c_str());
-	return TrySetHighlightColor(state, literal, args[1]);
+	             "WARNING: .%s [COLOR] will be removed in a future release, use .highlight_colors %s %s instead\n",
+	             literal.c_str(), hint.c_str(), args[1].c_str());
+	return TrySetHighlightColor(state, hint, args[1]);
 }
 
 #endif
@@ -876,6 +934,8 @@ static const MetadataCommand metadata_commands[] = {
     {"cd", 2, ChangeDirectory, "DIRECTORY", "Change the working directory to DIRECTORY", 0, ""},
     {"changes", 2, ToggleChanges, "on|off", "Show number of rows changed by SQL", 3, ""},
     {"columns", 1, SetColumnRendering, "", "Column-wise rendering of query results", 0, ""},
+    {"connect_command", 0, SetConnectCommand, "COMMAND", "Set the command executed by -connect", 0,
+     "Placeholders of the form {parameter|default} are replaced by the -host/-port/-token arguments"},
 #ifdef HAVE_LINENOISE
     {"comment", 2, SetHighlightingColor<DeprecatedHighlightColors::COMMENT>, "?COLOR?",
      "DEPRECATED: Sets the syntax highlighting color used for comment values", 0, nullptr},
@@ -913,7 +973,7 @@ static const MetadataCommand metadata_commands[] = {
      "--bom\tPut a UTF8 byte-order mark on intermediate file"},
     {"exit", 0, ExitProcess, "?CODE?", "Exit this program with return-code CODE", 0, ""},
     {"headers", 2, ToggleHeaders, "on|off", "Turn display of headers on or off", 0, ""},
-    {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN", 0, ""},
+    {"help", 0, ShowHelp, "?-all? ?PATTERN?", "Show help text for PATTERN (.help agent: the agent mode)", 0, ""},
     {"highlight", 2, ToggleHighlighting, "on|off", "Toggle syntax highlighting in the shell on/off", 0, ""},
     {"highlight_colors", 0, SetHighlightColors, "OPTIONS", "Configure highlighting colors", 0, ""},
     {"highlight_errors", 2, ToggleHighlightErrors, "on|off", "Turn highlighting of errors on or off", 0, ""},
@@ -942,8 +1002,14 @@ static const MetadataCommand metadata_commands[] = {
     {"manual", 2, ShowManual, "FUNCTION", "Show the manual page for a SQL function", 0,
      "Displays the signatures, descriptions and examples of all overloads of FUNCTION.\n"
      "FUNCTION may be qualified: [database.][schema.]function."},
+    {"maxbytes", 0, SetMaxBytes, "COUNT",
+     "Sets the maximum number of bytes of rows for display (0 = all). Only for markdown mode in -agent mode.", 0, ""},
+    {"maxcellwidth", 0, SetMaxCellWidth, "COUNT",
+     "Sets the maximum number of characters per cell (0 = all). Only for markdown mode in -agent mode.", 0, ""},
     {"maxrows", 0, SetMaxRows, "COUNT",
-     "Sets the maximum number of rows for display (default: 40). Only for duckbox mode.", 0, ""},
+     "Sets the maximum number of rows for display (default: 40, -1 = all). Only for duckbox mode and for markdown "
+     "mode in -agent mode.",
+     0, ""},
     {"maxwidth", 0, SetMaxWidth, "COUNT",
      "Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.", 0, ""},
     {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0,
@@ -990,6 +1056,8 @@ static const MetadataCommand metadata_commands[] = {
     {"rows", 1, SetRowRendering, "", "Row-wise rendering of query results (default)", 0, ""},
     {"safe_mode", 0, ShellState::EnableSafeMode, "", "Enable safe-mode", 0, ""},
     {"separator", 0, ShellState::SetSeparator, "COL ?ROW?", "Change the column and row separators", 0, ""},
+    {"serve_command", 0, SetServeCommand, "COMMAND", "Set the command executed by -serve", 0,
+     "Placeholders of the form {parameter|default} are replaced by the -host/-port/-token arguments"},
     {"schema", 0, DisplaySchemas, "?PATTERN?", "Show the CREATE statements matching PATTERN", 0,
      "By default the schema is pretty-printed using the SQL formatter.\nOptions:\n\t--no-indent\tPrint the schema as "
      "it is stored, without formatting\n\t--no-format\tAlias for --no-indent\n\t--indent\tForce pretty-printing (the "
@@ -1005,7 +1073,8 @@ static const MetadataCommand metadata_commands[] = {
     {"tables", 0, ShowTables, "?TABLE?", "List names of tables matching LIKE pattern TABLE", 2, ""},
     {"thousand_sep", 0, SetThousandSep, "SEP",
      "Sets the thousand separator used when rendering numbers. Only for duckbox mode.", 4, ""},
-    {"timer", 2, ShellState::ToggleTimer, "on|off", "Turn SQL timer on or off", 0, ""},
+    {"timer", 0, ShellState::ToggleTimer, "on|off [DIGITS]",
+     "Turn SQL timer on or off, DIGITS decimals for the real time (default 3)", 0, ""},
     {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0, ""},
     {"version", 1, ShowVersion, "", "Show the version", 0, ""},
     {"web", 1, OpenProfileWeb, "", "Open the last query profile (EXPLAIN ANALYZE) in a web browser", 0, ""},

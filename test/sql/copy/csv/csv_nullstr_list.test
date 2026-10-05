@@ -32,6 +32,12 @@ FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim
 ----
 CSV Reader function option "nullstr" requires a non-empty list of possible null strings (varchar) as input
 
+statement error
+COPY (SELECT NULL::INTEGER AS a) TO '{TEST_DIR}/empty_nullstr.csv'
+(FORMAT CSV, NULLSTR ([]::VARCHAR[]));
+----
+CSV Reader function option "nullstr" requires a non-empty list of possible null strings (varchar) as input
+
 # Test nullstr = ['a', NULL]
 statement error
 FROM read_csv('{DATA_DIR}/csv/null/multiple_nulls.csv', auto_detect=false, delim=',', quote='"', escape='"',  skip=0, header=true, columns={'name': 'VARCHAR', 'age': 'VARCHAR', 'height': 'VARCHAR'}, nullstr = ['a', NULL]);

@@ -200,6 +200,19 @@ public:
 	static string ConstructLogMessage(const string &pool, idx_t task_count);
 };
 
+class ProgressVerificationLogType : public LogType {
+public:
+	static constexpr const char *NAME = "ProgressVerification";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	ProgressVerificationLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const string &invariant, const string &operator_name, const string &pipeline,
+	                                  const string &detail);
+};
+
 class ExternalResourceLogType : public LogType {
 public:
 	static constexpr const char *NAME = "ExternalResource";
