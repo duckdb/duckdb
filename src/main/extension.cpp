@@ -1,3 +1,7 @@
+// The engine implements the whole V2 C API, including the unstable surface
+#ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
+#define DUCKDB_V2_API_ALLOW_UNSTABLE 1
+#endif
 #include "duckdb/main/extension.hpp"
 
 #include "duckdb/common/operator/cast_operators.hpp"

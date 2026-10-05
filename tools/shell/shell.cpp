@@ -3718,6 +3718,37 @@ void ShellState::DetectDarkLightMode() {
 #endif
 }
 
+static bool IsStdStreamAConsole(int std_fd) {
+	if (!isatty(std_fd)) {
+		return false;
+	}
+#if defined(_WIN32) || defined(WIN32)
+	DWORD std_handle_type = -1;
+	switch (std_fd) {
+	case 0:
+		std_handle_type = STD_INPUT_HANDLE;
+		break;
+	case 1:
+		std_handle_type = STD_OUTPUT_HANDLE;
+		break;
+	case 2:
+		std_handle_type = STD_ERROR_HANDLE;
+		break;
+	default:
+		return true;
+	}
+	HANDLE handle = GetStdHandle(std_handle_type);
+	if (handle == INVALID_HANDLE_VALUE) {
+		return true;
+	}
+	DWORD mode;
+	// false if it's a character device but NOT a console window, like NUL
+	return GetConsoleMode(handle, &mode);
+#else
+	return true;
+#endif
+}
+
 int RunShell(int argc, const char **argv) {
 	int rc = 0;
 	vector<string> extra_commands;
@@ -3727,9 +3758,9 @@ int RunShell(int argc, const char **argv) {
 
 	setBinaryMode(stdin, 0);
 	setvbuf(stderr, 0, _IONBF, 0); /* Make sure stderr is unbuffered */
-	data.stdin_is_interactive = isatty(0);
-	data.stdout_is_console = isatty(1);
-	data.stderr_is_console = isatty(2);
+	data.stdin_is_interactive = IsStdStreamAConsole(0);
+	data.stdout_is_console = IsStdStreamAConsole(1);
+	data.stderr_is_console = IsStdStreamAConsole(2);
 
 	data.Initialize();
 

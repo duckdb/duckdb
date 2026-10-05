@@ -1734,6 +1734,7 @@ IdentifierType:
     - CopyFileNameSuffix
     - ReservedIdentifierOrStringLiteral
     - AttachAlias
+    - TargetAlias
     - CollationName
     - IndexType
     - RelOptionName

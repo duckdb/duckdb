@@ -455,6 +455,7 @@ UnreservedKeyword <- 'ABORT' /
 'DELIMITER' /
 'DELIMITERS' /
 'DEPENDS' /
+'DESTROY' /
 'DETACH' /
 'DICTIONARY' /
 'DISABLE' /
@@ -616,6 +617,7 @@ UnreservedKeyword <- 'ABORT' /
 'REF' /
 'REFERENCING' /
 'REFRESH' /
+'REGISTER' /
 'REINDEX' /
 'RELATIVE' /
 'RELEASE' /
@@ -625,6 +627,7 @@ UnreservedKeyword <- 'ABORT' /
 'REPLICA' /
 'RESET' /
 'RESOURCE' /
+'RESOURCES' /
 'RESPECT' /
 'RESTART' /
 'RESTRICT' /
@@ -765,7 +768,7 @@ DropOrSet <- DropNullability / SetNullability
 DropNullability <- 'DROP'
 SetNullability <- 'SET'
 
-AlterType <- SetData? 'TYPE' Type? UsingExpression?
+AlterType <- SetData? 'TYPE' Type? ColumnCollation? UsingExpression?
 SetData <- 'SET' 'DATA'?
 UsingExpression <- 'USING' Expression
 
@@ -1107,7 +1110,8 @@ DeallocatePrepare <- 'PREPARE'
 
 DeleteStatement <- WithClause? 'DELETE' 'FROM' TargetOptAlias DeleteUsingClause? WhereClause? ReturningClause?
 TruncateStatement <- 'TRUNCATE' 'TABLE'? BaseTableName
-TargetOptAlias <- BaseTableName 'AS'? ColId?
+TargetOptAlias <- BaseTableName TargetAlias?
+TargetAlias <- 'AS'? ColId
 DeleteUsingClause <- 'USING' List(TableRef)
 
 DescribeStatement <- ShowTables / ShowDeprecatedSelect / DescribeSelect / ShowAllTables / ShowByName / DescribeByName

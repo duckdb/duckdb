@@ -22,6 +22,7 @@
 #include "duckdb/common/insertion_order_preserving_map.hpp"
 
 #include <cmath>
+#include <functional>
 
 namespace duckdb {
 
@@ -251,6 +252,9 @@ public:
 	DUCKDB_API string ToString() const;
 	//! Convert this value to a SQL-parseable string
 	DUCKDB_API string ToSQLString() const;
+	//! Render a nested value as SQL via child_to_sql
+	DUCKDB_API static string NestedToSQLString(const Value &value,
+	                                           const std::function<string(const Value &)> &child_to_sql);
 
 	DUCKDB_API uintptr_t GetPointer() const;
 
