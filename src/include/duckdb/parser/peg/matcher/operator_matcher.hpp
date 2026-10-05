@@ -59,9 +59,13 @@ private:
 		return true;
 	}
 
-private:
+public:
 	static bool HasSpecialPrecedence(const string &operator_name);
+	bool IsGenericPrecedence() const {
+		return mode == OperatorMatcherMode::GENERIC_PRECEDENCE;
+	}
 
+private:
 	OperatorMatcherMode mode;
 };
 

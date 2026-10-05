@@ -23,6 +23,9 @@ public:
 	string ToString() const override {
 		return matcher.GetName() + "?";
 	}
+	Matcher &GetChildMatcher() {
+		return matcher;
+	}
 	const Matcher &GetChildMatcher() const {
 		return matcher;
 	}

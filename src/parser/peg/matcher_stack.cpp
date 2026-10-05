@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/common/optional.hpp"
+#include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 
 namespace duckdb {
 
@@ -112,6 +113,21 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 	if (child->matcher.IsAtomic()) {
 		frame.child_result = ExecuteAtomicMatcher(*child);
 		return false;
+	}
+	if (child->state.BuildParseResult()) {
+		// skip sub-matchers that certainly cannot match at the current token (see MatcherFirstSet); such an attempt
+		// would fail without consuming a token, so skipping it changes neither the result nor the error position
+		if (child->matcher.Type() == MatcherType::OPTIONAL &&
+		    !child->matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set.MightMatch(child->state)) {
+			// what the optional's own process returns when its element fails
+			child->state.rule = child->matcher.GetRule();
+			frame.child_result = child->state.AllocateParseResult<OptionalParseResult>();
+			return false;
+		}
+		if (!child->matcher.first_set.MightMatch(child->state)) {
+			frame.child_result = MatcherResult::Failure();
+			return false;
+		}
 	}
 	PushFrame(*child);
 	return false;

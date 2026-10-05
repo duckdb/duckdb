@@ -22,6 +22,9 @@ public:
 	string ToString() const override {
 		return element.GetName() + "*";
 	}
+	Matcher &GetChildMatcher() {
+		return element;
+	}
 	const Matcher &GetChildMatcher() const {
 		return element;
 	}

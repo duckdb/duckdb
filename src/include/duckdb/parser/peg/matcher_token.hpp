@@ -14,11 +14,24 @@
 
 namespace duckdb {
 
+//! Token classes for FIRST-set checks; each is a superset of what the matching atomic matchers accept
+struct MatcherTokenClass {
+	static constexpr uint8_t WORD = 1;
+	static constexpr uint8_t OPERATOR = 2;
+	//! an operator without a precedence level of its own in the grammar
+	static constexpr uint8_t GENERIC_OPERATOR = 4;
+	static constexpr uint8_t STRING = 8;
+	static constexpr uint8_t NUMBER = 16;
+};
+
+uint8_t ComputeMatcherTokenClass(const string &text);
+
 struct MatcherToken {
 	// NOLINTNEXTLINE: allow implicit conversion from text
 	MatcherToken(string text_p, idx_t offset_p, TokenType type_p, bool unterminated_p = false)
 	    : type(type_p), text(std::move(text_p)), offset(offset_p), unterminated(unterminated_p) {
 		length = text.length();
+		token_class = ComputeMatcherTokenClass(text);
 	}
 
 	TokenType type;
@@ -28,6 +41,8 @@ struct MatcherToken {
 	bool unterminated = false;
 	bool preceded_by_newline = false;
 	bool preceded_by_block_comment = false;
+	//! MatcherTokenClass bits
+	uint8_t token_class = 0;
 
 	LiteralInfo GetLiteralInfo(const GrammarLiteralTable &table) {
 		if (literal_table_id != table.CacheId()) {
