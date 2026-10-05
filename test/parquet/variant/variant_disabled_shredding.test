@@ -4,6 +4,36 @@
 
 require parquet
 
+# SHREDDING requires a mapping from column names to types.
+foreach option NULL 'NULL' 'ANY' 'VARIANT' 42 true ['NULL']
+
+statement error
+COPY (SELECT 42::VARIANT AS v) TO '{TEST_DIR}/variant_invalid_shredding_option.parquet' (SHREDDING {option});
+----
+Binder Error: SHREDDING value should be a STRUCT of column names to types
+
+endloop
+
+# An untyped NULL is not a stringified type.
+foreach option NULL 42 true ['NULL']
+
+statement error
+COPY (SELECT 42::VARIANT AS v) TO '{TEST_DIR}/variant_invalid_shredding_option.parquet' (SHREDDING {v: {option}});
+----
+Binder Error: SHREDDING value should be of type VARCHAR
+
+endloop
+
+# ANY is an internal type, not a SQL type name.
+foreach option 'ANY' 'any'
+
+statement error
+COPY (SELECT 42::VARIANT AS v) TO '{TEST_DIR}/variant_invalid_shredding_option.parquet' (SHREDDING {v: {option}});
+----
+can not be converted to a DuckDB Type
+
+endloop
+
 statement ok
 CREATE MACRO mixed_data() AS TABLE (
 	FROM (VALUES
@@ -41,6 +71,9 @@ CREATE MACRO partial_data() AS TABLE (
 	FROM range(5) t(i)
 )
 
+# Typed NULLs and the NULL/VARIANT type names all leave the column unshredded.
+foreach shredding_type 'NULL' 'null' NULL::VARCHAR 'VARIANT' 'variant'
+
 foreach data mixed_data all_types_data partial_data
 
 query I nosort disabled_data
@@ -48,7 +81,7 @@ FROM {data}();
 ----
 
 statement ok
-COPY (FROM {data}()) TO '{TEST_DIR}/variant_disabled_{data}.parquet' (SHREDDING {v: 'NULL'});
+COPY (FROM {data}()) TO '{TEST_DIR}/variant_disabled_{data}.parquet' (SHREDDING {v: {shredding_type}});
 
 query I nosort disabled_data
 FROM '{TEST_DIR}/variant_disabled_{data}.parquet';
@@ -68,7 +101,7 @@ reset label disabled_data
 
 endloop
 
-# Each shape would be automatically shredded without the explicit NULL type.
+# Each shape would be automatically shredded without the explicit type.
 foreach serialize_enabled true false
 
 statement ok
@@ -77,7 +110,7 @@ SET debug_verify_serializer = {serialize_enabled};
 foreach shape 42 'hello' {'a':42} [1,2,3] NULL
 
 statement ok
-COPY (SELECT {shape}::VARIANT AS v) TO '{TEST_DIR}/variant_disabled_shape.parquet' (SHREDDING {v: 'NULL'});
+COPY (SELECT {shape}::VARIANT AS v) TO '{TEST_DIR}/variant_disabled_shape.parquet' (SHREDDING {v: {shredding_type}});
 
 query I
 SELECT count(*) FROM parquet_schema('{TEST_DIR}/variant_disabled_shape.parquet') WHERE name = 'typed_value';
@@ -105,7 +138,7 @@ COPY (
 	SELECT i::VARIANT AS disabled, i::VARIANT AS automatic, i::VARIANT AS explicit
 	FROM range(5000) t(i)
 ) TO '{TEST_DIR}/variant_disabled_columns.parquet' (
-	ROW_GROUP_SIZE 2048, SHREDDING {disabled: 'NULL', explicit: 'BIGINT'}
+	ROW_GROUP_SIZE 2048, SHREDDING {disabled: {shredding_type}, explicit: 'BIGINT'}
 );
 
 query II
@@ -132,7 +165,7 @@ FROM '{TEST_DIR}/variant_disabled_columns.parquet';
 # No rows must still produce an unshredded VARIANT schema.
 statement ok
 COPY (SELECT 42::VARIANT AS v WHERE false)
-TO '{TEST_DIR}/variant_disabled_empty.parquet' (SHREDDING {v: 'NULL'});
+TO '{TEST_DIR}/variant_disabled_empty.parquet' (SHREDDING {v: {shredding_type}});
 
 query II
 SELECT name, type FROM parquet_schema('{TEST_DIR}/variant_disabled_empty.parquet') ORDER BY column_id;
@@ -146,5 +179,7 @@ query I
 SELECT count(*) FROM '{TEST_DIR}/variant_disabled_empty.parquet';
 ----
 0
+
+endloop
 
 endloop

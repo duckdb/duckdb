@@ -323,7 +323,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	}
 
 	if (type.id() == LogicalTypeId::VARIANT) {
-		const bool is_shredded = shredding_type && shredding_type->type.id() != LogicalTypeId::SQLNULL;
+		const bool is_shredded = shredding_type && shredding_type->type.id() != LogicalTypeId::SQLNULL &&
+		                         shredding_type->type.id() != LogicalTypeId::ANY;
 
 		//! Build the child types for the Parquet VARIANT
 		child_list_t<LogicalType> child_types;
