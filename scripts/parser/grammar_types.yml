@@ -1045,7 +1045,7 @@ String:
     - StringLiteral
     - DropOrSet
     - SequenceName
-    - DottedIdentifierString
+    - DottedColLabel
     - DotColLabel
     - ColLabel
     - UnreservedKeyword

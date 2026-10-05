@@ -223,6 +223,12 @@ static auto CV2AggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_d
                                idx_t count) -> void {
 	const auto &info = aggr_input_data.function.GetExtraFunctionInfo().Cast<CV2AggregateFunctionInfo>();
 
+	// the callback expects one state per row - flatten a reference, as callers may hold on to the state buffer
+	auto states = Vector::Ref(state);
+	if (states.GetVectorType() != VectorType::FLAT_VECTOR) {
+		states.Flatten(*FlatVector::IncrementalSelectionVector(), count);
+	}
+
 	CV2AggregateUpdateInfo args = {};
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	args.in_bind_data = GetUserBindData(aggr_input_data.bind_data.get());
@@ -230,7 +236,7 @@ static auto CV2AggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_d
 	args.input_count = input_count;
 	args.function = &aggr_input_data.function;
 	args.row_count = count;
-	args.states = FlatVector::GetDataMutableUnsafe<void *>(state);
+	args.states = FlatVector::GetDataMutableUnsafe<void *>(states);
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
