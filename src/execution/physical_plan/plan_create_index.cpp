@@ -95,14 +95,17 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// Early-out, if the index already exists.
-	auto &schema = op.table.schema;
-	auto entry =
-	    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->GetIndexName());
-	if (entry && !op.alter_table_info) {
-		if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-			throw CatalogException("Index with name %s already exists!", op.info->GetIndexName());
+	// Indexes added by ALTER TABLE back constraints and are not catalog entries.
+	if (!op.alter_table_info) {
+		auto &schema = op.table.schema;
+		auto entry =
+		    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->GetIndexName());
+		if (entry) {
+			if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+				throw CatalogException("Index with name %s already exists!", op.info->GetIndexName());
+			}
+			return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
 		}
-		return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
 	}
 
 	if (!op.table.IsDuckTable()) {

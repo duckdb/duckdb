@@ -2,9 +2,6 @@
 # description: Test adding a PRIMARY KEY to a table that already has an index with that name.
 # group: [add_pk]
 
-# There is also a catalog dependency conflict,
-# which prevents altering a table with a dependency (index) on it.
-
 load {TEST_DIR}/test_add_pk_naming_conflict.db
 
 statement ok
@@ -16,17 +13,18 @@ INSERT INTO tbl VALUES (1);
 statement ok
 CREATE INDEX PRIMARY_tbl_i ON tbl(i);
 
+# The explicit index blocks ALTER TABLE regardless of its name.
 statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
 ----
-<REGEX>:Dependency Error.*depend on it.*
+<REGEX>:Dependency Error.*Cannot alter entry "tbl" because there are entries that depend on it.*
 
 restart
 
 statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
 ----
-<REGEX>:Dependency Error.*depend on it.*
+<REGEX>:Dependency Error.*Cannot alter entry "tbl" because there are entries that depend on it.*
 
 # Let's do it the other way around now.
 
@@ -39,5 +37,6 @@ INSERT INTO test VALUES (1);
 statement ok
 ALTER TABLE test ADD PRIMARY KEY (i);
 
+# Constraint index names are not identifiers, so an explicit index can reuse them.
 statement ok
 CREATE INDEX PRIMARY_test_i ON test(i);
