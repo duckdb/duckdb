@@ -37,6 +37,17 @@ unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parq
 bool ListColumnWriter::HasAnalyze() {
 	return GetChildWriter().HasAnalyze();
 }
+void ListColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+	auto &state = state_p.Cast<ListColumnWriterState>();
+	auto &list_child = ListVector::GetChildMutable(vector);
+	auto list_count = ListVector::GetListSize(vector);
+	GetChildWriter().Analyze(*state.child_state, &state_p, list_child, list_count);
+}
+
+void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
+	auto &state = state_p.Cast<ListColumnWriterState>();
+	GetChildWriter().FinalizeAnalyze(*state.child_state);
+}
 
 static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count) {
 	// returns a consecutive child list that fully flattens and repeats all required elements
@@ -70,19 +81,6 @@ static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset,
 	result.Slice(sel, total_length);
 	result.Flatten();
 	return total_length;
-}
-
-void ListColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = state_p.Cast<ListColumnWriterState>();
-	auto &list_child = ListVector::GetChildMutable(vector);
-	Vector child_list(Vector::Ref(list_child));
-	auto child_length = GetConsecutiveChildList(vector, child_list, 0, count);
-	GetChildWriter().Analyze(*state.child_state, &state_p, child_list, child_length);
-}
-
-void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
-	auto &state = state_p.Cast<ListColumnWriterState>();
-	GetChildWriter().FinalizeAnalyze(*state.child_state);
 }
 
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count,
