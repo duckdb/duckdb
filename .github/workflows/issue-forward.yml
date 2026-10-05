@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   forward:
-    # issue_comment fires for PRs too — skip those (the action guards this as well).
+    # issue_comment fires for PRs too — skip those
     if: ${{ github.event_name == 'issues' || github.event.issue.pull_request == null }}
     runs-on: ubuntu-latest
     steps:
