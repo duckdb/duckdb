@@ -271,38 +271,44 @@ hash_t LogicalType::Hash() const {
 	return duckdb::Hash<uint8_t>((uint8_t)id());
 }
 
-bool LogicalType::HasParameters() const {
-	auto info_type = type_info_.get().type;
-	switch (id()) {
+//! The type info that carries the parameters of a type id, or INVALID_TYPE_INFO if the id has no parameters
+static LogicalTypeInfoType GetParameterTypeInfo(LogicalTypeId id) {
+	switch (id) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
-		return info_type == LogicalTypeInfoType::LIST_TYPE_INFO;
+		return LogicalTypeInfoType::LIST_TYPE_INFO;
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::UNION:
 	case LogicalTypeId::VARIANT:
-		return info_type == LogicalTypeInfoType::STRUCT_TYPE_INFO;
+		return LogicalTypeInfoType::STRUCT_TYPE_INFO;
 	case LogicalTypeId::ARRAY:
-		return info_type == LogicalTypeInfoType::ARRAY_TYPE_INFO;
+		return LogicalTypeInfoType::ARRAY_TYPE_INFO;
 	case LogicalTypeId::DECIMAL:
-		return info_type == LogicalTypeInfoType::DECIMAL_TYPE_INFO;
+		return LogicalTypeInfoType::DECIMAL_TYPE_INFO;
 	case LogicalTypeId::ENUM:
-		return info_type == LogicalTypeInfoType::ENUM_TYPE_INFO;
+		return LogicalTypeInfoType::ENUM_TYPE_INFO;
 	case LogicalTypeId::VARCHAR:
-		return info_type == LogicalTypeInfoType::STRING_TYPE_INFO;
+		return LogicalTypeInfoType::STRING_TYPE_INFO;
 	case LogicalTypeId::ANY:
-		return info_type == LogicalTypeInfoType::ANY_TYPE_INFO;
+		return LogicalTypeInfoType::ANY_TYPE_INFO;
 	case LogicalTypeId::INTEGER_LITERAL:
-		return info_type == LogicalTypeInfoType::INTEGER_LITERAL_TYPE_INFO;
+		return LogicalTypeInfoType::INTEGER_LITERAL_TYPE_INFO;
 	case LogicalTypeId::TEMPLATE:
-		return info_type == LogicalTypeInfoType::TEMPLATE_TYPE_INFO;
+		return LogicalTypeInfoType::TEMPLATE_TYPE_INFO;
 	case LogicalTypeId::GEOMETRY:
-		return info_type == LogicalTypeInfoType::GEO_TYPE_INFO;
+		return LogicalTypeInfoType::GEO_TYPE_INFO;
 	case LogicalTypeId::UNBOUND:
-		return info_type == LogicalTypeInfoType::UNBOUND_TYPE_INFO;
+		return LogicalTypeInfoType::UNBOUND_TYPE_INFO;
 	default:
-		return false;
+		return LogicalTypeInfoType::INVALID_TYPE_INFO;
 	}
+}
+
+bool LogicalType::HasParameters() const {
+	auto parameter_type_info = GetParameterTypeInfo(id());
+	return parameter_type_info != LogicalTypeInfoType::INVALID_TYPE_INFO &&
+	       type_info_.get().type == parameter_type_info;
 }
 
 // **DEPRECATED**: Use EnumUtil directly instead.
@@ -1425,6 +1431,19 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	if (id == LogicalTypeId::LEGACY_AGGREGATE_STATE) {
 		// convert legacy aggregate state to blob on deserialize
 		return LogicalType::BLOB;
+	}
+	if (type_info && type_info->type != LogicalTypeInfoType::GENERIC_TYPE_INFO &&
+	    type_info->type != GetParameterTypeInfo(id)) {
+		throw SerializationException("Failed to deserialize type %s: unexpected type info %s", EnumUtil::ToString(id),
+		                             EnumUtil::ToString(type_info->type));
+	}
+	if (type_info && type_info->type == LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
+		auto &decimal_info = type_info->Cast<DecimalTypeInfo>();
+		if (decimal_info.width < 1 || decimal_info.width > Decimal::MAX_WIDTH_DECIMAL ||
+		    decimal_info.scale > decimal_info.width) {
+			throw SerializationException("Failed to deserialize type DECIMAL(%d, %d): invalid width or scale",
+			                             decimal_info.width, decimal_info.scale);
+		}
 	}
 
 	// Convert unnamed (non-empty) STRUCTs back to TUPLE
