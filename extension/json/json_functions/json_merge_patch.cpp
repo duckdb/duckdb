@@ -38,10 +38,10 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 			yyjson_mut_val *key, *orig_val;
 			yyjson_mut_obj_foreach(nodes.orig, idx, max, key, orig_val) {
 				auto patch_val =
-					yyjson_mut_obj_getn(nodes.patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+				    yyjson_mut_obj_getn(nodes.patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 				if (!patch_val) {
 					yyjson_mut_obj_add(nodes.builder, yyjson_mut_val_mut_copy(doc, key),
-									   yyjson_mut_val_mut_copy(doc, orig_val));
+					                   yyjson_mut_val_mut_copy(doc, orig_val));
 				}
 			}
 		}
