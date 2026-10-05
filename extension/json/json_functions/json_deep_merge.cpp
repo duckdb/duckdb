@@ -36,6 +36,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 		{
 			idx_t idx, max;
 			yyjson_mut_val *key, *orig_val;
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast): yyjson iteration macro
 			yyjson_mut_obj_foreach(nodes.orig_node, idx, max, key, orig_val) {
 				auto patch_val =
 				    yyjson_mut_obj_getn(nodes.patch_node, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
@@ -51,6 +52,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 		{
 			idx_t idx, max;
 			yyjson_mut_val *key, *patch_val;
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast): yyjson iteration macro
 			yyjson_mut_obj_foreach(nodes.patch_node, idx, max, key, patch_val) {
 				if (unsafe_yyjson_is_null(patch_val)) {
 					continue; // null entries handled in the first pass

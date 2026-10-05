@@ -120,7 +120,8 @@ typedef bool (*table_function_claim_batch_t)(ClientContext &context, TableFuncti
 typedef void (*table_function_finish_batch_t)(ClientContext &context, TableFunctionInput &input);
 //! Whether the scan of this function can be driven by read-ahead - batches are then claimed and have their I/O
 //! scheduled ahead of being scanned. Only meaningful together with table_function_claim_batch_t
-typedef bool (*table_function_supports_read_ahead_t)(const FunctionData &bind_data);
+//! Bind data can be absent when the schema is supplied without opening a file, e.g. by a table format.
+typedef bool (*table_function_supports_read_ahead_t)(optional_ptr<const FunctionData> bind_data);
 //! Schedules the I/O needed by the batch a local state has claimed, so it can be loaded before it is scanned
 typedef AsyncResult (*table_function_schedule_io_t)(ClientContext &context, TableFunctionInput &input);
 //! Called on the read-ahead pool once the scan of this function has been initialized, before any batch is claimed.
@@ -150,6 +151,15 @@ public:
 	shared_ptr<FunctionData> schema_bind_data;
 	//! Whether the scan reads several files
 	bool multi_file_scan = false;
+};
+
+//! What the bind of a wrapped single-file table function reports about the file it binds, beyond its names and types
+struct TableFunctionFileBindInfo {
+	//! The columns of the file, one per bound column, e.g. to attach the field ids of the columns and their nested
+	//! fields. Left empty, the columns are derived from the bound names and types
+	vector<MultiFileColumnDefinition> columns;
+	//! The key-value metadata of the file, exposed as the metadata of the reader of the file
+	InsertionOrderPreservingMap<Value> metadata;
 };
 
 //! Bind data of a multi-file function that wraps a single-file table function
@@ -289,6 +299,8 @@ public:
 	optional_idx cardinality;
 	//! The virtual columns that are read, as a map of the index they are projected in to their virtual column id
 	unordered_map<column_t, column_t> virtual_columns;
+	//! The key-value metadata the wrapped function reported for this file
+	InsertionOrderPreservingMap<Value> metadata;
 	//! The operator this file is scanned for, and the number of files that scan reads
 	optional_ptr<const PhysicalOperator> scan_op;
 	idx_t scan_file_count = 1;

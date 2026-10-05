@@ -219,10 +219,10 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
 }
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
-	Value disable_prefetch = false;
+	bool disable_prefetch = false;
 	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
 	// local files also prefetch by default, the async I/O overlaps with decoding
-	return file_handle.CanSeek() && !disable_prefetch.GetValue<bool>();
+	return file_handle.CanSeek() && !disable_prefetch;
 }
 
 //! Coalescing gap for the scan's prefetch I/O, either pinned through a setting or chosen by the cost model
@@ -1247,13 +1247,8 @@ void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
 }
 
 ParquetOptions::ParquetOptions(ClientContext &context) {
-	Value lookup_value;
-	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
-		binary_as_string = lookup_value.GetValue<bool>();
-	}
-	if (context.TryGetCurrentSetting("debug_delta_only_variant_encoding_enabled", lookup_value)) {
-		variant_legacy_encoding = lookup_value.GetValue<bool>();
-	}
+	context.TryGetCurrentSetting("binary_as_string", binary_as_string);
+	context.TryGetCurrentSetting("debug_delta_only_variant_encoding_enabled", variant_legacy_encoding);
 }
 
 MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
@@ -1343,9 +1338,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 }
 
 bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
-	Value metadata_cache = false;
+	bool metadata_cache = false;
 	context.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
-	return metadata_cache.GetValue<bool>();
+	return metadata_cache;
 }
 
 shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
@@ -1643,10 +1638,7 @@ static bool TryGetComparisonBloomFilterLeaf(ColumnReader &column_reader, const E
 		return false;
 	}
 
-	auto leaf_comparison = BoundComparisonExpression::Create(
-	    comparison_type, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
-	    make_uniq<BoundConstantExpression>(constant->GetValue()));
-	leaf_filter = make_uniq<ExpressionFilter>(std::move(leaf_comparison));
+	leaf_filter = ExpressionFilter::CreateComparisonFilter(comparison_type, constant->GetValue());
 	return true;
 }
 

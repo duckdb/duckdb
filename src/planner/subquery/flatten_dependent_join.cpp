@@ -1181,9 +1181,11 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownLimit(uniqu
 
 	if (limit.limit_val.Type() == LimitNodeType::CONSTANT_VALUE) {
 		auto limit_val = limit.limit_val.GetConstantValue();
-		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE) {
-			TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val);
+		if (limit.offset_val.Type() == LimitNodeType::CONSTANT_VALUE &&
+		    !TryAddOperator::Operation(limit_val, limit.offset_val.GetConstantValue(), limit_val)) {
+			limit_val = NumericLimits<idx_t>::Maximum();
 		}
+		limit_val = MinValue<idx_t>(limit_val, idx_t(NumericLimits<int64_t>::Maximum()));
 		auto upper_bound = make_uniq<BoundConstantExpression>(int64_t(limit_val));
 		condition = BoundComparisonExpression::Create(ExpressionType::COMPARE_LESSTHANOREQUALTO, row_num_ref->Copy(),
 		                                              std::move(upper_bound));
@@ -1243,20 +1245,8 @@ FlattenDependentJoins::UnnestingState FlattenDependentJoins::PushDownSetOperatio
 	}
 	for (idx_t i = 0; i < plan->children.size(); i++) {
 		if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
-			auto proj_index = binder.GenerateTableIndex();
-			auto bindings = plan->children[i]->GetColumnBindings();
-			plan->children[i]->ResolveOperatorTypes();
-			auto types = plan->children[i]->types;
-			vector<unique_ptr<Expression>> expressions;
-			expressions.reserve(bindings.size());
-			D_ASSERT(bindings.size() == types.size());
-
-			for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
-				expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
-			}
-			auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
-			proj->children.push_back(std::move(plan->children[i]));
-			plan->children[i] = std::move(proj);
+			plan->children[i] =
+			    LogicalProjection::CreateIdentity(binder.GenerateTableIndex(), std::move(plan->children[i]));
 		}
 	}
 

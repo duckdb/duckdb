@@ -1119,6 +1119,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	    LogicalType::BOOLEAN, Value::BOOLEAN(true));
 }
 
+// LCOV_EXCL_START
 void ParquetExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
@@ -1134,6 +1135,7 @@ std::string ParquetExtension::Version() const {
 	return "";
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 

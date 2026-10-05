@@ -341,6 +341,9 @@ float CheckApproxQuantile(const Value &quantile_val) {
 		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NULL");
 	}
 	auto quantile = quantile_val.GetValue<float>();
+	if (Value::IsNan(quantile)) {
+		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NaN");
+	}
 	if (quantile < 0 || quantile > 1) {
 		throw BinderException("APPROXIMATE QUANTILE can only take parameters in range [0, 1]");
 	}

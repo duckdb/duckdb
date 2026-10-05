@@ -273,44 +273,23 @@ static void VerifySchemaChildType(const MultiFileColumnDefinition &column, const
 
 static void VerifySchemaChildren(const MultiFileColumnDefinition &column) {
 	auto column_name = column.name.GetIdentifierName();
-	idx_t expected_count;
 	switch (column.type.id()) {
 	case LogicalTypeId::STRUCT:
-		expected_count = StructType::GetChildCount(column.type);
-		break;
 	case LogicalTypeId::LIST:
-		expected_count = 1;
-		break;
 	case LogicalTypeId::MAP:
-		expected_count = 2;
 		break;
 	default:
 		throw BinderException("'schema' column \"%s\" of type %s cannot define nested children", column_name,
 		                      column.type.ToString());
 	}
-	if (column.children.size() != expected_count) {
+	auto expected_children = LogicalType::GetNamedChildTypes(column.type);
+	if (column.children.size() != expected_children.size()) {
 		throw BinderException("'schema' column \"%s\" of type %s expects %d child definitions, not %d", column_name,
-		                      column.type.ToString(), expected_count, column.children.size());
+		                      column.type.ToString(), expected_children.size(), column.children.size());
 	}
-
-	switch (column.type.id()) {
-	case LogicalTypeId::STRUCT: {
-		auto &expected_children = StructType::GetChildTypes(column.type);
-		for (idx_t i = 0; i < expected_children.size(); i++) {
-			VerifySchemaChildType(column, column.children[i], expected_children[i].first.GetIdentifierName(),
-			                      expected_children[i].second);
-		}
-		break;
-	}
-	case LogicalTypeId::LIST:
-		VerifySchemaChildType(column, column.children[0], "element", ListType::GetChildType(column.type));
-		break;
-	case LogicalTypeId::MAP:
-		VerifySchemaChildType(column, column.children[0], "key", MapType::KeyType(column.type));
-		VerifySchemaChildType(column, column.children[1], "value", MapType::ValueType(column.type));
-		break;
-	default:
-		throw InternalException("Unexpected schema type with children");
+	for (idx_t i = 0; i < expected_children.size(); i++) {
+		VerifySchemaChildType(column, column.children[i], expected_children[i].first.GetIdentifierName(),
+		                      expected_children[i].second);
 	}
 }
 

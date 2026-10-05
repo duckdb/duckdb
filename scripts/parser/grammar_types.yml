@@ -1045,7 +1045,7 @@ String:
     - StringLiteral
     - DropOrSet
     - SequenceName
-    - DottedIdentifierString
+    - DottedColLabel
     - DotColLabel
     - ColLabel
     - UnreservedKeyword
@@ -1734,6 +1734,7 @@ IdentifierType:
     - CopyFileNameSuffix
     - ReservedIdentifierOrStringLiteral
     - AttachAlias
+    - TargetAlias
     - CollationName
     - IndexType
     - RelOptionName

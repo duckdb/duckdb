@@ -246,8 +246,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		} else if (arg > 0) {
 			options.sample_size = arg;
 		} else {
+			// LCOV_EXCL_START
 			throw BinderException("read_json \"sample_size\" parameter must be positive, or -1 to sample all input "
 			                      "files entirely, up to \"maximum_sample_files\" files.");
+			// LCOV_EXCL_STOP
 		}
 		return true;
 	}
@@ -275,8 +277,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		} else if (arg >= 0) {
 			options.map_inference_threshold = arg;
 		} else {
+			// LCOV_EXCL_START
 			throw BinderException("read_json_auto \"map_inference_threshold\" parameter must be 0 or positive, "
 			                      "or -1 to disable map inference for consistent objects.");
+			// LCOV_EXCL_STOP
 		}
 		return true;
 	}
@@ -331,8 +335,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		} else if (arg > 0) {
 			options.maximum_sample_files = arg;
 		} else {
+			// LCOV_EXCL_START
 			throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
 			                      "the limit on the number of files used to sample \"sample_size\" rows.");
+			// LCOV_EXCL_STOP
 		}
 		return true;
 	}
@@ -362,13 +368,17 @@ void JSONScan::BindSchema(ClientContext &context, JSONScanData &json_data, Multi
 	if (!options.auto_detect) {
 		// Need to specify columns if RECORDS and not auto-detecting
 		if (return_types.empty()) {
+			// LCOV_EXCL_START
 			throw BinderException("When auto_detect=false, read_json requires columns to be specified through the "
 			                      "\"columns\" parameter.");
+			// LCOV_EXCL_STOP
 		}
 		// If we are reading VALUES, we can only have one column
 		if (options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
+			// LCOV_EXCL_START
 			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
 			                      "parameter when \"records\" is set to 'false'.");
+			// LCOV_EXCL_STOP
 		}
 	}
 

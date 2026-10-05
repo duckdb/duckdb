@@ -383,8 +383,11 @@ static bool ReadSingleCSVFileClaimBatch(ClientContext &context, TableFunctionInp
 }
 
 //! The CSV scanner can be read ahead when the buffers of the file can be addressed individually
-static bool ReadSingleCSVFileSupportsReadAhead(const FunctionData &bind_data) {
-	auto &csv_data = bind_data.Cast<ReadSingleCSVFileData>();
+static bool ReadSingleCSVFileSupportsReadAhead(optional_ptr<const FunctionData> bind_data) {
+	if (!bind_data) {
+		return false;
+	}
+	auto &csv_data = bind_data->Cast<ReadSingleCSVFileData>();
 	return csv_data.buffer_manager && csv_data.buffer_manager->file_handle &&
 	       csv_data.buffer_manager->file_handle->HasKnownBufferRanges();
 }

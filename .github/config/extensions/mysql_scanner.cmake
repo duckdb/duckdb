@@ -3,5 +3,6 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             GIT_URL https://github.com/duckdb/duckdb-mysql
             GIT_TAG 5c219c915871415785d31cd10762809e7a4f651a
             SUBMODULES database-connector
+            APPLY_PATCHES
             )
 endif()
