@@ -76,7 +76,10 @@ ScalarFunction::ScalarFunction(Identifier name, std::initializer_list<FunctionPa
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionStability side_effects, FunctionNullHandling null_handling,
                                bind_lambda_function_t bind_lambda)
-    : SimpleFunction(std::move(name), FunctionSignature(params, std::move(varargs), std::move(return_type))) {
+    : SimpleFunction(std::move(name), FunctionSignature(params, std::move(return_type))) {
+	if (varargs.id() != LogicalTypeId::INVALID) {
+		signature.AddArgs("args", varargs).AddKwargs("kwargs", std::move(varargs));
+	}
 	properties.stability = side_effects;
 	properties.null_handling = null_handling;
 
@@ -102,10 +105,6 @@ bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
 
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 	return !(*this == rhs);
-}
-
-bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
-	return signature.Equal(rhs.signature);
 }
 
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -145,15 +144,19 @@ BoundScalarFunction::BoundScalarFunction(shared_ptr<const ScalarFunction> functi
 	// Try to default bind the function, to fill in any missing information in the BoundScalarFunction (e.g. from the
 	// "bind" callback)
 	for (auto &param : function.GetSignature().GetParameters()) {
-		arguments.push_back(param.GetType());
+		if (!param.IsVariadic()) {
+			arguments.push_back(param.GetType());
+		}
 	}
+	positional_arguments = arguments.size();
 	logical_arguments = arguments;
 	logical_return_type = return_type;
 }
 
 bool BoundScalarFunction::operator==(const BoundScalarFunction &rhs) const {
 	return callbacks == rhs.callbacks && properties == rhs.properties && GetName() == rhs.GetName() &&
-	       return_type == rhs.return_type && arguments == rhs.arguments;
+	       return_type == rhs.return_type && arguments == rhs.arguments &&
+	       positional_arguments == rhs.positional_arguments && named_arguments == rhs.named_arguments;
 }
 bool BoundScalarFunction::operator!=(const BoundScalarFunction &rhs) const {
 	return !(*this == rhs);

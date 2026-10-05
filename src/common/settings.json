@@ -198,20 +198,14 @@
         "description": "Whether known extensions are allowed to be automatically installed when a query depends on them.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false",
-        "conditional_defaults": {
-            "#if defined(DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT) && DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT": "true"
-        }
+        "default_value": "true"
     },
     {
         "name": "autoload_known_extensions",
         "description": "Whether known extensions are allowed to be automatically loaded when a query depends on them.",
         "type": "BOOLEAN",
         "scope": "global",
-        "default_value": "false",
-        "conditional_defaults": {
-            "#if defined(DUCKDB_EXTENSION_AUTOLOAD_DEFAULT) && DUCKDB_EXTENSION_AUTOLOAD_DEFAULT": "true"
-        }
+        "default_value": "true"
     },
     {
         "name": "block_allocator_memory",
@@ -298,6 +292,14 @@
             "set",
             "reset"
         ]
+    },
+    {
+        "name": "debug_abort_on_wal_failure",
+        "description": "Whether or not to abort if a serialization exception is thrown during WAL playback.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "internal_setting": "abort_on_wal_failure",
+        "is_debug": true
     },
     {
         "name": "debug_asof_iejoin",
@@ -901,8 +903,8 @@
         ]
     },
     {
-        "name": "external_file_cache_local_block_size",
-        "description": "Block size in bytes for the external file cache when reading local (non-remote) files.",
+        "name": "external_file_cache_local_max_block_size",
+        "description": "Maximum size in bytes of an external file cache block for local (non-remote) files. Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "16384",
@@ -914,11 +916,24 @@
         ]
     },
     {
-        "name": "external_file_cache_remote_block_size",
-        "description": "Block size in bytes for the external file cache when reading remote files (e.g. HTTP/S3).",
+        "name": "external_file_cache_remote_max_block_size",
+        "description": "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "2097152",
+        "custom_implementation": [
+            "set"
+        ],
+        "on_callbacks": [
+            "set"
+        ]
+    },
+    {
+        "name": "external_file_cache_remote_min_block_size",
+        "description": "Reads of remote files are rounded out to aligned blocks of this size, so tiny reads do not each cost a request.",
+        "type": "UBIGINT",
+        "default_scope": "global",
+        "default_value": "4096",
         "custom_implementation": [
             "set"
         ],
@@ -1188,7 +1203,7 @@
     },
     {
         "name": "max_streaming_buffer_size",
-        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Buffered bytes stay under this cap plus at most one chunk. An oversized chunk is only admitted into an empty queue.",
+        "description": "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, and each engine thread may hold, beyond the queue, the units it is still building or handing over from its current chunk.",
         "type": "VARCHAR",
         "scope": "local",
         "custom_implementation": true,
@@ -1531,10 +1546,11 @@
     },
     {
         "name": "vacuum_rebuild_indexes",
-        "description": "(Experimental) Allow vacuum to compact row groups on tables with bound ART indexes, rebuilding the indexes afterward. Tables with a row count exceeding this threshold are skipped. 0 = disabled. Can also be set per-database via the 'vacuum_rebuild_indexes' ATTACH option, which overrides this default.",
+        "description": "Deprecated compatibility setting: maximum table row count for rebuilding bound ART indexes when checkpoint vacuum cannot remap their row IDs. 0 disables the rebuild fallback but does not disable index remapping on v2.0 storage. The 'vacuum_rebuild_indexes' ATTACH option overrides this default per database.",
         "type": "UBIGINT",
         "default_scope": "global",
         "default_value": "0",
+        "is_deprecated": true,
         "on_callbacks": [
             "set"
         ]

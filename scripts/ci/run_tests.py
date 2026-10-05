@@ -1494,7 +1494,7 @@ def generate_coverage_report(source_root: Path, unittest_bin: str, profile_dir: 
             "--hierarchical",
             "--no-function-coverage",
             "--filter",
-            "region",
+            "region,brace",
             "--ignore-errors",
             "inconsistent,inconsistent",
             "--ignore-errors",

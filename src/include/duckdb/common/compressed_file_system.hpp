@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/query_context.hpp"
@@ -92,7 +93,10 @@ private:
 	void Clear(); // for Initialize re-use to support FS.Reset()
 	void ResetStreamData();
 
-	idx_t current_position = 0;
+	//! The number of compressed bytes read from the child handle
+	idx_t compressed_bytes_read = 0;
+	//! The number of compressed bytes consumed by the decompressor (for progress)
+	atomic<idx_t> compressed_bytes_consumed {0};
 	bool initialized = false;
 	unique_ptr<StreamWrapper> stream_wrapper;
 };

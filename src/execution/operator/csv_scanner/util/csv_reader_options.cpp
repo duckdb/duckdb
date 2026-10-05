@@ -3,6 +3,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
@@ -621,7 +622,13 @@ void CSVReaderOptions::Verify(MultiFileOptions &file_options) {
 	} else if (maximum_line_size.IsSetByUser() && maximum_line_size.GetValue() > max_line_size_default) {
 		// If the max line size is set by the user and bigger than we have by default, we make it part of our buffer
 		// size decision.
-		buffer_size_option.Set(CSVBuffer::ROWS_PER_BUFFER * maximum_line_size.GetValue(), false);
+		idx_t buffer_size;
+		if (!TryMultiplyOperator::Operation<idx_t, idx_t, idx_t>(CSVBuffer::ROWS_PER_BUFFER,
+		                                                         maximum_line_size.GetValue(), buffer_size)) {
+			throw BinderException("MAX_LINE_SIZE option was set to %d, which is too large",
+			                      maximum_line_size.GetValue());
+		}
+		buffer_size_option.Set(buffer_size, false);
 	}
 }
 
@@ -643,7 +650,7 @@ string CSVReaderOptions::GetUserDefinedParameters() const {
 	return result;
 }
 
-void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
+void CSVReaderOptions::FromNamedParameters(const named_argument_map_t &in, ClientContext &context,
                                            MultiFileOptions &file_options) {
 	for (auto &kv : in) {
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
@@ -851,7 +858,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size.GetValue()));
 	if (dialect_options.skip_rows.IsSetByUser()) {
-		named_params["skip"] = Value::UBIGINT(GetSkipRows());
+		named_params["skip"] = Value::BIGINT(NumericCast<int64_t>(GetSkipRows()));
 	}
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);
 	named_params["parallel"] = Value::BOOLEAN(parallel);

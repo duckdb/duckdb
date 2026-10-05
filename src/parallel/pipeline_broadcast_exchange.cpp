@@ -1767,24 +1767,23 @@ ProgressData PipelineBroadcastExchange::SinkProgress(const ProgressData &source_
                                                      idx_t estimated_cardinality) const {
 	annotated_lock_guard<annotated_mutex> guard(lock);
 	ProgressData progress;
-	auto produced_count = produced_rows.load(std::memory_order_relaxed);
-	auto produced = double(produced_count);
 	if (producer_state != ProducerState::ACTIVE) {
-		auto total = MaxValue<double>(produced, 1.0);
-		progress.done = total;
-		progress.total = total;
+		progress.done = 1.0;
+		progress.total = 1.0;
 		return progress;
 	}
-	progress.done = produced;
 	if (source_progress.IsValid()) {
-		progress.total = produced + MaxValue<double>(source_progress.total - source_progress.done, 1.0);
+		// the producing pipeline is done once its source is exhausted
+		return source_progress;
+	}
+	auto produced_count = produced_rows.load(std::memory_order_relaxed);
+	auto produced = double(produced_count);
+	progress.done = produced;
+	static constexpr const idx_t MAX_PROGRESS_CARDINALITY = 1ULL << 48ULL;
+	if (estimated_cardinality > 0 && estimated_cardinality < MAX_PROGRESS_CARDINALITY) {
+		progress.total = double(MaxValue<idx_t>(estimated_cardinality, produced_count + 1));
 	} else {
-		static constexpr const idx_t MAX_PROGRESS_CARDINALITY = 1ULL << 48ULL;
-		if (estimated_cardinality > 0 && estimated_cardinality < MAX_PROGRESS_CARDINALITY) {
-			progress.total = double(MaxValue<idx_t>(estimated_cardinality, produced_count + 1));
-		} else {
-			progress.total = produced + 1.0;
-		}
+		progress.total = produced + 1.0;
 	}
 	if (progress.done > progress.total) {
 		progress.total = progress.done;

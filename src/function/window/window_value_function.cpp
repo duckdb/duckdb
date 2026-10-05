@@ -371,6 +371,9 @@ public:
 				return false;
 			}
 			offset = bigint_value->GetValue<int64_t>();
+			if (offset == NumericLimits<int64_t>::Minimum()) {
+				return false;
+			}
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector

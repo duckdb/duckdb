@@ -134,8 +134,8 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : num_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), sorted_tuples(0),
-	      external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false), total_count(0),
-	      partition_size(0) {
+	      sunk_tuples(0), external(Settings::Get<DebugForceExternalSetting>(context)), any_combined(false),
+	      total_count(0), partition_size(0) {
 	}
 
 public:
@@ -192,6 +192,10 @@ public:
 	vector<unique_ptr<SortedRun>> sorted_runs;
 	//! Sorted tuple count (for progress)
 	atomic<idx_t> sorted_tuples;
+	//! Sunk tuple count (for progress)
+	atomic<idx_t> sunk_tuples;
+	//! Keeps the sink progress monotonic
+	MonotonicProgress sink_progress;
 
 	//! Whether this is an external sort
 	bool external;
@@ -251,6 +255,7 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	lstate.key_executor.Execute(chunk, lstate.key);
 	lstate.payload.ReferenceColumns(chunk, input_projection_map);
 	lstate.sorted_run->Sink(lstate.key, lstate.payload);
+	gstate.sunk_tuples.fetch_add(chunk.size(), std::memory_order_relaxed);
 
 	// Try to finish this call to Sink
 	unique_lock<mutex> guard;
@@ -322,13 +327,33 @@ SinkFinalizeType Sort::Finalize(ClientContext &context, OperatorSinkFinalizeInpu
 ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,
                                    const ProgressData source_progress) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSinkState>();
-	// Estimate that half of the Sink effort is sorting
+	return GetSinkProgress(source_progress, gstate.sorted_tuples, gstate.sunk_tuples, gstate.sink_progress);
+}
+
+idx_t Sort::GetSortedCount(GlobalSinkState &gstate) const {
+	return gstate.Cast<SortGlobalSinkState>().sorted_tuples;
+}
+
+ProgressData Sort::GetSinkProgress(const ProgressData &source_progress, idx_t sorted_count, idx_t sunk_count,
+                                   MonotonicProgress &monotonic_progress) {
 	ProgressData res;
-	const auto sorted_tuples = static_cast<double>(gstate.sorted_tuples);
-	res.done = source_progress.done / 2 + sorted_tuples / 2;
 	res.total = source_progress.total;
 	res.invalid = source_progress.invalid;
-	return res;
+	if (source_progress.total <= 0) {
+		return res;
+	}
+	const auto source_fraction = MinValue<double>(source_progress.done / source_progress.total, 1.0);
+	// the total number of tuples is unknown - relate the sorted tuples to the tuples sunk so far
+	double sorted_fraction;
+	if (sunk_count == 0) {
+		// there is nothing to sort if the source finished without producing any tuples
+		sorted_fraction = source_fraction >= 1.0 ? 1.0 : 0.0;
+	} else {
+		sorted_fraction = MinValue<double>(static_cast<double>(sorted_count) / static_cast<double>(sunk_count), 1.0);
+	}
+	res.done = source_progress.total * source_fraction * (1.0 + sorted_fraction) / 2;
+	// the sorted fraction drops when tuples are sunk faster than they are sorted
+	return monotonic_progress.Update(res);
 }
 
 //===--------------------------------------------------------------------===//
@@ -477,8 +502,7 @@ SourceResultType Sort::MaterializeColumnData(ExecutionContext &context, Operator
 	input.local_state.Cast<SortLocalSourceState>().merger_local_state.reset();
 
 	// Return type indicates whether materialization is done
-	const auto progress_data = GetProgress(context.client, input.global_state);
-	if (progress_data.done == progress_data.total) {
+	if (gstate.merger.total_count == 0 || gstate.merger.IsFinished(*gstate.merger_global_state)) {
 		// Destroy global state before returning
 		gstate.Destroy();
 		return SourceResultType::FINISHED;

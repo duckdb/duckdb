@@ -117,7 +117,7 @@ void OuterJoinMarker::Scan(OuterJoinGlobalScanState &gstate, OuterJoinLocalScanS
 				                           result_count);
 			}
 		}
-		gstate.rows_scanned += lstate.scan_chunk.size();
+		gstate.rows_scanned.fetch_add(lstate.scan_chunk.size(), std::memory_order_relaxed);
 		if (result_count > 0) {
 			return;
 		}
