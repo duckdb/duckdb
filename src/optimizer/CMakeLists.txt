@@ -25,6 +25,8 @@ add_library_unity(
   compressed_materialization.cpp
   cse_optimizer.cpp
   cte_filter_pusher.cpp
+  cte_join_filter_collector.cpp
+  cte_join_filter_pusher.cpp
   cte_inlining.cpp
   deliminator.cpp
   multi_stage_aggregate_rewriter.cpp

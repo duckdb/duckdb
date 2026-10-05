@@ -191,7 +191,9 @@ public:
 	string zDbFilename;                       /* name of the database file */
 	FILE *pLog = nullptr;                     /* Write log output here */
 	size_t max_rows = 0;                      /* The maximum number of rows to render in DuckBox mode */
-	size_t max_width = 0; /* The maximum number of characters to render horizontally in DuckBox mode */
+	size_t max_width = 0;      /* The maximum number of characters to render horizontally in DuckBox mode */
+	size_t max_bytes = 0;      /* The maximum number of bytes of rows to render in markdown mode (0 = all) */
+	size_t max_cell_width = 0; /* The maximum number of characters to render per cell in markdown mode (0 = all) */
 	//! The maximum number of rows to analyze in order to determine column widths in DuckBox mode
 	idx_t max_analyze_rows = 0;
 	//! Decimal separator (if any)
@@ -243,6 +245,19 @@ public:
 	*/
 	bool stdout_is_console = true;
 	bool stderr_is_console = true;
+
+	//! Whether to render for an AI coding agent: forced on/off from the command line, or auto-detected (DEFAULT)
+	OptionType agent_mode = OptionType::DEFAULT;
+	//! Whether agent mode is active (see DetectAgentMode)
+	bool agent_mode_active = false;
+	//! The name of the detected agent (e.g. "claude-code"), if any
+	string agent_name;
+	//! The environment variable that switched agent mode on (e.g. "CLAUDECODE"), empty when forced with -agent
+	string agent_marker;
+	//! Whether an output mode was given on the command line (-csv, -json, ...): detected agent mode then stays off
+	bool output_mode_flag = false;
+	//! Whether the exit hint (see PrintExitHint) went out already
+	bool exit_hint_printed = false;
 
 	//! True if an interrupt (Control-C) has been received.
 	atomic<idx_t> seenInterrupt;
@@ -366,6 +381,8 @@ public:
 	void RenderTableMetadata(vector<ShellTableInfo> &result);
 
 	void PrintDatabaseError(const string &zErr);
+	//! Print an error, either with its location in the query (default) or as JSON (agent mode)
+	void PrintDatabaseError(ErrorData error, const string &query = string());
 	int RunInitialCommand(const char *sql, bool bail);
 	//! Expand `{parameter|default}` placeholders in a command using the parameters set on the command line
 	bool ExpandCommandParameters(const string &command, string &result);
@@ -430,6 +447,17 @@ public:
 	static void Sleep(idx_t ms);
 	void PrintUsage();
 	void DetectDarkLightMode();
+	//! Decide whether agent mode is active, from the -agent/-no-agent flags or the environment (see agent_mode)
+	void DetectAgentMode();
+	//! Whether the environment marks the shell as being run by an AI coding agent, which one, and by which variable
+	static bool DetectAgentEnvironment(string &agent_name, string &marker);
+	//! Print how agent mode renders and the engine features an agent should know about; `startup` is the one-line
+	//! form printed before anything runs
+	void PrintAgentHelp(PrintOutput output, bool startup);
+	//! On a failed run through a pipe with no agent detected and no -agent/-no-agent given: point at -agent
+	void PrintExitHint(int rc);
+	//! Print the planner's estimate of what a statement will read and return to stderr (agent mode)
+	void PrintQueryEstimate(const string &sql, const duckdb::SQLStatement &statement);
 #if defined(_WIN32) || defined(WIN32)
 	static std::wstring Win32Utf8ToUnicode(const string &zText);
 	static std::wstring Win32Utf8ToUnicode(const char *) = delete;

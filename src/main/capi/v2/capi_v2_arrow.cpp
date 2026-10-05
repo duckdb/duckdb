@@ -521,7 +521,8 @@ DUCKDB_V2_ERROR duckdb_v2_arrow_exporter_create(duckdb_v2_context_handle context
 			if (IsNullArgument(&names[i])) {
 				throw duckdb::InvalidInputException("malformed column name at index %llu", i);
 			}
-			exporter->types.push_back(*Convert(types[i]));
+			auto type = Convert(types[i]);
+			exporter->types.push_back(*type);
 			exporter->names.emplace_back(ConvertIdentifierName(names[i]));
 		}
 		// Pin the settings and the extension map now: the schema below and every array this exporter produces are built

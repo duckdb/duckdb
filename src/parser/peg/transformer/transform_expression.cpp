@@ -343,6 +343,9 @@ MethodArguments PEGTransformerFactory::TransformFunctionExpressionArgumentList(
     PEGTransformer &transformer, const optional<bool> &distinct_or_all,
     optional<vector<FunctionArgument>> function_argument_list, optional<vector<OrderByNode>> order_by_clause,
     const optional<bool> &ignore_or_respect_nulls) {
+	if (distinct_or_all && !function_argument_list) {
+		throw ParserException("%s requires at least one argument", *distinct_or_all ? "DISTINCT" : "ALL");
+	}
 	MethodArguments result;
 	if (distinct_or_all) {
 		result.distinct = *distinct_or_all;
@@ -1195,7 +1198,7 @@ PEGTransformerFactory::TransformInSelectStatement(PEGTransformer &transformer,
 }
 
 unique_ptr<ParsedExpression>
-PEGTransformerFactory::TransformBetweenClause(PEGTransformer &transformer,
+PEGTransformerFactory::TransformBetweenClause(PEGTransformer &transformer, const bool &,
                                               unique_ptr<ParsedExpression> other_operator_expression,
                                               unique_ptr<ParsedExpression> other_operator_expression_1) {
 	auto result = make_uniq<BetweenExpression>(nullptr, std::move(other_operator_expression),
@@ -2225,6 +2228,15 @@ WindowFrame PEGTransformerFactory::TransformFrameClause(PEGTransformer &transfor
                                                         vector<WindowBoundaryExpression> frame_extent,
                                                         const optional<WindowExcludeMode> &window_exclude_clause) {
 	WindowFrame result;
+	if (frame_extent[0].boundary == WindowBoundary::CURRENT_ROW_RANGE &&
+	    frame_extent[1].boundary == WindowBoundary::EXPR_PRECEDING_RANGE) {
+		throw ParserException("Frame starting from current row cannot have preceding rows");
+	}
+	if (frame_extent[0].boundary == WindowBoundary::EXPR_FOLLOWING_RANGE &&
+	    (frame_extent[1].boundary == WindowBoundary::CURRENT_ROW_RANGE ||
+	     frame_extent[1].boundary == WindowBoundary::EXPR_PRECEDING_RANGE)) {
+		throw ParserException("Frame starting from following row cannot have preceding rows");
+	}
 	for (auto &frame : frame_extent) {
 		if (StringUtil::CIEquals(framing, "rows")) {
 			if (frame.boundary == WindowBoundary::CURRENT_ROW_RANGE) {

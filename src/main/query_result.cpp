@@ -36,6 +36,12 @@ void BaseQueryResult::ThrowError(const string &prepended_message) const {
 	error.Throw(prepended_message);
 }
 
+void BaseQueryResult::ThrowIfError(const string &prepended_message) const {
+	if (HasError()) {
+		error.Throw(prepended_message);
+	}
+}
+
 void BaseQueryResult::SetError(ErrorData error) {
 	success = !error.HasError();
 	this->error = std::move(error);
