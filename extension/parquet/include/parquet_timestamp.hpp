@@ -29,7 +29,6 @@ Int96 TimestampToImpalaTimestamp(timestamp_t &ts);
 
 timestamp_t ParquetTimestampMicrosToTimestamp(const int64_t &raw_ts);
 timestamp_t ParquetTimestampMsToTimestamp(const int64_t &raw_ts);
-timestamp_t ParquetTimestampNsToTimestamp(const int64_t &raw_ts);
 
 timestamp_ns_t ParquetTimestampMsToTimestampNs(const int64_t &raw_ms);
 timestamp_ns_t ParquetTimestampUsToTimestampNs(const int64_t &raw_us);
