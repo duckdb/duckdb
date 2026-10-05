@@ -1,0 +1,63 @@
+# name: test/sql/function/timetz/timezone_interval_offset_range.test
+# description: Test that timezone(INTERVAL, TIMETZ) rejects offsets outside of the supported range
+# group: [timetz]
+
+query II
+SELECT timezone(INTERVAL '15 hours 59 minutes 59 seconds', TIMETZ '12:00:00+00'),
+       timezone(INTERVAL '-15 hours -59 minutes -59 seconds', TIMETZ '12:00:00+00');
+----
+03:59:59+15:59:59	20:00:01-15:59:59
+
+query I
+SELECT timezone(NULL::INTERVAL, TIMETZ '12:00:00+00');
+----
+NULL
+
+statement error
+SELECT timezone(INTERVAL '16 hours', TIMETZ '12:00:00+00');
+----
+Out of Range Error: Time zone offset 16:00:00 is out of range
+
+statement error
+SELECT timezone(INTERVAL '-16 hours', TIMETZ '12:00:00+00');
+----
+Out of Range Error: Time zone offset -16:00:00 is out of range
+
+statement error
+SELECT timezone(INTERVAL '9223372036854775807 microseconds', TIMETZ '12:00:00+00');
+----
+Out of Range Error
+
+statement error
+SELECT timezone(INTERVAL '-1000000 hours', TIMETZ '12:00:00+00');
+----
+Out of Range Error
+
+statement error
+SELECT TIMETZ '12:00:00+00' AT TIME ZONE INTERVAL '16 hours';
+----
+Out of Range Error
+
+statement error
+CREATE TABLE t AS SELECT timezone(INTERVAL '16 hours', TIMETZ '12:00:00+00') x;
+----
+Out of Range Error
+
+# the offset is checked per row
+statement ok
+CREATE TABLE offsets AS SELECT * FROM (VALUES (INTERVAL '1 hour'), (INTERVAL '-2 hours'), (NULL)) t(i);
+
+query I
+SELECT timezone(i, TIMETZ '12:00:00+00') FROM offsets ORDER BY ALL;
+----
+13:00:00+01
+10:00:00-02
+NULL
+
+statement ok
+INSERT INTO offsets VALUES (INTERVAL '20 hours');
+
+statement error
+SELECT timezone(i, TIMETZ '12:00:00+00') FROM offsets;
+----
+Out of Range Error
