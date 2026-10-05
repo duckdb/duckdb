@@ -9,6 +9,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
+#include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher_stack.hpp"
@@ -396,7 +397,7 @@ TEST_CASE("Token literal caches follow grammar identity and token edits", "[api]
 	second.emplace(grammar, first_categories.ToLiteralMap());
 	REQUIRE(second->CacheId() != old_cache_id);
 	REQUIRE(iterator.CurrentLiteralInfo(*second) == first.Lookup("SELECT"));
-	tokens[0].text = "extension_word";
+	tokens[0] = MatcherToken("extension_word", 0, TokenType::IDENTIFIER);
 	TokenIterator edited(tokens);
 	REQUIRE(edited.CurrentLiteralInfo(*second).LiteralId() == 0);
 	branch.Advance();
@@ -977,6 +978,40 @@ TEST_CASE("Matcher driver preserves overrides on derived built-in matchers", "[a
 	REQUIRE(lifetime.started == lifetime.depth);
 	REQUIRE(lifetime.active == 0);
 	REQUIRE(lifetime.destroyed.size() == lifetime.depth);
+}
+
+class DerivedChoiceTestMatcher final : public ChoiceMatcher {
+public:
+	DerivedChoiceTestMatcher() : child("ANSWER", KeywordInfo()) {
+	}
+
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return state.Make<GrammarExtensionTestMatchProcess>(child, state);
+	}
+
+private:
+	KeywordMatcher child;
+};
+
+TEST_CASE("FIRST sets do not assume built-in semantics for derived matchers", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	DerivedChoiceTestMatcher derived;
+	ListMatcher list;
+	list.SetStructural();
+	list.matchers.push_back(derived);
+	ComputeFirstSets(list, grammar->GetKeywordHelper().GetLiteralTable());
+
+	vector<MatcherToken> tokens {MatcherToken("answer", 0, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	REQUIRE(list.MatchParseResult(state).IsSuccess());
 }
 
 TEST_CASE("Matcher stack supports variable-sized aligned arena processes", "[api][grammar_extension]") {
