@@ -185,18 +185,6 @@ struct BuiltinTypeInfos {
 	const LogicalTypeInfo *infos[NumericLimits<uint8_t>::Maximum() + 1] = {};
 };
 
-//! Set by the first GetBuiltinTypeInfo call, which every LogicalType constructor makes before the type exists.
-//! Constant-initialized, so reading it never runs (possibly throwing) initialization.
-const BuiltinTypeInfos *&BuiltinTypeInfosTable() noexcept {
-	static const BuiltinTypeInfos *table = nullptr;
-	return table;
-}
-
-//! The builtin info for the id of an existing type - cannot throw, as the table already exists
-const LogicalTypeInfo &ExistingBuiltinTypeInfo(LogicalTypeId id) noexcept {
-	return *BuiltinTypeInfosTable()->infos[static_cast<uint8_t>(id)];
-}
-
 } // namespace
 
 const LogicalTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
@@ -213,7 +201,6 @@ const LogicalTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
 			info->immortal = true;
 			result->infos[i] = info.release();
 		}
-		BuiltinTypeInfosTable() = result;
 		return result;
 	}();
 	auto info = builtins->infos[static_cast<uint8_t>(id)];
@@ -249,12 +236,14 @@ LogicalType::LogicalType(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info
 
 LogicalType::LogicalType(LogicalType &&other) noexcept : type_info_(other.type_info_) {
 	// the moved-from type keeps its id, but loses its parameters
-	other.type_info_ = ExistingBuiltinTypeInfo(type_info_.get().id);
+	// it may come from another copy of DuckDB (e.g. the host of a statically linked extension) - so the builtins of
+	// this copy might not exist yet, and creating them can only throw when out of memory
+	other.type_info_ = GetBuiltinTypeInfo(type_info_.get().id);
 }
 
 const LogicalTypeInfo &LogicalType::ReleaseTypeInfo() && {
 	auto &result = type_info_.get();
-	type_info_ = ExistingBuiltinTypeInfo(result.id);
+	type_info_ = GetBuiltinTypeInfo(result.id);
 	return result;
 }
 
