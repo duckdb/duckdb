@@ -23,6 +23,13 @@ unique_ptr<MemoryMappedFile> OpenerFileSystem::MemoryMapFile(const OpenFileInfo 
 	return GetFileSystem().MemoryMapFile(path, flags, options, GetOpener());
 }
 
+unique_ptr<MultiFileList> OpenerFileSystem::GlobFilesExtended(const string &path, const FileGlobInput &input,
+                                                              optional_ptr<FileOpener> opener) {
+	VerifyNoOpener(opener);
+	VerifyCanAccessFile(path);
+	return GetFileSystem().Glob(path, input, GetOpener());
+}
+
 void OpenerFileSystem::VerifyNoOpener(optional_ptr<FileOpener> opener) {
 	if (opener) {
 		throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
@@ -38,7 +45,8 @@ void OpenerFileSystem::VerifyCanAccessFileInternal(const string &path, FileType 
 		return;
 	}
 	auto &config = db->config;
-	if (!config.CanAccessFile(path, type)) {
+	auto canonical_path = config.file_system->CanonicalizePath(path, opener);
+	if (!config.CanAccessFile(canonical_path, type)) {
 		throw PermissionException("Cannot access %s \"%s\" - file system operations are disabled by configuration",
 		                          type == FileType::FILE_TYPE_DIR ? "directory" : "file", path);
 	}

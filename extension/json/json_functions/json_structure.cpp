@@ -1,7 +1,7 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_geojson.hpp"
 #include "json_scan.hpp"

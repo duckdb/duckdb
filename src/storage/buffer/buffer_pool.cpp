@@ -350,14 +350,17 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			block_allocator.FlushAll(extra_memory);
+			FlushAllocator(extra_memory);
 		}
 		return {true, std::move(r)};
 	}
 
 	bool success = false;
 	while (!object_cache->IsEmpty()) {
-		const idx_t freed_mem = object_cache->EvictToReduceMemory(extra_memory);
+		const idx_t used = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
+		const idx_t overshoot = used > memory_limit ? (used - memory_limit) : 0;
+		const idx_t target = MaxValue(extra_memory, overshoot);
+		const idx_t freed_mem = object_cache->EvictToReduceMemory(target);
 		// Break if all entries cannot be evicted.
 		if (freed_mem == 0) {
 			break;
@@ -371,7 +374,7 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 	if (!success) {
 		r.Resize(0);
 	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		block_allocator.FlushAll(extra_memory);
+		FlushAllocator(extra_memory);
 	}
 
 	return {success, std::move(r)};
@@ -379,6 +382,7 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(QueryContext context, MemoryTag tag, idx_t extra_memory,
                                                    idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
+	FlushOnBulkDeallocation();
 	for (auto &queue : queues) {
 		auto block_result = EvictBlocksInternal(context, *queue, tag, extra_memory, memory_limit, buffer);
 		if (block_result.success) {
@@ -399,7 +403,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
 		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			block_allocator.FlushAll(extra_memory);
+			FlushAllocator(extra_memory);
 		}
 		return {true, std::move(r)};
 	}
@@ -428,7 +432,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 	if (!found) {
 		r.Resize(0);
 	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		block_allocator.FlushAll(extra_memory);
+		FlushAllocator(extra_memory);
 	}
 
 	return {found, std::move(r)};
@@ -500,7 +504,16 @@ void EvictionQueue::IterateUnloadableBlocks(FN fn) {
 		// This node is the block's live queue entry, and we just dequeued it: the block no longer
 		// has an entry in the queue. Live entries are never counted as dead, so no decrement.
 		handle->SetHasLiveQueueEntry(lock, false);
-		if (!handle->CanUnload()) {
+		switch (handle->CanUnload()) {
+		case CanUnloadResult::CAN_UNLOAD:
+			break;
+		case CanUnloadResult::NO_TEMP_DIRECTORY:
+			// Unpinned temporary block that cannot be offloaded yet: re-enqueue until temp directory is set.
+			handle->SetHasLiveQueueEntry(lock, true);
+			q.enqueue(std::move(node));
+			return;
+		case CanUnloadResult::PINNED:
+		case CanUnloadResult::ALREADY_UNLOADED:
 			// The block cannot be unloaded right now (e.g. it is pinned). It gets a new queue
 			// entry when it is unpinned again.
 			continue;
@@ -560,6 +573,29 @@ void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
 
 idx_t BufferPool::GetAllocatorBulkDeallocationFlushThreshold() {
 	return allocator_bulk_deallocation_flush_threshold;
+}
+
+idx_t BufferPool::GetBulkDeallocationFlushThreshold() const {
+	// freed memory that the allocator still holds must stay a small fraction of the memory limit
+	return maximum_memory.load(std::memory_order_relaxed) / BULK_DEALLOCATION_FLUSH_DIVISOR;
+}
+
+void BufferPool::FlushAllocator(const optional_idx extra_memory) {
+	block_allocator.FlushAll(extra_memory);
+}
+
+void BufferPool::FlushOnBulkDeallocation() {
+	const auto threshold = GetBulkDeallocationFlushThreshold();
+	const auto deallocated = block_allocator.GetDeallocatedSinceFlush();
+	if (deallocated < threshold) {
+		return;
+	}
+	// freed memory that the allocator still holds only matters once it could push us past the memory limit
+	const auto used_memory = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
+	if (used_memory + deallocated <= maximum_memory.load(std::memory_order_relaxed)) {
+		return;
+	}
+	block_allocator.TryFlushDeallocated(threshold);
 }
 
 vector<EvictionQueueInformation> BufferPool::GetEvictionQueueInfo() const {

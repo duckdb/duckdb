@@ -3,6 +3,7 @@
 #include "duckdb/common/cgroups.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -70,7 +71,6 @@ DebugVerificationMode DBConfigOptions::global_verification_mode = DebugVerificat
 
 static const ConfigurationOption internal_options[] = {
 
-    DUCKDB_GLOBAL(DeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_GLOBAL(AccessModeSetting),
     DUCKDB_LOCAL(ActiveGrammarExtensionsSetting),
     DUCKDB_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
@@ -106,9 +106,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
     DUCKDB_SETTING(CustomExtensionRepositorySetting),
     DUCKDB_GLOBAL(CustomUserAgentSetting),
+    DUCKDB_GLOBAL(DebugAbortOnWalFailureSetting),
     DUCKDB_SETTING(DebugAsofIejoinSetting),
     DUCKDB_SETTING_CALLBACK(DebugCheckpointAbortSetting),
+    DUCKDB_SETTING(DebugCheckpointScanSleepMsSetting),
     DUCKDB_SETTING(DebugCheckpointSleepMsSetting),
+    DUCKDB_GLOBAL(DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING(DebugDisableOptimizerSetting),
     DUCKDB_SETTING(EnableCachingOperatorsSetting),
     DUCKDB_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
@@ -130,6 +133,8 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(DebugVerifyAggregateStateExportSetting),
     DUCKDB_SETTING(DebugVerifyBlocksSetting),
     DUCKDB_SETTING(DebugVerifyColumnBindingsSetting),
+    DUCKDB_SETTING_CALLBACK(DebugVerifyProgressSetting),
+    DUCKDB_SETTING(DebugVerifyProgressIgnoreSetting),
     DUCKDB_SETTING(DebugVerifySerializerSetting),
     DUCKDB_SETTING_CALLBACK(DebugVerifyStatementSetting),
     DUCKDB_SETTING(DebugVerifyStatsSetting),
@@ -172,15 +177,18 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ExtensionDirectoriesSetting),
     DUCKDB_SETTING_CALLBACK(ExtensionDirectorySetting),
     DUCKDB_SETTING_CALLBACK(ExtensionRepositoryDirectorySetting),
-    DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalBlockSizeSetting),
-    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheLocalMaxBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMaxBlockSizeSetting),
+    DUCKDB_SETTING_CALLBACK(ExternalFileCacheRemoteMinBlockSizeSetting),
     DUCKDB_SETTING(ExternalFileCacheSpillSetting),
     DUCKDB_SETTING_CALLBACK(ExternalThreadsSetting),
     DUCKDB_SETTING(FileSearchPathSetting),
     DUCKDB_SETTING_CALLBACK(ForceColumnMetadataReuseSetting),
     DUCKDB_SETTING_CALLBACK(ForceCompressionSetting),
+    DUCKDB_SETTING_CALLBACK(FsyncModeSetting),
     DUCKDB_SETTING(GeometryMinimumShreddingSize),
     DUCKDB_SETTING_CALLBACK(HomeDirectorySetting),
+    DUCKDB_GLOBAL(HTTPClientPoolCapacitySetting),
     DUCKDB_GLOBAL(HTTPProxySetting),
     DUCKDB_SETTING(HTTPProxyPasswordSetting),
     DUCKDB_SETTING(HTTPProxyUsernameSetting),
@@ -256,6 +264,7 @@ static const ConfigurationOption internal_options[] = {
     FINAL_SETTING};
 
 static const ConfigurationAlias setting_aliases[] = {
+    DUCKDB_SETTING_ALIAS("__delta_only_variant_encoding_enabled", DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING_ALIAS("enable_caching_operators", EnableCachingOperatorsSetting),
     DUCKDB_SETTING_ALIAS("force_bitpacking_mode", ForceBitpackingModeSetting),
     DUCKDB_SETTING_ALIAS("force_mbedtls_unsafe", ForceMbedtlsUnsafeSetting),
@@ -585,6 +594,11 @@ bool DBConfig::IsInMemoryDatabase(const char *database_path) {
 
 CastFunctionSet &DBConfig::GetCastFunctions() {
 	return type_manager->GetCastFunctions();
+}
+
+const CastFunctionSet &DBConfig::GetCastFunctions() const {
+	const auto &manager = *type_manager;
+	return manager.GetCastFunctions();
 }
 
 TypeManager &DBConfig::GetTypeManager() {
@@ -928,12 +942,31 @@ void DBConfig::AddAllowedDirectory(const string &path) {
 	if (!StringUtil::EndsWith(allowed_directory, "/")) {
 		allowed_directory += "/";
 	}
+	lock_guard<mutex> guard(allowed_paths_lock);
 	options.allowed_directories.insert(allowed_directory);
 }
 
 void DBConfig::AddAllowedPath(const string &path) {
 	auto allowed_path = SanitizeAllowedPath(path);
+	lock_guard<mutex> guard(allowed_paths_lock);
 	options.allowed_paths.insert(allowed_path);
+}
+
+void DBConfig::AddAllowedDatabasePath(const string &database_path) {
+	AddAllowedPath(database_path);
+	AddAllowedPath(database_path + ".wal");
+	AddAllowedPath(database_path + ".wal.checkpoint");
+	AddAllowedPath(database_path + ".wal.recovery");
+}
+
+vector<string> DBConfig::GetAllowedDirectories() const {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	return vector<string>(options.allowed_directories.begin(), options.allowed_directories.end());
+}
+
+vector<string> DBConfig::GetAllowedPaths() const {
+	lock_guard<mutex> guard(allowed_paths_lock);
+	return vector<string>(options.allowed_paths.begin(), options.allowed_paths.end());
 }
 
 bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
@@ -943,6 +976,7 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 	}
 	string path = SanitizeAllowedPath(input_path);
 
+	lock_guard<mutex> guard(allowed_paths_lock);
 	if (options.allowed_paths.count(path) > 0) {
 		// path is explicitly allowed
 		return true;
@@ -983,11 +1017,26 @@ void DBConfig::SetHTTPUtil(const shared_ptr<HTTPUtil> &new_http_util) {
 	http_transport_manager->SetHTTPUtil(new_http_util);
 }
 
+void DBConfig::SetExternalExtensionProvider(const shared_ptr<ExternalExtensionProvider> &new_provider) {
+	if (!new_provider) {
+		throw InvalidInputException("External extension provider cannot be null");
+	}
+	external_extension_provider = new_provider;
+}
+
+ExternalExtensionProvider &DBConfig::GetExternalExtensionProvider() const {
+	return *external_extension_provider;
+}
+
 HTTPUtil &DBConfig::GetHTTPUtil() const {
 	return http_transport_manager->GetHTTPUtil();
 }
 
 HTTPTransportManager &DBConfig::GetHTTPTransportManager() {
+	return *http_transport_manager;
+}
+
+const HTTPTransportManager &DBConfig::GetHTTPTransportManager() const {
 	return *http_transport_manager;
 }
 

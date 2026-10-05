@@ -8,12 +8,21 @@
 
 namespace duckdb {
 
-BufferedData::BufferedData(Type type, ClientContext &context_p, ResultLifetime lifetime)
+static shared_ptr<ResultFormat> FormatOrChunk(shared_ptr<ResultFormat> format) {
+	if (!format) {
+		return ChunkFormat::InMemory();
+	}
+	return format;
+}
+
+BufferedData::BufferedData(Type type, ClientContext &context_p, ResultLifetime lifetime,
+                           ResultFormatContext format_context_p, shared_ptr<ResultFormat> format_p)
     : type(type), context(context_p.shared_from_this()),
       // The setting has no lower bound. A buffer that can never admit a chunk blocks
       // every sink while empty, and the stream silently ends with zero rows
       total_buffer_size(MaxValue<idx_t>(ClientConfig::GetConfig(context_p).max_streaming_buffer_size, 1)),
-      lifetime(lifetime) {
+      lifetime(lifetime), format_context(std::move(format_context_p)), format(FormatOrChunk(std::move(format_p))),
+      format_state(format->InitGlobal(format_context)) {
 }
 
 BufferedData::~BufferedData() {
@@ -66,7 +75,7 @@ bool BufferedData::WaitsOnConsumer() {
 	}
 	// A space park is only the consumer's to release when a pop is possible: the batched buffer also
 	// parks read-ahead batches while the read queue is empty, and the minimum batch releases those
-	return HasBlockedSink() && HasObservableChunk();
+	return HasBlockedSink() && HasObservableUnit();
 }
 
 QueryResultState BufferedData::Cancelled(QueryResult &result) {
@@ -93,7 +102,7 @@ QueryResultState BufferedData::Participate(ClientContextLock &context_lock, Quer
 		return Cancelled(result);
 	}
 	DecideDraining();
-	// Checked with chunks poppable too, so a cancel ends the drain early. A worker error also raises
+	// Checked with units poppable too, so a cancel ends the drain early. A worker error also raises
 	// the flag, so only a flag without an executor error is a cancel; both loads are seq_cst
 	const bool interrupted = cc->interrupt_state.load() == ClientInterruptState::INTERRUPTED;
 	if (interrupted && !Executor::Get(*cc).HasError()) {
@@ -106,14 +115,14 @@ QueryResultState BufferedData::Participate(ClientContextLock &context_lock, Quer
 	// Let the executor run until the buffer is no longer empty
 	auto execution_result = cc->ExecuteTaskInternal(context_lock, result);
 	if (execution_result == QueryResultState::EXECUTION_ERROR) {
-		// The query has ended, so a still-buffered chunk must not be reported as poppable
+		// The query has ended, so a still-buffered unit must not be reported as poppable
 		Close();
 		return QueryResultState::EXECUTION_ERROR;
 	}
 	if (ReplenishSatisfied()) {
 		return QueryResultState::READY;
 	}
-	// Engine READY means a parked producer with a chunk to pop, which satisfies the replenish above
+	// Engine READY means a parked producer with a unit to pop, which satisfies the replenish above
 	D_ASSERT(execution_result != QueryResultState::READY);
 	return execution_result;
 }
@@ -126,13 +135,13 @@ QueryResultState BufferedData::Poll(ClientContextLock &context_lock, QueryResult
 	if (!cc->IsActiveResult(context_lock, result)) {
 		return Cancelled(result);
 	}
-	// Checked before the buffer, so a cancel is seen even with chunks poppable. A worker error also
+	// Checked before the buffer, so a cancel is seen even with units poppable. A worker error also
 	// raises the flag; only a flag without an executor error is a real cancel
 	const bool interrupted = cc->interrupt_state.load() == ClientInterruptState::INTERRUPTED;
 	if (interrupted && !Executor::Get(*cc).HasError()) {
 		throw InterruptException();
 	}
-	if (!interrupted && HasObservableChunk()) {
+	if (!interrupted && HasObservableUnit()) {
 		return QueryResultState::READY;
 	}
 	auto execution_result = cc->PollInternal(context_lock, result);
@@ -140,10 +149,10 @@ QueryResultState BufferedData::Poll(ClientContextLock &context_lock, QueryResult
 		Close();
 		return QueryResultState::EXECUTION_ERROR;
 	}
-	if (HasObservableChunk()) {
+	if (HasObservableUnit()) {
 		return QueryResultState::READY;
 	}
-	// Engine READY means a parked producer with a chunk to pop, which the check above would have seen
+	// Engine READY means a parked producer with a unit to pop, which the check above would have seen
 	D_ASSERT(execution_result != QueryResultState::READY);
 	return execution_result;
 }

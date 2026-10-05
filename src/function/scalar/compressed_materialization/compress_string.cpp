@@ -298,4 +298,14 @@ ScalarFunctionSet InternalDecompressStringFun::GetFunctions() {
 	return GetStringDecompressFunctionSet();
 }
 
+CMExpressionType CMUtils::GetStringType(const BoundScalarFunction &function) {
+	if (function.GetDeserializeCallback() == CMStringCompressDeserialize) {
+		return CMExpressionType::COMPRESS;
+	}
+	if (function.GetDeserializeCallback() == CMStringDecompressDeserialize) {
+		return CMExpressionType::DECOMPRESS;
+	}
+	return CMExpressionType::NONE;
+}
+
 } // namespace duckdb

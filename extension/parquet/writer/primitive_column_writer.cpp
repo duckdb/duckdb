@@ -379,6 +379,11 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(null_count);
 	column_chunk.meta_data.statistics.__isset.null_count = true;
 	column_chunk.meta_data.__isset.statistics = true;
+	if (column_chunk.meta_data.type == duckdb_parquet::Type::FLOAT ||
+	    column_chunk.meta_data.type == duckdb_parquet::Type::DOUBLE) {
+		column_chunk.meta_data.statistics.nan_count = NumericCast<int64_t>(state.stats_state->GetNaNCount());
+		column_chunk.meta_data.statistics.__isset.nan_count = true;
+	}
 
 	// if we have NaN values - don't write the min/max here
 	if (!state.stats_state->HasNaN()) {

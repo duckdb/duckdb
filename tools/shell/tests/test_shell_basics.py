@@ -673,6 +673,27 @@ def test_timer(shell):
     result = test.run()
     result.check_stdout('Run Time (s):')
 
+def test_timer_digits(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".timer on 6")
+        .statement("SELECT NULL;")
+    )
+    result = test.run()
+    result.check_stdout('Run Time (s):')
+    assert re.search(r'real \d\.\d{6} ', result.stdout)
+
+@pytest.mark.parametrize("digits", ["10", "-1"])
+def test_timer_digits_out_of_range(shell, digits):
+    test = (
+        ShellTest(shell)
+        .statement(f".timer on {digits}")
+        .statement("SELECT NULL;")
+    )
+    result = test.run()
+    result.check_stderr('.timer DIGITS must be between 0 and 9')
+    assert 'Run Time (s):' not in result.stdout
+
 def test_output_csv_mode(shell, random_filepath):
     test = (
         ShellTest(shell)

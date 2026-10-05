@@ -94,6 +94,10 @@ bool ColumnWriterStatistics::HasNaN() {
 	return false;
 }
 
+idx_t ColumnWriterStatistics::GetNaNCount() {
+	return 0;
+}
+
 bool ColumnWriterStatistics::MinIsExact() {
 	return true;
 }
@@ -123,6 +127,25 @@ ColumnWriter::ColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_s
 	can_have_nulls = column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::OPTIONAL;
 }
 ColumnWriter::~ColumnWriter() {
+}
+
+void ColumnWriter::MarkRepetitionRequired() {
+	if (column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::REQUIRED) {
+		return;
+	}
+	D_ASSERT(column_schema.repetition_type == duckdb_parquet::FieldRepetitionType::OPTIONAL);
+	D_ASSERT(can_have_nulls);
+	column_schema.repetition_type = duckdb_parquet::FieldRepetitionType::REQUIRED;
+	can_have_nulls = false;
+	DecrementMaxDefineRecursive();
+}
+
+void ColumnWriter::DecrementMaxDefineRecursive() {
+	D_ASSERT(column_schema.max_define > 0);
+	column_schema.max_define--;
+	for (auto &child : child_writers) {
+		child->DecrementMaxDefineRecursive();
+	}
 }
 
 bool ColumnWriter::TryExportPreparedShreddingType(ShreddingType &result) const {
@@ -407,10 +430,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		path_in_schema.push_back("key_value");
 
 		// construct the child types recursively
-		child_list_t<LogicalType> key_value;
-		key_value.reserve(2);
-		key_value.emplace_back("key", MapType::KeyType(type));
-		key_value.emplace_back("value", MapType::ValueType(type));
+		auto key_value = LogicalType::GetNamedChildTypes(type);
 		auto key_value_type = LogicalType::STRUCT(key_value);
 
 		auto map_column =
