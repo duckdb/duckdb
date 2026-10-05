@@ -1771,6 +1771,31 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 //------------------------------------------------------------------------------
 // Special cases for arrays
 //------------------------------------------------------------------------------
+// Casts the rows at target_sel in cast_vector to the target type - only the rows at target_sel are written
+static void TupleDataCastToArray(Vector &cast_vector, Vector &target, const SelectionVector &target_sel,
+                                 const idx_t scan_count) {
+	bool identity = true;
+	for (idx_t i = 0; i < scan_count && identity; i++) {
+		identity = target_sel.get_index(i) == i;
+	}
+	if (identity) {
+		VectorOperations::DefaultCast(cast_vector, target, scan_count);
+		return;
+	}
+	// cast the gathered rows into a dense vector, and copy them to their positions in the target
+	Vector source(cast_vector, target_sel, scan_count);
+	Vector dense(target.GetType(), scan_count);
+	VectorOperations::DefaultCast(source, dense, scan_count);
+	idx_t run_start = 0;
+	for (idx_t i = 1; i <= scan_count; i++) {
+		if (i < scan_count && target_sel.get_index(i) == target_sel.get_index(i - 1) + 1) {
+			continue;
+		}
+		VectorOperations::Copy(dense, target, i, run_start, target_sel.get_index(run_start));
+		run_start = i;
+	}
+}
+
 // A gather function that wraps another gather function and casts the result to the target array type
 static void TupleDataCastToArrayListGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                            const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
@@ -1780,13 +1805,13 @@ static void TupleDataCastToArrayListGather(const TupleDataLayout &layout, Vector
 		// Reuse the cached cast vector
 		TupleDataListGather(layout, row_locations, col_idx, scan_sel, scan_count, *cached_cast_vector, target_sel,
 		                    cached_cast_vector, child_functions);
-		VectorOperations::DefaultCast(*cached_cast_vector, target, scan_count);
+		TupleDataCastToArray(*cached_cast_vector, target, target_sel, scan_count);
 	} else {
 		// Otherwise, create a new temporary cast vector
 		Vector cast_vector(ArrayType::ConvertToList(target.GetType()));
 		TupleDataListGather(layout, row_locations, col_idx, scan_sel, scan_count, cast_vector, target_sel, &cast_vector,
 		                    child_functions);
-		VectorOperations::DefaultCast(cast_vector, target, scan_count);
+		TupleDataCastToArray(cast_vector, target, target_sel, scan_count);
 	}
 }
 
@@ -1798,13 +1823,13 @@ static void TupleDataCastToArrayStructGather(const TupleDataLayout &layout, Vect
 		// Reuse the cached cast vector
 		TupleDataStructGather(layout, row_locations, col_idx, scan_sel, scan_count, *cached_cast_vector, target_sel,
 		                      cached_cast_vector, child_functions);
-		VectorOperations::DefaultCast(*cached_cast_vector, target, scan_count);
+		TupleDataCastToArray(*cached_cast_vector, target, target_sel, scan_count);
 	} else {
 		// Otherwise, create a new temporary cast vector
 		Vector cast_vector(ArrayType::ConvertToList(target.GetType()));
 		TupleDataStructGather(layout, row_locations, col_idx, scan_sel, scan_count, cast_vector, target_sel,
 		                      &cast_vector, child_functions);
-		VectorOperations::DefaultCast(cast_vector, target, scan_count);
+		TupleDataCastToArray(cast_vector, target, target_sel, scan_count);
 	}
 }
 
