@@ -223,10 +223,9 @@ static unique_ptr<BaseStatistics> PropagateAbsStats(ClientContext &context, Func
 }
 
 template <class OP>
-static unique_ptr<FunctionData> DecimalUnaryOpBind(BindScalarFunctionInput &input) {
+static void DecimalUnaryOpResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->GetReturnType();
+	auto &decimal_type = input.GetArgumentType(0);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
 		bound_function.SetFunctionCallback(ScalarFunction::GetScalarUnaryFunction<OP>(LogicalTypeId::SMALLINT));
@@ -243,16 +242,18 @@ static unique_ptr<FunctionData> DecimalUnaryOpBind(BindScalarFunctionInput &inpu
 	}
 	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(decimal_type);
-	return nullptr;
 }
 
 ScalarFunctionSet AbsOperatorFun::GetFunctions() {
 	ScalarFunctionSet abs;
 	for (auto &type : LogicalType::Numeric()) {
 		switch (type.id()) {
-		case LogicalTypeId::DECIMAL:
-			abs.AddFunction(NameXArgument(ScalarFunction({}, type, nullptr, DecimalUnaryOpBind<AbsOperator>), type));
+		case LogicalTypeId::DECIMAL: {
+			ScalarFunction function({}, type, nullptr);
+			function.SetResolveTypesCallback(DecimalUnaryOpResolveTypes<AbsOperator>);
+			abs.AddFunction(NameXArgument(std::move(function), type));
 			break;
+		}
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
@@ -514,11 +515,10 @@ static void GenericRoundFunctionDecimal(DataChunk &input, ExpressionState &state
 }
 
 template <class OP>
-static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(BindScalarFunctionInput &input) {
+static void GenericRoundFunctionDecimalResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
 	// ceil essentially removes the scale
-	auto &decimal_type = arguments[0]->GetReturnType();
+	auto &decimal_type = input.GetArgumentType(0);
 	auto scale = DecimalType::GetScale(decimal_type);
 	auto width = DecimalType::GetWidth(decimal_type);
 	if (scale == 0) {
@@ -541,7 +541,6 @@ static unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(BindScalarFuncti
 	}
 	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(LogicalType::DECIMAL(width, 0));
-	return nullptr;
 }
 
 namespace {
@@ -566,7 +565,7 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 	ScalarFunctionSet ceil;
 	for (auto &type : LogicalType::Numeric()) {
 		scalar_function_t func = nullptr;
-		bind_scalar_function_t bind_func = nullptr;
+		resolve_scalar_types_t resolve_func = nullptr;
 		if (type.IsIntegral()) {
 			// no ceil for integral numbers
 			continue;
@@ -579,12 +578,14 @@ ScalarFunctionSet CeilFun::GetFunctions() {
 			func = ScalarFunction::UnaryFunction<double, double, CeilOperator>;
 			break;
 		case LogicalTypeId::DECIMAL:
-			bind_func = BindGenericRoundFunctionDecimal<CeilDecimalOperator>;
+			resolve_func = GenericRoundFunctionDecimalResolveTypes<CeilDecimalOperator>;
 			break;
 		default:
 			throw InternalException("Unimplemented numeric type for function \"ceil\"");
 		}
-		ceil.AddFunction(NameXArgument(ScalarFunction({}, type, func, bind_func), type));
+		ScalarFunction ceil_function({}, type, func);
+		ceil_function.SetResolveTypesCallback(resolve_func);
+		ceil.AddFunction(NameXArgument(std::move(ceil_function), type));
 	}
 	ceil.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return ceil;
@@ -622,7 +623,7 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 	ScalarFunctionSet floor;
 	for (auto &type : LogicalType::Numeric()) {
 		scalar_function_t func = nullptr;
-		bind_scalar_function_t bind_func = nullptr;
+		resolve_scalar_types_t resolve_func = nullptr;
 		if (type.IsIntegral()) {
 			// no floor for integral numbers
 			continue;
@@ -635,12 +636,14 @@ ScalarFunctionSet FloorFun::GetFunctions() {
 			func = ScalarFunction::UnaryFunction<double, double, FloorOperator>;
 			break;
 		case LogicalTypeId::DECIMAL:
-			bind_func = BindGenericRoundFunctionDecimal<FloorDecimalOperator>;
+			resolve_func = GenericRoundFunctionDecimalResolveTypes<FloorDecimalOperator>;
 			break;
 		default:
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
-		floor.AddFunction(NameXArgument(ScalarFunction({}, type, func, bind_func), type));
+		ScalarFunction floor_function({}, type, func);
+		floor_function.SetResolveTypesCallback(resolve_func);
+		floor.AddFunction(NameXArgument(std::move(floor_function), type));
 	}
 	floor.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 	return floor;
@@ -855,7 +858,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 	for (auto &type : LogicalType::Numeric()) {
 		scalar_function_t trunc_func = nullptr;
 		scalar_function_t trunc_prec_func = nullptr;
-		bind_scalar_function_t bind_func = nullptr;
+		resolve_scalar_types_t resolve_func = nullptr;
 		bind_scalar_function_t bind_prec_func = nullptr;
 		//	Truncation of integers gets generated by some tools (e.g., Tableau/JDBC:Postgres)
 		switch (type.id()) {
@@ -868,7 +871,7 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 			trunc_prec_func = ScalarFunction::BinaryFunction<double, int32_t, double, TruncOperatorPrecision>;
 			break;
 		case LogicalTypeId::DECIMAL:
-			bind_func = BindGenericRoundFunctionDecimal<TruncDecimalOperator>;
+			resolve_func = GenericRoundFunctionDecimalResolveTypes<TruncDecimalOperator>;
 			bind_prec_func =
 			    BindDecimalRoundPrecision<TruncDecimalNegativePrecisionOperator, TruncDecimalPositivePrecisionOperator>;
 			break;
@@ -915,7 +918,9 @@ ScalarFunctionSet TruncFun::GetFunctions() {
 		default:
 			throw InternalException("Unimplemented numeric type for function \"trunc\"");
 		}
-		trunc.AddFunction(NameXArgument(ScalarFunction({}, type, trunc_func, bind_func), type));
+		ScalarFunction trunc_function({}, type, trunc_func);
+		trunc_function.SetResolveTypesCallback(resolve_func);
+		trunc.AddFunction(NameXArgument(std::move(trunc_function), type));
 		trunc.AddFunction(NameXPrecisionArguments(ScalarFunction({}, type, trunc_prec_func, bind_prec_func), type));
 	}
 	trunc.SetUnaryArgProperties(ArgProperties().NonDecreasing());
@@ -1126,7 +1131,7 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 	for (auto &type : LogicalType::Numeric()) {
 		scalar_function_t round_prec_func = nullptr;
 		scalar_function_t round_func = nullptr;
-		bind_scalar_function_t bind_func = nullptr;
+		resolve_scalar_types_t resolve_func = nullptr;
 		bind_scalar_function_t bind_prec_func = nullptr;
 		switch (type.id()) {
 		case LogicalTypeId::FLOAT:
@@ -1140,7 +1145,7 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			    ScalarFunction::BinaryFunction<double, int32_t, double, RoundOperatorPrecision<RoundHalfAwayFromZero>>;
 			break;
 		case LogicalTypeId::DECIMAL:
-			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
+			resolve_func = GenericRoundFunctionDecimalResolveTypes<RoundDecimalOperator>;
 			bind_prec_func =
 			    BindDecimalRoundPrecision<DecimalRoundNegativePrecisionOperator<RoundHalfAwayFromZero>,
 			                              DecimalRoundPositivePrecisionOperator<RoundHalfAwayFromZero>, true>;
@@ -1177,7 +1182,9 @@ ScalarFunctionSet RoundFun::GetFunctions() {
 			}
 			throw InternalException("Unimplemented numeric type for function \"round\"");
 		}
-		auto round_function = NameXArgument(ScalarFunction({}, type, round_func, bind_func), type);
+		ScalarFunction round_unary_function({}, type, round_func);
+		round_unary_function.SetResolveTypesCallback(resolve_func);
+		auto round_function = NameXArgument(std::move(round_unary_function), type);
 		auto round_prec_function =
 		    NameXPrecisionArguments(ScalarFunction({}, type, round_prec_func, bind_prec_func), type);
 		if (type.id() == LogicalTypeId::DECIMAL) {

@@ -428,22 +428,21 @@ unique_ptr<FunctionData> DeserializeDecimalArithmetic(Deserializer &deserializer
 	return std::move(bind_data);
 }
 
-unique_ptr<FunctionData> NopDecimalBind(BindScalarFunctionInput &input) {
+void NopDecimalResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-
-	bound_function.SetReturnType(arguments[0]->GetReturnType());
-	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
-	return nullptr;
+	auto &decimal_type = input.GetArgumentType(0);
+	bound_function.SetReturnType(decimal_type);
+	bound_function.GetArguments()[0] = decimal_type;
 }
 
 } // namespace
 
 ScalarFunction AddFunction::GetFunction(const LogicalType &type) {
 	D_ASSERT(type.IsNumeric());
-	auto fn = type.id() == LogicalTypeId::DECIMAL
-	              ? ScalarFunction("+", {type}, type, ScalarFunction::NopFunction, NopDecimalBind)
-	              : ScalarFunction("+", {type}, type, ScalarFunction::NopFunction);
+	ScalarFunction fn("+", {type}, type, ScalarFunction::NopFunction);
+	if (type.id() == LogicalTypeId::DECIMAL) {
+		fn.SetResolveTypesCallback(NopDecimalResolveTypes);
+	}
 	fn.SetUnaryArgProperties(ArgProperties().StrictlyIncreasing());
 	return fn;
 }
@@ -716,31 +715,9 @@ interval_t NegateOperator::Operation(interval_t input) {
 	return result;
 }
 
-struct DecimalNegateBindData : public FunctionData {
-	DecimalNegateBindData() : bound_type(LogicalTypeId::INVALID) {
-	}
-
-	unique_ptr<FunctionData> Copy() const override {
-		auto res = make_uniq<DecimalNegateBindData>();
-		res->bound_type = bound_type;
-		return std::move(res);
-	}
-
-	bool Equals(const FunctionData &other_p) const override {
-		const auto &other = other_p.Cast<DecimalNegateBindData>();
-		return other.bound_type == bound_type;
-	}
-
-	LogicalTypeId bound_type;
-};
-
-static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input) {
+static void DecimalNegateResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-
-	auto bind_data = make_uniq<DecimalNegateBindData>();
-
-	auto &decimal_type = arguments[0]->GetReturnType();
+	auto &decimal_type = input.GetArgumentType(0);
 	auto width = DecimalType::GetWidth(decimal_type);
 	if (width <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.SetFunctionCallback(
@@ -759,7 +736,6 @@ static unique_ptr<FunctionData> DecimalNegateBind(BindScalarFunctionInput &input
 	decimal_type.Verify();
 	bound_function.GetArguments()[0] = decimal_type;
 	bound_function.SetReturnType(decimal_type);
-	return nullptr;
 }
 
 static unique_ptr<FunctionData> IntegerNegateBind(BindScalarFunctionInput &input) {
@@ -805,7 +781,8 @@ ScalarFunction SubtractFunction::GetFunction(const LogicalType &type) {
 		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else if (type.id() == LogicalTypeId::DECIMAL) {
-		ScalarFunction func("-", {type}, type, nullptr, DecimalNegateBind);
+		ScalarFunction func("-", {type}, type, nullptr);
+		func.SetResolveTypesCallback(DecimalNegateResolveTypes);
 		func.SetUnaryArgProperties(ArgProperties().StrictlyDecreasing());
 		return func;
 	} else if (type.id() == LogicalTypeId::BIGNUM) {

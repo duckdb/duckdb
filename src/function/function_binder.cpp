@@ -1319,6 +1319,11 @@ FunctionBinder::ResolveFunction(shared_ptr<const ScalarFunction> function_p, vec
 	ResolveTemplateTypes(bound_function, arguments);
 	bound_function.SetLogicalArguments(CaptureLogicalArguments(bound_function, arguments));
 
+	if (bound_function.HasResolveTypesCallback()) {
+		ResolveScalarFunctionTypesInput input(context, bound_function, arguments, argument_names);
+		bound_function.GetResolveTypesCallback()(input);
+	}
+
 	unique_ptr<FunctionData> bind_info;
 
 	if (bound_function.HasBindCallback()) {

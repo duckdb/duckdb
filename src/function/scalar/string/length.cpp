@@ -161,14 +161,14 @@ void ArrayLengthFunction(DataChunk &args, ExpressionState &state, Vector &result
 	}
 }
 
-unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
+void ArrayOrListLengthResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	if (arguments[0]->HasParameter() || arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	auto &argument = input.GetArgument(0);
+	if (argument.HasParameter() || argument.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 
-	const auto &arg_type = arguments[0]->GetReturnType().id();
+	const auto &arg_type = argument.GetReturnType().id();
 	if (arg_type == LogicalTypeId::ARRAY) {
 		bound_function.SetFunctionCallback(ArrayLengthFunction);
 	} else if (arg_type == LogicalTypeId::LIST) {
@@ -177,8 +177,7 @@ unique_ptr<FunctionData> ArrayOrListLengthBind(BindScalarFunctionInput &input) {
 		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
 	}
-	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
-	return nullptr;
+	bound_function.GetArguments()[0] = argument.GetReturnType();
 }
 
 //------------------------------------------------------------------
@@ -281,7 +280,8 @@ ScalarFunctionSet LengthFun::GetFunctions() {
 	bit_fun.GetSignature().AddParameter("bit", LogicalType::BIT);
 	length.AddFunction(bit_fun);
 
-	ScalarFunction list_fun({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
+	ScalarFunction list_fun({}, LogicalType::BIGINT, nullptr);
+	list_fun.SetResolveTypesCallback(ArrayOrListLengthResolveTypes);
 	list_fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
 	length.AddFunction(list_fun);
 
@@ -300,7 +300,8 @@ ScalarFunctionSet LengthGraphemeFun::GetFunctions() {
 ScalarFunctionSet ArrayLengthFun::GetFunctions() {
 	ScalarFunctionSet array_length("array_length");
 
-	ScalarFunction unary({}, LogicalType::BIGINT, nullptr, ArrayOrListLengthBind);
+	ScalarFunction unary({}, LogicalType::BIGINT, nullptr);
+	unary.SetResolveTypesCallback(ArrayOrListLengthResolveTypes);
 	unary.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
 	array_length.AddFunction(unary);
 
