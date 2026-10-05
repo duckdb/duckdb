@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/parser/peg/token_type.hpp"
 #include "duckdb/parser/peg/grammar_literal_table.hpp"
 
@@ -26,7 +27,7 @@ struct MatcherTokenClass {
 };
 
 //! The token class of a token as emitted by the tokenizer (implemented in base_tokenizer.cpp)
-uint8_t ComputeMatcherTokenClass(TokenType type, const string &text);
+DUCKDB_API uint8_t ComputeMatcherTokenClass(TokenType type, const string &text);
 
 //! text, length and token_class are set together on construction: replace a token instead of editing its text
 struct MatcherToken {

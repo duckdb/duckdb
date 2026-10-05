@@ -282,11 +282,11 @@ struct MatcherFirstSet {
 		auto word = literal_id / 64;
 		return word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
 	}
-	void AddLiteral(idx_t literal_id);
+	DUCKDB_API void AddLiteral(idx_t literal_id);
 	//! Merge other into this set, returns whether anything changed
-	bool Merge(const MatcherFirstSet &other);
+	DUCKDB_API bool Merge(const MatcherFirstSet &other);
 	//! False only if the matcher certainly cannot match at the current token
-	bool MightMatch(MatchState &state) const;
+	DUCKDB_API bool MightMatch(MatchState &state) const;
 };
 
 class Matcher {
@@ -380,7 +380,7 @@ protected:
 };
 
 //! Compute the FIRST sets of all matchers reachable from root
-void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table);
+DUCKDB_API void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table);
 
 class AtomicMatcher : public Matcher {
 public:

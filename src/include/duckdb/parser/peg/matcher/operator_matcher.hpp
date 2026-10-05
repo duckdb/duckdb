@@ -65,7 +65,7 @@ private:
 	}
 
 public:
-	static bool HasSpecialPrecedence(const string &operator_name);
+	DUCKDB_API static bool HasSpecialPrecedence(const string &operator_name);
 
 private:
 	OperatorMatcherMode mode;
