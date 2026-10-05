@@ -29,10 +29,20 @@ static bool IsSimpleDefaultValue(const ParsedExpression &val) {
 	return constant.get().GetExpressionClass() == ExpressionClass::CONSTANT;
 }
 
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTransformer &transformer,
-                                                                        unique_ptr<AlterInfo> alter_options) {
+static unique_ptr<SQLStatement> WrapAlterInfo(unique_ptr<AlterInfo> info) {
 	auto result = make_uniq<AlterStatement>();
-	result->info = std::move(alter_options);
+	result->info = std::move(info);
+	return std::move(result);
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTransformer &transformer,
+                                                                        unique_ptr<SQLStatement> alter_options) {
+	return alter_options;
+}
+
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterTableAction(unique_ptr<AlterInfo> info) {
+	auto result = make_uniq<AlterStatement>();
+	result->info = std::move(info);
 	if (result->info->type != AlterType::ALTER_TABLE) {
 		return std::move(result);
 	}
@@ -89,70 +99,83 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterStatement(PEGTrans
 	return std::move(multi_statement);
 }
 
-unique_ptr<AlterInfo>
+unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformAlterTableStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
                                                unique_ptr<BaseTableRef> base_table_name,
                                                vector<unique_ptr<AlterTableInfo>> alter_table_options) {
-	if (alter_table_options.size() > 1) {
-		throw ParserException("Only one ALTER command per statement is supported");
+	vector<unique_ptr<SQLStatement>> statements;
+	for (auto &option : alter_table_options) {
+		option->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
+		option->SetQualifiedName(base_table_name->GetQualifiedName());
+		statements.push_back(TransformAlterTableAction(std::move(option)));
 	}
-	auto result = std::move(alter_table_options[0]);
-	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	result->SetQualifiedName(base_table_name->GetQualifiedName());
-
-	return std::move(result);
+	if (statements.size() == 1) {
+		return std::move(statements[0]);
+	}
+	// several actions run as consecutive ALTER statements
+	auto multi_statement = make_uniq<MultiStatement>();
+	for (auto &statement : statements) {
+		if (statement->type == StatementType::MULTI_STATEMENT) {
+			for (auto &child : statement->Cast<MultiStatement>().statements) {
+				multi_statement->statements.push_back(std::move(child));
+			}
+			continue;
+		}
+		statement->query = statement->ToString();
+		multi_statement->statements.push_back(std::move(statement));
+	}
+	return std::move(multi_statement);
 }
 
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTransformer &transformer,
-                                                                        const optional<bool> &if_exists,
-                                                                        const Identifier &identifier,
-                                                                        const Identifier &identifier_1) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterDatabaseStmt(PEGTransformer &transformer,
+                                                                           const optional<bool> &if_exists,
+                                                                           const Identifier &identifier,
+                                                                           const Identifier &identifier_1) {
 	OnEntryNotFound not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	auto catalog_name = identifier;
 	auto new_name = identifier_1;
-	auto result = make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found);
-	return std::move(result);
+	return WrapAlterInfo(make_uniq<RenameDatabaseInfo>(catalog_name, new_name, not_found));
 }
 
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer,
-                                                                    const optional<bool> &if_exists,
-                                                                    unique_ptr<BaseTableRef> base_table_name,
-                                                                    unique_ptr<AlterTableInfo> rename_alter) {
+unique_ptr<SQLStatement> PEGTransformerFactory::TransformAlterViewStmt(PEGTransformer &transformer,
+                                                                       const optional<bool> &if_exists,
+                                                                       unique_ptr<BaseTableRef> base_table_name,
+                                                                       unique_ptr<AlterTableInfo> rename_alter) {
 	auto rename_table = unique_ptr_cast<AlterTableInfo, RenameTableInfo>(std::move(rename_alter));
 	auto result = make_uniq<RenameViewInfo>(AlterEntryData(), rename_table->new_table_name);
 	result->SetQualifiedName(base_table_name->GetQualifiedName());
 	result->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	return std::move(result);
+	return WrapAlterInfo(std::move(result));
 }
 
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer,
-                                                                      const optional<bool> &if_exists,
-                                                                      const QualifiedName &qualified_name,
-                                                                      unique_ptr<AlterTableInfo> alter_schema_options) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformAlterSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
+                                                const QualifiedName &qualified_name,
+                                                unique_ptr<AlterTableInfo> alter_schema_options) {
 	// the new schema is stored in the Schema() slot, matching the layout used by CreateSchemaInfo
 	auto if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 	AlterEntryData data(QualifiedName(qualified_name.Path(), Identifier()), if_not_found);
 	switch (alter_schema_options->alter_table_type) {
 	case AlterTableType::SET_TABLE_OPTIONS: {
 		auto &set_options = alter_schema_options->Cast<SetTableOptionsInfo>();
-		return make_uniq<SetSchemaOptionsInfo>(data, std::move(set_options.table_options));
+		return WrapAlterInfo(make_uniq<SetSchemaOptionsInfo>(data, std::move(set_options.table_options)));
 	}
 	case AlterTableType::RESET_TABLE_OPTIONS: {
 		auto &reset_options = alter_schema_options->Cast<ResetTableOptionsInfo>();
-		return make_uniq<ResetSchemaOptionsInfo>(data, std::move(reset_options.table_options));
+		return WrapAlterInfo(make_uniq<ResetSchemaOptionsInfo>(data, std::move(reset_options.table_options)));
 	}
 	default:
 		throw NotImplementedException("Altering schemas is not yet supported");
 	}
 }
 
-unique_ptr<AlterInfo> PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer,
-                                                                        const optional<bool> &if_exists,
-                                                                        const QualifiedName &qualified_sequence_name,
-                                                                        unique_ptr<AlterInfo> alter_sequence_options) {
+unique_ptr<SQLStatement>
+PEGTransformerFactory::TransformAlterSequenceStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
+                                                  const QualifiedName &qualified_sequence_name,
+                                                  unique_ptr<AlterInfo> alter_sequence_options) {
 	alter_sequence_options->SetQualifiedName(qualified_sequence_name);
 	alter_sequence_options->if_not_found = if_exists ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
-	return alter_sequence_options;
+	return WrapAlterInfo(std::move(alter_sequence_options));
 }
 
 QualifiedName PEGTransformerFactory::TransformQualifiedSequenceName(PEGTransformer &transformer,

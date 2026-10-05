@@ -61,6 +61,12 @@ SQLStatement:
   rules:
     - Statement
     - AlterStatement
+    - AlterOptions
+    - AlterTableStmt
+    - AlterDatabaseStmt
+    - AlterViewStmt
+    - AlterSchemaStmt
+    - AlterSequenceStmt
     - AnalyzeStatement
     - AttachStatement
     - CallStatement
@@ -210,12 +216,6 @@ AlterInfo:
   type: "unique_ptr<AlterInfo>"
   by_value: true
   rules:
-    - AlterOptions
-    - AlterTableStmt
-    - AlterDatabaseStmt
-    - AlterViewStmt
-    - AlterSchemaStmt
-    - AlterSequenceStmt
     - AlterSequenceOptions
     - RenameAlterSequenceOptions
     - SetSequenceOption

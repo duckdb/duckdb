@@ -89,6 +89,7 @@ enum class AlterTableType : uint8_t {
 	RENAME_FIELD = 16,
 	SET_TABLE_OPTIONS = 17,
 	RESET_TABLE_OPTIONS = 18,
+	EXTENSION_ALTER_STMT = 19,
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -546,6 +547,38 @@ public:
 
 private:
 	ResetTableOptionsInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// ExtensionAlterTableInfo
+//===--------------------------------------------------------------------===//
+//! An ALTER TABLE action defined by an extension, executed by the catalog that owns the table
+struct ExtensionAlterTableInfo : public AlterTableInfo {
+	ExtensionAlterTableInfo(const AlterEntryData &data, string alter_name,
+	                        unique_ptr<ParsedExpression> payload_expression, string action_sql);
+	~ExtensionAlterTableInfo() override;
+
+	//! Identifies the action for the catalog that executes it
+	string alter_name;
+	//! The arguments of the action as parsed; the binder folds them into payload and clears this
+	unique_ptr<ParsedExpression> payload_expression;
+	//! The arguments of the action
+	Value payload;
+	//! The SQL of the action following the table name, used by ToString
+	string action_sql;
+
+public:
+	//! The arguments of the action, only available after binding
+	DUCKDB_API const Value &GetPayload() const;
+
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	ExtensionAlterTableInfo();
 };
 
 } // namespace duckdb

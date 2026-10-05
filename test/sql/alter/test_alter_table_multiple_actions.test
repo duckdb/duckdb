@@ -1,0 +1,69 @@
+# name: test/sql/alter/test_alter_table_multiple_actions.test
+# description: Test ALTER TABLE with several comma-separated actions
+# group: [alter]
+
+statement ok
+CREATE TABLE test(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2)
+
+statement ok
+ALTER TABLE test ADD COLUMN k INTEGER DEFAULT 3, ADD COLUMN l INTEGER NOT NULL DEFAULT 4, RENAME COLUMN i TO x
+
+query IIII
+SELECT x, j, k, l FROM test ORDER BY x
+----
+1	1	3	4
+2	2	3	4
+
+# later actions see the result of earlier ones
+statement ok
+ALTER TABLE test ADD COLUMN m VARCHAR, ALTER COLUMN m SET DEFAULT 'hello', DROP COLUMN j
+
+statement ok
+INSERT INTO test (x, l) VALUES (3, 5)
+
+query IIIT
+SELECT * FROM test ORDER BY x
+----
+1	3	4	NULL
+2	3	4	NULL
+3	3	5	hello
+
+# a failing action undoes the actions before it
+statement error
+ALTER TABLE test ADD COLUMN n INTEGER, DROP COLUMN does_not_exist
+----
+does not have a column with name "does_not_exist"
+
+query I
+SELECT count(*) FROM (DESCRIBE test) WHERE column_name = 'n'
+----
+0
+
+# in an explicit transaction, the transaction is aborted
+statement ok
+BEGIN
+
+statement error
+ALTER TABLE test ADD COLUMN n INTEGER, DROP COLUMN does_not_exist
+----
+does not have a column with name "does_not_exist"
+
+statement ok
+ROLLBACK
+
+query I
+SELECT count(*) FROM (DESCRIBE test) WHERE column_name = 'n'
+----
+0
+
+# IF EXISTS applies to every action
+statement ok
+ALTER TABLE IF EXISTS does_not_exist ADD COLUMN a INTEGER, ADD COLUMN b INTEGER
+
+statement error
+ALTER TABLE does_not_exist ADD COLUMN a INTEGER, ADD COLUMN b INTEGER
+----
+does_not_exist

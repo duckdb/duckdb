@@ -2,7 +2,16 @@
 #include <type_traits>
 #include "test_helpers.hpp"
 
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/sql_identifier.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/statement/multi_statement.hpp"
+#include "duckdb/planner/operator/logical_alter.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/parser.hpp"
@@ -14,6 +23,7 @@
 #include "duckdb/parser/peg/matcher_stack.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
+#include "duckdb/parser/peg/transformer/peg_transformer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
@@ -1298,4 +1308,101 @@ TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_
 	CheckGrammarExtensionTestSyntax(con);
 	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
 	REQUIRE(ListValue::GetChildren(setting).size() == 2);
+}
+
+//! ALTER TABLE <table> SET TAG '<name>' = <expression>, as an extension ALTER TABLE action
+static unique_ptr<TransformResultValue> FinalizeSetTagAlter(PEGTransformer &transformer, ParseResult &parse_result) {
+	auto &list = parse_result.Cast<ListParseResult>();
+	auto name = transformer.Transform<string>(list.GetChild(2));
+	auto value = transformer.Transform<unique_ptr<ParsedExpression>>(list.GetChild(4));
+	auto action_sql = "SET TAG " + SQLString::ToString(name) + " = " + value->ToString();
+	vector<FunctionArgument> fields;
+	fields.emplace_back(Identifier("name"), ConstantExpression::String(name));
+	fields.emplace_back(Identifier("value"), std::move(value));
+	auto payload = make_uniq<FunctionExpression>(Identifier("struct_pack"), std::move(fields));
+	unique_ptr<AlterTableInfo> result =
+	    make_uniq<ExtensionAlterTableInfo>(AlterEntryData(), "set_tag", std::move(payload), std::move(action_sql));
+	return make_uniq<TypedTransformResult<unique_ptr<AlterTableInfo>>>(std::move(result));
+}
+
+static unique_ptr<TransformProcess> StartSetTagAlterTransform(PEGTransformer &transformer, ParseResult &parse_result) {
+	return make_uniq<FinalizeTransformProcess>(transformer, parse_result, FinalizeSetTagAlter);
+}
+
+class AddSetTagAlterTable final : public GrammarExtension {
+public:
+	AddSetTagAlterTable() : GrammarExtension("set_tag_alter", "ALTER TABLE ... SET TAG '<name>' = <value>") {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(GrammarChange::AddChoice("UnreservedKeyword", "'TAG'"));
+		changes.push_back(GrammarChange::AddRule("SetTagAlter <- 'SET' 'TAG' StringLiteral '=' Expression",
+		                                         StartSetTagAlterTransform));
+		changes.push_back(GrammarChange::PrependChoice("AlterTableOptions", "SetTagAlter"));
+		return changes;
+	}
+};
+
+TEST_CASE("Grammar extensions can add ALTER TABLE actions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<AddSetTagAlterTable>());
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("SET active_grammar_extensions = ['set_tag_alter']"));
+
+	Parser parser(*con.context);
+	parser.ParseQuery("ALTER TABLE IF EXISTS t SET TAG 'owner' = 'a' || 'b'");
+	REQUIRE(parser.statements.size() == 1);
+	REQUIRE(parser.statements[0]->type == StatementType::ALTER_STATEMENT);
+	auto &info = parser.statements[0]->Cast<AlterStatement>().info->Cast<AlterTableInfo>();
+	REQUIRE(info.alter_table_type == AlterTableType::EXTENSION_ALTER_STMT);
+	auto &extension_info = info.Cast<ExtensionAlterTableInfo>();
+	REQUIRE(extension_info.alter_name == "set_tag");
+	REQUIRE(extension_info.if_not_found == OnEntryNotFound::RETURN_NULL);
+	REQUIRE(extension_info.GetQualifiedName().Name() == Identifier("t"));
+	REQUIRE(extension_info.ToString() == "ALTER TABLE IF EXISTS t SET TAG 'owner' = ('a' || 'b');");
+	REQUIRE_THROWS(extension_info.GetPayload());
+
+	// Copy and serialization keep the action
+	auto copy = extension_info.Copy();
+	REQUIRE(copy->ToString() == extension_info.ToString());
+	MemoryStream stream;
+	BinarySerializer::Serialize(extension_info, stream);
+	stream.Rewind();
+	auto deserialized = BinaryDeserializer::Deserialize<ParseInfo>(stream);
+	auto &deserialized_info = deserialized->Cast<AlterInfo>().Cast<ExtensionAlterTableInfo>();
+	REQUIRE(deserialized_info.alter_name == "set_tag");
+	REQUIRE(deserialized_info.ToString() == extension_info.ToString());
+	REQUIRE(deserialized_info.payload_expression);
+
+	// the binder folds the payload into a constant
+	auto plan = con.ExtractPlan("ALTER TABLE t SET TAG 'owner' = 'a' || 'b'");
+	REQUIRE(plan->type == LogicalOperatorType::LOGICAL_ALTER);
+	auto &bound_info = plan->Cast<LogicalAlter>().info->Cast<ExtensionAlterTableInfo>();
+	REQUIRE(!bound_info.payload_expression);
+	auto expected = Value::STRUCT({{"name", Value("owner")}, {"value", Value("ab")}});
+	REQUIRE(bound_info.GetPayload() == expected);
+
+	// DuckDB tables reject the action, also when it is mixed with built-in actions
+	auto result = con.Query("ALTER TABLE t ADD COLUMN j INTEGER, SET TAG 'owner' = 'me'");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->GetError(), "\"set_tag\" is not supported for DuckDB tables"));
+	result = con.Query("SELECT * FROM t");
+	REQUIRE(result->ColumnCount() == 1);
+
+	// the payload must be constant
+	REQUIRE_FAIL(con.Query("ALTER TABLE t SET TAG 'owner' = i"));
+	REQUIRE_FAIL(con.Query("PREPARE p AS ALTER TABLE t SET TAG 'owner' = $1"));
+
+	// several actions become several ALTER statements
+	Parser multi_parser(*con.context);
+	multi_parser.ParseQuery("ALTER TABLE t ADD COLUMN j INTEGER, SET TAG 'owner' = 'me'");
+	REQUIRE(multi_parser.statements.size() == 1);
+	REQUIRE(multi_parser.statements[0]->type == StatementType::MULTI_STATEMENT);
+	auto &multi = multi_parser.statements[0]->Cast<MultiStatement>();
+	REQUIRE(multi.statements.size() == 2);
+	REQUIRE(multi.statements[1]->query == "ALTER TABLE t SET TAG 'owner' = 'me';");
+
+	REQUIRE_NO_FAIL(con.Query("ALTER TABLE IF EXISTS missing_table SET TAG 'owner' = 'me'"));
 }

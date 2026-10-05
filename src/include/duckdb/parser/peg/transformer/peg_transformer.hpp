@@ -654,6 +654,8 @@ public:
 	static void CollectGenericOptions(const vector<GenericCopyOption> &options_in,
 	                                  case_insensitive_map_t<unique_ptr<ParsedExpression>> &options,
 	                                  const char *statement_name);
+	//! A single ALTER TABLE action as a statement, expanded into several statements when needed
+	static unique_ptr<SQLStatement> TransformAlterTableAction(unique_ptr<AlterInfo> info);
 	static void AddToMultiStatement(const unique_ptr<MultiStatement> &multi_statement,
 	                                unique_ptr<AlterInfo> alter_info);
 	static void AddUpdateToMultiStatement(const unique_ptr<MultiStatement> &multi_statement, const string &column_name,
@@ -4112,13 +4114,15 @@ public:
 	static unique_ptr<TransformResultValue> FinalizeNameListTrampoline(PEGTransformer &transformer,
 	                                                                   GeneratedTransformProcess &process);
 	static unique_ptr<SQLStatement> TransformAlterStatement(PEGTransformer &transformer,
-	                                                        unique_ptr<AlterInfo> alter_options);
-	static unique_ptr<AlterInfo> TransformAlterTableStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
-	                                                     unique_ptr<BaseTableRef> base_table_name,
-	                                                     vector<unique_ptr<AlterTableInfo>> alter_table_options);
-	static unique_ptr<AlterInfo> TransformAlterSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
-	                                                      const QualifiedName &qualified_name,
-	                                                      unique_ptr<AlterTableInfo> alter_schema_options);
+	                                                        unique_ptr<SQLStatement> alter_options);
+	static unique_ptr<SQLStatement> TransformAlterTableStmt(PEGTransformer &transformer,
+	                                                        const optional<bool> &if_exists,
+	                                                        unique_ptr<BaseTableRef> base_table_name,
+	                                                        vector<unique_ptr<AlterTableInfo>> alter_table_options);
+	static unique_ptr<SQLStatement> TransformAlterSchemaStmt(PEGTransformer &transformer,
+	                                                         const optional<bool> &if_exists,
+	                                                         const QualifiedName &qualified_name,
+	                                                         unique_ptr<AlterTableInfo> alter_schema_options);
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer,
 	                                                         unique_ptr<Constraint> top_level_constraint);
 	static unique_ptr<AlterTableInfo> TransformDropConstraint(PEGTransformer &transformer,
@@ -4172,13 +4176,13 @@ public:
 	                                                     optional<unique_ptr<ParsedExpression>> using_expression);
 	static unique_ptr<ParsedExpression> TransformUsingExpression(PEGTransformer &transformer,
 	                                                             unique_ptr<ParsedExpression> expression);
-	static unique_ptr<AlterInfo> TransformAlterViewStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
-	                                                    unique_ptr<BaseTableRef> base_table_name,
-	                                                    unique_ptr<AlterTableInfo> rename_alter);
-	static unique_ptr<AlterInfo> TransformAlterSequenceStmt(PEGTransformer &transformer,
-	                                                        const optional<bool> &if_exists,
-	                                                        const QualifiedName &qualified_sequence_name,
-	                                                        unique_ptr<AlterInfo> alter_sequence_options);
+	static unique_ptr<SQLStatement> TransformAlterViewStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
+	                                                       unique_ptr<BaseTableRef> base_table_name,
+	                                                       unique_ptr<AlterTableInfo> rename_alter);
+	static unique_ptr<SQLStatement> TransformAlterSequenceStmt(PEGTransformer &transformer,
+	                                                           const optional<bool> &if_exists,
+	                                                           const QualifiedName &qualified_sequence_name,
+	                                                           unique_ptr<AlterInfo> alter_sequence_options);
 	static QualifiedName TransformQualifiedSequenceName(PEGTransformer &transformer,
 	                                                    const optional<Identifier> &catalog_qualification,
 	                                                    const optional<Identifier> &schema_qualification,
@@ -4188,10 +4192,10 @@ public:
 	static unique_ptr<AlterInfo>
 	TransformSetSequenceOption(PEGTransformer &transformer,
 	                           vector<pair<string, unique_ptr<SequenceOption>>> sequence_option);
-	static unique_ptr<AlterInfo> TransformAlterDatabaseStmt(PEGTransformer &transformer,
-	                                                        const optional<bool> &if_exists,
-	                                                        const Identifier &identifier,
-	                                                        const Identifier &identifier_1);
+	static unique_ptr<SQLStatement> TransformAlterDatabaseStmt(PEGTransformer &transformer,
+	                                                           const optional<bool> &if_exists,
+	                                                           const Identifier &identifier,
+	                                                           const Identifier &identifier_1);
 	static unique_ptr<SQLStatement> TransformAnalyzeStatement(PEGTransformer &transformer,
 	                                                          const Identifier &analyze_keyword,
 	                                                          const optional<bool> &analyze_verbose,

@@ -20,9 +20,3 @@ statement error
 ALTER VIEW x ADD COLUMN i INTEGER
 ----
 Parser Error
-
-# Multiple alter per statement not supported yet
-statement error
-ALTER TABLE i ADD COLUMN j INT, ADD COLUMN k INT
-----
-Parser Error: Only one ALTER command per statement is supported
