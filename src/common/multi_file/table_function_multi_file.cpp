@@ -593,13 +593,11 @@ void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<Lo
 }
 
 unique_ptr<GlobalTableFunctionState>
-TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileBindData &bind_data,
+TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileBindData &,
                                                      MultiFileGlobalState &global_state) {
 	auto result = make_uniq<TableFunctionMultiFileGlobalState>();
-	// the wrapped function is told which file of this scan it reads, so that a function that reports per-file
-	// information (like the CSV rejects tables) can tell the files of a scan apart from those of another scan
 	result->op = global_state.op;
-	result->file_count = bind_data.file_list->GetTotalFileCount();
+	result->file_count = global_state.file_list.GetTotalFileCount();
 	return std::move(result);
 }
 
