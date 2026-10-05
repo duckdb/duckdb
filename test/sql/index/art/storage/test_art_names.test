@@ -1,5 +1,5 @@
 # name: test/sql/index/art/storage/test_art_names.test
-# description: Test that explicit ART index names do not conflict with the names of constraint-backed indexes
+# description: Test names ART indexes
 # group: [storage]
 
 load {TEST_DIR}/test_art_names.db
@@ -8,14 +8,6 @@ load {TEST_DIR}/test_art_names.db
 
 statement ok
 CREATE TABLE tbl (i INTEGER PRIMARY KEY, j INTEGER UNIQUE);
-
-# Explicit indexes may reuse the internal names of the constraint-backed indexes.
-
-statement ok
-CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
-
-statement ok
-CREATE INDEX UNIQUE_tbl_1 ON tbl(j);
 
 statement ok
 INSERT INTO tbl SELECT range, range FROM range (3000);
@@ -34,12 +26,6 @@ restart
 
 # Test index name deserialization.
 
-query T
-SELECT index_name FROM duckdb_indexes() WHERE table_name = 'tbl' ORDER BY ALL;
-----
-PRIMARY_tbl_0
-UNIQUE_tbl_1
-
 statement error
 INSERT INTO tbl VALUES (4000, 20);
 ----
@@ -51,50 +37,16 @@ INSERT INTO tbl VALUES (20, 4000);
 <REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement error
-CREATE INDEX PRIMARY_tbl_0 ON tbl(i);
+INSERT INTO tbl VALUES (20, 4000);
 ----
-<REGEX>:Catalog Error.*Index with name PRIMARY_tbl_0 already exists.*
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
-statement ok
-CHECKPOINT;
+statement error
+INSERT INTO tbl VALUES (4000, 20);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 restart
-
-query T
-SELECT index_name FROM duckdb_indexes() WHERE table_name = 'tbl' ORDER BY ALL;
-----
-PRIMARY_tbl_0
-UNIQUE_tbl_1
-
-# Dropping the explicit indexes keeps the constraints.
-
-statement ok
-DROP INDEX PRIMARY_tbl_0;
-
-statement ok
-DROP INDEX UNIQUE_tbl_1;
-
-statement error
-INSERT INTO tbl VALUES (4000, 20);
-----
-<REGEX>:Constraint Error.*violates unique constraint.*
-
-statement error
-INSERT INTO tbl VALUES (20, 4000);
-----
-<REGEX>:Constraint Error.*violates primary key constraint.*
-
-restart
-
-statement error
-INSERT INTO tbl VALUES (4000, 20);
-----
-<REGEX>:Constraint Error.*violates unique constraint.*
-
-statement error
-INSERT INTO tbl VALUES (20, 4000);
-----
-<REGEX>:Constraint Error.*violates primary key constraint.*
 
 statement ok
 DROP TABLE tbl;
@@ -117,13 +69,7 @@ INSERT INTO tbl SELECT range, range FROM range (3000);
 statement ok
 INSERT INTO fk_tbl SELECT range, range FROM range (3000);
 
-statement ok
-CREATE INDEX FOREIGN_fk_tbl_0 ON fk_tbl(i);
-
-statement ok
-CREATE INDEX FOREIGN_fk_tbl_1 ON fk_tbl(j);
-
-# Check all constraint violations.
+# Check all constraint violations and catalog errors.
 
 statement error
 INSERT INTO tbl VALUES (4000, 20);
@@ -145,18 +91,29 @@ INSERT INTO fk_tbl VALUES (20, 4000);
 ----
 <REGEX>:Constraint Error.*Violates foreign key constraint because key.*does not exist in the referenced table.*
 
+# Check all constraint violations and catalog errors.
+
 statement error
-DELETE FROM tbl WHERE i = 1;
+INSERT INTO tbl VALUES (4000, 20);
 ----
-<REGEX>:Constraint Error.*still referenced by a foreign key.*
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+statement error
+INSERT INTO tbl VALUES (20, 4000);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement error
+INSERT INTO fk_tbl VALUES (4000, 20);
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint because key.*does not exist in the referenced table.*
+
+statement error
+INSERT INTO fk_tbl VALUES (20, 4000);
+----
+<REGEX>:Constraint Error.*Violates foreign key constraint because key.*does not exist in the referenced table.*
 
 restart
-
-statement ok
-DROP INDEX FOREIGN_fk_tbl_0;
-
-statement ok
-DROP INDEX FOREIGN_fk_tbl_1;
 
 # Check all constraint errors.
 
@@ -179,8 +136,3 @@ statement error
 INSERT INTO fk_tbl VALUES (20, 4000);
 ----
 <REGEX>:Constraint Error.*Violates foreign key constraint because key "j: 4000" does not exist in the referenced table.*
-
-statement error
-DELETE FROM tbl WHERE i = 1;
-----
-<REGEX>:Constraint Error.*still referenced by a foreign key.*

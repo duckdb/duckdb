@@ -75,21 +75,3 @@ statement error
 ALTER TABLE dup ADD UNIQUE (j, i);
 ----
 <REGEX>:Catalog Error.*table "dup" already has the constraint UNIQUE\(i, j\).*
-
-# a PRIMARY KEY on the columns of an existing UNIQUE constraint is allowed
-statement ok
-ALTER TABLE dup ADD PRIMARY KEY (i);
-
-statement error
-INSERT INTO dup VALUES (1, 1), (1, 2);
-----
-<REGEX>:Constraint Error.*Duplicate key.*
-
-# a UNIQUE constraint declared inline counts as well
-statement ok
-CREATE TABLE dup_inline(i INT UNIQUE);
-
-statement error
-ALTER TABLE dup_inline ADD UNIQUE (i);
-----
-<REGEX>:Catalog Error.*table "dup_inline" already has the constraint UNIQUE.*

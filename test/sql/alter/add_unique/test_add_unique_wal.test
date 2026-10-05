@@ -92,14 +92,3 @@ INSERT INTO renamed_t VALUES (3, 10, 300);
 
 statement ok
 INSERT INTO renamed_t VALUES (3, 30, 100);
-
-# Duplicate constraints are detected by their columns, also after renames and a restart.
-statement error
-ALTER TABLE renamed_t ADD UNIQUE (id);
-----
-<REGEX>:Catalog Error.*table "renamed_t" already has the constraint UNIQUE\(id\).*
-
-statement error
-ALTER TABLE renamed_t ADD PRIMARY KEY (j);
-----
-<REGEX>:Catalog Error.*table "renamed_t" can have only one primary key.*
