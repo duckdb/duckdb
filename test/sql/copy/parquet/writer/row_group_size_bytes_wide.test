@@ -59,9 +59,63 @@ SELECT max(row_group_bytes) < 1300000 FROM parquet_metadata('{TEST_DIR}/mixed/**
 ----
 true
 
+# Clustered wide rows must also be split when partitions are prepared immediately.
+statement ok
+CREATE TABLE skewed AS SELECT i // 2048 AS p, i,
+    CASE WHEN i % 2048 < 100 THEN repeat(md5(i::VARCHAR), 2048) ELSE md5(i::VARCHAR) END::BLOB AS payload
+FROM range(4096) t(i)
+
+statement ok
+SET partitioned_write_flush_threshold=1
+
+foreach threads 1 4
+
+statement ok
+SET threads={threads}
+
+statement ok
+COPY skewed TO '{TEST_DIR}/skewed_{threads}' (FORMAT parquet, COMPRESSION uncompressed, ROW_GROUP_SIZE_BYTES 1000000, PARTITION_BY (p))
+
+query T
+SELECT max(row_group_bytes) < 1300000 FROM parquet_metadata('{TEST_DIR}/skewed_{threads}/**/*.parquet')
+----
+true
+
+query II
+SELECT (SELECT count(*) FROM (FROM skewed EXCEPT ALL SELECT p, i, payload FROM '{TEST_DIR}/skewed_{threads}/**/*.parquet')),
+       (SELECT count(*) FROM (SELECT p, i, payload FROM '{TEST_DIR}/skewed_{threads}/**/*.parquet' EXCEPT ALL FROM skewed))
+----
+0	0
+
+statement ok
+COPY skewed TO '{TEST_DIR}/skewed_sorted_{threads}' (FORMAT parquet, COMPRESSION uncompressed, ROW_GROUP_SIZE_BYTES 1000000, PARTITION_BY (p), ORDER_BY (i))
+
+query T
+SELECT max(row_group_bytes) < 1300000 FROM parquet_metadata('{TEST_DIR}/skewed_sorted_{threads}/**/*.parquet')
+----
+true
+
+endloop
+
+# ORDER_BY without partition keys uses the same batching path.
+statement ok
+COPY skewed TO '{TEST_DIR}/skewed_sorted' (FORMAT parquet, COMPRESSION uncompressed, ROW_GROUP_SIZE_BYTES 1000000, ORDER_BY (i))
+
+query T
+SELECT max(row_group_bytes) < 1300000 FROM parquet_metadata('{TEST_DIR}/skewed_sorted/*.parquet')
+----
+true
+
+statement ok
+RESET threads
+
+statement ok
+RESET partitioned_write_flush_threshold
+
 # nested types are sliced per column, so they need the same bound and must round-trip
 statement ok
 CREATE TABLE nested AS SELECT
+    CASE WHEN i % 3 = 0 THEN NULL ELSE {'a': i, 'b': i} END AS fixed_strct,
     range(i, i + 400) AS lst,
     {'a': repeat(md5(i::VARCHAR), 20), 'b': i} AS strct,
     [repeat(md5(i::VARCHAR), 10), repeat(md5((i + 1)::VARCHAR), 10)]::VARCHAR[2] AS arr,

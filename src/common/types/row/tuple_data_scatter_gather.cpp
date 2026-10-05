@@ -12,6 +12,7 @@
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
+#include "duckdb/common/vector/vector_writer.hpp"
 
 namespace duckdb {
 
@@ -111,10 +112,12 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
                                            const SelectionVector &append_sel, const idx_t append_count) {
 	ResetCombinedListData(chunk_state.vector_data);
 
-	auto heap_sizes = FlatVector::GetDataMutable<idx_t>(chunk_state.heap_sizes);
-	std::fill_n(heap_sizes, append_count, 0);
+	auto writer = FlatVector::Writer<idx_t>(chunk_state.heap_sizes, append_count);
+	for (idx_t i = 0; i < append_count; i++) {
+		writer.WriteValue(0);
+	}
 
-	for (idx_t col_idx = 0; col_idx < new_chunk.ColumnCount(); col_idx++) {
+	for (auto col_idx : chunk_state.column_ids) {
 		const auto &source_v = new_chunk.data[col_idx];
 		auto &source_format = chunk_state.vector_data[col_idx];
 		ComputeHeapSizes(chunk_state.heap_sizes, source_v, source_format, append_sel, append_count);
