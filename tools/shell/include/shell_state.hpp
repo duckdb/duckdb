@@ -234,6 +234,8 @@ public:
 	//! In duckbox_preview mode: the still-open stream of the last query, when it had more rows than were fetched.
 	//! last_result holds the rows fetched so far - the rest is fetched only if the next statement refers to `_`
 	unique_ptr<duckdb::QueryResultStream<>> pending_result_stream;
+	//! Whether the last result is gone because it was a preview whose query was cancelled
+	bool last_result_preview_cancelled = false;
 	//! The last result from before the pending stream's query, which that query may still be reading through `_`
 	unique_ptr<duckdb::QueryResult> pending_result_input;
 	//! Whether the last EXPLAIN ANALYZE tree folded any operators (so ".last" has a fuller tree to show)
@@ -395,8 +397,9 @@ public:
 	//! Ends the pending result stream (if any): with consume, its remaining rows are first appended to last_result,
 	//! otherwise the query is cancelled. On fail - prints the error and returns FAILURE
 	SuccessState ResolvePendingResult(bool consume);
-	//! Whether the SQL text may refer to the last result `_` - errs on the side of yes (e.g. a `_` in a string)
-	static bool MayReferenceLastResult(const string &sql);
+	//! Whether the parsed statement has a table reference to the last result `_`. A reference that only appears when
+	//! binding (e.g. query('FROM _'), EXECUTE, a macro) is not found
+	static bool ReferencesLastResult(duckdb::SQLStatement &statement);
 	static bool UseDescribeRenderMode(const duckdb::SQLStatement &stmt, string &describe_table_name);
 	//! Route EXPLAIN ANALYZE output through the shell's direct-printing renderer when on an interactive console
 	void SetupPrettyExplain(duckdb::SQLStatement &statement);

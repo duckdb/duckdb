@@ -46,7 +46,52 @@ def test_preview_last_result_consumes_rest(shell):
     result.check_stdout("2999999")
 
 
-# a `_` inside a string also counts
+# a table reference to `_` anywhere in the statement fetches the rest
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT (SELECT count(*) FROM _) AS cnt",
+        "WITH c AS (FROM _) SELECT count(*) AS cnt FROM c",
+        "SELECT count(*) AS cnt FROM range(3_000_000) t(i) JOIN _ USING (i)",
+        "SELECT count(*) AS cnt FROM range(3_000_000) t(i) WHERE i IN (SELECT i FROM _)",
+        "COPY (SELECT count(*) AS cnt FROM _) TO '/dev/stdout' (FORMAT csv)",
+    ],
+)
+def test_preview_last_result_reference(shell, statement):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox_preview")
+        .statement("SELECT * FROM range(3_000_000) t(i)")
+        .statement(statement)
+    )
+    result = test.run()
+    result.check_stdout("3000000")
+
+
+def test_preview_last_result_explain_analyze(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox_preview")
+        .statement("SELECT * FROM range(3_000_000) t(i)")
+        .statement("EXPLAIN ANALYZE SELECT count(*) AS cnt FROM _")
+    )
+    result = test.run()
+    result.check_stdout("3,000,000 rows")
+
+
+def test_preview_last_result_create_table_as(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox_preview")
+        .statement("SELECT * FROM range(3_000_000) t(i)")
+        .statement("CREATE TABLE tbl AS FROM _")
+        .statement("SELECT count(*) AS cnt FROM tbl")
+    )
+    result = test.run()
+    result.check_stdout("3000000")
+
+
+# only a table reference counts: a `_` in a string does not fetch the rest, and the open query is cancelled
 def test_preview_last_result_in_string(shell):
     test = (
         ShellTest(shell)
@@ -55,7 +100,20 @@ def test_preview_last_result_in_string(shell):
         .statement("FROM query('SELECT count(*) AS cnt FROM _')")
     )
     result = test.run()
-    result.check_stdout("3000000")
+    result.check_stderr("the result was a preview")
+
+
+# after the open query is cancelled the fetched rows are not available as `_`
+def test_preview_cancelled_is_not_partial(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox_preview")
+        .statement("SELECT * FROM range(3_000_000) t(i)")
+        .statement("SET threads = 2")
+        .statement("SELECT count(*) AS cnt FROM _")
+    )
+    result = test.run()
+    result.check_stderr("the result was a preview")
 
 
 # a statement that does not refer to `_` cancels the open query - `_` is then its own result

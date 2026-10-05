@@ -56,7 +56,15 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node/list.hpp"
+#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -1013,6 +1021,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		stream = duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result));
 	} else {
 		last_result = std::move(result);
+		last_result_preview_cancelled = false;
 	}
 	// A bareword "SHOW name" is optimistically routed to the describe renderer, but it may have resolved to a setting
 	// value rather than a table describe. Only a describe-shaped result can be rendered in describe mode - fall back to
@@ -1036,6 +1045,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 			pending_result_stream = std::move(stream);
 		}
 		last_result = std::move(retained);
+		last_result_preview_cancelled = false;
 	}
 	return render_state;
 }
@@ -1048,8 +1058,11 @@ SuccessState ShellState::ResolvePendingResult(bool consume) {
 	auto input = std::move(pending_result_input);
 	auto stream = std::move(pending_result_stream);
 	if (!consume || !last_result) {
-		// nothing refers to the rest of the result (or the fetched rows were already released) - cancel the query
+		// nothing refers to the rest of the result (or the fetched rows were already released) - cancel the query.
+		// The fetched rows are only part of the result, so they are no longer available as `_`
 		stream->Close();
+		last_result.reset();
+		last_result_preview_cancelled = true;
 		return SuccessState::SUCCESS;
 	}
 	auto &collection = last_result->Collection();
@@ -1074,22 +1087,85 @@ SuccessState ShellState::ResolvePendingResult(bool consume) {
 	return SuccessState::SUCCESS;
 }
 
-bool ShellState::MayReferenceLastResult(const string &sql) {
-	// a `_` that is not part of a longer identifier - anywhere, including in a string (e.g. query('FROM _'))
-	auto is_identifier_char = [](char c) {
-		return duckdb::StringUtil::CharacterIsAlphaNumeric(c) || c == '_' || static_cast<unsigned char>(c) >= 0x80;
+static bool IsLastResultName(const duckdb::QualifiedName &name) {
+	return name.Catalog().empty() && name.Schema().empty() && name.Name().GetIdentifierName() == "_";
+}
+
+static bool QueryNodeReferencesLastResult(duckdb::QueryNode &node) {
+	bool found = false;
+	std::function<void(unique_ptr<duckdb::ParsedExpression> &)> expr_callback;
+	expr_callback = [&](unique_ptr<duckdb::ParsedExpression> &expr) {
+		if (!expr) {
+			return;
+		}
+		duckdb::ParsedExpressionIterator::VisitExpressionMutable<duckdb::SubqueryExpression>(
+		    *expr, [&](duckdb::SubqueryExpression &subquery) {
+			    found = found || QueryNodeReferencesLastResult(*subquery.SubqueryMutable()->node);
+			    duckdb::ParsedExpressionIterator::EnumerateChildren(subquery, expr_callback);
+		    });
 	};
-	for (idx_t i = 0; i < sql.size(); i++) {
-		if (sql[i] != '_') {
-			continue;
+	auto ref_callback = [&](duckdb::TableRef &ref) {
+		if (ref.type == duckdb::TableReferenceType::BASE_TABLE) {
+			found = found || IsLastResultName(ref.Cast<duckdb::BaseTableRef>().GetQualifiedName());
+		} else if (ref.type == duckdb::TableReferenceType::SHOW_REF) {
+			auto &show_ref = ref.Cast<duckdb::ShowRef>();
+			found = found || IsLastResultName(show_ref.qualified_name);
+			if (show_ref.query) {
+				found = found || QueryNodeReferencesLastResult(*show_ref.query);
+			}
 		}
-		bool starts = i == 0 || !is_identifier_char(sql[i - 1]);
-		bool ends = i + 1 == sql.size() || !is_identifier_char(sql[i + 1]);
-		if (starts && ends) {
-			return true;
+	};
+	duckdb::ParsedExpressionIterator::EnumerateQueryNodeChildren(node, expr_callback, ref_callback);
+	return found;
+}
+
+static bool StatementReferencesLastResult(duckdb::SQLStatement &statement) {
+	switch (statement.type) {
+	case duckdb::StatementType::SELECT_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::SelectStatement>().node);
+	case duckdb::StatementType::INSERT_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::InsertStatement>().node);
+	case duckdb::StatementType::UPDATE_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::UpdateStatement>().node);
+	case duckdb::StatementType::DELETE_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::DeleteStatement>().node);
+	case duckdb::StatementType::MERGE_INTO_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::MergeIntoStatement>().node);
+	case duckdb::StatementType::COPY_STATEMENT: {
+		auto &info = *statement.Cast<duckdb::CopyStatement>().info;
+		if (info.select_statement) {
+			return QueryNodeReferencesLastResult(*info.select_statement);
 		}
+		return !info.is_from && IsLastResultName(info.GetQualifiedName());
 	}
-	return false;
+	case duckdb::StatementType::CREATE_STATEMENT: {
+		auto &info = *statement.Cast<duckdb::CreateStatement>().info;
+		if (info.type == duckdb::CatalogType::TABLE_ENTRY) {
+			auto &query = info.Cast<duckdb::CreateTableInfo>().query;
+			return query && QueryNodeReferencesLastResult(*query->node);
+		}
+		if (info.type == duckdb::CatalogType::VIEW_ENTRY) {
+			auto &query = info.Cast<duckdb::CreateViewInfo>().query;
+			return query && QueryNodeReferencesLastResult(*query->node);
+		}
+		return false;
+	}
+	case duckdb::StatementType::EXPLAIN_STATEMENT:
+		return StatementReferencesLastResult(*statement.Cast<duckdb::ExplainStatement>().stmt);
+	case duckdb::StatementType::PREPARE_STATEMENT:
+		return StatementReferencesLastResult(*statement.Cast<duckdb::PrepareStatement>().statement);
+	default:
+		return false;
+	}
+}
+
+bool ShellState::ReferencesLastResult(duckdb::SQLStatement &statement) {
+	try {
+		return StatementReferencesLastResult(statement);
+	} catch (std::exception &) {
+		// a statement that cannot be traversed
+		return false;
+	}
 }
 
 /*
@@ -1167,9 +1243,8 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 			}
 
 			// the previous query may still be open (duckbox_preview) - executing this statement would cancel it, so
-			// first fetch the rest of it into `_` if this statement may refer to `_`
-			if (ResolvePendingResult(MayReferenceLastResult(!zStmtSql.empty() ? zStmtSql : zSql)) !=
-			    SuccessState::SUCCESS) {
+			// first fetch the rest of it into `_` if this statement refers to `_`
+			if (ResolvePendingResult(ReferencesLastResult(*statement)) != SuccessState::SUCCESS) {
 				return SuccessState::FAILURE;
 			}
 
