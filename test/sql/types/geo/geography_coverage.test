@@ -109,6 +109,23 @@ SELECT 'POLYGON((0 0, 0 10, 10 10, 10 0, 0 0))'::GEOGRAPHY && 'POINT(50 50)'::GE
 ----
 true	true
 
+# Orientation is decided on the sphere, not in planar lon/lat: the edge (0 45)->(90 45) bulges to
+# 54.7N, above the third vertex at 46N, so this ring is clockwise on the sphere (a planar shoelace
+# would call it counterclockwise) and its interior is the complement of the sliver.
+query II
+SELECT 'POLYGON((0 45, 90 45, 45 46, 0 45))'::GEOGRAPHY && 'POINT(0 0)'::GEOGRAPHY,
+       'POLYGON((0 45, 45 46, 90 45, 0 45))'::GEOGRAPHY && 'POINT(0 0)'::GEOGRAPHY;
+----
+true	false
+
+# The southern mirror dips below the third vertex instead, so the same vertex order is
+# counterclockwise there and keeps tight bounds
+query II
+SELECT 'POLYGON((0 -45, 90 -45, 45 -46, 0 -45))'::GEOGRAPHY && 'POINT(0 0)'::GEOGRAPHY,
+       'POLYGON((0 -45, 45 -46, 90 -45, 0 -45))'::GEOGRAPHY && 'POINT(0 0)'::GEOGRAPHY;
+----
+false	true
+
 # Holes never extend the interior: a counterclockwise shell with a (clockwise) hole keeps tight
 # bounds - the hole's orientation must not trigger the complement rule.
 query II

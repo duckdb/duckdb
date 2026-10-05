@@ -451,15 +451,13 @@ static auto VertexExtractStats(ClientContext &context, FunctionStatisticsInput &
 	}
 
 	if (bind_data.vertex_index == 0 && extent.HasXY()) { // X
-		if (extent.x_min <= extent.x_max) {
-			NumericStats::SetMin(new_stats, extent.x_min);
-			NumericStats::SetMax(new_stats, extent.x_max);
-		} else {
-			// A wrapped (antimeridian-crossing) GEOGRAPHY extent covers [x_min, 180] u [-180, x_max]:
-			// as a plain numeric range that is all of [-180, 180].
-			NumericStats::SetMin(new_stats, -180.0);
-			NumericStats::SetMax(new_stats, 180.0);
-		}
+		// A GEOGRAPHY extent is a longitude arc (it may wrap, and +180/-180 are the same longitude), so
+		// it is converted to a plain numeric range over the stored coordinate values.
+		const bool geodetic = input.child_stats[0].GetType().id() == LogicalTypeId::GEOGRAPHY;
+		double x_min, x_max;
+		extent.GetNumericXRange(geodetic, x_min, x_max);
+		NumericStats::SetMin(new_stats, x_min);
+		NumericStats::SetMax(new_stats, x_max);
 		return new_stats.ToUnique();
 	}
 	if (bind_data.vertex_index == 1 && extent.HasXY()) { // Y

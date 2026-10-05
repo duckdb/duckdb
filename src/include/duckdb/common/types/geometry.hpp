@@ -157,9 +157,10 @@ public:
 	// *coverage* extents: Geometry::GetExtent additionally bounds the geodesic edges between the
 	// vertices (great-circle arcs bulge poleward beyond their endpoints) and the polygon interiors
 	// under the interior-on-the-left rule (the S2/BigQuery convention): a shell winding east around
-	// the globe encloses the north pole, one winding west the south pole, a counterclockwise shell
-	// encloses its bounded side, and a clockwise shell encloses the complement - covering (almost)
-	// the whole globe, so ESRI-style clockwise shells get full-globe extents. This follows the
+	// the globe encloses the north pole, one winding west the south pole, a shell that is
+	// counterclockwise on the sphere encloses its bounded side, and a clockwise one encloses the
+	// complement - covering (almost) the whole globe, so ESRI-style clockwise shells get full-globe
+	// extents. Orientation is decided on the sphere, not in planar lon/lat. This follows the
 	// precedent of other spherical engines that write coverage bounds into Parquet geospatial
 	// statistics; the bounds are wider than the Parquet spec's coordinate-based bbox definition,
 	// which is safe for any reader.
@@ -265,14 +266,34 @@ public:
 		return x_min <= other.x_min && x_max >= other.x_max;
 	}
 
+	// The X axis as a plain numeric [min, max] range over the raw coordinate values, e.g. for numeric
+	// statistics of the extracted X ordinate. A geodetic arc is widened to the full range when it wraps
+	// or touches the seam (a coordinate of either sign may be stored for the same longitude), and is
+	// otherwise padded by LON_EPSILON to cover coordinates the rounded arc math absorbed.
+	void GetNumericXRange(bool geodetic, double &out_min, double &out_max) const {
+		out_min = x_min;
+		out_max = x_max;
+		if (!geodetic || !HasX()) {
+			return;
+		}
+		if (x_min > x_max || x_min == -180.0 || x_max == 180.0) {
+			out_min = -180.0;
+			out_max = 180.0;
+			return;
+		}
+		out_min = MaxValue(x_min - LON_EPSILON, -180.0);
+		out_max = MinValue(x_max + LON_EPSILON, 180.0);
+	}
+
 private:
 	// The X axis of a geodetic extent is an eastward arc on the longitude circle: it covers the
 	// longitudes traveled going east from x_min to x_max, so x_min > x_max means the arc crosses
 	// the antimeridian. [-180, 180] is the canonical full-circle arc, and +180/-180 denote the same
 	// physical longitude. Arc endpoints are always actual input coordinates (or +/-180 for the full
-	// circle) and are never synthesized with arithmetic: a coordinate that went into an extent
-	// always compares as contained, exactly. Decision comparisons still round at ~1 ulp of 360
-	// degrees, so the public predicates additionally guard with LON_EPSILON in the safe direction.
+	// circle) and are never synthesized with arithmetic. The containment tests still round at ~1 ulp
+	// of 360 degrees, so a merge can absorb a coordinate up to that far beyond an endpoint without
+	// widening the arc: the public predicates guard this with LON_EPSILON in the safe direction, and
+	// GetNumericXRange pads by it.
 	static constexpr double LON_EPSILON = 1e-9; // ~0.1mm of longitude at the equator
 
 	// Is this longitude within the canonical [-180, 180] range the arc math requires?

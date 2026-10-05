@@ -126,6 +126,58 @@ SELECT count(*) FROM t_vx WHERE g.x > 179.5;
 ----
 0
 
+# +180 and -180 are the same longitude to the arc math, so an arc ending at 180 contains a stored
+# -180. The numeric X range must then cover both seam values.
+statement ok
+CREATE TABLE t_vx_seam(g GEOGRAPHY);
+
+statement ok
+INSERT INTO t_vx_seam VALUES ('POINT(-159.6 0)');
+
+statement ok
+INSERT INTO t_vx_seam SELECT ('POINT(' || x || ' 0)')::GEOGRAPHY FROM range(-140, 180, 20) r(x);
+
+statement ok
+INSERT INTO t_vx_seam VALUES ('POINT(180 0)'), ('POINT(-180 0)');
+
+query II
+SELECT s.extent.x_min, s.extent.x_max FROM (SELECT stats(g) s FROM t_vx_seam LIMIT 1);
+----
+-159.6	180.0
+
+query I
+SELECT count(*) FROM t_vx_seam WHERE g.x = -180;
+----
+1
+
+query I
+SELECT count(*) FROM t_vx_seam WHERE g.x < -170;
+----
+1
+
+query I
+SELECT count(*) FROM t_vx_seam WHERE g.x > 170;
+----
+1
+
+# The arc containment test rounds at ~1 ulp, so a coordinate one ulp past the arc end can be
+# absorbed without widening the arc. The numeric X range is padded to cover it.
+statement ok
+CREATE TABLE t_vx_ulp(g GEOGRAPHY);
+
+statement ok
+INSERT INTO t_vx_ulp VALUES ('POINT(-89.628983761736379 0)'), ('POINT(-16.448723746794428 0)'), ('POINT(-16.448723746794425 0)');
+
+query I
+SELECT count(*) FROM t_vx_ulp WHERE g.x = -16.448723746794425;
+----
+1
+
+query I
+SELECT count(*) FROM t_vx_ulp WHERE g.x > -16.448723746794428;
+----
+1
+
 # ---------------------------------------------------------------------------------------------------
 # Poles: Y stays a plain min/max axis
 # ---------------------------------------------------------------------------------------------------

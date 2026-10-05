@@ -403,6 +403,38 @@ TEST_CASE("Geodetic extent: polygon interiors follow the interior-on-the-left ru
 	REQUIRE(small_cw.y_min == -90.0);
 	REQUIRE(small_cw.y_max == 90.0);
 
+	// Orientation is decided on the sphere: the edge (0 45)->(90 45) bulges to 54.7N, above the third
+	// vertex at 46N, so this ring is clockwise on the sphere even though a planar lon/lat shoelace
+	// calls it counterclockwise. Its interior is the complement of the sliver.
+	auto sliver_cw = get_extent(MakePolygonWKB({{0, 45}, {90, 45}, {45, 46}, {0, 45}}));
+	REQUIRE(sliver_cw.x_min == -180.0);
+	REQUIRE(sliver_cw.x_max == 180.0);
+	REQUIRE(sliver_cw.y_min == -90.0);
+	REQUIRE(sliver_cw.y_max == 90.0);
+	auto sliver_ccw = get_extent(MakePolygonWKB({{0, 45}, {45, 46}, {90, 45}, {0, 45}}));
+	REQUIRE(sliver_ccw.x_min == 0.0);
+	REQUIRE(sliver_ccw.x_max == 90.0);
+	REQUIRE(sliver_ccw.y_min == 45.0);
+	REQUIRE(sliver_ccw.y_max < 55.0);
+
+	// Southern mirror: the edge (0 -45)->(90 -45) dips to 54.7S, below the third vertex, so this ring
+	// is counterclockwise on the sphere. Its highest points are the two 45S vertices, where the turn
+	// direction decides: tight bounds.
+	auto sliver_south = get_extent(MakePolygonWKB({{0, -45}, {90, -45}, {45, -46}, {0, -45}}));
+	REQUIRE(sliver_south.x_min == 0.0);
+	REQUIRE(sliver_south.x_max == 90.0);
+	REQUIRE(sliver_south.y_max == -45.0);
+	REQUIRE(sliver_south.y_min < -54.0);
+	auto sliver_south_cw = get_extent(MakePolygonWKB({{0, -45}, {45, -46}, {90, -45}, {0, -45}}));
+	REQUIRE(sliver_south_cw.y_max == 90.0);
+	REQUIRE(sliver_south_cw.x_min == -180.0);
+
+	// A degenerate edge between two spellings of the same pole is not ambiguous
+	auto pole_edge = get_extent(MakeLineStringWKB({{0, 90}, {10, 90}}));
+	REQUIRE(pole_edge.y_min == 90.0);
+	REQUIRE(pole_edge.x_min == 0.0);
+	REQUIRE(pole_edge.x_max == 10.0);
+
 	// Holes never extend the interior: a clockwise hole inside a counterclockwise shell must not
 	// trigger the complement rule
 	std::string with_hole;
@@ -435,6 +467,25 @@ TEST_CASE("Geodetic extent: polygon interiors follow the interior-on-the-left ru
 	REQUIRE(ambiguous.y_max == 90.0);
 	REQUIRE(ambiguous.x_min == -180.0);
 	REQUIRE(ambiguous.x_max == 180.0);
+}
+
+TEST_CASE("Geodetic extent: edge apex stays accurate close to the pole", "[geometry]") {
+	// Two points at latitude phi0 nearly opposite in longitude: the geodesic between them passes
+	// close to the pole, where asin-based apex math loses up to ~1e-6 degrees. The computed y_max
+	// must still cover the true apex, tan(phi_max) = tan(phi0) / cos(half the longitude span).
+	for (double phi0 : {60.0, 80.0, 89.0, 89.9}) {
+		for (double d : {1e-2, 1e-4, 1e-6, 1e-8}) {
+			const double lon1 = -90.0 + d / 2, lon2 = 90.0 - d / 2;
+			auto e = GeometryExtent::Empty();
+			const auto wkb = MakeLineStringWKB({{lon1, phi0}, {lon2, phi0}});
+			Geometry::GetExtent(string_t(wkb.data(), uint32_t(wkb.size())), e, true);
+			const double half = (lon2 - lon1) / 2 * TEST_PI / 180.0;
+			const double apex = atan(tan(phi0 * TEST_PI / 180.0) / cos(half)) * 180.0 / TEST_PI;
+			INFO("phi0=" << phi0 << " d=" << d << " apex=" << apex << " y_max=" << e.y_max);
+			REQUIRE(e.y_max >= apex - 1e-12);
+			REQUIRE(e.y_max <= 90.0);
+		}
+	}
 }
 
 TEST_CASE("Geodetic extent: known ULP regression cases", "[geometry]") {
