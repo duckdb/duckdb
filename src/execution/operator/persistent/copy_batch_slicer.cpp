@@ -88,7 +88,8 @@ DataChunk &CopyBatchSlicer::Slice(DataChunk &chunk, idx_t &offset, const ColumnD
 	if (!layout.AllConstant() && offset == 0) {
 		ComputeRowSizes(chunk);
 	}
-	const auto current_batch_bytes = batch.SizeInBytes();
+	// InitializeAppend allocates a chunk, so an empty batch reports its capacity
+	const auto current_batch_bytes = batch.Count() == 0 ? 0 : batch.SizeInBytes();
 	const auto limit = batch_size_bytes.GetIndex();
 	// Avoid slicing chunks that only marginally cross the byte limit.
 	const auto slack_limit = limit + limit / BATCH_SIZE_BYTES_SLACK_DIVISOR;

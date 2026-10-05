@@ -144,10 +144,10 @@ CREATE TABLE fixed_struct AS SELECT {'a': i, 'b': i, 'c': i, 'd': i, 'e': i, 'f'
 statement ok
 COPY fixed_struct TO '{TEST_DIR}/fixed_struct.parquet' (FORMAT parquet, COMPRESSION uncompressed, ROW_GROUP_SIZE_BYTES 50000)
 
-query T
-SELECT max(row_group_bytes) < 65000 FROM parquet_metadata('{TEST_DIR}/fixed_struct.parquet')
+query TT
+SELECT max(row_group_bytes) < 65000, count(DISTINCT row_group_id) < 100 FROM parquet_metadata('{TEST_DIR}/fixed_struct.parquet')
 ----
-true
+true	true
 
 # a row wider than the limit cannot be split further - one row per row group, and no hang
 statement ok
