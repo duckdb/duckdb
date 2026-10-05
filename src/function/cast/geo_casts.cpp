@@ -34,7 +34,33 @@ struct TryCastBlobToGeometry {
 	}
 };
 
+// BLOB -> GEOGRAPHY additionally validates the canonical coordinate ranges, like ST_GeogFromWKB
+struct TryCastBlobToGeography {
+	template <class SRC, class DST>
+	static bool Operation(SRC input, DST &result, Vector &result_vector, CastParameters &parameters) {
+		try {
+			if (!Geometry::FromBinary(input, result, StringVector::GetStringHeap(result_vector), true)) {
+				return false;
+			}
+		} catch (InvalidInputException &ex) {
+			ErrorData error(ex);
+			HandleCastError::AssignError("Could not convert BLOB to GEOGRAPHY: " + error.RawMessage(), parameters);
+			return false;
+		}
+		if (!Geometry::IsValidGeography(result)) {
+			HandleCastError::AssignError("Could not convert BLOB to GEOGRAPHY: coordinates are outside the canonical "
+			                             "ranges (longitude/X must be within [-180, 180], latitude/Y within [-90, 90])",
+			                             parameters);
+			return false;
+		}
+		return true;
+	}
+};
+
 BoundCastInfo DefaultCasts::BlobToGeoCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	if (target.id() == LogicalTypeId::GEOGRAPHY) {
+		return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, TryCastBlobToGeography>);
+	}
 	return BoundCastInfo(&VectorCastHelpers::TryCastStringLoop<string_t, string_t, TryCastBlobToGeometry>);
 }
 

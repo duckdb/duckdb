@@ -1459,10 +1459,10 @@ static int VertexTopVerdict(double v_lon, double v_lat, double p_lon, double p_l
 		east = std::sin(dl) * std::cos(phi);
 		north = std::cos(phi_v) * std::sin(phi) - std::sin(phi_v) * std::cos(phi) * std::cos(dl);
 	};
-	double pe, pn, ne, nn;
-	tangent(p_lon, p_lat, pe, pn);
-	tangent(n_lon, n_lat, ne, nn);
-	const double cross = ne * pn - nn * pe;
+	double prev_east, prev_north, next_east, next_north;
+	tangent(p_lon, p_lat, prev_east, prev_north);
+	tangent(n_lon, n_lat, next_east, next_north);
+	const double cross = next_east * prev_north - next_north * prev_east;
 	return cross > 0 ? 1 : (cross < 0 ? -1 : 0);
 }
 
