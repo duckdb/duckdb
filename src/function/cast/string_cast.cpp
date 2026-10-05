@@ -338,7 +338,22 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 			}
 		}
 	}
-	MapVector::MapConversionVerify(result, count);
+	if (!parameters.error_message) {
+		MapVector::MapConversionVerify(result, count);
+		return vector_cast_data.all_converted;
+	}
+	// TRY_CAST: nullify maps with duplicate keys instead of throwing
+	SelectionVector row_sel(1);
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		if (!result_mask.RowIsValid(row_idx)) {
+			continue;
+		}
+		row_sel.set_index(0, row_idx);
+		if (MapVector::CheckMapValidity(result, 1, row_sel) != MapInvalidReason::VALID) {
+			HandleVectorCastError::Operation<string_t>("Map keys must be unique.", result_mask, row_idx,
+			                                           vector_cast_data);
+		}
+	}
 	return vector_cast_data.all_converted;
 }
 
