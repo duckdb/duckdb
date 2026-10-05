@@ -465,6 +465,7 @@ struct ColumnStatsUnifier {
 	idx_t column_size_bytes = 0;
 	bool can_have_nan = false;
 	bool has_nan = false;
+	idx_t nan_count = 0;
 
 	unique_ptr<GeometryStatsData> geo_stats;
 
@@ -1218,7 +1219,9 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 	if (writer_stats) {
 		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
 		has_nan = writer_stats->HasNaN();
-		stats_unifier->has_nan = has_nan;
+		// this is called once per row group: accumulate, so NaNs in earlier row groups are not lost
+		stats_unifier->has_nan = stats_unifier->has_nan || has_nan;
+		stats_unifier->nan_count += writer_stats->GetNaNCount();
 	}
 	if (column.meta_data.__isset.statistics) {
 		if (has_nan && writer_stats->HasStats()) {
@@ -1280,6 +1283,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 		}
 		if (stats_unifier->can_have_nan) {
 			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
+			column_stats["nan_count"] = Value::UBIGINT(stats_unifier->nan_count);
 		}
 		if (stats_unifier->geo_stats) {
 			const auto &bbox = stats_unifier->geo_stats->extent;

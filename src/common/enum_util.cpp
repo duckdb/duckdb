@@ -94,7 +94,6 @@
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/exception_format_value.hpp"
-#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/filename_pattern.hpp"
@@ -2527,36 +2526,6 @@ ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType
 	return static_cast<ExtraPersistentColumnDataType>(StringUtil::StringToEnum(GetExtraPersistentColumnDataTypeValues(), 3, "ExtraPersistentColumnDataType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetExtraTypeInfoTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ExtraTypeInfoType::INVALID_TYPE_INFO), "INVALID_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::GENERIC_TYPE_INFO), "GENERIC_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::DECIMAL_TYPE_INFO), "DECIMAL_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::STRING_TYPE_INFO), "STRING_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::LIST_TYPE_INFO), "LIST_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::STRUCT_TYPE_INFO), "STRUCT_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::ENUM_TYPE_INFO), "ENUM_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::UNBOUND_TYPE_INFO), "UNBOUND_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO), "LEGACY_AGGREGATE_STATE_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::ARRAY_TYPE_INFO), "ARRAY_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::ANY_TYPE_INFO), "ANY_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::INTEGER_LITERAL_TYPE_INFO), "INTEGER_LITERAL_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::TEMPLATE_TYPE_INFO), "TEMPLATE_TYPE_INFO" },
-		{ static_cast<uint32_t>(ExtraTypeInfoType::GEO_TYPE_INFO), "GEO_TYPE_INFO" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value) {
-	return StringUtil::EnumToString(GetExtraTypeInfoTypeValues(), 14, "ExtraTypeInfoType", static_cast<uint32_t>(value));
-}
-
-template<>
-ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value) {
-	return static_cast<ExtraTypeInfoType>(StringUtil::StringToEnum(GetExtraTypeInfoTypeValues(), 14, "ExtraTypeInfoType", value));
-}
-
 const StringUtil::EnumStringLiteral *GetFileBufferTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(FileBufferType::BLOCK), "BLOCK" },
@@ -3813,6 +3782,36 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	return static_cast<LogicalTypeId>(StringUtil::StringToEnum(GetLogicalTypeIdValues(), 54, "LogicalTypeId", value));
+}
+
+const StringUtil::EnumStringLiteral *GetLogicalTypeInfoTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(LogicalTypeInfoType::INVALID_TYPE_INFO), "INVALID_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::GENERIC_TYPE_INFO), "GENERIC_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::DECIMAL_TYPE_INFO), "DECIMAL_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::STRING_TYPE_INFO), "STRING_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::LIST_TYPE_INFO), "LIST_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::STRUCT_TYPE_INFO), "STRUCT_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::ENUM_TYPE_INFO), "ENUM_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::UNBOUND_TYPE_INFO), "UNBOUND_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::LEGACY_AGGREGATE_STATE_TYPE_INFO), "LEGACY_AGGREGATE_STATE_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::ARRAY_TYPE_INFO), "ARRAY_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::ANY_TYPE_INFO), "ANY_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::INTEGER_LITERAL_TYPE_INFO), "INTEGER_LITERAL_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::TEMPLATE_TYPE_INFO), "TEMPLATE_TYPE_INFO" },
+		{ static_cast<uint32_t>(LogicalTypeInfoType::GEO_TYPE_INFO), "GEO_TYPE_INFO" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<LogicalTypeInfoType>(LogicalTypeInfoType value) {
+	return StringUtil::EnumToString(GetLogicalTypeInfoTypeValues(), 14, "LogicalTypeInfoType", static_cast<uint32_t>(value));
+}
+
+template<>
+LogicalTypeInfoType EnumUtil::FromString<LogicalTypeInfoType>(const char *value) {
+	return static_cast<LogicalTypeInfoType>(StringUtil::StringToEnum(GetLogicalTypeInfoTypeValues(), 14, "LogicalTypeInfoType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLookupResultTypeValues() {

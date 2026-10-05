@@ -87,11 +87,9 @@ void ClientContext::StatementVerification(ClientContextLock &lock, unique_ptr<SQ
 			// reparsing not supported for relation statements
 			return;
 		}
-		auto parser_options = GetParserOptions();
 		// ToString() writes identifiers as they were folded when the statement was first parsed, so folding
 		// them a second time would corrupt any identifier that was quoted in the original statement
-		parser_options.identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
-		Parser parser(parser_options);
+		Parser parser(*this, IdentifierCaseMode::PRESERVE_CASE);
 		ErrorData error;
 		parser.ParseQuery(statement->ToString());
 		// FIXME: these properties don't round-trip in ToString(), so we overwrite them manually
