@@ -1,45 +1,65 @@
 #include "json_common.hpp"
 #include "json_functions.hpp"
+#include "json_stack.hpp"
 
 namespace duckdb {
 
 //! RFC 7396 merge patch; a missing or non-object orig is treated as an empty object
 static yyjson_mut_val *MergePatchRecursive(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {
-	if (!yyjson_mut_is_obj(patch)) {
-		return yyjson_mut_val_mut_copy(doc, patch);
-	}
+	auto root_builder = yyjson_mut_obj(doc);
 
-	auto builder = yyjson_mut_obj(doc);
-	if (!yyjson_mut_is_obj(orig)) {
-		// yyjson_mut_obj_getn on a non-object returns nullptr, so lookups below need no special case
-		orig = nullptr;
-	}
+	struct stack_item {
+		yyjson_mut_val *key;
+		yyjson_mut_val *orig;
+		yyjson_mut_val *patch;
+		yyjson_mut_val *builder;
+	};
+	Stack<stack_item> stack;
+	stack.Push(stack_item {nullptr, orig, patch, root_builder});
 
-	// Copy orig keys that the patch does not touch
-	if (orig) {
-		idx_t idx, max;
-		yyjson_mut_val *key, *orig_val;
-		yyjson_mut_obj_foreach(orig, idx, max, key, orig_val) {
-			auto patch_val = yyjson_mut_obj_getn(patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-			if (!patch_val) {
-				yyjson_mut_obj_add(builder, yyjson_mut_val_mut_copy(doc, key), yyjson_mut_val_mut_copy(doc, orig_val));
+	while (!stack.Empty()) {
+		auto nodes = stack.Pop();
+
+		// auto builder = yyjson_mut_obj(doc);
+		if (!yyjson_mut_is_obj(nodes.orig)) {
+			// yyjson_mut_obj_getn on a non-object returns nullptr, so lookups below need no special case
+			nodes.orig = nullptr;
+		}
+
+		// Copy orig keys that the patch does not touch
+		if (nodes.orig) {
+			idx_t idx, max;
+			yyjson_mut_val *key, *orig_val;
+			yyjson_mut_obj_foreach(nodes.orig, idx, max, key, orig_val) {
+				auto patch_val =
+				    yyjson_mut_obj_getn(nodes.patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+				if (!patch_val) {
+					yyjson_mut_obj_add(nodes.builder, yyjson_mut_val_mut_copy(doc, key),
+					                   yyjson_mut_val_mut_copy(doc, orig_val));
+				}
 			}
 		}
-	}
 
-	// Merge patch keys; null removes the key
-	idx_t idx, max;
-	yyjson_mut_val *key, *patch_val;
-	yyjson_mut_obj_foreach(patch, idx, max, key, patch_val) {
-		if (unsafe_yyjson_is_null(patch_val)) {
-			continue;
+		// Merge patch keys; null removes the key
+		idx_t idx, max;
+		yyjson_mut_val *key, *patch_val;
+		yyjson_mut_obj_foreach(nodes.patch, idx, max, key, patch_val) {
+			if (unsafe_yyjson_is_null(patch_val)) {
+				continue;
+			}
+			auto mut_key = yyjson_mut_val_mut_copy(doc, key);
+			if (!yyjson_mut_is_obj(patch_val)) {
+				yyjson_mut_obj_add(nodes.builder, mut_key, yyjson_mut_val_mut_copy(doc, patch_val));
+				continue;
+			}
+			auto orig_val = yyjson_mut_obj_getn(nodes.orig, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
+			auto child_builder = yyjson_mut_obj(doc);
+			yyjson_mut_obj_add(nodes.builder, mut_key, child_builder);
+			stack.Push(stack_item {mut_key, orig_val, patch_val, child_builder});
 		}
-		auto orig_val = yyjson_mut_obj_getn(orig, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-		auto merged_val = MergePatchRecursive(doc, orig_val, patch_val);
-		yyjson_mut_obj_add(builder, yyjson_mut_val_mut_copy(doc, key), merged_val);
 	}
 
-	return builder;
+	return root_builder;
 }
 
 static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *orig, yyjson_mut_val *patch) {

@@ -17,7 +17,7 @@ static void StripNulls(yyjson_mut_val *val) {
 		auto curr_val = stack.Pop().val;
 
 		if (!curr_val) { // TODO: at any point would we push something onto the stack that is a nullptr val?
-			return; // TODO: maybe put this as continue
+			return;      // TODO: maybe put this as continue
 		}
 		if (yyjson_mut_is_obj(curr_val)) {
 			yyjson_mut_obj_iter iter;
@@ -31,7 +31,8 @@ static void StripNulls(yyjson_mut_val *val) {
 					stack.Push(stack_item {child});
 				}
 			}
-		} else if (yyjson_mut_is_arr(curr_val)) { // TODO: this is exceptionally stupid bc you never check if array items are  null ?????????
+		} else if (yyjson_mut_is_arr(curr_val)) { // TODO: this is exceptionally stupid bc you never check if array
+			                                      // items are  null ?????????
 			// TODO: plus this logic could probably be combined with obj logic, its just the iterator ...
 			idx_t idx, max;
 			yyjson_mut_val *elem;
