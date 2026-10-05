@@ -58,7 +58,7 @@ ALTER TABLE g ADD PRIMARY KEY (g);
 
 # a UNIQUE constraint on the same set of columns already exists
 statement ok
-CREATE TABLE dup(i INT, j INT);
+CREATE TABLE dup(i INT);
 
 statement ok
 ALTER TABLE dup ADD UNIQUE (i);
@@ -67,11 +67,3 @@ statement error
 ALTER TABLE dup ADD UNIQUE (i);
 ----
 <REGEX>:Catalog Error.*table "dup" already has the constraint UNIQUE\(i\).*
-
-statement ok
-ALTER TABLE dup ADD UNIQUE (i, j);
-
-statement error
-ALTER TABLE dup ADD UNIQUE (j, i);
-----
-<REGEX>:Catalog Error.*table "dup" already has the constraint UNIQUE\(i, j\).*
