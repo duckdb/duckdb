@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
 
 namespace duckdb {
 
@@ -38,6 +39,7 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	return std::move(result);
 }
 
+<<<<<<< HEAD
 vector<unique_ptr<ParsedExpression>> CreateTableInfo::GetLegacySortKeys() const {
 	vector<unique_ptr<ParsedExpression>> result;
 	for (auto &order : sort_keys) {
@@ -53,6 +55,16 @@ void CreateTableInfo::SetLegacySortKeys(vector<unique_ptr<ParsedExpression>> leg
 	for (auto &expr : legacy_sort_keys) {
 		sort_keys.emplace_back(OrderType::ORDER_DEFAULT, OrderByNullType::ORDER_DEFAULT, std::move(expr));
 	}
+=======
+optional_idx CreateTableInfo::FindNotNullConstraint(LogicalIndex column) const {
+	for (idx_t constraint_idx = 0; constraint_idx < constraints.size(); constraint_idx++) {
+		auto &constraint = *constraints[constraint_idx];
+		if (constraint.type == ConstraintType::NOT_NULL && constraint.Cast<NotNullConstraint>().index == column) {
+			return constraint_idx;
+		}
+	}
+	return optional_idx();
+>>>>>>> origin/v2.0-cyanoptera
 }
 
 string CreateTableInfo::ExtraOptionsToString() const {

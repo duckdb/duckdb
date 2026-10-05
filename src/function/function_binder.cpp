@@ -768,6 +768,17 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &sche
 	return BindScalarFunction(function, std::move(children), error, is_operator, binder);
 }
 
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &schema, const Identifier &name,
+                                                          vector<unique_ptr<Expression>> children, bool is_operator,
+                                                          optional_ptr<Binder> binder) {
+	ErrorData error;
+	auto result = BindScalarFunction(schema, name, std::move(children), error, is_operator, binder);
+	if (!result) {
+		error.Throw();
+	}
+	return result;
+}
+
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
                                                           vector<unique_ptr<Expression>> children, ErrorData &error,
                                                           bool is_operator, optional_ptr<Binder> binder) {
@@ -1037,7 +1048,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	// Otherwise, recurse downwards into nested types, and try to infer nested type members
 	// This only works if the source and target types are completely defined (excluding templates),
 	// i.e. they have aux info.
-	if (!(source.IsNested() && target.IsNested() && source.AuxInfo() && target.AuxInfo())) {
+	if (!(source.IsNested() && target.IsNested() && source.HasParameters() && target.HasParameters())) {
 		return;
 	}
 

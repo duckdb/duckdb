@@ -1,5 +1,5 @@
 # name: test/sql/sql_export/mark_results.test
-# description: SQL export preserves scalar MARK results and rejects unsupported conjunction semantics
+# description: SQL export preserves scalar and grouped MARK results
 # group: [sql_export]
 
 statement ok
@@ -75,18 +75,22 @@ CREATE TABLE mark_build(b INTEGER,d INTEGER);
 statement ok
 INSERT INTO mark_build VALUES (1,NULL);
 
-statement error
-EXPLAIN (SQL) SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
+query TTT rowsort
+SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+null	0	false
+one	1	false
+two	2	false
 
 statement ok
 DELETE FROM mark_build;
 
-statement error
-EXPLAIN (SQL) SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
+query TTT rowsort
+SELECT label,id,a IN (SELECT b FROM mark_build WHERE c+d>0) FROM mark_probe;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+null	0	false
+one	1	false
+two	2	false
 
 statement ok
 DROP TABLE IF EXISTS l;
@@ -106,45 +110,133 @@ INSERT INTO l SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1
 statement ok
 INSERT INTO r SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	true
+1.0	1	10	true
+1.0	1	20	NULL
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	false
+1.0	NULL	20	false
+2.0	1	20	false
+NULL	1	10	false
+NULL	1	NULL	false
+NULL	NULL	NULL	false
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	true
+1.0	1	10	true
+1.0	1	20	NULL
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	false
+1.0	NULL	20	NULL
+2.0	1	20	false
+NULL	1	10	true
+NULL	1	NULL	NULL
+NULL	NULL	NULL	false
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	NULL
+1.0	1	10	NULL
+1.0	1	20	true
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	false
+1.0	NULL	20	false
+2.0	1	20	true
+NULL	1	10	false
+NULL	1	NULL	false
+NULL	NULL	NULL	false
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x<>ANY(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	NULL
+1.0	1	10	NULL
+1.0	1	20	true
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	false
+1.0	NULL	20	NULL
+2.0	1	20	true
+NULL	1	10	false
+NULL	1	NULL	NULL
+NULL	NULL	NULL	false
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	NULL
+1.0	1	10	NULL
+1.0	1	20	false
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	true
+1.0	NULL	20	true
+2.0	1	20	false
+NULL	1	10	true
+NULL	1	NULL	true
+NULL	NULL	NULL	true
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	NULL
+1.0	1	10	NULL
+1.0	1	20	false
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	true
+1.0	NULL	20	NULL
+2.0	1	20	false
+NULL	1	10	true
+NULL	1	NULL	NULL
+NULL	NULL	NULL	true
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	false
+1.0	1	10	false
+1.0	1	20	NULL
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	true
+1.0	NULL	20	true
+2.0	1	20	true
+NULL	1	10	true
+NULL	1	NULL	true
+NULL	NULL	NULL	true
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x<>ALL(SELECT r.y FROM r WHERE r.g IS NOT DISTINCT FROM o.g AND r.k IS NOT DISTINCT FROM o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10	false
+1.0	1	10	false
+1.0	1	20	NULL
+1.0	1	NULL	NULL
+1.0	2	10	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	true
+1.0	NULL	20	NULL
+2.0	1	20	true
+NULL	1	10	false
+NULL	1	NULL	NULL
+NULL	NULL	NULL	true
 
 statement ok
 DROP TABLE IF EXISTS l;
@@ -164,10 +256,21 @@ INSERT INTO l SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,20),(1,1,NULL),(1
 statement ok
 INSERT INTO r SELECT g,k,v FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	10.00	true
+1.0	1	10.00	true
+1.0	1	20.00	NULL
+1.0	1	NULL	NULL
+1.0	2	10.00	NULL
+1.0	2	NULL	NULL
+1.0	3	NULL	false
+1.0	NULL	20.00	false
+2.0	1	20.00	false
+NULL	1	10.00	false
+NULL	1	NULL	false
+NULL	NULL	NULL	false
 
 statement ok
 DROP TABLE IF EXISTS l;
@@ -187,10 +290,21 @@ INSERT INTO l SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE [v,NULL] END FROM (V
 statement ok
 INSERT INTO r SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE [v,NULL] END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	NULL	NULL
+1.0	1	[10, NULL]	true
+1.0	1	[10, NULL]	true
+1.0	1	[20, NULL]	NULL
+1.0	2	NULL	NULL
+1.0	2	[10, NULL]	NULL
+1.0	3	NULL	false
+1.0	NULL	[20, NULL]	false
+2.0	1	[20, NULL]	false
+NULL	1	NULL	false
+NULL	1	[10, NULL]	false
+NULL	NULL	NULL	false
 
 statement ok
 DROP TABLE IF EXISTS l;
@@ -210,10 +324,21 @@ INSERT INTO l SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE {'v':v} END FROM (VA
 statement ok
 INSERT INTO r SELECT g,k,CASE WHEN v IS NULL THEN NULL ELSE {'v':v} END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	NULL	NULL
+1.0	1	{'v': 10}	true
+1.0	1	{'v': 10}	true
+1.0	1	{'v': 20}	NULL
+1.0	2	NULL	NULL
+1.0	2	{'v': 10}	NULL
+1.0	3	NULL	false
+1.0	NULL	{'v': 20}	false
+2.0	1	{'v': 20}	false
+NULL	1	NULL	false
+NULL	1	{'v': 10}	false
+NULL	NULL	NULL	false
 
 statement ok
 DROP TABLE IF EXISTS l;
@@ -233,7 +358,18 @@ INSERT INTO l SELECT g,k,CASE v WHEN 10 THEN 'a' WHEN 20 THEN 'B' ELSE NULL END 
 statement ok
 INSERT INTO r SELECT g,k,CASE v WHEN 10 THEN 'a' WHEN 20 THEN 'B' ELSE NULL END FROM (VALUES (1,1,10),(1,1,10),(1,1,NULL),(1,2,NULL),(2,1,10),(NULL,1,10),(1,NULL,NULL)) t(g,k,v);
 
-statement error
-EXPLAIN (SQL) SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
+query TTTT rowsort
+SELECT o.g,o.k,o.x,o.x=ANY(SELECT r.y FROM r WHERE r.g=o.g AND r.k=o.k) m FROM l o;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query: The MARK condition requires conjunction execution semantics.*
+1.0	1	B	NULL
+1.0	1	NULL	NULL
+1.0	1	a	true
+1.0	1	a	true
+1.0	2	NULL	NULL
+1.0	2	a	NULL
+1.0	3	NULL	false
+1.0	NULL	B	false
+2.0	1	B	false
+NULL	1	NULL	false
+NULL	1	a	false
+NULL	NULL	NULL	false

@@ -268,6 +268,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	fun.SetBindCallback(BindMAD);
 	fun.SetStructStateExport(QuantileStateLayout<STATE>);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(mad_window)
 	fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 	fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
@@ -326,6 +327,7 @@ unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(BindAggregateFunctio
 	function.ReplaceImplementation(impl);
 	function.SetName("mad");
 	function.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	function.SetIsHolistic(true);
 	return BindMAD(input);
 }
 

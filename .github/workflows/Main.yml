@@ -52,17 +52,17 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64;job.priority=2' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
-      runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.runners.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.runners.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.runners.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.runners.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.runners.outputs.runners }}
+      runner_linux_small: ${{ fromJSON(steps.selection.outputs.runners).linux_small }}
+      runner_linux_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_x64 }}
+      runner_linux_22_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_22_x64 }}
+      runner_linux_arm64: ${{ fromJSON(steps.selection.outputs.runners).linux_arm64 }}
+      runner_windows_2022_x64: ${{ fromJSON(steps.selection.outputs.runners).windows_2022_x64 }}
+      runner_macos_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_arm64 }}
+      runner_macos_14_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_14_arm64 }}
+      runners: ${{ steps.selection.outputs.runners }}
       images: ${{ steps.config.outputs.images }}
       image_version: ${{ steps.config.outputs.image_version }}
       linux_release_matrix: ${{ steps.selection.outputs.linux_release_matrix }}
@@ -177,7 +177,8 @@ jobs:
             --skip-tests "$skip_tests" \
             --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
             --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
-            --runners '${{ steps.runners.outputs.runners }}'
+            --runners '${{ steps.runners.outputs.runners }}' \
+            --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
       - name: Configure CI
         id: config
@@ -283,6 +284,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        LINK_CORE_EXTENSIONS: 1
       with:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
@@ -553,8 +555,7 @@ jobs:
           GEN: ninja
           EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
           EXTENSION_TESTS_ONLY: 1
-          ENABLE_EXTENSION_AUTOLOADING: 1
-          ENABLE_EXTENSION_AUTOINSTALL: 1
+          DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
           DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
         with:
@@ -696,8 +697,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         EXTENSION_CONFIGS: ${{ format('{0}/.github/config/{1}', github.workspace, matrix.config.extension_config) }}
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
+        DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: ${{ matrix.config.build_jemalloc }}
         FORCE_WARN_UNUSED: 1
@@ -771,7 +771,7 @@ jobs:
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
-          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/extension/*/lib*_extension.a"
+          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
           assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
@@ -949,8 +949,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
+        DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
         BUILD_BENCHMARK: 1
         FORCE_WARN_UNUSED: 1
       with:
@@ -990,7 +989,7 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/extension/*/lib*_extension.a"
+        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
         ./scripts/upload-assets-to-staging.sh github_release \
           duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \
@@ -1137,6 +1136,7 @@ jobs:
           REDUCE_SYMBOLS: 1
           EXTENSION_STATIC_BUILD: 0
           CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          LINK_CORE_EXTENSIONS: 1
           DISABLE_STRING_INLINE: 1
           DESTROY_UNPINNED_BLOCKS: 1
           ALTERNATIVE_VERIFY: 1
@@ -1495,6 +1495,7 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+          BRANCH: ${{ github.ref_name }}
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
           DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
@@ -1521,6 +1522,18 @@ jobs:
             --header-upload "Cache-Control: no-cache" \
             "$pointer_file" \
             ":s3:duckdb-staging/latest_alpha_version.txt"
+
+          rclone copyto \
+            --s3-provider "$s3_provider" \
+            --s3-endpoint "$AWS_ENDPOINT_URL" \
+            --s3-access-key-id "$AWS_ACCESS_KEY_ID" \
+            --s3-secret-access-key "$AWS_SECRET_ACCESS_KEY" \
+            --s3-no-check-bucket \
+            --s3-no-head \
+            --header-upload "Content-Type: text/plain" \
+            --header-upload "Cache-Control: no-cache" \
+            "$pointer_file" \
+            ":s3:duckdb-staging/release/$BRANCH/latest_alpha_version.txt"
 
           target="${DUCKDB_COMMIT:0:10}"
           printf '%s\n' "$DUCKDB_VERSION" > "$pointer_file"

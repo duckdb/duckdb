@@ -202,8 +202,8 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 				expected.push_back(Value("b"));
 				expected.push_back(Value("B"));
 			}
-			REQUIRE(
-			    Value::NotDistinctFrom(direct->GetValue(0, 0), Value::LIST(LogicalType::VARCHAR, std::move(expected))));
+			REQUIRE(Value::NotDistinctFrom(direct->Collection().GetValue(0, 0),
+			                               Value::LIST(LogicalType::VARCHAR, std::move(expected))));
 			connection.Rollback();
 			INFO((exported.HasError() ? exported.GetIssues()[0].message : string()));
 			REQUIRE(exported.IsSuccess());
@@ -217,7 +217,7 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 			REQUIRE_NO_FAIL(*ast);
 			REQUIRE(ast->GetTypes() == direct->GetTypes());
 			for (auto result : {generated.get(), ast.get()}) {
-				auto value = result->GetValue(0, 0);
+				auto value = result->Collection().GetValue(0, 0);
 				auto &values = ListValue::GetChildren(value);
 				REQUIRE(values.size() == 6);
 				REQUIRE(std::count(values.begin(), values.end(), Value("b")) == 3);
@@ -265,8 +265,8 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 					auto direct = connection.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
 					REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
 					REQUIRE_NO_FAIL(*direct);
-					REQUIRE(
-					    Value::NotDistinctFrom(direct->GetValue(0, 0), expected_value(bind_nocase, multirow_values)));
+					REQUIRE(Value::NotDistinctFrom(direct->Collection().GetValue(0, 0),
+					                               expected_value(bind_nocase, multirow_values)));
 					connection.Rollback();
 				}
 			}
@@ -296,7 +296,8 @@ TEST_CASE("Logical plan SQL export verifies unordered VALUES list canonicalizers
 
 					auto generated = connection.Query(exported.GetValue().query->ToString());
 					REQUIRE_NO_FAIL(*generated);
-					REQUIRE(Value::NotDistinctFrom(generated->GetValue(0, 0), expected_value(bind_nocase, true)));
+					REQUIRE(Value::NotDistinctFrom(generated->Collection().GetValue(0, 0),
+					                               expected_value(bind_nocase, true)));
 					connection.Rollback();
 				}
 			}
