@@ -737,8 +737,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFie
 
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
 
-	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
-	                                        std::move(function));
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), vector<Identifier> {info.column_path[0]},
+	                                        std::move(res.new_type), std::move(function));
 	return ChangeColumnType(context, change_column_type, AlterTableType::ADD_FIELD);
 }
 
@@ -990,8 +990,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, Rem
 
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
 
-	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
-	                                        std::move(function));
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), vector<Identifier> {info.column_path[0]},
+	                                        std::move(res.new_type), std::move(function));
 	return ChangeColumnType(context, change_column_type, AlterTableType::REMOVE_FIELD);
 }
 
@@ -1084,13 +1084,16 @@ unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, Ren
 	children.push_back(ConstantExpression::Null());
 
 	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
-	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
-	                                        std::move(function));
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), vector<Identifier> {info.column_path[0]},
+	                                        std::move(res.new_type), std::move(function));
 	return ChangeColumnType(context, change_column_type, AlterTableType::RENAME_FIELD);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
-	auto default_idx = GetColumnIndex(info.column_name);
+	if (info.column_path.size() > 1) {
+		throw NotImplementedException("Setting a default value on a nested field is not yet supported");
+	}
+	auto default_idx = GetColumnIndex(info.column_path[0]);
 	if (default_idx.index == COLUMN_IDENTIFIER_ROW_ID) {
 		throw CatalogException("Cannot SET DEFAULT for rowid column");
 	}
@@ -1098,7 +1101,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 	auto create_info = GetInfo();
 	auto &table_info = create_info->Cast<CreateTableInfo>();
 
-	// Modify the column that was specified by 'column_name'
+	// Modify the column that was specified by 'column_path'
 	auto &col = table_info.columns.GetColumnMutable(default_idx);
 	if (col.Generated()) {
 		throw BinderException("Cannot SET DEFAULT for generated column %s", col.Name());
@@ -1112,7 +1115,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetD
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetNotNullInfo &info) {
-	auto not_null_idx = GetColumnIndex(info.column_name);
+	if (info.column_path.size() > 1) {
+		throw NotImplementedException("Setting a NOT NULL constraint on a nested field is not yet supported");
+	}
+	auto not_null_idx = GetColumnIndex(info.column_path[0]);
 	if (columns.GetColumn(LogicalIndex(not_null_idx)).Generated()) {
 		throw BinderException("Unsupported constraint for generated column!");
 	}
@@ -1142,12 +1148,15 @@ unique_ptr<CatalogEntry> DuckTableEntry::SetNotNull(ClientContext &context, SetN
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, DropNotNullInfo &info) {
-	auto not_null_idx = GetColumnIndex(info.column_name);
+	if (info.column_path.size() > 1) {
+		throw NotImplementedException("Dropping a NOT NULL constraint on a nested field is not yet supported");
+	}
+	auto not_null_idx = GetColumnIndex(info.column_path[0]);
 	if (const auto pk = GetPrimaryKey()) {
 		auto &unique = pk->Cast<UniqueConstraint>();
 		for (const auto &pk_index : unique.GetLogicalIndexes(columns)) {
 			if (pk_index == not_null_idx) {
-				throw CatalogException("column %s is in a primary key", info.column_name);
+				throw CatalogException("column %s is in a primary key", info.column_path[0]);
 			}
 		}
 	}
@@ -1169,12 +1178,17 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info,
                                                           AlterTableType alter_table_type) {
+	// Only reject a user issued ALTER TYPE ADD/REMOVE/RENAME_FIELD's internal calls use a single element
+	// column_path (the parent struct column), which never exceeds this size check.
+	if (alter_table_type == AlterTableType::ALTER_COLUMN_TYPE && info.column_path.size() > 1) {
+		throw NotImplementedException("Changing the type of a nested field is not yet supported");
+	}
 	// Bind type
 	auto type_binder = Binder::CreateBinder(context);
 	type_binder->SetSearchPath(catalog, schema.name);
 	type_binder->BindLogicalType(info.target_type);
 
-	auto change_idx = GetColumnIndex(info.column_name);
+	auto change_idx = GetColumnIndex(info.column_path[0]);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
 	create_info->comment = comment;
