@@ -1366,30 +1366,32 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	}
 
 	// Rolls back any physical index creation for index-based constraints.
-
 	auto &prev_table = prev_entry.Cast<DuckTableEntry>();
-	auto &prev_info = prev_table.GetStorage().GetDataTableInfo();
-	auto &prev_indexes = prev_info->GetIndexes();
+	auto &prev_indexes = prev_table.GetStorage().GetDataTableInfo()->GetIndexes();
+	for (auto oid : GetAddedUniqueIndexOids(prev_table)) {
+		prev_indexes.RemoveIndex(oid);
+	}
+}
 
-	// Find all index-based constraints that exist in rollback_table, but not in table.
-	// Then, remove them.
-
+vector<idx_t> DuckTableEntry::GetAddedUniqueIndexOids(const DuckTableEntry &prev_table) const {
 	unordered_set<idx_t> prev_oids;
 	for (const auto &constraint : prev_table.GetConstraints()) {
-		if (constraint->type != ConstraintType::UNIQUE) {
-			continue;
+		if (constraint->type == ConstraintType::UNIQUE) {
+			prev_oids.insert(constraint->GetBackingIndexOid());
 		}
-		prev_oids.insert(constraint->GetBackingIndexOid());
 	}
+
+	vector<idx_t> result;
 	for (const auto &constraint : GetConstraints()) {
 		if (constraint->type != ConstraintType::UNIQUE) {
 			continue;
 		}
 		auto oid = constraint->GetBackingIndexOid();
 		if (prev_oids.find(oid) == prev_oids.end()) {
-			prev_indexes.RemoveIndex(oid);
+			result.push_back(oid);
 		}
 	}
+	return result;
 }
 
 void DuckTableEntry::OnDrop() {

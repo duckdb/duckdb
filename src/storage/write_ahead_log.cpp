@@ -14,7 +14,6 @@
 #include "duckdb/common/encryption_key_manager.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/storage/single_file_block_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -548,12 +547,13 @@ void WriteAheadLog::WriteAlter(CatalogEntry &entry, const AlterInfo &info) {
 
 	auto &table = entry.Cast<DuckTableEntry>();
 	auto &parent = entry.Parent().Cast<DuckTableEntry>();
-	auto constraint_index = table.GetConstraints().size();
-	D_ASSERT(constraint_index < parent.GetConstraints().size());
-	auto &constraint = *parent.GetConstraints()[constraint_index];
-	D_ASSERT(constraint.type == ConstraintType::UNIQUE);
+	auto added_oids = parent.GetAddedUniqueIndexOids(table);
+	if (added_oids.size() != 1) {
+		throw InternalException("WriteAlter: expected one added UNIQUE constraint on table \"%s\", found %llu",
+		                        parent.name, added_oids.size());
+	}
 	auto &list = parent.GetStorage().GetDataTableInfo()->GetIndexes();
-	SerializeIndex(GetDatabase(), serializer, list, constraint.GetBackingIndexOid());
+	SerializeIndex(GetDatabase(), serializer, list, added_oids[0]);
 	serializer.End();
 }
 
