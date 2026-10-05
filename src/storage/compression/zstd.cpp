@@ -829,18 +829,6 @@ public:
 		reader.Align(sizeof(string_length_t));
 		auto string_lengths = reader.ReadArray<string_length_t>(metadata.count);
 
-		const auto page_remaining = page_end - reader.Position();
-		// Exclude the next page ID so it isn't passed to the decompressor.
-		const auto data_remaining = page_remaining > sizeof(block_id_t) ? page_remaining - sizeof(block_id_t) : 0;
-		auto compressed_size = metadata.compressed_size;
-		if (compressed_size > data_remaining) {
-			if (data_remaining == 0) {
-				ThrowZSTDPageTooSmall();
-			}
-			compressed_size = data_remaining;
-		}
-		auto compressed_data = reader.ReadBytes(compressed_size);
-
 		current_vector = make_uniq<ZSTDVectorScanState>(metadata, string_lengths, reader);
 		auto &scan_state = *current_vector;
 		const auto first_id = metadata.block_id == INVALID_BLOCK ? segment.GetBlockId() : metadata.block_id;
@@ -850,9 +838,21 @@ public:
 		}
 
 		// Update the in_buffer to point to the start of the compressed data frame
+		if (metadata.block_id != INVALID_BLOCK || segment.GetBlockOffset() == 0) {
+			const auto page_remaining = page_end - scan_state.reader.Position();
+			// Exclude the next page ID so it isn't passed to the decompressor.
+			const auto data_remaining = page_remaining > sizeof(block_id_t) ? page_remaining - sizeof(block_id_t) : 0;
+			if (metadata.compressed_size > data_remaining && data_remaining == 0) {
+				ThrowZSTDPageTooSmall();
+			}
+			scan_state.in_buffer.size = MinValue(metadata.compressed_size, data_remaining);
+		} else {
+			// A packed primary segment cannot contain a vector that continues onto another block.
+			scan_state.in_buffer.size = MinValue(metadata.compressed_size, scan_state.reader.Remaining());
+		}
+		auto compressed_data = scan_state.reader.ReadBytes(scan_state.in_buffer.size);
 		scan_state.in_buffer.src = compressed_data.data();
 		scan_state.in_buffer.pos = 0;
-		scan_state.in_buffer.size = compressed_data.size();
 
 		// Initialize the context for streaming decompression
 		duckdb_zstd::ZSTD_DCtx_reset(decompression_context, duckdb_zstd::ZSTD_reset_session_only);
