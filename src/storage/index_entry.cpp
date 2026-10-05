@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, const ConstraintTiming timing_p)
-    : owned_index(std::move(index_p)), timing(timing_p) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, const ConstraintCheckMode check_mode_p)
+    : owned_index(std::move(index_p)), check_mode(check_mode_p) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -124,10 +124,10 @@ void IndexEntry::InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintTiming::EAGER);
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintCheckMode::DEFAULT);
 	// Deferred constraints have no append index: transaction-local rows are verified when committing.
 	if (append_indexes && !IsDeferred()) {
-		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintTiming::EAGER);
+		append_indexes->AddIndex(bound_index.CreateEmptyCopy(constraint_type), ConstraintCheckMode::DEFAULT);
 	}
 }
 
@@ -294,7 +294,7 @@ bool IndexEntry::IsUnique() const {
 }
 
 bool IndexEntry::IsDeferred() const {
-	return timing == ConstraintTiming::DEFERRED;
+	return check_mode == ConstraintCheckMode::DEFERRED;
 }
 
 bool IndexEntry::IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) const {
@@ -478,7 +478,7 @@ IndexInfo IndexEntry::GetStorageInfo() const {
 	result.is_primary = owned_index->IsPrimary();
 	result.is_unique = owned_index->IsUnique() || result.is_primary;
 	result.is_foreign = owned_index->IsForeign();
-	result.timing = timing;
+	result.check_mode = check_mode;
 	result.column_set = owned_index->GetColumnIdSet();
 	return result;
 }

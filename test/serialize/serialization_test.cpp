@@ -298,10 +298,11 @@ TEST_CASE("Test DataPointer byte size storage version compatibility", "[serializ
 	REQUIRE(!legacy.byte_size);
 }
 
-TEST_CASE("Constraint timing survives serialization", "[serialization][deferred]") {
-	for (auto timing : {ConstraintTiming::EAGER, ConstraintTiming::IMMEDIATE, ConstraintTiming::DEFERRED}) {
+TEST_CASE("Constraint check mode survives serialization", "[serialization][deferred]") {
+	for (auto check_mode :
+	     {ConstraintCheckMode::DEFAULT, ConstraintCheckMode::IMMEDIATE, ConstraintCheckMode::DEFERRED}) {
 		for (auto primary_key : {false, true}) {
-			UniqueConstraint constraint(vector<Identifier> {Identifier("i")}, primary_key, timing);
+			UniqueConstraint constraint(vector<Identifier> {Identifier("i")}, primary_key, check_mode);
 
 			Allocator allocator;
 			MemoryStream stream(allocator);
@@ -310,7 +311,7 @@ TEST_CASE("Constraint timing survives serialization", "[serialization][deferred]
 			BinarySerializer::Serialize(constraint, stream, options);
 			stream.Rewind();
 			auto restored = BinaryDeserializer::Deserialize<Constraint>(stream);
-			REQUIRE(restored->Cast<UniqueConstraint>().timing == timing);
+			REQUIRE(restored->Cast<UniqueConstraint>().check_mode == check_mode);
 			REQUIRE(restored->ToString() == constraint.ToString());
 		}
 	}

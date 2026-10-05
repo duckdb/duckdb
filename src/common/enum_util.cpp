@@ -26,7 +26,7 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
-#include "duckdb/common/enums/constraint_timing.hpp"
+#include "duckdb/common/enums/constraint_check_mode.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -1463,23 +1463,23 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
 }
 
-const StringUtil::EnumStringLiteral *GetConstraintTimingValues() {
+const StringUtil::EnumStringLiteral *GetConstraintCheckModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ConstraintTiming::EAGER), "EAGER" },
-		{ static_cast<uint32_t>(ConstraintTiming::IMMEDIATE), "IMMEDIATE" },
-		{ static_cast<uint32_t>(ConstraintTiming::DEFERRED), "DEFERRED" }
+		{ static_cast<uint32_t>(ConstraintCheckMode::DEFAULT), "DEFAULT" },
+		{ static_cast<uint32_t>(ConstraintCheckMode::IMMEDIATE), "IMMEDIATE" },
+		{ static_cast<uint32_t>(ConstraintCheckMode::DEFERRED), "DEFERRED" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<ConstraintTiming>(ConstraintTiming value) {
-	return StringUtil::EnumToString(GetConstraintTimingValues(), 3, "ConstraintTiming", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<ConstraintCheckMode>(ConstraintCheckMode value) {
+	return StringUtil::EnumToString(GetConstraintCheckModeValues(), 3, "ConstraintCheckMode", static_cast<uint32_t>(value));
 }
 
 template<>
-ConstraintTiming EnumUtil::FromString<ConstraintTiming>(const char *value) {
-	return static_cast<ConstraintTiming>(StringUtil::StringToEnum(GetConstraintTimingValues(), 3, "ConstraintTiming", value));
+ConstraintCheckMode EnumUtil::FromString<ConstraintCheckMode>(const char *value) {
+	return static_cast<ConstraintCheckMode>(StringUtil::StringToEnum(GetConstraintCheckModeValues(), 3, "ConstraintCheckMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {

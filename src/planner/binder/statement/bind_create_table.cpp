@@ -167,17 +167,18 @@ unique_ptr<BoundConstraint> BindCheckConstraint(Binder &binder, const Constraint
 	return std::move(bound_constraint);
 }
 
-void Binder::VerifyConstraintTimingStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary) {
+void Binder::VerifyConstraintCheckModeStorageVersion(const Constraint &constraint, Catalog &catalog, bool temporary) {
 	if (constraint.type != ConstraintType::UNIQUE || temporary || !catalog.IsDuckCatalog() || catalog.InMemory()) {
 		return;
 	}
 	auto &unique = constraint.Cast<UniqueConstraint>();
-	if (unique.timing == ConstraintTiming::EAGER) {
+	if (unique.check_mode == ConstraintCheckMode::DEFAULT) {
 		return;
 	}
 	if (StorageManager::Get(catalog).GetStorageVersion() < StorageVersion::V2_0_0) {
-		throw BinderException("Explicit constraint timing is only supported for storage versions v2.0.0 and higher.\n"
-		                      "Use an in-memory database, or ATTACH with (STORAGE_VERSION 'v2.0.0')");
+		throw BinderException(
+		    "Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.\n"
+		    "Use an in-memory database, or ATTACH with (STORAGE_VERSION 'v2.0.0')");
 	}
 }
 
@@ -722,7 +723,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		}
 		bound_constraints = BindNewConstraints(base.constraints, base.GetTableName(), base.columns);
 		for (auto &constraint : base.constraints) {
-			VerifyConstraintTimingStorageVersion(*constraint, catalog, base.temporary);
+			VerifyConstraintCheckModeStorageVersion(*constraint, catalog, base.temporary);
 		}
 		if (bind_mode != AlterBindMode::SKIP_BINDING) {
 			// bind the default values

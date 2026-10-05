@@ -1,5 +1,5 @@
-# name: test/sql/constraints/deferred/test_alter_constraint_timing.test
-# description: Test constraint timing when adding constraints to existing columns
+# name: test/sql/constraints/deferred/test_alter_constraint_check_mode.test
+# description: Test constraint check mode when adding constraints to existing columns
 # group: [deferred]
 
 statement ok

@@ -1,5 +1,5 @@
 # name: test/sql/constraints/deferred/test_deferred_syntax.test
-# description: Test constraint timing for primary key and unique constraints
+# description: Test constraint check mode for primary key and unique constraints
 # group: [deferred]
 
 statement ok

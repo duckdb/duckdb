@@ -67,9 +67,9 @@ public:
 
 	struct ReplayIndexInfo {
 		ReplayIndexInfo(TableIndexList &index_list, unique_ptr<Index> index, idx_t table_oid, optional_idx index_oid,
-		                ConstraintTiming timing)
+		                ConstraintCheckMode check_mode)
 		    : index_list(index_list), index(std::move(index)), table_oid(table_oid), index_oid(index_oid),
-		      timing(timing) {
+		      check_mode(check_mode) {
 		}
 
 		reference<TableIndexList> index_list;
@@ -80,8 +80,8 @@ public:
 		//! Invalid for constraint-backed indexes (i.e., UNIQUE): they have no separate catalog entry and cannot be
 		//! targeted by DROP INDEX.
 		optional_idx index_oid;
-		//! The timing of the constraint enforced by the index.
-		ConstraintTiming timing;
+		//! The check mode of the constraint enforced by the index.
+		ConstraintCheckMode check_mode;
 	};
 	vector<ReplayIndexInfo> replay_index_infos;
 };
@@ -631,7 +631,7 @@ unique_ptr<WriteAheadLog> WriteAheadLogReplayer::ReplayLog(unique_ptr<FileHandle
 
 				// Commit any outstanding indexes.
 				for (auto &info : state.replay_index_infos) {
-					info.index_list.get().AddIndex(std::move(info.index), info.timing);
+					info.index_list.get().AddIndex(std::move(info.index), info.check_mode);
 				}
 				state.replay_index_infos.clear();
 
@@ -998,7 +998,7 @@ void WriteAheadLogDeserializer::ReplayAlter() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(index_instance), table.oid,
-	                                      /*index_oid=*/optional_idx(), unique_info.timing);
+	                                      /*index_oid=*/optional_idx(), unique_info.check_mode);
 
 	catalog.Alter(context, alter_info);
 }
@@ -1264,7 +1264,7 @@ void WriteAheadLogDeserializer::ReplayCreateIndex() {
 
 	auto &table_index_list = storage.GetDataTableInfo()->GetIndexes();
 	state.replay_index_infos.emplace_back(table_index_list, std::move(unbound_index), table.oid, index_entry->oid,
-	                                      ConstraintTiming::EAGER);
+	                                      ConstraintCheckMode::DEFAULT);
 }
 
 void WriteAheadLogDeserializer::ReplayDropIndex() {

@@ -361,7 +361,7 @@ bool DataTable::HasUniqueIndexes() const {
 }
 
 void DataTable::AddIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index), ConstraintTiming::EAGER);
+	info->indexes.AddIndex(std::move(index), ConstraintCheckMode::DEFAULT);
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
@@ -1662,7 +1662,8 @@ bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegment
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                         const IndexConstraintType type, IndexStorageInfo index_info, const ConstraintTiming timing) {
+                         const IndexConstraintType type, IndexStorageInfo index_info,
+                         const ConstraintCheckMode check_mode) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
 		                           "%s by a different transaction",
@@ -1685,7 +1686,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art), timing);
+	info->indexes.AddIndex(std::move(art), check_mode);
 }
 
 } // namespace duckdb

@@ -119,8 +119,8 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 
 	// find all columns that have NOT NULL specified, but are NOT primary key columns
 	logical_index_set_t not_null_columns;
-	logical_index_map_t<vector<ConstraintTiming>> unique_columns;
-	logical_index_map_t<vector<ConstraintTiming>> pk_columns;
+	logical_index_map_t<vector<ConstraintCheckMode>> unique_columns;
+	logical_index_map_t<vector<ConstraintCheckMode>> pk_columns;
 	identifier_set_t multi_key_pks;
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
@@ -132,9 +132,9 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			if (pk.HasIndex()) {
 				// no columns specified: single column constraint
 				if (pk.IsPrimaryKey()) {
-					pk_columns[pk.GetIndex()].push_back(pk.timing);
+					pk_columns[pk.GetIndex()].push_back(pk.check_mode);
 				} else {
-					unique_columns[pk.GetIndex()].push_back(pk.timing);
+					unique_columns[pk.GetIndex()].push_back(pk.check_mode);
 				}
 			} else {
 				// multi-column constraint, this constraint needs to go at the end after all columns
@@ -172,19 +172,19 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 		}
 		if (is_single_key_pk) {
 			// single column pk: insert constraint here
-			for (auto timing : pk_columns.at(column.Logical())) {
+			for (auto check_mode : pk_columns.at(column.Logical())) {
 				ss << " PRIMARY KEY";
-				if (timing != ConstraintTiming::EAGER) {
-					ss << " " << EnumUtil::ToString(timing);
+				if (check_mode != ConstraintCheckMode::DEFAULT) {
+					ss << " " << EnumUtil::ToString(check_mode);
 				}
 			}
 		}
 		if (is_unique) {
 			// single column unique: insert constraint here
-			for (auto timing : unique_columns.at(column.Logical())) {
+			for (auto check_mode : unique_columns.at(column.Logical())) {
 				ss << " UNIQUE";
-				if (timing != ConstraintTiming::EAGER) {
-					ss << " " << EnumUtil::ToString(timing);
+				if (check_mode != ConstraintCheckMode::DEFAULT) {
+					ss << " " << EnumUtil::ToString(check_mode);
 				}
 			}
 		}

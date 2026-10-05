@@ -367,7 +367,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			if (!index.is_unique) {
 				continue;
 			}
-			if (index.timing == ConstraintTiming::DEFERRED) {
+			if (index.check_mode == ConstraintCheckMode::DEFERRED) {
 				// Without a conflict target, every constraint is a conflict target.
 				throw BinderException("DEFERRED PRIMARY KEY or UNIQUE constraints cannot be ON CONFLICT targets, "
 				                      "specify the ON CONFLICT columns of a constraint that is not DEFERRED");
@@ -451,7 +451,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 			if (!index.is_unique || on_conflict_filter != index.column_set) {
 				continue;
 			}
-			if (index.timing == ConstraintTiming::DEFERRED) {
+			if (index.check_mode == ConstraintCheckMode::DEFERRED) {
 				deferred_index_matches = true;
 				continue;
 			}

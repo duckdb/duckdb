@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/constraint_timing.hpp"
+#include "duckdb/common/enums/constraint_check_mode.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
@@ -112,7 +112,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	IndexEntry(unique_ptr<Index> index, ConstraintTiming timing);
+	IndexEntry(unique_ptr<Index> index, ConstraintCheckMode check_mode);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -207,7 +207,7 @@ private:
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
 	//! Whether the enforced constraint is deferred. Derived from the catalog constraint, not serialized.
-	const ConstraintTiming timing;
+	const ConstraintCheckMode check_mode;
 	IndexDeltas deltas;
 };
 

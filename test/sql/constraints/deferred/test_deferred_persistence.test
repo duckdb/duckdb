@@ -1,5 +1,5 @@
 # name: test/sql/constraints/deferred/test_deferred_persistence.test
-# description: Deferred constraint timing survives checkpoints and WAL replay
+# description: Deferred constraint check mode survives checkpoints and WAL replay
 # group: [deferred]
 
 load {TEST_DIR}/deferred_constraint.db readwrite v2.0.0

@@ -1132,7 +1132,7 @@ String:
     - UpdateSetColumnTarget
 
 ConstraintTiming:
-  type: "ConstraintTiming"
+  type: "ConstraintCheckMode"
   by_value: false
   rules:
     - ConstraintTiming
