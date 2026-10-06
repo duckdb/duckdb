@@ -1,0 +1,28 @@
+# name: test/sql/aggregate/aggregate_state_export/approx_quantile_time_export_state.test
+# description: Approximate quantiles of imported TIME and TIMETZ states are clamped to valid times
+# group: [aggregate_state_export]
+
+query I
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': 1e15, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT'], [NULL, 0.5]));
+----
+24:00:00
+
+query I
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': -5, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT'], [NULL, 0.5]));
+----
+00:00:00
+
+query I
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': 1e15, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT[]'], [NULL, [0.5]]));
+----
+['24:00:00']
+
+query I
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': 1e18, 'weight': 1.0}]}, 'approx_quantile', ['TIMETZ', 'FLOAT'], [NULL, 0.5]));
+----
+00:00:00-15:59:59
+
+query II
+SELECT approx_quantile(x, 0.5), finalize(approx_quantile(x, 0.5) EXPORT_STATE) FROM (SELECT TIME '10:00:00' + INTERVAL (i) MINUTE x FROM range(100) t(i));
+----
+10:49:30	10:49:30
