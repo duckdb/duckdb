@@ -3,7 +3,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             APPLY_PATCHES
             GIT_URL https://github.com/duckdb/duckdb-aws-glue
-            GIT_TAG 26cebe53ddf4ef45e95d02f9fcd56433ab862fb1
+            GIT_TAG 2811770780ab64b563c1d890b244f85025947aba
             SUBMODULES extension-ci-tools
             APPLY_PATCHES
             )
