@@ -19,6 +19,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "parquet_column_schema.hpp"
+#include "parquet_writer.hpp"
 #include "parquet_types.h"
 
 namespace duckdb {
@@ -109,6 +110,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			state.repetition_levels.push_back(first_repeat_level);
 			state.is_empty.push_back(true);
 		} else if (validity.RowIsValid(vector_index)) {
+			state.num_values++;
 			// push the repetition levels
 			if (list_data[vector_index].length == 0) {
 				state.definition_levels.push_back(MaxDefine());
@@ -127,6 +129,8 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			if (!can_have_nulls) {
 				throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 			}
+			state.own_null_count++;
+			state.num_values++;
 			state.definition_levels.push_back(MaxDefine() - 1);
 			state.repetition_levels.push_back(first_repeat_level);
 			state.is_empty.push_back(true);
@@ -164,6 +168,7 @@ void ListColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<ListColumnWriterState>();
+	writer.FlushNestedColumnStats(SchemaIndex(), state.own_null_count, state.num_values);
 	GetChildWriter().FinalizeWrite(*state.child_state);
 }
 
