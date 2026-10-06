@@ -283,8 +283,14 @@ TEST_CASE("Uncached reads are split at the cache block size", "[external_file_ca
 	REQUIRE(ReadFull(*handle, BLOCK_SIZE, 100) == content.substr(100, BLOCK_SIZE));
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{100, BLOCK_SIZE}});
 
-	// Without async threads the pieces cannot run in parallel, so the read stays whole
+	// Without async threads, worker threads still run the pieces in parallel, so the read is still split
+	REQUIRE(!con.Query("SET threads=4")->HasError());
 	REQUIRE(!con.Query("SET async_threads=0")->HasError());
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	REQUIRE(recording_fs->TakeReads().size() == 4);
+
+	// Without any other thread the pieces cannot run in parallel, so the read stays whole
+	REQUIRE(!con.Query("SET threads=1")->HasError());
 	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
 }
