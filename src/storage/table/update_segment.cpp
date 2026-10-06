@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/update_segment.hpp"
 
+#include "duckdb/common/bitset.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -672,40 +673,36 @@ void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 //===--------------------------------------------------------------------===//
 // Check for conflicts in update
 //===--------------------------------------------------------------------===//
-static void CheckForConflicts(UndoBufferPointer next_ptr, TransactionData transaction, row_t *ids,
+//! Whether an update that the transaction does not see touches one of the rows (ids[sel[i]] - offset). Also sets
+//! node_ref to the transaction's own update, if any
+static bool CheckForConflicts(UndoBufferPointer next_ptr, TransactionData transaction, const row_t *ids,
                               const SelectionVector &sel, idx_t count, row_t offset, UndoBufferReference &node_ref) {
+	bitset<STANDARD_VECTOR_SIZE> rows;
+	bool rows_filled = false;
 	while (next_ptr.IsSet()) {
 		auto pin = next_ptr.Pin();
 		auto &info = UpdateInfo::Get(pin);
 		if (info.version_number == transaction.GetTransactionId()) {
 			// this UpdateInfo belongs to the current transaction, set it in the node
 			node_ref = std::move(pin);
-		} else if (info.version_number.load() >= transaction.view.visibility_bound) {
-			// potential conflict, check that tuple ids do not conflict
-			// as both ids and info->tuples are sorted, this is similar to a merge join
-			idx_t i = 0, j = 0;
+		} else if (info.AppliesToTransaction(transaction.view)) {
+			// potential conflict, check whether the update touches one of the rows
+			if (!rows_filled) {
+				for (idx_t i = 0; i < count; i++) {
+					rows.set(NumericCast<idx_t>(ids[sel.get_index(i)] - offset));
+				}
+				rows_filled = true;
+			}
 			auto tuples = info.GetTuples();
-			while (true) {
-				auto id = ids[sel.get_index(i)] - offset;
-				if (id == tuples[j]) {
-					throw TransactionException("Conflict on update!");
-				} else if (id < tuples[j]) {
-					// id < the current tuple in info, move to next id
-					i++;
-					if (i == count) {
-						break;
-					}
-				} else {
-					// id > the current tuple, move to next tuple in info
-					j++;
-					if (j == info.N) {
-						break;
-					}
+			for (idx_t i = 0; i < info.N; i++) {
+				if (rows.test(tuples[i])) {
+					return true;
 				}
 			}
 		}
 		next_ptr = info.next;
 	}
+	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1454,8 +1451,10 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		auto root_pin = root_pointer.Pin();
 
 		UndoBufferReference node_ref;
-		CheckForConflicts(UpdateInfo::Get(root_pin).next, transaction, ids, sel, count,
-		                  UnsafeNumericCast<row_t>(vector_offset), node_ref);
+		if (CheckForConflicts(UpdateInfo::Get(root_pin).next, transaction, ids, sel, count,
+		                      UnsafeNumericCast<row_t>(vector_offset), node_ref)) {
+			throw TransactionException("Conflict on update!");
+		}
 
 		ReallocateRootInfoIfNeeded(UpdateInfo::Get(root_pin), count, vector_index);
 		root_pointer = root->info[vector_index];
@@ -1568,6 +1567,20 @@ bool UpdateSegment::HasUncommittedUpdates(idx_t vector_index) {
 		return true;
 	}
 	return false;
+}
+
+bool UpdateSegment::HasConflictingUpdate(TransactionData transaction, idx_t vector_index, const row_t rows[],
+                                         idx_t count) const {
+	auto read_lock = lock.GetSharedLock();
+	auto entry = GetUpdateNode(*read_lock, vector_index);
+	if (!entry.IsSet()) {
+		return false;
+	}
+	// skip the root, which holds the base values
+	auto root_pin = entry.Pin();
+	UndoBufferReference own_update;
+	return CheckForConflicts(UpdateInfo::Get(root_pin).next, transaction, rows,
+	                         *FlatVector::IncrementalSelectionVector(), count, 0, own_update);
 }
 
 bool UpdateSegment::HasUpdates(idx_t start_row_index, idx_t end_row_index) {

@@ -1,0 +1,600 @@
+# name: test/sql/transactions/delete_update_conflict.test
+# description: A DELETE and an UPDATE of the same row by concurrent transactions conflict, in either order
+# group: [transactions]
+
+load {TEST_DIR}/delete_update_conflict.db
+
+# stale DELETE after a committed UPDATE
+statement ok
+CREATE TABLE t1 (id INTEGER, status VARCHAR);
+
+statement ok
+INSERT INTO t1 VALUES (1, 'open'), (2, 'open');
+
+statement ok con2
+BEGIN
+
+query II con2
+SELECT * FROM t1 ORDER BY id
+----
+1	open
+2	open
+
+statement ok con1
+UPDATE t1 SET status = 'closed' WHERE id = 1
+
+statement error con2
+DELETE FROM t1 WHERE status = 'open'
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT * FROM t1 ORDER BY id
+----
+1	closed
+2	open
+
+# stale UPDATE after a committed DELETE
+statement ok
+CREATE TABLE t2 (id INTEGER, status VARCHAR);
+
+statement ok
+INSERT INTO t2 VALUES (1, 'open'), (2, 'open');
+
+statement ok con2
+BEGIN
+
+query II con2
+SELECT * FROM t2 ORDER BY id
+----
+1	open
+2	open
+
+statement ok con1
+DELETE FROM t2 WHERE id = 1
+
+statement error con2
+UPDATE t2 SET status = 'archived'
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT * FROM t2 ORDER BY id
+----
+2	open
+
+# uncommitted UPDATE, then DELETE
+statement ok
+CREATE TABLE t3 (id INTEGER, status VARCHAR);
+
+statement ok
+INSERT INTO t3 VALUES (1, 'open');
+
+statement ok con1
+BEGIN
+
+statement ok con1
+UPDATE t3 SET status = 'closed' WHERE id = 1
+
+statement error con2
+DELETE FROM t3 WHERE id = 1
+----
+Conflict on tuple deletion
+
+statement ok con1
+COMMIT
+
+query II
+SELECT * FROM t3
+----
+1	closed
+
+# uncommitted DELETE, then UPDATE
+statement ok
+CREATE TABLE t4 (id INTEGER, status VARCHAR);
+
+statement ok
+INSERT INTO t4 VALUES (1, 'open');
+
+statement ok con1
+BEGIN
+
+statement ok con1
+DELETE FROM t4 WHERE id = 1
+
+statement error con2
+UPDATE t4 SET status = 'archived' WHERE id = 1
+----
+Conflict on update
+
+statement ok con1
+COMMIT
+
+query II
+SELECT * FROM t4
+----
+
+# an UPDATE executed as delete + insert (LIST column) after a committed in-place UPDATE of another column
+statement ok
+CREATE TABLE t5 (id INTEGER, status VARCHAR, tags VARCHAR[]);
+
+statement ok
+INSERT INTO t5 VALUES (1, 'open', []);
+
+statement ok con2
+BEGIN
+
+query III con2
+SELECT * FROM t5
+----
+1	open	[]
+
+statement ok con1
+UPDATE t5 SET status = 'closed' WHERE id = 1
+
+statement error con2
+UPDATE t5 SET tags = ['x'] WHERE id = 1
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+query III
+SELECT * FROM t5
+----
+1	closed	[]
+
+# the same with an update of an indexed column
+statement ok
+CREATE TABLE t6 (id INTEGER PRIMARY KEY, status VARCHAR);
+
+statement ok
+INSERT INTO t6 VALUES (1, 'open');
+
+statement ok con2
+BEGIN
+
+query II con2
+SELECT * FROM t6
+----
+1	open
+
+statement ok con1
+UPDATE t6 SET status = 'closed' WHERE id = 1
+
+statement error con2
+UPDATE t6 SET id = 2 WHERE id = 1
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT * FROM t6
+----
+1	closed
+
+# updates of nested struct fields and of the validity mask are found as well (only s.b.c changes below)
+statement ok
+CREATE TABLE t7 (id INTEGER, s STRUCT(a INTEGER, b STRUCT(c VARCHAR)), v VARCHAR);
+
+statement ok
+INSERT INTO t7 VALUES (1, {'a': 1, 'b': {'c': 'x'}}, 'v'), (2, {'a': 2, 'b': {'c': 'y'}}, 'v');
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t7
+----
+2
+
+statement ok con1
+UPDATE t7 SET s = {'a': 1, 'b': {'c': 'z'}} WHERE id = 1
+
+statement ok con1
+UPDATE t7 SET v = NULL WHERE id = 2
+
+statement error con2
+DELETE FROM t7 WHERE id = 1
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t7
+----
+2
+
+statement ok con1
+UPDATE t7 SET v = NULL WHERE id = 1
+
+statement error con2
+DELETE FROM t7 WHERE id = 1
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+query III
+SELECT * FROM t7 ORDER BY id
+----
+1	{'a': 1, 'b': {'c': z}}	NULL
+2	{'a': 2, 'b': {'c': y}}	NULL
+
+# no conflict between different rows of the same vector, with updates the deleter sees, or within one transaction
+statement ok
+CREATE TABLE t8 (id INTEGER, status VARCHAR);
+
+statement ok
+INSERT INTO t8 VALUES (1, 'open'), (2, 'open'), (3, 'open'), (4, 'open');
+
+statement ok con1
+UPDATE t8 SET status = 'closed' WHERE id = 4
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t8
+----
+4
+
+statement ok con1
+UPDATE t8 SET status = 'closed' WHERE id = 1
+
+statement ok con2
+DELETE FROM t8 WHERE id = 2
+
+statement ok con1
+DELETE FROM t8 WHERE id = 3
+
+statement ok con2
+UPDATE t8 SET status = 'archived' WHERE id = 2 OR id = 4
+
+statement ok con2
+DELETE FROM t8 WHERE id = 4
+
+statement ok con2
+COMMIT
+
+query II
+SELECT * FROM t8 ORDER BY id
+----
+1	closed
+
+# a conflict in a later vector reverts the deletes made in earlier vectors
+statement ok
+CREATE TABLE t9 AS SELECT i AS id, 'open' AS status FROM range(5000) t(i);
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t9
+----
+5000
+
+statement ok con1
+UPDATE t9 SET status = 'closed' WHERE id = 4500
+
+statement error con2
+DELETE FROM t9
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT count(*), count(*) FILTER (status = 'closed') FROM t9
+----
+5000	1
+
+# a conflict in a later vector reverts the updates made in earlier vectors
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t9
+----
+5000
+
+statement ok con1
+DELETE FROM t9 WHERE id = 4600
+
+statement error con2
+UPDATE t9 SET status = 'all'
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT count(*), count(*) FILTER (status = 'all') FROM t9
+----
+4999	0
+
+# UPDATE of a vector that a concurrent transaction deleted entirely (constant delete id)
+statement ok
+CREATE TABLE t10 AS SELECT i AS id, 'open' AS status FROM range(4096) t(i);
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t10
+----
+4096
+
+statement ok con1
+DELETE FROM t10 WHERE id < 2048
+
+statement ok con2
+UPDATE t10 SET status = 'closed' WHERE id = 3000
+
+statement error con2
+UPDATE t10 SET status = 'closed' WHERE id = 100
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+# UPDATE of a row whose concurrent delete a checkpoint has compressed
+statement ok
+CREATE TABLE t11 AS SELECT i AS id, 'open' AS status FROM range(4096) t(i);
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t11
+----
+4096
+
+statement ok con1
+DELETE FROM t11 WHERE id % 2 = 0
+
+statement ok con1
+CHECKPOINT
+
+statement error con2
+UPDATE t11 SET status = 'closed' WHERE id = 100
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t11
+----
+2048
+
+statement ok con2
+UPDATE t11 SET status = 'closed' WHERE id = 101
+
+statement ok con2
+COMMIT
+
+# a DELETE whose row ids are not sorted: probing the table with a permutation yields 0, 37, 74, 11, ..., 7, ...
+statement ok
+CREATE TABLE t12 AS SELECT i AS id, 'open' AS status FROM range(100) t(i);
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t12
+----
+100
+
+statement ok con1
+UPDATE t12 SET status = 'closed' WHERE id = 7
+
+statement error con2
+DELETE FROM t12 USING (SELECT (i * 37) % 100 AS x FROM range(10000) r(i)) v WHERE t12.id = v.x
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+query I
+SELECT count(*) FROM t12
+----
+100
+
+# rows beyond the first row group, in both directions, next to rows that do not conflict
+statement ok
+CREATE TABLE t13 AS SELECT i AS id, 'open' AS status FROM range(300000) t(i);
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t13
+----
+300000
+
+statement ok con1
+UPDATE t13 SET status = 'closed' WHERE id = 250000
+
+statement ok con2
+DELETE FROM t13 WHERE id = 250001
+
+statement error con2
+DELETE FROM t13 WHERE id = 250000
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t13
+----
+300000
+
+statement ok con1
+DELETE FROM t13 WHERE id = 260000
+
+statement ok con2
+UPDATE t13 SET status = 'x' WHERE id = 260001
+
+statement error con2
+UPDATE t13 SET status = 'x' WHERE id = 260000
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT count(*), count(*) FILTER (status = 'closed') FROM t13
+----
+299999	1
+
+# an upsert of a key whose delete it sees inserts, even while an older snapshot keeps the deleted row alive
+statement ok
+CREATE TABLE t14 (id INTEGER PRIMARY KEY, v VARCHAR);
+
+statement ok
+INSERT INTO t14 VALUES (1, 'a'), (2, 'b');
+
+statement ok con3
+BEGIN
+
+query I con3
+SELECT count(*) FROM t14
+----
+2
+
+statement ok con1
+DELETE FROM t14 WHERE id = 1
+
+statement ok con2
+INSERT INTO t14 VALUES (1, 'new') ON CONFLICT DO UPDATE SET v = 'upserted'
+
+statement ok con3
+ROLLBACK
+
+# an upsert on a stale snapshot whose conflicting row a concurrent transaction deleted
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t14
+----
+2
+
+statement ok con1
+DELETE FROM t14 WHERE id = 2
+
+statement error con2
+INSERT INTO t14 VALUES (2, 'new') ON CONFLICT DO UPDATE SET v = 'upserted'
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT * FROM t14 ORDER BY id
+----
+1	new
+
+# a checkpoint cannot fold an update that an active transaction does not see, so a later delete still conflicts
+statement ok
+CREATE TABLE t15 AS SELECT i AS id, 'open' AS status FROM range(4096) t(i);
+
+statement ok
+CHECKPOINT
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t15
+----
+4096
+
+statement ok con1
+UPDATE t15 SET status = 'closed' WHERE id = 7
+
+statement error con3
+CHECKPOINT
+----
+Cannot CHECKPOINT: there are other write transactions active
+
+statement error con2
+DELETE FROM t15 WHERE id = 7
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+# deletes loaded from disk do not conflict, and new deletes in the same vector still do
+statement ok
+CREATE TABLE t16 AS SELECT i AS id, 'open' AS status FROM range(4096) t(i);
+
+statement ok
+DELETE FROM t16 WHERE id % 3 = 0
+
+statement ok
+CHECKPOINT
+
+restart
+
+statement ok
+UPDATE t16 SET status = 'closed' WHERE id = 1
+
+statement ok
+DELETE FROM t16 WHERE id = 2
+
+statement ok con2
+BEGIN
+
+query I con2
+SELECT count(*) FROM t16
+----
+2729
+
+statement ok con1
+DELETE FROM t16 WHERE id = 4
+
+statement error con2
+UPDATE t16 SET status = 'x' WHERE id = 4
+----
+Conflict on update
+
+statement ok con2
+ROLLBACK
+
+query II
+SELECT count(*), count(*) FILTER (status = 'closed') FROM t16
+----
+2728	1

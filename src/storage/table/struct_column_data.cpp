@@ -511,6 +511,19 @@ bool StructColumnData::HasAnyChanges() const {
 	return false;
 }
 
+bool StructColumnData::HasConflictingUpdate(TransactionData transaction, idx_t vector_index, const row_t rows[],
+                                            idx_t count) const {
+	if (validity->HasConflictingUpdate(transaction, vector_index, rows, count)) {
+		return true;
+	}
+	for (auto &child_col : sub_columns) {
+		if (child_col->HasConflictingUpdate(transaction, vector_index, rows, count)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 PersistentColumnData StructColumnData::Serialize() {
 	PersistentColumnData persistent_data(type);
 	persistent_data.child_columns.push_back(validity->Serialize());

@@ -67,6 +67,8 @@ public:
 	idx_t GetRowCount(ScanOptions options, idx_t max_count);
 	//! Returns whether or not a single row in the ChunkVectorInfo should be used or not for the given transaction
 	bool Fetch(TransactionData transaction, row_t row);
+	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction
+	bool HasConflictingDelete(transaction_t transaction_id, const row_t ids[], idx_t count, row_t offset) const;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
 	bool Cleanup(VisibilityBound lowest_visibility_bound) const;
 	string ToString(idx_t max_count) const;
