@@ -11675,7 +11675,7 @@ void PEGTransformerFactory::InitializeTruncateStatementTrampoline(PEGTransformer
                                                                   GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(1);
-	process.PushChild({transformer.GetRule("BaseTableName"), list_pr.GetChild(2)}, 0);
+	process.PushChild({transformer.GetRule("TargetOptAlias"), list_pr.GetChild(2)}, 0);
 }
 
 unique_ptr<TransformResultValue>
@@ -11685,8 +11685,8 @@ PEGTransformerFactory::FinalizeTruncateStatementTrampoline(PEGTransformer &trans
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
-	auto base_table_name = process.TakeResult<unique_ptr<BaseTableRef>>(0);
-	auto result = TransformTruncateStatement(transformer, has_result, std::move(base_table_name));
+	auto target_opt_alias = process.TakeResult<unique_ptr<BaseTableRef>>(0);
+	auto result = TransformTruncateStatement(transformer, has_result, std::move(target_opt_alias));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

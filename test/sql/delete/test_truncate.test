@@ -15,7 +15,7 @@ TRUNCATE TABLE a
 
 # delete everything
 statement ok
-TRUNCATE a
+TRUNCATE a as ignored_alias
 
 query I
 SELECT COUNT(*) FROM a;
