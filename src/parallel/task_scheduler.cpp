@@ -174,7 +174,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 			    Settings::Get<AllocatorBackgroundThreadsSetting>(db),
 			    StringUtil::ParseFormattedBytes(Settings::Get<AllocatorFlushThresholdSetting>(db)),
 			    GetPool(TaskSchedulerType::REGULAR).NumberOfThreads());
-			auto decay_delay = Allocator::DecayDelay();
+			auto decay_delay = block_allocator.DecayDelay();
 			if (!decay_delay.IsValid()) {
 				// no decay delay specified - just wait
 				pool.Wait();
@@ -182,7 +182,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 				if (!pool.Wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 - INITIAL_FLUSH_WAIT)) {
 					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
 					// mark it as idle and start an untimed wait
-					Allocator::ThreadIdle();
+					block_allocator.ThreadIdle();
 					pool.Wait();
 				}
 			}
@@ -203,7 +203,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 	if (block_allocator.SupportsFlush()) {
 		block_allocator.ThreadFlush(Settings::Get<AllocatorBackgroundThreadsSetting>(db), 0,
 		                            GetPool(TaskSchedulerType::REGULAR).NumberOfThreads());
-		Allocator::ThreadIdle();
+		block_allocator.ThreadIdle();
 	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");

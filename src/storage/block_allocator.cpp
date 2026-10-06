@@ -52,13 +52,6 @@ static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 	bool success = true;
 #if defined(_WIN32)
 	success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
-#elif defined(__APPLE__)
-	// Nothing to do here
-#else
-	// Pre-fault the memory
-	for (idx_t i = 0; i < size; i += 4096) {
-		pointer[i] = 0;
-	}
 #endif
 	if (!success) {
 		throw InternalException("OnFirstAllocation failed");
@@ -196,7 +189,7 @@ private:
 	optional_ptr<const BlockAllocator> block_allocator;
 	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
 
-	static constexpr idx_t BATCH_SIZE = 128;
+	static constexpr idx_t BATCH_SIZE = 16;
 	static constexpr idx_t FREE_THRESHOLD = BATCH_SIZE * 2;
 
 	vector<uint32_t> untouched;
@@ -337,7 +330,7 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 }
 
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
-	estimated_unflushed_memory.fetch_add(size, std::memory_order_relaxed);
+	deallocated_since_flush.fetch_add(size, std::memory_order_relaxed);
 	if (!IsActive() || !IsInPool(pointer)) {
 		return allocator.FreeData(pointer, size);
 	}
@@ -366,6 +359,14 @@ bool BlockAllocator::SupportsFlush() const {
 	return (IsActive() && IsEnabled()) || Allocator::SupportsFlush();
 }
 
+optional_idx BlockAllocator::DecayDelay() const {
+	auto delay = Allocator::DecayDelay();
+	if (!delay.IsValid() && IsActive() && IsEnabled()) {
+		return optional_idx(1);
+	}
+	return delay;
+}
+
 void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const {
 	if (IsActive() && IsEnabled()) {
 		GetBlockAllocatorThreadLocalState(*this).Clear();
@@ -375,83 +376,88 @@ void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t thresh
 	}
 }
 
-void BlockAllocator::FlushAll(const optional_idx extra_memory) const {
-	estimated_unflushed_memory.store(0, std::memory_order_relaxed);
-	if (IsActive() && IsEnabled() && extra_memory.IsValid()) {
-		FreeInternal(extra_memory.GetIndex());
+void BlockAllocator::ThreadIdle() const {
+	try {
+		FreeInternal(optional_idx());
+	} catch (...) {
+		// Reclamation is best effort on scheduler threads.
 	}
-	if (Allocator::SupportsFlush()) {
-		Allocator::FlushAll();
+	Allocator::ThreadIdle();
+}
+
+void BlockAllocator::FlushAll(const optional_idx extra_memory) const noexcept {
+	deallocated_since_flush.store(0, std::memory_order_relaxed);
+	try {
+		FreeInternal(extra_memory);
+	} catch (...) {
+		// Failed reclamation leaves blocks available for reuse.
+	}
+	try {
+		if (Allocator::SupportsFlush()) {
+			Allocator::FlushAll();
+		}
+	} catch (...) {
+		// Fallback reclamation is also best effort.
 	}
 }
 
-idx_t BlockAllocator::GetEstimatedUnflushedMemory() const {
-	return estimated_unflushed_memory.load(std::memory_order_relaxed);
+idx_t BlockAllocator::GetDeallocatedSinceFlush() const {
+	return deallocated_since_flush.load(std::memory_order_relaxed);
 }
 
-bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_limit,
-                                         const idx_t used_memory) const {
+bool BlockAllocator::TryFlushDeallocated(const idx_t threshold) const {
 	if (!SupportsFlush()) {
 		return false;
 	}
-	auto deallocated = estimated_unflushed_memory.load(std::memory_order_relaxed);
+	auto deallocated = deallocated_since_flush.load(std::memory_order_relaxed);
 	if (deallocated < threshold) {
 		return false;
 	}
-	// the thread that claims the accumulated amount checks whether a flush is needed
-	if (!estimated_unflushed_memory.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
+	// the thread that claims the accumulated amount performs the flush
+	if (!deallocated_since_flush.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
 		return false;
-	}
-	if (!IsActive()) {
-		const auto mapped_memory = allocator.GetMappedMemory();
-		if (mapped_memory.IsValid()) {
-			// Freed pages cannot occupy more than the allocator's entire mapped footprint.
-			const auto unflushed = MinValue(deallocated, mapped_memory.GetIndex());
-			if (used_memory + unflushed <= memory_limit) {
-				// Keep the upper bound in subsequent pressure checks, adding any concurrent frees.
-				estimated_unflushed_memory.fetch_add(unflushed, std::memory_order_relaxed);
-				return false;
-			}
-		}
 	}
 	FlushAll(deallocated);
 	return true;
 }
 
-void BlockAllocator::FreeInternal(const idx_t extra_memory) const {
-	auto count = DivBlockSize(extra_memory);
-	unsafe_vector<uint32_t> to_free_buffer;
-	to_free_buffer.resize(count);
-	count = touched->q.try_dequeue_bulk(to_free_buffer.begin(), count);
-	if (count == 0) {
+void BlockAllocator::FreeInternal(const optional_idx extra_memory) const {
+	if (!IsActive() || !IsEnabled()) {
 		return;
 	}
-	to_free_buffer.resize(count);
-
-	// Sort so we can coalesce madvise calls
-	std::sort(to_free_buffer.begin(), to_free_buffer.end());
-
-	// Coalesce and free
-	uint32_t block_id_start = to_free_buffer[0];
-	for (idx_t i = 1; i < to_free_buffer.size(); i++) {
-		const auto &previous_block_id = to_free_buffer[i - 1];
-		const auto &current_block_id = to_free_buffer[i];
-		if (previous_block_id == current_block_id - 1) {
-			continue; // Current is contiguous with previous block
-		}
-
-		// Previous block is the last contiguous block starting from block_id_start, free them in one go
-		FreeContiguousBlocks(block_id_start, previous_block_id);
-
-		// Continue coalescing from the current
-		block_id_start = current_block_id;
+	GetBlockAllocatorThreadLocalState(*this).Clear();
+	// Bound this flush even when other threads keep freeing blocks.
+	idx_t remaining = touched->q.size_approx();
+	if (extra_memory.IsValid()) {
+		remaining = MinValue(remaining, DivBlockSize(extra_memory.GetIndex()));
 	}
+	static constexpr idx_t RECLAIM_BATCH_SIZE = 1024;
+	unsafe_vector<uint32_t> to_free_buffer;
+	to_free_buffer.resize(MinValue(remaining, RECLAIM_BATCH_SIZE));
+	while (remaining > 0) {
+		const auto count = touched->q.try_dequeue_bulk(to_free_buffer.begin(), MinValue(remaining, RECLAIM_BATCH_SIZE));
+		if (count == 0) {
+			break;
+		}
+		remaining -= count;
+		std::sort(to_free_buffer.begin(), to_free_buffer.begin() + count);
 
-	// Don't forget the last one
-	FreeContiguousBlocks(block_id_start, to_free_buffer.back());
-
-	// Make freed blocks available to allocate again
-	untouched->q.enqueue_bulk(to_free_buffer.begin(), to_free_buffer.size());
+		idx_t start = 0;
+		while (start < count) {
+			auto end = start + 1;
+			while (end < count && to_free_buffer[end] == to_free_buffer[end - 1] + 1) {
+				end++;
+			}
+			try {
+				FreeContiguousBlocks(to_free_buffer[start], to_free_buffer[end - 1]);
+			} catch (...) {
+				touched->q.enqueue_bulk(to_free_buffer.begin() + start, count - start);
+				throw;
+			}
+			untouched->q.enqueue_bulk(to_free_buffer.begin() + start, end - start);
+			start = end;
+		}
+	}
 }
 
 void BlockAllocator::FreeContiguousBlocks(const uint32_t block_id_start, const uint32_t block_id_end_including) const {

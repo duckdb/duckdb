@@ -3,16 +3,23 @@
 #include "duckdb/storage/block_allocator.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/storage_info.hpp"
 
 #include <condition_variable>
 #include <thread>
+#include <unordered_set>
+
+#if defined(__linux__)
+#include <sys/mman.h>
+#endif
 
 using namespace duckdb;
 
 #if INTPTR_MAX == INT64_MAX
 namespace {
 struct BlockAllocatorFallbackData : public PrivateAllocatorData {
-	idx_t allocation_count = 0;
+	atomic<idx_t> allocation_count {0};
 
 	static data_ptr_t Allocate(PrivateAllocatorData *private_data, idx_t size) {
 		private_data->Cast<BlockAllocatorFallbackData>().allocation_count++;
@@ -96,6 +103,256 @@ TEST_CASE("BlockAllocator switching races with allocator destruction", "[api][bl
 		worker.join();
 	}
 }
+
+TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 1103;
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
+	auto private_data = make_uniq<BlockAllocatorFallbackData>();
+	auto &fallback_data = *private_data;
+	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
+	                   std::move(private_data));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		block[BLOCK_SIZE - 1] = 42;
+		blocks.push_back(block);
+	}
+	auto live_first = blocks[3];
+	auto live_second = blocks[1030];
+	for (auto block : blocks) {
+		if (block != live_first && block != live_second) {
+			allocator.FreeData(block, BLOCK_SIZE);
+		}
+	}
+
+	idx_t expected_reclaimed = 0;
+	SECTION("Warm reuse") {
+	}
+	SECTION("Thread flush only returns cached blocks") {
+		allocator.ThreadFlush(false, 0, 1);
+	}
+	SECTION("Zero-byte flush") {
+		allocator.FlushAll(0);
+	}
+	SECTION("Sub-block flush") {
+		allocator.FlushAll(BLOCK_SIZE - 1);
+	}
+	SECTION("Byte-limited flush") {
+		expected_reclaimed = 17;
+		allocator.FlushAll(expected_reclaimed * BLOCK_SIZE + BLOCK_SIZE / 2);
+	}
+	SECTION("Complete flush spans reclamation batches") {
+		expected_reclaimed = BLOCK_COUNT - 2;
+		allocator.FlushAll();
+	}
+	SECTION("Idle flush spans reclamation batches") {
+		expected_reclaimed = BLOCK_COUNT - 2;
+		allocator.ThreadIdle();
+	}
+
+	std::unordered_set<data_ptr_t> allocated {live_first, live_second};
+	blocks.clear();
+	idx_t reclaimed = 0;
+	for (idx_t i = 0; i < BLOCK_COUNT - 2; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		CHECK(allocated.insert(block).second);
+		if (block[0] == 0 && block[BLOCK_SIZE - 1] == 0) {
+			reclaimed++;
+		}
+		if (expected_reclaimed == 0) {
+			CHECK(block[0] == 42);
+			CHECK(block[BLOCK_SIZE - 1] == 42);
+		}
+		blocks.push_back(block);
+	}
+#if defined(__linux__) || defined(_WIN32)
+	CHECK(reclaimed == expected_reclaimed);
+#else
+	CHECK(reclaimed <= expected_reclaimed);
+#endif
+	CHECK(live_first[0] == 42);
+	CHECK(live_first[BLOCK_SIZE - 1] == 42);
+	CHECK(live_second[0] == 42);
+	CHECK(live_second[BLOCK_SIZE - 1] == 42);
+	CHECK(fallback_data.allocation_count == 0);
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.FreeData(live_first, BLOCK_SIZE);
+	allocator.FreeData(live_second, BLOCK_SIZE);
+}
+
+TEST_CASE("BlockAllocator reclamation races with allocation and free", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 256;
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
+	auto private_data = make_uniq<BlockAllocatorFallbackData>();
+	auto &fallback_data = *private_data;
+	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
+	                   std::move(private_data));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	auto live = allocator.AllocateData(BLOCK_SIZE);
+	memset(live, 42, BLOCK_SIZE);
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < 128; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		memset(block, 42, BLOCK_SIZE);
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.ThreadFlush(false, 0, 1);
+	atomic<bool> ready {false};
+	atomic<bool> start {false};
+	atomic<bool> preserved {true};
+	std::thread worker([&]() {
+		for (idx_t iteration = 0; iteration < 100; iteration++) {
+			vector<data_ptr_t> local;
+			for (idx_t i = 0; i < 32; i++) {
+				auto block = allocator.AllocateData(BLOCK_SIZE);
+				memset(block, 84, BLOCK_SIZE);
+				local.push_back(block);
+			}
+			if (iteration == 0) {
+				ready = true;
+				while (!start) {
+					std::this_thread::yield();
+				}
+			}
+			for (auto block : local) {
+				for (idx_t i = 0; i < BLOCK_SIZE; i++) {
+					if (block[i] != 84) {
+						preserved = false;
+					}
+				}
+				allocator.FreeData(block, BLOCK_SIZE);
+			}
+			allocator.ThreadFlush(false, 0, 1);
+		}
+	});
+	while (!ready) {
+		std::this_thread::yield();
+	}
+	allocator.FlushAll();
+	start = true;
+	for (idx_t iteration = 0; iteration < 100; iteration++) {
+		allocator.FlushAll();
+		allocator.ThreadIdle();
+	}
+	worker.join();
+	CHECK(preserved);
+	bool live_preserved = true;
+	for (idx_t i = 0; i < BLOCK_SIZE; i++) {
+		live_preserved &= live[i] == 42;
+	}
+	CHECK(live_preserved);
+	allocator.FreeData(live, BLOCK_SIZE);
+	allocator.FlushAll();
+	blocks.clear();
+	std::unordered_set<data_ptr_t> allocated;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		CHECK(allocated.insert(block).second);
+		blocks.push_back(block);
+	}
+	CHECK(fallback_data.allocation_count == 0);
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+}
+
+TEST_CASE("BlockAllocator supplies an idle decay delay when enabled", "[api][block_allocator]") {
+	Allocator fallback;
+	BlockAllocator allocator(fallback, 65536, 65536, 0);
+	const auto fallback_delay = Allocator::DecayDelay();
+	CHECK(allocator.DecayDelay().IsValid() == fallback_delay.IsValid());
+	allocator.Resize(65536);
+	REQUIRE(allocator.DecayDelay().IsValid());
+	CHECK(allocator.DecayDelay().GetIndex() == (fallback_delay.IsValid() ? fallback_delay.GetIndex() : 1));
+}
+
+#if defined(__linux__)
+TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 16;
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
+	auto private_data = make_uniq<BlockAllocatorFallbackData>();
+	auto &fallback_data = *private_data;
+	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
+	                   std::move(private_data));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		memset(block, 42, BLOCK_SIZE);
+		blocks.push_back(block);
+	}
+	std::sort(blocks.begin(), blocks.end());
+	auto live_first = blocks[4];
+	auto live_second = blocks[12];
+	auto locked = blocks[8];
+	// Linux rejects MADV_DONTNEED for locked pages, leaving the mapping accessible.
+	if (mlock(locked, 1) != 0) {
+		WARN("Cannot lock a page to exercise discard failure");
+		for (auto block : blocks) {
+			allocator.FreeData(block, BLOCK_SIZE);
+		}
+		return;
+	}
+	for (auto block : blocks) {
+		if (block != live_first && block != live_second) {
+			allocator.FreeData(block, BLOCK_SIZE);
+		}
+	}
+	const optional_idx flush_size(POOL_SIZE);
+	STATIC_REQUIRE(noexcept(allocator.FlushAll(flush_size)));
+	CHECK_NOTHROW(allocator.FlushAll(POOL_SIZE));
+	CHECK_NOTHROW(allocator.FlushAll());
+	CHECK_NOTHROW(allocator.ThreadIdle());
+	CHECK(munlock(locked, 1) == 0);
+	allocator.FlushAll();
+	std::unordered_set<data_ptr_t> allocated {live_first, live_second};
+	blocks.clear();
+	for (idx_t i = 0; i < BLOCK_COUNT - 2; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		CHECK(allocated.insert(block).second);
+		CHECK(block[0] == 0);
+		CHECK(block[BLOCK_SIZE - 1] == 0);
+		blocks.push_back(block);
+	}
+	CHECK(live_first[0] == 42);
+	CHECK(live_second[0] == 42);
+	CHECK(fallback_data.allocation_count == 0);
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.FreeData(live_first, BLOCK_SIZE);
+	allocator.FreeData(live_second, BLOCK_SIZE);
+}
+
+TEST_CASE("BlockAllocator discard failure does not interrupt database shutdown", "[api][block_allocator]") {
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	config.options.block_allocator_size = 4 * DEFAULT_BLOCK_ALLOC_SIZE;
+	auto db = make_uniq<DuckDB>(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db->instance);
+	auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
+	block[0] = 42;
+	if (mlock(block, 1) != 0) {
+		WARN("Cannot lock a page to exercise discard failure during shutdown");
+		allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
+		return;
+	}
+	allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
+	// Unmapping the pool during destruction also releases the page lock.
+	CHECK_NOTHROW(db.reset());
+}
+#endif
 #endif
 
 TEST_CASE("BlockAllocator usage and de-allocation on different threads", "[api][block_allocator]") {

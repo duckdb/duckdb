@@ -586,7 +586,7 @@ void BufferPool::FlushAllocator(const optional_idx extra_memory) {
 
 void BufferPool::FlushOnBulkDeallocation() {
 	const auto threshold = GetBulkDeallocationFlushThreshold();
-	const auto deallocated = block_allocator.GetEstimatedUnflushedMemory();
+	const auto deallocated = block_allocator.GetDeallocatedSinceFlush();
 	if (deallocated < threshold) {
 		return;
 	}
@@ -595,7 +595,7 @@ void BufferPool::FlushOnBulkDeallocation() {
 	if (used_memory + deallocated <= maximum_memory.load(std::memory_order_relaxed)) {
 		return;
 	}
-	block_allocator.TryFlushDeallocated(threshold, maximum_memory.load(std::memory_order_relaxed), used_memory);
+	block_allocator.TryFlushDeallocated(threshold);
 }
 
 vector<EvictionQueueInformation> BufferPool::GetEvictionQueueInfo() const {

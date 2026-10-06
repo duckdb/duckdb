@@ -45,12 +45,15 @@ public:
 
 	//! Flush outstanding allocations
 	bool SupportsFlush() const;
+	optional_idx DecayDelay() const;
 	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
-	void FlushAll(optional_idx extra_memory = optional_idx()) const;
-	//! Estimated memory freed but still held by the allocator
-	idx_t GetEstimatedUnflushedMemory() const;
-	//! Flush if at least threshold bytes were freed since the last reclamation check, returns whether a flush happened
-	bool TryFlushDeallocated(idx_t threshold, idx_t memory_limit, idx_t used_memory) const;
+	void ThreadIdle() const;
+	//! Best-effort reclamation of free pool blocks and fallback allocations.
+	void FlushAll(optional_idx extra_memory = optional_idx()) const noexcept;
+	//! Memory freed since the last flush, which the allocator may still hold
+	idx_t GetDeallocatedSinceFlush() const;
+	//! Flush if at least threshold bytes were freed since the last flush, returns whether a flush happened
+	bool TryFlushDeallocated(idx_t threshold) const;
 
 private:
 	bool IsActive() const;
@@ -65,7 +68,7 @@ private:
 
 	void VerifyBlockID(uint32_t block_id) const;
 
-	void FreeInternal(idx_t extra_memory) const;
+	void FreeInternal(optional_idx extra_memory) const;
 	void FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) const;
 
 private:
@@ -73,8 +76,8 @@ private:
 	const hugeint_t uuid;
 	//! Fallback allocator
 	Allocator &allocator;
-	//! Estimated memory freed but still held by the allocator
-	mutable atomic<idx_t> estimated_unflushed_memory {0};
+	//! Memory freed since the last flush
+	mutable atomic<idx_t> deallocated_since_flush {0};
 
 	//! Block size (power of two)
 	const idx_t block_size;
