@@ -89,6 +89,11 @@ struct BlockQueue {
 	duckdb_moodycamel::ConcurrentQueue<uint32_t> q;
 };
 
+struct BlockAllocatorLifetimeState {
+	mutex lock;
+	bool alive = true;
+};
+
 class BlockAllocatorThreadLocalState {
 public:
 	explicit BlockAllocatorThreadLocalState(const BlockAllocator &block_allocator_p) {
@@ -137,13 +142,15 @@ public:
 	}
 
 	void Clear() {
-		if (alive_token && alive_token->load()) {
-			// Allocator is still alive — return local blocks to global queues
-			if (!touched.empty()) {
-				block_allocator->touched->q.enqueue_bulk(touched.begin(), touched.size());
-			}
-			if (!untouched.empty()) {
-				block_allocator->untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
+		if (lifetime_state) {
+			lock_guard<mutex> guard(lifetime_state->lock);
+			if (lifetime_state->alive) {
+				if (!touched.empty()) {
+					block_allocator->touched->q.enqueue_bulk(touched.begin(), touched.size());
+				}
+				if (!untouched.empty()) {
+					block_allocator->untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
+				}
 			}
 		}
 		touched.clear();
@@ -152,11 +159,10 @@ public:
 
 private:
 	void Initialize(const BlockAllocator &block_allocator_p) {
+		Clear();
 		cached_uuid = block_allocator_p.uuid;
 		block_allocator = block_allocator_p;
-		alive_token = block_allocator_p.alive_token;
-		untouched.clear();
-		touched.clear();
+		lifetime_state = block_allocator_p.lifetime_state;
 		untouched.reserve(BATCH_SIZE);
 		touched.reserve(FREE_THRESHOLD);
 	}
@@ -188,8 +194,7 @@ private:
 private:
 	hugeint_t cached_uuid;
 	optional_ptr<const BlockAllocator> block_allocator;
-	// Whether the BlockAllocator is still alive.
-	shared_ptr<atomic<bool>> alive_token;
+	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
 
 	static constexpr idx_t BATCH_SIZE = 128;
 	static constexpr idx_t FREE_THRESHOLD = BATCH_SIZE * 2;
@@ -221,13 +226,16 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)), virtual_memory_space(nullptr),
       physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
-      alive_token(make_shared_ptr<atomic<bool>>(true)) {
+      lifetime_state(make_shared_ptr<BlockAllocatorLifetimeState>()) {
 	D_ASSERT(IsPowerOfTwo(block_size));
 	Resize(physical_memory_size_p);
 }
 
 BlockAllocator::~BlockAllocator() {
-	alive_token->store(false);
+	{
+		lock_guard<mutex> guard(lifetime_state->lock);
+		lifetime_state->alive = false;
+	}
 	GetBlockAllocatorThreadLocalState(*this).Clear();
 	if (IsActive()) {
 		try {

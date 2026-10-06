@@ -22,6 +22,7 @@ class Allocator;
 class AttachedDatabase;
 class DatabaseInstance;
 struct BlockQueue;
+struct BlockAllocatorLifetimeState;
 
 class BlockAllocator {
 	friend class BlockAllocatorThreadLocalState;
@@ -95,8 +96,8 @@ private:
 	//! Touched by block IDs
 	unsafe_unique_ptr<BlockQueue> touched;
 
-	//! Token used to indicate whether current BlockAllocator is alive.
-	shared_ptr<atomic<bool>> alive_token;
+	//! Synchronizes returning cached blocks with allocator destruction.
+	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
 };
 
 } // namespace duckdb
