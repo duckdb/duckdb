@@ -143,22 +143,26 @@ struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, A
 	}
 };
 
-//! The average of TIME values is a TIME - only a crafted state can produce a value outside of a day
-static void CheckTimeAverage(int64_t micros) {
-	if (micros < 0 || micros > Interval::MICROS_PER_DAY) {
-		throw InvalidInputException("Invalid avg state - the average %d is not a valid time", micros);
+//! The average of TIME values is within a day - reject imported states that average outside of it
+void ValidateTimeAverageStates(const_data_ptr_t states, idx_t count, idx_t stride) {
+	for (idx_t i = 0; i < count; i++) {
+		const auto state = Load<AvgState<hugeint_t>>(states + i * stride);
+		if (state.count == 0) {
+			continue;
+		}
+		const auto max_value = hugeint_t(0, state.count) * hugeint_t(Interval::MICROS_PER_DAY);
+		if (state.value < 0 || state.value > max_value) {
+			throw InvalidInputException("Invalid avg state - the average of %s over %llu values is not a valid time",
+			                            state.value.ToString(), state.count);
+		}
 	}
 }
 
-struct TimeAverageOperation : public DiscreteAverageOperation {
-	template <class T, class STATE>
-	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		DiscreteAverageOperation::Finalize<T, STATE>(state, target, finalize_data);
-		if (state.count != 0) {
-			CheckTimeAverage(target);
-		}
-	}
-};
+AggregateStateLayout TimeAverageStateLayout(AggregateLayoutInput &input) {
+	auto layout = AggregateFunction::StructStateLayout<AvgState<hugeint_t>>(input);
+	layout.validate_state = ValidateTimeAverageStates;
+	return layout;
+}
 
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class STATE, class OP>
@@ -271,7 +275,6 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 			auto micros = Hugeint::Cast<int64_t>(Hugeint::DivModPositive(state.value, state.count, remainder));
 			// Round the result
 			micros += (remainder > (state.count / 2));
-			CheckTimeAverage(micros);
 			target = dtime_tz_t(dtime_t(micros), 0);
 		}
 	}
@@ -358,15 +361,17 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	timestamp_tz_avg.GetSignature().GetParameter(0).SetName("x");
 	avg.AddFunction(timestamp_tz_avg);
 
-	auto time_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, TimeAverageOperation>(
+	auto time_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
 	    LogicalType::TIME, LogicalType::TIME);
 	time_avg.GetSignature().GetParameter(0).SetName("x");
+	time_avg.SetStructStateExport(TimeAverageStateLayout);
 	avg.AddFunction(time_avg);
 
 	auto time_tz_avg =
 	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, dtime_tz_t, dtime_tz_t, TimeTZAverageOperation>(
 	        LogicalType::TIME_TZ, LogicalType::TIME_TZ);
 	time_tz_avg.GetSignature().GetParameter(0).SetName("x");
+	time_tz_avg.SetStructStateExport(TimeAverageStateLayout);
 	avg.AddFunction(time_tz_avg);
 
 	return avg;

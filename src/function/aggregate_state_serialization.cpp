@@ -298,6 +298,9 @@ void AggregateStateSerialization::DeserializeStates(const BoundAggregateFunction
 	}
 	DeserializeField(layout.type, layout.field, input_vec, count, dest_buffer, layout.total_state_size, 0, allocator,
 	                 ownership);
+	if (layout.validate_state) {
+		layout.validate_state(dest_buffer, count, layout.total_state_size);
+	}
 }
 
 void AggregateStateSerialization::SerializeStates(const AggregateStateLayout &layout, Vector &result, idx_t count,
