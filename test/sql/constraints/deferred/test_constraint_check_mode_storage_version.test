@@ -1,8 +1,8 @@
-# name: test/sql/constraints/deferred/test_constraint_timing_storage_version.test
-# description: Require compatible storage for explicit constraint timing
+# name: test/sql/constraints/deferred/test_constraint_check_mode_storage_version.test
+# description: Require compatible storage for explicit constraint check mode
 # group: [deferred]
 
-load {TEST_DIR}/constraint_timing_old.db readwrite v1.5.0
+load {TEST_DIR}/constraint_check_mode_old.db readwrite v1.5.0
 
 statement ok
 CREATE TABLE t1(i INTEGER UNIQUE, j INTEGER PRIMARY KEY);
@@ -13,12 +13,17 @@ INSERT INTO t1 VALUES (1, 2);
 statement error
 CREATE TABLE t2(i INTEGER UNIQUE IMMEDIATE);
 ----
-Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+Binder Error: Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.
 
 statement error
 CREATE TABLE t2(i INTEGER, PRIMARY KEY(i) IMMEDIATE);
 ----
-Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+Binder Error: Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.
+
+statement error
+CREATE TABLE t2(i INTEGER UNIQUE DEFERRED);
+----
+Binder Error: Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.
 
 statement ok
 CREATE TABLE t2(i INTEGER, j INTEGER);
@@ -26,12 +31,17 @@ CREATE TABLE t2(i INTEGER, j INTEGER);
 statement error
 ALTER TABLE t2 ADD UNIQUE(i) IMMEDIATE;
 ----
-Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+Binder Error: Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.
 
 statement error
 ALTER TABLE t2 ADD PRIMARY KEY(j) IMMEDIATE;
 ----
-Binder Error: Explicit constraint timing is only supported for storage versions v2.0.0 and higher.
+Binder Error: Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.
+
+statement error
+ALTER TABLE t2 ADD UNIQUE(i) DEFERRED;
+----
+Binder Error: Explicit constraint check mode is only supported for storage versions v2.0.0 and higher.
 
 # Failed ALTER statements leave the table available for ordinary constraints.
 statement ok
@@ -57,7 +67,7 @@ statement ok
 ALTER TABLE mem.t ADD PRIMARY KEY(j) IMMEDIATE;
 
 statement ok
-ATTACH '{TEST_DIR}/constraint_timing_new.db' AS db (STORAGE_VERSION 'v2.0.0');
+ATTACH '{TEST_DIR}/constraint_check_mode_new.db' AS db (STORAGE_VERSION 'v2.0.0');
 
 statement ok
 CREATE TABLE db.t(i INTEGER UNIQUE IMMEDIATE, j INTEGER);
