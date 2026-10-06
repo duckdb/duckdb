@@ -1969,6 +1969,37 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  table_function_bind_get_file_open_options:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-06" ]
+    description: |
+      Creates open options for the file the function reads, carrying what is already known about the file.
+
+      When the function reads a file as part of a multi-file function registered with
+      `[[multi_file_function_register]]`, the multi-file reader can know more about the file than its path: the
+      options a caller passed along with it (e.g. `read_x([{'filename': 'f.x', 'file_size': 42}])`), or what a file
+      system reported about it while globbing. The returned options carry those values, so that opening the file with
+      them lets the file system skip work it would otherwise repeat, such as asking a remote store for the size of the
+      file. When the function is not bound as part of a multi-file scan, the returned options carry no values.
+
+      The options carry no flags: set them with `[[file_open_options_set_flag]]` before passing the options to
+      `[[file_system_open]]`. The caller owns the returned handle and must destroy it with
+      `[[file_open_options_destroy]]`.
+    parameters:
+      info:
+        type: table_function_bind_info
+        description: The bind info handle.
+      options:
+        type: file_open_options
+        indirection: 1
+        kind: OUT
+        description: On success, receives the new options. Owned by the caller; destroy via `[[file_open_options_destroy]]`.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   #---------------------------------------------------------------------------------------------------------------------
   # Multi-file functions
   #---------------------------------------------------------------------------------------------------------------------

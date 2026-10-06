@@ -4020,6 +4020,13 @@ auto TableFunction::BindInput::AddFileMetadata(const std::string &key, const Val
 	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &view, value.handle());
 }
 
+auto TableFunction::BindInput::GetFileOpenOptions() const -> FileOpenOptions {
+	duckdb_v2_file_open_options_handle options = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_bind_get_file_open_options,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &options);
+	return detail::Factory::Make<FileOpenOptions>(options);
+}
+
 void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
 	duckdb_v2_opaque opaque {data, destructor, nullptr};
 	CheckedAPICall(duckdb_v2_table_function_init_global_set_global_state,

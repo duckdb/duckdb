@@ -140,6 +140,9 @@ public:
 	};
 	vector<ColumnIdentifier> out_column_identifiers;
 	InsertionOrderPreservingMap<Value> out_file_metadata;
+
+	//! The file the function reads, when it is bound as part of a multi-file scan
+	optional_ptr<const OpenFileInfo> in_file;
 };
 
 static auto Convert(duckdb_v2_table_function_bind_info_handle info) -> CV2TableBindInfo * {
@@ -428,6 +431,7 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	CV2ConstantBindInfo bind_info(input.table_function, info.user_data ? info.user_data->GetData() : nullptr,
 	                              input.inputs, input.named_parameters);
 	CV2TableBindInfo args = {};
+	args.in_file = TableFunctionFileBindInput::Get(input).file;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -1753,6 +1757,18 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_file_metadata(duckdb_v2_table_
 	return WithErrorHandler(err, [&]() {
 		auto &metadata = Convert(info)->out_file_metadata;
 		metadata[duckdb::string(Convert(*key))] = *Convert(value);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_file_open_options(duckdb_v2_table_function_bind_info_handle info,
+                                                                    duckdb_v2_file_open_options_handle *options,
+                                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(options);
+	*options = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &file = Convert(info)->in_file;
+		*options = CreateFileOpenOptions(file ? file->extended_info : nullptr);
 	});
 }
 

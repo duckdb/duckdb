@@ -3978,6 +3978,13 @@ public:
 		/// reads a file for a `MultiFileFunction`, as the metadata its reader exposes. Unstable API.
 		auto AddFileMetadata(const std::string &key, const Value &value) -> void;
 
+		/// Open options for the file the function reads, carrying what is already known about the file: the options
+		/// a caller passed along with it, or what a file system reported about it while globbing. Opening the file
+		/// with them lets the file system skip work it would otherwise repeat, such as asking a remote store for the
+		/// size of the file. Only filled when the function reads a file for a `MultiFileFunction`; empty otherwise.
+		/// The options carry no flags yet: set them before opening the file. Unstable API.
+		auto GetFileOpenOptions() const -> FileOpenOptions;
+
 	private:
 		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}

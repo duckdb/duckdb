@@ -17,6 +17,7 @@
 #include "duckdb/common/types/bignum.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/open_file_info.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
@@ -313,6 +314,10 @@ inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
 //! cannot be Convert'ed with a cast: the loader is resolved through the state instead. Valid only while the
 //! extension's entrypoint is running.
 auto GetExtensionLoader(duckdb_v2_extension_handle handle) -> ExtensionLoader &;
+
+//! New open options without flags, carrying the given values (if any); defined in capi_v2_file_system.cpp, which
+//! owns the representation of the options. The caller owns the result.
+auto CreateFileOpenOptions(shared_ptr<ExtendedOpenFileInfo> extended_info) -> duckdb_v2_file_open_options_handle;
 
 //! Translate the generic (key, value) function property channel into engine properties; defined in
 //! capi_v2_func_properties.cpp and shared by the scalar and aggregate set_property entry points.

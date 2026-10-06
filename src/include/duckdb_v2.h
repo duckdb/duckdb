@@ -13568,6 +13568,36 @@ duckdb_v2_table_function_bind_add_file_metadata(duckdb_v2_table_function_bind_in
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
+ * Creates open options for the file the function reads, carrying what is already known about the file.
+ *
+ * When the function reads a file as part of a multi-file function registered with
+ * `duckdb_v2_multi_file_function_register()`, the multi-file reader can know more about the file than its path: the
+ * options a caller passed along with it (e.g. `read_x([{'filename': 'f.x', 'file_size': 42}])`), or what a file system
+ * reported about it while globbing. The returned options carry those values, so that opening the file with them lets
+ * the file system skip work it would otherwise repeat, such as asking a remote store for the size of the file. When the
+ * function is not bound as part of a multi-file scan, the returned options carry no values.
+ *
+ * The options carry no flags: set them with `duckdb_v2_file_open_options_set_flag()` before passing the options to
+ * `duckdb_v2_file_system_open()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_file_open_options_destroy()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param options On success, receives the new options. Owned by the caller; destroy via
+ * `duckdb_v2_file_open_options_destroy()`.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_file_open_options(
+    duckdb_v2_table_function_bind_info_handle info, duckdb_v2_file_open_options_handle *options,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
  * Creates a new multi-file function that will be registered on the connection's database.
  *
  * The function starts out empty: give it a name with `duckdb_v2_multi_file_function_set_name()` and the single-file
