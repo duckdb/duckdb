@@ -1,0 +1,404 @@
+# name: test/sql/function/compat/dialect_aliases.test
+# description: Alternative spellings of existing DuckDB functions commonly used in other SQL dialects
+# group: [compat]
+
+require json
+
+require icu
+
+statement ok
+SET Calendar = 'gregorian';
+
+statement ok
+SET TimeZone = 'UTC';
+
+#---------------------------------------------------------------------------------------------------------------------
+# regexp_substr / regexp_count / regexp_instr / dateadd / sysdate / nvl / charindex
+#---------------------------------------------------------------------------------------------------------------------
+
+# regexp_substr(s, pat) is regexp_extract(s, pat): '' when there is no match, NULL in -> NULL out
+query I
+SELECT bool_and(regexp_substr(s, p) IS NOT DISTINCT FROM regexp_extract(s, p))
+FROM (VALUES ('abc123x', '[0-9]+'), ('abc', '[0-9]+'), ('', 'a*'), (NULL, 'x'), ('abc', NULL)) t(s, p)
+----
+true
+
+# optional 1-based start position (values < 1 search from the start), occurrence and parameters
+query IIIII
+SELECT regexp_substr('abc123x', '[0-9]+'), regexp_substr('abc123x', '[0-9]+', 5), regexp_substr('abc', '[0-9]+'), regexp_substr(NULL, 'x'), regexp_substr('abc123x', '[0-9]+', -1)
+----
+123	23	(empty)	NULL	123
+
+query IIIIII
+SELECT regexp_substr('a1b22c333', '[0-9]+', 1, 2), regexp_substr('a1b22c333', '[0-9]+', 1, 5), regexp_substr('a1b22c333', '[0-9]+', 1, 0), regexp_substr('ABC', 'b', 1, 1, 'i'), regexp_substr('a1b22', '([a-z])([0-9]+)', 1, 2, 'e'), regexp_substr(NULL, 'b', 1, 1)
+----
+22	(empty)	(empty)	B	b	NULL
+
+# regexp_instr: 1-based position of the match itself (not of the first occurrence of the matched text), 0 when none
+query IIIIII
+SELECT regexp_instr('abc123', '[0-9]'), regexp_instr('bab', 'b$'), regexp_instr('abc', 'z'), regexp_instr(NULL, 'z'), regexp_instr('xaby', '(?i)B'), regexp_instr('ab ab', 'ab$')
+----
+4	3	0	NULL	3	4
+
+query IIIIII
+SELECT regexp_instr('a1b2c3', '[0-9]', 3), regexp_instr('a1b2c3', '[0-9]', 1, 2), regexp_instr('a1b2c3', '[0-9]', 3, 2), regexp_instr('a1b2c3', '[0-9]', 1, 5), regexp_instr('abc', 'z', 1, 1), regexp_instr('a1b2', '[0-9]', 0, 2)
+----
+4	4	6	0	0	4
+
+# regexp_count(s, pat) is len(regexp_extract_all(s, pat))
+query I
+SELECT bool_and(regexp_count(s, p) IS NOT DISTINCT FROM len(regexp_extract_all(s, p)))
+FROM (VALUES ('a1b22', '[0-9]'), ('abc', '[0-9]'), ('', 'x'), (NULL, 'x')) t(s, p)
+----
+true
+
+query IIIII
+SELECT regexp_count('a1b22', '[0-9]'), regexp_count('a1b22', '[0-9]', 3), regexp_count('abc', '[0-9]'), regexp_count('A1b22', '[a-z]', 1, 'i'), regexp_count(NULL, 'a', 1, 'c')
+----
+3	2	0	2	NULL
+
+# regexp_like is an alias of regexp_matches (same overloads, including the options argument)
+query I
+SELECT bool_and(regexp_like(s, p) IS NOT DISTINCT FROM regexp_matches(s, p)) AND bool_and(regexp_like(s, p, 'i') IS NOT DISTINCT FROM regexp_matches(s, p, 'i'))
+FROM (VALUES ('abc', 'b'), ('abc', '^b'), ('ABC', 'b'), (NULL, 'b'), ('abc', NULL)) t(s, p)
+----
+true
+
+query III
+SELECT regexp_like('abc', 'b'), regexp_like('abc', '^b'), regexp_like('ABC', 'b', 'i')
+----
+true	false	true
+
+# dateadd(part, n, ts) is ts + to_interval(part, n): TIMESTAMP for DATE/TIMESTAMP input
+query I
+SELECT bool_and(dateadd(part, n, ts) IS NOT DISTINCT FROM ts + to_interval(part, n))
+FROM (VALUES ('month', 1, TIMESTAMP '2024-01-31'), ('day', -7, TIMESTAMP '2024-01-01'), ('hour', 36, TIMESTAMP '2024-01-01'), ('year', NULL, TIMESTAMP '2024-01-01'), ('day', 1, NULL)) t(part, n, ts)
+----
+true
+
+query III
+SELECT dateadd('month', 1, DATE '2024-01-31'), dateadd('day', 7, TIMESTAMP '2024-01-01 10:00:00'), dateadd('hour', -1, TIME '10:00:00')
+----
+2024-02-29 00:00:00	2024-01-08 10:00:00	09:00:00
+
+query III
+SELECT dateadd('year', 1, TIMESTAMPTZ '2024-02-29 00:00:00+00'), typeof(dateadd('d', 1, DATE '2024-01-01')), dateadd('ms', 1500, TIMESTAMP '2024-01-01')
+----
+2025-02-28 00:00:00+00	TIMESTAMP	2024-01-01 00:00:01.5
+
+# the part can be a column and the abbreviated part spellings are accepted
+query I
+SELECT dateadd(part, 1, DATE '2024-01-31') FROM (VALUES ('month'), ('day'), ('week')) t(part)
+----
+2024-02-29 00:00:00
+2024-02-01 00:00:00
+2024-02-07 00:00:00
+
+query IIIIIIII
+SELECT dateadd('qtr', 1, DATE '2024-01-01'), dateadd('m', 30, TIMESTAMP '2024-01-01'), dateadd('yrs', 1, DATE '2024-01-01'), dateadd('millisecs', 5, TIMESTAMP '2024-01-01'), dateadd('microsec', 5, TIMESTAMP '2024-01-01'), dateadd('hrs', 2, TIMESTAMP '2024-01-01'), dateadd('secs', 2, TIMESTAMP '2024-01-01'), dateadd('mons', 1, DATE '2024-01-31')
+----
+2024-04-01 00:00:00	2024-01-01 00:30:00	2025-01-01 00:00:00	2024-01-01 00:00:00.005	2024-01-01 00:00:00.000005	2024-01-01 02:00:00	2024-01-01 00:00:02	2024-02-29 00:00:00
+
+statement error
+SELECT dateadd('fortnight', 1, DATE '2024-01-01')
+----
+date part "fortnight" not recognized
+
+statement error
+SELECT dateadd('dow', 1, DATE '2024-01-01')
+----
+cannot be used to construct an interval
+
+# sysdate() / getdate() are now()::TIMESTAMP
+query IIII
+SELECT typeof(sysdate()), typeof(getdate()), sysdate() = now()::TIMESTAMP, getdate() = now()::TIMESTAMP
+----
+TIMESTAMP	TIMESTAMP	true	true
+
+# nvl is coalesce (two to five arguments)
+query I
+SELECT bool_and(nvl(a, b) IS NOT DISTINCT FROM coalesce(a, b)) AND bool_and(nvl(a, b, c) IS NOT DISTINCT FROM coalesce(a, b, c))
+FROM (VALUES (NULL, 5, 1), (1, 5, 2), (NULL, NULL, 7), (NULL, NULL, NULL)) t(a, b, c)
+----
+true
+
+query IIIIIII
+SELECT nvl(NULL, 5), nvl(1, 5), nvl(NULL, NULL, 7), nvl(NULL, NULL, NULL, 8), nvl(NULL, NULL, NULL, NULL, 9), nvl2(NULL, 'x', 'y'), nvl2(1, 'x', 'y')
+----
+5	1	7	8	9	y	x
+
+# charindex(sub, s) is strpos(s, sub) (0 when not found); the optional start position is supported too
+query I
+SELECT bool_and(charindex(sub, s) IS NOT DISTINCT FROM strpos(s, sub))
+FROM (VALUES ('c', 'abcabc'), ('z', 'abc'), ('', 'abc'), (NULL, 'abc'), ('a', NULL)) t(sub, s)
+----
+true
+
+query IIIIII
+SELECT charindex('c', 'abcabc'), charindex('z', 'abc'), charindex(NULL, 'abc'), charindex('b', 'abcabc', 3), charindex('z', 'abc', 2), charindex('a', 'abc', 0)
+----
+3	0	NULL	5	0	1
+
+#---------------------------------------------------------------------------------------------------------------------
+# from_unixtime / to_unixtime / from_iso8601_* / sequence / array_join / map_agg / element_at / cardinality
+#---------------------------------------------------------------------------------------------------------------------
+
+# from_unixtime(e) is to_timestamp(e) (TIMESTAMPTZ); to_unixtime(ts) is epoch(ts) (DOUBLE)
+query I
+SELECT bool_and(from_unixtime(e) IS NOT DISTINCT FROM to_timestamp(e)) AND bool_and(to_unixtime(ts) IS NOT DISTINCT FROM epoch(ts))
+FROM (VALUES (1700000000, TIMESTAMP '2023-11-14 22:13:20'), (0, TIMESTAMP '1970-01-01'), (1.5, TIMESTAMP '1970-01-01 00:00:01.5'), (NULL, NULL)) t(e, ts)
+----
+true
+
+query IIIIIII
+SELECT from_unixtime(1700000000), typeof(from_unixtime(1700000000)), from_unixtime(1700000000, 'Asia/Tokyo'), from_unixtime(1700000000, 5, 30), to_unixtime(TIMESTAMP '2023-11-14 22:13:20'), typeof(to_unixtime(TIMESTAMP '2023-11-14 22:13:20')), to_unixtime(TIMESTAMPTZ '2023-11-14 22:13:20+00')
+----
+2023-11-14 22:13:20+00	TIMESTAMP WITH TIME ZONE	2023-11-15 07:13:20	2023-11-15 03:43:20	1700000000.0	DOUBLE	1700000000.0
+
+# from_iso8601_timestamp(s) is s::TIMESTAMPTZ, from_iso8601_date(s) is s::DATE
+query I
+SELECT bool_and(from_iso8601_timestamp(s) IS NOT DISTINCT FROM s::TIMESTAMPTZ) AND bool_and(from_iso8601_date(d) IS NOT DISTINCT FROM d::DATE)
+FROM (VALUES ('2024-01-02T03:04:05Z', '2024-01-02'), ('2024-01-02T03:04:05+02:00', '2024-02-29'), ('2024-01-02', '2024-01-02'), (NULL, NULL)) t(s, d)
+----
+true
+
+query IIII
+SELECT from_iso8601_timestamp('2024-01-02T03:04:05Z'), from_iso8601_timestamp('2024-01-02T03:04:05+02:00'), from_iso8601_date('2024-01-02'), typeof(from_iso8601_date('2024-01-02'))
+----
+2024-01-02 03:04:05+00	2024-01-02 01:04:05+00	2024-01-02	DATE
+
+# sequence is generate_series (inclusive bounds; an empty list for a step with the wrong sign, like generate_series)
+query I
+SELECT bool_and(sequence(a, b) IS NOT DISTINCT FROM generate_series(a, b)) AND bool_and(sequence(a, b, s) IS NOT DISTINCT FROM generate_series(a, b, s))
+FROM (VALUES (1, 3, 1), (1, 5, 2), (5, 1, -2), (5, 1, 1), (1, 1, 1), (NULL, 3, 1), (1, NULL, 1)) t(a, b, s)
+----
+true
+
+query IIIII
+SELECT sequence(1, 3), sequence(1, 5, 2), sequence(5, 1, -2), sequence(5, 1), sequence(TIMESTAMP '2024-01-01', TIMESTAMP '2024-01-02', INTERVAL 12 HOUR)
+----
+[1, 2, 3]	[1, 3, 5]	[5, 3, 1]	[]	['2024-01-01 00:00:00', '2024-01-01 12:00:00', '2024-01-02 00:00:00']
+
+# cardinality accepts lists (same as len) as well as maps
+query I
+SELECT bool_and(cardinality(l) IS NOT DISTINCT FROM len(l))
+FROM (VALUES ([1, 2, 3]), ([]::INTEGER[]), (NULL::INTEGER[]), ([NULL]::INTEGER[])) t(l)
+----
+true
+
+query IIIII
+SELECT cardinality([1, 2, 3]), cardinality(map([4, 2], ['a', 'b'])), cardinality([]::INTEGER[]), cardinality(NULL::INTEGER[]), typeof(cardinality([1]))
+----
+3	2	0	NULL	UBIGINT
+
+statement error
+SELECT cardinality(42)
+----
+Cardinality can only operate on MAPs, LISTs and ARRAYs
+
+# element_at(list, i) is list_extract(list, i); element_at(map, key) keeps map_extract semantics
+query I
+SELECT bool_and(element_at(l, i) IS NOT DISTINCT FROM list_extract(l, i))
+FROM (VALUES ([10, 20, 30], 2), ([10, 20, 30], -1), ([10, 20, 30], 5), ([10, 20, 30], 0), ([10, 20, 30], NULL), (NULL::INTEGER[], 1)) t(l, i)
+----
+true
+
+query IIIIII
+SELECT element_at([10, 20, 30], 2), element_at([10, 20, 30], -1), element_at([10, 20, 30], 5), element_at(map(['k'], [1]), 'k'), element_at(map(['k'], [1]), 'z'), element_at(['a', 'b'], 1)
+----
+20	30	NULL	[1]	[]	a
+
+# array_join(l, sep) is array_to_string(l, sep); the 3-argument form replaces NULL elements
+query I
+SELECT bool_and(array_join(l, ',') IS NOT DISTINCT FROM array_to_string(l, ','))
+FROM (VALUES (['a', 'b']), (['a', NULL, 'b']), ([]::VARCHAR[]), (NULL::VARCHAR[]), ([NULL]::VARCHAR[])) t(l)
+----
+true
+
+query IIIII
+SELECT array_join(['a', 'b'], '-'), array_join(['a', NULL, 'b'], ','), array_join(['a', NULL, 'b'], ',', 'N'), array_join([1, 2], '+'), array_join([]::VARCHAR[], ',')
+----
+a-b	a,b	a,N,b	1+2	(empty)
+
+statement ok
+CREATE TABLE nums AS SELECT * FROM (VALUES (1), (2), (3), (4), (5), (NULL)) t(x);
+
+# approx_percentile is an alias of approx_quantile, whose quantile argument now accepts DOUBLE
+query I
+SELECT approx_percentile(x, 0.5) = approx_quantile(x, 0.5) AND approx_percentile(x, [0.25, 0.75]) = approx_quantile(x, [0.25, 0.75]) FROM nums
+----
+true
+
+query IIIIII
+SELECT approx_percentile(x, 0.5), approx_percentile(x, 0.5::DOUBLE), approx_percentile(x, 1.0 / 2), approx_percentile(x, [0.25, 0.75]), approx_quantile(x, 0.5::DOUBLE), approx_quantile(x::DECIMAL(10, 2), [0.5::DOUBLE]) FROM nums
+----
+3	3	3	[2, 4]	3	[3.00]
+
+# as a real aggregate it supports DISTINCT, FILTER and OVER
+query III
+SELECT approx_percentile(DISTINCT x, 0.5), approx_percentile(x, 0.5) FILTER (WHERE x > 2), approx_percentile(x, 0.5) FILTER (WHERE x IS NULL) FROM nums
+----
+3	4	NULL
+
+query I
+SELECT approx_percentile(x, 0.5) OVER (ORDER BY x) FROM nums WHERE x IS NOT NULL
+----
+1
+2
+2
+2
+3
+
+statement error
+SELECT approx_percentile(x, 1.5) FROM nums
+----
+can only take parameters in range [0, 1]
+
+# approx_distinct is an alias of approx_count_distinct
+query IIII
+SELECT approx_distinct(x) = approx_count_distinct(x), approx_distinct(x), approx_distinct(x) FILTER (WHERE x > 1), approx_distinct(DISTINCT x) FROM nums
+----
+true	5	4	5
+
+query I
+SELECT approx_distinct(x) OVER (ORDER BY x) FROM nums WHERE x IS NOT NULL
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT approx_distinct(x) FROM nums WHERE x IS NULL
+----
+0
+
+# map_agg: NULL keys are ignored and duplicate keys keep the first value; works as a window function too.
+# As a macro it does not accept DISTINCT/FILTER/ORDER BY modifiers.
+query II
+SELECT map_agg(k, v), map_agg(k, v)['b'] FROM (VALUES ('a', 1), ('b', 2)) t(k, v)
+----
+{a=1, b=2}	2
+
+query I
+SELECT map_agg(k, v) FROM (VALUES ('a', 1), ('a', 2), (NULL, 3), ('b', 4)) t(k, v)
+----
+{a=1, b=4}
+
+query II
+SELECT g, map_agg(k, v) FROM (VALUES (1, 'a', 1), (1, 'a', 2), (2, 'b', 3)) t(g, k, v) GROUP BY g ORDER BY g
+----
+1	{a=1}
+2	{b=3}
+
+query I
+SELECT map_agg(k, v) OVER (ORDER BY v) FROM (VALUES ('a', 1), ('b', 2)) t(k, v)
+----
+{a=1}
+{a=1, b=2}
+
+statement error
+SELECT map_agg(k, v) FILTER (WHERE v > 1) FROM (VALUES ('a', 1), ('b', 2)) t(k, v)
+----
+Macro Function
+
+# last_day_of_month is last_day, day_of_year is dayofyear, week_of_year is weekofyear
+query I
+SELECT bool_and(last_day_of_month(d) IS NOT DISTINCT FROM last_day(d)) AND bool_and(day_of_year(d) IS NOT DISTINCT FROM dayofyear(d)) AND bool_and(week_of_year(d) IS NOT DISTINCT FROM weekofyear(d))
+FROM (VALUES (DATE '2024-02-10'), (DATE '2021-01-01'), (DATE '2024-12-31'), (NULL)) t(d)
+----
+true
+
+query IIIIII
+SELECT last_day_of_month(DATE '2024-02-10'), last_day_of_month(TIMESTAMP '2024-02-10 10:00:00'), last_day_of_month(TIMESTAMPTZ '2024-02-10 10:00:00+00'), day_of_year(DATE '2024-02-01'), week_of_year(DATE '2024-01-01'), week_of_year(DATE '2021-01-01')
+----
+2024-02-29	2024-02-29	2024-02-29	32	1	53
+
+#---------------------------------------------------------------------------------------------------------------------
+# substring_index / stuff / iff / iif
+#---------------------------------------------------------------------------------------------------------------------
+
+# substring_index: negative counts from the right, 0 gives '', too large gives the whole string, NULL in -> NULL out
+query IIIIIIIIIIII
+SELECT substring_index('a.b.c', '.', 2), substring_index('a.b.c', '.', -2), substring_index('a.b.c', '.', 0), substring_index('a.b.c', '.', 5), substring_index('a.b.c', '.', -5), substring_index('abc', '.', 1), substring_index('a.b.c', '.', NULL), substring_index(NULL, '.', 1), substring_index('a.b.c', NULL, 1), substring_index('www.example.com', '.', 1), substring_index('www.example.com', '.', -1), substring_index('www.example.com', '.', -2)
+----
+a.b	b.c	(empty)	a.b.c	a.b.c	abc	NULL	NULL	NULL	www	com	example.com
+
+# stuff: NULL when start is out of range or length is negative, long lengths delete to the end, NULL replacement only deletes
+query IIIIIIIII
+SELECT stuff('abcdef', 2, 3, 'XY'), stuff('abcdef', 1, 0, 'X'), stuff('abcdef', 7, 1, 'X'), stuff('abcdef', 0, 1, 'X'), stuff('abcdef', 2, 100, 'X'), stuff('abcdef', 2, 3, NULL), stuff(NULL, 2, 3, 'X'), stuff('abcdef', 6, 1, 'Z'), stuff('abcdef', 2, -1, 'X')
+----
+aXYef	Xabcdef	NULL	NULL	aX	aef	NULL	abcdeZ	NULL
+
+# iff / iif are if
+query I
+SELECT bool_and(iff(c, a, b) IS NOT DISTINCT FROM if(c, a, b)) AND bool_and(iif(c, a, b) IS NOT DISTINCT FROM if(c, a, b))
+FROM (VALUES (true, 1, 2), (false, 1, 2), (NULL, 1, 2), (true, NULL, 2)) t(c, a, b)
+----
+true
+
+query IIII
+SELECT iff(true, 1, 2), iff(false, 1, 2), iff(NULL, 1, 2), iif(1 > 0, 'y', 'n')
+----
+1	2	2	y
+
+#---------------------------------------------------------------------------------------------------------------------
+# to_interval(part, n) and the three-argument date_add(unit, n, ts) overloads
+#---------------------------------------------------------------------------------------------------------------------
+
+query IIIIIIIIIIIIIIII
+SELECT to_interval('day', 5), to_interval('month', 2), to_interval('year', 1), to_interval('week', 1), to_interval('hour', 36), to_interval('minute', 90), to_interval('second', 61), to_interval('millisecond', 1500), to_interval('microsecond', 5), to_interval('quarter', 2), to_interval('decade', 1), to_interval('century', 1), to_interval('millennium', 1), to_interval('DAY', 1), to_interval(NULL, 1), to_interval('day', NULL)
+----
+5 days	2 months	1 year	7 days	36:00:00	01:30:00	00:01:01	00:00:01.5	00:00:00.000005	6 months	10 years	100 years	1000 years	1 day	NULL	NULL
+
+# same results as the to_<unit> constructors
+query I
+SELECT to_interval('year', 3) = to_years(3) AND to_interval('month', 3) = to_months(3) AND to_interval('day', 3) = to_days(3) AND to_interval('hour', 3) = to_hours(3) AND to_interval('minute', 3) = to_minutes(3) AND to_interval('second', 3) = to_seconds(3) AND to_interval('week', 3) = to_weeks(3) AND to_interval('quarter', 3) = to_quarters(3)
+----
+true
+
+statement error
+SELECT to_interval('bogus', 1)
+----
+date part "bogus" not recognized
+
+statement error
+SELECT to_interval('day', 3000000000)
+----
+out of range
+
+# the original two-argument form is unchanged
+query II
+SELECT date_add(DATE '2008-12-25', INTERVAL 5 DAY), date_add(TIMESTAMP '2008-12-25 00:00:00', INTERVAL 5 DAY)
+----
+2008-12-30 00:00:00	2008-12-30 00:00:00
+
+# three-argument form: DATE in, DATE out; other types keep their type; same operation as ts + to_interval(unit, n)
+query IIIIII
+SELECT date_add('day', 7, DATE '2024-01-01'), typeof(date_add('day', 7, DATE '2024-01-01')), date_add('month', 1, TIMESTAMP '2024-01-31 05:00:00'), date_add('hour', 1, TIMESTAMPTZ '2024-03-10 06:00:00+00'), date_add('week', -1, DATE '2024-01-08'), date_add('minute', 30, TIME '10:00:00')
+----
+2024-01-08	DATE	2024-02-29 05:00:00	2024-03-10 07:00:00+00	2024-01-01	10:30:00
+
+query I
+SELECT bool_and(date_add(u, n, ts) IS NOT DISTINCT FROM ts + to_interval(u, n)) AND bool_and(date_add(u, n, d) IS NOT DISTINCT FROM (d + to_interval(u, n))::DATE)
+FROM (VALUES ('day', 7, TIMESTAMP '2024-01-01', DATE '2024-01-01'), ('month', -1, TIMESTAMP '2024-03-31 05:00:00', DATE '2024-03-31'), ('year', 1, NULL, NULL)) t(u, n, ts, d)
+----
+true
+
+# date_diff keeps its (unit-first) semantics
+query II
+SELECT date_diff('day', DATE '2024-01-01', DATE '2024-01-10'), datediff('day', DATE '2024-01-01', DATE '2024-01-10')
+----
+9	9
+
+# every alias is visible in the catalog
+query I
+SELECT count(DISTINCT function_name) FROM duckdb_functions()
+WHERE function_name IN ('regexp_substr', 'regexp_instr', 'regexp_count', 'regexp_like', 'dateadd',
+                        'sysdate', 'getdate', 'nvl', 'nvl2', 'charindex', 'from_unixtime', 'to_unixtime', 'from_iso8601_timestamp',
+                        'from_iso8601_date', 'sequence', 'cardinality',
+                        'element_at', 'array_join', 'approx_percentile', 'approx_distinct', 'map_agg', 'last_day_of_month',
+                        'day_of_year', 'week_of_year', 'substring_index', 'stuff', 'iff', 'iif', 'to_interval', 'date_add')
+----
+30

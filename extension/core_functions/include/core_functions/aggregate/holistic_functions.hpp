@@ -25,6 +25,12 @@ struct ApproxQuantileFun {
 	static AggregateFunctionSet GetFunctions();
 };
 
+struct ApproxPercentileFun {
+	using ALIAS = ApproxQuantileFun;
+
+	static constexpr const char *Name = "approx_percentile";
+};
+
 struct MadFun {
 	static constexpr const char *Name = "mad";
 	static constexpr const char *Parameters = "x";

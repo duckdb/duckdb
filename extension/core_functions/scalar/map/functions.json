@@ -1,8 +1,8 @@
 [
     {
         "name": "cardinality",
-        "parameters": "map",
-        "description": "Returns the size of the map (or the number of entries in the map)",
+        "parameters": "map_or_list",
+        "description": "Returns the number of entries in the map or list",
         "example": "cardinality( map([4, 2], ['a', 'b']) );",
         "type": "scalar_function"
     },
@@ -25,8 +25,14 @@
         "parameters": "map,key",
         "description": "Returns a list containing the value for a given key or an empty list if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned",
         "example": "map_extract(map(['key'], ['val']), 'key')",
-        "type": "scalar_function",
-        "aliases": ["element_at"]
+        "type": "scalar_function"
+    },
+    {
+        "name": "element_at",
+        "parameters": "map_or_list,key_or_index",
+        "description": "For a map, returns a list containing the value for the given key, or an empty list if the key is not present (same as map_extract). For a list, returns the element at the given 1-based index (negative indexes count from the end), or NULL if the index is out of range (same as list_extract)",
+        "example": "element_at([4, 5, 6], 3)",
+        "type": "scalar_function_set"
     },
     {
         "name": "map_extract_value",

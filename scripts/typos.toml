@@ -38,6 +38,8 @@ stichting = "stichting"
 nd = "nd"
 eit = "eit"
 ser = "ser"
+# function names
+iif = "iif"
 siz = "siz"
 cpy = "cpy"
 Cpy = "Cpy"

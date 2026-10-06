@@ -185,13 +185,13 @@ LogicalType ApproxQuantileExportType() {
 Value ApproxQuantileParameterValue(const ApproximateQuantileBindData &bind_data, const LogicalType &param_type) {
 	vector<Value> quantiles;
 	for (auto &q : bind_data.quantiles) {
-		quantiles.push_back(Value::FLOAT(q));
+		quantiles.push_back(Value::DOUBLE(q));
 	}
 	if (param_type.id() != LogicalTypeId::LIST && param_type.id() != LogicalTypeId::ARRAY) {
 		D_ASSERT(quantiles.size() == 1);
 		return quantiles[0];
 	}
-	return Value::LIST(LogicalType::FLOAT, std::move(quantiles));
+	return Value::LIST(LogicalType::DOUBLE, std::move(quantiles));
 }
 
 AggregateStateLayout ApproxQuantileGetStateType(AggregateLayoutInput &input) {
@@ -413,7 +413,7 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().GetParameter(0).SetName("x");
-	fun.GetSignature().AddParameter("pos", LogicalType::FLOAT);
+	fun.GetSignature().AddParameter("pos", LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -538,8 +538,7 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().GetParameter(0).SetName("x");
-	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
-	fun.GetSignature().AddParameter("pos", list_of_float);
+	fun.GetSignature().AddParameter("pos", LogicalType::LIST(LogicalType::DOUBLE));
 	return fun;
 }
 
@@ -559,7 +558,7 @@ AggregateFunction GetApproxQuantileDecimal() {
 	// stub function - the actual function is set during bind or deserialize
 	AggregateFunction fun({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      BindApproxQuantileDecimal);
-	fun.GetSignature().AddParameter("x", LogicalTypeId::DECIMAL).AddParameter("pos", LogicalType::FLOAT);
+	fun.GetSignature().AddParameter("x", LogicalTypeId::DECIMAL).AddParameter("pos", LogicalType::DOUBLE);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproxQuantileDecimalDeserialize);
 	return fun;
@@ -571,7 +570,7 @@ AggregateFunction GetApproxQuantileDecimalList() {
 	                      nullptr, BindApproxQuantileDecimalList);
 	fun.GetSignature()
 	    .AddParameter("x", LogicalTypeId::DECIMAL)
-	    .AddParameter("pos", LogicalType::LIST(LogicalType::FLOAT));
+	    .AddParameter("pos", LogicalType::LIST(LogicalType::DOUBLE));
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproxQuantileDecimalDeserialize);
 	return fun;

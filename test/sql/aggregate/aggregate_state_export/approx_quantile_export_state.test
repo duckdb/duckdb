@@ -91,7 +91,7 @@ statement error
 SELECT finalize(to_aggregate_state(
     {'count': 1::UBIGINT, 'min': 0.0::DOUBLE, 'max': 0.0::DOUBLE,
      'centroids': []::STRUCT(mean DOUBLE, weight DOUBLE)[]},
-    'approx_quantile', ['DOUBLE', 'FLOAT'], [NULL, 0.5::FLOAT]
+    'approx_quantile', ['DOUBLE', 'DOUBLE'], [NULL, 0.5::DOUBLE]
 ));
 ----
 Invalid Input Error: Invalid approx_quantile state - non-zero count requires at least one centroid

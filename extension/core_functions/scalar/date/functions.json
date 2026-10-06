@@ -364,6 +364,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "to_interval",
+        "parameters": "part,value",
+        "description": "Construct an interval of `value` units of the given date `part` (e.g. 'day', 'month', 'hour'). The part names are those accepted by date_part",
+        "example": "to_interval('day', 5)",
+        "type": "scalar_function"
+    },
+    {
         "name": "to_microseconds",
         "parameters": "integer",
         "description": "Construct a microsecond interval",
@@ -373,7 +380,7 @@
     {
         "name": "to_millennia",
         "parameters": "integer",
-        "description": "Construct a millenium interval",
+        "description": "Construct a millennium interval",
         "example": "to_millennia(1)",
         "type": "scalar_function_set"
     },

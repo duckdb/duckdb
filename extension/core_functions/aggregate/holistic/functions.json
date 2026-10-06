@@ -4,7 +4,8 @@
         "parameters": "x,pos",
         "description": "Computes the approximate quantile using T-Digest.",
         "example": "approx_quantile(x, 0.5)",
-        "type": "aggregate_function_set"
+        "type": "aggregate_function_set",
+        "aliases": ["approx_percentile"]
     },
     {
         "name": "mad",
