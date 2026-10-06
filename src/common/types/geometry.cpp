@@ -898,13 +898,37 @@ struct WKBAnalysis {
 	bool has_trailing_data = false;
 };
 
+//! A collection whose parts are being analyzed
+struct WKBAnalysisFrame {
+	//! The number of parts that remain to be analyzed
+	uint32_t parts_remaining;
+	//! The type the parts must have, or 0 if they can have any type
+	uint32_t part_type;
+};
+
 WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 	WKBAnalysis result;
 	// Collection children are complete WKB objects embedded in the root object.
-	uint64_t geometries_remaining = 1;
+	vector<WKBAnalysisFrame> collections;
+	bool is_root = true;
+	bool root_has_z = false;
+	bool root_has_m = false;
 
-	while (geometries_remaining > 0) {
-		geometries_remaining--;
+	while (is_root || !collections.empty()) {
+		uint32_t required_type = 0;
+		if (!is_root) {
+			auto &collection = collections.back();
+			if (collection.parts_remaining == 0) {
+				collections.pop_back();
+				continue;
+			}
+			collection.parts_remaining--;
+			required_type = collection.part_type;
+			if (collections.size() >= Geometry::MAX_RECURSION_DEPTH) {
+				throw InvalidInputException("Geometry exceeds maximum recursion depth of %d",
+				                            Geometry::MAX_RECURSION_DEPTH);
+			}
+		}
 		const auto le = reader.Read<uint8_t>() == 1;
 
 		const auto meta = reader.Read<uint32_t>(le);
@@ -918,6 +942,21 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 
 		const auto has_z = ((flag_id & 0x01) != 0) || has_extz;
 		const auto has_m = ((flag_id & 0x02) != 0) || has_extm;
+
+		if (is_root) {
+			root_has_z = has_z;
+			root_has_m = has_m;
+			is_root = false;
+		} else {
+			if (has_z != root_has_z || has_m != root_has_m) {
+				throw InvalidInputException("Geometry has inconsistent Z/M dimensions, starting at position %zu",
+				                            reader.GetPosition());
+			}
+			if (required_type != 0 && type_id != required_type) {
+				throw InvalidInputException("Unexpected geometry type %d in a collection of type %d at position %zu",
+				                            type_id, required_type + 3, reader.GetPosition());
+			}
+		}
 
 		if (has_srid) {
 			result.any_ewkb = true;
@@ -962,7 +1001,8 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 		case 6:   // MULTIPOLYGON
 		case 7: { // GEOMETRYCOLLECTION
 			const auto part_count = reader.Read<uint32_t>(le);
-			geometries_remaining += part_count;
+			// MULTIPOINT, MULTILINESTRING and MULTIPOLYGON contain POINT, LINESTRING and POLYGON parts
+			collections.push_back({part_count, type_id == 7 ? 0 : type_id - 3});
 			result.size += sizeof(uint32_t); // part count
 		} break;
 		default: {
