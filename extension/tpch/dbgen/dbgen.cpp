@@ -1161,7 +1161,7 @@ public:
 		auto &catalog = Catalog::GetCatalog(context, catalog_name);
 		parameters = make_uniq<TPCHDBgenParameters>(context, catalog, schema, suffix);
 
-		load_dists(10 * 1024 * 1024, &base_context); // 10MiB
+		load_dists(TEXT_POOL_SIZE, &base_context);
 		distributions_loaded = true;
 		/* have to do this after init */
 		base_context.tdefs[NATION].base = nations.count;

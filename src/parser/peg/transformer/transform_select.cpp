@@ -227,12 +227,15 @@ bool PEGTransformerFactory::TransformWithOrdinality(PEGTransformer &transformer)
 
 static void RegisterWindowClause(PEGTransformer &transformer, const Identifier &window_name,
                                  WindowExpression &window_function) {
-	auto it = transformer.window_clauses.find(window_name);
-	if (it != transformer.window_clauses.end()) {
+	if (transformer.window_clauses.empty()) {
+		throw InternalException("WINDOW clause registered outside of a SELECT");
+	}
+	auto &current_windows = transformer.window_clauses.back();
+	auto it = current_windows.find(window_name);
+	if (it != current_windows.end()) {
 		throw ParserException("window %s is already defined", window_name);
 	}
-	transformer.window_clauses[window_name] =
-	    unique_ptr_cast<ParsedExpression, WindowExpression>(window_function.Copy());
+	current_windows[window_name] = unique_ptr_cast<ParsedExpression, WindowExpression>(window_function.Copy());
 }
 
 static void PushSimpleSelectRemainder(GeneratedTransformProcess &process) {
@@ -264,6 +267,7 @@ void PEGTransformerFactory::InitializeSimpleSelectTrampoline(PEGTransformer &tra
                                                              GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(7);
+	transformer.window_clauses.emplace_back();
 	auto &window_clause_opt = list_pr.Child<OptionalParseResult>(4);
 	if (window_clause_opt.HasResult()) {
 		process.manual_state = 0;
@@ -307,7 +311,8 @@ PEGTransformerFactory::FinalizeSimpleSelectTrampoline(PEGTransformer &transforme
 	}
 	auto select_statement = make_uniq<SelectStatement>();
 	select_statement->node = std::move(select_node);
-	transformer.window_clauses.clear();
+	D_ASSERT(!transformer.window_clauses.empty());
+	transformer.window_clauses.pop_back();
 	return make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(select_statement));
 }
 
@@ -479,7 +484,7 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.FunctionName() != "row") {
+		if (function.FunctionName() != "row" || function.GetArgumentsMutable().empty()) {
 			return false;
 		}
 		for (auto &child : function.GetArgumentsMutable()) {
@@ -1465,7 +1470,7 @@ PEGTransformerFactory::TransformPivotTargetList(PEGTransformer &transformer,
 		PivotColumnEntry pivot_entry;
 		pivot_entry.alias = target->GetAlias();
 		bool transformed = TransformPivotInList(target, pivot_entry);
-		if (!transformed) {
+		if (!transformed || pivot_entry.values.empty()) {
 			pivot_entry.expr = std::move(target);
 		}
 		result.push_back(std::move(pivot_entry));

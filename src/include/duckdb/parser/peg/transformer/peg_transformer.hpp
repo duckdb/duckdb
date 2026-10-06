@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/deque.hpp"
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
@@ -540,7 +541,7 @@ public:
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 
-	identifier_map_t<unique_ptr<WindowExpression>> window_clauses;
+	deque<identifier_map_t<unique_ptr<WindowExpression>>> window_clauses;
 
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
@@ -1803,6 +1804,15 @@ public:
 	static void InitializeGeneratedColumnTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeGeneratedAlwaysTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedAlwaysTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedByDefaultTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedByDefaultTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
 	                                                    GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
@@ -4437,9 +4447,8 @@ public:
 	static unique_ptr<CreateStatement>
 	TransformCreateIndexStmt(PEGTransformer &transformer, const optional<bool> &unique_index,
 	                         const optional<bool> &if_not_exists, const optional<Identifier> &index_name,
-	                         unique_ptr<BaseTableRef> base_table_name,
-	                         const optional<vector<string>> &insert_column_list, const optional<Identifier> &index_type,
-	                         optional<vector<unique_ptr<ParsedExpression>>> index_element,
+	                         unique_ptr<BaseTableRef> base_table_name, const optional<Identifier> &index_type,
+	                         vector<unique_ptr<ParsedExpression>> index_element,
 	                         optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
 	                         optional<unique_ptr<ParsedExpression>> where_clause);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
@@ -4584,7 +4593,7 @@ public:
 	static CreateTableColumnElement TransformCreateTableConstraint(PEGTransformer &transformer,
 	                                                               unique_ptr<Constraint> top_level_constraint);
 	static ConstraintColumnDefinition
-	TransformColumnDefinition(PEGTransformer &transformer, const vector<string> &dotted_identifier,
+	TransformColumnDefinition(PEGTransformer &transformer, const Identifier &identifier,
 	                          const optional<LogicalType> &type, optional<GeneratedColumnDefinition> generated_column,
 	                          const bool &has_result, optional<vector<ColumnConstraintEntry>> column_constraint);
 	static ColumnConstraintEntry TransformNotNullConstraint(PEGTransformer &transformer, const bool &child);
@@ -4632,9 +4641,12 @@ public:
 	static string TransformDotColLabel(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformColLabelIdentifier(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformStringLiteralIdentifier(PEGTransformer &transformer, const string &string_literal);
-	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, const bool &has_result,
+	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer,
+	                                                          const optional<bool> &generated_always,
 	                                                          unique_ptr<ParsedExpression> expression,
 	                                                          const optional<bool> &generated_column_type);
+	static bool TransformGeneratedAlways(PEGTransformer &transformer);
+	static bool TransformGeneratedByDefault(PEGTransformer &transformer);
 	static bool TransformCommitAction(PEGTransformer &transformer, const bool &preserve_or_delete);
 	static bool TransformPreserveRows(PEGTransformer &transformer);
 	static bool TransformDeleteRows(PEGTransformer &transformer);
