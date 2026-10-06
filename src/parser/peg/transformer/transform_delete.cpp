@@ -48,7 +48,8 @@ vector<unique_ptr<TableRef>> PEGTransformerFactory::TransformDeleteUsingClause(P
 
 unique_ptr<SQLStatement> PEGTransformerFactory::TransformTruncateStatement(PEGTransformer &transformer,
                                                                            const bool &has_result,
-                                                                           unique_ptr<BaseTableRef> base_table_name) {
+                                                                           unique_ptr<BaseTableRef> base_table_name,
+                                                                           optional<bool> drop_behavior) {
 	auto result = make_uniq<DeleteStatement>();
 	result->node->table = std::move(base_table_name);
 	return std::move(result);

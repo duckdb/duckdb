@@ -49,3 +49,24 @@ query I
 SELECT COUNT(*) FROM a;
 ----
 1
+
+statement ok
+INSERT INTO a VALUES (42);
+
+# CASCADE is parsed but does nothing
+statement ok
+TRUNCATE a CASCADE
+
+query I
+SELECT COUNT(*) FROM a;
+----
+0
+
+# RESTRICT is parsed but does nothing
+statement ok
+TRUNCATE a RESTRICT
+
+query I
+SELECT COUNT(*) FROM a;
+----
+0

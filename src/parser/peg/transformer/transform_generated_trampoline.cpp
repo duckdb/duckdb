@@ -11674,7 +11674,11 @@ PEGTransformerFactory::FinalizeDeleteStatementTrampoline(PEGTransformer &transfo
 void PEGTransformerFactory::InitializeTruncateStatementTrampoline(PEGTransformer &transformer,
                                                                   GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(1);
+	process.ReserveChildSlots(2);
+	auto &drop_behavior_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (drop_behavior_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("DropBehavior"), drop_behavior_opt.GetResult()}, 1);
+	}
 	process.PushChild({transformer.GetRule("TargetOptAlias"), list_pr.GetChild(2)}, 0);
 }
 
@@ -11686,7 +11690,11 @@ PEGTransformerFactory::FinalizeTruncateStatementTrampoline(PEGTransformer &trans
 	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
 	auto target_opt_alias = process.TakeResult<unique_ptr<BaseTableRef>>(0);
-	auto result = TransformTruncateStatement(transformer, has_result, std::move(target_opt_alias));
+	optional<bool> drop_behavior {};
+	if (process.child_results[1]) {
+		drop_behavior = process.TakeResult<bool>(1);
+	}
+	auto result = TransformTruncateStatement(transformer, has_result, std::move(target_opt_alias), drop_behavior);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

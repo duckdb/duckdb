@@ -4704,7 +4704,8 @@ public:
 	                         optional<unique_ptr<ParsedExpression>> where_clause,
 	                         optional<vector<unique_ptr<ParsedExpression>>> returning_clause);
 	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer, const bool &has_result,
-	                                                           unique_ptr<BaseTableRef> base_table_name);
+	                                                           unique_ptr<BaseTableRef> base_table_name,
+	                                                           optional<bool> drop_behavior);
 	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
 	                                                        unique_ptr<BaseTableRef> base_table_name,
 	                                                        const optional<Identifier> &target_alias);
