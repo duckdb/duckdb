@@ -27,6 +27,6 @@ SELECT variant_contains(v, 1::VARIANT), variant_contains(v, 2::VARIANT) FROM r W
 true	false
 
 query I
-SELECT variant_contains({'a': [1, {'b': 'x'}]}::VARIANT, {'b': 'x'}::VARIANT);
+SELECT variant_contains({'a': [{'c': 1}, {'b': 'x'}]}::VARIANT, {'b': 'x'}::VARIANT);
 ----
 true

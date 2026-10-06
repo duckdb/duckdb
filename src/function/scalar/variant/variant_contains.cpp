@@ -152,6 +152,8 @@ static void VariantContainsFunction(DataChunk &input, ExpressionState &state, Ve
 
 ScalarFunctionSet VariantContainsFun::GetFunctions() {
 	ScalarFunction function("variant_contains", {}, LogicalType::BOOLEAN, VariantContainsFunction);
+	// the depth limit raises an error
+	function.SetFallible();
 	function.GetSignature()
 	    .AddParameter("variant_haystack", LogicalType::VARIANT())
 	    .AddParameter("variant_needle", LogicalType::VARIANT());
