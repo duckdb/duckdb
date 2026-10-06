@@ -322,15 +322,12 @@ AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &typ
 AggregateFunction GetApproximateQuantileDecimalAggregateFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
-		return GetApproximateQuantileAggregateFunction(LogicalType::TINYINT);
 	case PhysicalType::INT16:
-		return GetApproximateQuantileAggregateFunction(LogicalType::SMALLINT);
 	case PhysicalType::INT32:
-		return GetApproximateQuantileAggregateFunction(LogicalType::INTEGER);
 	case PhysicalType::INT64:
-		return GetApproximateQuantileAggregateFunction(LogicalType::BIGINT);
 	case PhysicalType::INT128:
-		return GetApproximateQuantileAggregateFunction(LogicalType::HUGEINT);
+		// keep the DECIMAL type as the input and return type so that the width and scale survive the bind
+		return GetApproximateQuantileAggregateFunction(type);
 	default:
 		throw InternalException("Unimplemented quantile decimal aggregate");
 	}
