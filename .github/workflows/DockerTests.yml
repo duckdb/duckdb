@@ -38,6 +38,7 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_VERSION: ${{ inputs.duckdb_version }}
   DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
+  DUCKDB_NEW_EXTENSION_BUILD: 1
 
 jobs:
   linux-tests:
@@ -251,6 +252,7 @@ jobs:
       run: |
         docker run --rm -i \
           --platform "${{ matrix.settings.platform }}" \
+          --env DUCKDB_NEW_EXTENSION_BUILD=1 \
           --volume "${{ github.workspace }}:/duckdb" \
           --workdir /duckdb \
         "${{ matrix.settings.image }}" sh << 'EOF'
