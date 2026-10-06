@@ -101,8 +101,8 @@ QueryResultState ResultStreamBase::TryFetchUnit(unique_ptr<ResultUnit> &out_unit
 		}
 		if (state == QueryResultState::READY) {
 			out_unit = buffer.Scan();
-		}
-		if (out_unit) {
+			// READY is only reported with a unit queued
+			D_ASSERT(out_unit);
 			return QueryResultState::READY;
 		}
 		if (state == QueryResultState::FINISHED) {
@@ -111,10 +111,6 @@ QueryResultState ResultStreamBase::TryFetchUnit(unique_ptr<ResultUnit> &out_unit
 			handle->EndQuery(lock);
 			// Cleanup can fail on an autocommit commit. It records the error without throwing
 			return handle->HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
-		}
-		if (state == QueryResultState::READY) {
-			// A unit was announced but the scan came up empty: the stream has not ended yet
-			return QueryResultState::NOT_READY;
 		}
 		return state;
 	});

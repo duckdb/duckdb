@@ -117,8 +117,8 @@ public:
 	DUCKDB_API QueryResultState Poll();
 	//! Executes a single task of the query on the calling thread. Decides nothing: READY means the engine is
 	//! waiting for the retention decision, and every further call returns READY, running nothing, until a
-	//! stream is opened or a retained-side call (Materialize, Complete, Collection, ...) is made. On a
-	//! retained result, the call that reports FINISHED ends the query and collects the rows.
+	//! stream is opened or a retained-side call (Materialize, Complete, Collection, ...) is made. Unless a
+	//! stream drains the result, the call that reports FINISHED ends the query and collects the rows.
 	DUCKDB_API QueryResultState ExecuteTask();
 	//! Blocks until a task is runnable or the engine is waiting on the caller. Runs no task.
 	DUCKDB_API void WaitForTask();

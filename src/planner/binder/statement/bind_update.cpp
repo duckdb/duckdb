@@ -190,13 +190,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		get = &root->Cast<LogicalGet>();
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
-	} else {
-		GetStatementProperties().writes_temporary = true;
-	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::UPDATE_DATA);
 	auto update = make_uniq<LogicalUpdate>(table);
 
 	// Trigger expansion flags its generated base UPDATE for OLD capture via scoped binder state (keyed by node

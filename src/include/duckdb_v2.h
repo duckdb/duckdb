@@ -11777,7 +11777,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_ha
  * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. Frees the memory the result owns and releases
  * the connection for its next query. Safe at any point in the stream's life. Destroying a result before its statement
  * ended (drained, or stepped to FINISHED) aborts the statement. On autocommit, its writes are rolled back. Inside a
- * transaction, a statement that writes invalidates the transaction, and a read-only statement just stops. Chunks
+ * transaction, a statement that may write invalidates the transaction, and a read-only statement just stops. Chunks
  * already fetched are caller-owned and stay valid. On success the slot is set to nullptr.
  *
  * history:

@@ -1522,6 +1522,21 @@ TEST_CASE("V2: an insert that was only waited on is discarded when destroyed", "
 }
 #endif
 
+TEST_CASE("V2: a zero-row stream stepped to FINISHED keeps the transaction", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE SEQUENCE s");
+	ExecSQL(fx.conn, "BEGIN TRANSACTION");
+
+	duckdb_v2_result_handle r = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT n FROM (SELECT nextval('s') n FROM range(5)) q WHERE n > 100", &r) ==
+	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(StepChunk(r) == nullptr);
+	duckdb_v2_result_destroy(&r);
+
+	ExecSQL(fx.conn, "SELECT 42");
+	ExecSQL(fx.conn, "COMMIT");
+}
+
 // ===========================================================================
 // result_get_schema: a result's output schema as one schema handle.
 // ===========================================================================

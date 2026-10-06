@@ -620,15 +620,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		auto merge_into = GenerateMergeInto(node, table);
 		return Bind(*merge_into);
 	}
-	if (table.temporary) {
-		// Temporary inserts still need a catalog dependency so prepared statements are rebound if the table is dropped.
-		GetStatementProperties().RegisterDBRead(table.catalog, context);
-		GetStatementProperties().writes_temporary = true;
-	} else {
-		// inserting into a non-temporary table: alters underlying database
-		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
-		GetStatementProperties().RegisterDBModify(table.catalog, context, modification_type);
-	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::INSERT_DATA);
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
 

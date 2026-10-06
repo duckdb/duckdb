@@ -231,32 +231,26 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		// modification type depends on actions
-		DatabaseModificationType modification;
-		for (auto &action_condition : node.actions) {
-			for (auto &action : action_condition.second) {
-				switch (action->action_type) {
-				case MergeActionType::MERGE_UPDATE:
-					modification |= DatabaseModificationType::UPDATE_DATA;
-					break;
-				case MergeActionType::MERGE_DELETE:
-					modification |= DatabaseModificationType::DELETE_DATA;
-					break;
-				case MergeActionType::MERGE_INSERT:
-					modification |= DatabaseModificationType::INSERT_DATA;
-					break;
-				default:
-					break;
-				}
+	// modification type depends on actions
+	DatabaseModificationType modification;
+	for (auto &action_condition : node.actions) {
+		for (auto &action : action_condition.second) {
+			switch (action->action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				modification |= DatabaseModificationType::UPDATE_DATA;
+				break;
+			case MergeActionType::MERGE_DELETE:
+				modification |= DatabaseModificationType::DELETE_DATA;
+				break;
+			case MergeActionType::MERGE_INSERT:
+				modification |= DatabaseModificationType::INSERT_DATA;
+				break;
+			default:
+				break;
 			}
 		}
-		properties.RegisterDBModify(table.catalog, context, modification);
-	} else {
-		GetStatementProperties().writes_temporary = true;
 	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, modification);
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);

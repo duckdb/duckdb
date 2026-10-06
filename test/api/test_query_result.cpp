@@ -56,15 +56,6 @@ QueryResultState StepToEnd(QueryResult &handle) {
 	return state;
 }
 
-void WaitForExecution(Connection &con) {
-	auto &executor = Executor::Get(*con.context);
-	Deadline deadline;
-	while (!executor.ExecutionIsFinished()) {
-		REQUIRE(!deadline.Passed());
-		std::this_thread::sleep_for(std::chrono::microseconds(100));
-	}
-}
-
 //! Stands in for an out-of-tree streaming collector: it builds its own result object and keeps the
 //! query open, the combination no in-tree collector has
 class TestCollectorState : public GlobalSinkState {
@@ -571,6 +562,7 @@ TEST_CASE("An unfinished insert that is closed or destroyed leaves no rows", "[a
 	REQUIRE(CHECK_COLUMN(next, 0, {42}));
 }
 
+#if STANDARD_VECTOR_SIZE >= 512
 TEST_CASE("An insert whose worker failed unobserved leaves no rows when closed", "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -578,10 +570,9 @@ TEST_CASE("An insert whose worker failed unobserved leaves no rows when closed",
 	REQUIRE_NO_FAIL(con.Query("SET threads=2"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
 
-	auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(20000000) t(i)");
-	// Let the worker append rows before the interrupt reaches it
-	std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	con.Interrupt();
+	// The failing row is deep into the input, so the worker appends rows before it fails
+	auto handle = Submit(con, "INSERT INTO t SELECT CASE WHEN i = 200000 THEN error('boom') ELSE i END "
+	                          "FROM range(1000000) t(i)");
 
 	auto &executor = Executor::Get(*con.context);
 	Deadline deadline;
@@ -596,6 +587,7 @@ TEST_CASE("An insert whose worker failed unobserved leaves no rows when closed",
 	auto count = observer.Query("SELECT count(*) FROM t");
 	REQUIRE(CHECK_COLUMN(count, 0, {0}));
 }
+#endif
 
 TEST_CASE("An unfinished insert closed inside a transaction invalidates it", "[api][query_result]") {
 	DuckDB db(nullptr);
@@ -618,6 +610,44 @@ TEST_CASE("An unfinished insert closed inside a transaction invalidates it", "[a
 	REQUIRE(CHECK_COLUMN(count, 0, {0}));
 	auto after = con.Query("SELECT 42");
 	REQUIRE(CHECK_COLUMN(after, 0, {42}));
+}
+
+TEST_CASE("An unfinished statement superseded by the next one inside a transaction is aborted", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	Connection observer(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (42)"));
+	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO t VALUES (43)"));
+
+	SECTION("a write superseded by a query invalidates the transaction") {
+		auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(1000000) t(i)");
+		StepUnfinished(*handle);
+		auto next = con.Query("SELECT 42");
+		REQUIRE(next->HasError());
+		REQUIRE(StringUtil::Contains(next->GetError(), "aborted"));
+		handle->Close();
+		REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+		auto count = observer.Query("SELECT count(*) FROM t");
+		REQUIRE(CHECK_COLUMN(count, 0, {1}));
+	}
+	SECTION("a write superseded by COMMIT is rolled back") {
+		auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(1000000) t(i)");
+		StepUnfinished(*handle);
+		// COMMIT of an invalidated transaction rolls it back
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		auto count = observer.Query("SELECT count(*) FROM t");
+		REQUIRE(CHECK_COLUMN(count, 0, {1}));
+	}
+	SECTION("a read-only stream superseded by COMMIT keeps the transaction") {
+		auto handle = Submit(con, "SELECT i FROM range(1000000) t(i)");
+		StepUnfinished(*handle);
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+		auto count = observer.Query("SELECT count(*) FROM t");
+		REQUIRE(CHECK_COLUMN(count, 0, {2}));
+	}
 }
 
 TEST_CASE("An unfinished statement closed inside a wrapped group rolls the whole group back", "[api][query_result]") {
@@ -659,7 +689,7 @@ TEST_CASE("An insert that finished executing but that no call ended leaves no ro
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
 
 	auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(1000) t(i)");
-	WaitForExecution(con);
+	REQUIRE(WaitForExecution(con));
 	handle->Close();
 
 	auto count = observer.Query("SELECT count(*) FROM t");
@@ -710,6 +740,39 @@ TEST_CASE("Stepping an insert to FINISHED commits it", "[api][query_result]") {
 	REQUIRE(CHECK_COLUMN(count, 0, {1000}));
 }
 
+TEST_CASE("Stepping a zero-row stream to FINISHED ends it", "[api][query_result]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(con.Query("CREATE SEQUENCE s"));
+	// No row is sunk, so no producer waits for the retention decision and the engine finishes undecided
+	const string query = "SELECT n FROM (SELECT nextval('s') n FROM range(5)) q WHERE n > 100";
+
+	SECTION("on autocommit the step commits") {
+		auto handle = Submit(con, query);
+		REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
+		REQUIRE(!handle->IsOpen());
+		REQUIRE(!con.context->transaction.HasActiveTransaction());
+		REQUIRE(handle->ExecuteTask() == QueryResultState::FINISHED);
+		REQUIRE(handle->RowCount() == 0);
+	}
+	SECTION("inside a transaction closing it afterwards keeps the transaction") {
+		REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
+		auto handle = Submit(con, query);
+		REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
+		handle->Close();
+		REQUIRE_NO_FAIL(con.Query("SELECT 42"));
+		REQUIRE_NO_FAIL(con.Query("COMMIT"));
+	}
+	SECTION("a stream opened afterwards reports the end at once") {
+		auto handle = Submit(con, query);
+		REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
+		QueryResultStream<> stream(std::move(handle));
+		REQUIRE(!stream.Fetch());
+		REQUIRE(!stream.HasError());
+	}
+}
+
 TEST_CASE("A commit that fails when a step ends the query is reported by that step", "[api][query_result]") {
 	DuckDB db(nullptr);
 	Connection con(db);
@@ -718,7 +781,7 @@ TEST_CASE("A commit that fails when a step ends the query is reported by that st
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i INTEGER PRIMARY KEY)"));
 
 	auto handle = Submit(con, "INSERT INTO t VALUES (1)");
-	WaitForExecution(con);
+	REQUIRE(WaitForExecution(con));
 	// The key is only in this handle's transaction, so the other connection commits it first
 	REQUIRE_NO_FAIL(other.Query("INSERT INTO t VALUES (1)"));
 

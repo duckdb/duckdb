@@ -280,12 +280,7 @@ TEST_CASE("Closing a stream of a writing SELECT before its end invalidates the o
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 
 	auto stream = OpenStream(con, "SELECT nextval('s') FROM range(10000)");
-	auto &executor = Executor::Get(*con.context);
-	Deadline deadline;
-	while (!executor.ExecutionIsFinished()) {
-		REQUIRE(!deadline.Passed());
-		std::this_thread::sleep_for(std::chrono::microseconds(100));
-	}
+	REQUIRE(WaitForExecution(con));
 	// Execution is done and the buffer holds the rest, but the consumer never reached the end
 	REQUIRE(stream->Fetch());
 	REQUIRE(stream->GetBufferedData().HasObservableUnit());

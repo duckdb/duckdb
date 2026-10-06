@@ -240,7 +240,8 @@ QueryResultState QueryResult::ExecuteTask() {
 	auto lock = LockContext();
 	CheckExecutableInternal(*lock);
 	auto state = context->ExecuteTaskInternal(*lock, *this);
-	if (state == QueryResultState::FINISHED && buffer && buffer->Lifetime() == ResultLifetime::RETAINED) {
+	// Only a statement that sank no row finishes undecided, since producers park until the decision
+	if (state == QueryResultState::FINISHED && buffer && buffer->Lifetime() != ResultLifetime::DRAINING) {
 		return EndFinishedInternal(*lock);
 	}
 	return state;
