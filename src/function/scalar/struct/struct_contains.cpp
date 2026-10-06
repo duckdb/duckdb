@@ -9,13 +9,21 @@
 
 namespace duckdb {
 
+//! The members that can match the target - the bind casts these to the type of the target
+static vector<bool> GetMatchingMembers(const vector<Vector> &members, const Vector &target) {
+	vector<bool> result;
+	for (const auto &member : members) {
+		result.push_back(member.GetType() == target.GetType());
+	}
+	return result;
+}
+
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
-static void TemplatedStructSearch(const Vector &input_vector, const vector<Vector> &members, const Vector &target,
-                                  const idx_t count, Vector &result) {
+static void TemplatedStructSearch(const Vector &input_vector, const vector<Vector> &members,
+                                  const vector<bool> &matching_members, const Vector &target, const idx_t count,
+                                  Vector &result) {
 	// If the return type is not a bool, return the position
 	const auto return_pos = std::is_same<RETURN_TYPE, int32_t>::value;
-
-	const auto &target_type = target.GetType();
 
 	UnifiedVectorFormat vector_format;
 	input_vector.ToUnifiedFormat(vector_format);
@@ -27,8 +35,9 @@ static void TemplatedStructSearch(const Vector &input_vector, const vector<Vecto
 	vector<const T *> member_data_ptrs;
 	vector<UnifiedVectorFormat> member_vectors;
 	idx_t total_matches = 0;
-	for (const auto &member : members) {
-		if (member.GetType().InternalType() == target_type.InternalType()) {
+	for (idx_t member_idx = 0; member_idx < members.size(); member_idx++) {
+		auto &member = members[member_idx];
+		if (matching_members[member_idx]) {
 			UnifiedVectorFormat member_format;
 			member.ToUnifiedFormat(member_format);
 			member_data_ptrs.push_back(UnifiedVectorFormat::GetData<T>(member_format));
@@ -95,6 +104,7 @@ static void TemplatedStructSearch(const Vector &input_vector, const vector<Vecto
 				} else {
 					found_value = RETURN_TYPE(true);
 				}
+				break;
 			}
 		}
 
@@ -111,8 +121,9 @@ static void TemplatedStructSearch(const Vector &input_vector, const vector<Vecto
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-static void StructNestedOp(const Vector &input_vector, const vector<Vector> &members, const Vector &target,
-                           const idx_t count, Vector &result) {
+static void StructNestedOp(const Vector &input_vector, const vector<Vector> &members,
+                           const vector<bool> &matching_members, const Vector &target, const idx_t count,
+                           Vector &result) {
 	const OrderModifiers order_modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST);
 
 	// Set up sort keys for nested types.
@@ -128,48 +139,64 @@ static void StructNestedOp(const Vector &input_vector, const vector<Vector> &mem
 	Vector target_sort_key_vec(LogicalType::BLOB, count);
 	CreateSortKeyHelpers::CreateSortKeyWithValidity(target, target_sort_key_vec, order_modifiers);
 
-	TemplatedStructSearch<string_t, RETURN_TYPE, FIND_NULLS>(input_vector, member_sort_key_vectors, target_sort_key_vec,
-	                                                         count, result);
+	TemplatedStructSearch<string_t, RETURN_TYPE, FIND_NULLS>(input_vector, member_sort_key_vectors, matching_members,
+	                                                         target_sort_key_vec, count, result);
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
 static void StructSearchOp(const Vector &input_vector, const vector<Vector> &members, const Vector &target,
                            const idx_t count, Vector &result) {
 	const auto &target_type = target.GetType().InternalType();
+	// matching members are determined on the original types - nested types are compared through their sort keys
+	const auto matching_members = GetMatchingMembers(members, target);
 	switch (target_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return TemplatedStructSearch<int8_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<int8_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                              count, result);
 	case PhysicalType::INT16:
-		return TemplatedStructSearch<int16_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<int16_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                               count, result);
 	case PhysicalType::INT32:
-		return TemplatedStructSearch<int32_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<int32_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                               count, result);
 	case PhysicalType::INT64:
-		return TemplatedStructSearch<int64_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<int64_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                               count, result);
 	case PhysicalType::INT128:
-		return TemplatedStructSearch<hugeint_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<hugeint_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members,
+		                                                                 target, count, result);
 	case PhysicalType::UINT8:
-		return TemplatedStructSearch<uint8_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<uint8_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                               count, result);
 	case PhysicalType::UINT16:
-		return TemplatedStructSearch<uint16_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<uint16_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                                count, result);
 	case PhysicalType::UINT32:
-		return TemplatedStructSearch<uint32_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<uint32_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                                count, result);
 	case PhysicalType::UINT64:
-		return TemplatedStructSearch<uint64_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<uint64_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                                count, result);
 	case PhysicalType::UINT128:
-		return TemplatedStructSearch<uhugeint_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<uhugeint_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members,
+		                                                                  target, count, result);
 	case PhysicalType::FLOAT:
-		return TemplatedStructSearch<float, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<float, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                             count, result);
 	case PhysicalType::DOUBLE:
-		return TemplatedStructSearch<double, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<double, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                              count, result);
 	case PhysicalType::VARCHAR:
-		return TemplatedStructSearch<string_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<string_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target,
+		                                                                count, result);
 	case PhysicalType::INTERVAL:
-		return TemplatedStructSearch<interval_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return TemplatedStructSearch<interval_t, RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members,
+		                                                                  target, count, result);
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 	case PhysicalType::ARRAY:
-		return StructNestedOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+		return StructNestedOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, matching_members, target, count, result);
 	default:
 		throw NotImplementedException("This function has not been implemented for logical type %s",
 		                              TypeIdToString(target_type));
@@ -219,17 +246,25 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	}
 	bound_function.GetArguments()[0] = child_type;
 
-	// the value type must match one of the struct's children
-	LogicalType max_child_type = arguments[1]->GetReturnType();
+	// find the type that the value and all the children it can be compared with can be cast to
+	LogicalType target_type = arguments[1]->GetReturnType();
+	for (auto &child : struct_children) {
+		LogicalType max_type;
+		if (LogicalType::TryGetMaxLogicalType(context, child.second, target_type, max_type)) {
+			target_type = max_type;
+		}
+	}
+	bound_function.GetArguments()[1] = target_type;
+	// cast the children that can be compared with the value to that type - the others never match
 	vector<LogicalType> new_child_types;
 	for (auto &child : struct_children) {
-		if (!LogicalType::TryGetMaxLogicalType(context, child.second, max_child_type, max_child_type)) {
+		LogicalType max_type;
+		if (LogicalType::TryGetMaxLogicalType(context, child.second, target_type, max_type) &&
+		    max_type == target_type) {
+			new_child_types.push_back(target_type);
+		} else {
 			new_child_types.push_back(child.second);
-			continue;
 		}
-
-		new_child_types.push_back(max_child_type);
-		bound_function.GetArguments()[1] = max_child_type;
 	}
 
 	child_list_t<LogicalType> cast_children;
