@@ -1,0 +1,21 @@
+# name: test/sql/types/map/map_try_cast_duplicate_keys.test
+# description: TRY_CAST from VARCHAR to MAP with duplicate keys
+# group: [map]
+
+query II
+SELECT TRY_CAST('{1=1,1=2}' AS MAP(INT,INT)), TRY_CAST('{1=1,2=2}' AS MAP(INT,INT))
+----
+NULL	{1=1, 2=2}
+
+query I
+SELECT TRY_CAST(s AS MAP(INT,INT)) FROM (VALUES ('{1=1}'), ('{1=1,1=2}'), ('{3=3}'), ('{a=1}')) t(s)
+----
+{1=1}
+NULL
+{3=3}
+NULL
+
+statement error
+SELECT CAST('{1=1,1=2}' AS MAP(INT,INT))
+----
+Map keys must be unique
