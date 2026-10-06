@@ -20,15 +20,15 @@ CREATE TABLE t(
 # constraint names are not stored, every constraint is registered under a generated name
 query IIII
 SELECT constraint_type, constraint_name, constraint_column_names, constraint_text
-FROM duckdb_constraints() WHERE table_name = 't' ORDER BY constraint_index;
+FROM duckdb_constraints() WHERE table_name = 't' ORDER BY constraint_name;
 ----
 CHECK	t_a_check	[a]	CHECK((a > 0))
 NOT NULL	t_a_not_null	[a]	NOT NULL
 CHECK	t_b_check	[b]	CHECK((b > 0))
 UNIQUE	t_b_key	[b]	UNIQUE(b)
 FOREIGN KEY	t_c_id_fkey	[c]	FOREIGN KEY (c) REFERENCES p(id)
-PRIMARY KEY	t_c_pkey	[c]	PRIMARY KEY(c)
 NOT NULL	t_c_not_null	[c]	NOT NULL
+PRIMARY KEY	t_c_pkey	[c]	PRIMARY KEY(c)
 
 query III
 SELECT column_name, column_default, is_nullable FROM duckdb_columns() WHERE table_name = 't' ORDER BY column_index;

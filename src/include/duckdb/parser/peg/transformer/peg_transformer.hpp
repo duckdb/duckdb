@@ -1672,10 +1672,10 @@ public:
 	static void InitializeColumnConstraintTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeColumnConstraintTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
-	static void InitializeNamedColumnConstraintTrampoline(PEGTransformer &transformer,
-	                                                      GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeNamedColumnConstraintTrampoline(PEGTransformer &transformer,
-	                                                                                GeneratedTransformProcess &process);
+	static void InitializeNameableColumnConstraintTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeNameableColumnConstraintTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeColumnConstraintElementTrampoline(PEGTransformer &transformer,
 	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
@@ -4593,6 +4593,8 @@ public:
 	TransformColumnDefinition(PEGTransformer &transformer, const vector<string> &dotted_identifier,
 	                          const optional<LogicalType> &type, optional<GeneratedColumnDefinition> generated_column,
 	                          optional<vector<ColumnConstraintEntry>> column_constraint);
+	static ColumnConstraintEntry TransformNameableColumnConstraint(PEGTransformer &transformer, const bool &has_result,
+	                                                               ColumnConstraintEntry child);
 	static ColumnConstraintEntry TransformNotNullConstraint(PEGTransformer &transformer, const bool &child);
 	static bool TransformNullConstraint(PEGTransformer &transformer);
 	static bool TransformNotNullColumnConstraint(PEGTransformer &transformer);

@@ -485,6 +485,13 @@ ColumnConstraintEntry PEGTransformerFactory::TransformUniqueConstraint(PEGTransf
 	return entry;
 }
 
+// Column constraint names are parsed but not stored
+ColumnConstraintEntry PEGTransformerFactory::TransformNameableColumnConstraint(PEGTransformer &transformer,
+                                                                               const bool &has_result,
+                                                                               ColumnConstraintEntry child) {
+	return child;
+}
+
 bool PEGTransformerFactory::TransformNullConstraint(PEGTransformer &transformer) {
 	return false;
 }

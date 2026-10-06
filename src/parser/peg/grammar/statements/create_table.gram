@@ -38,8 +38,8 @@ CreateTableColumnElement <- CreateTableColumnDefinition / CreateTableConstraint
 CreateTableColumnDefinition <- ColumnDefinition
 CreateTableConstraint <- TopLevelConstraint
 ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
-ColumnConstraint <- NamedColumnConstraint / ColumnConstraintElement / ColumnCollation
-NamedColumnConstraint <- ConstraintNameClause ColumnConstraintElement
+ColumnConstraint <- NameableColumnConstraint / ColumnCollation
+NameableColumnConstraint <- ConstraintNameClause? ColumnConstraintElement
 ColumnConstraintElement <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCompression
 NotNullConstraint <- NullConstraint / NotNullColumnConstraint
 NullConstraint <- 'NULL'
