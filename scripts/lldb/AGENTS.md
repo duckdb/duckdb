@@ -45,6 +45,8 @@ sql_current_statement
 `sql_current_statement` prints the test file, line, statement kind, connection, SQL,
 and active loop values. It also works from a deeper C++ breakpoint when the
 sqllogictest caller is still on thread 1's stack.
+Use `sql_current_statement --json` to capture these fields as a JSON object rather
+than parsing the display text.
 
 Use these commands to move through the test:
 
@@ -53,6 +55,7 @@ sql_next_statement
 sql_next_matching_statement --kind statement_error
 sql_next_matching_statement --file test/sql/join --kind query --loop i=3
 sql_next_matching_statement --connection con2
+sql_next_matching_statement --sql "JOIN" --kind query
 ```
 
 Choose filters that match the test being debugged. Supported filters are:
@@ -61,6 +64,7 @@ Choose filters that match the test being debugged. Supported filters are:
 - `--line-min <n>` and `--line-max <n>` for an inclusive range; do not combine these with `--line`.
 - `--kind query|statement|statement_ok|statement_error`.
 - `--connection <name>` for an exact connection-name match.
+- `--sql <substring>` for a case-sensitive match against the expanded SQL.
 - `--loop <name>` or `--loop <name>=<value>`; repeat for multiple loop constraints.
 
 Filters combine with AND. Use the location reported by `sql_current_statement`
@@ -142,3 +146,15 @@ Validate behavior inside LLDB: a Python syntax check alone does not exercise LLD
 API, expression evaluation, formatters, or breakpoint callbacks. For SQL navigation
 changes, use a small sqllogictest and verify matching, watch deletion, and restoration
 of other breakpoints' auto-continue settings.
+
+Run the integration suite from the repository root:
+
+```sh
+python3 scripts/lldb/tests/run_tests.py --unittest build/debug/test/unittest \
+  --coverage-dir /tmp/duckdb-lldb-coverage
+```
+
+The suite needs LLDB with Python support, a C++ compiler, and permission to launch
+local processes under the debugger. Use a build with a resolvable `query_break`
+symbol and inspectable locals. See [tests/README.md](tests/README.md) for coverage
+details and runner options.
