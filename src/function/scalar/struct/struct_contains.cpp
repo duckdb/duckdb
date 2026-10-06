@@ -9,14 +9,21 @@
 
 namespace duckdb {
 
-//! The members that can match the target - the bind casts these to the type of the target
-static vector<bool> GetMatchingMembers(const vector<Vector> &members, const Vector &target) {
-	vector<bool> result;
-	for (const auto &member : members) {
-		result.push_back(member.GetType() == target.GetType());
+struct StructSearchBindData : public FunctionData {
+	explicit StructSearchBindData(vector<bool> matching_members_p) : matching_members(std::move(matching_members_p)) {
 	}
-	return result;
-}
+
+	//! The members that can match the value - the bind casts these to the type of the value
+	vector<bool> matching_members;
+
+public:
+	unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<StructSearchBindData>(matching_members);
+	}
+	bool Equals(const FunctionData &other_p) const override {
+		return matching_members == other_p.Cast<StructSearchBindData>().matching_members;
+	}
+};
 
 template <class T, class RETURN_TYPE, bool FIND_NULLS>
 static void TemplatedStructSearch(const Vector &input_vector, const vector<Vector> &members,
@@ -144,11 +151,10 @@ static void StructNestedOp(const Vector &input_vector, const vector<Vector> &mem
 }
 
 template <class RETURN_TYPE, bool FIND_NULLS>
-static void StructSearchOp(const Vector &input_vector, const vector<Vector> &members, const Vector &target,
-                           const idx_t count, Vector &result) {
+static void StructSearchOp(const Vector &input_vector, const vector<Vector> &members,
+                           const vector<bool> &matching_members, const Vector &target, const idx_t count,
+                           Vector &result) {
 	const auto &target_type = target.GetType().InternalType();
-	// matching members are determined on the original types - nested types are compared through their sort keys
-	const auto matching_members = GetMatchingMembers(members, target);
 	switch (target_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -214,8 +220,11 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 	const auto &input_vector = args.data[0];
 	const auto &members = StructVector::GetEntries(input_vector);
 	const auto &target = args.data[1];
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.BindInfo()->Cast<StructSearchBindData>();
+	D_ASSERT(info.matching_members.size() == members.size());
 
-	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
+	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, info.matching_members, target, count, result);
 }
 
 static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &input) {
@@ -239,7 +248,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	if (struct_children.empty()) {
 		// an empty struct contains nothing, the search always returns false (or position 0)
 		bound_function.GetArguments()[0] = child_type;
-		return nullptr;
+		return make_uniq<StructSearchBindData>(vector<bool>());
 	}
 	if (child_type.id() != LogicalTypeId::TUPLE) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
@@ -257,14 +266,13 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	bound_function.GetArguments()[1] = target_type;
 	// cast the children that can be compared with the value to that type - the others never match
 	vector<LogicalType> new_child_types;
+	vector<bool> matching_members;
 	for (auto &child : struct_children) {
 		LogicalType max_type;
-		if (LogicalType::TryGetMaxLogicalType(context, child.second, target_type, max_type) &&
-		    max_type == target_type) {
-			new_child_types.push_back(target_type);
-		} else {
-			new_child_types.push_back(child.second);
-		}
+		const bool matching =
+		    LogicalType::TryGetMaxLogicalType(context, child.second, target_type, max_type) && max_type == target_type;
+		new_child_types.push_back(matching ? target_type : child.second);
+		matching_members.push_back(matching);
 	}
 
 	child_list_t<LogicalType> cast_children;
@@ -275,7 +283,7 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	// the input is an unnamed struct - represent it as a TUPLE
 	bound_function.GetArguments()[0] = LogicalType::TUPLE(cast_children);
 
-	return nullptr;
+	return make_uniq<StructSearchBindData>(std::move(matching_members));
 }
 
 ScalarFunction StructContainsFun::GetFunction() {
