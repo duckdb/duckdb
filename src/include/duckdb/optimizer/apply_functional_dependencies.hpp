@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-class BoundOrderByNode;
+struct BoundOrderByNode;
 
 class ApplyFunctionalDependencies : public LogicalOperatorVisitor {
 public:
