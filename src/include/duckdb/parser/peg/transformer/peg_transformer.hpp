@@ -4383,7 +4383,7 @@ public:
 	static Identifier TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,
 	                                           const vector<Identifier> &copy_file_name_suffix);
 	static GenericCopyOption TransformCopyLegacyOption(PEGTransformer &transformer, const bool &has_result,
-	                                                   const string &identifier);
+	                                                   const string &delimiter);
 	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer, const bool &has_result,
 	                                                      const vector<GenericCopyOption> &copy_option_list);
 	static vector<GenericCopyOption>

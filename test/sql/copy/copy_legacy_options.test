@@ -1,30 +1,48 @@
 # name: test/sql/copy/copy_legacy_options.test
-# description: test legacy COPY x option
+# description: Test the legacy COPY ... [USING] DELIMITERS syntax
 # group: [copy]
 
 statement ok
-CREATE TABLE t (ID INT, Date_Time VARCHAR);
+CREATE TABLE t (a INT, b INT, c INT);
 
 statement ok
-COPY t FROM '{DATA_DIR}/csv/custom_date.csv' USING DELIMITERS ',';
+COPY t FROM '{DATA_DIR}/csv/unguessed_delimiters.csv' USING DELIMITERS '+';
 
-query I
-SELECT count(*) FROM t
+query III
+SELECT * FROM t
 ----
-2
+1	2	3
+1	2	3
 
 statement ok
-COPY t TO '/tmp/out.csv' USING DELIMITERS ';';
+COPY t TO '{TEMP_DIR}/out.csv' DELIMITERS '^';
+
+# Read back as a single column to check which delimiter was written
+query I
+SELECT * FROM read_csv('{TEMP_DIR}/out.csv', delim = '|', header = true, columns = {'line': 'VARCHAR'})
+----
+1^2^3
+1^2^3
 
 statement ok
 TRUNCATE t;
 
-# New options should override the legacy variant
 statement ok
-COPY t FROM '/tmp/out.csv' DELIMITERS '+' WITH ( DELIMITER ';' );
+COPY t FROM '{TEMP_DIR}/out.csv' DELIMITERS '^' (HEADER true);
 
-query I
-SELECT count(*) FROM t
+query III
+SELECT * FROM t
 ----
-2
+1	2	3
+1	2	3
 
+statement error
+COPY t FROM '{TEMP_DIR}/out.csv' DELIMITERS '^' WITH (DELIMITER ';');
+----
+Parser Error: Unexpected duplicate option "delimiter"
+
+# Only supported for COPY of a table, not of a query
+statement error
+COPY (SELECT 42) TO '{TEMP_DIR}/out2.csv' DELIMITERS '^';
+----
+Parser Error

@@ -31,3 +31,8 @@ select * from strings;
 1
 2
 three
+
+statement error
+INSERT INTO strings OVERRIDING VALUE SELECT 3;
+----
+Parser Error

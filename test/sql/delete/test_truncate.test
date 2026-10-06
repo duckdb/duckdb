@@ -15,7 +15,7 @@ TRUNCATE TABLE a
 
 # delete everything
 statement ok
-TRUNCATE a as ignored_alias
+TRUNCATE a
 
 query I
 SELECT COUNT(*) FROM a;
@@ -53,7 +53,19 @@ SELECT COUNT(*) FROM a;
 statement ok
 INSERT INTO a VALUES (42);
 
-# CASCADE is parsed but does nothing
+# the alias is accepted and ignored
+statement ok
+TRUNCATE a AS ignored_alias
+
+query I
+SELECT COUNT(*) FROM a;
+----
+0
+
+statement ok
+INSERT INTO a VALUES (42);
+
+# CASCADE and RESTRICT are accepted and ignored
 statement ok
 TRUNCATE a CASCADE
 
@@ -62,11 +74,36 @@ SELECT COUNT(*) FROM a;
 ----
 0
 
-# RESTRICT is parsed but does nothing
 statement ok
-TRUNCATE a RESTRICT
+INSERT INTO a VALUES (42);
+
+statement ok
+TRUNCATE TABLE a ignored_alias RESTRICT
 
 query I
 SELECT COUNT(*) FROM a;
 ----
 0
+
+# CASCADE does not truncate referencing tables
+statement ok
+CREATE TABLE pk(i INTEGER PRIMARY KEY);
+
+statement ok
+CREATE TABLE fk(i INTEGER REFERENCES pk(i));
+
+statement ok
+INSERT INTO pk VALUES (1);
+
+statement ok
+INSERT INTO fk VALUES (1);
+
+statement error
+TRUNCATE pk CASCADE
+----
+Violates foreign key constraint
+
+query I
+SELECT COUNT(*) FROM fk;
+----
+1

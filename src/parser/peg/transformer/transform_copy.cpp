@@ -6,7 +6,6 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
-#include <string>
 
 namespace duckdb {
 
@@ -151,15 +150,18 @@ PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_pt
 	}
 	info->format = ExtractFormat(info->file_path);
 
+	auto generic_options = vector<GenericCopyOption>();
+	generic_options.reserve((legacy_option ? 1 : 0) + (copy_options ? copy_options->size() : 0));
+
 	if (legacy_option) {
-		vector<GenericCopyOption> legacy_option_vec;
-		legacy_option_vec.push_back(*legacy_option);
-		SetCopyOptions(info, legacy_option_vec);
+		generic_options.push_back(*legacy_option);
 	}
 
 	if (copy_options) {
-		auto generic_options = *copy_options;
+		generic_options.insert(generic_options.end(), copy_options->begin(), copy_options->end());
+	}
 
+	if (!generic_options.empty()) {
 		SetCopyOptions(info, generic_options);
 	}
 
@@ -203,8 +205,8 @@ Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &trans
 }
 
 GenericCopyOption PEGTransformerFactory::TransformCopyLegacyOption(PEGTransformer &transformer, const bool &has_result,
-                                                                   const string &identifier) {
-	return GenericCopyOption("delimiter", identifier);
+                                                                   const string &delimiter) {
+	return GenericCopyOption("delimiter", delimiter);
 }
 
 vector<GenericCopyOption>
