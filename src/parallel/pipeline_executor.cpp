@@ -77,6 +77,13 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
+void PipelineExecutor::FlushUnfinishedProfile() {
+	if (finalized) {
+		return;
+	}
+	pipeline.executor.Flush(thread);
+}
+
 void PipelineExecutor::Reset() {
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(context.client);
 

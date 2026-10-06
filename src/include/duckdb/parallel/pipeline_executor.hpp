@@ -59,6 +59,9 @@ class PipelineExecutor {
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline, optional_idx reserved_batch_index = optional_idx());
 
+	//! Merge the operator metrics of a pipeline that did not finish (error or cancellation) into the query profile
+	void FlushUnfinishedProfile();
+
 	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted
 	PipelineExecuteResult Execute();
 	//! Execute a pipeline with a source and a sink until finished, or until max_chunks were processed from the source
@@ -136,7 +139,7 @@ private:
 	//! The operators that are not yet finished executing and have data remaining
 	//! If the stack of in_process_operators is empty, we fetch from the source instead
 	stack<idx_t> in_process_operators;
-	//! Whether or not the pipeline has been finalized (used for verification only)
+	//! Whether or not the pipeline has been finalized
 	bool finalized = false;
 	//! Whether or not the pipeline has finished processing
 	int32_t finished_processing_idx = -1;

@@ -24,6 +24,33 @@ FROM read_json('{TEST_DIR}/failed_query_profile.json') prof;
 ----
 true	true
 
+# operators of the pipeline that failed report the rows they processed before the error
+statement ok
+SET threads = 1;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/failed_pipeline_profile.json';
+
+statement error
+SELECT sum(x) FROM (SELECT CASE WHEN i = 500000 THEN error('boom') ELSE i END AS x FROM range(1000000) t(i));
+----
+boom
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+RESET threads;
+
+query I
+SELECT regexp_extract(content, '"intermediate_rows": (\d+),[^{}]*"type": "TABLE_SCAN"', 1)::BIGINT BETWEEN 1 AND 1000000
+FROM read_text('{TEST_DIR}/failed_pipeline_profile.json');
+----
+true
+
 # a query that fails before planning must not leave the previous profile behind
 statement ok
 PRAGMA enable_profiling = 'json';
