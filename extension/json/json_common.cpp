@@ -422,4 +422,77 @@ void JSONCommon::GetWildcardPath(yyjson_val *val, const char *ptr, const idx_t &
 	GetWildcardPathInternal(val, ptr, end, vals);
 }
 
+//! Shallow copy of a mutable value - the children of containers are copied by MutValMutCopy
+static yyjson_mut_val *MutValShallowCopy(yyjson_mut_doc *doc, yyjson_mut_val *val) {
+	auto result = unsafe_yyjson_mut_val(doc, 1);
+	if (!result) {
+		return nullptr;
+	}
+	result->tag = val->tag;
+	switch (unsafe_yyjson_get_type(val)) {
+	case YYJSON_TYPE_OBJ:
+	case YYJSON_TYPE_ARR:
+		result->uni.ptr = nullptr;
+		break;
+	case YYJSON_TYPE_RAW:
+	case YYJSON_TYPE_STR:
+		result->uni.str = unsafe_yyjson_mut_strncpy(doc, val->uni.str, unsafe_yyjson_get_len(val));
+		if (!result->uni.str) {
+			return nullptr;
+		}
+		break;
+	default:
+		result->uni = val->uni;
+		break;
+	}
+	return result;
+}
+
+yyjson_mut_val *JSONCommon::MutValMutCopy(yyjson_mut_doc *doc, yyjson_mut_val *val) {
+	if (!doc || !val) {
+		return nullptr;
+	}
+	struct CopyEntry {
+		yyjson_mut_val *source;
+		yyjson_mut_val *target;
+	};
+	vector<CopyEntry> containers;
+	auto result = MutValShallowCopy(doc, val);
+	if (!result) {
+		return nullptr;
+	}
+	if (unsafe_yyjson_is_ctn(val) && unsafe_yyjson_get_len(val) > 0) {
+		containers.push_back({val, result});
+	}
+	while (!containers.empty()) {
+		auto entry = containers.back();
+		containers.pop_back();
+		// the children of a container form a circular list - the container points to the last child
+		auto last = reinterpret_cast<yyjson_mut_val *>(entry.source->uni.ptr);
+		auto source_child = last;
+		yyjson_mut_val *first_copy = nullptr;
+		yyjson_mut_val *prev_copy = nullptr;
+		do {
+			auto child_copy = MutValShallowCopy(doc, source_child);
+			if (!child_copy) {
+				return nullptr;
+			}
+			if (unsafe_yyjson_is_ctn(source_child) && unsafe_yyjson_get_len(source_child) > 0) {
+				containers.push_back({source_child, child_copy});
+			}
+			if (prev_copy) {
+				prev_copy->next = child_copy;
+			} else {
+				first_copy = child_copy;
+			}
+			prev_copy = child_copy;
+			source_child = source_child->next;
+		} while (source_child != last);
+		// the copies were made starting from the last child - close the circle, and point the copy at the last child
+		prev_copy->next = first_copy;
+		entry.target->uni.ptr = first_copy;
+	}
+	return result;
+}
+
 } // namespace duckdb
