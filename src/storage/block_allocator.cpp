@@ -5,6 +5,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/bit_utils.hpp"
 
 #if defined(_WIN32)
@@ -17,6 +18,19 @@
 #endif
 
 namespace duckdb {
+
+struct BlockAllocatorConfig {
+	//! Blocks transferred between thread-local caches and global queues.
+	static constexpr idx_t BATCH_SIZE = 16;
+	//! Cached freed blocks that trigger a transfer to the global queue.
+	static constexpr idx_t FREE_THRESHOLD = BATCH_SIZE * 2;
+	//! Idle decay delay in seconds when the fallback allocator supplies none.
+	static constexpr idx_t DEFAULT_DECAY_DELAY = 1;
+	//! Maximum blocks sorted and coalesced in one reclamation batch.
+	static constexpr idx_t RECLAIM_BATCH_SIZE = 1024;
+	//! Maximum blocks reclaimed by one background task.
+	static constexpr idx_t MAX_FLUSH_BLOCKS = 64;
+};
 
 //===--------------------------------------------------------------------===//
 // Memory Helpers
@@ -83,8 +97,8 @@ struct BlockQueue {
 };
 
 struct BlockAllocatorLifetimeState {
-	mutex lock;
-	bool alive = true;
+	annotated_mutex lock;
+	bool alive DUCKDB_GUARDED_BY(lock) = true;
 };
 
 class BlockAllocatorThreadLocalState {
@@ -124,19 +138,20 @@ public:
 
 	void Free(const data_ptr_t pointer) {
 		touched.push_back(block_allocator->GetBlockID(pointer));
-		if (touched.size() < FREE_THRESHOLD) {
+		if (touched.size() < BlockAllocatorConfig::FREE_THRESHOLD) {
 			return;
 		}
 
 		// Upon reaching the threshold, we return a local batch to global
 		std::sort(touched.begin(), touched.end());
-		block_allocator->touched->q.enqueue_bulk(touched.end() - BATCH_SIZE, BATCH_SIZE);
-		touched.resize(touched.size() - BATCH_SIZE);
+		block_allocator->touched->q.enqueue_bulk(touched.end() - BlockAllocatorConfig::BATCH_SIZE,
+		                                         BlockAllocatorConfig::BATCH_SIZE);
+		touched.resize(touched.size() - BlockAllocatorConfig::BATCH_SIZE);
 	}
 
-	void Clear() {
+	void Clear() DUCKDB_EXCLUDES(lifetime_state->lock) {
 		if (lifetime_state) {
-			lock_guard<mutex> guard(lifetime_state->lock);
+			annotated_lock_guard<annotated_mutex> guard(lifetime_state->lock);
 			if (lifetime_state->alive) {
 				if (!touched.empty()) {
 					block_allocator->touched->q.enqueue_bulk(touched.begin(), touched.size());
@@ -156,8 +171,8 @@ private:
 		cached_uuid = block_allocator_p.uuid;
 		block_allocator = block_allocator_p;
 		lifetime_state = block_allocator_p.lifetime_state;
-		untouched.reserve(BATCH_SIZE);
-		touched.reserve(FREE_THRESHOLD);
+		untouched.reserve(BlockAllocatorConfig::BATCH_SIZE);
+		touched.reserve(BlockAllocatorConfig::FREE_THRESHOLD);
 	}
 
 	data_ptr_t TryAllocateFromLocal() {
@@ -177,8 +192,8 @@ private:
 
 	static bool TryGetBatch(vector<uint32_t> &local, BlockQueue &global) {
 		D_ASSERT(local.empty());
-		local.resize(BATCH_SIZE);
-		const auto size = global.q.try_dequeue_bulk(local.begin(), BATCH_SIZE);
+		local.resize(BlockAllocatorConfig::BATCH_SIZE);
+		const auto size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
 		local.resize(size);
 		std::sort(local.begin(), local.end());
 		return !local.empty();
@@ -188,9 +203,6 @@ private:
 	hugeint_t cached_uuid;
 	optional_ptr<const BlockAllocator> block_allocator;
 	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
-
-	static constexpr idx_t BATCH_SIZE = 16;
-	static constexpr idx_t FREE_THRESHOLD = BATCH_SIZE * 2;
 
 	vector<uint32_t> untouched;
 	vector<uint32_t> touched;
@@ -226,7 +238,7 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
 
 BlockAllocator::~BlockAllocator() {
 	{
-		lock_guard<mutex> guard(lifetime_state->lock);
+		annotated_lock_guard<annotated_mutex> guard(lifetime_state->lock);
 		lifetime_state->alive = false;
 	}
 	GetBlockAllocatorThreadLocalState(*this).Clear();
@@ -248,7 +260,7 @@ BlockAllocator &BlockAllocator::Get(AttachedDatabase &db) {
 }
 
 void BlockAllocator::Resize(const idx_t new_physical_memory_size) {
-	lock_guard<mutex> guard(physical_memory_lock);
+	annotated_lock_guard<annotated_mutex> guard(physical_memory_lock);
 
 	if (new_physical_memory_size != 0 && !IsActive()) {
 		virtual_memory_space = AllocateVirtualMemory(virtual_memory_size);
@@ -362,7 +374,7 @@ bool BlockAllocator::SupportsFlush() const {
 optional_idx BlockAllocator::DecayDelay() const {
 	auto delay = Allocator::DecayDelay();
 	if (!delay.IsValid() && IsActive() && IsEnabled()) {
-		return optional_idx(1);
+		return optional_idx(BlockAllocatorConfig::DEFAULT_DECAY_DELAY);
 	}
 	return delay;
 }
@@ -376,22 +388,99 @@ void BlockAllocator::ThreadFlush(bool allocator_background_threads, idx_t thresh
 	}
 }
 
-void BlockAllocator::ThreadIdle() const {
+class BlockAllocatorFlushTask : public Task {
+public:
+	BlockAllocatorFlushTask(TaskScheduler &scheduler, const BlockAllocator &allocator,
+	                        optional_idx remaining_blocks = optional_idx())
+	    : scheduler(scheduler), allocator(allocator), remaining_blocks(remaining_blocks) {
+	}
+
+	TaskExecutionResult Execute(TaskExecutionMode mode) override {
+		using FlushState = BlockAllocator::FlushState;
+		{
+			annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+			D_ASSERT(allocator.flush_state == FlushState::SCHEDULED ||
+			         allocator.flush_state == FlushState::RESCHEDULE_REQUESTED);
+			if (!remaining_blocks.IsValid()) {
+				allocator.flush_state = FlushState::SCHEDULED;
+			}
+		}
+		const auto remaining = allocator.FlushPool(remaining_blocks, BlockAllocatorConfig::MAX_FLUSH_BLOCKS);
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		const bool reschedule = allocator.flush_state == FlushState::RESCHEDULE_REQUESTED;
+		allocator.flush_state = FlushState::IDLE;
+		// Defer to the next idle interval when other work is waiting.
+		if ((remaining > 0 || reschedule) && scheduler.GetNumberOfTasks() == 0 &&
+		    scheduler.NumberOfAsyncThreads() > 0) {
+			try {
+				scheduler.ScheduleTask(
+				    *allocator.flush_producer,
+				    make_shared_ptr<BlockAllocatorFlushTask>(scheduler, allocator,
+				                                             remaining > 0 ? optional_idx(remaining) : optional_idx()),
+				    TaskSchedulerType::ASYNC);
+				allocator.flush_state =
+				    remaining > 0 && reschedule ? FlushState::RESCHEDULE_REQUESTED : FlushState::SCHEDULED;
+			} catch (...) {
+				// A later idle request can retry failed submission.
+			}
+		}
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	TaskScheduler &scheduler;
+	const BlockAllocator &allocator;
+	const optional_idx remaining_blocks;
+};
+
+bool BlockAllocator::TryScheduleFlush(TaskScheduler &scheduler) const {
+	annotated_lock_guard<annotated_mutex> guard(flush_lock);
+	if (scheduler.NumberOfAsyncThreads() == 0) {
+		return false;
+	}
+	if (flush_state != FlushState::IDLE) {
+		flush_state = FlushState::RESCHEDULE_REQUESTED;
+		return true;
+	}
 	try {
-		FreeInternal(optional_idx());
+		if (!flush_producer) {
+			flush_producer = scheduler.CreateProducer();
+		}
+		scheduler.ScheduleTask(*flush_producer, make_shared_ptr<BlockAllocatorFlushTask>(scheduler, *this),
+		                       TaskSchedulerType::ASYNC);
+		flush_state = FlushState::SCHEDULED;
+		return true;
+	} catch (...) {
+		return false;
+	}
+}
+
+void BlockAllocator::ThreadIdle(optional_ptr<TaskScheduler> scheduler) const {
+	try {
+		if (IsActive() && IsEnabled()) {
+			GetBlockAllocatorThreadLocalState(*this).Clear();
+			if (touched->q.size_approx() > 0 && (!scheduler || !TryScheduleFlush(*scheduler))) {
+				FlushPool();
+			}
+		}
 	} catch (...) {
 		// Reclamation is best effort on scheduler threads.
 	}
 	Allocator::ThreadIdle();
 }
 
-void BlockAllocator::FlushAll(const optional_idx extra_memory) const noexcept {
-	deallocated_since_flush.store(0, std::memory_order_relaxed);
+idx_t BlockAllocator::FlushPool(const optional_idx block_limit, const optional_idx task_limit) const noexcept {
 	try {
-		FreeInternal(extra_memory);
+		return FreeInternal(block_limit, task_limit);
 	} catch (...) {
 		// Failed reclamation leaves blocks available for reuse.
+		return 0;
 	}
+}
+
+void BlockAllocator::FlushAll(const optional_idx extra_memory) const noexcept {
+	deallocated_since_flush.store(0, std::memory_order_relaxed);
+	FlushPool(extra_memory.IsValid() ? optional_idx(DivBlockSize(extra_memory.GetIndex())) : optional_idx());
 	try {
 		if (Allocator::SupportsFlush()) {
 			Allocator::FlushAll();
@@ -421,25 +510,27 @@ bool BlockAllocator::TryFlushDeallocated(const idx_t threshold) const {
 	return true;
 }
 
-void BlockAllocator::FreeInternal(const optional_idx extra_memory) const {
+idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optional_idx task_limit) const {
 	if (!IsActive() || !IsEnabled()) {
-		return;
+		return 0;
 	}
 	GetBlockAllocatorThreadLocalState(*this).Clear();
 	// Bound this flush even when other threads keep freeing blocks.
 	idx_t remaining = touched->q.size_approx();
-	if (extra_memory.IsValid()) {
-		remaining = MinValue(remaining, DivBlockSize(extra_memory.GetIndex()));
+	if (block_limit.IsValid()) {
+		remaining = MinValue(remaining, block_limit.GetIndex());
 	}
-	static constexpr idx_t RECLAIM_BATCH_SIZE = 1024;
+	auto task_remaining = task_limit.IsValid() ? MinValue(remaining, task_limit.GetIndex()) : remaining;
 	unsafe_vector<uint32_t> to_free_buffer;
-	to_free_buffer.resize(MinValue(remaining, RECLAIM_BATCH_SIZE));
-	while (remaining > 0) {
-		const auto count = touched->q.try_dequeue_bulk(to_free_buffer.begin(), MinValue(remaining, RECLAIM_BATCH_SIZE));
+	to_free_buffer.resize(MinValue(task_remaining, BlockAllocatorConfig::RECLAIM_BATCH_SIZE));
+	while (task_remaining > 0) {
+		const auto count = touched->q.try_dequeue_bulk(
+		    to_free_buffer.begin(), MinValue(task_remaining, BlockAllocatorConfig::RECLAIM_BATCH_SIZE));
 		if (count == 0) {
-			break;
+			return 0;
 		}
 		remaining -= count;
+		task_remaining -= count;
 		std::sort(to_free_buffer.begin(), to_free_buffer.begin() + count);
 
 		idx_t start = 0;
@@ -458,6 +549,7 @@ void BlockAllocator::FreeInternal(const optional_idx extra_memory) const {
 			start = end;
 		}
 	}
+	return remaining;
 }
 
 void BlockAllocator::FreeContiguousBlocks(const uint32_t block_id_start, const uint32_t block_id_end_including) const {

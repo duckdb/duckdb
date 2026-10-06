@@ -4,8 +4,10 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/storage/storage_info.hpp"
 
+#include <chrono>
 #include <condition_variable>
 #include <thread>
 #include <unordered_set>
@@ -274,6 +276,276 @@ TEST_CASE("BlockAllocator supplies an idle decay delay when enabled", "[api][blo
 	REQUIRE(allocator.DecayDelay().IsValid());
 	CHECK(allocator.DecayDelay().GetIndex() == (fallback_delay.IsValid() ? fallback_delay.GetIndex() : 1));
 }
+
+#ifndef DUCKDB_NO_THREADS
+namespace {
+class BlockAllocatorAsyncGate {
+public:
+	explicit BlockAllocatorAsyncGate(TaskScheduler &scheduler) : executor(scheduler, TaskSchedulerType::ASYNC) {
+		executor.ScheduleTask(make_uniq<GateTask>(executor, *this));
+	}
+	~BlockAllocatorAsyncGate() {
+		Release();
+		executor.CancelAndDrain();
+	}
+
+	bool WaitUntilBlocked() {
+		unique_lock<mutex> guard(lock);
+		return cv.wait_for(guard, std::chrono::seconds(10), [&]() { return blocked; });
+	}
+	void Release() {
+		lock_guard<mutex> guard(lock);
+		released = true;
+		cv.notify_all();
+	}
+
+private:
+	class GateTask : public BaseExecutorTask {
+	public:
+		GateTask(TaskExecutor &executor, BlockAllocatorAsyncGate &gate) : BaseExecutorTask(executor), gate(gate) {
+		}
+		void ExecuteTask() override {
+			unique_lock<mutex> guard(gate.lock);
+			gate.blocked = true;
+			gate.cv.notify_all();
+			gate.cv.wait(guard, [&]() { return gate.released; });
+		}
+
+	private:
+		BlockAllocatorAsyncGate &gate;
+	};
+
+	TaskExecutor executor;
+	mutex lock;
+	std::condition_variable cv;
+	bool blocked = false;
+	bool released = false;
+};
+} // namespace
+
+TEST_CASE("BlockAllocator idle reclamation uses the async task queue", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 32;
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
+	Allocator fallback;
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 1;
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
+	REQUIRE(scheduler.NumberOfAsyncThreads() == 1);
+	BlockAllocatorAsyncGate gate(scheduler);
+	REQUIRE(gate.WaitUntilBlocked());
+	vector<data_ptr_t> live;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		block[BLOCK_SIZE - 1] = 42;
+		live.push_back(block);
+	}
+	auto freed = live.back();
+	live.pop_back();
+	allocator.FreeData(freed, BLOCK_SIZE);
+	for (idx_t i = 0; i < 32; i++) {
+		allocator.ThreadIdle(scheduler);
+	}
+	CHECK(scheduler.GetNumberOfTasks() == 1);
+	// Relaunch without changing workers preserves queued work and its coalesced request.
+	scheduler.RelaunchThreads();
+	allocator.ThreadIdle(scheduler);
+	CHECK(scheduler.GetNumberOfTasks() == 1);
+	auto reused = allocator.AllocateData(BLOCK_SIZE);
+	CHECK(reused == freed);
+	CHECK(reused[0] == 42);
+	CHECK(reused[BLOCK_SIZE - 1] == 42);
+	allocator.FreeData(reused, BLOCK_SIZE);
+	allocator.ThreadIdle(scheduler);
+	SECTION("Async worker executes the queued pass") {
+		gate.Release();
+	}
+	SECTION("External execution can consume the ASYNC queue") {
+		atomic<bool> execute {true};
+		CHECK(scheduler.ExecuteTasks(&execute, 32) == 1);
+		gate.Release();
+	}
+
+#if defined(__linux__) || defined(_WIN32)
+	bool reclaimed = false;
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+	while (!reclaimed && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		reused = allocator.AllocateData(BLOCK_SIZE);
+		reclaimed = reused == freed && reused[0] == 0 && reused[BLOCK_SIZE - 1] == 0;
+		allocator.FreeData(reused, BLOCK_SIZE);
+		allocator.ThreadFlush(true, 0, 1);
+	}
+	CHECK(reclaimed);
+#endif
+	for (auto block : live) {
+		CHECK(block[0] == 42);
+		CHECK(block[BLOCK_SIZE - 1] == 42);
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+
+	scheduler.SetAsyncThreads(0);
+	scheduler.RelaunchThreads();
+	CHECK(scheduler.NumberOfAsyncThreads() == 0);
+	live.clear();
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		live.push_back(block);
+	}
+	for (auto block : live) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.ThreadIdle(scheduler);
+	live.clear();
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+#if defined(__linux__) || defined(_WIN32)
+		CHECK(block[0] == 0);
+#endif
+		live.push_back(block);
+	}
+	for (auto block : live) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+}
+
+TEST_CASE("BlockAllocator async reclamation survives worker relaunch and shutdown", "[api][block_allocator]") {
+	for (idx_t iteration = 0; iteration < 8; iteration++) {
+		DBConfig config;
+		config.options.maximum_threads = 1;
+		config.options.async_threads = 2;
+		config.SetOptionByName("scheduler_process_partial", Value::BOOLEAN(iteration % 2 == 0));
+		config.options.block_allocator_size = 64 * DEFAULT_BLOCK_ALLOC_SIZE;
+		DuckDB db(nullptr, &config);
+		auto &allocator = BlockAllocator::Get(*db.instance);
+		auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
+		vector<data_ptr_t> live;
+		for (idx_t round = 0; round < 8; round++) {
+			for (idx_t i = 0; i < 64; i++) {
+				auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
+				block[0] = 42;
+				live.push_back(block);
+			}
+			for (auto block : live) {
+				CHECK(block[0] == 42);
+				allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
+			}
+			live.clear();
+			allocator.ThreadIdle(scheduler);
+			scheduler.SetThreads(1 + round % 2, 1);
+			scheduler.RelaunchThreads();
+			if (round % 3 == 0) {
+				scheduler.SetAsyncThreads(0);
+				scheduler.RelaunchThreads();
+				CHECK(scheduler.NumberOfAsyncThreads() == 0);
+				scheduler.SetAsyncThreads(2);
+				scheduler.RelaunchThreads();
+			}
+		}
+		allocator.ThreadIdle(scheduler);
+	}
+}
+
+TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 4097;
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
+	Allocator fallback;
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 1;
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
+	BlockAllocatorAsyncGate gate(scheduler);
+	REQUIRE(gate.WaitUntilBlocked());
+
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		block[BLOCK_SIZE - 1] = 42;
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	blocks.clear();
+	auto other_producer = scheduler.CreateProducer();
+	allocator.ThreadIdle(scheduler);
+	atomic<bool> execute {true};
+	REQUIRE(scheduler.ExecuteTasks(&execute, 1) == 1);
+	CHECK(scheduler.GetNumberOfTasks() == 1);
+
+	SECTION("One task leaves warm blocks available for reuse") {
+		idx_t reclaimed = 0;
+		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+			auto block = allocator.AllocateData(BLOCK_SIZE);
+			if (block[0] == 0 && block[BLOCK_SIZE - 1] == 0) {
+				reclaimed++;
+			}
+			blocks.push_back(block);
+		}
+#if defined(__linux__) || defined(_WIN32)
+		CHECK(reclaimed > 0);
+#endif
+		CHECK(reclaimed < BLOCK_COUNT);
+		// The continuation must not discard blocks that have since been allocated.
+		for (auto block : blocks) {
+			block[0] = 84;
+		}
+		CHECK(scheduler.ExecuteTasks(&execute, BLOCK_COUNT) == 1);
+		for (auto block : blocks) {
+			CHECK(block[0] == 84);
+		}
+	}
+	SECTION("Continuations finish the backlog without another idle request") {
+		CHECK(scheduler.ExecuteTasks(&execute, BLOCK_COUNT) > 0);
+		CHECK(scheduler.GetNumberOfTasks() == 0);
+		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+			auto block = allocator.AllocateData(BLOCK_SIZE);
+#if defined(__linux__) || defined(_WIN32)
+			CHECK(block[0] == 0);
+			CHECK(block[BLOCK_SIZE - 1] == 0);
+#endif
+			blocks.push_back(block);
+		}
+	}
+	SECTION("Pending work stops the continuation chain") {
+		class OtherTask : public Task {
+		public:
+			explicit OtherTask(bool &executed) : executed(executed) {
+			}
+			TaskExecutionResult Execute(TaskExecutionMode) override {
+				executed = true;
+				return TaskExecutionResult::TASK_FINISHED;
+			}
+
+		private:
+			bool &executed;
+		};
+		bool executed = false;
+		scheduler.ScheduleTask(*other_producer, make_shared_ptr<OtherTask>(executed), TaskSchedulerType::ASYNC);
+		// Either queue order is valid; at most the current drain precedes other work.
+		CHECK(scheduler.ExecuteTasks(&execute, 2) == 2);
+		CHECK(executed);
+		// After contention, an idle request can resume any deferred reclamation.
+		allocator.ThreadIdle(scheduler);
+		scheduler.ExecuteTasks(&execute, BLOCK_COUNT);
+		CHECK(scheduler.GetNumberOfTasks() == 0);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+}
+#endif
 
 #if defined(__linux__)
 TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][block_allocator]") {

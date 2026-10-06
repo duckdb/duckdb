@@ -12,6 +12,7 @@
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
@@ -21,11 +22,14 @@ namespace duckdb {
 class Allocator;
 class AttachedDatabase;
 class DatabaseInstance;
+class TaskScheduler;
+struct ProducerToken;
 struct BlockQueue;
 struct BlockAllocatorLifetimeState;
 
 class BlockAllocator {
 	friend class BlockAllocatorThreadLocalState;
+	friend class BlockAllocatorFlushTask;
 
 public:
 	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t virtual_memory_size, idx_t physical_memory_size);
@@ -36,7 +40,7 @@ public:
 	static BlockAllocator &Get(AttachedDatabase &db);
 
 	//! Resize physical memory (can only be increased)
-	void Resize(idx_t new_physical_memory_size);
+	void Resize(idx_t new_physical_memory_size) DUCKDB_EXCLUDES(physical_memory_lock);
 
 	//! Allocation functions (same API as Allocator)
 	data_ptr_t AllocateData(idx_t size) const;
@@ -47,15 +51,18 @@ public:
 	bool SupportsFlush() const;
 	optional_idx DecayDelay() const;
 	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
-	void ThreadIdle() const;
+	//! Pass the owning database's scheduler to defer pool reclamation.
+	void ThreadIdle(optional_ptr<TaskScheduler> scheduler = nullptr) const DUCKDB_EXCLUDES(flush_lock);
 	//! Best-effort reclamation of free pool blocks and fallback allocations.
-	void FlushAll(optional_idx extra_memory = optional_idx()) const noexcept;
+	void FlushAll(optional_idx extra_memory = optional_idx()) const noexcept DUCKDB_EXCLUDES(flush_lock);
 	//! Memory freed since the last flush, which the allocator may still hold
 	idx_t GetDeallocatedSinceFlush() const;
 	//! Flush if at least threshold bytes were freed since the last flush, returns whether a flush happened
 	bool TryFlushDeallocated(idx_t threshold) const;
 
 private:
+	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
+
 	bool IsActive() const;
 	bool IsEnabled() const;
 	bool IsInPool(data_ptr_t pointer) const;
@@ -68,7 +75,11 @@ private:
 
 	void VerifyBlockID(uint32_t block_id) const;
 
-	void FreeInternal(optional_idx extra_memory) const;
+	bool TryScheduleFlush(TaskScheduler &scheduler) const DUCKDB_EXCLUDES(flush_lock);
+	//! Return the unprocessed portion of the initial free-block budget.
+	idx_t FlushPool(optional_idx block_limit = optional_idx(), optional_idx task_limit = optional_idx()) const noexcept
+	    DUCKDB_EXCLUDES(flush_lock);
+	idx_t FreeInternal(optional_idx block_limit, optional_idx task_limit) const;
 	void FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) const;
 
 private:
@@ -90,7 +101,7 @@ private:
 	atomic<data_ptr_t> virtual_memory_space;
 
 	//! Mutex for modifying physical memory size
-	mutex physical_memory_lock;
+	annotated_mutex physical_memory_lock;
 	//! Size of the physical memory
 	atomic<idx_t> physical_memory_size;
 
@@ -101,6 +112,12 @@ private:
 
 	//! Synchronizes returning cached blocks with allocator destruction.
 	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
+
+	//! Coalesce requests into one task, including follow-up passes while it runs.
+	mutable annotated_mutex flush_lock;
+	//! Scheduler queue destruction invalidates this token before allocator destruction.
+	mutable unique_ptr<ProducerToken> flush_producer DUCKDB_GUARDED_BY(flush_lock);
+	mutable FlushState flush_state DUCKDB_GUARDED_BY(flush_lock) = FlushState::IDLE;
 };
 
 } // namespace duckdb
