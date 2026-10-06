@@ -48,7 +48,7 @@ aUtHoRiZaTiOn	redacted
 x-amz-security-token	redacted
 
 statement ok
-SET redact_logs = false;
+SET redact_sensitive_logs = false;
 
 statement ok
 CALL truncate_duckdb_logs();
@@ -71,10 +71,10 @@ aUtHoRiZaTiOn	dummy-authorization
 x-amz-security-token	dummy-token
 
 statement ok
-RESET redact_logs;
+RESET redact_sensitive_logs;
 
 query I
-SELECT current_setting('redact_logs');
+SELECT current_setting('redact_sensitive_logs');
 ----
 true
 

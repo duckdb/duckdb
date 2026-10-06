@@ -65,7 +65,7 @@ public:
 	DUCKDB_API void TruncateLogStorage();
 
 	DUCKDB_API LogConfig GetConfig();
-	bool ShouldRedactLogs() const;
+	bool ShouldRedactSensitiveLogs() const;
 
 	DUCKDB_API void RegisterLogType(unique_ptr<LogType> type);
 	DUCKDB_API optional_ptr<const LogType> LookupLogType(const string &type);

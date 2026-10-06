@@ -2285,9 +2285,9 @@ struct ReadAheadDepthSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct RedactLogsSetting {
+struct RedactSensitiveLogsSetting {
 	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "redact_logs";
+	static constexpr const char *Name = "redact_sensitive_logs";
 	static constexpr const char *Description = "Redact potentially sensitive information in logs.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;

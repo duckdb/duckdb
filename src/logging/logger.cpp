@@ -46,8 +46,8 @@ Logger &Logger::Get(const shared_ptr<Logger> &logger) {
 	return *logger;
 }
 
-bool Logger::ShouldRedactLogs() const {
-	return manager.ShouldRedactLogs();
+bool Logger::ShouldRedactSensitiveLogs() const {
+	return manager.ShouldRedactSensitiveLogs();
 }
 
 ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)

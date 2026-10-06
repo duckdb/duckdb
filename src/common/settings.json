@@ -1411,7 +1411,7 @@
         ]
     },
     {
-        "name": "redact_logs",
+        "name": "redact_sensitive_logs",
         "description": "Redact potentially sensitive information in logs.",
         "type": "BOOLEAN",
         "scope": "global",

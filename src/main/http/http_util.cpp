@@ -250,7 +250,8 @@ void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> respo
 	if (!request.params.logger || !request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
 		return;
 	}
-	auto log_string = HTTPLogType::ConstructLogMessage(request, response, request.params.logger->ShouldRedactLogs());
+	auto log_string =
+	    HTTPLogType::ConstructLogMessage(request, response, request.params.logger->ShouldRedactSensitiveLogs());
 	request.params.logger->WriteLog(HTTPLogType::NAME, HTTPLogType::LEVEL, log_string);
 }
 

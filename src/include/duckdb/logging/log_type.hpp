@@ -90,7 +90,7 @@ public:
 	static LogicalType GetLogType();
 
 	static string ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response,
-	                                  bool redact_logs = true);
+	                                  bool redact_sensitive_logs = true);
 
 	// FIXME: HTTPLogType should be structured probably
 	static string ConstructLogMessage(const string &str) {
