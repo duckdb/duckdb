@@ -906,7 +906,7 @@
         "name": "external_file_cache_local_max_block_size",
         "description": "Maximum size in bytes of an external file cache block for local (non-remote) files. Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "16384",
         "custom_implementation": [
             "set"
@@ -919,7 +919,7 @@
         "name": "external_file_cache_remote_max_block_size",
         "description": "Maximum size in bytes of an external file cache block for remote files (e.g. HTTP/S3). Larger reads are split into blocks of this size, which are fetched in parallel.",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "2097152",
         "custom_implementation": [
             "set"
@@ -932,7 +932,7 @@
         "name": "external_file_cache_remote_min_block_size",
         "description": "Reads of remote files are rounded out to aligned blocks of this size, so tiny reads do not each cost a request.",
         "type": "UBIGINT",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "4096",
         "custom_implementation": [
             "set"
@@ -945,7 +945,7 @@
         "name": "external_file_cache_request_sizing",
         "description": "How reads of cached files are sized: AUTO lets each reader choose, GRID reads the aligned blocks of the cache block size around each read, EXACT reads exactly the requested bytes. Reads of files that are not cached are always exact.",
         "type": "ENUM<ExternalFileCacheRequestSizing>",
-        "default_scope": "global",
+        "scope": "global",
         "default_value": "AUTO"
     },
     {
