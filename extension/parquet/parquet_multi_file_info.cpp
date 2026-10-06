@@ -122,7 +122,7 @@ static bool ParquetScanSupportPushdownExtract(const FunctionData &bind_data_p, c
 
 	auto &column = bind_data.columns[col_idx.index];
 	auto &column_type = column.type;
-	return column_type.id() == LogicalTypeId::STRUCT || column_type.id() == LogicalTypeId::VARIANT;
+	return StructType::IsStruct(column_type) || column_type.id() == LogicalTypeId::VARIANT;
 }
 
 static vector<column_t> ParquetGetRowIdColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {

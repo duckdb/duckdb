@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p, optional_idx catalog_index_oid_p)
-    : catalog_index_oid(catalog_index_oid_p), owned_index(std::move(index_p)) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p)
+    : index_oid(index_oid_p), owned_index(std::move(index_p)) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -115,8 +115,8 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableInd
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), catalog_index_oid);
-	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), catalog_index_oid);
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid);
+	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid);
 }
 
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {

@@ -627,11 +627,14 @@ struct DatePart {
 
 		template <typename TA, typename TB, typename TR>
 		static TR Operation(TA interval, TB timetz) {
+			auto offset = interval.micros / Interval::MICROS_PER_SEC;
+			if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
+				throw OutOfRangeException("Timezone offset out of range: %s", Interval::ToString(interval));
+			}
 			auto time = Time::NormalizeTimeTZ(timetz);
 			date_t date(0);
 			time = Interval::Add(time, interval, date);
-			auto offset = UnsafeNumericCast<int32_t>(interval.micros / Interval::MICROS_PER_SEC);
-			return TR(time, offset);
+			return TR(time, UnsafeNumericCast<int32_t>(offset));
 		}
 
 		template <typename TA, typename TB, typename TR>
