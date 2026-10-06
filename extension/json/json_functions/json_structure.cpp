@@ -601,6 +601,7 @@ void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, c
 }
 
 JSONStructureNode ExtractStructureInternal(yyjson_val *val, const bool ignore_errors) {
+	JSONDocument::VerifyNestingDepth(val);
 	JSONStructureNode node;
 	JSONStructure::ExtractStructure(val, node, ignore_errors, false);
 	return node;
@@ -673,8 +674,8 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
-	set.SetFallible();
 	GetStructureFunctionInternal(set, LogicalType::JSON());
+	set.SetFallible();
 	return set;
 }
 

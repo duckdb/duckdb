@@ -103,6 +103,7 @@ public:
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = scan_state.values[i];
 				if (val) {
+					JSONDocument::VerifyNestingDepth(val);
 					JSONStructure::ExtractStructure(val, node, true, options.geojson.value_or(false));
 				}
 			}

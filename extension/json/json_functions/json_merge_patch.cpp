@@ -23,8 +23,9 @@ static inline void ReadObjects(yyjson_mut_doc *doc, const Vector &input, yyjson_
 		if (!entry.IsValid()) {
 			objs[i] = nullptr;
 		} else {
-			objs[i] = yyjson_val_mut_copy(
-			    doc, JSONCommon::ReadDocument(entry.GetValue(), JSONCommon::READ_FLAG, &doc->alc)->root);
+			auto root = JSONCommon::ReadDocument(entry.GetValue(), JSONCommon::READ_FLAG, &doc->alc)->root;
+			JSONDocument::VerifyNestingDepth(root);
+			objs[i] = yyjson_val_mut_copy(doc, root);
 		}
 	}
 }
@@ -77,6 +78,7 @@ ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
 	fun.GetSignature().AddParameter("json1", LogicalType::JSON()).AddParameter("json2", LogicalType::JSON());
 	fun.GetSignature().AddArgs("args", LogicalType::JSON());
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	fun.SetFallible();
 
 	return ScalarFunctionSet(fun);
 }

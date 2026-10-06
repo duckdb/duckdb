@@ -13,6 +13,7 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
+#include "duckdb/common/json_document.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
 

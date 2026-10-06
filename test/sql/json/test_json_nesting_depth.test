@@ -1,0 +1,54 @@
+# name: test/sql/json/test_json_nesting_depth.test
+# description: Recursive JSON functions reject values that are nested too deeply
+# group: [json]
+
+require json
+
+statement ok
+CREATE TABLE deep AS SELECT
+    repeat('[', 100000) || repeat(']', 100000) AS arr,
+    repeat('{"a":', 100000) || '1' || repeat('}', 100000) AS obj,
+    repeat('[', 1000) || repeat(']', 1000) AS arr_1000,
+    repeat('[', 1001) || repeat(']', 1001) AS arr_1001
+
+foreach col arr obj arr_1001
+
+statement error
+SELECT json_structure({col}) FROM deep
+----
+JSON value exceeds the maximum nesting depth of 1000
+
+statement error
+SELECT json_contains({col}, '1') FROM deep
+----
+JSON value exceeds the maximum nesting depth of 1000
+
+statement error
+SELECT json_contains('1', {col}::JSON) FROM deep
+----
+JSON value exceeds the maximum nesting depth of 1000
+
+statement error
+SELECT json_merge_patch('{}', {col}) FROM deep
+----
+JSON value exceeds the maximum nesting depth of 1000
+
+statement error
+SELECT {col}::JSON::VARIANT FROM deep
+----
+JSON value exceeds the maximum nesting depth of 1000
+
+endloop
+
+query IIII
+SELECT json_structure(arr_1000) IS NOT NULL, json_contains(arr_1000, '[]'), json_merge_patch('{}', arr_1000) = arr_1000, arr_1000::JSON::VARIANT IS NOT NULL FROM deep
+----
+true	true	true	true
+
+statement ok
+COPY (SELECT arr_1001::JSON j FROM deep) TO '__TEST_DIR__/deep.json'
+
+statement error
+SELECT * FROM read_json('__TEST_DIR__/deep.json')
+----
+JSON value exceeds the maximum nesting depth of 1000

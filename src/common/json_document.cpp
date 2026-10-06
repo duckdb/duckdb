@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
@@ -338,6 +339,30 @@ string JSONWriter::ToString(JSONWriteFlags flags) const {
 	string result(json, len);
 	free(json);
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Nesting depth
+//===--------------------------------------------------------------------===//
+void JSONDocument::VerifyNestingDepth(yyjson_val *val) {
+	if (!val || !unsafe_yyjson_is_ctn(val)) {
+		return;
+	}
+	// immutable values are stored in pre-order, so we can find the depth without recursing:
+	// keep track of where each of the containers we are currently in ends
+	vector<yyjson_val *> container_ends;
+	const auto end = unsafe_yyjson_get_next(val);
+	for (auto current = val; current < end; current++) {
+		while (!container_ends.empty() && current >= container_ends.back()) {
+			container_ends.pop_back();
+		}
+		if (unsafe_yyjson_is_ctn(current)) {
+			container_ends.push_back(unsafe_yyjson_get_next(current));
+			if (container_ends.size() > MAX_NESTING_DEPTH) {
+				throw InvalidInputException("JSON value exceeds the maximum nesting depth of %llu", MAX_NESTING_DEPTH);
+			}
+		}
+	}
 }
 
 } // namespace duckdb

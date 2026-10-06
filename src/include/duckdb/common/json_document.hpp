@@ -152,6 +152,11 @@ public:
 	//! Serialize the (immutable) document to a string
 	string ToString(JSONWriteFlags flags = JSONWriteFlags::NONE) const;
 
+	//! The maximum nesting depth of JSON values that recursive JSON functions accept
+	static constexpr idx_t MAX_NESTING_DEPTH = 1000;
+	//! Throws an InvalidInputException if the (immutable) value is nested deeper than MAX_NESTING_DEPTH
+	static void VerifyNestingDepth(duckdb_yyjson::yyjson_val *val);
+
 private:
 	//! The wrapped yyjson document
 	duckdb_yyjson::yyjson_doc *doc;

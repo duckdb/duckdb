@@ -8,6 +8,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/json_document.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -288,6 +289,10 @@ bool ConvertJSONToVariant(ToVariantSourceData &source, ToVariantGlobalResultData
 			continue;
 		}
 		auto *root = yyjson_doc_get_root(doc);
+		if (!WRITE_DATA) {
+			// the conversion recurses into nested values
+			JSONDocument::VerifyNestingDepth(root);
+		}
 
 		if (!ConvertJSON<WRITE_DATA, IGNORE_NULLS>(root, result, result_index, is_root)) {
 			return false;

@@ -120,8 +120,10 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 		}
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
 		auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
+		JSONDocument::VerifyNestingDepth(needle_doc->root);
 		UnaryExecutor::Execute<string_t, bool>(haystacks, result, [&](string_t haystack_str) {
 			auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, alc);
+			JSONDocument::VerifyNestingDepth(haystack_doc->root);
 			return JSONContains(haystack_doc->root, needle_doc->root);
 		});
 	} else {
@@ -129,6 +131,8 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 		    haystacks, needles, result, [&](string_t haystack_str, string_t needle_str) {
 			    auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, alc);
 			    auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, alc);
+			    JSONDocument::VerifyNestingDepth(needle_doc->root);
+			    JSONDocument::VerifyNestingDepth(haystack_doc->root);
 			    return JSONContains(haystack_doc->root, needle_doc->root);
 		    });
 	}
@@ -145,8 +149,8 @@ ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
-	set.SetFallible();
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
+	set.SetFallible();
 	// TODO: implement json_contains that accepts path argument as well
 
 	return set;
