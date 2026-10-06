@@ -195,7 +195,7 @@ ORDER BY n DESC, first_v LIMIT 2
 query I
 SELECT parameters FROM duckdb_functions() WHERE function_name = 'match_recognize'
 ----
-[columns]
+[]
 
 query I
 SELECT n FROM (

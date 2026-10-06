@@ -247,10 +247,17 @@ EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT i,count(*) n FROM scope_input GR
 ----
 sql	<REGEX>:.*[(]SELECT.*[(]SELECT.*
 
+# the window self join rewrites an OVER () window into a cross join with its own scope
+statement ok
+SET disabled_optimizers='window_self_join';
+
 query TT
 EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT i,count(*) n FROM scope_input GROUP BY i) q;
 ----
 sql	<!REGEX>:.*[(]SELECT.*[(]SELECT.*[(]SELECT.*
+
+statement ok
+RESET disabled_optimizers;
 
 query TT
 EXPLAIN (SQL) SELECT sum(n) OVER() FROM (SELECT row_number() OVER(ORDER BY i) n FROM scope_input) q;
