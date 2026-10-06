@@ -15,6 +15,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -327,6 +328,13 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		}
 		value = entry->Copy(*transaction.context);
 		value->comment = alter_info.Cast<SetCommentInfo>().comment_value;
+	} else if (alter_info.type == AlterType::SET_TAGS && !alter_info.Cast<SetTagsInfo>().IsColumn()) {
+		// Copy the existing entry; we are only changing metadata here
+		if (!transaction.context) {
+			throw InternalException("Cannot AlterEntry::SET_TAGS without client context");
+		}
+		value = entry->Copy(*transaction.context);
+		alter_info.Cast<SetTagsInfo>().Apply(value->tags);
 	} else {
 		// Use the existing entry to create the altered entry
 		value = entry->AlterEntry(transaction, alter_info);

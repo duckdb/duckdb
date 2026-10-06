@@ -1,0 +1,90 @@
+# name: test/sql/catalog/tag_on_storage_version.test
+# description: View column tags require v2.0.0 storage without restricting existing tag metadata
+# group: [catalog]
+
+load {TEST_DIR}/tag_on_old_storage.db readwrite v1.0.0
+
+statement ok
+CREATE TABLE tagged_table(i INTEGER);
+
+statement ok
+INSERT INTO tagged_table VALUES (42);
+
+statement ok
+CREATE VIEW tagged_view AS SELECT i FROM tagged_table;
+
+# Object and table-column tags already have a compatible storage representation
+statement ok
+TAG ON TABLE tagged_table SET {'owner': 'storage'};
+
+statement ok
+TAG ON COLUMN tagged_table.i SET {'unit': 'count'};
+
+statement ok
+TAG ON VIEW tagged_view SET {'owner': 'reporting'};
+
+statement error
+TAG ON COLUMN tagged_view.i SET {'unit': 'count'};
+----
+View column tags are only supported for storage versions v2.0.0 and higher
+
+statement error
+TAG ON COLUMN tagged_view.i UNSET ['unit'];
+----
+View column tags are only supported for storage versions v2.0.0 and higher
+
+statement ok
+CHECKPOINT;
+
+restart
+
+query I
+SELECT tags['owner'] FROM duckdb_tables() WHERE table_name = 'tagged_table';
+----
+storage
+
+query I
+SELECT tags['unit'] FROM duckdb_columns() WHERE table_name = 'tagged_table';
+----
+count
+
+query I
+SELECT tags['owner'] FROM duckdb_views() WHERE view_name = 'tagged_view';
+----
+reporting
+
+query I
+SELECT cardinality(tags) FROM duckdb_columns() WHERE table_name = 'tagged_view';
+----
+0
+
+query I
+SELECT * FROM tagged_view;
+----
+42
+
+# Temporary and in-memory views do not depend on the persistent storage version
+statement ok
+CREATE TEMP VIEW temporary_tagged AS SELECT i FROM tagged_table;
+
+statement ok
+TAG ON COLUMN temporary_tagged.i SET {'unit': 'count'};
+
+query I
+SELECT tags['unit'] FROM duckdb_columns() WHERE table_name = 'temporary_tagged';
+----
+count
+
+statement ok
+ATTACH ':memory:' AS mem;
+
+statement ok
+CREATE VIEW mem.tagged_view AS SELECT 84 AS i;
+
+statement ok
+TAG ON COLUMN mem.tagged_view.i SET {'unit': 'count'};
+
+query I
+SELECT tags['unit'] FROM duckdb_columns() WHERE database_name = 'mem' AND table_name = 'tagged_view';
+----
+count

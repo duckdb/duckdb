@@ -19,6 +19,12 @@
       ]
     },
     {
+      "reason": "View column tags require v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/tag_on.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
         "test/sql/json/test_json_serialize_sql.test",

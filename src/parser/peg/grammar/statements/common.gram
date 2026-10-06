@@ -29,6 +29,7 @@ Statement <-
 	ExportStatement /
 	ImportStatement /
 	CommentStatement /
+	TagStatement /
 	DeallocateStatement /
 	TruncateStatement /
 	LoadStatement /

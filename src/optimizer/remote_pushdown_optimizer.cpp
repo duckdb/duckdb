@@ -28,6 +28,7 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/function/table_macro_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/set_tags_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/delete_statement.hpp"
@@ -766,6 +767,7 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(AlterStatement &
 	case AlterType::CHANGE_OWNERSHIP:
 	case AlterType::SET_COMMENT:
 	case AlterType::SET_COLUMN_COMMENT:
+	case AlterType::SET_TAGS:
 		break;
 	case AlterType::ALTER_DATABASE:
 		// renaming a database renames the attachment, which only exists locally
@@ -775,8 +777,10 @@ CatalogPushdownResult RemotePushdownOptimizer::RewriteStatement(AlterStatement &
 		// CREATE resolves an OnCreateConflict, so they never reach the optimizer as a parsed statement
 		return CatalogPushdownResult::Unknown();
 	}
-	// COMMENT ON COLUMN targets either a table or a view, the exact type is only resolved at bind time
-	auto entry_type = info.type == AlterType::SET_COLUMN_COMMENT ? CatalogType::TABLE_ENTRY : info.GetCatalogType();
+	// Column metadata targets either a table or a view, and the exact type is only resolved at bind time.
+	auto is_column = info.type == AlterType::SET_COLUMN_COMMENT ||
+	                 (info.type == AlterType::SET_TAGS && info.Cast<SetTagsInfo>().IsColumn());
+	auto entry_type = is_column ? CatalogType::TABLE_ENTRY : info.GetCatalogType();
 	auto target = ResolveDDLTarget(info.GetQualifiedName(), DDLTarget::EXISTING_ENTRY, entry_type);
 	return VerifyStatementSupport(statement, std::move(target));
 }
