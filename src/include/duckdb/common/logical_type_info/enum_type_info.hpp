@@ -38,13 +38,13 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		idx_t read_count = 0;
 		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
 			if (i >= size) {
-				throw DataCorruptionException("Corrupted enum: string value index %llu exceeds enum size %u", i, size);
+				throw SerializationException("Corrupted enum: string value index %llu exceeds enum size %u", i, size);
 			}
 			strings[i] = list.ReadElement<string>();
 			read_count++;
 		});
 		if (read_count != size) {
-			throw DataCorruptionException("Corrupted enum: expected %u values, but found %llu", size, read_count);
+			throw SerializationException("Corrupted enum: expected %u values, but found %llu", size, read_count);
 		}
 		return make_uniq<EnumTypeInfoTemplated>(values_insert_order, size);
 	}

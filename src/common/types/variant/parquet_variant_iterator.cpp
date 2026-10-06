@@ -10,6 +10,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/interval.hpp"
 #include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
@@ -507,6 +508,13 @@ T ParquetVariantNode::GetData() const {
 	case VariantPrimitiveType::DECIMAL16:
 		CheckBinaryRead(payload, sizeof(uint8_t) + sizeof(hugeint_t), binary_end);
 		return ReadBinaryDecimalValue<T>(value_metadata.primitive_type, payload);
+	case VariantPrimitiveType::TIME_NTZ_MICROS: {
+		auto micros = LoadChecked<int64_t>(payload, binary_end);
+		if (micros < 0 || micros > Interval::MICROS_PER_DAY) {
+			throw IOException("Corrupted VARIANT 'value' buffer, TIME value (%d) is out of range", micros);
+		}
+		return LoadChecked<T>(payload, binary_end);
+	}
 	default:
 		//! Fixed-width primitives are stored in the canonical little-endian layout
 		return LoadChecked<T>(payload, binary_end);

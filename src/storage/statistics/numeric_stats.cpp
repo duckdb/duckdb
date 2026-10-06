@@ -350,8 +350,26 @@ bool NumericStats::ConstantsCoverRange(const BaseStatistics &stats, array_ptr<co
 	return true;
 }
 
+template <class T>
+static bool ZeroSignsMatch(const BaseStatistics &stats) {
+	auto min = NumericStats::GetMinUnsafe<T>(stats);
+	auto max = NumericStats::GetMaxUnsafe<T>(stats);
+	return min != T(0) || std::signbit(min) == std::signbit(max);
+}
+
 bool NumericStats::IsConstant(const BaseStatistics &stats) {
-	return NumericStats::Max(stats) <= NumericStats::Min(stats);
+	if (NumericStats::Max(stats) > NumericStats::Min(stats)) {
+		return false;
+	}
+	// -0.0 == 0.0, so a zero range is only constant if both bounds have the same sign
+	switch (stats.GetType().InternalType()) {
+	case PhysicalType::FLOAT:
+		return ZeroSignsMatch<float>(stats);
+	case PhysicalType::DOUBLE:
+		return ZeroSignsMatch<double>(stats);
+	default:
+		return true;
+	}
 }
 
 void SetNumericValueInternal(const Value &input, const LogicalType &type, NumericValueUnion &val, bool &has_val) {

@@ -2359,6 +2359,9 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		return new_value;
 	}
 	new_value.is_null = false;
+	if (type.IsNested() && !type.HasParameters()) {
+		throw SerializationException("Failed to deserialize value: type %s is missing its type info", type.ToString());
+	}
 
 	if (type.id() == LogicalTypeId::TYPE) {
 		// special case for TYPE values: deserialize the type as a nested object

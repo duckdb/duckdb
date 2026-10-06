@@ -106,7 +106,10 @@ bool RequiresTrackingAttaches(const string &path, const string &db_type) {
 shared_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &context, AttachInfo &info,
                                                              AttachOptions &options) {
 	string extension = "";
-	if (FileSystem::IsRemoteFile(info.path, extension)) {
+	// a storage extension named by an explicit TYPE interprets the path itself (e.g. as a connection URI)
+	// so a remote-looking path only implies a remote file (read-only, requiring e.g. httpfs) otherwise
+	bool explicit_storage_type = !options.db_type.empty() && !StringUtil::CIEquals(options.db_type, "duckdb");
+	if (!explicit_storage_type && FileSystem::IsRemoteFile(info.path, extension)) {
 		if (options.access_mode == AccessMode::AUTOMATIC) {
 			// Attaching of remote files gets bumped to READ_ONLY
 			// This is due to the fact that on most (all?) remote files writes to DB are not available
