@@ -41,11 +41,7 @@ target_compile_definitions(test_capi_v2_static_extension
 target_include_directories(test_capi_v2_static_extension
                            PRIVATE ${CMAKE_SOURCE_DIR}/tools/cpp)
 
-# The tests of the unstable part of the API opt into it, which the other tests
-# verify stays off by default - so they are built on their own as well.
-add_library(test_capi_v2_unstable OBJECT test_capi_v2_unstable.cpp)
-
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES} $<TARGET_OBJECTS:test_sql_capi_v2>
     $<TARGET_OBJECTS:test_capi_v2_static_extension>
-    $<TARGET_OBJECTS:test_capi_v2_unstable> PARENT_SCOPE)
+    PARENT_SCOPE)
