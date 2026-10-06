@@ -35,6 +35,8 @@ CI runs this suite in the **OSX Debug** job in
 the job builds a separate debug executable with the symbols and locals needed by LLDB,
 runs all helper tests, and uploads the annotated reports as `lldb-coverage-osx`,
 including when tests fail. It respects the workflow's `skip_tests` input.
+The LLDB debug build leaves compiler warnings non-fatal: Debug enables additional
+conversion warnings beyond the existing release build's warning set.
 Changes under `scripts/lldb/` select the OSX workflow on pull requests, including
 when the reduced CI matrix is enabled.
 

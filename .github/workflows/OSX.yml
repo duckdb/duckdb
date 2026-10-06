@@ -70,6 +70,9 @@ jobs:
       timeout-minutes: 60
       env:
         DISABLE_SHELL: 1
+        # Debug enables extra conversion warnings; keep them non-fatal for the LLDB fixture build.
+        TREAT_WARNINGS_AS_ERRORS: 0
+        EXTRA_CMAKE_VARIABLES: -DTREAT_WARNINGS_AS_ERRORS=OFF
       run: python3 scripts/ci/retry.py -- make debug
 
     - name: LLDB helper tests
