@@ -340,7 +340,8 @@ void VectorBuffer::Copy(const Vector &source_p, const SelectionVector &source_se
 		default: {
 			// for exotic types we flatten followed by copying
 			Vector flattened_vector(Vector::Ref(source));
-			flattened_vector.Flatten(sel, source_offset + source_count);
+			// source_count is the end of the range that is copied (not its length)
+			flattened_vector.Flatten(sel, source_count);
 			Copy(flattened_vector, *FlatVector::IncrementalSelectionVector(), source_count, source_offset,
 			     target_offset, copy_count);
 			return;
