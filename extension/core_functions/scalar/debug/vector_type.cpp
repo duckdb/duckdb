@@ -17,6 +17,7 @@ ScalarFunction VectorTypeFun::GetFunction() {
 	auto vector_type_fun = ScalarFunction({}, LogicalType::VARCHAR, VectorTypeFunction);
 	vector_type_fun.GetSignature().AddParameter("col", LogicalType::ANY);
 	vector_type_fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
+	vector_type_fun.SetStability(FunctionStability::VOLATILE);
 	return vector_type_fun;
 }
 

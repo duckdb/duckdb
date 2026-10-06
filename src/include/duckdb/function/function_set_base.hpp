@@ -30,8 +30,9 @@ public:
 	vector<shared_ptr<const T>> functions;
 
 public:
-	void AddFunction(T function) {
+	auto AddFunction(T function) & -> FunctionSet<T> & {
 		functions.push_back(make_shared_ptr<T>(std::move(function)));
+		return *this;
 	}
 	void AddFunction(shared_ptr<const T> function) {
 		functions.push_back(std::move(function));
@@ -56,12 +57,13 @@ public:
 		}
 	}
 
-	bool MergeFunctionSet(FunctionSet<T> new_functions, bool override = false) {
+	bool MergeFunctionSet(const FunctionSet<T> &new_functions, bool override = false) {
 		D_ASSERT(!new_functions.functions.empty());
 		for (auto &new_func : new_functions.functions) {
 			bool overwritten = false;
 			for (auto &func : functions) {
-				if (new_func->Equal(*func)) {
+				// the same rule for every kind of function - see FunctionSignature::IsSameOverload
+				if (new_func->GetSignature().IsSameOverload(func->GetSignature())) {
 					// function overload already exists
 					if (override) {
 						// override it

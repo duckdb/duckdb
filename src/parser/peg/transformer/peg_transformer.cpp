@@ -190,36 +190,14 @@ string TransformStack::FormatStack() const {
 }
 #endif
 
-unique_ptr<TransformResultValue> PEGTransformer::ExecuteRecursive(TransformInput input) {
-	auto rule = input.GetRule();
-	if (!rule) {
-		throw InternalException("No registered data exists for rule '%s'", input.parse_result.name);
-	}
-	auto process = rule->StartTransform(*this, input.parse_result);
-	unique_ptr<TransformResultValue> child_result;
-	while (true) {
-		auto step = process->Resume(std::move(child_result));
-		auto child = step.GetChild();
-		if (!child) {
-			auto result = step.TakeResult();
-			SetResultLocation(input.parse_result, *result);
-			return result;
-		}
-		child_result = ExecuteRecursive(*child);
-	}
-}
-
 unique_ptr<TransformResultValue> PEGTransformer::TransformInternal(ParseResult &parse_result) {
 	auto rule = parse_result.GetRule();
 	if (!rule) {
 		throw InternalException("No registered data exists for rule '%s'", parse_result.name);
 	}
 	TransformInput input {*rule, parse_result};
-	if (options.heap_based_parser) {
-		TransformStack stack(*this);
-		return stack.Execute(input);
-	}
-	return ExecuteRecursive(input);
+	TransformStack stack(*this);
+	return stack.Execute(input);
 }
 
 const CompiledGrammarRule &PEGTransformer::GetRule(const string &rule_name) const {
@@ -392,7 +370,7 @@ bool PEGTransformer::IsWindowFrameDefault(WindowBoundary start, WindowBoundary e
 unique_ptr<WindowExpression> PEGTransformer::GetWindowClause(const Identifier &window_name) {
 	auto it = window_clauses.find(window_name);
 	if (it == window_clauses.end()) {
-		throw ParserException("window \"%s\" does not exist", window_name);
+		throw ParserException("window %s does not exist", window_name);
 	}
 	return unique_ptr_cast<ParsedExpression, WindowExpression>(it->second->Copy());
 }

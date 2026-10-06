@@ -871,7 +871,7 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
-			fetch_state.row_group = state.parent->row_group;
+			fetch_state.row_group = state.parent->GetRowGroup();
 			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i), scan_vector, i);
 		}
 	} else {

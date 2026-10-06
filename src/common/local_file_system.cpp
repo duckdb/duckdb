@@ -1,6 +1,7 @@
 #include "duckdb/common/local_file_system.hpp"
 
 #include "duckdb/common/checksum.hpp"
+#include "duckdb/common/enums/file_sync_mode.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
@@ -17,7 +18,9 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 
+#include <algorithm>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
@@ -62,12 +65,9 @@ namespace duckdb {
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		auto normalized_file = ExpandPath(filename, opener);
-		if (access(normalized_file.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_file.c_str(), &status);
-			if (S_ISREG(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_file.c_str(), &status) == 0 && S_ISREG(status.st_mode)) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -77,12 +77,9 @@ bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	if (!filename.empty()) {
 		auto normalized_file = ExpandPath(filename, opener);
-		if (access(normalized_file.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_file.c_str(), &status);
-			if (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_file.c_str(), &status) == 0 && (S_ISFIFO(status.st_mode) || S_ISCHR(status.st_mode))) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -150,7 +147,9 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 	}
 
 	if (abs_path.find(L"\\\\") == 0) {
-		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path;
+		// Extended UNC paths use "\\?\UNC\server\share", so remove the original leading "\\".
+		// See https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file#namespaces
+		return WINDOWS_UNC_LONG_PATH_PREFIX + abs_path.substr(2);
 	}
 
 	return WINDOWS_LOCAL_LONG_PATH_PREFIX + abs_path;
@@ -159,24 +158,18 @@ static std::wstring NormalizePathAndConvertToUnicode(FileSystem &fs, const strin
 bool LocalFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status; // typos:ignore
-		_wstati64(wpath, &status);
-		if (status.st_mode & S_IFREG) {
-			return true;
-		}
+	struct _stati64 status; // typos:ignore
+	if (_wstati64(wpath, &status) == 0 && (status.st_mode & S_IFREG)) {
+		return true;
 	}
 	return false;
 }
 bool LocalFileSystem::IsPipe(const string &filename, optional_ptr<FileOpener> opener) {
 	auto unicode_path = NormalizePathAndConvertToUnicode(*this, filename, opener);
 	const wchar_t *wpath = unicode_path.c_str();
-	if (_waccess(wpath, 0) == 0) {
-		struct _stati64 status; // typos:ignore
-		_wstati64(wpath, &status);
-		if (status.st_mode & _S_IFCHR) {
-			return true;
-		}
+	struct _stati64 status; // typos:ignore
+	if (_wstati64(wpath, &status) == 0 && (status.st_mode & _S_IFCHR)) {
+		return true;
 	}
 	return false;
 }
@@ -627,6 +620,26 @@ FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	return file_metadata;
 }
 
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto path = ExpandPath(path_p, opener);
+	struct stat status;
+	if (stat(path.c_str(), &status) != 0) {
+		auto retained_errno = errno;
+		if (retained_errno == ENOENT || retained_errno == ENOTDIR) {
+			return nullopt;
+		}
+		throw IOException({{"errno", std::to_string(retained_errno)}}, "Failed to get stats for path \"%s\": %s",
+		                  path_p, strerror(retained_errno));
+	}
+	auto file_metadata = StatsFromStruct(status);
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
@@ -640,12 +653,9 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 
 	if (!directory.empty()) {
 		auto normalized_dir = ExpandPath(directory, opener);
-		if (access(normalized_dir.c_str(), 0) == 0) {
-			struct stat status;
-			stat(normalized_dir.c_str(), &status);
-			if (S_ISDIR(status.st_mode)) {
-				return true;
-			}
+		struct stat status;
+		if (stat(normalized_dir.c_str(), &status) == 0 && S_ISDIR(status.st_mode)) {
+			return true;
 		}
 	}
 	// if any condition fails
@@ -805,21 +815,26 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-
-#if HAVE_FULLFSYNC
-	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
-	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
-	if (::fcntl(fd, F_FULLFSYNC) == 0) {
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	auto fsync_mode = unix_handle.db ? Settings::Get<FsyncModeSetting>(*unix_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
 		return;
 	}
-#endif // HAVE_FULLFSYNC
+	int fd = unix_handle.fd;
 
-#if HAVE_FDATASYNC
+#ifdef F_FULLFSYNC
+	// On macOS and iOS, fsync() doesn't guarantee durability past power failures. fcntl(F_FULLFSYNC) is required for
+	// that purpose. Some filesystems don't support fcntl(F_FULLFSYNC), and require a fallback to fsync().
+	if (fsync_mode == FileSyncMode::FULL && ::fcntl(fd, F_FULLFSYNC) == 0) {
+		return;
+	}
+#endif // F_FULLFSYNC
+
+#ifdef DUCKDB_HAVE_FDATASYNC
 	bool sync_success = ::fdatasync(fd) == 0;
 #else
 	bool sync_success = ::fsync(fd) == 0;
-#endif // HAVE_FDATASYNC
+#endif // DUCKDB_HAVE_FDATASYNC
 
 	if (sync_success) {
 		return;
@@ -1121,8 +1136,9 @@ static FileMetadata StatsFromDirInfo(const FILE_ID_BOTH_DIR_INFO &entry) {
 
 struct WindowsFileHandle : public FileHandle {
 public:
-	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags)
-	    : FileHandle(file_system, path, flags), position(0), fd(fd) {
+	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd, FileOpenFlags flags,
+	                  optional_ptr<DatabaseInstance> db)
+	    : FileHandle(file_system, path, flags), position(0), fd(fd), db(db) {
 	}
 	~WindowsFileHandle() override {
 		Close();
@@ -1130,6 +1146,7 @@ public:
 
 	idx_t position;
 	HANDLE fd;
+	optional_ptr<DatabaseInstance> db;
 
 public:
 	void Close() override {
@@ -1280,7 +1297,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		auto abs_path = WindowsUtil::UnicodeToUTF8(unicode_path.c_str());
 		throw IOException("Cannot open file \"%s\": %s%s", abs_path, error, extended_error);
 	}
-	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags);
+	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile, flags, FileOpener::TryGetDatabase(opener));
 	if (flags.OpenForAppending()) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
@@ -1596,19 +1613,64 @@ bool LocalFileSystem::ListFilesExtended(const string &directory,
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &windows_handle = handle.Cast<WindowsFileHandle>();
+	auto fsync_mode = windows_handle.db ? Settings::Get<FsyncModeSetting>(*windows_handle.db) : FileSyncMode::STANDARD;
+	if (fsync_mode == FileSyncMode::NONE) {
+		return;
+	}
+	HANDLE hFile = windows_handle.fd;
 	if (FlushFileBuffers(hFile) == 0) {
 		throw IOException("Could not flush file handle to disk!");
 	}
 }
 
+static bool TryMoveFileWithPosixSemantics(HANDLE source_handle, const std::wstring &target) {
+	constexpr auto file_rename_info_ex = static_cast<FILE_INFO_BY_HANDLE_CLASS>(22); // FileRenameInfoEx
+	const auto file_name_length = target.size() * sizeof(WCHAR);
+	const auto rename_info_size = offsetof(FILE_RENAME_INFO, FileName) + file_name_length + sizeof(WCHAR);
+	const auto rename_info_size_dw = NumericCast<DWORD>(rename_info_size);
+	auto rename_info_buffer = make_uniq_array<data_t>(rename_info_size);
+	auto rename_info = reinterpret_cast<FILE_RENAME_INFO *>(rename_info_buffer.get());
+	rename_info->Flags = FILE_RENAME_FLAG_REPLACE_IF_EXISTS | FILE_RENAME_FLAG_POSIX_SEMANTICS;
+	rename_info->RootDirectory = nullptr;
+	rename_info->FileNameLength = NumericCast<DWORD>(file_name_length);
+	std::copy(target.c_str(), target.c_str() + target.size() + 1, rename_info->FileName);
+
+	return SetFileInformationByHandle(source_handle, file_rename_info_ex, rename_info, rename_info_size_dw);
+}
+
 void LocalFileSystem::MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener) {
 	auto source_unicode = NormalizePathAndConvertToUnicode(*this, source, opener);
 	auto target_unicode = NormalizePathAndConvertToUnicode(*this, target, opener);
-	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 
+	// FileRenameInfoEx renames the file identified by a handle opened with DELETE access.
+	// See https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info
+	constexpr DWORD delete_access = 0x00010000L; // DELETE
+	auto raw_source_handle =
+	    CreateFileW(source_unicode.c_str(), delete_access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+	                nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+	if (raw_source_handle == INVALID_HANDLE_VALUE) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not move file \"%s\" to \"%s\": failed to open source file: %s", source, target,
+		                  error);
+	}
+	unique_ptr<void, decltype(&CloseHandle)> source_handle(raw_source_handle, CloseHandle);
+
+	if (TryMoveFileWithPosixSemantics(source_handle.get(), target_unicode)) {
+		return;
+	}
+	auto error_code = GetLastError();
+	source_handle.reset();
+
+	if (error_code != ERROR_INVALID_PARAMETER && error_code != ERROR_NOT_SUPPORTED &&
+	    error_code != ERROR_INVALID_FUNCTION) {
+		SetLastError(error_code);
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
+	}
+
+	DWORD flags = MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH;
 	if (!MoveFileExW(source_unicode.c_str(), target_unicode.c_str(), flags)) {
-		throw IOException("Could not move file: %s", GetLastErrorAsString());
+		throw IOException("Could not move file \"%s\" to \"%s\": %s", source, target, GetLastErrorAsString());
 	}
 }
 
@@ -1620,6 +1682,29 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 FileMetadata LocalFileSystem::Stats(FileHandle &handle) {
 	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto file_metadata = StatsInternal(hFile, handle.GetPath());
+	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
+	return file_metadata;
+}
+
+optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	const auto &path_p = file.path;
+	if (path_p.empty()) {
+		return nullopt;
+	}
+	auto unicode_path = NormalizePathAndConvertToUnicode(*this, path_p, opener);
+	auto raw_handle = CreateFileW(unicode_path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
+	if (raw_handle == INVALID_HANDLE_VALUE) {
+		auto error_code = GetLastError();
+		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND) {
+			return nullopt;
+		}
+		SetLastError(error_code);
+		throw IOException("Failed to get stats for path \"%s\": %s", path_p, GetLastErrorAsString());
+	}
+	unique_ptr<void, decltype(&CloseHandle)> handle(raw_handle, CloseHandle);
+
+	auto file_metadata = StatsInternal(handle.get(), path_p);
 	file_metadata.version_tag = VersionTagFromMetadata(file_metadata);
 	return file_metadata;
 }

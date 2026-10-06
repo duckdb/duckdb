@@ -32,7 +32,35 @@ reserved variable fails the whole invocation at startup rather than silently sha
 value. Use the matching option (`--data-dir`, `--temp-dir-root`, `--local-data-dir`, …) instead;
 `test_env` is for a suite's *own* variables.
 
-Some tests require a particular environment variables to be set so they can properly run, usually this can be seen via `require-env VAR` in the test.
+### Environment prerequisites
+
+`require-env NAME` skips the whole test if the environment variable is absent.
+An optional space-separated list of values requires an exact, case-sensitive match
+with any listed value. `require-env-not NAME` requires the variable to be absent.
+With an excluded value list, `require-env-not NAME VALUE...` instead requires the
+variable to exist and match none of the listed values.
+
+```text
+# Run against either supported storage backend.
+require-env TEST_STORAGE_BACKEND local memory
+```
+
+```text
+# This test requires a backend with persistent storage.
+require-env-not TEST_STORAGE_BACKEND memory
+```
+
+```text
+# This test requires the VARIABLE_NAME variable to not be defined.
+require-env-not VARIABLE_NAME
+```
+
+Both directives use the same environment lookup, including config `test_env` values,
+and register present values for `{NAME}` substitution. The absence-only form does
+not register a substitution or an environment tag. An empty but defined variable
+counts as present. Values are literal tokens: commas, `!`, and `not` have no special
+meaning. Each directive applies to the whole test and cannot appear inside a loop.
+Existing `require-env NAME` and `require-env NAME VALUE` tests retain their behavior.
 
 ### Data directory
 

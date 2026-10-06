@@ -26,6 +26,22 @@ public:
 	virtual idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) = 0;
 };
 
+//! A delete filter that forwards to one owned by somebody else - used to hand a reader the filter of the scan it is
+//! part of, which outlives it
+class BorrowedDeleteFilter : public DeleteFilter {
+public:
+	explicit BorrowedDeleteFilter(DeleteFilter &filter_p) : filter(filter_p) {
+	}
+
+public:
+	idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) override {
+		return filter.Filter(start_row_index, count, result_sel);
+	}
+
+private:
+	DeleteFilter &filter;
+};
+
 struct HivePartitioningIndex {
 	HivePartitioningIndex(string value, idx_t index);
 
@@ -38,7 +54,8 @@ struct HivePartitioningIndex {
 
 struct MultiFileColumnDefinition {
 public:
-	MultiFileColumnDefinition(const Identifier &name, const LogicalType &type) : name(name), type(type) {
+	MultiFileColumnDefinition(Identifier name_p, LogicalType type_p)
+	    : name(std::move(name_p)), type(std::move(type_p)) {
 	}
 	MultiFileColumnDefinition(const char *name, const LogicalType &type) : name(name), type(type) {
 	}
@@ -102,6 +119,9 @@ public:
 		return identifier.GetValue<int32_t>();
 	}
 
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static MultiFileColumnDefinition Deserialize(Deserializer &deserializer);
+
 	string GetIdentifierName() const {
 		if (identifier.IsNull()) {
 			// No identifier was provided, assume the name as the identifier
@@ -115,6 +135,10 @@ public:
 	Identifier name;
 	LogicalType type;
 	vector<MultiFileColumnDefinition> children;
+	//! Fallback when no file column/field matches this definition. A NULL fallback must be an explicit
+	//! ConstantExpression containing a typed NULL, rather than a nullptr.
+	//! With field-id mapping, nullptr requires a matching field; a missing field raises InvalidInputException.
+	//! With name mapping, nullptr rejects missing root columns but fills missing nested fields with NULL.
 	unique_ptr<ParsedExpression> default_expression;
 
 	//! Either the field_id or the name to map on

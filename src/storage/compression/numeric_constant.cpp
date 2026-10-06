@@ -23,23 +23,11 @@ static optional_ptr<const BoundFunctionExpression> TryGetFunctionExpression(cons
 	return expression.Cast<BoundFunctionExpression>();
 }
 
-static bool IsSimpleFilterColumnRef(const Expression &expression) {
-	return expression.GetExpressionType() == ExpressionType::BOUND_REF ||
-	       expression.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF;
-}
-
 static bool TryComparisonFiltersNullValues(const BoundFunctionExpression &comparison, bool &filters_nulls,
                                            bool &filters_valid_values) {
-	optional_ptr<const BoundConstantExpression> constant_expr;
-	auto &left = BoundComparisonExpression::Left(comparison);
-	auto &right = BoundComparisonExpression::Right(comparison);
-	auto comparison_type = comparison.GetExpressionType();
-	if (IsSimpleFilterColumnRef(left) && right.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		constant_expr = right.Cast<BoundConstantExpression>();
-	} else if (IsSimpleFilterColumnRef(right) && left.GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		constant_expr = left.Cast<BoundConstantExpression>();
-		comparison_type = FlipComparisonExpression(comparison_type);
-	} else {
+	ExpressionType comparison_type;
+	auto constant_expr = ExpressionFilter::TryGetColumnConstantComparison(comparison, comparison_type);
+	if (!constant_expr) {
 		return false;
 	}
 	if (constant_expr->GetValue().IsNull()) {
@@ -111,7 +99,7 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR) {
 		auto &op = expression.Cast<BoundOperatorExpression>();
-		if (op.GetChildren().size() != 1 || !IsSimpleFilterColumnRef(*op.GetChildren()[0])) {
+		if (op.GetChildren().size() != 1 || !ExpressionFilter::IsSimpleFilterColumnRef(*op.GetChildren()[0])) {
 			return false;
 		}
 		switch (expression.GetExpressionType()) {
@@ -147,14 +135,8 @@ static bool TryExpressionFiltersNullValues(const Expression &expression, bool &f
 		return true;
 	}
 	if (function_name == SelectivityOptionalFilterScalarFun::NAME) {
-		if (!func_expr->BindInfo()) {
-			return false;
-		}
-		auto &data = func_expr->BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-		if (!data.child_filter_expr) {
-			return false;
-		}
-		return TryExpressionFiltersNullValues(*data.child_filter_expr, filters_nulls, filters_valid_values);
+		auto optional_child = ExpressionFilter::GetOptionalFilterChild(*func_expr);
+		return optional_child && TryExpressionFiltersNullValues(*optional_child, filters_nulls, filters_valid_values);
 	}
 	if (function_name == PrefixRangeScalarFun::NAME) {
 		if (!func_expr->BindInfo()) {
