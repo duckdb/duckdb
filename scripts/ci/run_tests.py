@@ -1356,15 +1356,11 @@ def strip_skipped_test_summary_lines(lines: list[str]):
 
 
 def extract_skipped_test_output(stdout: str, stderr: str):
-    stdout_summary = parse_skipped_test_summary(stdout)
-    if stdout_summary[0] > 0 or stdout_summary[1]:
-        return stdout_summary
-
-    stderr_summary = parse_skipped_test_summary(stderr)
-    if stderr_summary[0] > 0 or stderr_summary[1]:
-        return stderr_summary
-
-    return 0, {}
+    # catch prints the skipped count on stdout, the reason breakdown goes to stderr: pick each
+    # field separately, preferring stdout, so a summary present in both streams is not counted twice
+    stdout_count, stdout_reasons = parse_skipped_test_summary(stdout)
+    stderr_count, stderr_reasons = parse_skipped_test_summary(stderr)
+    return (stdout_count or stderr_count), (stdout_reasons or stderr_reasons)
 
 
 def coverage_profile_file_pattern(profile_dir: Path):
@@ -1498,7 +1494,7 @@ def generate_coverage_report(source_root: Path, unittest_bin: str, profile_dir: 
             "--hierarchical",
             "--no-function-coverage",
             "--filter",
-            "region",
+            "region,brace",
             "--ignore-errors",
             "inconsistent,inconsistent",
             "--ignore-errors",

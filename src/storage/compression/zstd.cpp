@@ -1035,18 +1035,18 @@ unique_ptr<CompressedSegmentState> ZSTDStorage::StringInitSegment(ColumnSegment 
 	auto result = make_uniq<UncompressedStringSegmentState>();
 	if (segment_state) {
 		auto &serialized_state = segment_state->Cast<SerializedStringSegmentState>();
-		result->on_disk_blocks = std::move(serialized_state.blocks);
+		result->InitializeOnDiskBlocks(std::move(serialized_state.blocks));
 	}
 	return std::move(result);
 }
 
 unique_ptr<ColumnSegmentState> ZSTDStorage::SerializeState(ColumnSegment &segment) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	if (state.on_disk_blocks.empty()) {
+	if (state.GetOnDiskBlocks().empty()) {
 		// no on-disk blocks - nothing to write
 		return nullptr;
 	}
-	return make_uniq<SerializedStringSegmentState>(state.on_disk_blocks);
+	return make_uniq<SerializedStringSegmentState>(state.GetOnDiskBlocks());
 }
 
 unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deserializer) {
@@ -1057,7 +1057,7 @@ unique_ptr<ColumnSegmentState> ZSTDStorage::DeserializeState(Deserializer &deser
 
 void ZSTDStorage::VisitBlockIds(const ColumnSegment &segment, BlockIdVisitor &visitor) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	for (auto &block_id : state.on_disk_blocks) {
+	for (auto &block_id : state.GetOnDiskBlocks()) {
 		visitor.Visit(block_id);
 	}
 }

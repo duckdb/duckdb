@@ -15,12 +15,13 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
-	if (!wexpr.AggregateFunction()->CanAggregate()) {
+	auto &aggr = *wexpr.AggregateFunction();
+	if (!aggr.CanAggregate()) {
 		return false;
 	}
 
-	//	Don't use segment trees for custom windowing
-	if (wexpr.AggregateFunction()->CanWindow()) {
+	//	Don't use segment trees for custom windowing or holistic aggregates
+	if (aggr.CanWindow() || aggr.IsHolistic()) {
 		return false;
 	}
 
@@ -361,7 +362,7 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 	const auto &partition_offsets = gstate.partition_offsets;
 	idx_t combine_width = gstate.TREE_FANOUT;
 	idx_t combine_level = 0;
-	auto combine_begin = partition_offsets.rbegin();
+	auto combine_begin = partition_offsets.rend();
 	std::greater<idx_t> combine_cmp;
 
 	auto &levels_flat_native = gstate.levels_flat_native;
@@ -395,7 +396,7 @@ void WindowSegmentTreeLocalState::Finalize(ExecutionContext &context, WindowAggr
 		//	Update the combine width to the current level.
 		for (; combine_level < level_current; ++combine_level) {
 			combine_width *= gstate.TREE_FANOUT;
-			combine_begin = partition_offsets.rbegin();
+			combine_begin = partition_offsets.rend();
 		}
 
 		//	Check for crossing a partition boundary

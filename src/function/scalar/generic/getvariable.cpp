@@ -54,8 +54,8 @@ unique_ptr<Expression> BindGetVariableExpression(FunctionBindExpressionInput &in
 } // namespace
 
 ScalarFunction GetVariableFun::GetFunction() {
-	ScalarFunction getvar("getvariable", {{"variable_name", LogicalType::VARCHAR}}, LogicalType::ANY, nullptr,
-	                      GetVariableBind, nullptr);
+	ScalarFunction getvar("getvariable", {}, LogicalType::ANY, nullptr, GetVariableBind, nullptr);
+	getvar.GetSignature().AddParameter("variable_name", LogicalType::VARCHAR);
 	getvar.SetBindExpressionCallback(BindGetVariableExpression);
 	return getvar;
 }

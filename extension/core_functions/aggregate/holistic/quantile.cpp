@@ -102,7 +102,8 @@ QuantileBindData::QuantileBindData(const vector<Value> &quantiles_p) {
 	}
 }
 
-QuantileBindData::QuantileBindData(const QuantileBindData &other) : order(other.order), desc(other.desc) {
+QuantileBindData::QuantileBindData(const QuantileBindData &other)
+    : FunctionData(other), order(other.order), desc(other.desc) {
 	for (const auto &q : other.quantiles) {
 		quantiles.emplace_back(q);
 	}
@@ -467,6 +468,7 @@ struct ListDiscreteQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, list_entry_t, OP>(type, LogicalType::LIST(type));
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
@@ -565,6 +567,7 @@ struct ScalarContinuousQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, TARGET_TYPE, OP>(input_type, target_type);
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, TARGET_TYPE>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
@@ -581,6 +584,7 @@ struct ListContinuousQuantile {
 		auto fun = QuantileBufferingAggregate<STATE, list_entry_t, OP>(input_type, LogicalType::LIST(target_type));
 		fun.SetStructStateExport(QuantileStateLayout<STATE>);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 #if !DUCKDB_SMALLER_BINARY(quantile_window)
 		fun.SetWindowBatchCallback(OP::template Window<STATE, INPUT_TYPE, list_entry_t>);
 		fun.SetWindowInitCallback(OP::template WindowInit<STATE, INPUT_TYPE>);
@@ -716,8 +720,9 @@ struct DiscreteQuantileListFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter(LogicalType::LIST(LogicalType::DOUBLE));
+		fun.GetSignature().AddParameter("quantile", LogicalType::LIST(LogicalType::DOUBLE));
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -745,8 +750,9 @@ struct DiscreteQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter("quantile", LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -779,8 +785,9 @@ struct ContinuousQuantileFunction {
 		fun.SetSerializeCallback(QuantileBindData::Serialize);
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
-		fun.GetSignature().AddParameter(LogicalType::DOUBLE);
+		fun.GetSignature().AddParameter("quantile", LogicalType::DOUBLE);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -812,8 +819,9 @@ struct ContinuousQuantileListFunction {
 		fun.SetDeserializeCallback(Deserialize);
 		// temporarily push an argument so we can bind the actual quantile
 		auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
-		fun.GetSignature().AddParameter(list_of_double);
+		fun.GetSignature().AddParameter("quantile", list_of_double);
 		fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+		fun.SetIsHolistic(true);
 		return fun;
 	}
 
@@ -847,6 +855,7 @@ static AggregateFunction EmptyQuantileFunction(LogicalType input, const LogicalT
 	fun.SetSerializeCallback(QuantileBindData::Serialize);
 	fun.SetDeserializeCallback(OP::Deserialize);
 	fun.SetOrderDependent(AggregateOrderDependent::NOT_ORDER_DEPENDENT);
+	fun.SetIsHolistic(true);
 	return fun;
 }
 

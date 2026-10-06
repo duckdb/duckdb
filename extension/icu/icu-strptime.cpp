@@ -39,7 +39,7 @@ TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, Calendar *calen
 TimestampComponents ICUHelpers::GetComponents(timestamp_tz_ns_t tsns, Calendar *calendar) {
 	// Get the parts in the given time zone
 	auto ts_data = GetComponents(timestamp_tz_t(tsns.value / Interval::NANOS_PER_MICRO), calendar);
-	ts_data.nanosecond = tsns.value % Interval::NANOS_PER_MICRO;
+	ts_data.nanosecond = UnsafeNumericCast<int16_t>(tsns.value % Interval::NANOS_PER_MICRO);
 	return ts_data;
 }
 
@@ -475,9 +475,11 @@ struct ICUStrptime : public ICUDateFunc {
 				    auto calendar = cal.get();
 
 				    // Extract the offset from the calendar
-				    auto offset = ExtractField(calendar, CAL_ZONE_OFFSET);
-				    offset += ExtractField(calendar, CAL_DST_OFFSET);
-				    offset /= Interval::MSECS_PER_SEC;
+				    int32_t offset;
+				    if (!TryGetTimeTZOffset(calendar, offset)) {
+					    HandleCastError::AssignError(TimeTZOffsetError(offset), parameters);
+					    return nullopt;
+				    }
 
 				    // Apply it to the offset +00 time we parsed.
 				    result = dtime_tz_t(result.time(), offset);
@@ -626,10 +628,16 @@ struct ICUStrftime : public ICUDateFunc {
 
 	static void AddBinaryTimestampFunction(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
-		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ}, {"format", LogicalType::VARCHAR}},
-		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind));
-		set.AddFunction(ScalarFunction({{"data", LogicalType::TIMESTAMP_TZ_NS}, {"format", LogicalType::VARCHAR}},
-		                               LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind));
+		ScalarFunction tstz_fun({}, LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_t>, Bind);
+		tstz_fun.GetSignature()
+		    .AddParameter("data", LogicalType::TIMESTAMP_TZ)
+		    .AddParameter("format", LogicalType::VARCHAR);
+		set.AddFunction(tstz_fun);
+		ScalarFunction tstz_ns_fun({}, LogicalType::VARCHAR, ICUStrftimeFunction<timestamp_tz_ns_t>, Bind);
+		tstz_ns_fun.GetSignature()
+		    .AddParameter("data", LogicalType::TIMESTAMP_TZ_NS)
+		    .AddParameter("format", LogicalType::VARCHAR);
+		set.AddFunction(tstz_ns_fun);
 		// throws for unsupported format specifiers
 		set.SetFallible();
 		loader.RegisterFunction(set);

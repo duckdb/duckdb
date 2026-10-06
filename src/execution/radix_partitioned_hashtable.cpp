@@ -90,7 +90,7 @@ enum class AggregatePartitionState : uint8_t {
 
 struct AggregatePartition : StateWithBlockableTasks {
 	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p)
-	    : state(AggregatePartitionState::READY_TO_FINALIZE), data(std::move(data_p)), progress(0) {
+	    : state(AggregatePartitionState::READY_TO_FINALIZE), data(std::move(data_p)) {
 	}
 
 	AggregatePartitionState state;
@@ -102,7 +102,22 @@ struct AggregatePartition : StateWithBlockableTasks {
 	shared_ptr<ArenaAllocator> allocator;
 	//! Arena holding the imported states (combining may steal from them, so it must live as long)
 	shared_ptr<ArenaAllocator> import_allocator;
-	atomic<double> progress;
+	//! Combine progress of this partition
+	atomic<idx_t> combine_chunk_count {0};
+	atomic<idx_t> combined_chunks {0};
+	atomic<bool> finalized {false};
+
+	double GetCombineProgress() const {
+		if (finalized.load(std::memory_order_relaxed)) {
+			return 1;
+		}
+		auto chunk_count = combine_chunk_count.load(std::memory_order_relaxed);
+		if (chunk_count == 0) {
+			return 0;
+		}
+		auto combined = MinValue<idx_t>(combined_chunks.load(std::memory_order_relaxed), chunk_count);
+		return static_cast<double>(combined) / static_cast<double>(chunk_count);
+	}
 };
 
 class RadixHTGlobalSinkState;
@@ -1023,7 +1038,7 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 			gstate.max_partition_size = MaxValue(gstate.max_partition_size, partition_size);
 			if (single_ht) {
 				gstate.finalize_done++;
-				gstate.partitions.back()->progress = 1;
+				gstate.partitions.back()->finalized = true;
 				gstate.partitions.back()->state = AggregatePartitionState::READY_TO_SCAN;
 			}
 		}
@@ -1092,6 +1107,12 @@ public:
 	//! For synchronizing tasks
 	atomic<idx_t> task_idx;
 	atomic<idx_t> task_done;
+	//! Scan progress: the partitions whose scan started, the rows in these partitions, and the rows scanned
+	atomic<idx_t> started_partitions;
+	atomic<idx_t> started_rows;
+	atomic<idx_t> scanned_rows;
+	//! The scan progress estimate drops when a larger partition starts scanning
+	MonotonicProgress scan_progress;
 };
 
 enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };
@@ -1146,10 +1167,15 @@ void RadixPartitionedHashTable::ResetGlobalSourceState(ClientContext &context, G
 	gstate.finished = false;
 	gstate.task_idx = 0;
 	gstate.task_done = 0;
+	gstate.started_partitions = 0;
+	gstate.started_rows = 0;
+	gstate.scanned_rows = 0;
+	gstate.scan_progress.Reset();
 }
 
 RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht)
-    : context(context_p), finished(false), task_idx(0), task_done(0) {
+    : context(context_p), finished(false), task_idx(0), task_done(0), started_partitions(0), started_rows(0),
+      scanned_rows(0) {
 	for (column_t column_id = 0; column_id < radix_ht.group_types.size(); column_id++) {
 		column_ids.push_back(column_id);
 	}
@@ -1259,7 +1285,8 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	}
 
 	// Now combine the uncombined data using this thread's HT
-	ht->Combine(*partition.data, &partition.progress);
+	partition.combine_chunk_count = partition.data->ChunkCount();
+	ht->Combine(*partition.data, &partition.combined_chunks);
 	if (partition.exported_data) {
 		// Rebuild the exported states on an arena of their own, one chunk at a time, and combine
 		// them like the rest. Combining may steal from the imported states, so the arena lives
@@ -1270,7 +1297,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		                                     [&](TupleDataCollection &imported) { ht->Combine(imported); });
 		partition.exported_data.reset();
 	}
-	partition.progress = 1;
+	partition.finalized = true;
 
 	// Move the combined data back to the partition
 	partition.data =
@@ -1317,6 +1344,8 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	if (scan_status == RadixHTScanStatus::INIT) {
 		data_collection.InitializeScan(scan_state, gstate.column_ids, sink.scan_pin_properties);
 		scan_status = RadixHTScanStatus::IN_PROGRESS;
+		gstate.started_rows.fetch_add(data_collection.Count(), std::memory_order_relaxed);
+		gstate.started_partitions.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
@@ -1332,6 +1361,8 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		}
 		return;
 	}
+
+	gstate.scanned_rows.fetch_add(scan_chunk.size(), std::memory_order_relaxed);
 
 	const auto group_cols = layout.ColumnCount() - 1;
 	RowOperations::FinalizeStates(row_state, layout, scan_state.chunk_state.row_locations, scan_chunk, group_cols);
@@ -1451,14 +1482,25 @@ ProgressData RadixPartitionedHashTable::GetProgress(ClientContext &, GlobalSinkS
 	// Get partition combine progress, weigh it 2x
 	ProgressData progress;
 	for (auto &partition : sink.partitions) {
-		progress.done += 2.0 * partition->progress;
+		progress.done += 2.0 * partition->GetCombineProgress();
 	}
 
-	// Get scan progress, weigh it 1x
-	progress.done += 1.0 * double(gstate.task_done);
+	// Get scan progress in partitions, weigh it 1x - weigh the partitions whose scan started by the scanned rows
+	const auto partition_count = static_cast<double>(sink.partitions.size());
+	const auto started_partitions = static_cast<double>(gstate.started_partitions.load(std::memory_order_relaxed));
+	const auto started_rows = gstate.started_rows.load(std::memory_order_relaxed);
+	const auto scanned_rows = gstate.scanned_rows.load(std::memory_order_relaxed);
+	double scanned_partitions = started_partitions;
+	if (started_rows > 0) {
+		scanned_partitions *=
+		    static_cast<double>(MinValue(scanned_rows, started_rows)) / static_cast<double>(started_rows);
+	}
+	auto scan_progress =
+	    gstate.scan_progress.Update(ProgressData {scanned_partitions, MaxValue(partition_count, 1.0), false});
+	progress.done += 1.0 * scan_progress.done;
 
 	// Divide by 3x for the weights, and the number of partitions to get a value between 0 and 1 again
-	progress.total += 3.0 * double(sink.partitions.size());
+	progress.total += 3.0 * partition_count;
 
 	return progress;
 }

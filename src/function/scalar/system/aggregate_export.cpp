@@ -20,6 +20,11 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/common/type_visitor.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 
 namespace duckdb {
 
@@ -355,6 +360,10 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	ParseOrderBys(order_entry->second, column_count, orders);
 	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
 	const idx_t argument_count = inner->aggr.GetArguments().size();
+	if (argument_count > column_count) {
+		throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
+		                      (uint64_t)argument_count, (uint64_t)column_count);
+	}
 
 	auto reconstructed = FunctionBinder::BindSortedAggregateState(context, inner->aggr, std::move(inner->bind_data),
 	                                                              buffer_struct, orders, argument_count);
@@ -675,6 +684,10 @@ void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAg
 		if (column.IsNull() || order.IsNull()) {
 			throw BinderException("to_aggregate_state: each ORDER BY entry must have a non-NULL 'column' and 'order'");
 		}
+		if (order.type().id() != LogicalTypeId::VARCHAR) {
+			throw BinderException("to_aggregate_state: the 'order' of an ORDER BY entry must be a string, e.g. "
+			                      "'DESC NULLS LAST'");
+		}
 		SortedAggregateStateOrder state_order;
 		state_order.column = column.GetValue<uint32_t>();
 		if (state_order.column >= column_count) {
@@ -767,6 +780,55 @@ void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &
 
 } // namespace
 
+unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalType &type,
+                                                                 unique_ptr<ParsedExpression> value) {
+	auto info = type.GetExtensionInfo();
+	if (!type.IsAggregateState() || !info) {
+		return nullptr;
+	}
+	auto name = info->properties.find("function_name");
+	auto parameters = info->properties.find("parameters");
+	const bool has_function_name =
+	    name != info->properties.end() && !name->second.IsNull() && name->second.type().id() == LogicalTypeId::VARCHAR;
+	const bool has_parameters = parameters != info->properties.end() && !parameters->second.IsNull() &&
+	                            parameters->second.type().id() == LogicalTypeId::LIST;
+	if (!has_function_name || !has_parameters) {
+		return nullptr;
+	}
+	vector<LogicalType> types;
+	map<idx_t, Value> constants;
+	ParseStateParameters(parameters->second, types, constants);
+	vector<Value> signature;
+	vector<unique_ptr<ParsedExpression>> constant_arguments;
+	for (idx_t i = 0; i < types.size(); i++) {
+		if (!TypeExpression::CanRepresent(types[i]) || TypeVisitor::Contains(types[i], [](const LogicalType &child) {
+			    return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
+		    })) {
+			return nullptr;
+		}
+		signature.emplace_back(types[i].ToString());
+		auto entry = constants.find(i);
+		unique_ptr<ParsedExpression> constant;
+		try {
+			constant = ConstantExpression::FromValue(entry == constants.end() ? Value() : entry->second);
+		} catch (const NotImplementedException &) {
+			return nullptr;
+		}
+		constant_arguments.push_back(make_uniq<CastExpression>(LogicalType::VARIANT(), std::move(constant)));
+	}
+	vector<unique_ptr<ParsedExpression>> arguments;
+	arguments.push_back(std::move(value));
+	arguments.push_back(ConstantExpression::FromValue(name->second));
+	arguments.push_back(ConstantExpression::FromValue(Value::LIST(LogicalType::VARCHAR, std::move(signature))));
+	arguments.push_back(
+	    make_uniq<FunctionExpression>(QualifiedName("system", "main", "list_value"), std::move(constant_arguments)));
+	auto orders = info->properties.find("order_bys");
+	if (orders != info->properties.end()) {
+		arguments.push_back(ConstantExpression::FromValue(orders->second));
+	}
+	return make_uniq<FunctionExpression>(QualifiedName("system", "main", "to_aggregate_state"), std::move(arguments));
+}
+
 void ExportAggregateFunction::SetStateExport(BoundAggregateExpression &aggregate, LogicalType state_layout) {
 	auto &bound_function = aggregate.FunctionMutable();
 	// functions with an explicit export callback use it as the finalize; others use the field-based serialization
@@ -831,16 +893,18 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 }
 
 ScalarFunction FinalizeFun::GetFunction() {
-	auto function = ScalarFunction("finalize", {LogicalTypeId::ANY}, LogicalTypeId::INVALID, AggregateStateFinalize,
-	                               BindAggregateState, nullptr, InitFinalizeState);
+	auto function = ScalarFunction("finalize", {}, LogicalTypeId::INVALID, AggregateStateFinalize, BindAggregateState,
+	                               nullptr, InitFinalizeState);
+	function.GetSignature().AddParameter("state", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 
 	return function;
 }
 
 ScalarFunction CombineFun::GetFunction() {
-	auto function = ScalarFunction("combine", {LogicalTypeId::ANY, LogicalTypeId::ANY}, LogicalTypeId::ANY,
-	                               AggregateStateCombine, BindAggregateState, nullptr, InitCombineState);
+	auto function = ScalarFunction("combine", {}, LogicalTypeId::ANY, AggregateStateCombine, BindAggregateState,
+	                               nullptr, InitCombineState);
+	function.GetSignature().AddParameter("state1", LogicalTypeId::ANY).AddParameter("state2", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
@@ -877,10 +941,10 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 }
 
 AggregateFunction CombineAggrFun::GetFunction() {
-	auto function =
-	    AggregateFunction("combine_aggr", {LogicalTypeId::ANY}, LogicalTypeId::ANY, nullptr, nullptr, CombineAggrUpdate,
-	                      nullptr, CombineAggrFinalize, FunctionNullHandling::SPECIAL_HANDLING, nullptr,
-	                      CombineAggrBind, nullptr, nullptr, nullptr);
+	auto function = AggregateFunction("combine_aggr", {}, LogicalTypeId::ANY, nullptr, nullptr, CombineAggrUpdate,
+	                                  nullptr, CombineAggrFinalize, FunctionNullHandling::SPECIAL_HANDLING, nullptr,
+	                                  CombineAggrBind, nullptr, nullptr, nullptr);
+	function.GetSignature().AddParameter("arg", LogicalTypeId::ANY);
 	function.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return function;
 }
@@ -888,10 +952,10 @@ AggregateFunction CombineAggrFun::GetFunction() {
 AggregateFunctionSet CombineAggrFun::GetFunctions() {
 	AggregateFunctionSet set("combine_aggr");
 	set.AddFunction(GetFunction());
-	auto repeated =
-	    AggregateFunction("combine_aggr", {LogicalTypeId::ANY, LogicalType::BIGINT}, LogicalTypeId::ANY, nullptr,
-	                      nullptr, CombineAggrUpdate, nullptr, CombineAggrFinalize,
-	                      FunctionNullHandling::SPECIAL_HANDLING, nullptr, CombineAggrBind, nullptr, nullptr, nullptr);
+	auto repeated = AggregateFunction("combine_aggr", {}, LogicalTypeId::ANY, nullptr, nullptr, CombineAggrUpdate,
+	                                  nullptr, CombineAggrFinalize, FunctionNullHandling::SPECIAL_HANDLING, nullptr,
+	                                  CombineAggrBind, nullptr, nullptr, nullptr);
+	repeated.GetSignature().AddParameter("arg", LogicalTypeId::ANY).AddParameter("multiplicities", LogicalType::BIGINT);
 	repeated.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	set.AddFunction(std::move(repeated));
 	return set;
