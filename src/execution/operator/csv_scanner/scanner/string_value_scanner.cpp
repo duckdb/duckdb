@@ -747,7 +747,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
-			if (!StringValueScanner::CanDirectlyCast(result.csv_file_scan->file_types[col_idx], result.icu_loaded)) {
+			if (!StringValueScanner::CanDirectlyCast(result.csv_file_scan->file_types[cur_error.chunk_idx], result.icu_loaded)) {
 				result.number_of_rows--;
 			}
 			break;
