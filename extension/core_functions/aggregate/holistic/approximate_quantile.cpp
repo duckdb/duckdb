@@ -41,23 +41,6 @@ struct ApproxQuantileCoding {
 };
 
 template <>
-double ApproxQuantileCoding::Encode(const dtime_t &input) {
-	return Encode<int64_t, double>(input.value);
-}
-
-template <>
-bool ApproxQuantileCoding::Decode(const double &source, dtime_t &target) {
-	int64_t micros;
-	auto decoded = Decode<double, int64_t>(source, micros);
-	if (micros < 0 || micros > Interval::MICROS_PER_DAY) {
-		micros = MinValue<int64_t>(MaxValue<int64_t>(micros, 0), Interval::MICROS_PER_DAY);
-		decoded = false;
-	}
-	target = dtime_t(micros);
-	return decoded;
-}
-
-template <>
 double ApproxQuantileCoding::Encode(const dtime_tz_t &input) {
 	return Encode<uint64_t, double>(input.sort_key());
 }
@@ -71,9 +54,16 @@ bool ApproxQuantileCoding::Decode(const double &source, dtime_tz_t &target) {
 		auto offset = dtime_tz_t::decode_offset(sort_key);
 		auto micros = dtime_tz_t::decode_micros(sort_key);
 		micros -= int64_t(dtime_tz_t::encode_offset(offset) * dtime_tz_t::OFFSET_MICROS);
-		// an interpolated sort key is not necessarily a valid time with time zone
-		offset = MinValue<int32_t>(MaxValue<int32_t>(offset, dtime_tz_t::MIN_OFFSET), dtime_tz_t::MAX_OFFSET);
-		micros = MinValue<int64_t>(MaxValue<int64_t>(micros, 0), Interval::MICROS_PER_DAY);
+		if (offset < dtime_tz_t::MIN_OFFSET || micros < 0 || micros > Interval::MICROS_PER_DAY) {
+			// the offset bits of an interpolated sort key are meaningless - use the normalized time at +00
+			offset = 0;
+			micros = dtime_tz_t::decode_micros(sort_key) -
+			         int64_t(dtime_tz_t::encode_offset(offset) * dtime_tz_t::OFFSET_MICROS);
+			micros %= Interval::MICROS_PER_DAY;
+			if (micros < 0) {
+				micros += Interval::MICROS_PER_DAY;
+			}
+		}
 		target = dtime_tz_t(dtime_t(micros), offset);
 	} else if (source < 0) {
 		target = Value::MinimumValue(LogicalTypeId::TIME_TZ).GetValue<dtime_tz_t>();
@@ -262,6 +252,14 @@ void ApproxQuantileExportState(Vector &state_vector, AggregateFinalizeInputData 
 	}
 }
 
+//! TIME values are stored as microseconds, which must be within a day
+static void CheckApproxQuantileTime(double value) {
+	if (!(value >= 0 && value <= double(Interval::MICROS_PER_DAY))) {
+		throw InvalidInputException("Invalid approx_quantile state - %f is not a valid TIME value", value);
+	}
+}
+
+template <bool IS_TIME>
 void ApproxQuantileImportState(AggregateImportInputData &input) {
 	const auto &layout = input.layout;
 	const auto &input_vec = input.input_vec;
@@ -296,7 +294,14 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 			if (!centroid_entry.IsValid() || !mean_entry.IsValid() || !weight_entry.IsValid()) {
 				throw InvalidInputException("Invalid approx_quantile state - the centroids cannot be NULL");
 			}
+			if (IS_TIME) {
+				CheckApproxQuantileTime(mean_entry.GetValue());
+			}
 			centroids.emplace_back(mean_entry.GetValue(), weight_entry.GetValue());
+		}
+		if (IS_TIME) {
+			CheckApproxQuantileTime(min_entry.GetValue());
+			CheckApproxQuantileTime(max_entry.GetValue());
 		}
 		auto digest = input.allocator.Make<duckdb_tdigest::TDigest>(
 		    std::move(centroids), duckdb::arena_vector<duckdb_tdigest::Centroid>(input.allocator), 100, 0, 0);
@@ -306,15 +311,18 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 	}
 }
 
+aggregate_import_state_t GetApproxQuantileImportState(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TIME) {
+		return ApproxQuantileImportState<true>;
+	}
+	return ApproxQuantileImportState<false>;
+}
+
 AggregateFunction GetApproximateQuantileAggregateFunction(const LogicalType &type) {
 	//	Not binary comparable
 	if (type == LogicalType::TIME_TZ) {
 		return AggregateFunction::UnaryAggregate<ApproxQuantileState, dtime_tz_t, dtime_tz_t,
 		                                         ApproxQuantileScalarOperation>(type, type);
-	}
-	if (type == LogicalType::TIME) {
-		return AggregateFunction::UnaryAggregate<ApproxQuantileState, dtime_t, dtime_t, ApproxQuantileScalarOperation>(
-		    type, type);
 	}
 	switch (type.InternalType()) {
 	case PhysicalType::INT8:
@@ -405,7 +413,8 @@ AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
 	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
+	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState,
+	                                 ApproxQuantileImportState<false>);
 	return function;
 }
 
@@ -434,7 +443,8 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetBindCallback(BindApproxQuantile);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
+	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState,
+	                            GetApproxQuantileImportState(type));
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().GetParameter(0).SetName("x");
 	fun.GetSignature().AddParameter("pos", LogicalType::FLOAT);
@@ -507,9 +517,8 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::TIME:
-		return GetTypedApproxQuantileListAggregateFunction<dtime_t, dtime_t>(type);
+		return GetTypedApproxQuantileListAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::TIME_TZ:
 		//	Not binary comparable
 		return GetTypedApproxQuantileListAggregateFunction<dtime_tz_t, dtime_tz_t>(type);
@@ -542,7 +551,8 @@ AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
 	function.SetName("approx_quantile");
 	function.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	function.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
+	function.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState,
+	                                 ApproxQuantileImportState<false>);
 	return function;
 }
 
@@ -560,7 +570,8 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetBindCallback(BindApproxQuantile);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
-	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
+	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState,
+	                            GetApproxQuantileImportState(type));
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().GetParameter(0).SetName("x");
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);

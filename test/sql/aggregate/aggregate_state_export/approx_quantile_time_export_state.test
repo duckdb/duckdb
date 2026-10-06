@@ -1,28 +1,40 @@
 # name: test/sql/aggregate/aggregate_state_export/approx_quantile_time_export_state.test
-# description: Approximate quantiles of imported TIME and TIMETZ states are clamped to valid times
+# description: Approximate quantiles of TIME and TIMETZ values are valid times
 # group: [aggregate_state_export]
 
-query I
+# imported TIME states must contain valid times
+statement error
 SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': 1e15, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT'], [NULL, 0.5]));
 ----
-24:00:00
+Invalid approx_quantile state - 1000000000000000.000000 is not a valid TIME value
 
-query I
-SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': -5, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT'], [NULL, 0.5]));
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'min': -1.0, 'max': 0.0, 'centroids': [{'mean': 0.0, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT[]'], [NULL, [0.5]]));
 ----
-00:00:00
+Invalid approx_quantile state - -1.000000 is not a valid TIME value
 
-query I
-SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': 1e15, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT[]'], [NULL, [0.5]]));
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 90000000000.0, 'centroids': [{'mean': 0.0, 'weight': 1.0}]}, 'approx_quantile', ['TIME', 'FLOAT'], [NULL, 0.5]));
 ----
-['24:00:00']
-
-query I
-SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': 1e18, 'weight': 1.0}]}, 'approx_quantile', ['TIMETZ', 'FLOAT'], [NULL, 0.5]));
-----
-00:00:00-15:59:59
+is not a valid TIME value
 
 query II
 SELECT approx_quantile(x, 0.5), finalize(approx_quantile(x, 0.5) EXPORT_STATE) FROM (SELECT TIME '10:00:00' + INTERVAL (i) MINUTE x FROM range(100) t(i));
 ----
 10:49:30	10:49:30
+
+# the offset bits of an interpolated TIMETZ sort key are not a valid offset
+query I
+SELECT approx_quantile(x, 0.5) FROM (VALUES (TIMETZ '10:00:00+00'), (TIMETZ '10:00:00.000001+00')) t(x);
+----
+10:00:00+00
+
+query II
+SELECT approx_quantile(x, 0.3), approx_quantile(x, [0.1, 0.5, 0.9]) FROM (SELECT TIMETZ '10:00:00+05' + INTERVAL (i) MICROSECOND x FROM range(10) t(i));
+----
+05:00:00.000002+00	['05:00:00+00', '05:00:00.000004+00', '05:00:00.000008+00']
+
+query I
+SELECT finalize(to_aggregate_state({'count': 1, 'min': 0.0, 'max': 0.0, 'centroids': [{'mean': 1e18, 'weight': 1.0}]}, 'approx_quantile', ['TIMETZ', 'FLOAT'], [NULL, 0.5]));
+----
+00:33:25.644775+00
