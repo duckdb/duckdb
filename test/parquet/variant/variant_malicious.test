@@ -49,3 +49,14 @@ query I
 SELECT variant_bytes_to_variant('\x01\x00\x00\x44\x00\x00\x00\x00\x00\x00\x00\x00'::BLOB);
 ----
 00:00:00
+
+# metadata dictionary key that is not valid UTF8
+statement error
+SELECT variant_bytes_to_variant('\x01\x01\x00\x02\xFF\xFE\x02\x01\x00\x00\x02\x0C\x05'::BLOB);
+----
+Corrupted VARIANT 'metadata' buffer, a dictionary key isn't valid UTF8
+
+query I
+SELECT variant_bytes_to_variant('\x01\x01\x00\x02ab\x02\x01\x00\x00\x02\x0C\x05'::BLOB)::VARCHAR;
+----
+{'ab': 5}
