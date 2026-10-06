@@ -587,7 +587,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 		}
 	}
 
-	const auto val_type = arguments[0]->GetReturnType().InternalType();
+	const auto val_type = GetMinMaxNSpecializationType(arguments[0]->GetReturnType());
 
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
