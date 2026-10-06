@@ -564,7 +564,7 @@ FunctionBinder::BindSortedAggregateState(ClientContext &context, const BoundAggr
 		                      (uint64_t)inner_arguments.size());
 	}
 	for (idx_t i = 0; i < argument_count; i++) {
-		if (buffer_columns[i].second != inner_arguments[i]) {
+		if (inner_arguments[i].IsComplete() && buffer_columns[i].second != inner_arguments[i]) {
 			throw BinderException("Aggregate state for \"%s\" has state column %llu of type %s, expected %s",
 			                      inner_function.GetName(), (uint64_t)i, buffer_columns[i].second.ToString(),
 			                      inner_arguments[i].ToString());

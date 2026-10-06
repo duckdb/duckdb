@@ -758,7 +758,9 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			                      (uint64_t)aggr_arguments.size(), (uint64_t)column_count);
 		}
 		for (idx_t i = 0; i < aggr_arguments.size(); i++) {
-			buffer_columns[i].second = aggr_arguments[i];
+			if (aggr_arguments[i].IsComplete()) {
+				buffer_columns[i].second = aggr_arguments[i];
+			}
 		}
 		const auto buffer_struct = LogicalType::STRUCT(std::move(buffer_columns));
 		vector<SortedAggregateStateOrder> orders;
