@@ -1435,7 +1435,20 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 		}
 	}
 
+	auto info_type = type_info ? type_info->type : LogicalTypeInfoType::INVALID_TYPE_INFO;
+	if (info_type == LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
+		auto &decimal_info = type_info->Cast<DecimalTypeInfo>();
+		if (!Decimal::IsValidWidthScale(decimal_info.width, decimal_info.scale)) {
+			throw SerializationException("Failed to deserialize type: invalid DECIMAL(%d, %d)", decimal_info.width,
+			                             decimal_info.scale);
+		}
+	}
 	LogicalType result(id, std::move(type_info));
+	if (info_type != LogicalTypeInfoType::INVALID_TYPE_INFO && info_type != LogicalTypeInfoType::GENERIC_TYPE_INFO &&
+	    !result.HasParameters()) {
+		throw SerializationException("Failed to deserialize type %s: type info %s does not match the type",
+		                             EnumUtil::ToString(id), EnumUtil::ToString(info_type));
+	}
 	if (Geometry::IsSpatialGeometryType(result)) {
 		// This is a legacy geometry type, deserialize as geometry
 		return LogicalType::GEOMETRY();
