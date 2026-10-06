@@ -298,7 +298,13 @@ idx_t DataTable::MaxThreads(ClientContext &context) const {
 		parallel_scan_vector_count = 1;
 	}
 	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
-	return GetTotalRows() / parallel_scan_tuple_count + 1;
+	idx_t total_rows = GetTotalRows();
+	auto local_storage = LocalStorage::Get(context, db).GetStorage(*this);
+	if (local_storage) {
+		// transaction-local rows are scanned in parallel as well
+		total_rows += local_storage->GetCollection().GetTotalRows();
+	}
+	return total_rows / parallel_scan_tuple_count + 1;
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
@@ -360,8 +366,8 @@ bool DataTable::HasUniqueIndexes() const {
 	return info->indexes.HasUniqueIndexes();
 }
 
-void DataTable::AddIndex(unique_ptr<Index> index) {
-	info->indexes.AddIndex(std::move(index), ConstraintCheckMode::DEFAULT);
+void DataTable::AddIndex(unique_ptr<Index> index, idx_t index_oid) {
+	info->indexes.AddIndex(std::move(index), index_oid, ConstraintCheckMode::DEFAULT);
 }
 
 bool DataTable::HasForeignKeyIndex(const vector<PhysicalIndex> &keys, ForeignKeyType type) {
@@ -661,10 +667,8 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 
 	// Get the column types in their physical order. A foreign key always references a table in the same (possibly
 	// nested) schema, so we qualify it with this table's schema path.
-	auto schema_path = info->GetSchemaPath();
-	schema_path.insert(schema_path.begin(), db.GetName());
 	auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(
-	    context, QualifiedName(std::move(schema_path), bound_foreign_key.info.table));
+	    context, QualifiedName::FromCatalogSchema(db.GetName(), info->GetSchemaPath(), bound_foreign_key.info.table));
 	vector<LogicalType> types;
 	for (auto &col : table_entry.GetColumns().Physical()) {
 		types.emplace_back(col.Type());
@@ -743,9 +747,9 @@ void DataTable::VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> stora
 		if (!global_conflicts && !local_conflicts) {
 			conflict = 0;
 		} else if (!global_conflicts && local_conflicts) {
-			conflict = local_conflict_manager.GetFirstInvalidIndex(count);
+			conflict = local_conflict_manager.GetFirstInvalidIndex(count, /*negate=*/true);
 		} else if (global_conflicts && !local_conflicts) {
-			conflict = global_conflict_manager.GetFirstInvalidIndex(count);
+			conflict = global_conflict_manager.GetFirstInvalidIndex(count, /*negate=*/true);
 		} else {
 			auto &global_validity = global_conflict_manager.GetFirstValidity();
 			auto &local_validity = local_conflict_manager.GetFirstValidity();
@@ -1133,7 +1137,7 @@ void DataTable::ScanTableSegment(DuckTransaction &transaction, idx_t row_start, 
 
 	InitializeScanWithOffset(transaction, state, column_ids, row_start, row_start + count);
 	auto row_start_aligned =
-	    state.table_state.row_group->GetRowStart() + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
+	    state.table_state.GetRowGroup()->GetRowStart() + state.table_state.vector_index * STANDARD_VECTOR_SIZE;
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
@@ -1662,7 +1666,7 @@ bool DataTable::ScanColumnSegmentInfo(const QueryContext &context, ColumnSegment
 // Index Constraint Creation
 //===--------------------------------------------------------------------===//
 void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes,
-                         const IndexConstraintType type, IndexStorageInfo index_info,
+                         const IndexConstraintType type, IndexStorageInfo index_info, idx_t index_oid,
                          const ConstraintCheckMode check_mode) {
 	if (!IsMainTable()) {
 		throw TransactionException("Transaction conflict: attempting to add an index to table \"%s\" but it has been "
@@ -1686,7 +1690,7 @@ void DataTable::AddIndex(const ColumnList &columns, const vector<LogicalIndex> &
 	auto &io_manager = TableIOManager::Get(*this);
 	auto art = make_uniq<ART>(index_info.name, type, physical_ids, io_manager, std::move(expressions), db, nullptr,
 	                          index_info);
-	info->indexes.AddIndex(std::move(art), check_mode);
+	info->indexes.AddIndex(std::move(art), index_oid, check_mode);
 }
 
 } // namespace duckdb

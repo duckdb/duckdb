@@ -1,4 +1,6 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
@@ -99,10 +101,11 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 
 			QueryErrorContext error_context(expr->GetQueryLocation());
 
-			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY,
-			                                QualifiedName(func_expr.FunctionName()), error_context);
-			auto entry = GetCatalogEntry(func_expr.GetQualifiedName().Catalog(), Identifier::DefaultSchema(),
-			                             function_lookup, OnEntryNotFound::RETURN_NULL);
+			auto function_name = func_expr.GetQualifiedName();
+			BindSchemaOrCatalog(function_name);
+			EntryLookupInfo function_lookup(CatalogType::AGGREGATE_FUNCTION_ENTRY, BindTableName(function_name),
+			                                error_context);
+			auto entry = GetCatalogEntry(function_lookup, OnEntryNotFound::RETURN_NULL);
 
 			if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 				throw BinderException(
@@ -202,9 +205,9 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 					first_children.push_back(std::move(bound));
 
 					// Create a last aggregate for the newly bound column reference
+					auto last_fun = GetBuiltinAggregateFunction(context, LastFun::Name, {result.types[i]});
 					auto first_aggregate = function_binder.BindAggregateFunction(
-					    LastFunctionGetter::GetFunction(result.types[i]), std::move(first_children), nullptr,
-					    AggregateType::NON_DISTINCT);
+					    std::move(last_fun), std::move(first_children), nullptr, AggregateType::NON_DISTINCT);
 
 					payload_aggregates.push_back(std::move(first_aggregate));
 				} else {
@@ -282,8 +285,8 @@ BoundStatement Binder::BindNode(RecursiveCTENode &statement) {
 				vector<unique_ptr<Expression>> first_children;
 				first_children.push_back(std::move(uncollated_group));
 				FunctionBinder function_binder(*this);
-				auto first = function_binder.BindAggregateFunction(FirstFunctionGetter::GetFunction(group_type),
-				                                                   std::move(first_children));
+				auto first_fun = GetBuiltinAggregateFunction(context, FirstFun::Name, {group_type});
+				auto first = function_binder.BindAggregateFunction(std::move(first_fun), std::move(first_children));
 				first->SetAlias("__collated_group");
 				collated_group_bindings[column_index] = ProjectionIndex(payload_aggregates.size());
 				payload_aggregates.push_back(std::move(first));

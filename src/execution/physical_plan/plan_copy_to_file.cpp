@@ -7,6 +7,18 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	auto &plan = CreatePlan(*op.children[0]);
+	auto &fs = FileSystem::GetFileSystem(context);
+	op.file_path = fs.ExpandPath(op.file_path);
+	return CreatePlan(op, plan);
+}
+
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op, PhysicalOperator &plan) {
+	if (op.use_tmp_file) {
+		auto &fs = FileSystem::GetFileSystem(context);
+		auto path = StringUtil::GetFilePath(op.file_path);
+		auto base = StringUtil::GetFileName(op.file_path);
+		op.file_path = fs.JoinPath(path, "tmp_" + base);
+	}
 	bool preserve_insertion_order = PhysicalPlanGenerator::PreserveInsertionOrder(context, plan);
 	bool supports_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, plan);
 
@@ -14,15 +26,6 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		preserve_insertion_order = true;
 	} else if (op.preserve_order == PreserveOrderType::DONT_PRESERVE_ORDER) {
 		preserve_insertion_order = false;
-	}
-
-	auto &fs = FileSystem::GetFileSystem(context);
-	op.file_path = fs.ExpandPath(op.file_path);
-
-	if (op.use_tmp_file) {
-		auto path = StringUtil::GetFilePath(op.file_path);
-		auto base = StringUtil::GetFileName(op.file_path);
-		op.file_path = fs.JoinPath(path, "tmp_" + base);
 	}
 	if (op.per_thread_output || op.file_size_bytes.IsValid() || op.rotate || op.partition_output ||
 	    !op.partition_columns.empty() || !op.order_columns.empty()) {
@@ -84,6 +87,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.write_empty_file = op.write_empty_file;
 	cast_copy.hive_file_pattern = op.hive_file_pattern;
 	cast_copy.order_columns = std::move(op.order_columns);
+	cast_copy.partition_path_expression = std::move(op.partition_path_expression);
 
 	cast_copy.children.push_back(plan);
 	return copy;

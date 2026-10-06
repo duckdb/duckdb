@@ -7,6 +7,8 @@
 #include "duckdb/execution/operator/join/physical_nested_loop_join.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/function/window/rows_functions.hpp"
 #include "duckdb/function/window/value_functions.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -203,7 +205,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 		auto col_ref = make_uniq<BoundReferenceExpression>(col_type, col_idx);
 		aggr_children.push_back(std::move(col_ref));
 
-		auto aggr_expr = FirstFunctionGetter::GetFunction(col_type).Bind(context, std::move(aggr_children));
+		auto aggr_expr =
+		    GetBuiltinAggregateFunction(context, FirstFun::Name, {col_type})->Bind(context, std::move(aggr_children));
 
 		D_ASSERT(col_type == aggr_expr->GetReturnType());
 		aggregates.emplace_back(std::move(aggr_expr));
@@ -240,10 +243,9 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	}
 
 	// Add a synthetic primary integer key to the probe relation using streaming windowing.
-	auto row_number = make_uniq<WindowFunction>(RowNumberFun::GetFunction());
 	vector<unique_ptr<Expression>> window_select;
 
-	auto pk = RowNumberFun::GetFunction().Bind(context);
+	auto pk = GetBuiltinWindowFunction(context, RowNumberFun::Name, {})->Bind(context);
 	D_ASSERT(pk->GetReturnType() == pk_type);
 
 	pk->WindowStartMutable() = WindowBoundary::UNBOUNDED_PRECEDING;

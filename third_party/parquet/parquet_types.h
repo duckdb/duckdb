@@ -677,7 +677,7 @@ void swap(GeospatialStatistics &a, GeospatialStatistics &b);
 std::ostream& operator<<(std::ostream& out, const GeospatialStatistics& obj);
 
 typedef struct _Statistics__isset {
-  _Statistics__isset() : max(false), min(false), null_count(false), distinct_count(false), max_value(false), min_value(false), is_max_value_exact(false), is_min_value_exact(false) {}
+  _Statistics__isset() : max(false), min(false), null_count(false), distinct_count(false), max_value(false), min_value(false), is_max_value_exact(false), is_min_value_exact(false), nan_count(false) {}
   bool max :1;
   bool min :1;
   bool null_count :1;
@@ -686,6 +686,7 @@ typedef struct _Statistics__isset {
   bool min_value :1;
   bool is_max_value_exact :1;
   bool is_min_value_exact :1;
+  bool nan_count :1;
 } _Statistics__isset;
 
 /**
@@ -752,6 +753,13 @@ class Statistics : public virtual ::apache::thrift::TBase {
    * If true, min_value is the actual minimum value for a column
    */
   bool is_min_value_exact;
+  /**
+   * Count of NaN values in the column; only present if physical type is FLOAT
+   * or DOUBLE, or logical type is FLOAT16.
+   * If this field is not present, readers MUST assume NaNs may be present
+   * (i.e. MUST assume nan_count > 0 and MAY NOT assume nan_count == 0).
+   */
+  int64_t nan_count;
 
   _Statistics__isset __isset;
 
@@ -770,6 +778,8 @@ class Statistics : public virtual ::apache::thrift::TBase {
   void __set_is_max_value_exact(const bool val);
 
   void __set_is_min_value_exact(const bool val);
+
+  void __set_nan_count(const int64_t val);
 
   uint32_t read(::apache::thrift::protocol::TProtocol* iprot) override;
   uint32_t write(::apache::thrift::protocol::TProtocol* oprot) const override;

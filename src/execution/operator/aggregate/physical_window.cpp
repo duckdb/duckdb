@@ -216,6 +216,8 @@ public:
 	GlobalStatePtr strategy_sink;
 	//! The number of sunk rows (for progress)
 	atomic<idx_t> count;
+	//! Keeps the sink progress monotonic
+	MonotonicProgress sink_progress;
 	//! The execution functions
 	Executors executors;
 	//! The shared expressions library
@@ -230,6 +232,7 @@ public:
 		// sort sink holds per-iteration materialized data, so replace that while preserving the setup.
 		strategy_sink = sort_strategy->GetGlobalSinkState(context);
 		count = 0;
+		sink_progress.Reset();
 		GlobalSinkState::Reset(context);
 	}
 };
@@ -384,8 +387,7 @@ ProgressData PhysicalWindow::GetSinkProgress(ClientContext &context, GlobalSinkS
 	auto progress = source_progress;
 	lock_guard<mutex> sinks_guard(gsink.lock);
 	progress.Add(gsink.sort_strategy->GetSinkProgress(context, *gsink.strategy_sink, progress));
-
-	return progress;
+	return gsink.sink_progress.Update(progress);
 }
 
 //===--------------------------------------------------------------------===//
@@ -563,11 +565,13 @@ void WindowHashGroup::AllocateMasks() {
 	//	Allocate masks inside the lock
 	partition_mask.Initialize(count);
 
+	// All masks refer to the shared sort's partition columns, including duplicate expressions.
+	const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
 	const auto &executors = gsink.executors;
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
 
-		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.Partitions().size();
 		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
 		if (order_mask.IsMaskSet()) {
 			continue;
@@ -802,9 +806,10 @@ WindowHashGroup::ExecutorGlobalStates &WindowHashGroup::GetGlobalStates(ClientCo
 	}
 
 	// These can be large so we defer building them until we are ready.
+	const auto &sort_expr = gsink.op.select_list[gsink.op.order_idx]->Cast<BoundWindowExpression>();
+	const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : sort_expr.Partitions().size();
 	for (auto &wexec : executors) {
 		auto &wexpr = wexec->wexpr;
-		const auto order_begin = gsink.op.partition_info.RequiresPartitionColumns() ? 0 : wexpr.Partitions().size();
 		auto &order_mask = order_masks[order_begin + wexpr.OrderBy().size()];
 		gestates.emplace_back(wexec->GetGlobalState(client, count, partition_mask, order_mask));
 	}
@@ -1127,11 +1132,11 @@ ProgressData PhysicalWindow::GetProgress(ClientContext &client, GlobalSourceStat
 	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
 	auto &gsink = gsource.gsink;
 	const auto count = gsink.count.load();
-	const auto completed = gsource.completed.load();
+	const auto finished = gsource.finished.load();
 
 	ProgressData res;
 	if (count) {
-		res.done = double(completed);
+		res.done = double(finished);
 		res.total = double(gsource.total_tasks);
 		//	Convert to tuples.
 		res.Normalize(double(count));

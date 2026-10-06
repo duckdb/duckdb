@@ -361,7 +361,7 @@ TEST_CASE("Linear recursive CTE statistics preserve their output layout", "[opti
 	DuckDB db;
 	Connection connection(db);
 	connection.BeginTransaction();
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(R"(
 		WITH RECURSIVE values(i) AS (
 			SELECT 1
@@ -391,7 +391,7 @@ TEST_CASE("Recursive CTE join terms use fixpoint cardinality fallbacks", "[optim
 	DuckDB db;
 	Connection connection(db);
 	connection.BeginTransaction();
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(R"(
 		WITH RECURSIVE values(i) AS (
 			SELECT 1

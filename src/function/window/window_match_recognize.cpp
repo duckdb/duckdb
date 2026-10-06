@@ -1161,11 +1161,9 @@ WindowFunction MatchRecognizeFun::GetFunction() {
 	                   WindowMatchRecognizeExecutor::GetGlobal, WindowMatchRecognizeExecutor::GetLocal,
 	                   WindowMatchRecognizeExecutor::Sink, WindowMatchRecognizeExecutor::Finalize,
 	                   WindowMatchRecognizeExecutor::GetData);
-	fun.SetVarArgs(LogicalType::ANY);
-
 	auto &signature = fun.GetSignature();
 	signature = FunctionSignature(vector<FunctionParameter>(), WindowMatchRecognizeExecutor::ResultType());
-	signature.AddParameter(Identifier("columns"), LogicalType::ANY);
+	signature.AddArgs(Identifier("columns"), LogicalType::ANY);
 
 	fun.SetSerializeCallback(WindowMatchRecognizeExecutor::Serialize);
 	fun.SetDeserializeCallback(WindowMatchRecognizeExecutor::Deserialize);

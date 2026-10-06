@@ -143,6 +143,9 @@ public:
 	bool partition_output;
 	bool write_partition_columns;
 	bool hive_file_pattern;
+	//! Directory (relative to file_path) of a partition's files, replacing the hive layout if set. Evaluated per
+	//! partition over a single row holding the partition values, in partition_columns order.
+	unique_ptr<Expression> partition_path_expression;
 
 	//! If the data should be sorted
 	vector<BoundOrderByNode> order_columns;

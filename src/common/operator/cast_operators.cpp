@@ -1376,6 +1376,16 @@ bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ns_t &result, bool st
 }
 
 template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_ms_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_ns_t, timestamp_ms_t>(input, result, strict);
+}
+
+template <>
+bool TryCast::Operation(timestamp_tz_ns_t input, timestamp_sec_t &result, bool strict) {
+	return TryCastTimestampBase<timestamp_tz_ns_t, timestamp_sec_t>(input, result, strict);
+}
+
+template <>
 bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict) {
 	return TryCastTimestampBase<timestamp_t, timestamp_tz_t>(input, result, strict);
 }
@@ -2148,7 +2158,7 @@ struct HugeIntCastData {
 	using Operation = OP;
 	ResultType result;
 	IntermediateType intermediate;
-	uint8_t digits;
+	idx_t digits;
 
 	ResultType decimal;
 	uint16_t decimal_total_digits;

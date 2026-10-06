@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/remove_redundant_order_keys.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/column_binding_map.hpp"

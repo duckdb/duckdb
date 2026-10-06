@@ -37,7 +37,7 @@ CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- CreateTableColumnDefinition / CreateTableConstraint
 CreateTableColumnDefinition <- ColumnDefinition
 CreateTableConstraint <- TopLevelConstraint
-ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*
+ColumnDefinition <- Identifier Type? GeneratedColumn? ConstraintNameClause? ColumnConstraint*
 ColumnConstraint <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCollation / ColumnCompression
 NotNullConstraint <- NullConstraint / NotNullColumnConstraint
 NullConstraint <- 'NULL'
@@ -49,11 +49,13 @@ ImmediateConstraint <- 'IMMEDIATE'
 DeferredConstraint <- 'DEFERRED'
 DefaultValue <- 'DEFAULT' ColumnDefaultExpr
 CheckConstraint <- 'CHECK' Parens(Expression)
-ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions
+ForeignKeyConstraint <- 'REFERENCES' BaseTableName Parens(ColumnList)? KeyActions?
 ColumnCollation <- 'COLLATE' DottedIdentifier
 ColumnCompression <- 'USING' 'COMPRESSION' ColIdOrString
 
-KeyActions <- UpdateAction? DeleteAction?
+KeyActions <- UpdateFirstKeyActions / DeleteFirstKeyActions
+UpdateFirstKeyActions <- UpdateAction DeleteAction?
+DeleteFirstKeyActions <- DeleteAction UpdateAction?
 UpdateAction <- 'ON' 'UPDATE' KeyAction
 DeleteAction <- 'ON' 'DELETE' KeyAction
 KeyAction <- NoKeyAction / RestrictKeyAction / CascadeKeyAction / SetNullKeyAction / SetDefaultKeyAction
@@ -65,7 +67,7 @@ SetDefaultKeyAction <- 'SET' 'DEFAULT'
 
 TopLevelConstraint <- ConstraintNameClause? TopLevelConstraintList
 TopLevelConstraintList <- TopPrimaryKeyConstraint / TopCheckConstraint / TopUniqueConstraint / TopForeignKeyConstraint
-ConstraintNameClause <- 'CONSTRAINT' Identifier
+ConstraintNameClause <- 'CONSTRAINT' ConstraintName
 TopCheckConstraint <- CheckConstraint
 TopPrimaryKeyConstraint <- 'PRIMARY' 'KEY' ColumnIdList ConstraintTiming?
 TopUniqueConstraint <- 'UNIQUE' ColumnIdList ConstraintTiming?
@@ -89,8 +91,9 @@ ColLabelIdentifier <- ColLabel
 StringLiteralIdentifier <- StringLiteral
 GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
-Generated <- 'GENERATED' AlwaysOrByDefault?
-AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
+Generated <- GeneratedAlways / GeneratedByDefault
+GeneratedAlways <- 'GENERATED' 'ALWAYS'
+GeneratedByDefault <- 'GENERATED' 'BY' 'DEFAULT'
 GeneratedColumnType <- VirtualGeneratedColumn / StoredGeneratedColumn
 
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'

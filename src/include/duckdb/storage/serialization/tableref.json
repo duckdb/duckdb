@@ -227,6 +227,7 @@
       {
         "id": 200,
         "name": "function",
+        "serialize_property": "SerializableFunction()",
         "type": "ParsedExpression*"
       },
       {

@@ -152,6 +152,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto local_table_storage = local_storage.GetStorage(storage);
 
 	auto check_mode = ConstraintCheckMode::DEFAULT;
+	idx_t index_oid;
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
 		auto entry =
@@ -168,7 +169,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		D_ASSERT(index_entry);
 		auto &index = index_entry->Cast<DuckIndexEntry>();
 		index.initial_index_size = bound_index->GetInMemorySize();
-
+		index_oid = index.oid;
 	} else {
 		// Ensure that there are no other indexes with that name on this table.
 		const auto &indexes = storage.GetDataTableInfo()->GetIndexes();
@@ -186,13 +187,15 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		}
 		auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
 		check_mode = constraint_info.constraint->Cast<UniqueConstraint>().check_mode;
+		index_oid = DatabaseManager::Get(context).NextOid();
+		constraint_info.constraint->SetBackingIndexOid(index_oid);
 
 		auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 		catalog.Alter(context, *alter_table_info);
 	}
 
 	// Add the index to the storage.
-	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), check_mode);
+	auto index_entry = storage.GetDataTableInfo()->GetIndexes().AddIndex(std::move(bound_index), index_oid, check_mode);
 	if (local_table_storage) {
 		// Existing transaction-local rows are verified when committing, so we only add a delete index.
 		index_entry->InitializeLocalDeleteIndex(local_table_storage->delete_indexes);

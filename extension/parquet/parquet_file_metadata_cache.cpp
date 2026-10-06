@@ -104,17 +104,13 @@ ParquetCacheValidity ParquetFileMetadataCache::IsValid(const OpenFileInfo &info,
 		return ParquetCacheValidity::UNKNOWN;
 	}
 
-	const auto &open_options = info.extended_info->options;
-	const auto lm_entry = open_options.find("last_modified");
-	if (lm_entry == open_options.end()) {
+	const auto &extended_info = *info.extended_info;
+	timestamp_t new_last_modified;
+	if (!extended_info.TryGetOption("last_modified", new_last_modified)) {
 		return ParquetCacheValidity::UNKNOWN;
 	}
-	auto new_last_modified = lm_entry->second.GetValue<timestamp_t>();
 	string new_etag;
-	const auto etag_entry = open_options.find("etag");
-	if (etag_entry != open_options.end()) {
-		new_etag = StringValue::Get(etag_entry->second);
-	}
+	extended_info.TryGetOption("etag", new_etag);
 
 	if (ExternalFileCache::IsValid(/*validate=*/true, version_tag, last_modified, new_etag, new_last_modified)) {
 		return ParquetCacheValidity::VALID;

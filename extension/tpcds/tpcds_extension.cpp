@@ -295,12 +295,14 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind, DsdgenInit);
-	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	dsdgen_func.named_parameters["keys"] = LogicalType::BOOLEAN;
-	dsdgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
-	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
-	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	dsdgen_func.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("sf", LogicalType::DOUBLE)
+		    .Add("overwrite", LogicalType::BOOLEAN)
+		    .Add("keys", LogicalType::BOOLEAN)
+		    .Add("catalog", LogicalType::VARCHAR)
+		    .Add("schema", LogicalType::VARCHAR)
+		    .Add("suffix", LogicalType::VARCHAR);
+	});
 	dsdgen_func.call_return_type = StatementReturnType::NOTHING;
 	dsdgen_func.table_scan_progress = DsdgenProgress;
 	dsdgen_func.cardinality = DsdgenCardinality;
@@ -308,17 +310,23 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(dsdgen_func);
 
 	// create the TPCDS pragma that allows us to run the query
-	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, {LogicalType::BIGINT});
-	tpcds_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	auto tpcds_func = PragmaFunction::PragmaCall(
+	    "tpcds", PragmaTpcdsQuery, FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
+	tpcds_func.GetSignature().WithTypedKwargs("options",
+	                                          [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
 	loader.RegisterFunction(tpcds_func);
 
 	// create the TPCDS_QUERIES function that returns the queries, optionally parameterized for a scale factor
 	TableFunctionSet tpcds_queries_set("tpcds_queries");
 	TableFunction tpcds_query_func({}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
-	tpcds_query_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	tpcds_query_func.GetSignature().WithTypedKwargs(
+	    "options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
 	tpcds_queries_set.AddFunction(tpcds_query_func);
-	tpcds_query_func.GetArguments() = {LogicalType::DOUBLE};
-	tpcds_queries_set.AddFunction(tpcds_query_func);
+	TableFunction tpcds_query_sf_func({}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
+	tpcds_query_sf_func.GetSignature()
+	    .AddPositionalOnly("scale_factor", LogicalType::DOUBLE)
+	    .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
+	tpcds_queries_set.AddFunction(tpcds_query_sf_func);
 	loader.RegisterFunction(tpcds_queries_set);
 
 	// create the TPCDS_ANSWERS that returns the query result
@@ -328,9 +336,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(tpcds_query_answer_func);
 }
 
+// LCOV_EXCL_START
 void TpcdsExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
+// LCOV_EXCL_STOP
 
 std::string TpcdsExtension::GetQuery(int query) {
 	return tpcds::DSDGenWrapper::GetQuery(query);
@@ -344,6 +354,7 @@ std::string TpcdsExtension::GetAnswer(double sf, int query) {
 	return tpcds::DSDGenWrapper::GetAnswer(sf, query);
 }
 
+// LCOV_EXCL_START
 std::string TpcdsExtension::Name() {
 	return "tpcds";
 }
@@ -355,6 +366,7 @@ std::string TpcdsExtension::Version() const {
 	return "";
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 
