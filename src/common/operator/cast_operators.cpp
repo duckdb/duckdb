@@ -1970,7 +1970,11 @@ bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
 	if (!TryCast::Operation(micros, result)) {
 		return false;
 	}
-	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, nanos, result.value);
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, nanos, result.value)) {
+		return false;
+	}
+	// the nanoseconds can push e.g. 24:00:00 past the end of the day
+	return result.value <= Interval::NANOS_PER_DAY;
 }
 
 template <>
