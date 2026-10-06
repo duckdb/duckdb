@@ -396,7 +396,7 @@ unique_ptr<BaseStatistics> SubstringStatsFromSharedPrefix(FunctionStatisticsInpu
 
 	optional_idx max_output_length;
 	if (has_parameters && parameters.character_count.IsValid()) {
-		auto bytes_per_character = StringStats::CanContainUnicode(input.child_stats[0]) ? 4 : 1;
+		idx_t bytes_per_character = StringStats::CanContainUnicode(input.child_stats[0]) ? 4 : 1;
 		auto character_count = parameters.character_count.GetIndex();
 		if (character_count <= NumericLimits<uint32_t>::Maximum() / bytes_per_character) {
 			max_output_length = character_count * bytes_per_character;

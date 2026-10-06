@@ -1899,13 +1899,13 @@ LogicalType ArrayType::ConvertToList(const LogicalType &type) {
 LogicalType LogicalType::ARRAY(const LogicalType &child, optional_idx size) {
 	if (!size.IsValid()) {
 		// Create an incomplete ARRAY type, used for binding
-		auto info = make_uniq<ArrayTypeInfo>(child, 0);
+		auto info = make_uniq<ArrayTypeInfo>(child, uint32_t(0));
 		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 	} else {
 		auto array_size = size.GetIndex();
 		D_ASSERT(array_size > 0);
 		D_ASSERT(array_size <= ArrayType::MAX_ARRAY_SIZE);
-		auto info = make_uniq<ArrayTypeInfo>(child, array_size);
+		auto info = make_uniq<ArrayTypeInfo>(child, NumericCast<uint32_t>(array_size));
 		return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 	}
 }

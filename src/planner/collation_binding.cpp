@@ -159,7 +159,8 @@ static bool PushStructCollation(ClientContext &context, unique_ptr<Expression> &
 	is_null->GetChildrenMutable().push_back(lambda_parameter_expr->Copy());
 	auto null_result = make_uniq<BoundConstantExpression>(Value(result->GetReturnType()));
 	auto body = make_uniq<BoundCaseExpression>(std::move(is_null), std::move(null_result), std::move(result));
-	auto lambda = make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(body), 1);
+	auto lambda =
+	    make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA, std::move(body), idx_t(1));
 	lambda->SetParameterNames({lambda_parameter});
 
 	// Invoke evaluates the source once, even when several fields need collations.
