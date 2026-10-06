@@ -204,6 +204,7 @@ BoundExpressionSQLExportResult BoundExpressionSQLExportState::ExportInternal(con
 	case ExpressionClass::BETWEEN:
 	case ExpressionClass::LAMBDA_REF:
 	case ExpressionClass::TYPE:
+	case ExpressionClass::PATTERN:
 		return BoundExpressionSQLExportResult::Failure({BoundExpressionSQLExportState::InternalExpressionInvariant(
 		    path, expression, "Expression export requires a final bound class")});
 	case ExpressionClass::INVALID:
