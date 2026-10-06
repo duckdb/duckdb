@@ -229,6 +229,32 @@ struct SortKeyConstantOperator {
 	}
 };
 
+//! TIMETZ is ordered by its time normalized to UTC (its sort key), not by its raw bits
+struct SortKeyTimeTZOperator {
+	using TYPE = int64_t;
+
+	static idx_t GetEncodeLength(TYPE input) {
+		return sizeof(uint64_t);
+	}
+
+	template <bool FLIP_BYTES>
+	static idx_t Encode(data_ptr_t result, TYPE input) {
+		const dtime_tz_t value(static_cast<uint64_t>(input));
+		return SortKeyConstantOperator<uint64_t>::Encode<FLIP_BYTES>(result, value.sort_key());
+	}
+
+	template <bool FLIP_BYTES>
+	static idx_t Decode(const_data_ptr_t input, idx_t input_size, Vector &result, TYPE &result_value) {
+		uint64_t sort_key;
+		auto size = SortKeyConstantOperator<uint64_t>::Decode<FLIP_BYTES>(input, input_size, result, sort_key);
+		// the sort key adds the (biased) offset to the time - the offset bits themselves are unchanged
+		const auto bits =
+		    sort_key - dtime_tz_t::encode_micros((sort_key & dtime_tz_t::OFFSET_MASK) * dtime_tz_t::OFFSET_MICROS);
+		result_value = static_cast<int64_t>(bits);
+		return size;
+	}
+};
+
 struct SortKeyVarcharOperator {
 	using TYPE = string_t;
 
@@ -542,7 +568,11 @@ void GetSortKeyLengthRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 		TemplatedGetSortKeyLength<SortKeyConstantOperator<uint64_t>>(vector_data, chunk, result);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGetSortKeyLength<SortKeyConstantOperator<int64_t>>(vector_data, chunk, result);
+		if (vector_data.vec.GetType().id() == LogicalTypeId::TIME_TZ) {
+			TemplatedGetSortKeyLength<SortKeyTimeTZOperator>(vector_data, chunk, result);
+		} else {
+			TemplatedGetSortKeyLength<SortKeyConstantOperator<int64_t>>(vector_data, chunk, result);
+		}
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedGetSortKeyLength<SortKeyConstantOperator<float>>(vector_data, chunk, result);
@@ -758,7 +788,11 @@ void ConstructSortKeyRecursive(SortKeyVectorData &vector_data, SortKeyChunk chun
 		TemplatedConstructSortKey<SortKeyConstantOperator<uint64_t>>(vector_data, chunk, info);
 		break;
 	case PhysicalType::INT64:
-		TemplatedConstructSortKey<SortKeyConstantOperator<int64_t>>(vector_data, chunk, info);
+		if (vector_data.vec.GetType().id() == LogicalTypeId::TIME_TZ) {
+			TemplatedConstructSortKey<SortKeyTimeTZOperator>(vector_data, chunk, info);
+		} else {
+			TemplatedConstructSortKey<SortKeyConstantOperator<int64_t>>(vector_data, chunk, info);
+		}
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedConstructSortKey<SortKeyConstantOperator<float>>(vector_data, chunk, info);
@@ -1354,8 +1388,12 @@ void DecodeSortKeyRecursive(DecodeSortKeyData decode_data[], DecodeSortKeyVector
 		                                                          count);
 		break;
 	case PhysicalType::INT64:
-		TemplatedDecodeSortKey<SortKeyConstantOperator<int64_t>>(decode_data, vector_data, result, result_offset,
-		                                                         count);
+		if (result.GetType().id() == LogicalTypeId::TIME_TZ) {
+			TemplatedDecodeSortKey<SortKeyTimeTZOperator>(decode_data, vector_data, result, result_offset, count);
+		} else {
+			TemplatedDecodeSortKey<SortKeyConstantOperator<int64_t>>(decode_data, vector_data, result, result_offset,
+			                                                         count);
+		}
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedDecodeSortKey<SortKeyConstantOperator<float>>(decode_data, vector_data, result, result_offset, count);

@@ -895,7 +895,8 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 	}
 
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
-	const auto arg_type = arguments[1]->GetReturnType().InternalType();
+	// the values are only stored, the arguments are compared
+	const auto arg_type = GetMinMaxNSpecializationType(arguments[1]->GetReturnType());
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 
 	// Specialize the function based on the input types

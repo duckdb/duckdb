@@ -320,6 +320,10 @@ static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
 
 template <class OP, class OP_STRING, class OP_VECTOR>
 static AggregateFunction GetMinMaxOperator(const LogicalType &type) {
+	if (type.id() == LogicalTypeId::TIME_TZ) {
+		// TIMETZ is not ordered by its physical representation - compare the sort keys instead
+		return GetMinMaxFunction<OP_VECTOR>(type);
+	}
 	auto internal_type = type.InternalType();
 	switch (internal_type) {
 	case PhysicalType::VARCHAR:
@@ -587,7 +591,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 		}
 	}
 
-	const auto val_type = arguments[0]->GetReturnType().InternalType();
+	const auto val_type = GetMinMaxNSpecializationType(arguments[0]->GetReturnType());
 
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);
