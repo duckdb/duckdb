@@ -127,9 +127,11 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		auto then_type = values_unpacked[i]->GetReturnType();
 		if (!LogicalType::TryGetMaxLogicalType(input.context, function_data.return_type, then_type,
 		                                       function_data.return_type)) {
+			// LCOV_EXCL_START
 			throw BinderException(
 			    "Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",
 			    function_data.return_type.ToString(), then_type.ToString());
+			// LCOV_EXCL_STOP
 		}
 		case_check.then_expr = std::move(values_unpacked[i]);
 		result->CaseChecksMutable().push_back(std::move(case_check));

@@ -123,7 +123,7 @@ DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_type(duckdb_v2_function_bind_inf
 	return WithErrorHandler(err, [&]() {
 		auto &bind_info = *Convert(info);
 		CheckArgIndex(bind_info, index, "duckdb_v2_function_bind_get_arg_type");
-		*type = Convert(new duckdb::LogicalType(bind_info.GetArgType(index)));
+		*type = Convert(bind_info.GetArgType(index));
 	});
 }
 

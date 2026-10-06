@@ -416,7 +416,10 @@ duckdb_v2_scalar_function_resolve_types_set_return_type(duckdb_v2_scalar_functio
                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(return_type);
-	return WithErrorHandler(err, [&]() { Convert(info)->bound_function.SetReturnType(*Convert(return_type)); });
+	return WithErrorHandler(err, [&]() {
+		auto type = Convert(return_type);
+		Convert(info)->bound_function.SetReturnType(*type);
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_scalar_function_init_get_user_data(duckdb_v2_scalar_function_init_info_handle info,

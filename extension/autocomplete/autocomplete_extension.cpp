@@ -470,10 +470,10 @@ static unique_ptr<SQLTokenizeFunctionData> GenerateTokens(ClientContext &context
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(tokens);
-	auto parser_options = context.GetParserOptions();
+	auto identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(context);
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
-	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode);
+	                           MatchMode::RECOGNIZE_ONLY, identifier_case_mode);
 	MatchState state(token_iterator, match_context);
 
 	compiled_grammar->ProgramMatcher().MatchParseResult(state);
@@ -564,10 +564,10 @@ static duckdb::unique_ptr<FunctionData> CheckPEGParserBind(ClientContext &contex
 	ParseResultAllocator parse_allocator;
 	idx_t max_token_index = 0;
 	TokenIterator token_iterator(root_tokens);
-	auto parser_options = context.GetParserOptions();
+	auto identifier_case_mode = Settings::Get<PreserveIdentifierCaseSetting>(context);
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext match_context(suggestions, parse_allocator, process_allocator, max_token_index,
-	                           MatchMode::RECOGNIZE_ONLY, parser_options.identifier_case_mode);
+	                           MatchMode::RECOGNIZE_ONLY, identifier_case_mode);
 	MatchState state(token_iterator, match_context);
 
 	auto match_result = compiled_grammar->ProgramMatcher().MatchParseResult(state);
@@ -703,6 +703,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(format_sql_set);
 }
 
+// LCOV_EXCL_START
 void AutocompleteExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
@@ -714,6 +715,7 @@ std::string AutocompleteExtension::Name() {
 std::string AutocompleteExtension::Version() const {
 	return DefaultVersion();
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 extern "C" {

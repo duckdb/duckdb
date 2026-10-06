@@ -223,6 +223,12 @@ static auto CV2AggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_d
                                idx_t count) -> void {
 	const auto &info = aggr_input_data.function.GetExtraFunctionInfo().Cast<CV2AggregateFunctionInfo>();
 
+	// the callback expects one state per row - flatten a reference, as callers may hold on to the state buffer
+	auto states = Vector::Ref(state);
+	if (states.GetVectorType() != VectorType::FLAT_VECTOR) {
+		states.Flatten(*FlatVector::IncrementalSelectionVector(), count);
+	}
+
 	CV2AggregateUpdateInfo args = {};
 	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	args.in_bind_data = GetUserBindData(aggr_input_data.bind_data.get());
@@ -230,7 +236,7 @@ static auto CV2AggregateUpdate(Vector inputs[], AggregateInputData &aggr_input_d
 	args.input_count = input_count;
 	args.function = &aggr_input_data.function;
 	args.row_count = count;
-	args.states = FlatVector::GetDataMutableUnsafe<void *>(state);
+	args.states = FlatVector::GetDataMutableUnsafe<void *>(states);
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -545,8 +551,10 @@ DUCKDB_V2_ERROR duckdb_v2_aggregate_function_bind_set_return_type(duckdb_v2_aggr
                                                                   duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(return_type);
-	return WithErrorHandler(
-	    err, [&]() { Convert(info)->in_input->GetBoundFunction().SetReturnType(*Convert(return_type)); });
+	return WithErrorHandler(err, [&]() {
+		auto type = Convert(return_type);
+		Convert(info)->in_input->GetBoundFunction().SetReturnType(*type);
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_aggregate_function_size_get_user_data(duckdb_v2_aggregate_function_size_info_handle info,

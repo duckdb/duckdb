@@ -428,13 +428,7 @@ static unique_ptr<Expression> BindJSONCopyTimestampTZFormatter(ClientContext &co
 	children.push_back(make_uniq<BoundConstantExpression>(Value(format_string)));
 
 	FunctionBinder function_binder(context);
-	ErrorData error;
-	auto result =
-	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), "strftime", std::move(children), error);
-	if (!result) {
-		error.Throw();
-	}
-	return result;
+	return function_binder.BindScalarFunction(Identifier::DefaultSchema(), "strftime", std::move(children));
 }
 
 static unique_ptr<JSONCopyToJSONFunctionData>
