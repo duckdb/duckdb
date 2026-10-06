@@ -364,6 +364,9 @@ public:
 	DUCKDB_API static string GetFileExtension(const string &file_name);
 	DUCKDB_API static string GetFileStem(const string &file_name);
 	DUCKDB_API static string GetFilePath(const string &file_path);
+	//! Replace the file name of a path, keeping its directory part as written (also for files directly below a
+	//! scheme root, where splitting into GetFilePath and JoinPath would not round-trip: "opfs://a" -> "opfs://b")
+	DUCKDB_API static string ReplaceFileName(const string &file_path, const string &file_name);
 
 	struct EnumStringLiteral {
 		uint32_t number;
