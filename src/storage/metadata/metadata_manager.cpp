@@ -188,7 +188,7 @@ void MetadataManager::AddAndRegisterBlock(unique_lock<mutex> &block_lock, Metada
 		throw InternalException("AddAndRegisterBlock called with a transient block id");
 	}
 	block_lock.unlock();
-	block.block = block_manager.RegisterBlock(block.block_id);
+	block.block = block_manager.RegisterBlock(block.block_id, MemoryTag::METADATA);
 	block_lock.lock();
 	AddBlock(block_lock, std::move(block), true);
 }
@@ -296,8 +296,9 @@ void MetadataManager::Flush(QueryContext context) {
 			// Convert the temporary block to a persistent block.
 			// we cannot use ConvertToPersistent as another thread might still be reading the block
 			// so we use the safe version of ConvertToPersistent
-			auto new_block = block_manager.ConvertToPersistent(context, kv.first, std::move(block_handle),
-			                                                   std::move(handle), ConvertToPersistentMode::THREAD_SAFE);
+			auto new_block =
+			    block_manager.ConvertToPersistent(context, kv.first, std::move(block_handle), std::move(handle),
+			                                      ConvertToPersistentMode::THREAD_SAFE, MemoryTag::METADATA);
 
 			guard.lock();
 			block.block = std::move(new_block);
