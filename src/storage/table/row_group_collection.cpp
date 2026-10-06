@@ -154,6 +154,27 @@ RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, BlockMa
 	}
 }
 
+unique_ptr<const RowGroupCollection> RowGroupCollection::CreateScanSnapshot(const RowGroupCollection &source) {
+	auto source_row_groups = source.GetRowGroups();
+	auto base_row_id = source_row_groups->GetBaseRowId();
+	auto snapshot = make_uniq<RowGroupCollection>(source.info, source.block_manager, source.types, base_row_id, 0,
+	                                              source.row_group_size);
+	auto snapshot_row_groups = snapshot->GetRowGroups();
+	idx_t max_row = base_row_id;
+	idx_t total_rows = 0;
+	{
+		auto lock = source_row_groups->Lock();
+		for (auto &entry : source_row_groups->SegmentNodes(lock)) {
+			snapshot_row_groups->AppendSegment(entry.ReferenceNode(), entry.GetRowStart());
+			max_row = MaxValue(max_row, entry.GetRowEnd());
+			total_rows += entry.GetNode().count;
+		}
+	}
+	snapshot->total_rows = total_rows;
+	snapshot->next_row_id = max_row - base_row_id;
+	return snapshot;
+}
+
 idx_t RowGroupCollection::GetTotalRows() const {
 	return total_rows.load();
 }
@@ -338,8 +359,9 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 }
 
 bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
-                                                  RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
-                                                  idx_t vector_index, idx_t max_row, bool initialize_columns) {
+                                                  const RowGroupCollection &collection,
+                                                  SegmentNode<RowGroup> &row_group, idx_t vector_index, idx_t max_row,
+                                                  bool initialize_columns) {
 	state.max_row = max_row;
 	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
@@ -349,7 +371,7 @@ bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, Collec
 	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index, initialize_columns);
 }
 
-void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
+void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) const {
 	state.collection = this;
 	state.row_groups = GetRowGroups();
 	state.AssignRowGroup(state.GetRootSegment(*state.row_groups));
@@ -370,13 +392,13 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 }
 
 optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
-                                                  CollectionScanState &scan_state, bool initialize_columns) {
+                                                  CollectionScanState &scan_state, bool initialize_columns) const {
 	AssignSharedPointer(scan_state.row_groups, state.row_groups);
 	while (true) {
 		idx_t vector_index;
 		idx_t max_row;
 		idx_t assignment_rows;
-		optional_ptr<RowGroupCollection> collection;
+		optional_ptr<const RowGroupCollection> collection;
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
 			// select the next row group to scan from the parallel state
