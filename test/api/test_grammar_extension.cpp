@@ -10,7 +10,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
-#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/operator/logical_alter.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
@@ -1384,25 +1383,19 @@ TEST_CASE("Grammar extensions can add ALTER TABLE actions", "[api][grammar_exten
 	auto expected = Value::STRUCT({{"name", Value("owner")}, {"value", Value("ab")}});
 	REQUIRE(bound_info.GetPayload() == expected);
 
-	// DuckDB tables reject the action, also when it is mixed with built-in actions
-	auto result = con.Query("ALTER TABLE t ADD COLUMN j INTEGER, SET TAG 'owner' = 'me'");
+	// DuckDB tables reject the action
+	auto result = con.Query("ALTER TABLE t SET TAG 'owner' = 'me'");
 	REQUIRE_FAIL(result);
 	REQUIRE(StringUtil::Contains(result->GetError(), "\"set_tag\" is not supported for DuckDB tables"));
-	result = con.Query("SELECT * FROM t");
-	REQUIRE(result->ColumnCount() == 1);
 
 	// the payload must be constant
 	REQUIRE_FAIL(con.Query("ALTER TABLE t SET TAG 'owner' = i"));
 	REQUIRE_FAIL(con.Query("PREPARE p AS ALTER TABLE t SET TAG 'owner' = $1"));
 
-	// several actions become several ALTER statements
-	Parser multi_parser(*con.context);
-	multi_parser.ParseQuery("ALTER TABLE t ADD COLUMN j INTEGER, SET TAG 'owner' = 'me'");
-	REQUIRE(multi_parser.statements.size() == 1);
-	REQUIRE(multi_parser.statements[0]->type == StatementType::MULTI_STATEMENT);
-	auto &multi = multi_parser.statements[0]->Cast<MultiStatement>();
-	REQUIRE(multi.statements.size() == 2);
-	REQUIRE(multi.statements[1]->query == "ALTER TABLE t SET TAG 'owner' = 'me';");
-
 	REQUIRE_NO_FAIL(con.Query("ALTER TABLE IF EXISTS missing_table SET TAG 'owner' = 'me'"));
+
+	// an ALTER TABLE still takes a single action
+	result = con.Query("ALTER TABLE t ADD COLUMN j INTEGER, SET TAG 'owner' = 'me'");
+	REQUIRE_FAIL(result);
+	REQUIRE(StringUtil::Contains(result->GetError(), "Only one ALTER command per statement is supported"));
 }

@@ -4163,7 +4163,7 @@ void PEGTransformerFactory::InitializeAlterStatementTrampoline(PEGTransformer &t
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeAlterStatementTrampoline(PEGTransformer &transformer,
                                                         GeneratedTransformProcess &process) {
-	auto alter_options = process.TakeResult<unique_ptr<SQLStatement>>(0);
+	auto alter_options = process.TakeResult<unique_ptr<AlterInfo>>(0);
 	auto result = TransformAlterStatement(transformer, std::move(alter_options));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
@@ -4184,8 +4184,8 @@ void PEGTransformerFactory::InitializeAlterOptionsTrampoline(PEGTransformer &tra
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeAlterOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process) {
-	auto result = process.TakeResult<unique_ptr<SQLStatement>>(0);
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+	auto result = process.TakeResult<unique_ptr<AlterInfo>>(0);
+	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAlterTableStmtTrampoline(PEGTransformer &transformer,
@@ -4222,7 +4222,7 @@ PEGTransformerFactory::FinalizeAlterTableStmtTrampoline(PEGTransformer &transfor
 	}
 	auto result =
 	    TransformAlterTableStmt(transformer, if_exists, std::move(base_table_name), std::move(alter_table_options));
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAlterSchemaStmtTrampoline(PEGTransformer &transformer,
@@ -4247,7 +4247,7 @@ PEGTransformerFactory::FinalizeAlterSchemaStmtTrampoline(PEGTransformer &transfo
 	auto qualified_name = process.TakeResult<QualifiedName>(1);
 	auto alter_schema_options = process.TakeResult<unique_ptr<AlterTableInfo>>(2);
 	auto result = TransformAlterSchemaStmt(transformer, if_exists, qualified_name, std::move(alter_schema_options));
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAlterSchemaOptionsTrampoline(PEGTransformer &transformer,
@@ -4889,7 +4889,7 @@ PEGTransformerFactory::FinalizeAlterViewStmtTrampoline(PEGTransformer &transform
 	auto base_table_name = process.TakeResult<unique_ptr<BaseTableRef>>(1);
 	auto rename_alter = process.TakeResult<unique_ptr<AlterTableInfo>>(2);
 	auto result = TransformAlterViewStmt(transformer, if_exists, std::move(base_table_name), std::move(rename_alter));
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAlterSequenceStmtTrampoline(PEGTransformer &transformer,
@@ -4915,7 +4915,7 @@ PEGTransformerFactory::FinalizeAlterSequenceStmtTrampoline(PEGTransformer &trans
 	auto alter_sequence_options = process.TakeResult<unique_ptr<AlterInfo>>(2);
 	auto result =
 	    TransformAlterSequenceStmt(transformer, if_exists, qualified_sequence_name, std::move(alter_sequence_options));
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeQualifiedSequenceNameTrampoline(PEGTransformer &transformer,
@@ -5035,7 +5035,7 @@ PEGTransformerFactory::FinalizeAlterDatabaseStmtTrampoline(PEGTransformer &trans
 	auto identifier = list_pr.GetChild(2).Cast<IdentifierParseResult>().identifier;
 	auto identifier_1 = list_pr.GetChild(6).Cast<IdentifierParseResult>().identifier;
 	auto result = TransformAlterDatabaseStmt(transformer, if_exists, identifier, identifier_1);
-	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
+	return make_uniq<TypedTransformResult<unique_ptr<AlterInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeAnalyzeStatementTrampoline(PEGTransformer &transformer,
