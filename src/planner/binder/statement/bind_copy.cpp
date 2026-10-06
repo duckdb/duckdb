@@ -703,7 +703,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt, const CopyFunction &fun
 	return result;
 }
 
-vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option_binder, const Identifier &name,
+vector<Value> BindCopyOption(ClientContext &context, Binder &binder, const Identifier &name,
                              unique_ptr<ParsedExpression> &expr) {
 	vector<Value> result;
 	if (!expr) {
@@ -719,20 +719,20 @@ vector<Value> BindCopyOption(ClientContext &context, TableFunctionBinder &option
 		}
 	}
 	const bool is_partition_by = name == "partition_by";
+	const bool is_column_list =
+	    is_partition_by || name == "force_quote" || name == "force_not_null" || name == "force_null";
+	auto conversion_policy = is_column_list ? TableFunctionBinder::IdentifierConversionPolicy::ALLOW
+	                                        : TableFunctionBinder::IdentifierConversionPolicy::FOLLOW_SETTING;
+	TableFunctionBinder option_binder(binder, context, "Copy", "Copy options", conversion_policy);
 
 	if (is_partition_by) {
-		//! When binding the 'partition_by' option, we don't want to resolve a column reference to a SQLValueFunction
-		//! (like 'user')
+		// Partition columns such as 'user' must not resolve to SQL value functions.
 		option_binder.DisableSQLValueFunctions();
 	}
 	auto bound_expr = option_binder.Bind(expr);
 	if (bound_expr->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (is_partition_by) {
-		option_binder.EnableSQLValueFunctions();
-	}
-
 	auto val = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
 	if (val.IsNull()) {
 		throw BinderException("NULL is not supported as a valid option for COPY option \"" + name + "\"");
@@ -764,9 +764,8 @@ string ExtractFormat(const string &file_path) {
 }
 
 void Binder::BindCopyOptions(CopyInfo &info) {
-	TableFunctionBinder option_binder(*this, context, "Copy", "Copy options");
 	if (info.file_path_expression) {
-		auto inputs = BindCopyOption(context, option_binder, "filename", info.file_path_expression);
+		auto inputs = BindCopyOption(context, *this, "filename", info.file_path_expression);
 		if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
 			throw InternalException("Unsupported parameter type for filename: expected e.g. TARGET 'file.parquet'");
 		}
@@ -787,7 +786,7 @@ void Binder::BindCopyOptions(CopyInfo &info) {
 			partition_path = std::move(option_expr);
 			continue;
 		}
-		auto inputs = BindCopyOption(context, option_binder, option_name, option_expr);
+		auto inputs = BindCopyOption(context, *this, option_name, option_expr);
 		if (option_name == "format") {
 			// format specifier: interpret this option
 			if (inputs.size() != 1 || inputs[0].type().id() != LogicalTypeId::VARCHAR) {
