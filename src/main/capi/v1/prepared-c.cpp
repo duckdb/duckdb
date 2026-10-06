@@ -15,7 +15,6 @@ using duckdb::hugeint_t;
 using duckdb::LogicalType;
 using duckdb::optional_ptr;
 using duckdb::PreparedStatementWrapper;
-using duckdb::QueryResultType;
 using duckdb::StringUtil;
 using duckdb::timestamp_t;
 using duckdb::uhugeint_t;

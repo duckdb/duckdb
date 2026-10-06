@@ -216,13 +216,8 @@ static unique_ptr<Expression> CreateIsNanCall(ClientContext &context, const Expr
 	vector<unique_ptr<Expression>> children;
 	children.push_back(expr.Copy());
 
-	ErrorData error;
 	FunctionBinder binder(context);
-	auto isnan = binder.BindScalarFunction(Identifier::DefaultSchema(), "isnan", std::move(children), error);
-	if (!isnan) {
-		error.Throw();
-	}
-	return isnan;
+	return binder.BindScalarFunction(Identifier::DefaultSchema(), "isnan", std::move(children));
 }
 
 static unique_ptr<Expression> CreateNotIsNanGuard(ClientContext &context, const Expression &expr) {

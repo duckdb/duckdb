@@ -5,9 +5,10 @@
   "inherit_skip_tests": "test/configs/stats_dependent_tests.json",
   "skip_tests": [
     {
-      "reason": "Checks projection evaluation counts after optimizer filter pushdown.",
+      "reason": "Checks evaluation counts after optimizer filter pushdown.",
       "paths": [
-        "test/optimizer/pushdown/lateral_projection_evaluation.test"
+        "test/optimizer/pushdown/lateral_projection_evaluation.test",
+        "test/optimizer/pushdown/cte_domain_join_filter.test"
       ]
     },
     {
@@ -65,7 +66,8 @@
         "test/sql/types/geo/geometry_vertex_extract.test",
         "test/sql/copy/parquet/parquet_glob_cache.test",
         "test/optimizer/joins/fkpk_composite_key_ce.test",
-        "test/sql/cast/signed_cast_repro.test"
+        "test/sql/cast/signed_cast_repro.test",
+        "test/optimizer/remove_redundant_order_keys_side_effects.test"
       ]
     },
     {
@@ -85,6 +87,12 @@
         "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test",
         "test/sql/sample/reservoir_testing_percentage.test",
         "test/sql/window/test_constant_orderby.test"
+      ]
+    },
+    {
+      "reason": "Calibrates exact memory-fit boundaries that shift when the optimizer is disabled.",
+      "paths": [
+        "test/sql/copy/parquet/parquet_prefetch_tracked_memory.test"
       ]
     },
     {

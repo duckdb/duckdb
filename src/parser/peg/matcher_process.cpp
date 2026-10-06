@@ -21,8 +21,10 @@ optional<MatchInput> MatchStep::GetChild() {
 
 MatcherResult MatchStep::GetResult() const {
 	D_ASSERT(!child);
-	D_ASSERT(result);
-	return result.value();
+	if (!result) {
+		throw InternalException("Completed match step has no result");
+	}
+	return *result;
 }
 
 class AtomicMatchProcess : public MatchProcess {
@@ -174,9 +176,11 @@ public:
 		D_ASSERT(awaiting_child == child_result.has_value());
 		if (child_result) {
 			awaiting_child = false;
-			D_ASSERT(child_state);
+			if (!child_state) {
+				throw InternalException("Choice matcher child state is missing");
+			}
 			if (child_result->IsSuccess()) {
-				state.token_iterator.SetPosition(child_state.value().token_iterator);
+				state.token_iterator.SetPosition(child_state->token_iterator);
 				if (!child_result->HasParseResult()) {
 					return MatchStep::Complete(MatcherResult::Success());
 				}
