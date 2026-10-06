@@ -580,8 +580,9 @@ static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors,
                                      const bool detect_geojson, const idx_t depth) {
 	if (depth > MAX_STRUCTURE_DEPTH) {
-		throw InvalidInputException("JSON is nested more than %llu levels deep, which is more than json_structure supports",
-		                            MAX_STRUCTURE_DEPTH);
+		throw InvalidInputException(
+		    "JSON is nested more than %llu levels deep, which is more than json_structure supports",
+		    MAX_STRUCTURE_DEPTH);
 	}
 	node.count++;
 	const auto tag = yyjson_get_tag(val);

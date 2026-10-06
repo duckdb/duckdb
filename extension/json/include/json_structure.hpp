@@ -98,7 +98,8 @@ public:
 
 struct JSONStructure {
 public:
-	//! Deepest nesting ExtractStructure follows before it gives up, so a deeply nested document cannot overflow the stack
+	//! Deepest nesting ExtractStructure follows before it gives up, so a deeply nested document cannot overflow the
+	//! stack
 	static constexpr idx_t MAX_STRUCTURE_DEPTH = 1000;
 	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node, bool ignore_errors, bool detect_geojson,
 	                             idx_t depth = 0);
