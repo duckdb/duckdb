@@ -331,12 +331,13 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 
 	// Special handling for http repository: avoid using regular filesystem (note: the filesystem is not used here)
 	if (HTTPUtil::IsHTTPProtocol(options.repository->path)) {
-		// The core repository has a backup server that serves the same binaries - fall back to it if the core server
-		// is unavailable. Custom repositories have no backup, so there the error surfaces directly
+		// The core and community repositories have backup servers that serve the same binaries - fall back to those
+		// if the primary server is unavailable. Custom repositories have no backup, so there the error surfaces
+		// directly
 		string backup_url;
-		if (options.repository->path == ExtensionRepository::CORE_REPOSITORY_URL) {
-			backup_url = StringUtil::Replace(generated_url, ExtensionRepository::CORE_REPOSITORY_URL,
-			                                 ExtensionRepository::CORE_BACKUP_REPOSITORY_URL);
+		auto backup_repository_url = ExtensionRepository::TryGetBackupRepositoryUrl(options.repository->path);
+		if (!backup_repository_url.empty()) {
+			backup_url = StringUtil::Replace(generated_url, options.repository->path, backup_repository_url);
 		}
 		if (db.ExtensionIsLoaded("httpfs")) {
 			HTTPUtil::BumpToSecureProtocol(generated_url);

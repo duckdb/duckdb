@@ -92,8 +92,10 @@ struct ExtensionRepository {
 	static constexpr const char *CORE_NIGHTLY_REPOSITORY_URL = "http://nightly-extensions.duckdb.org";
 	static constexpr const char *COMMUNITY_REPOSITORY_URL = "http://community-extensions.duckdb.org";
 
-	//! Backup server for the core repository: serves identical binaries and is used when the core server is unavailable
+	//! Backup servers for the core and community repositories: they serve identical binaries and are used when the
+	//! primary server is unavailable
 	static constexpr const char *CORE_BACKUP_REPOSITORY_URL = "http://extensions.duckdb-backup.org";
+	static constexpr const char *COMMUNITY_BACKUP_REPOSITORY_URL = "http://community-extensions.duckdb-backup.org";
 
 	//! Debugging repositories (target local, relative paths that are produced by DuckDB's build system)
 	static constexpr const char *BUILD_DEBUG_REPOSITORY_PATH = "./build/debug/repository";
@@ -113,6 +115,8 @@ struct ExtensionRepository {
 	static string TryGetRepositoryUrl(const string &repository);
 	//! Try to convert a url to a known repository name, will return empty string if the repository is unknown
 	static string TryConvertUrlToKnownRepository(const string &url);
+	//! Try to get the backup server url of a repository url, will return empty string if the repository has no backup
+	static string TryGetBackupRepositoryUrl(const string &url);
 
 	//! Get the default repository, optionally passing a config to allow
 	static ExtensionRepository GetDefaultRepository(optional_ptr<DBConfig> config);
