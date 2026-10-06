@@ -208,6 +208,27 @@ int32_t ICUDateFunc::ExtractField(Calendar *calendar, CalendarField field) {
 	return result;
 }
 
+bool ICUDateFunc::TryGetTimeTZOffset(Calendar *calendar, int32_t &offset) {
+	offset = ExtractField(calendar, CAL_ZONE_OFFSET);
+	offset += ExtractField(calendar, CAL_DST_OFFSET);
+	offset /= Interval::MSECS_PER_SEC;
+	return offset >= dtime_tz_t::MIN_OFFSET && offset <= dtime_tz_t::MAX_OFFSET;
+}
+
+int32_t ICUDateFunc::GetTimeTZOffset(Calendar *calendar) {
+	int32_t offset;
+	if (!TryGetTimeTZOffset(calendar, offset)) {
+		throw OutOfRangeException(TimeTZOffsetError(offset));
+	}
+	return offset;
+}
+
+string ICUDateFunc::TimeTZOffsetError(int32_t offset) {
+	interval_t interval {0, 0, offset * Interval::MICROS_PER_SEC};
+	return StringUtil::Format("Time zone offset %s is out of range, expected a value between -15:59:59 and +15:59:59",
+	                          Interval::ToString(interval));
+}
+
 int32_t ICUDateFunc::SubtractField(Calendar *calendar, CalendarField field, timestamp_tz_t end_date) {
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
 	const auto sub = calendar->FieldDifference(millis, field);
