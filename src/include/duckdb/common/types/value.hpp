@@ -86,6 +86,8 @@ public:
 	inline bool IsNull() const {
 		return is_null;
 	}
+	//! Whether the value is within the domain of its type (e.g. valid UTF-8, ENUM index within the dictionary)
+	DUCKDB_API bool IsValid() const;
 
 	//! Create the lowest possible value of a given type (numeric only)
 	DUCKDB_API static Value MinimumValue(const LogicalType &type);

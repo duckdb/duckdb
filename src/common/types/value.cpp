@@ -2348,10 +2348,19 @@ void Value::Serialize(Serializer &serializer) const {
 	SerializeInternal(serializer, true);
 }
 
-//! Verify that a deserialized value is within the domain of its type
-static void VerifyDeserializedValue(const LogicalType &type, const Value &value) {
+//! Whether the value (excluding its children) is within the domain of its type
+static bool ValueIsValidShallow(const Value &value) {
+	if (value.IsNull()) {
+		return true;
+	}
+	auto &type = value.type();
 	bool valid = true;
 	switch (type.id()) {
+	case LogicalTypeId::VARCHAR: {
+		auto &str = StringValue::Get(value);
+		valid = Value::StringIsValid(str);
+		break;
+	}
 	case LogicalTypeId::ENUM: {
 		uint64_t index;
 		switch (type.InternalType()) {
@@ -2416,12 +2425,45 @@ static void VerifyDeserializedValue(const LogicalType &type, const Value &value)
 		}
 		break;
 	}
+	case LogicalTypeId::UNION: {
+		auto &children = StructValue::GetChildren(value);
+		valid = children.size() == UnionType::GetMemberCount(type) + 1 &&
+		        children[0].GetValueUnsafe<union_tag_t>() < UnionType::GetMemberCount(type);
+		break;
+	}
+	case LogicalTypeId::STRUCT:
+		valid = StructValue::GetChildren(value).size() == StructType::GetChildCount(type);
+		break;
+	case LogicalTypeId::ARRAY:
+		valid = ArrayValue::GetChildren(value).size() == ArrayType::GetSize(type);
+		break;
 	default:
 		break;
 	}
-	if (!valid) {
-		throw SerializationException("Failed to deserialize value: value is out of range for type %s", type.ToString());
+	return valid;
+}
+
+bool Value::IsValid() const {
+	if (!ValueIsValidShallow(*this)) {
+		return false;
 	}
+	if (is_null) {
+		return true;
+	}
+	switch (type_.InternalType()) {
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+	case PhysicalType::ARRAY:
+		for (auto &child : value_info_->Get<NestedValueInfo>().GetValues()) {
+			if (!child.IsValid()) {
+				return false;
+			}
+		}
+		break;
+	default:
+		break;
+	}
+	return true;
 }
 
 Value Value::Deserialize(Deserializer &deserializer) {
@@ -2545,7 +2587,10 @@ Value Value::Deserialize(Deserializer &deserializer) {
 	default:
 		throw NotImplementedException("Unimplemented type for Deserialize");
 	}
-	VerifyDeserializedValue(type, new_value);
+	// the children are deserialized (and checked) through Value::Deserialize as well
+	if (!ValueIsValidShallow(new_value)) {
+		throw SerializationException("Failed to deserialize value: value is not valid for type %s", type.ToString());
+	}
 	return new_value;
 }
 
