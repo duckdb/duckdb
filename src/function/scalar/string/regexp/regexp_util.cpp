@@ -2,6 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "re2/re2.h"
 #include "re2/stringpiece.h"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -133,13 +134,19 @@ idx_t AdvanceOneUTF8Basic(const duckdb_re2::StringPiece &input, idx_t base) {
 	} else if ((first & 0xF8) == 0xF0) {
 		char_len = 4;
 	} else {
-		// This should be impossible since RE2 operates on codepoints
-		throw InternalException("Invalid UTF-8 lead byte in regexp_extract_all");
+		// \C can leave us in the middle of a character
+		return 1;
 	}
 	if (base + char_len > input.length()) {
-		throw InternalException("Invalid UTF-8 sequence in regexp_extract_all");
+		return 1;
 	}
 	return char_len;
+}
+
+void VerifyUTF8Result(const char *data, idx_t size) {
+	if (!Utf8Proc::IsValid(data, size)) {
+		throw InvalidInputException("Regular expression result is not valid UTF-8 - \\C matched part of a character");
+	}
 }
 
 } // namespace regexp_util

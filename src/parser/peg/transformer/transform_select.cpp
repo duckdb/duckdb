@@ -479,7 +479,7 @@ bool PEGTransformerFactory::TransformPivotInList(unique_ptr<ParsedExpression> &e
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr->Cast<FunctionExpression>();
-		if (function.FunctionName() != "row") {
+		if (function.FunctionName() != "row" || function.GetArgumentsMutable().empty()) {
 			return false;
 		}
 		for (auto &child : function.GetArgumentsMutable()) {
@@ -1465,7 +1465,7 @@ PEGTransformerFactory::TransformPivotTargetList(PEGTransformer &transformer,
 		PivotColumnEntry pivot_entry;
 		pivot_entry.alias = target->GetAlias();
 		bool transformed = TransformPivotInList(target, pivot_entry);
-		if (!transformed) {
+		if (!transformed || pivot_entry.values.empty()) {
 			pivot_entry.expr = std::move(target);
 		}
 		result.push_back(std::move(pivot_entry));
