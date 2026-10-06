@@ -32,6 +32,11 @@ QualifiedName PEGTransformerFactory::TransformCatalogNameAsUseTarget(PEGTransfor
 	return result;
 }
 
+QualifiedName PEGTransformerFactory::TransformStringLiteralAsUseTarget(PEGTransformer &transformer,
+                                                                       const Identifier &string_literal_identifier) {
+	return QualifiedName(string_literal_identifier);
+}
+
 // UseTargetCatalogSchema <- CatalogName '.' ReservedSchemaName DotIdentifier*
 QualifiedName
 PEGTransformerFactory::TransformUseTargetCatalogSchema(PEGTransformer &transformer, const Identifier &catalog_name,

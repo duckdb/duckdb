@@ -806,6 +806,7 @@ QualifiedName:
     - UseTargetCatalogSchema
     - SchemaNameAsUseTarget
     - CatalogNameAsUseTarget
+    - StringLiteralAsUseTarget
     - CatalogReservedSchemaIdentifier
     - SchemaReservedIdentifierOrStringLiteral
 

@@ -35,6 +35,30 @@ USE "trampoline_use_catalog"."main"
 statement ok
 USE "my""db"
 
+statement ok
+USE 'trampoline_use_catalog'
+
+query I
+SELECT current_database()
+----
+trampoline_use_catalog
+
+statement ok
+USE 'my"db'
+
+query I
+SELECT current_database()
+----
+my"db
+
+statement ok
+USE 'main'
+
+statement error
+USE 'trampoline_use_catalog.main'
+----
+Catalog Error
+
 statement error
 USE temp
 ----
