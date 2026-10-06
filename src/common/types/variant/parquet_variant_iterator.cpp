@@ -568,18 +568,25 @@ VariantDecimalProperties ParquetVariantNode::GetDecimalProperties() const {
 	auto value_metadata = VariantValueMetadata::FromHeaderByte(binary[0]);
 	auto payload = binary + 1;
 	uint8_t scale = LoadChecked<uint8_t>(payload, binary_end);
+	if (scale > DecimalWidth<hugeint_t>::max) {
+		throw IOException("Corrupted VARIANT 'value' buffer, DECIMAL scale (%d) is out of range", scale);
+	}
 	auto value_data = payload + sizeof(uint8_t);
+	uint32_t width;
 	switch (value_metadata.primitive_type) {
 	case VariantPrimitiveType::DECIMAL4:
-		return VariantDecimalProperties(ComputeDecimalWidth<int32_t>(LoadChecked<int32_t>(value_data, binary_end)),
-		                                scale);
+		width = ComputeDecimalWidth<int32_t>(LoadChecked<int32_t>(value_data, binary_end));
+		break;
 	case VariantPrimitiveType::DECIMAL8:
-		return VariantDecimalProperties(ComputeDecimalWidth<int64_t>(LoadChecked<int64_t>(value_data, binary_end)),
-		                                scale);
+		width = ComputeDecimalWidth<int64_t>(LoadChecked<int64_t>(value_data, binary_end));
+		break;
 	default:
 		D_ASSERT(value_metadata.primitive_type == VariantPrimitiveType::DECIMAL16);
-		return VariantDecimalProperties(DecimalWidth<hugeint_t>::max, scale);
+		width = DecimalWidth<hugeint_t>::max;
+		break;
 	}
+	//! The width must cover the scale, e.g. 0.001 has a single digit but a scale of 3
+	return VariantDecimalProperties(MaxValue<uint32_t>(width, scale), scale);
 }
 
 ParquetObjectIterator ParquetVariantNode::GetObjectChildren(VariantIterationOrder order) const {
