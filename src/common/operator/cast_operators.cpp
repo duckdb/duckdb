@@ -3300,7 +3300,8 @@ static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decim
 		negative = false;
 	}
 
-	char buffer[DecimalWidth<hugeint_t>::max];
+	// a hugeint can have one more digit than the maximum decimal width
+	char buffer[DecimalWidth<hugeint_t>::max + 1];
 	auto end = buffer + sizeof(buffer);
 	auto begin = NumericHelper::FormatUnsigned(input, end);
 
