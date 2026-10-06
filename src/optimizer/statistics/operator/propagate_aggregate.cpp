@@ -533,10 +533,11 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggr
 	}
 	aggr.distinct_validity = distinct_validity;
 
+	const auto is_ungrouped = aggr.groups.empty();
 	// after we propagate statistics - try to directly execute aggregates using statistics
 	TryExecuteAggregates(aggr, node_ptr);
 
-	if (aggr.groups.empty()) {
+	if (is_ungrouped) {
 		// Ungrouped aggregate always returns exactly one row, even over empty input
 		return make_uniq<NodeStatistics>(1U, 1U);
 	}
