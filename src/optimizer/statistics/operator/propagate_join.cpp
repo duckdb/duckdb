@@ -80,11 +80,41 @@ bool StatisticsPropagator::HandleJoinAlwaysMatches(LogicalJoin &join, unique_ptr
 	}
 }
 
+static idx_t CountComparisonConditions(const vector<JoinCondition> &conditions) {
+	idx_t count = 0;
+	for (auto &condition : conditions) {
+		if (condition.IsComparison()) {
+			count++;
+		}
+	}
+	return count;
+}
+
 void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> &node_ptr) {
 	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
 		if (!condition.IsComparison()) {
 			PropagateExpression(condition.JoinExpressionReference());
+			switch (ClassifyFilter(condition.GetJoinExpression())) {
+			case FilterPropagateResult::FILTER_FALSE_OR_NULL:
+			case FilterPropagateResult::FILTER_ALWAYS_FALSE:
+				if (HandleJoinNeverMatches(join, node_ptr)) {
+					return;
+				}
+				break;
+			case FilterPropagateResult::FILTER_ALWAYS_TRUE:
+				if (join.conditions.size() > 1) {
+					join.conditions.erase_at(i);
+					i--;
+					removed_expressions = true;
+				} else if (HandleJoinAlwaysMatches(join, node_ptr)) {
+					removed_expressions = true;
+					return;
+				}
+				break;
+			default:
+				break;
+			}
 			continue;
 		}
 
@@ -127,12 +157,17 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						break;
 					}
 				}
-				if (join.conditions.size() > 1) {
-					// there are multiple conditions: erase this condition
+				if (CountComparisonConditions(join.conditions) > 1) {
+					// there are multiple comparisons: erase this condition
 					join.conditions.erase_at(i);
 					i--;
 					removed_expressions = true;
 					continue;
+				}
+				if (join.conditions.size() > 1) {
+					// the last comparison cannot be removed while arbitrary conditions remain
+					// a comparison join without comparisons cannot be planned
+					break;
 				}
 				// this is the only condition and it is always true: all conditions are true
 				if (HandleJoinAlwaysMatches(join, node_ptr)) {
