@@ -95,6 +95,9 @@ static void ArrayFixedCombine(DataChunk &args, ExpressionState &state, Vector &r
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
 	auto &rhs_child = ArrayVector::GetChildMutable(args.data[1]);
+	// the children are not necessarily flat (e.g. a constant NULL child)
+	lhs_child.Flatten(ArrayVector::GetTotalSize(args.data[0]));
+	rhs_child.Flatten(ArrayVector::GetTotalSize(args.data[1]));
 	auto &res_child = ArrayVector::GetChildMutable(result);
 
 	const auto &lhs_child_validity = FlatVector::Validity(lhs_child);
@@ -158,6 +161,9 @@ static void ArrayGenericFold(DataChunk &args, ExpressionState &state, Vector &re
 	const auto count = args.size();
 	auto &lhs_child = ArrayVector::GetChildMutable(args.data[0]);
 	auto &rhs_child = ArrayVector::GetChildMutable(args.data[1]);
+	// the children are not necessarily flat (e.g. a constant NULL child)
+	lhs_child.Flatten(ArrayVector::GetTotalSize(args.data[0]));
+	rhs_child.Flatten(ArrayVector::GetTotalSize(args.data[1]));
 
 	const auto &lhs_child_validity = FlatVector::Validity(lhs_child);
 	const auto &rhs_child_validity = FlatVector::Validity(rhs_child);
