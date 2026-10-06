@@ -1,0 +1,317 @@
+# name: test/sql/catalog/nested_schema/nested_schema_depth_limit.test
+# description: schemas cannot be nested without bound
+# group: [nested_schema]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE SCHEMA s1.s2.s3;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94.s95;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94.s95.s96;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94.s95.s96.s97;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94.s95.s96.s97.s98;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94.s95.s96.s97.s98.s99;
+
+statement ok
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94.s95.s96.s97.s98.s99.s100;
+
+# the 101st level is rejected
+statement error
+CREATE SCHEMA s1.s2.s3.s4.s5.s6.s7.s8.s9.s10.s11.s12.s13.s14.s15.s16.s17.s18.s19.s20.s21.s22.s23.s24.s25.s26.s27.s28.s29.s30.s31.s32.s33.s34.s35.s36.s37.s38.s39.s40.s41.s42.s43.s44.s45.s46.s47.s48.s49.s50.s51.s52.s53.s54.s55.s56.s57.s58.s59.s60.s61.s62.s63.s64.s65.s66.s67.s68.s69.s70.s71.s72.s73.s74.s75.s76.s77.s78.s79.s80.s81.s82.s83.s84.s85.s86.s87.s88.s89.s90.s91.s92.s93.s94.s95.s96.s97.s98.s99.s100.s101;
+----
+<REGEX>:Catalog Error.*nested more than.*
+
+query I
+SELECT count(*) FROM duckdb_schemas() WHERE schema_name SIMILAR TO 's[0-9]+';
+----
+100

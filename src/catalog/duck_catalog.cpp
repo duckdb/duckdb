@@ -61,6 +61,9 @@ optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
+//! Nested schemas are scanned recursively, so the nesting is bounded to keep that off the stack limit
+static constexpr idx_t MAX_SCHEMA_NESTING_DEPTH = 100;
+
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	LogicalDependencyList dependencies;
 
@@ -76,6 +79,10 @@ optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction 
 			return nullptr;
 		}
 		return result;
+	}
+	if (parents.size() >= MAX_SCHEMA_NESTING_DEPTH) {
+		throw CatalogException("Cannot create schema \"%s\": schemas cannot be nested more than %llu levels deep",
+		                       info.SchemaName(), MAX_SCHEMA_NESTING_DEPTH);
 	}
 	EntryLookupInfo lookup(CatalogType::SCHEMA_ENTRY, info.GetQualifiedName().Parent().Parent());
 	auto parent =
