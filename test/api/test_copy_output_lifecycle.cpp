@@ -2,12 +2,21 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
+#include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/main/extension_manager.hpp"
+#include "duckdb/parallel/event.hpp"
+#include "duckdb/parallel/pipeline.hpp"
+#include "duckdb/parallel/thread_context.hpp"
 #include "test_helpers.hpp"
+
+#include <chrono>
+#include <condition_variable>
+#include <future>
 
 using namespace duckdb;
 
@@ -207,6 +216,244 @@ void RemoveDirectoryIfPresent(FileSystem &fs, const string &path) {
 }
 
 } // namespace
+
+#ifndef DUCKDB_NO_THREADS
+namespace {
+
+struct BackpressureCopyInfo : LifecycleCopyInfo {
+	std::condition_variable cv;
+	bool flush_started = false;
+	bool flush_released = false;
+	vector<int64_t> rows;
+
+	bool WaitForFlush() {
+		unique_lock<mutex> guard(lock);
+		return cv.wait_for(guard, std::chrono::seconds(10), [&]() { return flush_started; });
+	}
+
+	void ReleaseFlush() {
+		lock_guard<mutex> guard(lock);
+		flush_released = true;
+		cv.notify_all();
+	}
+};
+
+struct BackpressurePreparedData : PreparedBatchData {
+	vector<int64_t> rows;
+};
+
+unique_ptr<PreparedBatchData> BackpressurePrepare(ClientContext &, FunctionData &bind_data, GlobalFunctionData &,
+                                                  unique_ptr<ColumnDataCollection> collection) {
+	auto &info = bind_data.Cast<LifecycleCopyBindData>().info->Cast<BackpressureCopyInfo>();
+	{
+		unique_lock<mutex> guard(info.lock);
+		if (!info.flush_started) {
+			info.flush_started = true;
+			info.cv.notify_all();
+			info.cv.wait(guard, [&]() { return info.flush_released; });
+		}
+	}
+	auto result = make_uniq<BackpressurePreparedData>();
+	ColumnDataScanState scan;
+	collection->InitializeScan(scan);
+	DataChunk chunk;
+	collection->InitializeScanChunk(scan, chunk);
+	while (collection->Scan(scan, chunk)) {
+		for (auto row : chunk.data[0].Values<int64_t>()) {
+			result->rows.push_back(row.GetValue());
+		}
+	}
+	return std::move(result);
+}
+
+void BackpressureFlush(ClientContext &, FunctionData &bind_data, GlobalFunctionData &, PreparedBatchData &batch) {
+	auto &info = bind_data.Cast<LifecycleCopyBindData>().info->Cast<BackpressureCopyInfo>();
+	lock_guard<mutex> guard(info.lock);
+	auto &rows = batch.Cast<BackpressurePreparedData>().rows;
+	info.rows.insert(info.rows.end(), rows.begin(), rows.end());
+}
+
+class BackpressureTask : public Task {
+public:
+	TaskExecutionResult Execute(TaskExecutionMode) override {
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+	void Reschedule() override {
+		++wakeups;
+	}
+	atomic<idx_t> wakeups {0};
+};
+
+class BackpressureEvent : public Event {
+public:
+	explicit BackpressureEvent(Executor &executor) : Event(executor) {
+	}
+	void Schedule() override {
+	}
+};
+
+struct BackpressureFlushGuard {
+	BackpressureFlushGuard(BackpressureCopyInfo &info, std::future<SinkResultType> sink)
+	    : info(info), sink(std::move(sink)) {
+	}
+	~BackpressureFlushGuard() {
+		info.ReleaseFlush();
+		if (sink.valid()) {
+			sink.wait();
+		}
+	}
+	BackpressureCopyInfo &info;
+	std::future<SinkResultType> sink;
+};
+
+} // namespace
+
+TEST_CASE("Partitioned COPY bounds overlapping input and wakes combined producers", "[api][copy]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	REQUIRE_NO_FAIL(connection.Query("SET threads=2"));
+	REQUIRE_NO_FAIL(connection.Query("SET async_threads=0"));
+	REQUIRE_NO_FAIL(
+	    connection.Query(StringUtil::Format("SET partitioned_write_flush_threshold=%llu", STANDARD_VECTOR_SIZE)));
+	connection.BeginTransaction();
+	auto pending = connection.Submit("SELECT 1");
+	REQUIRE_NO_FAIL(*pending);
+
+	auto info = make_shared_ptr<BackpressureCopyInfo>();
+	auto function = CreateLifecycleCopyFunction("copy_backpressure", info);
+	function.prepare_batch = BackpressurePrepare;
+	function.flush_batch = BackpressureFlush;
+	auto &context = *connection.context;
+	PhysicalPlan plan(Allocator::Get(context));
+	auto &copy = plan.Make<PhysicalCopyToFile>(vector<LogicalType> {LogicalType::BIGINT}, function,
+	                                           make_uniq<LifecycleCopyBindData>(info), 0)
+	                 .Cast<PhysicalCopyToFile>();
+	copy.expected_types = {LogicalType::BIGINT, LogicalType::BIGINT};
+	copy.names = {Identifier("p"), Identifier("i")};
+	copy.file_path = TestCreatePath("copy_backpressure");
+	copy.file_extension = "test";
+	copy.per_thread_output = false;
+	copy.partition_output = true;
+	copy.partition_columns = {0};
+	copy.write_partition_columns = false;
+	copy.hive_file_pattern = true;
+	copy.use_tmp_file = false;
+	copy.write_empty_file = true;
+	copy.overwrite_mode = CopyOverwriteMode::COPY_OVERWRITE;
+	copy.return_type = CopyFunctionReturnType::CHANGED_ROWS;
+	copy.batch_size = STANDARD_VECTOR_SIZE;
+	copy.sink_state = copy.GetGlobalSinkState(context);
+
+	ThreadContext first_thread(context), second_thread(context);
+	ExecutionContext first_context(context, first_thread, nullptr), second_context(context, second_thread, nullptr);
+	auto first_local = copy.GetLocalSinkState(first_context);
+	auto second_local = copy.GetLocalSinkState(second_context);
+	auto task = make_shared_ptr<BackpressureTask>();
+	auto second_task = make_shared_ptr<BackpressureTask>();
+	InterruptState interrupt(task);
+	InterruptState second_interrupt(second_task);
+	OperatorSinkInput first_input {*copy.sink_state, *first_local, interrupt};
+	OperatorSinkInput second_input {*copy.sink_state, *second_local, second_interrupt};
+	DataChunk first_chunk, second_chunk;
+	first_chunk.Initialize(context, copy.expected_types);
+	second_chunk.Initialize(context, copy.expected_types);
+	const auto fill_chunk = [&](DataChunk &chunk, idx_t chunk_idx) {
+		chunk.Reset();
+		auto partitions = FlatVector::Writer<int64_t>(chunk.data[0], STANDARD_VECTOR_SIZE);
+		auto values = FlatVector::Writer<int64_t>(chunk.data[1], STANDARD_VECTOR_SIZE);
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			partitions.WriteValue(0);
+			values.WriteValue(NumericCast<int64_t>(chunk_idx * STANDARD_VECTOR_SIZE + i));
+		}
+		REQUIRE(chunk.size() == STANDARD_VECTOR_SIZE);
+	};
+	const auto sink_first = [&](idx_t chunk_idx) {
+		fill_chunk(first_chunk, chunk_idx);
+		return copy.Sink(first_context, first_chunk, first_input);
+	};
+
+	REQUIRE(sink_first(0) == SinkResultType::NEED_MORE_INPUT);
+	fill_chunk(second_chunk, 1);
+	REQUIRE(copy.Sink(second_context, second_chunk, second_input) == SinkResultType::NEED_MORE_INPUT);
+	REQUIRE(sink_first(2) == SinkResultType::NEED_MORE_INPUT);
+	fill_chunk(second_chunk, 3);
+	BackpressureFlushGuard stalled(
+	    *info, std::async(std::launch::async, [&]() { return copy.Sink(second_context, second_chunk, second_input); }));
+	if (!info->WaitForFlush()) {
+		if (stalled.sink.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+			stalled.sink.get();
+		}
+		FAIL("The first flush did not reach the stall");
+	}
+
+	// Input overlaps the stalled flush, but the next state cannot grow indefinitely.
+	REQUIRE(sink_first(4) == SinkResultType::NEED_MORE_INPUT);
+	REQUIRE(sink_first(5) == SinkResultType::NEED_MORE_INPUT);
+	REQUIRE(sink_first(6) == SinkResultType::BLOCKED);
+	REQUIRE(task->wakeups == 0);
+
+	const auto interrupt_while_blocked = GENERATE(false, true);
+	if (interrupt_while_blocked) {
+		connection.Interrupt();
+		REQUIRE_THROWS_AS(copy.Sink(first_context, first_chunk, first_input), InterruptException);
+		context.ClearInterrupt();
+	}
+
+	info->ReleaseFlush();
+	REQUIRE(stalled.sink.get() == SinkResultType::NEED_MORE_INPUT);
+	REQUIRE(task->wakeups > 0);
+	REQUIRE(copy.Sink(first_context, first_chunk, first_input) == SinkResultType::NEED_MORE_INPUT);
+	REQUIRE(sink_first(7) == SinkResultType::NEED_MORE_INPUT);
+	REQUIRE(sink_first(8) == SinkResultType::BLOCKED);
+	auto wakeups_before_combine = task->wakeups.load();
+
+	// The exhausted producer supplies the last combine needed by the active flush.
+	OperatorSinkCombineInput second_combine {*copy.sink_state, *second_local, second_interrupt};
+	REQUIRE(copy.Combine(second_context, second_combine) == SinkCombineResultType::BLOCKED);
+	REQUIRE(task->wakeups > wakeups_before_combine);
+	REQUIRE(second_task->wakeups == 0);
+	if (interrupt_while_blocked) {
+		connection.Interrupt();
+		REQUIRE_THROWS_AS(copy.Combine(second_context, second_combine), InterruptException);
+		context.ClearInterrupt();
+	}
+	REQUIRE(copy.Sink(first_context, first_chunk, first_input) == SinkResultType::NEED_MORE_INPUT);
+	REQUIRE(sink_first(9) == SinkResultType::NEED_MORE_INPUT);
+	OperatorSinkCombineInput first_combine {*copy.sink_state, *first_local, interrupt};
+	REQUIRE(copy.Combine(first_context, first_combine) == SinkCombineResultType::FINISHED);
+	REQUIRE(second_task->wakeups > 0);
+	REQUIRE(copy.Combine(second_context, second_combine) == SinkCombineResultType::FINISHED);
+
+	auto &executor = Executor::Get(context);
+	auto pipeline = make_shared_ptr<Pipeline>(executor);
+	auto event = make_shared_ptr<BackpressureEvent>(executor);
+	auto completed = make_shared_ptr<BackpressureEvent>(executor);
+	completed->AddDependency(*event);
+	OperatorSinkFinalizeInput finalize_input {*copy.sink_state, interrupt};
+	REQUIRE(copy.Finalize(*pipeline, *event, context, finalize_input) == SinkFinalizeType::READY);
+	event->Finish();
+	while (!completed->IsFinished() && !executor.HasError()) {
+		executor.WorkOnTasks();
+	}
+	if (executor.HasError()) {
+		executor.ThrowException();
+	}
+	std::sort(info->rows.begin(), info->rows.end());
+	REQUIRE(info->rows.size() == 10 * STANDARD_VECTOR_SIZE);
+	for (idx_t i = 0; i < info->rows.size(); i++) {
+		REQUIRE(info->rows[i] == NumericCast<int64_t>(i));
+	}
+	auto source = copy.GetGlobalSourceState(context);
+	auto local_source = copy.GetLocalSourceState(first_context, *source);
+	OperatorSourceInput source_input {*source, *local_source, interrupt};
+	DataChunk count;
+	count.Initialize(context, copy.GetTypes());
+	REQUIRE(copy.GetData(first_context, count, source_input) == SourceResultType::FINISHED);
+	REQUIRE(count.GetValue(0, 0) == Value::BIGINT(10 * STANDARD_VECTOR_SIZE));
+	pending->Complete();
+	REQUIRE_NO_FAIL(*pending);
+}
+#endif
 
 TEST_CASE("Partitioned COPY to remote storage does not require the local filesystem", "[api][copy]") {
 	DuckDB db(nullptr);
