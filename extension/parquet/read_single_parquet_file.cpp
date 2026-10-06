@@ -286,7 +286,7 @@ static void ReadSingleParquetFilePrepareReadAhead(ClientContext &context, TableF
 }
 
 //! The parquet reader can always be read ahead - the row group a thread claimed is loaded before it is scanned
-static bool ReadSingleParquetFileSupportsReadAhead(const FunctionData &bind_data) {
+static bool ReadSingleParquetFileSupportsReadAhead(optional_ptr<const FunctionData> bind_data) {
 	return true;
 }
 

@@ -21,6 +21,11 @@
 
 #include "dbgen/config.h"
 
+#include "duckdb/common/assert.hpp"
+
+#include <limits>
+
+#include <array>
 #include <math.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -51,36 +56,54 @@ static bool seed_matches_table(seed_t &seed, int t, DBGenContext *ctx) {
 	return seed.table == t || seed.table == ctx->tdefs[t].child;
 }
 
-void row_start(int t, DBGenContext *ctx) {
-	t = seed_table(t);
-	for (int i = 0; i <= MAX_STREAM; i++) {
-		if (seed_matches_table(ctx->Seed[i], t, ctx)) {
-			ctx->Seed[i].usage = 0;
-		}
-	}
+// the streams of each table; the seed table and the child relation are constants of the generator
+struct TableStreams {
+	int count = 0;
+	int stream[MAX_STREAM + 1];
+};
 
-	return;
+static constexpr int TABLE_COUNT = sizeof(DBGenContext::tdefs) / sizeof(DBGenContext::tdefs[0]);
+
+static const TableStreams &table_streams(int t, DBGenContext *ctx) {
+	static const std::array<TableStreams, TABLE_COUNT> streams = [ctx]() {
+		std::array<TableStreams, TABLE_COUNT> result;
+		for (int table = 0; table < TABLE_COUNT; table++) {
+			for (int i = 0; i <= MAX_STREAM; i++) {
+				if (seed_matches_table(ctx->Seed[i], table, ctx)) {
+					result[table].stream[result[table].count++] = i;
+				}
+			}
+		}
+		return result;
+	}();
+	D_ASSERT(t >= 0 && t < TABLE_COUNT);
+	return streams[t];
+}
+
+void row_start(int t, DBGenContext *ctx) {
+	auto &streams = table_streams(seed_table(t), ctx);
+	for (int s = 0; s < streams.count; s++) {
+		ctx->Seed[streams.stream[s]].usage = 0;
+	}
 }
 
 void row_stop_h(int t, DBGenContext *ctx) {
-	t = seed_table(t);
-	for (int i = 0; i <= MAX_STREAM; i++) {
-		if (seed_matches_table(ctx->Seed[i], t, ctx)) {
-			if (set_seeds && (ctx->Seed[i].usage > ctx->Seed[i].boundary)) {
-				fprintf(stderr, "\nSEED CHANGE: seed[%d].usage = " HUGE_FORMAT "\n", i, ctx->Seed[i].usage);
-				ctx->Seed[i].boundary = ctx->Seed[i].usage;
-			} else {
-				auto advance_count = ctx->Seed[i].boundary - ctx->Seed[i].usage;
-				if (advance_count > 0) {
-					NthElement(advance_count, &ctx->Seed[i].value);
-				}
-#ifdef RNG_TEST
-				ctx->Seed[i].nCalls += advance_count;
-#endif
+	auto &streams = table_streams(seed_table(t), ctx);
+	for (int s = 0; s < streams.count; s++) {
+		auto &seed = ctx->Seed[streams.stream[s]];
+		if (set_seeds && (seed.usage > seed.boundary)) {
+			fprintf(stderr, "\nSEED CHANGE: seed[%d].usage = " HUGE_FORMAT "\n", streams.stream[s], seed.usage);
+			seed.boundary = seed.usage;
+		} else {
+			auto advance_count = seed.boundary - seed.usage;
+			if (advance_count > 0) {
+				NthElement(advance_count, &seed.value);
 			}
+#ifdef RNG_TEST
+			seed.nCalls += advance_count;
+#endif
 		}
 	}
-	return;
 }
 
 void dump_seeds(int tbl, seed_t *seeds) {
