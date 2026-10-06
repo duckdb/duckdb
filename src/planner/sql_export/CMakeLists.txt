@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   bound_expression_sql_exporter.cpp
   logical_plan_sql_exporter.cpp
+  sql_export_composition.cpp
   sql_export_constants.cpp
   sql_export_cte.cpp
   sql_export_functions.cpp

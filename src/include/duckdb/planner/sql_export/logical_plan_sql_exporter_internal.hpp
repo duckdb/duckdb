@@ -91,6 +91,18 @@ struct LogicalPlanSQLExportHelpers {
 	static void SetChildScope(SelectNode &select, LogicalPlanSQLExportedChild child,
 	                          optional_ptr<const SelectNode> plain);
 
+	static optional_ptr<const SelectNode> ComposeInput(LogicalOperator &op, const LogicalPlanSQLExportedChild &child,
+	                                                   BoundExpressionSQLExportState &state);
+
+	static bool HasSimpleGroups(const LogicalAggregate &aggregate);
+
+	static bool ComposeProjection(LogicalProjection &projection, LogicalPlanSQLExportedChild &child, SelectNode &select,
+	                              const BoundExpressionSQLExportContext &context,
+	                              const LogicalPlanVerificationPath &path);
+
+	static bool ComposeOrder(LogicalOperator &op, LogicalPlanSQLExportedChild &child, SelectNode &select,
+	                         const BoundExpressionSQLExportContext &context, const LogicalPlanVerificationPath &path);
+
 	static bool IsIdentityProjection(const LogicalProjection &projection,
 	                                 const vector<LogicalPlanSQLExportField> &fields);
 };

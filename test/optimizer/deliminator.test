@@ -68,6 +68,7 @@ logical_opt	<!REGEX>:.*(l_partkey IS NOT DISTINCT FROM l_partkey|l_suppkey IS NO
 # Reduced SQLStorm 6064: a pair-dependent predicate below a reused window CTE remains in the
 # normal decorrelation pipeline and exposes both join keys to the optimizer. MARK is retained
 # when column liveness cannot prove that conversion to SEMI is safe.
+# Verification projections can change anonymous join-key ordinals.
 statement ok
 CREATE TABLE storm_posts(id INTEGER, owner_user_id INTEGER, post_type_id INTEGER, title VARCHAR, creation_date DATE, score INTEGER);
 
@@ -101,7 +102,7 @@ EXPLAIN WITH ranked_posts AS (
 )
 SELECT * FROM top_posts ORDER BY post_id;
 ----
-logical_opt	<REGEX>:.*Join Type: (MARK|SEMI).*post_id.*post_id.*user_id = #0.*
+logical_opt	<REGEX>:.*Join Type: (MARK|SEMI).*post_id.*post_id.*user_id = #[0-9]+.*
 
 statement ok
 CREATE TABLE integers(i INTEGER, j integer)

@@ -805,21 +805,10 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		if (ExpressionFilter::IsRootOptionalExpression(func)) {
+			auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+			return !optional_child ||
+			       CollectValuesAndComparisonsFromExpression(*optional_child, in_values, comparisons);
 		}
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;

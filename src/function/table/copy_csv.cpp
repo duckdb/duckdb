@@ -140,13 +140,8 @@ static vector<unique_ptr<Expression>> CreateCastExpressions(WriteCSVData &bind_d
 			vector<unique_ptr<Expression>> children;
 			children.push_back(std::move(column));
 			children.push_back(make_uniq<BoundConstantExpression>(format));
-			ErrorData error;
 			FunctionBinder function_binder(context);
-			expr = function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier("strftime"),
-			                                          std::move(children), error, false);
-			if (!expr) {
-				error.Throw();
-			}
+			expr = function_binder.BindScalarFunction(Identifier::DefaultSchema(), "strftime", std::move(children));
 		} else {
 			// CAST <name> AS VARCHAR
 			expr = std::move(column);

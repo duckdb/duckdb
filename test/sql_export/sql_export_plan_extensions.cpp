@@ -106,9 +106,10 @@ TEST_CASE("Extension SQL reconstruction owns its result and preserves positional
 	auto rows = connection.Query(owned->query->ToString());
 	REQUIRE_NO_FAIL(*rows);
 	REQUIRE(rows->RowCount() == 2);
+	auto row_values = rows->Collection().GetRows();
 	for (idx_t row = 0; row < 2; row++) {
-		REQUIRE(rows->GetValue(0, row) == Value::INTEGER(20));
-		REQUIRE(rows->GetValue(1, row) == Value::INTEGER(10));
+		REQUIRE(row_values.GetValue(0, row) == Value::INTEGER(20));
+		REQUIRE(row_values.GetValue(1, row) == Value::INTEGER(10));
 	}
 }
 
@@ -147,7 +148,7 @@ TEST_CASE("Logical plan SQL export isolates extension column names and scope mod
 		}
 		leaf->export_sql = [&](SQLExportExtensionOperator &op, LogicalPlanSQLExportContext &,
 		                       const LogicalPlanVerificationPath &path) {
-			Parser parser;
+			Parser parser(*connection.context);
 			parser.ParseQuery(sql);
 			return op.ExportQuery(std::move(parser.statements[0]->Cast<SelectStatement>().node), path);
 		};

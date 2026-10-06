@@ -16,12 +16,16 @@
 #include <functional>
 
 namespace duckdb {
+class DatabaseInstance;
 class DuckDB;
 
 //! An extension compiled into this binary, as a name and the callable that loads it.
 struct LinkedExtension {
 	string name;
+	//! empty when what was registered is not an extension
 	std::function<void(DuckDB &)> load;
+	//! set instead of load when what was registered is not an extension, called for every database opened
+	std::function<void(DatabaseInstance &)> database_callback;
 };
 
 //! What a describe function described, once validated.

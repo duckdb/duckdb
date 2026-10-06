@@ -355,6 +355,9 @@ public:
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	bool single_value_identity = false;
 
+	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
+	bool is_holistic = false;
+
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
 };
@@ -400,6 +403,10 @@ public: // Properties
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
 	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
+
+	//! Whether the aggregate is holistic.
+	auto IsHolistic() const -> bool { return properties.is_holistic; }
+	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
 
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
@@ -876,9 +883,17 @@ public:
 	const shared_ptr<const AggregateFunction> &GetDefinition() const {
 		return definition;
 	}
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
 	//! The number of arguments that were received by "*args", they directly follow the standard parameters
 	idx_t GetVarArgsCount() const {
 		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
 	}
 	//! The number of arguments that were received by "**kwargs", they are the last arguments
 	idx_t GetKwargsCount() const {

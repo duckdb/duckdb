@@ -107,11 +107,11 @@ EXPLAIN (SQL) SELECT * FROM missing_explain_source;
 ----
 missing_explain_source
 
-statement error
+query TT
 EXPLAIN (SQL) SELECT __mark_join_marker FROM (VALUES (1,1)) l(a,c)
 JOIN BY (TYPE MARK) (VALUES (1,NULL::INTEGER)) r(b,d) ON a IS NOT DISTINCT FROM b AND c=d;
 ----
-<REGEX>:.*EXPLAIN \(SQL\) cannot render this query:.*MARK condition.*
+sql	<REGEX>:.*JOIN BY [(]TYPE MARK[)].*
 
 query TT
 EXPLAIN (SQL) SELECT * FROM duckdb_views();

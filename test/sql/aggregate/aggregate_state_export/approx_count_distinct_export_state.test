@@ -1,0 +1,120 @@
+# name: test/sql/aggregate/aggregate_state_export/approx_count_distinct_export_state.test
+# description: Test EXPORT_STATE for approx_count_distinct - the HyperLogLog sketch is explicitly (de)serialized
+# group: [aggregate_state_export]
+
+# the exported state is the sketch itself, so finalizing it gives exactly the direct estimate
+query II
+SELECT finalize(approx_count_distinct(i) EXPORT_STATE) = approx_count_distinct(i), approx_count_distinct(i) FROM range(100000) r(i);
+----
+true	99467
+
+# merging partial sketches takes the per-register maximum, which is what the direct sketch holds too
+query I
+SELECT finalize(combine_aggr(s)) FROM (SELECT approx_count_distinct(i) EXPORT_STATE AS s FROM range(100000) r(i) GROUP BY i % 7);
+----
+99467
+
+query I
+SELECT finalize(combine_aggr(s)) FROM (SELECT approx_count_distinct('v' || (i % 500)::VARCHAR) EXPORT_STATE AS s FROM range(5000) r(i) GROUP BY i % 3);
+----
+498
+
+# the state stores the sketch's precision and its 2^precision registers
+query III
+SELECT s.precision, len(s.registers), list_max(s.registers) BETWEEN 1 AND 55 FROM (
+    SELECT (approx_count_distinct(i) EXPORT_STATE)::STRUCT(precision UTINYINT, registers UTINYINT[]) s
+    FROM range(1000) t(i)
+) t;
+----
+10	1024	true
+
+# an empty sketch (no non-NULL input) exports all-zero registers and finalizes to zero, like the aggregate itself
+query II
+SELECT finalize(s), list_max(s::STRUCT(precision UTINYINT, registers UTINYINT[]).registers) FROM (
+    SELECT approx_count_distinct(x) EXPORT_STATE s FROM (SELECT NULL::INTEGER AS x FROM range(10))
+) t;
+----
+0	0
+
+query I
+SELECT finalize(approx_count_distinct(i) EXPORT_STATE) FROM (SELECT 1 AS i WHERE false) t;
+----
+0
+
+# combine_aggr across groups, including an empty state
+query I
+SELECT finalize(combine_aggr(s)) FROM (
+    SELECT approx_count_distinct(i) EXPORT_STATE AS s FROM range(0, 50000) t(i)
+    UNION ALL
+    SELECT approx_count_distinct(i) EXPORT_STATE AS s FROM range(50000, 100000) t(i)
+    UNION ALL
+    SELECT approx_count_distinct(i) EXPORT_STATE AS s FROM (SELECT 1 AS i WHERE false) t
+) t;
+----
+99467
+
+# a hand-built all-zero sketch is an empty state
+query I
+SELECT finalize(to_aggregate_state({'precision': 10, 'registers': list_resize([]::UTINYINT[], 1024, 0)}, 'approx_count_distinct', ['BIGINT']));
+----
+0
+
+# a NULL state finalizes to NULL (as for every aggregate) and is imported as an empty sketch when combined
+query I
+SELECT finalize(to_aggregate_state(NULL::STRUCT(precision UTINYINT, registers UTINYINT[]), 'approx_count_distinct', ['BIGINT']));
+----
+NULL
+
+query I
+SELECT finalize(combine_aggr(s)) = (SELECT approx_count_distinct(i) FROM range(1000) t(i)) FROM (
+    SELECT to_aggregate_state(NULL::STRUCT(precision UTINYINT, registers UTINYINT[]), 'approx_count_distinct', ['BIGINT']) s
+    UNION ALL
+    SELECT approx_count_distinct(i) EXPORT_STATE FROM range(1000) t(i)
+) t;
+----
+true
+
+# malformed states are rejected
+statement error
+SELECT finalize(to_aggregate_state({'precision': NULL, 'registers': list_resize([]::UTINYINT[], 1024, 0)}, 'approx_count_distinct', ['BIGINT']));
+----
+the state fields cannot be NULL
+
+statement error
+SELECT finalize(to_aggregate_state({'precision': 4, 'registers': list_resize([]::UTINYINT[], 16, 0)}, 'approx_count_distinct', ['BIGINT']));
+----
+expected precision 10, got 4
+
+statement error
+SELECT finalize(to_aggregate_state({'precision': 10, 'registers': [1, 2, 3]::UTINYINT[]}, 'approx_count_distinct', ['BIGINT']));
+----
+expected 1024 registers, got 3
+
+statement error
+SELECT finalize(to_aggregate_state({'precision': 10, 'registers': list_resize([]::UTINYINT[], 1024, NULL)}, 'approx_count_distinct', ['BIGINT']));
+----
+the registers cannot be NULL
+
+# a register holds the position of the first set bit of a 54-bit hash remainder, so it is at most 55
+statement error
+SELECT finalize(to_aggregate_state({'precision': 10, 'registers': list_resize([]::UTINYINT[], 1024, 56)}, 'approx_count_distinct', ['BIGINT']));
+----
+register value 56 exceeds 55
+
+require parquet
+
+# a state written through Parquet is re-typed with to_aggregate_state and merges as before
+statement ok
+COPY (SELECT i % 7 AS g, approx_count_distinct(i) EXPORT_STATE AS s FROM range(100000) r(i) GROUP BY g) TO '__TEST_DIR__/approx_count_distinct_states.parquet' (FORMAT PARQUET);
+
+query I
+SELECT finalize(combine_aggr(to_aggregate_state(s, 'approx_count_distinct', ['BIGINT']))) FROM '__TEST_DIR__/approx_count_distinct_states.parquet';
+----
+99467
+
+query II
+SELECT g, finalize(to_aggregate_state(s, 'approx_count_distinct', ['BIGINT'])) FROM '__TEST_DIR__/approx_count_distinct_states.parquet' ORDER BY g LIMIT 3;
+----
+0	13844
+1	14708
+2	13965

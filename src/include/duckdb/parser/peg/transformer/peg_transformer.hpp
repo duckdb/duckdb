@@ -114,6 +114,7 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.Identifier", Iden
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.InsertColumnOrder", InsertColumnOrder);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.InsertValues", InsertValues);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.IsDistinctFromTail", IsDistinctFromTail);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.IsExpressionTail", IsExpressionTail);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinPrefix", JoinPrefix);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinQualifier", JoinQualifier);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.JoinType", JoinType);
@@ -224,6 +225,7 @@ DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.unique_ptr<Window
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<FunctionArgument>", vector<FunctionArgument>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<GenericCopyOption>", vector<GenericCopyOption>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<Identifier>", vector<Identifier>);
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<IsExpressionTail>", vector<IsExpressionTail>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<LogicalType>", vector<LogicalType>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<MacroParameter>", vector<MacroParameter>);
 DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.transform_result.vector<OrderByNode>", vector<OrderByNode>);
@@ -626,6 +628,7 @@ public:
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
+	static LogicalType ApplyColumnCollation(const optional<LogicalType> &type, unique_ptr<ParsedExpression> collation);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
 	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);
 	static vector<GroupingSet> GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
@@ -715,6 +718,9 @@ public:
 	static void InitializeAlterSchemaStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAlterSchemaStmtTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeAlterSchemaOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeAlterSchemaOptionsTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeAlterTableOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeAlterTableOptionsTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -1421,10 +1427,9 @@ public:
 	static void InitializeRelOptionNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeRelOptionNameTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
-	static void InitializeDottedIdentifierStringTrampoline(PEGTransformer &transformer,
-	                                                       GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue>
-	FinalizeDottedIdentifierStringTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeDottedColLabelTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDottedColLabelTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
 	static void InitializeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
 	                                                     GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
@@ -1484,6 +1489,9 @@ public:
 	static void InitializeCreateSchemaStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateSchemaStmtTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeWithOptionListTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeWithOptionListTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
 	static void InitializeCreateSecretStmtTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCreateSecretStmtTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -1700,6 +1708,14 @@ public:
 	static void InitializeKeyActionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeKeyActionsTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
+	static void InitializeUpdateFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeUpdateFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
+	static void InitializeDeleteFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                      GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDeleteFirstKeyActionsTrampoline(PEGTransformer &transformer,
+	                                                                                GeneratedTransformProcess &process);
 	static void InitializeUpdateActionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUpdateActionTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
@@ -1787,6 +1803,15 @@ public:
 	static void InitializeGeneratedColumnTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeGeneratedAlwaysTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedAlwaysTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedByDefaultTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedByDefaultTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
 	                                                    GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
@@ -1915,6 +1940,9 @@ public:
 	static void InitializeTargetOptAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeTargetOptAliasTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
+	static void InitializeTargetAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeTargetAliasTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
 	static void InitializeDeleteUsingClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeDeleteUsingClauseTrampoline(PEGTransformer &transformer,
 	                                                                            GeneratedTransformProcess &process);
@@ -2551,6 +2579,26 @@ public:
 	static void InitializeIsExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeIsExpressionTrampoline(PEGTransformer &transformer,
 	                                                                       GeneratedTransformProcess &process);
+	static void InitializeIsExpressionContinuationTrampoline(PEGTransformer &transformer,
+	                                                         GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue>
+	FinalizeIsExpressionContinuationTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeIsExpressionTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsExpressionTailTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeIsTestTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsTestTailTrampoline(PEGTransformer &transformer,
+	                                                                     GeneratedTransformProcess &process);
+	static void InitializeIsDistinctTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsDistinctTailTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeIsComparisonTailTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsComparisonTailTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
+	static void InitializeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeIsOtherOperatorTailTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeIsTestTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeIsTestTrampoline(PEGTransformer &transformer,
 	                                                                 GeneratedTransformProcess &process);
@@ -2624,13 +2672,16 @@ public:
 	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
 	FinalizeBetweenInLikeExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static void InitializeBetweenInLikeOpTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeBetweenInLikeOpTrampoline(PEGTransformer &transformer,
-	                                                                          GeneratedTransformProcess &process);
-	static void InitializeBetweenInLikeOpExpressionTrampoline(PEGTransformer &transformer,
-	                                                          GeneratedTransformProcess &process);
+	static void InitializeInPredicateTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeInPredicateTrampoline(PEGTransformer &transformer,
+	                                                                      GeneratedTransformProcess &process);
+	static void InitializeBetweenLikeOpTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeBetweenLikeOpTrampoline(PEGTransformer &transformer,
+	                                                                        GeneratedTransformProcess &process);
+	static void InitializeBetweenLikeOpExpressionTrampoline(PEGTransformer &transformer,
+	                                                        GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue>
-	FinalizeBetweenInLikeOpExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	FinalizeBetweenLikeOpExpressionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static void InitializeLikeClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeLikeClauseTrampoline(PEGTransformer &transformer,
 	                                                                     GeneratedTransformProcess &process);
@@ -4075,7 +4126,7 @@ public:
 	                                                     vector<unique_ptr<AlterTableInfo>> alter_table_options);
 	static unique_ptr<AlterInfo> TransformAlterSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_exists,
 	                                                      const QualifiedName &qualified_name,
-	                                                      unique_ptr<AlterTableInfo> rename_alter);
+	                                                      unique_ptr<AlterTableInfo> alter_schema_options);
 	static unique_ptr<AlterTableInfo> TransformAddConstraint(PEGTransformer &transformer,
 	                                                         unique_ptr<Constraint> top_level_constraint);
 	static unique_ptr<AlterTableInfo> TransformDropConstraint(PEGTransformer &transformer,
@@ -4125,6 +4176,7 @@ public:
 	static string TransformSetNullability(PEGTransformer &transformer);
 	static unique_ptr<AlterTableInfo> TransformAlterType(PEGTransformer &transformer, const bool &has_result,
 	                                                     const optional<LogicalType> &type,
+	                                                     optional<ColumnConstraintEntry> column_collation,
 	                                                     optional<unique_ptr<ParsedExpression>> using_expression);
 	static unique_ptr<ParsedExpression> TransformUsingExpression(PEGTransformer &transformer,
 	                                                             unique_ptr<ParsedExpression> expression);
@@ -4394,9 +4446,8 @@ public:
 	static unique_ptr<CreateStatement>
 	TransformCreateIndexStmt(PEGTransformer &transformer, const optional<bool> &unique_index,
 	                         const optional<bool> &if_not_exists, const optional<Identifier> &index_name,
-	                         unique_ptr<BaseTableRef> base_table_name,
-	                         const optional<vector<string>> &insert_column_list, const optional<Identifier> &index_type,
-	                         optional<vector<unique_ptr<ParsedExpression>>> index_element,
+	                         unique_ptr<BaseTableRef> base_table_name, const optional<Identifier> &index_type,
+	                         vector<unique_ptr<ParsedExpression>> index_element,
 	                         optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
 	                         optional<unique_ptr<ParsedExpression>> where_clause);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
@@ -4419,7 +4470,8 @@ public:
 	TransformRelOption(PEGTransformer &transformer, const Identifier &rel_option_name,
 	                   optional<unique_ptr<ParsedExpression>> rel_option_argument_opt);
 	static Identifier TransformRelOptionName(PEGTransformer &transformer, const string &child);
-	static string TransformDottedIdentifierString(PEGTransformer &transformer, const vector<string> &dotted_identifier);
+	static string TransformDottedColLabel(PEGTransformer &transformer, const string &col_label,
+	                                      const optional<vector<string>> &dot_col_label);
 	static unique_ptr<ParsedExpression> TransformRelOptionArgumentOpt(PEGTransformer &transformer,
 	                                                                  unique_ptr<ParsedExpression> def_arg);
 	static unique_ptr<ParsedExpression> TransformDefArgNull(PEGTransformer &transformer, const Value &null_literal);
@@ -4446,9 +4498,13 @@ public:
 	                                                                unique_ptr<ParsedExpression> expression);
 	static unique_ptr<MacroFunction>
 	TransformTableMacroDefinition(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
-	static unique_ptr<CreateStatement> TransformCreateSchemaStmt(PEGTransformer &transformer,
-	                                                             const optional<bool> &if_not_exists,
-	                                                             const QualifiedName &qualified_name);
+	static unique_ptr<CreateStatement>
+	TransformCreateSchemaStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
+	                          const QualifiedName &qualified_name,
+	                          optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_option_list);
+	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
+	TransformWithOptionList(PEGTransformer &transformer,
+	                        case_insensitive_map_t<unique_ptr<ParsedExpression>> rel_option_list);
 	static unique_ptr<CreateStatement>
 	TransformCreateSecretStmt(PEGTransformer &transformer, const optional<bool> &if_not_exists,
 	                          const optional<Identifier> &secret_name,
@@ -4536,7 +4592,7 @@ public:
 	static CreateTableColumnElement TransformCreateTableConstraint(PEGTransformer &transformer,
 	                                                               unique_ptr<Constraint> top_level_constraint);
 	static ConstraintColumnDefinition
-	TransformColumnDefinition(PEGTransformer &transformer, const vector<string> &dotted_identifier,
+	TransformColumnDefinition(PEGTransformer &transformer, const Identifier &identifier,
 	                          const optional<LogicalType> &type, optional<GeneratedColumnDefinition> generated_column,
 	                          const bool &has_result, optional<vector<ColumnConstraintEntry>> column_constraint);
 	static ColumnConstraintEntry TransformNotNullConstraint(PEGTransformer &transformer, const bool &child);
@@ -4551,13 +4607,15 @@ public:
 	static ColumnConstraintEntry TransformForeignKeyConstraint(PEGTransformer &transformer,
 	                                                           unique_ptr<BaseTableRef> base_table_name,
 	                                                           const optional<vector<string>> &column_list,
-	                                                           const KeyActions &key_actions);
+	                                                           const optional<KeyActions> &key_actions);
 	static ColumnConstraintEntry TransformColumnCollation(PEGTransformer &transformer,
 	                                                      const vector<string> &dotted_identifier);
 	static ColumnConstraintEntry TransformColumnCompression(PEGTransformer &transformer,
 	                                                        const Identifier &col_id_or_string);
-	static KeyActions TransformKeyActions(PEGTransformer &transformer, const optional<string> &update_action,
-	                                      const optional<string> &delete_action);
+	static KeyActions TransformUpdateFirstKeyActions(PEGTransformer &transformer, const string &update_action,
+	                                                 const optional<string> &delete_action);
+	static KeyActions TransformDeleteFirstKeyActions(PEGTransformer &transformer, const string &delete_action,
+	                                                 const optional<string> &update_action);
 	static string TransformUpdateAction(PEGTransformer &transformer, const string &key_action);
 	static string TransformDeleteAction(PEGTransformer &transformer, const string &key_action);
 	static string TransformNoKeyAction(PEGTransformer &transformer);
@@ -4582,9 +4640,12 @@ public:
 	static string TransformDotColLabel(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformColLabelIdentifier(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformStringLiteralIdentifier(PEGTransformer &transformer, const string &string_literal);
-	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, const bool &has_result,
+	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer,
+	                                                          const optional<bool> &generated_always,
 	                                                          unique_ptr<ParsedExpression> expression,
 	                                                          const optional<bool> &generated_column_type);
+	static bool TransformGeneratedAlways(PEGTransformer &transformer);
+	static bool TransformGeneratedByDefault(PEGTransformer &transformer);
 	static bool TransformCommitAction(PEGTransformer &transformer, const bool &preserve_or_delete);
 	static bool TransformPreserveRows(PEGTransformer &transformer);
 	static bool TransformDeleteRows(PEGTransformer &transformer);
@@ -4646,7 +4707,9 @@ public:
 	                                                           unique_ptr<BaseTableRef> base_table_name);
 	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
 	                                                        unique_ptr<BaseTableRef> base_table_name,
-	                                                        const bool &has_result, const optional<Identifier> &col_id);
+	                                                        const optional<Identifier> &target_alias);
+	static Identifier TransformTargetAlias(PEGTransformer &transformer, const bool &has_result,
+	                                       const Identifier &col_id);
 	static vector<unique_ptr<TableRef>> TransformDeleteUsingClause(PEGTransformer &transformer,
 	                                                               vector<unique_ptr<TableRef>> table_ref);
 	static unique_ptr<SelectStatement> TransformDescribeStatement(PEGTransformer &transformer,
@@ -4995,9 +5058,19 @@ public:
 	                                                                  unique_ptr<ParsedExpression> is_expression);
 	static vector<bool> TransformNotExpression(PEGTransformer &transformer, const vector<bool> &not_keyword);
 	static bool TransformNotKeyword(PEGTransformer &transformer);
-	static unique_ptr<ParsedExpression> TransformIsExpression(PEGTransformer &transformer,
-	                                                          unique_ptr<ParsedExpression> is_distinct_from_expression,
-	                                                          optional<vector<unique_ptr<ParsedExpression>>> is_test);
+	static unique_ptr<ParsedExpression>
+	TransformIsExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> is_distinct_from_expression,
+	                      optional<vector<IsExpressionTail>> is_expression_continuation);
+	static vector<IsExpressionTail>
+	TransformIsExpressionContinuation(PEGTransformer &transformer, unique_ptr<ParsedExpression> is_test,
+	                                  optional<vector<IsExpressionTail>> is_expression_tail);
+	static IsExpressionTail TransformIsTestTail(PEGTransformer &transformer, unique_ptr<ParsedExpression> is_test);
+	static IsExpressionTail TransformIsDistinctTail(PEGTransformer &transformer,
+	                                                IsDistinctFromTail is_distinct_from_tail);
+	static IsExpressionTail TransformIsComparisonTail(PEGTransformer &transformer,
+	                                                  ComparisonExpressionTail comparison_expression_tail);
+	static IsExpressionTail TransformIsOtherOperatorTail(PEGTransformer &transformer,
+	                                                     OtherOperatorTail other_operator_tail);
 	static unique_ptr<ParsedExpression> TransformIsLiteral(PEGTransformer &transformer, const bool &has_result,
 	                                                       const Value &is_literal_value);
 	static Value TransformUnknownLiteral(PEGTransformer &transformer);
@@ -5026,17 +5099,18 @@ public:
 	static ExpressionType TransformOperatorGreaterThan(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorLessThanEquals(PEGTransformer &transformer);
 	static ExpressionType TransformOperatorGreaterThanEquals(PEGTransformer &transformer);
-	static unique_ptr<ParsedExpression>
-	TransformBetweenInLikeExpression(PEGTransformer &transformer,
-	                                 unique_ptr<ParsedExpression> other_operator_expression,
-	                                 optional<BetweenInLikeOperator> between_in_like_op);
-	static BetweenInLikeOperator TransformBetweenInLikeOp(PEGTransformer &transformer, const bool &has_result,
-	                                                      unique_ptr<ParsedExpression> between_in_like_op_expression);
+	static unique_ptr<ParsedExpression> TransformBetweenInLikeExpression(
+	    PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+	    optional<vector<BetweenInLikeOperator>> in_predicate, optional<BetweenInLikeOperator> between_like_op);
+	static BetweenInLikeOperator TransformInPredicate(PEGTransformer &transformer, const bool &has_result,
+	                                                  unique_ptr<ParsedExpression> in_clause);
+	static BetweenInLikeOperator TransformBetweenLikeOp(PEGTransformer &transformer, const bool &has_result,
+	                                                    unique_ptr<ParsedExpression> between_like_op_expression);
 	static unique_ptr<ParsedExpression> TransformLikeClause(PEGTransformer &transformer, const string &like_variations,
 	                                                        unique_ptr<ParsedExpression> other_operator_expression,
 	                                                        optional<unique_ptr<ParsedExpression>> escape_clause);
 	static unique_ptr<ParsedExpression> TransformEscapeClause(PEGTransformer &transformer,
-	                                                          unique_ptr<ParsedExpression> comparison_expression);
+	                                                          unique_ptr<ParsedExpression> other_operator_expression);
 	static string TransformLikeToken(PEGTransformer &transformer);
 	static string TransformILikeToken(PEGTransformer &transformer);
 	static string TransformGlobToken(PEGTransformer &transformer);
@@ -5056,7 +5130,8 @@ public:
 	static unique_ptr<ParsedExpression>
 	TransformInSelectStatement(PEGTransformer &transformer, unique_ptr<SelectStatement> select_statement_internal);
 	static unique_ptr<ParsedExpression>
-	TransformBetweenClause(PEGTransformer &transformer, unique_ptr<ParsedExpression> other_operator_expression,
+	TransformBetweenClause(PEGTransformer &transformer, const bool &,
+	                       unique_ptr<ParsedExpression> other_operator_expression,
 	                       unique_ptr<ParsedExpression> other_operator_expression_1);
 	static unique_ptr<ParsedExpression>
 	TransformInfixOtherOperatorExpression(PEGTransformer &transformer, unique_ptr<ParsedExpression> bitwise_expression,
