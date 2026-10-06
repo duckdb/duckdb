@@ -17,6 +17,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/pipeline_schedule.hpp"
+#include "duckdb/parallel/progress_verifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -80,33 +81,41 @@ ClientContext &Pipeline::GetClientContext() {
 }
 
 bool Pipeline::GetProgress(ProgressData &progress) {
+	PipelineProgress detailed_progress;
+	GetDetailedProgress(detailed_progress);
+	progress = detailed_progress.pipeline;
+	return progress.IsValid();
+}
+
+void Pipeline::GetDetailedProgress(PipelineProgress &progress) {
 	D_ASSERT(source);
 	idx_t source_cardinality = MinValue<idx_t>(source->estimated_cardinality, 1ULL << 48ULL);
 	if (source_cardinality < 1) {
 		source_cardinality = 1;
 	}
 	if (!initialized) {
-		progress.done = 0;
-		progress.total = double(source_cardinality);
-		return true;
+		progress.source.done = 0;
+		progress.source.total = double(source_cardinality);
+		progress.pipeline = progress.source;
+		return;
 	}
 	auto &client = executor.context;
 
 	auto state = GetSourceState();
 	if (state) {
-		progress = source->GetProgress(client, *state);
+		progress.source = source->GetProgress(client, *state);
 	} else {
-		progress.done = 0;
-		progress.total = double(source_cardinality);
+		progress.source.done = 0;
+		progress.source.total = double(source_cardinality);
 	}
-	progress.Normalize(double(source_cardinality));
+	progress.pipeline = progress.source;
+	progress.pipeline.Normalize(double(source_cardinality));
 	if (sink) {
 		lock_guard<mutex> guard(sink->lock);
 		if (sink->sink_state) {
-			progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+			progress.pipeline = sink->GetSinkProgress(client, *sink->sink_state, progress.pipeline);
 		}
 	}
-	return progress.IsValid();
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
@@ -353,6 +362,7 @@ void Pipeline::ResetSinkForReschedule() {
 	if (!sink->IsSink()) {
 		throw InternalException("Sink of pipeline does not have IsSink set");
 	}
+	NotifyProgressReset();
 	lock_guard<mutex> guard(sink->lock);
 	auto &client = GetClientContext();
 	auto allow_reuse = Settings::Get<EnableCachingOperatorsSetting>(client);
@@ -394,6 +404,7 @@ void Pipeline::Reset() {
 }
 
 void Pipeline::ResetForReschedule(bool reset_sink) {
+	NotifyProgressReset();
 	if (reset_sink) {
 		ResetSinkForReschedule();
 	}
@@ -423,12 +434,20 @@ void Pipeline::ResetForReschedule(bool reset_sink) {
 	initialized = true;
 }
 
+void Pipeline::NotifyProgressReset() {
+	auto progress_verifier = executor.GetProgressVerifier();
+	if (progress_verifier) {
+		progress_verifier->OnReset(*this);
+	}
+}
+
 void Pipeline::ResetSource(bool force) {
 	if (source && !source->IsSource()) {
 		throw InternalException("Source of pipeline does not have IsSource set");
 	}
 	auto source_state = GetSourceState();
 	if (force || !source_state) {
+		NotifyProgressReset();
 		auto partition_info = sink ? sink->RequiredPartitionInfo() : OperatorPartitionInfo::NoPartitionInfo();
 		SetSourceState(ToSharedSourceState(source->GetGlobalSourceState(GetClientContext(), partition_info)));
 	}

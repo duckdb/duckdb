@@ -149,6 +149,11 @@ shared_ptr<DuckDB> DBInstanceCache::CreateInstance(const string &database, DBCon
 	return CreateInstanceInternal(database, config, cache_instance, unique_lock<mutex>(cache_lock), on_create);
 }
 
+shared_ptr<DuckDB> DBInstanceCache::CreateEmptyInstance(DBConfig &config) {
+	config.path_manager = path_manager;
+	return DuckDB::CreateEmpty(&config);
+}
+
 shared_ptr<DuckDB> DBInstanceCache::GetOrCreateInstance(const string &database, DBConfig &config_dict,
                                                         bool cache_instance,
                                                         const std::function<void(DuckDB &)> &on_create) {

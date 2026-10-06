@@ -248,7 +248,7 @@ auto TryGetExceptionTypeFromErrorCode(DUCKDB_V2_ERROR code) -> optional<Exceptio
 	}
 }
 
-auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, string &raw_message) noexcept -> void {
+auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, optional<string> &raw_message) noexcept -> void {
 	// Set the fallback code first (non-throwing), then render the detail.
 	code = DUCKDB_V2_ERROR_API;
 	try {
@@ -272,11 +272,11 @@ auto RenderCaughtError(DUCKDB_V2_ERROR &code, string &text, string &raw_message)
 		// Rendering the detail exhausted memory: that supersedes the original report.
 		code = DUCKDB_V2_ERROR_RESOURCE_OUT_OF_MEMORY;
 		text.clear();
-		raw_message.clear();
+		raw_message.reset();
 	} catch (...) {
 		// Rendering the detail failed: keep the code produced so far with no detail.
 		text.clear();
-		raw_message.clear();
+		raw_message.reset();
 	}
 }
 
@@ -302,7 +302,7 @@ auto NullArgumentError(duckdb_v2_error_info_handle *err, const char *function, c
 	auto &out = *Convert(*err);
 	out.code = code;
 	out.message.clear();
-	out.raw_message.clear();
+	out.raw_message.reset();
 	try {
 		// Render through ErrorData so message/raw_message match what WithErrorHandler
 		// produces for a thrown InvalidInputException.
@@ -358,19 +358,22 @@ static void PopulateOptionAliases(const unique_ptr<CV2Option> &out, const Identi
 	}
 }
 
-// Read the effective setting for `name` through `client`'s setting cascade.
-// For a databases internal connection (no LOCAL overrides) this returns GLOBAL -> static default;
-// For a client connection it returns LOCAL -> GLOBAL -> static default.
-// Falls back to `fallback_default` if the cascade returned NULL.
-static std::string ReadEffectiveSetting(ClientContext &client, const Identifier &name,
-                                        const std::string &fallback_default) {
-	if (Value result; client.TryGetCurrentSetting(name, result) && !result.IsNull()) {
+string CV2OptionSource::ReadSetting(const Identifier &name, const string &fallback) const {
+	if (staged_settings) {
+		auto staged = staged_settings->find(name);
+		if (staged != staged_settings->end()) {
+			return staged->second;
+		}
+	}
+	Value result;
+	auto found = context ? context->TryGetCurrentSetting(name, result) : config.TryGetCurrentSetting(name, result);
+	if (found && !result.IsNull()) {
 		return result.ToString();
 	}
-	return fallback_default;
+	return fallback;
 }
 
-static unique_ptr<CV2Option> PopulateOptionFromCore(const ConfigurationOption &option, ClientContext &client) {
+static unique_ptr<CV2Option> PopulateOptionFromCore(const ConfigurationOption &option, const CV2OptionSource &source) {
 	auto out = make_uniq<CV2Option>();
 
 	out->name = option.name ? option.name : "";
@@ -379,7 +382,7 @@ static unique_ptr<CV2Option> PopulateOptionFromCore(const ConfigurationOption &o
 	out->default_setting = option.default_value ? option.default_value : "";
 	out->aliases.clear();
 	PopulateOptionAliases(out, out->name);
-	out->setting = ReadEffectiveSetting(client, out->name, out->default_setting);
+	out->setting = source.ReadSetting(out->name, out->default_setting);
 
 	return out;
 }
@@ -387,7 +390,7 @@ static unique_ptr<CV2Option> PopulateOptionFromCore(const ConfigurationOption &o
 // Populate `out` from an extension option. Extension options carry no
 // SettingScopeTarget (the V2 enum reports UNKNOWN) and no aliases.
 static unique_ptr<CV2Option> PopulateOptionFromExtension(const Identifier &name, const ExtensionOption &ext_option,
-                                                         ClientContext &client) {
+                                                         const CV2OptionSource &source) {
 	auto out = make_uniq<CV2Option>();
 
 	out->name = name;
@@ -395,22 +398,26 @@ static unique_ptr<CV2Option> PopulateOptionFromExtension(const Identifier &name,
 	out->target_scope = DUCKDB_V2_OPTION_TARGET_SCOPE_UNKNOWN;
 	out->default_setting = ext_option.default_value.IsNull() ? std::string() : ext_option.default_value.ToString();
 	out->aliases.clear();
-	out->setting = ReadEffectiveSetting(client, name, out->default_setting);
+	out->setting = source.ReadSetting(name, out->default_setting);
 
 	return out;
 }
 
-unique_ptr<CV2Option> CV2Option::FromIndex(ClientContext &context, DBConfig &config, idx_t index) {
+idx_t CV2Option::Count(const CV2OptionSource &source) {
+	return DBConfig::GetOptionCount() + source.GetConfig().GetExtensionSettings().size();
+}
+
+unique_ptr<CV2Option> CV2Option::FromIndex(const CV2OptionSource &source, idx_t index) {
 	const auto core_count = DBConfig::GetOptionCount();
 	if (index < core_count) {
 		auto option = DBConfig::GetOptionByIndex(index);
 		if (!option) {
 			throw InvalidInputException("core option not found at given index");
 		}
-		return PopulateOptionFromCore(*option, context);
+		return PopulateOptionFromCore(*option, source);
 	}
 	const idx_t ext_rel = index - core_count;
-	auto ext_settings = config.GetExtensionSettings();
+	auto ext_settings = source.GetConfig().GetExtensionSettings();
 	if (ext_rel >= ext_settings.size()) {
 		throw InvalidInputException("option index out of range");
 	}
@@ -418,20 +425,20 @@ unique_ptr<CV2Option> CV2Option::FromIndex(ClientContext &context, DBConfig &con
 
 	for (const auto &[name, option] : ext_settings) {
 		if (i == ext_rel) {
-			return PopulateOptionFromExtension(name, option, context);
+			return PopulateOptionFromExtension(name, option, source);
 		}
 		++i;
 	}
 	throw InvalidInputException("option index out of range");
 }
 
-unique_ptr<CV2Option> CV2Option::FromName(ClientContext &context, DBConfig &config, std::string_view name) {
+unique_ptr<CV2Option> CV2Option::FromName(const CV2OptionSource &source, std::string_view name) {
 	Identifier name_id(name);
 	if (auto option = DBConfig::GetOptionByName(name_id)) {
-		return PopulateOptionFromCore(*option, context);
+		return PopulateOptionFromCore(*option, source);
 	}
-	if (ExtensionOption ext_option; config.TryGetExtensionOption(name_id, ext_option)) {
-		return PopulateOptionFromExtension(name_id, ext_option, context);
+	if (ExtensionOption ext_option; source.GetConfig().TryGetExtensionOption(name_id, ext_option)) {
+		return PopulateOptionFromExtension(name_id, ext_option, source);
 	}
 	throw InvalidInputException("unknown configuration option: %s", name_id.GetIdentifierName());
 }

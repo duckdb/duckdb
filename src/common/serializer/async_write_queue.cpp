@@ -124,14 +124,7 @@ void AsyncWriteQueue::Submit(AsyncWriteRequest request) {
 	}
 	auto request_size = request.Size();
 	if (executor && executor->HasError()) {
-		ErrorData error;
-		try {
-			executor->ThrowError();
-		} catch (const std::exception &ex) {
-			error = ErrorData(ex);
-		} catch (...) { // LCOV_EXCL_START
-			error = ErrorData("Unknown exception during async write");
-		} // LCOV_EXCL_STOP
+		auto error = executor->GetError();
 		request.payload.reset();
 		CompleteRequest(request, request_size, error);
 		error.Throw();
@@ -316,14 +309,7 @@ void AsyncWriteQueue::DrainRequests() {
 		}
 	} catch (...) {
 		auto error_ptr = std::current_exception();
-		ErrorData error;
-		try {
-			std::rethrow_exception(error_ptr);
-		} catch (const std::exception &ex) {
-			error = ErrorData(ex);
-		} catch (...) { // LCOV_EXCL_START
-			error = ErrorData("Unknown exception during async write");
-		} // LCOV_EXCL_STOP
+		auto error = ErrorDataFromExceptionPtr(error_ptr);
 		request_idx++;
 		for (; request_idx < requests.size(); request_idx++) {
 			auto &request = requests[request_idx].request;
@@ -419,15 +405,10 @@ void AsyncWriteQueue::Flush() {
 		return;
 	}
 
-	try {
+	{
+		// join before leaving this scope, whether the scheduling succeeds or throws
+		TaskExecutor::JoinGuard join(*executor);
 		ScheduleTasksInternal(true);
-		executor->WorkOnTasks();
-	} catch (...) {
-		try {
-			executor->WorkOnTasks();
-		} catch (...) {
-		}
-		throw;
 	}
 	RethrowTaskError();
 }
@@ -774,7 +755,7 @@ void ManagedAsyncWriteQueue::ApplyBackpressure() {
 		idx_t current_pending_bytes;
 		{
 			lock_guard<mutex> guard(lock);
-			D_ASSERT(external_pending_bytes == 0);
+			// external bytes a stream wrapper has not adopted yet are still pending
 			current_pending_bytes = TotalPendingBytes();
 		}
 		if (current_pending_bytes <= BackpressureBudget()) {

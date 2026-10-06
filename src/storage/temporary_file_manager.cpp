@@ -102,10 +102,18 @@ bool TemporaryFileIndex::IsValid() const {
 //===--------------------------------------------------------------------===//
 // BlockIndexManager
 //===--------------------------------------------------------------------===//
-BlockIndexManager::BlockIndexManager() : max_index(0), manager(nullptr) {
+BlockIndexManager::BlockIndexManager() : max_index(0), manager(nullptr), encrypted(false) {
 }
 
-BlockIndexManager::BlockIndexManager(TemporaryFileManager &manager) : max_index(0), manager(&manager) {
+BlockIndexManager::BlockIndexManager(TemporaryFileManager &manager, bool encrypted)
+    : max_index(0), manager(&manager), encrypted(encrypted) {
+}
+
+//! Physical stride of one block on disk: payload + (per-block encryption header, if encrypted).
+static idx_t PhysicalBlockSize(const TemporaryBufferSize size, const bool encrypted) {
+	const auto base = size == TemporaryBufferSize::DEFAULT ? DEFAULT_BLOCK_ALLOC_SIZE : TemporaryBufferSizeToSize(size);
+	const auto header_size = encrypted ? DEFAULT_ENCRYPTED_BUFFER_HEADER_SIZE : 0;
+	return base + header_size;
 }
 
 idx_t BlockIndexManager::GetNewBlockIndex(const TemporaryBufferSize size) {
@@ -168,8 +176,7 @@ idx_t BlockIndexManager::GetNewBlockIndexInternal(const TemporaryBufferSize size
 }
 
 void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBufferSize size) {
-	const auto temp_file_block_size =
-	    size == TemporaryBufferSize::DEFAULT ? DEFAULT_BLOCK_ALLOC_SIZE : TemporaryBufferSizeToSize(size);
+	const auto temp_file_block_size = PhysicalBlockSize(size, encrypted);
 	if (!manager) {
 		max_index = new_index;
 	} else {
@@ -195,7 +202,7 @@ void BlockIndexManager::SetMaxIndex(const idx_t new_index, const TemporaryBuffer
 TemporaryFileHandle::TemporaryFileHandle(TemporaryFileManager &manager, TemporaryFileIdentifier identifier_p,
                                          idx_t temp_file_count)
     : db(manager.db), identifier(identifier_p), max_allowed_index((1 << temp_file_count) * MAX_ALLOWED_INDEX_BASE),
-      path(manager.CreateTemporaryFileName(identifier)), index_manager(manager) {
+      path(manager.CreateTemporaryFileName(identifier)), index_manager(manager, identifier.encrypted) {
 }
 
 TemporaryFileHandle::~TemporaryFileHandle() {
@@ -333,7 +340,7 @@ TemporaryFileInformation TemporaryFileHandle::GetTemporaryFile() {
 	TemporaryFileLock lock(file_lock);
 	TemporaryFileInformation info;
 	info.path = path;
-	info.size = GetPositionInFile(index_manager.GetUsedBlockCount());
+	info.size = GetPositionInFile(index_manager.GetMaxIndex());
 	return info;
 }
 
@@ -354,7 +361,7 @@ void TemporaryFileHandle::RemoveTempBlockIndex(TemporaryFileLock &, idx_t index)
 #ifndef WIN32 // this ended up causing issues when sorting
 		auto max_index = index_manager.GetMaxIndex();
 		auto &fs = FileSystem::GetFileSystem(db);
-		fs.Truncate(*handle, NumericCast<int64_t>(GetPositionInFile(max_index + 1)));
+		fs.Truncate(*handle, NumericCast<int64_t>(GetPositionInFile(max_index)));
 #endif
 	}
 }
@@ -545,10 +552,17 @@ idx_t TemporaryFileManager::WriteTemporaryBuffer(QueryContext context, block_id_
 	D_ASSERT(handle);
 	D_ASSERT(index.IsValid());
 
-	handle->WriteTemporaryBuffer(context, buffer, index.block_index.GetIndex(), compressed_buffer);
+	try {
+		handle->WriteTemporaryBuffer(context, buffer, index.block_index.GetIndex(), compressed_buffer);
+	} catch (...) {
+		// the block was registered under the lock above - unregister it again on write failure
+		TemporaryFileManagerLock lock(manager_lock);
+		EraseUsedBlock(lock, block_id, *handle, index);
+		throw;
+	}
 
 	compression_adaptivity.Update(compression_result.level, time_before);
-	return static_cast<idx_t>(compression_result.size);
+	return PhysicalBlockSize(compression_result.size, handle->IsEncrypted());
 }
 
 TemporaryFileManager::CompressionResult
@@ -666,7 +680,7 @@ unique_ptr<FileBuffer> TemporaryFileManager::ReadTemporaryBuffer(QueryContext co
 
 	// If eviction size requested, set it to the size of the block (compressed size if applicable).
 	if (eviction_size) {
-		*eviction_size = NumericCast<idx_t>(index.identifier.size);
+		*eviction_size = PhysicalBlockSize(index.identifier.size, index.identifier.encrypted);
 	}
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -688,7 +702,7 @@ idx_t TemporaryFileManager::DeleteTemporaryBuffer(block_id_t id) {
 	auto index = GetTempBlockIndex(lock, id);
 	auto handle = GetFileHandle(lock, index.identifier);
 	EraseUsedBlock(lock, id, *handle, index);
-	return static_cast<idx_t>(index.identifier.size);
+	return PhysicalBlockSize(index.identifier.size, index.identifier.encrypted);
 }
 
 vector<TemporaryFileInformation> TemporaryFileManager::GetTemporaryFiles() {
@@ -838,13 +852,16 @@ void TemporaryDirectoryHandle::ClaimOwner() {
 	// count from zero. It is not locked, and nothing ever opens anybody else's: existing is its job.
 	for (;;) {
 		owner.instance = NextInstanceId();
+		auto marker_path = fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner));
 		try {
-			auto marker = fs.OpenFile(fs.JoinPath(temp_directory, TemporaryOwnerMarkerName(owner)),
-			                          FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+			auto marker = fs.OpenFile(marker_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 			marker->Close();
 			break;
 		} catch (std::exception &) {
 			// taken, by a live instance or by one that died holding it - either way not ours
+			if (!fs.FileExists(marker_path)) {
+				throw;
+			}
 		}
 	}
 	file_prefix = TemporaryFilePrefix(owner);

@@ -110,6 +110,8 @@ enums:
         value: 32
       STATEMENT_TYPE_EXTERNAL_RESOURCE:
         value: 33
+      STATEMENT_TYPE_PASSTHROUGH:
+        value: 34
 functions:
   parse_sql:
     lifecycle:
@@ -129,7 +131,7 @@ functions:
     parameters:
       conn:
         type: connection
-        description: The connection supplying the parser state.
+        description: The connection supplying the parser configuration.
       sql:
         type: char
         indirection: 1
@@ -210,7 +212,7 @@ functions:
     parameters:
       conn:
         type: connection
-        description: The connection supplying the catalog, transaction, and parser state.
+        description: The connection supplying the catalog, transaction, and parser configuration.
       statement:
         type: sql_statement
         description: The statement to bind. Borrowed; not consumed.

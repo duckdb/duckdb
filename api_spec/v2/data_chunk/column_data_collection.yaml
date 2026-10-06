@@ -256,6 +256,7 @@ functions:
       Appends a copy of the given chunk to the end of the collection. The
       chunk's column count and types must equal the collection's exactly; a
       mismatch is rejected with INVALID_INPUT before anything is copied.
+      VARCHAR values must already contain valid UTF-8; this function does not validate text.
       Complex-typed vectors may be flattened in place by the copy.
     belongs_to: column_data_collection
     parameters:

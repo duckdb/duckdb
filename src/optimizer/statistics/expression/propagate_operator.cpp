@@ -50,7 +50,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		D_ASSERT(expr.GetChildrenMutable().size() == child_stats.size());
 		if (expr.GetChildrenMutable().size() == 1) {
 			// coalesce of one entry: simply return that entry
-			expr_ptr = std::move(expr.GetChildrenMutable()[0]);
+			expr_ptr = Expression::PreserveReturnType(expr.GetReturnType(), std::move(expr.GetChildrenMutable()[0]));
 		} else {
 			// coalesce of multiple entries
 			// merge the stats

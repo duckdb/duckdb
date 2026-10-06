@@ -20,6 +20,9 @@ public:
 
 public:
 	bool IsDuckCatalog() override;
+	bool SupportsNestedSchemas() const override {
+		return true;
+	}
 	void Initialize(bool load_builtin) override;
 
 	string GetCatalogType() override {
@@ -38,6 +41,8 @@ public:
 
 public:
 	DUCKDB_API optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) override;
+	DUCKDB_API void AlterSchema(CatalogTransaction transaction, SchemaCatalogEntry &schema,
+	                            AlterSchemaInfo &info) override;
 	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
 	DUCKDB_API void ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback);
 

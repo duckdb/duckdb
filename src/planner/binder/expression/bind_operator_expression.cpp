@@ -213,12 +213,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 				if (uinteger_value) {
 					// Array extraction: if the cast fails it's definitely out-of-bounds for a JSON array
 					auto index = UIntegerValue::Get(*uinteger_value);
-					const_exp.GetValueMutable() = StringUtil::Format("$[%lld]", index);
+					const_exp.SetValue(StringUtil::Format("$[%lld]", index));
 					const_exp.SetReturnType(LogicalType::VARCHAR);
 				} else if (const_exp.GetReturnType().id() == LogicalType::VARCHAR) {
 					// Field extraction
-					const_exp.GetValueMutable() =
-					    StringUtil::Format("$.\"%s\"", const_exp.GetValueMutable().ToString());
+					const_exp.SetValue(StringUtil::Format("$.\"%s\"", const_exp.GetValue().ToString()));
 					const_exp.SetReturnType(LogicalType::VARCHAR);
 				}
 			}
@@ -227,9 +226,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			auto &i_exp = *children[1];
 			if (i_exp.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp.Cast<BoundConstantExpression>();
-				if (!const_exp.GetValueMutable().IsNull() && const_exp.GetReturnType().IsIntegral()) {
-					const_exp.GetValueMutable() =
-					    const_exp.GetValueMutable().DefaultCastAs(LogicalType::UINTEGER, true);
+				if (!const_exp.GetValue().IsNull() && const_exp.GetReturnType().IsIntegral()) {
+					const_exp.SetValue(const_exp.GetValue().DefaultCastAs(LogicalType::UINTEGER, true));
 					const_exp.SetReturnType(LogicalType::UINTEGER);
 				}
 			}
@@ -266,8 +264,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			auto &i_exp = *children[1];
 			if (i_exp.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = i_exp.Cast<BoundConstantExpression>();
-				if (!const_exp.GetValueMutable().IsNull()) {
-					const_exp.GetValueMutable() = StringUtil::Format("%s", const_exp.GetValueMutable().ToString());
+				if (!const_exp.GetValue().IsNull()) {
+					const_exp.SetValue(StringUtil::Format("%s", const_exp.GetValue().ToString()));
 					const_exp.SetReturnType(LogicalType::VARCHAR);
 				}
 			}
@@ -276,9 +274,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 			// Make sure we only extract fields, not array elements, by adding $. syntax
 			if (name_exp.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 				auto &const_exp = name_exp.Cast<BoundConstantExpression>();
-				if (!const_exp.GetValueMutable().IsNull()) {
-					const_exp.GetValueMutable() =
-					    StringUtil::Format("$.\"%s\"", const_exp.GetValueMutable().ToString());
+				if (!const_exp.GetValue().IsNull()) {
+					const_exp.SetValue(StringUtil::Format("$.\"%s\"", const_exp.GetValue().ToString()));
 					const_exp.SetReturnType(LogicalType::VARCHAR);
 				}
 			}

@@ -1,7 +1,7 @@
 #include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "json_executors.hpp"
 #include "json_geojson.hpp"
 #include "json_scan.hpp"
@@ -890,9 +890,19 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		}
 	}
 
+	// An empty key can't be a STRUCT member name, so such objects can only be a MAP or JSON
+	bool has_empty_key = false;
+	for (auto &child : desc.children) {
+		D_ASSERT(child.key);
+		has_empty_key = has_empty_key || child.key->empty();
+	}
+	if (has_empty_key && map_inference_threshold == DConstants::INVALID_INDEX) {
+		return LogicalType::JSON();
+	}
+
 	// If it's an inconsistent object we also just do MAP with the best-possible, recursively-merged value type
-	if (map_inference_threshold != DConstants::INVALID_INDEX &&
-	    IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold)) {
+	if (has_empty_key || (map_inference_threshold != DConstants::INVALID_INDEX &&
+	                      IsStructureInconsistent(desc, node.count, node.null_count, field_appearance_threshold))) {
 		return LogicalType::MAP(LogicalType::VARCHAR,
 		                        GetMergedType(context, node, max_depth, field_appearance_threshold,
 		                                      map_inference_threshold, depth + 1, null_type));

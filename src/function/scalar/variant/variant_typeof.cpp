@@ -2,6 +2,7 @@
 #include "duckdb/function/scalar/variant_functions.hpp"
 #include "duckdb/common/serializer/varint.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
@@ -46,6 +47,7 @@ static void VariantTypeofFunction(DataChunk &input, ExpressionState &state, Vect
 			auto nested_data = VariantUtils::DecodeNestedData(variant, i, 0);
 			//! Find all the keys of the children of this object
 			auto object_keys = VariantUtils::GetObjectKeys(variant, i, nested_data);
+			std::sort(object_keys.begin(), object_keys.end());
 			type_str = StringUtil::Format("OBJECT(%s)", StringUtil::Join(object_keys, ", "));
 		} else {
 			D_ASSERT(type == VariantLogicalType::ARRAY);
