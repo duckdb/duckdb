@@ -87,3 +87,35 @@ EXECUTE q
 6146
 6145
 6144
+
+# A write inside the statement must be visible to the following scan.
+statement ok
+CREATE TABLE cte_t AS SELECT i FROM range(8192) r(i)
+
+statement ok
+CHECKPOINT
+
+query I
+WITH ins AS (INSERT INTO cte_t VALUES (10000))
+SELECT i FROM cte_t ORDER BY i DESC LIMIT 3 OFFSET 2047
+----
+6145
+6144
+6143
+
+# Plan-time statistics do not include rows written by the INSERT CTE.
+query III
+WITH ins AS (INSERT INTO cte_t VALUES (-1), (20000))
+SELECT count(*), min(i), max(i) FROM cte_t WHERE i > 2500
+----
+5693	2501	20000
+
+# The scan must see the INSERT even when the table is empty during optimization.
+statement ok
+CREATE TABLE cte_empty_t (i INTEGER)
+
+query I
+WITH ins AS (INSERT INTO cte_empty_t VALUES (1), (2), (3))
+SELECT i FROM cte_empty_t ORDER BY i LIMIT 1 OFFSET 1
+----
+2
