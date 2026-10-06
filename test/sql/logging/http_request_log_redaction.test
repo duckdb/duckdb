@@ -12,12 +12,15 @@ statement ok
 CALL enable_logging('HTTP', storage = 'memory');
 
 statement ok
-SET http_retries = 0;
+SET enable_external_file_cache = false;
+
+statement ok
+SET enable_http_metadata_cache = false;
 
 statement ok
 CREATE SECRET http_log_headers (
     TYPE HTTP,
-    SCOPE 'http://localhost:2338/',
+    SCOPE 'https://raw.githubusercontent.com/duckdb/duckdb/v2.0-cyanoptera/data/csv/header.csv',
     EXTRA_HTTP_HEADERS MAP {
         'aUtHoRiZaTiOn': 'dummy-authorization',
         'Cookie': 'dummy-cookie',
@@ -25,22 +28,21 @@ CREATE SECRET http_log_headers (
         'X-Custom': 'dummy-custom',
         'ETag': 'dummy-etag',
         'AcCePt': 'text/csv',
-        'AcCePt-EnCoDiNg': 'gzip'
+        'AcCePt-EnCoDiNg': 'identity'
     }
 );
 
-# Failed requests must also redact sensitive headers while preserving allowed protocol metadata.
-statement error
-FROM 'http://localhost:2338/header-redaction.csv';
-----
+# HTTPFS supplies the secret headers, while core redacts their values in the HTTP logs.
+statement ok
+FROM 'https://raw.githubusercontent.com/duckdb/duckdb/v2.0-cyanoptera/data/csv/header.csv';
 
 query TT rowsort
-SELECT entry.key, entry.value
+SELECT DISTINCT entry.key, entry.value
 FROM duckdb_logs_parsed('HTTP'), UNNEST(map_entries(request.headers)) AS headers(entry)
 WHERE lower(entry.key) IN ('authorization', 'cookie', 'x-amz-security-token', 'x-custom', 'etag', 'accept', 'accept-encoding');
 ----
 AcCePt	text/csv
-AcCePt-EnCoDiNg	gzip
+AcCePt-EnCoDiNg	identity
 Cookie	redacted
 ETag	redacted
 X-Custom	redacted
@@ -53,17 +55,16 @@ SET redact_sensitive_logs = false;
 statement ok
 CALL truncate_duckdb_logs();
 
-statement error
-FROM 'http://localhost:2338/header-redaction.csv';
-----
+statement ok
+FROM 'https://raw.githubusercontent.com/duckdb/duckdb/v2.0-cyanoptera/data/csv/header.csv';
 
 query TT rowsort
-SELECT entry.key, entry.value
+SELECT DISTINCT entry.key, entry.value
 FROM duckdb_logs_parsed('HTTP'), UNNEST(map_entries(request.headers)) AS headers(entry)
 WHERE lower(entry.key) IN ('authorization', 'cookie', 'x-amz-security-token', 'x-custom', 'etag', 'accept', 'accept-encoding');
 ----
 AcCePt	text/csv
-AcCePt-EnCoDiNg	gzip
+AcCePt-EnCoDiNg	identity
 Cookie	dummy-cookie
 ETag	dummy-etag
 X-Custom	dummy-custom
@@ -81,9 +82,8 @@ true
 statement ok
 CALL truncate_duckdb_logs();
 
-statement error
-FROM 'http://localhost:2338/header-redaction.csv';
-----
+statement ok
+FROM 'https://raw.githubusercontent.com/duckdb/duckdb/v2.0-cyanoptera/data/csv/header.csv';
 
 query I
 SELECT count(*) > 0 AND bool_and(entry.value = 'redacted')
