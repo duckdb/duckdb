@@ -486,17 +486,14 @@ ifeq (${DISABLE_RTTI}, 1)
 WASM_RTTI_FLAG:=-DDISABLE_RTTI=1
 endif
 
-wasm_mvp: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/wasm_mvp && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp ${WASM_RTTI_FLAG} -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
-	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_mvp
-
-wasm_eh: WASM_EH_CMAKE_VARS=-DBUILD_EXTENSIONS_ONLY=1
-wasm_ci: WASM_EH_CMAKE_VARS=
-wasm_eh wasm_ci: ${EXTENSION_CONFIG_STEP}
-	mkdir -p ./build/wasm_eh && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 $(WASM_EH_CMAKE_VARS) -Bbuild/wasm_eh ${WASM_RTTI_FLAG} -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DDUCKDB_NO_THREADS=1 -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
-	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_eh
+# The wasm platforms are wasm_base (single-threaded, WebAssembly exception handling) and wasm_threads,
+# both built with emscripten 6; wasm_mvp and wasm_eh were the platforms of the emscripten 3 builds
+wasm_base: WASM_BASE_CMAKE_VARS=-DBUILD_EXTENSIONS_ONLY=1
+wasm_ci: WASM_BASE_CMAKE_VARS=
+wasm_base wasm_ci: ${EXTENSION_CONFIG_STEP}
+	mkdir -p ./build/wasm_base && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 $(WASM_BASE_CMAKE_VARS) -Bbuild/wasm_base ${WASM_RTTI_FLAG} -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DDUCKDB_NO_THREADS=1 -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_base" -DDUCKDB_EXPLICIT_PLATFORM="wasm_base" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
+	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_base
 
 wasm_threads: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_threads && \

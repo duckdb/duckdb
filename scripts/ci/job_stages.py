@@ -14,7 +14,7 @@ COMMON_JOBS = [
     "tidy-check",
     "extensions-build",
     "extensions-deploy",
-    "wasm-eh",
+    "wasm-base",
     "linux-release",
     "linux-release-tests",
     "linux-release-musl",
