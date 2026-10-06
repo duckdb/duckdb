@@ -10,16 +10,16 @@ SELECT count(*), sum(i) FROM '{DATA_DIR}/parquet-testing/gzip_oob/complete.parqu
 100	4950
 
 statement error
-FROM '{DATA_DIR}/parquet-testing/gzip_oob/half_footer.parquet';
+FROM '{DATA_DIR}/parquet-testing/oob_gzip/half_footer.parquet';
 ----
 <REGEX>:.*incomplete GZIP member footer.*
 
 statement error
-FROM '{DATA_DIR}/parquet-testing/gzip_oob/one_byte_footer.parquet';
+FROM '{DATA_DIR}/parquet-testing/oob_gzip/one_byte_footer.parquet';
 ----
 <REGEX>:.*incomplete GZIP member footer.*
 
 statement error
-FROM '{DATA_DIR}/parquet-testing/gzip_oob/no_footer.parquet';
+FROM '{DATA_DIR}/parquet-testing/oob_gzip/no_footer.parquet';
 ----
 <REGEX>:.*incomplete GZIP member footer.*
