@@ -81,6 +81,11 @@ void PipelineExecutor::FlushUnfinishedProfile() {
 	if (finalized) {
 		return;
 	}
+	// the source never finished, so its scan metrics have not been collected yet
+	if (!source_profiling_finalized && local_source_state && global_source_state) {
+		context.thread.profiler.FinishSource(*pipeline.source, *global_source_state, *local_source_state);
+		source_profiling_finalized = true;
+	}
 	pipeline.executor.Flush(thread);
 }
 

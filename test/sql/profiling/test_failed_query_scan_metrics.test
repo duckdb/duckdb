@@ -1,0 +1,32 @@
+# name: test/sql/profiling/test_failed_query_scan_metrics.test
+# description: A table scan whose pipeline fails before it finishes still reports the rows it scanned
+# group: [profiling]
+
+require json
+
+statement ok
+CREATE TABLE t AS SELECT i FROM range(1000000) r(i);
+
+statement ok
+SET threads = 1;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '{TEST_DIR}/failed_scan_profile.json';
+
+statement error
+SELECT sum(CASE WHEN i = 500000 THEN error('boom') ELSE i END) FROM t;
+----
+boom
+
+statement ok
+PRAGMA disable_profiling;
+
+query II
+SELECT regexp_extract(content, '"row_groups_scanned": (\d+),[^{}]*"type": "TABLE_SCAN"', 1)::BIGINT >= 1,
+       regexp_extract(content, '"rows_scanned": (\d+),[^{}]*"type": "TABLE_SCAN"', 1)::BIGINT BETWEEN 500000 AND 999999
+FROM read_text('{TEST_DIR}/failed_scan_profile.json');
+----
+true	true
