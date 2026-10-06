@@ -317,6 +317,9 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, BoundScalar
 	}
 
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::LIST) {
+		throw BinderException("list_sort can only operate on LISTs");
+	}
 	child_type = ListType::GetChildType(arguments[0]->GetReturnType());
 
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
@@ -351,7 +354,17 @@ static unique_ptr<FunctionData> ListGradeUpBind(BindScalarFunctionInput &input) 
 	order = config.ResolveOrder(context, order);
 	null_order = config.ResolveNullOrder(context, order, null_order);
 
+	if (arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		return make_uniq<ListSortBindData>(order, null_order, true, bound_function.GetReturnType(),
+		                                   bound_function.GetReturnType(), context);
+	}
+
 	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::LIST) {
+		throw BinderException("list_grade_up can only operate on LISTs");
+	}
 
 	bound_function.GetArguments()[0] = arguments[0]->GetReturnType();
 	bound_function.SetReturnType(LogicalType::LIST(LogicalTypeId::BIGINT));
