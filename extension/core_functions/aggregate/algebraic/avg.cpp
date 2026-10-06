@@ -48,7 +48,7 @@ struct KahanAvgState {
 	void Combine(const KahanAvgState &other) {
 		this->count += other.count;
 		KahanAddInternal(other.value, this->value, this->err);
-		KahanAddInternal(other.err, this->value, this->err);
+		KahanAddInternal(-other.err, this->value, this->err);
 	}
 };
 
@@ -182,7 +182,7 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
 		} else {
-			target = (state.value / state.count) + (state.err / state.count);
+			target = (state.value / state.count) - (state.err / state.count);
 		}
 	}
 };
