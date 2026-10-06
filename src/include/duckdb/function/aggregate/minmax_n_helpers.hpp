@@ -360,15 +360,6 @@ struct MinMaxStringValue {
 	}
 };
 
-//! The physical type used to specialize the min/max N functions for a value of the given type. Values that are not
-//! ordered by their physical representation (e.g. BIT) use the sort key based fallback (PhysicalType::INVALID).
-inline PhysicalType GetMinMaxNSpecializationType(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::BIT) {
-		return PhysicalType::INVALID;
-	}
-	return type.InternalType();
-}
-
 // Use sort key to serialize/deserialize values
 struct MinMaxFallbackValue {
 	using TYPE = string_t;

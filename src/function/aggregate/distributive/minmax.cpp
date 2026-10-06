@@ -356,13 +356,8 @@ shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &con
 	return func->functions.GetFunctionByOffset(best_function.GetIndex());
 }
 
-template <class OP, class OP_STRING, class OP_VECTOR>
-unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	auto input_type = arguments[0]->GetReturnType();
-
+//! Whether min/max over the type are computed through arg_min/arg_max over the collated value
+static bool MinMaxUsesCollation(ClientContext &context, const LogicalType &input_type) {
 	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT and VARIANT use explicit
 	// binary-comparable keys so min/max follows the same logical order as comparisons and ORDER BY.
 	const auto varchar_collation =
@@ -370,8 +365,18 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
 	const auto nested_collation = StructType::IsStruct(input_type) || input_type.id() == LogicalTypeId::LIST ||
 	                              input_type.id() == LogicalTypeId::ARRAY;
-	const auto collation = input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::VARIANT ||
-	                       varchar_collation || nested_collation;
+	return input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::VARIANT || varchar_collation ||
+	       nested_collation;
+}
+
+template <class OP, class OP_STRING, class OP_VECTOR>
+unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto input_type = arguments[0]->GetReturnType();
+
+	const auto collation = MinMaxUsesCollation(context, input_type);
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
 	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
@@ -566,7 +571,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
-	if (arguments[0]->GetReturnType().id() == LogicalTypeId::VARIANT) {
+	if (MinMaxUsesCollation(context, arguments[0]->GetReturnType())) {
 		auto collated_arg = arguments[0]->Copy();
 		if (ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 			vector<LogicalType> types {arguments[0]->GetReturnType(), collated_arg->GetReturnType(),
@@ -587,7 +592,7 @@ unique_ptr<FunctionData> MinMaxNBind(BindAggregateFunctionInput &input) {
 		}
 	}
 
-	const auto val_type = GetMinMaxNSpecializationType(arguments[0]->GetReturnType());
+	const auto val_type = arguments[0]->GetReturnType().InternalType();
 
 	// Specialize the function based on the input types
 	SpecializeMinMaxNFunction<COMPARATOR>(val_type, function);

@@ -111,6 +111,15 @@ struct ArgMinMaxSortKeyState : ArgMinMaxState<string_t, string_t> {
 	                                                     OptionalStateType<StateSortKey<StateInputType<1>, ORDER>>>>;
 };
 
+//! Collates the argument that is compared - string types (e.g. collated VARCHAR or BIT) and nested types that can
+//! contain them are not ordered by their physical representation
+void PushArgMinMaxCollation(ClientContext &context, unique_ptr<Expression> &arg) {
+	auto &type = arg->GetReturnType();
+	if (type.InternalType() == PhysicalType::VARCHAR || type.IsNested()) {
+		ExpressionBinder::PushCollation(context, arg, type);
+	}
+}
+
 template <class COMPARATOR>
 struct ArgMinMaxBase {
 	template <class A_TYPE, class B_TYPE, class STATE>
@@ -210,9 +219,7 @@ struct ArgMinMaxBase {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
-		}
+		PushArgMinMaxCollation(context, arguments[1]);
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -379,9 +386,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		if (arguments[1]->GetReturnType().InternalType() == PhysicalType::VARCHAR) {
-			ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
-		}
+		PushArgMinMaxCollation(context, arguments[1]);
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -886,6 +891,7 @@ void SpecializeArgMinMaxNullNFunction(PhysicalType val_type, PhysicalType arg_ty
 
 template <ArgMinMaxNullHandling NULL_HANDLING, bool NULLS_LAST, class COMPARATOR>
 unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	for (auto &arg : arguments) {
@@ -893,10 +899,10 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
+	PushArgMinMaxCollation(context, arguments[1]);
 
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
-	// the values are only stored, the arguments are compared
-	const auto arg_type = GetMinMaxNSpecializationType(arguments[1]->GetReturnType());
+	const auto arg_type = arguments[1]->GetReturnType().InternalType();
 	function.SetReturnType(LogicalType::LIST(arguments[0]->GetReturnType()));
 
 	// Specialize the function based on the input types

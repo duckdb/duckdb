@@ -1,5 +1,5 @@
 # name: test/sql/types/bit/bit_sort_key_order.test
-# description: BIT values are ordered the same in sort keys, min/max N and ORDER BY
+# description: BIT values are ordered the same in min/max N, arg_min/arg_max and ORDER BY
 # group: [bit]
 
 statement ok
@@ -35,3 +35,23 @@ query I
 SELECT max(x, 5) FROM b
 ----
 [1111111111111111111, 10, 1, 01, 0]
+
+# nested values containing BIT
+query IIII
+SELECT arg_max(i, [x]), arg_max(i, [x], 2), max([x], 2), min({'a': x}, 2) FROM b
+----
+2	[2, 5]	[[1111111111111111111], [10]]	[{'a': 0}, {'a': 01}]
+
+statement ok
+INSERT INTO b VALUES (NULL, 6)
+
+query III
+SELECT max(x, 2), arg_min(i, x, 2), arg_min_null(i, x) FROM b
+----
+[1111111111111111111, 10]	[1, 3]	1
+
+# min/max N follow the collation of VARCHAR values
+query III
+SELECT max(v COLLATE nocase, 2), arg_max(v, v COLLATE nocase, 2), max(v, 2) FROM (VALUES ('B'), ('a'), ('C')) t(v)
+----
+[C, B]	[C, B]	[a, C]
