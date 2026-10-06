@@ -437,12 +437,14 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
 	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(path.path);
-	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek()) {
+	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
+	// without async threads the pieces would run one after another, so one read is cheaper
+	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek() ||
+	    scheduler.NumberOfAsyncThreads() == 0) {
 		ReadAndRecord(context, buffer, nr_bytes, location);
 		return;
 	}
 	// split like cached reads, so the requests are the same whether or not the cache is enabled
-	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 	for (idx_t offset = 0; offset < nr_bytes; offset += max_block_size) {
 		executor.ScheduleTask(make_uniq<ReadRangeTask>(*this, executor, context, buffer + offset,
