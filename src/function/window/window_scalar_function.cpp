@@ -214,7 +214,7 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 } // namespace
 
 unique_ptr<Expression> FunctionBinder::BindScalarWindowFunction(BoundWindowExpression &wexpr,
-                                                                 const vector<LogicalType> &input_types) {
+                                                                const vector<LogicalType> &input_types) {
 	//	The window expressions reference the input row, so the function receives all of it
 	vector<unique_ptr<Expression>> children;
 	for (idx_t col_idx = 0; col_idx < input_types.size(); ++col_idx) {
