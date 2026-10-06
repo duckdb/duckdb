@@ -18931,15 +18931,15 @@ void PEGTransformerFactory::InitializeInsertStatementTrampoline(PEGTransformer &
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(8);
-	auto &returning_clause_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
+	auto &returning_clause_opt = list_pr.GetChild(10).Cast<OptionalParseResult>();
 	if (returning_clause_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("ReturningClause"), returning_clause_opt.GetResult()}, 7);
 	}
-	auto &on_conflict_clause_opt = list_pr.GetChild(8).Cast<OptionalParseResult>();
+	auto &on_conflict_clause_opt = list_pr.GetChild(9).Cast<OptionalParseResult>();
 	if (on_conflict_clause_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("OnConflictClause"), on_conflict_clause_opt.GetResult()}, 6);
 	}
-	process.PushChild({transformer.GetRule("InsertValues"), list_pr.GetChild(7)}, 5);
+	process.PushChild({transformer.GetRule("InsertValues"), list_pr.GetChild(8)}, 5);
 	auto &insert_column_list_opt = list_pr.GetChild(6).Cast<OptionalParseResult>();
 	if (insert_column_list_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("InsertColumnList"), insert_column_list_opt.GetResult()}, 4);
@@ -18962,6 +18962,7 @@ void PEGTransformerFactory::InitializeInsertStatementTrampoline(PEGTransformer &
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeInsertStatementTrampoline(PEGTransformer &transformer,
                                                          GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	optional<CommonTableExpressionMap> with_clause {};
 	if (process.child_results[0]) {
 		with_clause = process.TakeResult<CommonTableExpressionMap>(0);
@@ -18979,6 +18980,9 @@ PEGTransformerFactory::FinalizeInsertStatementTrampoline(PEGTransformer &transfo
 	if (process.child_results[4]) {
 		insert_column_list = process.TakeResult<vector<string>>(4);
 	}
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(7).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
 	auto insert_values = process.TakeResult<InsertValues>(5);
 	optional<unique_ptr<OnConflictInfo>> on_conflict_clause {};
 	if (process.child_results[6]) {
@@ -18988,9 +18992,10 @@ PEGTransformerFactory::FinalizeInsertStatementTrampoline(PEGTransformer &transfo
 	if (process.child_results[7]) {
 		returning_clause = process.TakeResult<vector<unique_ptr<ParsedExpression>>>(7);
 	}
-	auto result = TransformInsertStatement(transformer, std::move(with_clause), or_action, std::move(insert_target),
-	                                       by_name_or_position, insert_column_list, std::move(insert_values),
-	                                       std::move(on_conflict_clause), std::move(returning_clause));
+	auto result =
+	    TransformInsertStatement(transformer, std::move(with_clause), or_action, std::move(insert_target),
+	                             by_name_or_position, insert_column_list, has_result, std::move(insert_values),
+	                             std::move(on_conflict_clause), std::move(returning_clause));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 

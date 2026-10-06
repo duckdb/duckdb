@@ -1616,7 +1616,7 @@ ExternalResourceSource <- ExternalResourceCreateClause / ExternalResourceReferen
 ExternalResourceCreateClause <- 'NEW' 'TEMPORARY' ExternalResourceKeyword StringLiteral ExternalResourceCreationOptions?
 ExternalResourceReferenceClause <- ExternalResourceKeyword ColId
 
-InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? InsertValues OnConflictClause? ReturningClause?
+InsertStatement <- WithClause? 'INSERT' OrAction? 'INTO' InsertTarget ByNameOrPosition? InsertColumnList? OverridingClause? InsertValues OnConflictClause? ReturningClause?
 
 OrAction <- InsertOrReplace / InsertOrIgnore
 InsertOrReplace <- 'OR' 'REPLACE'
@@ -1626,6 +1626,8 @@ InsertByNameOrder <- 'BY' InsertByName
 InsertByPositionOrder <- 'BY' InsertByPosition
 InsertByName <- 'NAME'
 InsertByPosition <- 'POSITION'
+OverridingClause <- 'OVERRIDING' OverridingScope 'VALUE'
+OverridingScope <- 'USER' / 'SYSTEM'
 
 InsertTarget <- BaseTableName InsertAlias?
 InsertAlias <- 'AS' Identifier

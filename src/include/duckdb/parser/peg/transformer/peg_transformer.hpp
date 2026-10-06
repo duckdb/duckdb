@@ -5320,8 +5320,8 @@ public:
 	TransformInsertStatement(PEGTransformer &transformer, optional<CommonTableExpressionMap> with_clause,
 	                         const optional<OnConflictAction> &or_action, unique_ptr<BaseTableRef> insert_target,
 	                         const optional<InsertColumnOrder> &by_name_or_position,
-	                         const optional<vector<string>> &insert_column_list, InsertValues insert_values,
-	                         optional<unique_ptr<OnConflictInfo>> on_conflict_clause,
+	                         const optional<vector<string>> &insert_column_list, bool has_overriding_clause,
+	                         InsertValues insert_values, optional<unique_ptr<OnConflictInfo>> on_conflict_clause,
 	                         optional<vector<unique_ptr<ParsedExpression>>> returning_clause);
 	static OnConflictAction TransformInsertOrReplace(PEGTransformer &transformer);
 	static OnConflictAction TransformInsertOrIgnore(PEGTransformer &transformer);

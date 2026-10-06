@@ -1932,3 +1932,4 @@ excluded_rules:
   # expression.gram rules kept manual during incremental transformer generation migration
   - OverClause
   - PrefixExpression
+  - OverridingClause
