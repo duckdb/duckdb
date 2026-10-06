@@ -78,7 +78,7 @@ TEST_CASE("Test prepared EXPLAIN ANALYZE", "[api]") {
 	for (idx_t i = 0; i < 2; i++) {
 		auto result = prepared->Execute();
 		REQUIRE_NO_FAIL(*result);
-		auto plan = result->GetValue(1, 0).ToString();
+		auto plan = result->Collection().GetValue(1, 0).ToString();
 		REQUIRE(!StringUtil::Contains(plan, "Query profiling is disabled"));
 		REQUIRE(StringUtil::Contains(plan, "Total Time"));
 	}
