@@ -4,6 +4,8 @@
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -71,9 +73,36 @@ ExpressionType ComparisonGetExpressionType(FunctionToStringInput &input) {
 	return TYPE;
 }
 
+//! Comparisons called as functions (e.g. "="(a, b)) need their arguments cast to a common type, as for operators
+template <ExpressionType TYPE>
+static unique_ptr<FunctionData> ComparisonBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &arguments = input.GetArguments();
+	auto &left_return_type = arguments[0]->GetReturnType();
+	if (left_return_type == arguments[1]->GetReturnType() &&
+	    (left_return_type.id() != LogicalTypeId::VARCHAR || StringType::GetCollation(left_return_type).empty())) {
+		// the arguments already have the same type (e.g. when re-binding a deserialized comparison)
+		return nullptr;
+	}
+	auto left_type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
+	auto right_type = ExpressionBinder::GetExpressionReturnType(*arguments[1]);
+	LogicalType input_type;
+	if (!BoundComparisonExpression::TryBindComparison(context, left_type, right_type, input_type, TYPE)) {
+		throw BinderException("Cannot compare values of type %s and type %s - an explicit cast is required",
+		                      left_type.ToString(), right_type.ToString());
+	}
+	for (auto &argument : arguments) {
+		argument = BoundCastExpression::AddCastToType(context, std::move(argument), input_type,
+		                                              input_type.id() == LogicalTypeId::ENUM);
+		ExpressionBinder::PushCollation(context, argument, input_type);
+	}
+	return nullptr;
+}
+
 template <ExpressionType TYPE>
 static ScalarFunction GetComparisonFunctionInternal(const string &name) {
-	ScalarFunction comparison_fun(Identifier(name), {}, LogicalType::BOOLEAN, ComparisonFunction<TYPE>);
+	ScalarFunction comparison_fun(Identifier(name), {}, LogicalType::BOOLEAN, ComparisonFunction<TYPE>,
+	                              ComparisonBind<TYPE>);
 	comparison_fun.GetSignature().AddParameter("left", LogicalType::ANY).AddParameter("right", LogicalType::ANY);
 	comparison_fun.SetGetExpressionTypeCallback(ComparisonGetExpressionType<TYPE>);
 	if constexpr (TYPE == ExpressionType::COMPARE_DISTINCT_FROM || TYPE == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
