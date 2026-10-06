@@ -255,11 +255,15 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 	}
 
 	string download_url = url;
-	auto response = RequestExtension(db, context, download_url, headers);
+	auto response = RequestExtension(db, context, url, headers);
 	if (!response->Success() && !backup_url.empty() && ServerUnavailable(*response)) {
-		// the server is unavailable - retry against the backup server
-		download_url = backup_url;
-		response = RequestExtension(db, context, download_url, headers);
+		// the server is unavailable - retry against the backup server. If that fails as well we report the error of
+		// the primary server, as that is the one the user asked for
+		auto backup_response = RequestExtension(db, context, backup_url, headers);
+		if (backup_response->Success()) {
+			download_url = backup_url;
+			response = std::move(backup_response);
+		}
 	}
 	if (!response->Success()) {
 		// if we should not retry or exceeded the number of retries - bubble up the error
@@ -272,12 +276,12 @@ InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extens
 		}
 		if (response->HasRequestError()) {
 			// request error - this means something went wrong performing the request
-			throw IOException("Failed to download extension \"%s\" at URL \"%s\"\n%s (ERROR %s)", extension_name,
-			                  download_url, message, response->GetRequestError());
+			throw IOException("Failed to download extension \"%s\" at URL \"%s\"\n%s (ERROR %s)", extension_name, url,
+			                  message, response->GetRequestError());
 		}
 		// if this was not a request error this means the server responded - report the response status and response
 		throw HTTPException(*response, "Failed to download extension \"%s\" at URL \"%s\" (HTTP %n)\n%s",
-		                    extension_name, download_url, int(response->status), message);
+		                    extension_name, url, int(response->status), message);
 	}
 	if (response->status == HTTPStatusCode::NotModified_304 && install_info) {
 		return install_info;
