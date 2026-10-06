@@ -143,6 +143,23 @@ struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, A
 	}
 };
 
+//! The average of TIME values is a TIME - only a crafted state can produce a value outside of a day
+static void CheckTimeAverage(int64_t micros) {
+	if (micros < 0 || micros > Interval::MICROS_PER_DAY) {
+		throw InvalidInputException("Invalid avg state - the average %d is not a valid time", micros);
+	}
+}
+
+struct TimeAverageOperation : public DiscreteAverageOperation {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		DiscreteAverageOperation::Finalize<T, STATE>(state, target, finalize_data);
+		if (state.count != 0) {
+			CheckTimeAverage(target);
+		}
+	}
+};
+
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class STATE, class OP>
 	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
@@ -254,6 +271,7 @@ struct TimeTZAverageOperation : public BaseSumOperation<AverageSetOperation, Add
 			auto micros = Hugeint::Cast<int64_t>(Hugeint::DivModPositive(state.value, state.count, remainder));
 			// Round the result
 			micros += (remainder > (state.count / 2));
+			CheckTimeAverage(micros);
 			target = dtime_tz_t(dtime_t(micros), 0);
 		}
 	}
@@ -340,7 +358,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	timestamp_tz_avg.GetSignature().GetParameter(0).SetName("x");
 	avg.AddFunction(timestamp_tz_avg);
 
-	auto time_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
+	auto time_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, TimeAverageOperation>(
 	    LogicalType::TIME, LogicalType::TIME);
 	time_avg.GetSignature().GetParameter(0).SetName("x");
 	avg.AddFunction(time_avg);

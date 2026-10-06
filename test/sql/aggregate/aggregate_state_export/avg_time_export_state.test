@@ -1,0 +1,32 @@
+# name: test/sql/aggregate/aggregate_state_export/avg_time_export_state.test
+# description: Imported avg states over TIME and TIMETZ must average to a valid time
+# group: [aggregate_state_export]
+
+foreach type TIME TIMETZ
+
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'value': 99999999999999999}, 'avg', ['{type}']));
+----
+Invalid avg state - the average 99999999999999999 is not a valid time
+
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'value': -1}, 'avg', ['{type}']));
+----
+Invalid avg state - the average -1 is not a valid time
+
+statement error
+SELECT finalize(to_aggregate_state({'count': 1, 'value': 9223372036854775807}, 'avg', ['{type}']));
+----
+not a valid time
+
+query I
+SELECT finalize(to_aggregate_state({'count': 2, 'value': 86400000000}, 'avg', ['{type}']))::TIME;
+----
+12:00:00
+
+endloop
+
+query II
+SELECT finalize(avg(x) EXPORT_STATE), finalize(avg(x::TIMETZ) EXPORT_STATE) FROM (VALUES (TIME '23:00:00'), (TIME '22:00:00')) t(x);
+----
+22:30:00	22:30:00+00
