@@ -96,6 +96,8 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 		file_input.expected_bind_data = options.schema_bind_data.get();
 	}
 	bind_input.multi_file_input = file_input;
+	TableFunctionFileBindInfo file_info;
+	bind_input.file_info = file_info;
 	names.clear();
 	types.clear();
 	bind_data = function.bind(context, bind_input, types, names);
@@ -103,9 +105,16 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 		// the function describes the columns of its file itself - names and types alone would lose their nested
 		// structure and the identifiers that map the files of a scan onto one another
 		columns = settings.get_file_columns(context, *bind_data);
+	} else if (!file_info.columns.empty()) {
+		if (file_info.columns.size() != names.size()) {
+			throw InternalException("Table function %s described %llu columns of file \"%s\", but bound %llu",
+			                        function.name, file_info.columns.size(), file.path, names.size());
+		}
+		columns = std::move(file_info.columns);
 	} else {
 		columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 	}
+	metadata = std::move(file_info.metadata);
 
 	cardinality = optional_idx();
 	if (function.cardinality) {
@@ -343,7 +352,7 @@ double TableFunctionFileReader::GetProgressInFile(ClientContext &context) {
 }
 
 InsertionOrderPreservingMap<Value> TableFunctionFileReader::GetMetadata() const {
-	return {};
+	return metadata;
 }
 
 //===--------------------------------------------------------------------===//
@@ -584,13 +593,11 @@ void TableFunctionMultiFileWrapper::BindReader(ClientContext &context, vector<Lo
 }
 
 unique_ptr<GlobalTableFunctionState>
-TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileBindData &bind_data,
+TableFunctionMultiFileWrapper::InitializeGlobalState(ClientContext &, MultiFileBindData &,
                                                      MultiFileGlobalState &global_state) {
 	auto result = make_uniq<TableFunctionMultiFileGlobalState>();
-	// the wrapped function is told which file of this scan it reads, so that a function that reports per-file
-	// information (like the CSV rejects tables) can tell the files of a scan apart from those of another scan
 	result->op = global_state.op;
-	result->file_count = bind_data.file_list->GetTotalFileCount();
+	result->file_count = global_state.file_list.GetTotalFileCount();
 	return std::move(result);
 }
 
@@ -609,11 +616,7 @@ bool TableFunctionMultiFileWrapper::SupportsReadAhead(const MultiFileBindData &b
 		// the schema was combined from the files rather than taken from one of them - ask the first of them
 		file_bind_data = bind_data.union_readers[0]->Cast<TableFunctionUnionData>().bind_data;
 	}
-	if (!file_bind_data) {
-		// we do not have the bind of a file of this scan to ask
-		return false;
-	}
-	return settings.supports_read_ahead(*file_bind_data);
+	return settings.supports_read_ahead(file_bind_data.get());
 }
 
 void TableFunctionMultiFileWrapper::FinishReading(ClientContext &context, GlobalTableFunctionState &,
@@ -688,6 +691,12 @@ unique_ptr<FunctionData> TableFunctionMultiFileWrapper::MultiFileBindWith(
 static unique_ptr<FunctionData> TableFunctionMultiFileBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types,
                                                            vector<Identifier> &names) {
+	if (!input.table_function.function_info) {
+		// the wrapped function is reached through the function info, which a caller binding the function itself has
+		// to pass along
+		throw InvalidInputException("Multi-file table function %s was bound without its function info",
+		                            input.table_function.GetName());
+	}
 	auto &info = input.table_function.function_info->Cast<TableFunctionMultiFileInfo>();
 	return TableFunctionMultiFileWrapper::MultiFileBindWith(context, input, return_types, names, info.function,
 	                                                        info.settings);

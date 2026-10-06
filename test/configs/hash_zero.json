@@ -70,7 +70,8 @@
         "test/optimizer/joins/fkpk_composite_key_ce.test",
         "test/optimizer/partitioned_execution_coverage.test",
         "test/optimizer/projection_placement.test",
-        "test/optimizer/statistics/statistics_count_not_null_pruning.test"
+        "test/optimizer/statistics/statistics_count_not_null_pruning.test",
+        "test/sql/sql_export/aggregate_topn_rewrites.test"
       ]
     },
     {
@@ -87,7 +88,8 @@
         "test/sql/timezone/test_icu_calendar_islamic_observed.test",
         "test/sql/timezone/test_icu_calendar_japanese.test",
         "test/sql/timezone/test_icu_datetime_sweep.test",
-        "test/sql/optimizer/constant_function_zonemap_pruning.test"
+        "test/sql/optimizer/constant_function_zonemap_pruning.test",
+        "test/sql/sql_export/call_values.test"
       ]
     }
   ]

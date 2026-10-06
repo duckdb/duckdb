@@ -169,15 +169,15 @@ vector<shared_ptr<CacheBlock>> ExternalFileCache::AcquireBlocks(CachedFile &cach
 	return result;
 }
 
-void ExternalFileCache::RetireBlocks(CachedFile &cached_file, const vector<shared_ptr<CacheBlock>> &blocks) {
+void ExternalFileCache::DropBlocks(CachedFile &cached_file) {
 	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
-	for (auto &block : blocks) {
-		auto entry = cached_file.blocks.find(block->location);
-		if (entry == cached_file.blocks.end() || entry->second != block) {
-			continue;
-		}
-		cached_file.blocks.erase(entry);
-	}
+	cached_file.blocks.clear();
+	cached_file.content_generation++;
+}
+
+idx_t ExternalFileCache::GetContentGeneration(CachedFile &cached_file) {
+	const annotated_lock_guard<annotated_mutex> map_guard(cached_file.map_lock);
+	return cached_file.content_generation;
 }
 
 ExternalFileCache::CachedFile::CachedFile(string path_p, idx_t generation_p)

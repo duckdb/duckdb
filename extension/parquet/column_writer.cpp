@@ -430,10 +430,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		path_in_schema.push_back("key_value");
 
 		// construct the child types recursively
-		child_list_t<LogicalType> key_value;
-		key_value.reserve(2);
-		key_value.emplace_back("key", MapType::KeyType(type));
-		key_value.emplace_back("value", MapType::ValueType(type));
+		auto key_value = LogicalType::GetNamedChildTypes(type);
 		auto key_value_type = LogicalType::STRUCT(key_value);
 
 		auto map_column =

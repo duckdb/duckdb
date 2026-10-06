@@ -6,23 +6,42 @@
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
 #include "duckdb/common/pair.hpp"
 
-#include "utf8proc.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 
 namespace duckdb {
 
 static pair<idx_t, idx_t> PadCountChars(const idx_t len, const char *data, const idx_t size) {
 	//  Count how much of str will fit in the output
-	auto str = reinterpret_cast<const utf8proc_uint8_t *>(data);
 	idx_t nbytes = 0;
 	idx_t nchars = 0;
 	for (; nchars < len && nbytes < size; ++nchars) {
-		utf8proc_int32_t codepoint;
-		auto bytes = utf8proc_iterate(str + nbytes, UnsafeNumericCast<utf8proc_ssize_t>(size - nbytes), &codepoint);
-		D_ASSERT(bytes > 0);
-		nbytes += UnsafeNumericCast<idx_t>(bytes);
+		int32_t codepoint;
+		nbytes += DecodeCodepoint(data + nbytes, size - nbytes, codepoint);
 	}
 
 	return pair<idx_t, idx_t>(nbytes, nchars);
+}
+
+static idx_t PaddingByteCount(const idx_t len, const string_t &pad) {
+	//  Count the bytes InsertPadding will write
+	auto data = pad.GetData();
+	auto size = pad.GetSize();
+	if (len == 0 || size == 0) {
+		return 0;
+	}
+	auto pad_chars = PadCountChars(NumericLimits<idx_t>::Maximum(), data, size).second;
+	auto remainder = PadCountChars(len % pad_chars, data, size).first;
+	return (len / pad_chars) * size + remainder;
+}
+
+static void CheckPadResultSize(const idx_t len, const string_t &pad, const pair<idx_t, idx_t> &written,
+                               const char *name) {
+	auto result_size = written.first + PaddingByteCount(len - written.second, pad);
+	if (result_size > string_t::MAX_STRING_SIZE) {
+		throw OutOfRangeException(
+		    "Cannot create a string of size: '%d' in %s, the maximum supported string size is: '%d'", result_size, name,
+		    string_t::MAX_STRING_SIZE);
+	}
 }
 
 static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &result) {
@@ -36,7 +55,6 @@ static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &re
 	}
 
 	//  Insert characters until we have all we need.
-	auto str = reinterpret_cast<const utf8proc_uint8_t *>(data);
 	idx_t nbytes = 0;
 	for (idx_t nchars = 0; nchars < len; ++nchars) {
 		//  If we are at the end of the pad, flush all of it and loop back
@@ -46,10 +64,8 @@ static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &re
 		}
 
 		//  Write the next character
-		utf8proc_int32_t codepoint;
-		auto bytes = utf8proc_iterate(str + nbytes, UnsafeNumericCast<utf8proc_ssize_t>(size - nbytes), &codepoint);
-		D_ASSERT(bytes > 0);
-		nbytes += UnsafeNumericCast<idx_t>(bytes);
+		int32_t codepoint;
+		nbytes += DecodeCodepoint(data + nbytes, size - nbytes, codepoint);
 	}
 
 	//  Flush the remaining pad
@@ -68,6 +84,7 @@ static string_t LeftPadFunction(const string_t &str, const int32_t len, const st
 
 	//  Count how much of str will fit in the output
 	auto written = PadCountChars(UnsafeNumericCast<idx_t>(len), data_str, size_str);
+	CheckPadResultSize(UnsafeNumericCast<idx_t>(len), pad, written, "LPAD");
 
 	//  Left pad by the number of characters still needed
 	if (!InsertPadding(UnsafeNumericCast<idx_t>(len) - written.second, pad, result)) {
@@ -97,6 +114,7 @@ static string_t RightPadFunction(const string_t &str, const int32_t len, const s
 
 	// Count how much of str will fit in the output
 	auto written = PadCountChars(UnsafeNumericCast<idx_t>(len), data_str, size_str);
+	CheckPadResultSize(UnsafeNumericCast<idx_t>(len), pad, written, "RPAD");
 
 	//  Append as much of the original string as fits
 	result.insert(result.end(), data_str, data_str + written.first);

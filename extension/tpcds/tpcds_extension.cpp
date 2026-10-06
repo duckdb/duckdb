@@ -278,9 +278,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(tpcds_query_answer_func);
 }
 
+// LCOV_EXCL_START
 void TpcdsExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
+// LCOV_EXCL_STOP
 
 std::string TpcdsExtension::GetQuery(int query) {
 	return tpcds::DSDGenWrapper::GetQuery(query);
@@ -290,6 +292,7 @@ std::string TpcdsExtension::GetAnswer(double sf, int query) {
 	return tpcds::DSDGenWrapper::GetAnswer(sf, query);
 }
 
+// LCOV_EXCL_START
 std::string TpcdsExtension::Name() {
 	return "tpcds";
 }
@@ -301,6 +304,7 @@ std::string TpcdsExtension::Version() const {
 	return "";
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 

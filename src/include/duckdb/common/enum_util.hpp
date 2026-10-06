@@ -242,8 +242,6 @@ enum class ExtraDropInfoType : uint8_t;
 
 enum class ExtraPersistentColumnDataType : uint8_t;
 
-enum class ExtraTypeInfoType : uint8_t;
-
 enum class FileBufferType : uint8_t;
 
 enum class FileExpandResult : uint8_t;
@@ -349,6 +347,8 @@ enum class LogicalPlanVerificationPathComponentType : int32_t;
 enum class LogicalPlanVerificationPhase : int32_t;
 
 enum class LogicalTypeId : uint8_t;
+
+enum class LogicalTypeInfoType : uint8_t;
 
 enum class LookupResultType : uint8_t;
 
@@ -469,8 +469,6 @@ enum class QueryNodeType : uint8_t;
 enum class QueryResultMemoryType : uint8_t;
 
 enum class QueryResultState : uint8_t;
-
-enum class QueryResultType : uint8_t;
 
 enum class RecoveryMode : uint8_t;
 
@@ -983,9 +981,6 @@ template<>
 const char* EnumUtil::ToChars<ExtraPersistentColumnDataType>(ExtraPersistentColumnDataType value);
 
 template<>
-const char* EnumUtil::ToChars<ExtraTypeInfoType>(ExtraTypeInfoType value);
-
-template<>
 const char* EnumUtil::ToChars<FileBufferType>(FileBufferType value);
 
 template<>
@@ -1143,6 +1138,9 @@ const char* EnumUtil::ToChars<LogicalPlanVerificationPhase>(LogicalPlanVerificat
 
 template<>
 const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
+
+template<>
+const char* EnumUtil::ToChars<LogicalTypeInfoType>(LogicalTypeInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<LookupResultType>(LookupResultType value);
@@ -1323,9 +1321,6 @@ const char* EnumUtil::ToChars<QueryResultMemoryType>(QueryResultMemoryType value
 
 template<>
 const char* EnumUtil::ToChars<QueryResultState>(QueryResultState value);
-
-template<>
-const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
 const char* EnumUtil::ToChars<RecoveryMode>(RecoveryMode value);
@@ -1935,9 +1930,6 @@ template<>
 ExtraPersistentColumnDataType EnumUtil::FromString<ExtraPersistentColumnDataType>(const char *value);
 
 template<>
-ExtraTypeInfoType EnumUtil::FromString<ExtraTypeInfoType>(const char *value);
-
-template<>
 FileBufferType EnumUtil::FromString<FileBufferType>(const char *value);
 
 template<>
@@ -2095,6 +2087,9 @@ LogicalPlanVerificationPhase EnumUtil::FromString<LogicalPlanVerificationPhase>(
 
 template<>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value);
+
+template<>
+LogicalTypeInfoType EnumUtil::FromString<LogicalTypeInfoType>(const char *value);
 
 template<>
 LookupResultType EnumUtil::FromString<LookupResultType>(const char *value);
@@ -2275,9 +2270,6 @@ QueryResultMemoryType EnumUtil::FromString<QueryResultMemoryType>(const char *va
 
 template<>
 QueryResultState EnumUtil::FromString<QueryResultState>(const char *value);
-
-template<>
-QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
 RecoveryMode EnumUtil::FromString<RecoveryMode>(const char *value);

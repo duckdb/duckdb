@@ -274,9 +274,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(tpch_query_answer_func);
 }
 
+// LCOV_EXCL_START
 void TpchExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
+// LCOV_EXCL_STOP
 
 std::string TpchExtension::GetQuery(int query) {
 	return tpch::DBGenWrapper::GetQuery(query);
@@ -286,6 +288,7 @@ std::string TpchExtension::GetAnswer(double sf, int query) {
 	return tpch::DBGenWrapper::GetAnswer(sf, query);
 }
 
+// LCOV_EXCL_START
 std::string TpchExtension::Name() {
 	return "tpch";
 }
@@ -297,6 +300,7 @@ std::string TpchExtension::Version() const {
 	return "";
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 

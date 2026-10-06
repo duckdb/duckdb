@@ -117,6 +117,9 @@ public:
 	//! Autoload an extension (depending on config, potentially a nop. Throws when installation fails)
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
 	static void AutoLoadExtension(DatabaseInstance &db, const string &extension_name);
+	//! Autoload the extension a remote path requires
+	DUCKDB_API static void AutoLoadExtensionForPath(DatabaseInstance &db, const string &path,
+	                                                const string &path_kind = "File");
 
 	//! Autoload an extension (depending on config, potentially a nop. Returns false on failure)
 	DUCKDB_API static bool TryAutoLoadExtension(DatabaseInstance &db, const string &extension_name) noexcept;
