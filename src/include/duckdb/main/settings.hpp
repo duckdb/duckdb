@@ -2285,10 +2285,11 @@ struct ReadAheadDepthSetting {
 	static void OnSet(SettingCallbackInfo &info, Value &input);
 };
 
-struct RedactSensitiveLogsSetting {
+struct RedactHttpLogsSetting {
 	using RETURN_TYPE = bool;
-	static constexpr const char *Name = "redact_sensitive_logs";
-	static constexpr const char *Description = "Redact potentially sensitive information in logs.";
+	static constexpr const char *Name = "redact_http_logs";
+	static constexpr const char *Description =
+	    "Redact HTTP header values in logs unless their names are explicitly allowed.";
 	static constexpr const char *InputType = "BOOLEAN";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

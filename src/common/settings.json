@@ -1411,8 +1411,8 @@
         ]
     },
     {
-        "name": "redact_sensitive_logs",
-        "description": "Redact potentially sensitive information in logs.",
+        "name": "redact_http_logs",
+        "description": "Redact HTTP header values in logs unless their names are explicitly allowed.",
         "type": "BOOLEAN",
         "scope": "global",
         "default_value": "true"

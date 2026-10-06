@@ -39,7 +39,7 @@ content-length	true
 location	true
 
 statement ok
-SET redact_sensitive_logs = false;
+SET redact_http_logs = false;
 
 statement ok
 CALL truncate_duckdb_logs();
@@ -57,7 +57,7 @@ WHERE lower(entry.key) = 'location';
 true
 
 statement ok
-RESET redact_sensitive_logs;
+RESET redact_http_logs;
 
 statement ok
 CALL truncate_duckdb_logs();

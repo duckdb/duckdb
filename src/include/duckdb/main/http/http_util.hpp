@@ -78,6 +78,10 @@ private:
 	friend class HTTPUtil;
 	friend class HTTPTransportManager;
 
+	bool ShouldRedactLogs() const;
+
+	//! Borrowed database.
+	optional_ptr<DatabaseInstance> db;
 	//! Manager borrowed from the owning DatabaseInstance.
 	optional_ptr<HTTPTransportManager> transport_manager;
 	//! Provider publication captured by the creating manager session.
