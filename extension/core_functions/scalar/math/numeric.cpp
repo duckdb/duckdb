@@ -1273,11 +1273,10 @@ struct ExpOperator {
 } // namespace
 
 ScalarFunction ExpFun::GetFunction() {
-	auto func = NameXArgument(
+	// not annotated monotone: libm exp is not monotone on every platform (Apple libm inverts adjacent doubles)
+	return NameXArgument(
 	    ScalarFunction({}, LogicalType::DOUBLE, ScalarFunction::UnaryFunction<double, double, ExpOperator>),
 	    LogicalType::DOUBLE);
-	func.SetUnaryArgProperties(ArgProperties().NonDecreasing());
-	return func;
 }
 
 //===--------------------------------------------------------------------===//
