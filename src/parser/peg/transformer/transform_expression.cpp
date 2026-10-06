@@ -723,6 +723,7 @@ PEGTransformerFactory::TransformLogicalNotExpression(PEGTransformer &transformer
 	if (!not_expression) {
 		return expr;
 	}
+	auto not_depth_guard = transformer.StackCheck(not_expression->size());
 	for (idx_t i = 0; i < not_expression->size(); i++) {
 		vector<unique_ptr<ParsedExpression>> inner_list_children;
 		inner_list_children.push_back(std::move(expr));

@@ -124,8 +124,25 @@ TransformStackFrame::TransformStackFrame(TransformInput input)
 TransformStack::TransformStack(PEGTransformer &transformer_p) : transformer(transformer_p) {
 }
 
+TransformStack::~TransformStack() {
+	// release the expression depth of frames that remain after an exception
+	while (!frames.empty()) {
+		PopFrame();
+	}
+}
+
 void TransformStack::PushFrame(TransformInput input) {
 	frames.emplace(input);
+	if (transformer.IsExpressionRule(frames.top().rule)) {
+		transformer.EnterExpression();
+	}
+}
+
+void TransformStack::PopFrame() {
+	if (transformer.IsExpressionRule(frames.top().rule)) {
+		transformer.ExitExpression();
+	}
+	frames.pop();
 }
 
 void TransformStack::InitializeFrame(TransformStackFrame &frame) {
@@ -162,7 +179,7 @@ unique_ptr<TransformResultValue> TransformStack::Execute(TransformInput input) {
 			continue;
 		}
 		transformer.SetResultLocation(frame.parse_result, *result);
-		frames.pop();
+		PopFrame();
 		if (frames.empty()) {
 			return result;
 		}
@@ -198,6 +215,30 @@ unique_ptr<TransformResultValue> PEGTransformer::TransformInternal(ParseResult &
 	TransformInput input {*rule, parse_result};
 	TransformStack stack(*this);
 	return stack.Execute(input);
+}
+
+bool PEGTransformer::IsExpressionRule(optional_ptr<const CompiledGrammarRule> rule) {
+	if (!expression_rule_initialized) {
+		expression_rule = grammar.GetRule("SingleExpression");
+		expression_rule_initialized = true;
+	}
+	return rule && rule == expression_rule;
+}
+
+void PEGTransformer::EnterExpression() {
+	// the transformer does not recurse, but binding the resulting expressions does - reject them early
+	// the depth is incremented first, as the frame is released (and the depth decremented) when throwing
+	expression_depth++;
+	if (expression_depth > options.max_expression_depth) {
+		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      options.max_expression_depth);
+	}
+}
+
+void PEGTransformer::ExitExpression() {
+	D_ASSERT(expression_depth > 0);
+	expression_depth--;
 }
 
 const CompiledGrammarRule &PEGTransformer::GetRule(const string &rule_name) const {

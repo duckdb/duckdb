@@ -409,6 +409,7 @@ using frame_stack_t = stack<TransformStackFrame>;
 class TransformStack {
 public:
 	explicit TransformStack(PEGTransformer &transformer);
+	~TransformStack();
 	unique_ptr<TransformResultValue> Execute(TransformInput input);
 
 	template <class T>
@@ -427,6 +428,7 @@ public:
 
 private:
 	void PushFrame(TransformInput input);
+	void PopFrame();
 	void InitializeFrame(TransformStackFrame &frame);
 	unique_ptr<TransformResultValue> ExecuteFrame(TransformStackFrame &frame);
 
@@ -550,6 +552,15 @@ public:
 
 	friend class StackChecker<PEGTransformer>;
 	idx_t stack_depth = 0;
+	//! The number of (nested) expressions that are currently being transformed - tracked by the transform stacks
+	idx_t expression_depth = 0;
+	//! The "SingleExpression" rule, which every nested expression is transformed through
+	optional_ptr<const CompiledGrammarRule> expression_rule;
+	bool expression_rule_initialized = false;
+
+	bool IsExpressionRule(optional_ptr<const CompiledGrammarRule> rule);
+	void EnterExpression();
+	void ExitExpression();
 
 	StackChecker<PEGTransformer> StackCheck(idx_t extra_stack = 1) {
 		if (stack_depth + extra_stack >= options.max_expression_depth) {
