@@ -514,6 +514,9 @@ static const TransformFrameOps IDENTIFIER_COL_ID_OPS = {"IdentifierColId",
 static const TransformFrameOps COPY_FILE_NAME_SUFFIX_OPS = {
     "CopyFileNameSuffix", &PEGTransformerFactory::InitializeCopyFileNameSuffixTrampoline,
     &PEGTransformerFactory::FinalizeCopyFileNameSuffixTrampoline};
+static const TransformFrameOps COPY_LEGACY_OPTION_OPS = {"CopyLegacyOption",
+                                                         &PEGTransformerFactory::InitializeCopyLegacyOptionTrampoline,
+                                                         &PEGTransformerFactory::FinalizeCopyLegacyOptionTrampoline};
 static const TransformFrameOps COPY_OPTIONS_OPS = {"CopyOptions",
                                                    &PEGTransformerFactory::InitializeCopyOptionsTrampoline,
                                                    &PEGTransformerFactory::FinalizeCopyOptionsTrampoline};
@@ -3236,6 +3239,7 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"CopyFileNameIdentifierColId", &COPY_FILE_NAME_IDENTIFIER_COL_ID_OPS},
 	    {"IdentifierColId", &IDENTIFIER_COL_ID_OPS},
 	    {"CopyFileNameSuffix", &COPY_FILE_NAME_SUFFIX_OPS},
+	    {"CopyLegacyOption", &COPY_LEGACY_OPTION_OPS},
 	    {"CopyOptions", &COPY_OPTIONS_OPS},
 	    {"CopyOptionList", &COPY_OPTION_LIST_OPS},
 	    {"SpecializedOptionList", &SPECIALIZED_OPTION_LIST_OPS},
@@ -7137,10 +7141,14 @@ PEGTransformerFactory::FinalizeCopyVariationsTrampoline(PEGTransformer &transfor
 void PEGTransformerFactory::InitializeCopyTableTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(5);
-	auto &copy_options_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	process.ReserveChildSlots(6);
+	auto &copy_options_opt = list_pr.GetChild(5).Cast<OptionalParseResult>();
 	if (copy_options_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("CopyOptions"), copy_options_opt.GetResult()}, 4);
+		process.PushChild({transformer.GetRule("CopyOptions"), copy_options_opt.GetResult()}, 5);
+	}
+	auto &copy_legacy_option_opt = list_pr.GetChild(4).Cast<OptionalParseResult>();
+	if (copy_legacy_option_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("CopyLegacyOption"), copy_legacy_option_opt.GetResult()}, 4);
 	}
 	process.PushChild({transformer.GetRule("CopyFileName"), list_pr.GetChild(3)}, 3);
 	process.PushChild({transformer.GetRule("FromOrTo"), list_pr.GetChild(2)}, 2);
@@ -7160,12 +7168,16 @@ PEGTransformerFactory::FinalizeCopyTableTrampoline(PEGTransformer &transformer, 
 	}
 	auto from_or_to = process.TakeResult<bool>(2);
 	auto copy_file_name = process.TakeResult<unique_ptr<ParsedExpression>>(3);
-	optional<vector<GenericCopyOption>> copy_options {};
+	optional<GenericCopyOption> copy_legacy_option {};
 	if (process.child_results[4]) {
-		copy_options = process.TakeResult<vector<GenericCopyOption>>(4);
+		copy_legacy_option = process.TakeResult<GenericCopyOption>(4);
+	}
+	optional<vector<GenericCopyOption>> copy_options {};
+	if (process.child_results[5]) {
+		copy_options = process.TakeResult<vector<GenericCopyOption>>(5);
 	}
 	auto result = TransformCopyTable(transformer, std::move(base_table_name), insert_column_list, from_or_to,
-	                                 std::move(copy_file_name), copy_options);
+	                                 std::move(copy_file_name), copy_legacy_option, copy_options);
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
 
@@ -7362,6 +7374,23 @@ PEGTransformerFactory::FinalizeCopyFileNameSuffixTrampoline(PEGTransformer &tran
                                                             GeneratedTransformProcess &process) {
 	auto result = process.TakeResult<Identifier>(0);
 	return make_uniq<TypedTransformResult<Identifier>>(result);
+}
+
+void PEGTransformerFactory::InitializeCopyLegacyOptionTrampoline(PEGTransformer &transformer,
+                                                                 GeneratedTransformProcess &process) {
+	process.ReserveChildSlots(0);
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeCopyLegacyOptionTrampoline(PEGTransformer &transformer,
+                                                          GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	bool has_result {};
+	auto &has_result_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
+	has_result = has_result_opt.HasResult();
+	auto string_literal = TransformStringLiteral(transformer, list_pr.GetChild(2));
+	auto result = TransformCopyLegacyOption(transformer, has_result, string_literal);
+	return make_uniq<TypedTransformResult<GenericCopyOption>>(result);
 }
 
 void PEGTransformerFactory::InitializeCopyOptionsTrampoline(PEGTransformer &transformer,

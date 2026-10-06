@@ -1241,6 +1241,9 @@ public:
 	static void InitializeCopyFileNameSuffixTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCopyFileNameSuffixTrampoline(PEGTransformer &transformer,
 	                                                                             GeneratedTransformProcess &process);
+	static void InitializeCopyLegacyOptionTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeCopyLegacyOptionTrampoline(PEGTransformer &transformer,
+	                                                                           GeneratedTransformProcess &process);
 	static void InitializeCopyOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeCopyOptionsTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
@@ -4360,12 +4363,11 @@ public:
 	                                                             const Identifier &catalog_name);
 	static unique_ptr<SQLStatement> TransformCopyStatement(PEGTransformer &transformer,
 	                                                       unique_ptr<SQLStatement> copy_variations);
-	static unique_ptr<SQLStatement> TransformCopyTable(PEGTransformer &transformer,
-	                                                   unique_ptr<BaseTableRef> base_table_name,
-	                                                   const optional<vector<string>> &insert_column_list,
-	                                                   const bool &from_or_to,
-	                                                   unique_ptr<ParsedExpression> copy_file_name,
-	                                                   const optional<vector<GenericCopyOption>> &copy_options);
+	static unique_ptr<SQLStatement>
+	TransformCopyTable(PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name,
+	                   const optional<vector<string>> &insert_column_list, const bool &from_or_to,
+	                   unique_ptr<ParsedExpression> copy_file_name, const optional<GenericCopyOption> &legacy_option,
+	                   const optional<vector<GenericCopyOption>> &copy_options);
 	static bool TransformCopyFrom(PEGTransformer &transformer);
 	static bool TransformCopyTo(PEGTransformer &transformer);
 	static unique_ptr<SQLStatement> TransformCopySelect(PEGTransformer &transformer,
@@ -4380,6 +4382,8 @@ public:
 	                                                                         const Identifier &identifier_col_id);
 	static Identifier TransformIdentifierColId(PEGTransformer &transformer, const Identifier &identifier,
 	                                           const vector<Identifier> &copy_file_name_suffix);
+	static GenericCopyOption TransformCopyLegacyOption(PEGTransformer &transformer, const bool &has_result,
+	                                                   const string &identifier);
 	static vector<GenericCopyOption> TransformCopyOptions(PEGTransformer &transformer, const bool &has_result,
 	                                                      const vector<GenericCopyOption> &copy_option_list);
 	static vector<GenericCopyOption>

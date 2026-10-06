@@ -929,6 +929,7 @@ GenericCopyOption:
     - PartitionedByCopyOption
     - SpecializedOption
     - SpecializedOptionTail
+    - CopyLegacyOption
     - SingleOption
     - EncodingOption
     - ForceQuoteOption

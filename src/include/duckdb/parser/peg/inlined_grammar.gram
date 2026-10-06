@@ -833,7 +833,7 @@ CatalogSessionTarget <- CatalogName
 CopyStatement <- 'COPY' CopyVariations
 CopyVariations <- CopyTable / CopySelect / CopyFromDatabase
 
-CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
+CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyLegacyOption? CopyOptions?
 FromOrTo <- CopyFrom / CopyTo
 CopyFrom <- 'FROM'
 CopyTo <- 'TO'
@@ -847,6 +847,9 @@ CopyFileNameIdentifier <- Identifier
 CopyFileNameIdentifierColId <- IdentifierColId
 IdentifierColId <- Identifier CopyFileNameSuffix+
 CopyFileNameSuffix <- '.' ColId
+
+CopyLegacyOption <- 'USING'? 'DELIMITERS' StringLiteral
+
 CopyOptions <- 'WITH'? CopyOptionList
 CopyOptionList <- CopyGenericOptionList / SpecializedOptionList
 SpecializedOptionList <- SpecializedOption SpecializedOptionTail*

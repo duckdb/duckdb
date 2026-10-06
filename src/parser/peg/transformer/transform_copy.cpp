@@ -6,6 +6,7 @@
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include <string>
 
 namespace duckdb {
 
@@ -132,6 +133,7 @@ unique_ptr<SQLStatement>
 PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_ptr<BaseTableRef> base_table_name,
                                           const optional<vector<string>> &insert_column_list, const bool &from_or_to,
                                           unique_ptr<ParsedExpression> copy_file_name,
+                                          const optional<GenericCopyOption> &legacy_option,
                                           const optional<vector<GenericCopyOption>> &copy_options) {
 	auto result = make_uniq<CopyStatement>();
 	auto info = make_uniq<CopyInfo>();
@@ -149,8 +151,15 @@ PEGTransformerFactory::TransformCopyTable(PEGTransformer &transformer, unique_pt
 	}
 	info->format = ExtractFormat(info->file_path);
 
+	if (legacy_option) {
+		vector<GenericCopyOption> legacy_option_vec;
+		legacy_option_vec.push_back(*legacy_option);
+		SetCopyOptions(info, legacy_option_vec);
+	}
+
 	if (copy_options) {
 		auto generic_options = *copy_options;
+
 		SetCopyOptions(info, generic_options);
 	}
 
@@ -191,6 +200,11 @@ Identifier PEGTransformerFactory::TransformIdentifierColId(PEGTransformer &trans
 		result += suffix.GetIdentifierName();
 	}
 	return Identifier(result);
+}
+
+GenericCopyOption PEGTransformerFactory::TransformCopyLegacyOption(PEGTransformer &transformer, const bool &has_result,
+                                                                   const string &identifier) {
+	return GenericCopyOption("delimiter", identifier);
 }
 
 vector<GenericCopyOption>

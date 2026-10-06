@@ -1,0 +1,30 @@
+# name: test/sql/copy/copy_legacy_options.test
+# description: test legacy COPY x option
+# group: [copy]
+
+statement ok
+CREATE TABLE t (ID INT, Date_Time VARCHAR);
+
+statement ok
+COPY t FROM '{DATA_DIR}/csv/custom_date.csv' USING DELIMITERS ',';
+
+query I
+SELECT count(*) FROM t
+----
+2
+
+statement ok
+COPY t TO '/tmp/out.csv' USING DELIMITERS ';';
+
+statement ok
+TRUNCATE t;
+
+# New options should override the legacy variant
+statement ok
+COPY t FROM '/tmp/out.csv' DELIMITERS '+' WITH ( DELIMITER ';' );
+
+query I
+SELECT count(*) FROM t
+----
+2
+
