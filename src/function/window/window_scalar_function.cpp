@@ -1,6 +1,8 @@
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/function/window_function.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/aggregate_function.hpp"
@@ -40,6 +42,17 @@ struct ScalarWindowBindData : public FunctionData {
 	unique_ptr<Expression> wexpr;
 };
 
+//	A degenerate frame holds at most the current row, which these exclusions remove
+idx_t DegenerateFrameWidth(const BoundWindowExpression &wexpr) {
+	switch (wexpr.WindowExclude()) {
+	case WindowExcludeMode::CURRENT_ROW:
+	case WindowExcludeMode::GROUP:
+		return 0;
+	default:
+		return 1;
+	}
+}
+
 void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &scalar_info = func_expr.BindInfo()->Cast<ScalarWindowBindData>();
@@ -47,7 +60,7 @@ void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result
 	auto bind_info = wexpr.BindInfo().get();
 
 	//	Is the frame empty?
-	const idx_t width = (wexpr.WindowExclude() == WindowExcludeMode::CURRENT_ROW) ? 0 : 1;
+	const idx_t width = DegenerateFrameWidth(wexpr);
 
 	auto &client = scalar_info.client;
 	ThreadContext thread(client);
@@ -80,8 +93,32 @@ void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result
 	//	Update the state if the frame is not empty
 	AggregateFinalizeInputData aggr_bind_info(aggr.function, bind_info, arena_allocator);
 	if (width) {
+		//	The arguments reference the input row
+		DataChunk inputs;
+		ExpressionExecutor input_exec(client);
+		vector<LogicalType> input_types;
+		for (const auto &child : wexpr.GetChildren()) {
+			input_exec.AddExpression(*child);
+			input_types.emplace_back(child->GetReturnType());
+		}
+		if (!input_types.empty()) {
+			inputs.Initialize(allocator, input_types);
+			input_exec.Execute(args, inputs);
+		}
+		inputs.SetCardinality(count);
+
+		//	Rows rejected by the filter leave their state empty
 		auto update = aggr.function.GetCallbacks().GetStateUpdateCallback();
-		update(args.data.data(), aggr_bind_info, args.data.size(), statev, count);
+		if (wexpr.Filter()) {
+			SelectionVector sel(count);
+			ExpressionExecutor filter_exec(client, *wexpr.Filter());
+			const auto update_count = filter_exec.SelectExpression(args, sel);
+			inputs.Slice(sel, update_count);
+			Vector update_states(statev, sel, update_count);
+			update(inputs.data.data(), aggr_bind_info, inputs.ColumnCount(), update_states, update_count);
+		} else {
+			update(inputs.data.data(), aggr_bind_info, inputs.ColumnCount(), statev, count);
+		}
 	}
 
 	//	Finalize the states
@@ -101,7 +138,7 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &wexpr = scalar_info.wexpr->Cast<BoundWindowExpression>();
 
 	//	Is the frame empty?
-	const idx_t width = (wexpr.WindowExclude() == WindowExcludeMode::CURRENT_ROW) ? 0 : 1;
+	const idx_t width = DegenerateFrameWidth(wexpr);
 
 	auto &client = scalar_info.client;
 	ThreadContext thread(client);
@@ -110,20 +147,6 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	ArenaAllocator arena_allocator(allocator);
 	const auto count = args.size();
 	if (width) {
-		//	Set the bounds to the single frame.
-		vector<LogicalType> bounds_types(8, LogicalType(LogicalTypeId::UBIGINT));
-		DataChunk bounds;
-		bounds.Initialize(allocator, bounds_types);
-		auto frame_begin = FlatVector::Writer<idx_t>(bounds.data[PARTITION_BEGIN], count);
-		auto frame_end = FlatVector::Writer<idx_t>(bounds.data[PARTITION_END], count);
-		for (idx_t i = 0; i < count; ++i) {
-			frame_begin.WriteValue(i);
-			frame_end.WriteValue(i + 1);
-		}
-		for (column_t col = 2; col < bounds.ColumnCount(); ++col) {
-			bounds.data[col].Reference(bounds.data[col % 2]);
-		}
-
 		//	Build shared expressions
 		WindowSharedExpressions shared;
 		WindowExecutor wexec(wexpr, shared);
@@ -133,9 +156,14 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 		shared.PrepareCollection(coll_exec, coll_chunk);
 
 		//	Build acceleration data
-		ValidityMask mask(count);
-		mask.SetAllInvalid(count);
-		auto gsink = wexec.GetGlobalState(client, count, mask, mask);
+		//	One partition in which every row is its own peer group, so the frame is the current row
+		ValidityMask partition_mask;
+		partition_mask.Initialize(count);
+		partition_mask.SetAllInvalid(count);
+		partition_mask.SetValid(0);
+		ValidityMask order_mask;
+		order_mask.Initialize(count);
+		auto gsink = wexec.GetGlobalState(client, count, partition_mask, order_mask);
 		auto lsink = wexec.GetLocalState(context, *gsink);
 
 		//	Compute fully materialised expressions
@@ -185,14 +213,16 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 
 } // namespace
 
-unique_ptr<Expression> FunctionBinder::BindScalarWindowFunction(BoundWindowExpression &wexpr) {
-	vector<LogicalType> arguments;
-	for (const auto &child : wexpr.GetChildren()) {
-		arguments.emplace_back(child->GetReturnType());
+unique_ptr<Expression> FunctionBinder::BindScalarWindowFunction(BoundWindowExpression &wexpr,
+                                                                 const vector<LogicalType> &input_types) {
+	//	The window expressions reference the input row, so the function receives all of it
+	vector<unique_ptr<Expression>> children;
+	for (idx_t col_idx = 0; col_idx < input_types.size(); ++col_idx) {
+		children.emplace_back(make_uniq<BoundReferenceExpression>(input_types[col_idx], col_idx));
 	}
 	auto &aggr = wexpr.AggregateFunction();
 	auto func = aggr ? AggregateScalarFunc : WindowScalarFunc;
-	ScalarFunction scalar(wexpr.GetName(), arguments, wexpr.GetReturnType(), func);
+	ScalarFunction scalar(wexpr.GetName(), input_types, wexpr.GetReturnType(), func);
 	if (aggr) {
 		scalar.SetProperties(aggr->GetProperties());
 	} else {
@@ -200,8 +230,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarWindowFunction(BoundWindowExpre
 	}
 	auto bind_info = make_uniq<ScalarWindowBindData>(context, wexpr);
 	BoundScalarFunction bound(scalar);
-
-	return make_uniq<BoundFunctionExpression>(bound, std::move(wexpr.GetChildrenMutable()), std::move(bind_info));
+	return make_uniq<BoundFunctionExpression>(bound, std::move(children), std::move(bind_info));
 }
 
 } // namespace duckdb
