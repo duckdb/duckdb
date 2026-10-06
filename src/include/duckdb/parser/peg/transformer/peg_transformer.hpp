@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/deque.hpp"
 #include "duckdb/parser/peg/ast/unpivot_name_values.hpp"
 #include "duckdb/parser/qualified_name_set.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
@@ -540,7 +541,7 @@ public:
 	idx_t prepared_statement_parameter_index = 0;
 	PreparedParamType last_param_type = PreparedParamType::INVALID;
 
-	vector<identifier_map_t<unique_ptr<WindowExpression>>> window_clauses;
+	deque<identifier_map_t<unique_ptr<WindowExpression>>> window_clauses;
 
 	vector<unique_ptr<CreatePivotEntry>> pivot_entries;
 	vector<reference<CommonTableExpressionMap>> stored_cte_map;
