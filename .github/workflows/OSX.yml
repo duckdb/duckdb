@@ -64,40 +64,17 @@ jobs:
       if: ${{ !inputs.skip_tests }}
       run: make unittest_release
 
-  xcode-lldb:
-    name: OSX LLDB Helpers
-    if: ${{ !inputs.skip_tests }}
-    runs-on: ${{ inputs.runner_macos_arm64 || 'macos-latest' }}
-    timeout-minutes: 60
-
-    env:
-      TREAT_WARNINGS_AS_ERRORS: 1
-      DISABLE_SHELL: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v6
-      with:
-        fetch-depth: 0
-        ref: ${{ inputs.duckdb_commit }}
-
-    - uses: actions/setup-python@v6
-      with:
-        python-version: '3.12'
-
-    - uses: ./.github/actions/ccache-action
-
-    - name: Install ninja
-      run: python3 scripts/ci/retry.py -- brew install ninja
-
-    - uses: ./.github/actions/cleanup_runner
-
     # SQL navigation needs the query_break hook and locals that release builds optimize away.
-    - name: Build debug executable
+    - name: Build debug executable for LLDB
+      if: ${{ !inputs.skip_tests }}
+      timeout-minutes: 60
+      env:
+        DISABLE_SHELL: 1
       run: python3 scripts/ci/retry.py -- make debug
 
     - name: LLDB helper tests
       id: lldb-tests
+      if: ${{ !inputs.skip_tests }}
       timeout-minutes: 5
       run: |
         python3 scripts/lldb/tests/run_tests.py --unittest build/debug/test/unittest \

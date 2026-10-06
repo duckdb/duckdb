@@ -30,8 +30,9 @@ the four helper modules and prints line-coverage percentages. Omit the option to
 run without tracing. This measures executed Python lines, not branch coverage or
 coverage of the DuckDB C++ executable.
 
-CI runs this suite in the **OSX LLDB Helpers** job in
-[OSX.yml](../../../.github/workflows/OSX.yml). The job builds a debug executable,
+CI runs this suite in the **OSX Debug** job in
+[OSX.yml](../../../.github/workflows/OSX.yml). After the existing release tests,
+the job builds a separate debug executable with the symbols and locals needed by LLDB,
 runs all helper tests, and uploads the annotated reports as `lldb-coverage-osx`,
 including when tests fail. It respects the workflow's `skip_tests` input.
 Changes under `scripts/lldb/` select the OSX workflow on pull requests, including
