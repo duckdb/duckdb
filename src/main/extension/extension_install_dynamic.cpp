@@ -201,11 +201,38 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	return make_uniq<ExtensionInstallInfo>(info);
 }
 
-static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db, const string &url,
-                                                           const string &extension_name, const string &temp_path,
-                                                           const string &local_extension_path,
-                                                           ExtensionInstallOptions &options,
-                                                           optional_ptr<ClientContext> context) {
+//! Perform the GET request for an extension against a single url
+static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_ptr<ClientContext> context,
+                                                 const string &url, const HTTPHeaders &headers) {
+	auto &manager = db.config.GetHTTPTransportManager();
+	auto session = context ? manager.CreateSession(*context, url) : manager.CreateSession(db, url);
+	auto &params = session.Parameters();
+
+	// Unclear what's peculiar about extension install flow, but those two parameters are needed
+	// to avoid lengthy retry on 304
+	params.follow_location = false;
+	params.keep_alive = false;
+
+	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
+	get_request.try_request = true;
+
+	return session.Request(get_request);
+}
+
+//! Whether a failed response means the server itself is unavailable, as opposed to e.g. the extension not existing
+static bool ServerUnavailable(const HTTPResponse &response) {
+	if (response.HasRequestError()) {
+		// the request never completed: DNS failure, connection refused, timeout, ...
+		return true;
+	}
+	return response.status >= HTTPStatusCode::InternalServerError_500;
+}
+
+//! Install an extension from a http url. If a backup url is given it is tried when the server at url is unavailable
+static unique_ptr<ExtensionInstallInfo>
+InstallFromHttpUrl(DatabaseInstance &db, const string &url, const string &extension_name, const string &temp_path,
+                   const string &local_extension_path, ExtensionInstallOptions &options,
+                   optional_ptr<ClientContext> context, const string &backup_url = string()) {
 	unique_ptr<ExtensionInstallInfo> install_info;
 	{
 		auto &fs = FileSystem::GetLocal(db);
@@ -227,19 +254,13 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		headers.Insert("If-None-Match", StringUtil::Format("%s", install_info->etag));
 	}
 
-	auto &manager = db.config.GetHTTPTransportManager();
-	auto session = context ? manager.CreateSession(*context, url) : manager.CreateSession(db, url);
-	auto &params = session.Parameters();
-
-	// Unclear what's peculiar about extension install flow, but those two parameters are needed
-	// to avoid lengthy retry on 304
-	params.follow_location = false;
-	params.keep_alive = false;
-
-	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
-	get_request.try_request = true;
-
-	auto response = session.Request(get_request);
+	string download_url = url;
+	auto response = RequestExtension(db, context, download_url, headers);
+	if (!response->Success() && !backup_url.empty() && ServerUnavailable(*response)) {
+		// the server is unavailable - retry against the backup server
+		download_url = backup_url;
+		response = RequestExtension(db, context, download_url, headers);
+	}
 	if (!response->Success()) {
 		// if we should not retry or exceeded the number of retries - bubble up the error
 		string message;
@@ -251,12 +272,12 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		}
 		if (response->HasRequestError()) {
 			// request error - this means something went wrong performing the request
-			throw IOException("Failed to download extension \"%s\" at URL \"%s\"\n%s (ERROR %s)", extension_name, url,
-			                  message, response->GetRequestError());
+			throw IOException("Failed to download extension \"%s\" at URL \"%s\"\n%s (ERROR %s)", extension_name,
+			                  download_url, message, response->GetRequestError());
 		}
 		// if this was not a request error this means the server responded - report the response status and response
 		throw HTTPException(*response, "Failed to download extension \"%s\" at URL \"%s\" (HTTP %n)\n%s",
-		                    extension_name, url, int(response->status), message);
+		                    extension_name, download_url, int(response->status), message);
 	}
 	if (response->status == HTTPStatusCode::NotModified_304 && install_info) {
 		return install_info;
@@ -283,13 +304,13 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 
 	if (options.repository) {
 		info.mode = ExtensionInstallMode::REPOSITORY;
-		info.full_path = url;
+		info.full_path = download_url;
 		info.repository_url = options.repository->path;
 		info.repository_type = options.repository->type;
 		info.repository_name = options.repository->name;
 	} else {
 		info.mode = ExtensionInstallMode::CUSTOM_PATH;
-		info.full_path = url;
+		info.full_path = download_url;
 	}
 
 	QueryContext query_context(context);
@@ -310,10 +331,19 @@ static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &
 
 	// Special handling for http repository: avoid using regular filesystem (note: the filesystem is not used here)
 	if (HTTPUtil::IsHTTPProtocol(options.repository->path)) {
+		// The core repository has a backup server that serves the same binaries - fall back to it if the core server
+		// is unavailable. Custom repositories have no backup, so there the error surfaces directly
+		string backup_url;
+		if (options.repository->path == ExtensionRepository::CORE_REPOSITORY_URL) {
+			backup_url = StringUtil::Replace(generated_url, ExtensionRepository::CORE_REPOSITORY_URL,
+			                                 ExtensionRepository::CORE_BACKUP_REPOSITORY_URL);
+		}
 		if (db.ExtensionIsLoaded("httpfs")) {
 			HTTPUtil::BumpToSecureProtocol(generated_url);
+			HTTPUtil::BumpToSecureProtocol(backup_url);
 		}
-		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options, context);
+		return InstallFromHttpUrl(db, generated_url, extension_name, temp_path, local_extension_path, options, context,
+		                          backup_url);
 	}
 
 	// Default case, let the FileSystem figure it out
