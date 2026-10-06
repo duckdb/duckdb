@@ -8,6 +8,7 @@
 #include "duckdb/common/sorting/sort_strategy.hpp"
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -18,6 +19,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/execution/operator/persistent/copy_batch_slicer.hpp"
 #include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 #include "fmt/format.h"
 
@@ -562,6 +564,8 @@ public:
 	//! Current append batch (unpartitioned write)
 	unique_ptr<ColumnDataCollection> batch;
 	ColumnDataAppendState batch_append_state;
+	//! Cuts chunks so BATCH_SIZE_BYTES is reachable
+	unique_ptr<CopyBatchSlicer> batch_slicer;
 
 	//! Local state (partitioned write)
 	unique_ptr<PartitionedCopyLocalState> partitioned_copy_local_state;
@@ -1216,6 +1220,8 @@ public:
 	unique_ptr<ColumnDataCollection> collection;
 	//! The partition boundary mask (marks where partition key changes within the bin)
 	ValidityMask partition_mask;
+	//! Row sizes computed during MASK for byte-limited batches.
+	vector<idx_t> row_sizes;
 
 	//! Lock for stage transitions and task assignment
 	mutable annotated_mutex lock;
@@ -2012,6 +2018,9 @@ bool PartitionedCopyHashGroup::TryPrepareNextStage() {
 	case PartitionedCopyStage::MATERIALIZE:
 		if (materialized == blocks && collection.get()) {
 			partition_mask.Initialize(count);
+			if (partitioned_copy.op.batch_size_bytes.IsValid()) {
+				row_sizes.resize(count);
+			}
 			stage = PartitionedCopyStage::MASK;
 			return true;
 		}
@@ -2103,6 +2112,7 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 		// Uses entry-level validity mask iteration to skip 64 rows at a time (see ExecuteFlat in unary_executor.hpp)
 		D_ASSERT(batch_row_idx <= batch_scan_state.next_row_index);
 		const idx_t chunk_end = batch_scan_state.next_row_index;
+		const idx_t row_before = batch_row_idx;
 		// Skip batch_row_idx itself if it's the start of the current partition
 		const idx_t search_start = batch_row_idx + (batch_row_idx == task.begin_idx ? 1 : 0);
 		if (search_start < chunk_end) {
@@ -2134,13 +2144,22 @@ optional<PartitionedCopyTask> PartitionedCopyHashGroup::TryNextBatchTask() {
 			batch_row_idx = chunk_end;
 		}
 
-		// Did not find the next partition boundary, add chunk
-		auto &segment = segments[batch_scan_state.segment_index];
+		const auto &batch_size_bytes = partitioned_copy.op.batch_size_bytes;
+		if (batch_size_bytes.IsValid()) {
+			const auto partition_end = batch_row_idx;
+			batch_row_idx = row_before;
+			do {
+				current_batch_size_bytes += row_sizes[batch_row_idx++];
+			} while (batch_row_idx < partition_end && current_batch_size_bytes < batch_size_bytes.GetIndex());
+			found_next_partition = found_next_partition && batch_row_idx == partition_end;
+		} else {
+			auto &segment = segments[batch_scan_state.segment_index];
+			current_batch_size_bytes += segment->GetChunkAllocationSize(batch_scan_state.chunk_index - 1);
+		}
+
 		const auto current_batch_size = batch_row_idx - task.begin_idx;
-		current_batch_size_bytes += segment->GetChunkAllocationSize(batch_scan_state.chunk_index - 1);
 		const CopyFunctionBatchAnalyzer batch_analyzer(current_batch_size, current_batch_size_bytes,
-		                                               partitioned_copy.op.batch_size,
-		                                               partitioned_copy.op.batch_size_bytes);
+		                                               partitioned_copy.op.batch_size, batch_size_bytes);
 
 		// Move to the next chunk if we exhausted this one
 		if (batch_row_idx == batch_scan_state.next_row_index) {
@@ -2271,6 +2290,18 @@ void PartitionedCopyHashGroup::Mask(const PartitionedCopyTask &task) {
 	partition_mask.SetRangeInvalid(count, begin_entry, end_entry);
 	if (!task.begin_idx) {
 		partition_mask.SetValidUnsafe(0);
+	}
+
+	if (!row_sizes.empty()) {
+		CopyBatchSlicer batch_slicer(partitioned_copy.write_types, partitioned_copy.op.batch_size_bytes);
+		WindowCollectionChunkScanner scanner(*collection, partitioned_copy.write_columns, task.begin_idx);
+		for (idx_t block_idx = task.begin_idx; block_idx < task.end_idx && scanner.Scan(); block_idx++) {
+			auto sizes = batch_slicer.ComputeRowSizes(scanner.chunk).Values<idx_t>();
+			auto row_idx = scanner.state.current_row_index;
+			for (auto entry : sizes) {
+				row_sizes[row_idx++] = entry.GetValue();
+			}
+		}
 	}
 
 	// Only compare partition columns (not order columns)
@@ -3298,6 +3329,7 @@ void PartitionedCopy::FlushDelayedPartitionRun(const vector<Value> &values, Part
 		auto batch = make_uniq<ColumnDataCollection>(context, write_types);
 		ColumnDataAppendState append_state;
 		batch->InitializeAppend(append_state);
+		CopyBatchSlicer batch_slicer(write_types, op.batch_size_bytes);
 
 		const auto flush_batch = [&]() {
 			if (batch->Count() == 0) {
@@ -3314,10 +3346,14 @@ void PartitionedCopy::FlushDelayedPartitionRun(const vector<Value> &values, Part
 		};
 
 		while (collection.Scan(scan_state, scan_chunk)) {
-			batch->Append(append_state, scan_chunk);
-			const CopyFunctionBatchAnalyzer batch_analyzer(*batch, op.batch_size, op.batch_size_bytes);
-			if (batch_analyzer.MeetsFlushCriteria()) {
-				flush_batch();
+			idx_t offset = 0;
+			while (offset < scan_chunk.size()) {
+				auto &slice = batch_slicer.Slice(scan_chunk, offset, *batch);
+				batch->Append(append_state, slice);
+				const CopyFunctionBatchAnalyzer batch_analyzer(*batch, op.batch_size, op.batch_size_bytes);
+				if (batch_analyzer.MeetsFlushCriteria()) {
+					flush_batch();
+				}
 			}
 		}
 		flush_batch();
@@ -3790,7 +3826,9 @@ CopyToFileLocalState::CopyToFileLocalState(const PhysicalCopyToFile &op_p, Execu
 	if (op.partition_output) {
 		++gstate.partitioned_copy->locals;
 		partitioned_copy_local_state = make_uniq<PartitionedCopyLocalState>();
+		return;
 	}
+	batch_slicer = make_uniq<CopyBatchSlicer>(op.expected_types, op.batch_size_bytes);
 }
 
 //===--------------------------------------------------------------------===//
@@ -3943,16 +3981,20 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	}
 	auto &file_state = per_thread_output ? lstate.global_file_state : gstate.global_state;
 
-	if (!lstate.batch) {
-		lstate.batch = make_uniq<ColumnDataCollection>(context.client, expected_types);
-		lstate.batch->InitializeAppend(lstate.batch_append_state);
-	}
-	lstate.batch->Append(lstate.batch_append_state, chunk);
-
-	const CopyFunctionBatchAnalyzer batch_analyzer(*lstate.batch, batch_size, batch_size_bytes);
-	if (batch_analyzer.MeetsFlushCriteria()) {
-		lstate.batch_append_state.current_chunk_state.handles.clear();
-		PrepareAndFlushBatch(context.client, gstate, file_state, gstate.create_file_state_fun, std::move(lstate.batch));
+	idx_t offset = 0;
+	while (offset < chunk.size()) {
+		if (!lstate.batch) {
+			lstate.batch = make_uniq<ColumnDataCollection>(context.client, expected_types);
+			lstate.batch->InitializeAppend(lstate.batch_append_state);
+		}
+		auto &slice = lstate.batch_slicer->Slice(chunk, offset, *lstate.batch);
+		lstate.batch->Append(lstate.batch_append_state, slice);
+		const CopyFunctionBatchAnalyzer batch_analyzer(*lstate.batch, batch_size, batch_size_bytes);
+		if (batch_analyzer.MeetsFlushCriteria()) {
+			lstate.batch_append_state.current_chunk_state.handles.clear();
+			PrepareAndFlushBatch(context.client, gstate, file_state, gstate.create_file_state_fun,
+			                     std::move(lstate.batch));
+		}
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;

@@ -1704,4 +1704,88 @@ TEST_CASE("V2: VARIANT values are built by casting into them", "[capi_v2][value]
 	duckdb_v2_logical_type_destroy(&variant_type);
 }
 
+namespace {
+
+// POINT (42 1337) as little-endian WKB
+const uint8_t POINT_WKB[] = {0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                             0x45, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0xE4, 0x94, 0x40};
+
+} // namespace
+
+TEST_CASE("V2: GEOMETRY values cast to and from WKB BLOBs", "[capi_v2][value][cast][geometry]") {
+	EnvFixture fx;
+	auto geom_type = MakeType(fx.conn, "geometry", nullptr, {});
+	auto blob_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BLOB);
+	const std::string expected_wkb(reinterpret_cast<const char *>(POINT_WKB), sizeof(POINT_WKB));
+
+	// The byte-string getter does not read GEOMETRY directly; cast to BLOB to get the WKB
+	auto geom = MakeValueFromText(fx.conn, geom_type, "POINT(42 1337)");
+	duckdb_v2_str str = {nullptr, 0};
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_value_get_blob(geom, &str, &err) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_error_info_destroy(&err);
+
+	duckdb_v2_value_handle wkb = nullptr;
+	REQUIRE(duckdb_v2_value_cast_with_connection(fx.conn, geom, blob_type, &wkb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ConsumeBlob(wkb) == expected_wkb);
+	duckdb_v2_value_destroy(&geom);
+
+	// WKB to GEOMETRY
+	auto blob = MakeBlobValue(fx.conn, POINT_WKB, sizeof(POINT_WKB));
+	duckdb_v2_value_handle from_wkb = nullptr;
+	REQUIRE(duckdb_v2_value_cast_with_connection(fx.conn, blob, geom_type, &from_wkb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(from_wkb) == "POINT (42 1337)");
+	duckdb_v2_value_destroy(&from_wkb);
+	duckdb_v2_value_destroy(&blob);
+
+	// Invalid WKB is a cast failure
+	auto truncated = MakeBlobValue(fx.conn, POINT_WKB, 5);
+	auto out = reinterpret_cast<duckdb_v2_value_handle>(0x1);
+	REQUIRE(duckdb_v2_value_cast_with_connection(fx.conn, truncated, geom_type, &out, &err) != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(out == nullptr);
+	duckdb_v2_error_info_destroy(&err);
+	duckdb_v2_value_destroy(&truncated);
+
+	duckdb_v2_logical_type_destroy(&blob_type);
+	duckdb_v2_logical_type_destroy(&geom_type);
+}
+
+TEST_CASE("V2: GEOMETRY vector cells read and write as WKB", "[capi_v2][value][cast][geometry]") {
+	EnvFixture fx;
+	auto geom_type = MakeType(fx.conn, "geometry", nullptr, {});
+	auto blob_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BLOB);
+
+	duckdb_v2_logical_type_handle types[1] = {geom_type};
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	REQUIRE(duckdb_v2_data_chunk_create(types, 1, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_vector_handle vec = nullptr;
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(vec, 1, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	// A WKB BLOB value is cast to GEOMETRY on write
+	auto blob = MakeBlobValue(fx.conn, POINT_WKB, sizeof(POINT_WKB));
+	REQUIRE(duckdb_v2_vector_set_value(vec, 0, blob, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_value_destroy(&blob);
+
+	// Invalid WKB is rejected on write
+	auto truncated = MakeBlobValue(fx.conn, POINT_WKB, 5);
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_vector_set_value(vec, 0, truncated, &err) != DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_error_info_destroy(&err);
+	duckdb_v2_value_destroy(&truncated);
+
+	// The cell reads back as GEOMETRY, and casts to its WKB
+	duckdb_v2_value_handle cell = nullptr;
+	REQUIRE(duckdb_v2_vector_get_value(vec, 0, &cell, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Render(cell) == "POINT (42 1337)");
+	duckdb_v2_value_handle wkb = nullptr;
+	REQUIRE(duckdb_v2_value_cast_with_connection(fx.conn, cell, blob_type, &wkb, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(ConsumeBlob(wkb) == std::string(reinterpret_cast<const char *>(POINT_WKB), sizeof(POINT_WKB)));
+	duckdb_v2_value_destroy(&cell);
+
+	REQUIRE(duckdb_v2_data_chunk_destroy(&chunk) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_logical_type_destroy(&blob_type);
+	duckdb_v2_logical_type_destroy(&geom_type);
+}
+
 } // namespace test_capi_v2
