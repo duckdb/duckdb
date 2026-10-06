@@ -28,7 +28,7 @@ OnConflictIndexTarget <- 'ON' 'CONSTRAINT' ConstraintName
 
 OnConflictAction <- OnConflictUpdate / OnConflictNothing
 
-OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClause WhereClause?
+OnConflictUpdate <- 'DO' 'UPDATE' 'SET' UpdateSetClauseList WhereClause?
 OnConflictNothing <- 'DO' 'NOTHING'
 
 ReturningClause <- 'RETURNING' TargetList

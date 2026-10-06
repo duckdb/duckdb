@@ -2995,15 +2995,15 @@ static const TransformFrameOps BASE_TABLE_ALIAS_SET_OPS = {
 static const TransformFrameOps UPDATE_ALIAS_OPS = {"UpdateAlias",
                                                    &PEGTransformerFactory::InitializeUpdateAliasTrampoline,
                                                    &PEGTransformerFactory::FinalizeUpdateAliasTrampoline};
+static const TransformFrameOps UPDATE_SET_CLAUSE_LIST_OPS = {
+    "UpdateSetClauseList", &PEGTransformerFactory::InitializeUpdateSetClauseListTrampoline,
+    &PEGTransformerFactory::FinalizeUpdateSetClauseListTrampoline};
 static const TransformFrameOps UPDATE_SET_CLAUSE_OPS = {"UpdateSetClause",
                                                         &PEGTransformerFactory::InitializeUpdateSetClauseTrampoline,
                                                         &PEGTransformerFactory::FinalizeUpdateSetClauseTrampoline};
 static const TransformFrameOps UPDATE_SET_TUPLE_OPS = {"UpdateSetTuple",
                                                        &PEGTransformerFactory::InitializeUpdateSetTupleTrampoline,
                                                        &PEGTransformerFactory::FinalizeUpdateSetTupleTrampoline};
-static const TransformFrameOps UPDATE_SET_ELEMENT_LIST_OPS = {
-    "UpdateSetElementList", &PEGTransformerFactory::InitializeUpdateSetElementListTrampoline,
-    &PEGTransformerFactory::FinalizeUpdateSetElementListTrampoline};
 static const TransformFrameOps UPDATE_SET_ELEMENT_OPS = {"UpdateSetElement",
                                                          &PEGTransformerFactory::InitializeUpdateSetElementTrampoline,
                                                          &PEGTransformerFactory::FinalizeUpdateSetElementTrampoline};
@@ -4104,9 +4104,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"BaseTableSet", &BASE_TABLE_SET_OPS},
 	    {"BaseTableAliasSet", &BASE_TABLE_ALIAS_SET_OPS},
 	    {"UpdateAlias", &UPDATE_ALIAS_OPS},
+	    {"UpdateSetClauseList", &UPDATE_SET_CLAUSE_LIST_OPS},
 	    {"UpdateSetClause", &UPDATE_SET_CLAUSE_OPS},
 	    {"UpdateSetTuple", &UPDATE_SET_TUPLE_OPS},
-	    {"UpdateSetElementList", &UPDATE_SET_ELEMENT_LIST_OPS},
 	    {"UpdateSetElement", &UPDATE_SET_ELEMENT_OPS},
 	    {"UpdateSetColumnTarget", &UPDATE_SET_COLUMN_TARGET_OPS},
 	    {"UseStatement", &USE_STATEMENT_OPS},
@@ -19343,18 +19343,18 @@ void PEGTransformerFactory::InitializeOnConflictUpdateTrampoline(PEGTransformer 
 	if (where_clause_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("WhereClause"), where_clause_opt.GetResult()}, 1);
 	}
-	process.PushChild({transformer.GetRule("UpdateSetClause"), list_pr.GetChild(3)}, 0);
+	process.PushChild({transformer.GetRule("UpdateSetClauseList"), list_pr.GetChild(3)}, 0);
 }
 
 unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeOnConflictUpdateTrampoline(PEGTransformer &transformer,
                                                           GeneratedTransformProcess &process) {
-	auto update_set_clause = process.TakeResult<unique_ptr<UpdateSetInfo>>(0);
+	auto update_set_clause_list = process.TakeResult<unique_ptr<UpdateSetInfo>>(0);
 	optional<unique_ptr<ParsedExpression>> where_clause {};
 	if (process.child_results[1]) {
 		where_clause = process.TakeResult<unique_ptr<ParsedExpression>>(1);
 	}
-	auto result = TransformOnConflictUpdate(transformer, std::move(update_set_clause), std::move(where_clause));
+	auto result = TransformOnConflictUpdate(transformer, std::move(update_set_clause_list), std::move(where_clause));
 	return make_uniq<TypedTransformResult<unique_ptr<OnConflictInfo>>>(std::move(result));
 }
 
@@ -24845,7 +24845,7 @@ void PEGTransformerFactory::InitializeUpdateStatementTrampoline(PEGTransformer &
 	if (from_clause_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("FromClause"), from_clause_opt.GetResult()}, 3);
 	}
-	process.PushChild({transformer.GetRule("UpdateSetClause"), list_pr.GetChild(3)}, 2);
+	process.PushChild({transformer.GetRule("UpdateSetClauseList"), list_pr.GetChild(3)}, 2);
 	process.PushChild({transformer.GetRule("UpdateTarget"), list_pr.GetChild(2)}, 1);
 	auto &with_clause_opt = list_pr.GetChild(0).Cast<OptionalParseResult>();
 	if (with_clause_opt.HasResult()) {
@@ -24861,7 +24861,7 @@ PEGTransformerFactory::FinalizeUpdateStatementTrampoline(PEGTransformer &transfo
 		with_clause = process.TakeResult<CommonTableExpressionMap>(0);
 	}
 	auto update_target = process.TakeResult<unique_ptr<TableRef>>(1);
-	auto update_set_clause = process.TakeResult<unique_ptr<UpdateSetInfo>>(2);
+	auto update_set_clause_list = process.TakeResult<unique_ptr<UpdateSetInfo>>(2);
 	optional<unique_ptr<TableRef>> from_clause {};
 	if (process.child_results[3]) {
 		from_clause = process.TakeResult<unique_ptr<TableRef>>(3);
@@ -24875,7 +24875,7 @@ PEGTransformerFactory::FinalizeUpdateStatementTrampoline(PEGTransformer &transfo
 		returning_clause = process.TakeResult<vector<unique_ptr<ParsedExpression>>>(5);
 	}
 	auto result = TransformUpdateStatement(transformer, std::move(with_clause), std::move(update_target),
-	                                       std::move(update_set_clause), std::move(from_clause),
+	                                       std::move(update_set_clause_list), std::move(from_clause),
 	                                       std::move(where_clause), std::move(returning_clause));
 	return make_uniq<TypedTransformResult<unique_ptr<SQLStatement>>>(std::move(result));
 }
@@ -24955,6 +24955,32 @@ PEGTransformerFactory::FinalizeUpdateAliasTrampoline(PEGTransformer &transformer
 	return make_uniq<TypedTransformResult<Identifier>>(result);
 }
 
+void PEGTransformerFactory::InitializeUpdateSetClauseListTrampoline(PEGTransformer &transformer,
+                                                                    GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	auto dynamic_child_count = list_items.size();
+	process.ReserveChildSlots(1 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule("UpdateSetClause"), list_items[child_idx].get()}, 0 + child_idx);
+	}
+}
+
+unique_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeUpdateSetClauseListTrampoline(PEGTransformer &transformer,
+                                                             GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
+	auto dynamic_child_count = dynamic_list_items.size();
+	vector<unique_ptr<UpdateSetInfo>> update_set_clause;
+	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
+		update_set_clause.push_back(process.TakeResult<unique_ptr<UpdateSetInfo>>(i));
+	}
+	auto result = TransformUpdateSetClauseList(transformer, std::move(update_set_clause));
+	return make_uniq<TypedTransformResult<unique_ptr<UpdateSetInfo>>>(std::move(result));
+}
+
 void PEGTransformerFactory::InitializeUpdateSetClauseTrampoline(PEGTransformer &transformer,
                                                                 GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -24997,32 +25023,6 @@ PEGTransformerFactory::FinalizeUpdateSetTupleTrampoline(PEGTransformer &transfor
 	return make_uniq<TypedTransformResult<unique_ptr<UpdateSetInfo>>>(std::move(result));
 }
 
-void PEGTransformerFactory::InitializeUpdateSetElementListTrampoline(PEGTransformer &transformer,
-                                                                     GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
-	auto dynamic_child_count = list_items.size();
-	process.ReserveChildSlots(1 + dynamic_child_count - 1);
-	for (idx_t i = list_items.size(); i > 0; i--) {
-		auto child_idx = i - 1;
-		process.PushChild({transformer.GetRule("UpdateSetElement"), list_items[child_idx].get()}, 0 + child_idx);
-	}
-}
-
-unique_ptr<TransformResultValue>
-PEGTransformerFactory::FinalizeUpdateSetElementListTrampoline(PEGTransformer &transformer,
-                                                              GeneratedTransformProcess &process) {
-	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(0));
-	auto dynamic_child_count = dynamic_list_items.size();
-	vector<pair<string, unique_ptr<ParsedExpression>>> update_set_element;
-	for (idx_t i = 0; i < 0 + dynamic_child_count; i++) {
-		update_set_element.push_back(process.TakeResult<pair<string, unique_ptr<ParsedExpression>>>(i));
-	}
-	auto result = TransformUpdateSetElementList(transformer, std::move(update_set_element));
-	return make_uniq<TypedTransformResult<unique_ptr<UpdateSetInfo>>>(std::move(result));
-}
-
 void PEGTransformerFactory::InitializeUpdateSetElementTrampoline(PEGTransformer &transformer,
                                                                  GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
@@ -25037,7 +25037,7 @@ PEGTransformerFactory::FinalizeUpdateSetElementTrampoline(PEGTransformer &transf
 	auto update_set_column_target = process.TakeResult<string>(0);
 	auto expression = process.TakeResult<unique_ptr<ParsedExpression>>(1);
 	auto result = TransformUpdateSetElement(transformer, update_set_column_target, std::move(expression));
-	return make_uniq<TypedTransformResult<pair<string, unique_ptr<ParsedExpression>>>>(std::move(result));
+	return make_uniq<TypedTransformResult<unique_ptr<UpdateSetInfo>>>(std::move(result));
 }
 
 void PEGTransformerFactory::InitializeUpdateSetColumnTargetTrampoline(PEGTransformer &transformer,

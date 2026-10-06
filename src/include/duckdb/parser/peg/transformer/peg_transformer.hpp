@@ -4049,16 +4049,16 @@ public:
 	static void InitializeUpdateAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUpdateAliasTrampoline(PEGTransformer &transformer,
 	                                                                      GeneratedTransformProcess &process);
+	static void InitializeUpdateSetClauseListTrampoline(PEGTransformer &transformer,
+	                                                    GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeUpdateSetClauseListTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeUpdateSetClauseTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUpdateSetClauseTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
 	static void InitializeUpdateSetTupleTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUpdateSetTupleTrampoline(PEGTransformer &transformer,
 	                                                                         GeneratedTransformProcess &process);
-	static void InitializeUpdateSetElementListTrampoline(PEGTransformer &transformer,
-	                                                     GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue> FinalizeUpdateSetElementListTrampoline(PEGTransformer &transformer,
-	                                                                               GeneratedTransformProcess &process);
 	static void InitializeUpdateSetElementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeUpdateSetElementTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
@@ -5806,15 +5806,14 @@ public:
 	                                                       const optional<Identifier> &update_alias);
 	static Identifier TransformUpdateAlias(PEGTransformer &transformer, const bool &has_result,
 	                                       const Identifier &col_id);
+	static unique_ptr<UpdateSetInfo> TransformUpdateSetClauseList(PEGTransformer &transformer,
+	                                                              vector<unique_ptr<UpdateSetInfo>> update_set_info);
 	static unique_ptr<UpdateSetInfo> TransformUpdateSetTuple(PEGTransformer &transformer,
 	                                                         const vector<Identifier> &column_name,
 	                                                         unique_ptr<ParsedExpression> expression);
-	static unique_ptr<UpdateSetInfo>
-	TransformUpdateSetElementList(PEGTransformer &transformer,
-	                              vector<pair<string, unique_ptr<ParsedExpression>>> update_set_element);
-	static pair<string, unique_ptr<ParsedExpression>>
-	TransformUpdateSetElement(PEGTransformer &transformer, const string &update_set_column_target,
-	                          unique_ptr<ParsedExpression> expression);
+	static unique_ptr<UpdateSetInfo> TransformUpdateSetElement(PEGTransformer &transformer,
+	                                                           const string &update_set_column_target,
+	                                                           unique_ptr<ParsedExpression> expression);
 	static string TransformUpdateSetColumnTarget(PEGTransformer &transformer, const Identifier &column_name,
 	                                             const optional<vector<Identifier>> &dot_identifier);
 	static unique_ptr<SQLStatement> TransformUseStatement(PEGTransformer &transformer, const QualifiedName &use_target);

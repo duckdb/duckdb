@@ -1,0 +1,24 @@
+# name: test/sql/update/update_tuple.test
+# description: Tests duckdb's SET tuple functionality
+# group: [update]
+
+statement ok
+CREATE TABLE t1 (a INT, b INT, c INT, d INT, e VARCHAR);
+
+statement ok
+INSERT INTO t1 VALUES (1,2,3,4, 'FIVE')
+
+statement ok
+UPDATE t1
+ SET (a, b) = (10, 20),
+        c = 30,
+     (d, e) = (40, 'SIX'),
+
+query IIIII
+SELECT * FROM t1;
+----
+10
+20
+30
+40
+SIX
