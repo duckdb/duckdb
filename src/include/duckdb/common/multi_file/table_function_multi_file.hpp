@@ -54,7 +54,13 @@ struct TableFunctionFileBindInput {
 	//! that also holds the options to open the file with (e.g. its size or encryption key) - see
 	//! OpenFileInfo::FromValue. A multi-file scan passes every file it reads this way
 	static OpenFileInfo GetFile(const TableFunctionBindInput &input) {
-		return OpenFileInfo::FromValue(input.inputs[0], input.table_function.GetName());
+		auto &file = input.inputs[0];
+		auto type = file.type().id();
+		if (type != LogicalTypeId::VARCHAR && type != LogicalTypeId::STRUCT && type != LogicalTypeId::VARIANT) {
+			throw BinderException("%s reads a single file - given as a VARCHAR path or as a file struct, not as %s",
+			                      input.table_function.GetName(), file.type().ToString());
+		}
+		return OpenFileInfo::FromValue(file, input.table_function.GetName());
 	}
 };
 

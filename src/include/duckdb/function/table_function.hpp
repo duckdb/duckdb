@@ -21,8 +21,6 @@
 #include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
-#include "duckdb/common/insertion_order_preserving_map.hpp"
-#include "duckdb/common/multi_file/multi_file_data.hpp"
 
 namespace duckdb {
 enum class TablePartitionInfo : uint8_t;
@@ -303,14 +301,15 @@ public:
 	unordered_map<string, Value> options;
 	ScanType type;
 
-	//! A function that reads a file can describe the file in more detail than its names and types, which a multi-file
-	//! function wrapping it uses to read the file (see TableFunctionMultiFileWrapper):
-	//! The columns of the file, one per bound column - e.g. with the field ids of the columns and their nested fields,
-	//! which the multi-file reader maps the columns of every file by. Left empty, the columns are derived from the
-	//! bound names and types
-	vector<MultiFileColumnDefinition> file_columns;
-	//! The key-value metadata of the file, exposed as the metadata of the reader of the file
-	InsertionOrderPreservingMap<Value> file_metadata;
+	//! An identifier attached to a result column of the bound call, or to a field nested inside one (addressed as in
+	//! MultiFileColumnDefinition::ResolveChildPath) - e.g. a field id, by which a multi-file function wrapping the
+	//! function maps the columns of its files onto one another
+	struct ColumnIdentifier {
+		idx_t column_index;
+		vector<idx_t> child_path;
+		Value identifier;
+	};
+	vector<ColumnIdentifier> column_identifiers;
 
 	void InsertOption(const string &name, Value value) { // NOLINT: work-around bug in clang-tidy
 		if (options.find(name) != options.end()) {

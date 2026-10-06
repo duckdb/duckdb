@@ -4442,9 +4442,9 @@ auto TableFunction::GetBindInfoInput::SetColumnIdentifier(idx_t column_index, co
 	               child_path.data(), static_cast<idx_t>(child_path.size()), identifier.handle());
 }
 
-auto TableFunction::GetBindInfoInput::AddFileMetadata(const std::string &key, const Value &value) -> void {
+auto TableFunction::GetBindInfoInput::SetOption(const std::string &key, const Value &value) -> void {
 	auto view = ToStr(key);
-	CheckedAPICall(duckdb_v2_table_function_get_bind_info_add_file_metadata,
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_set_option,
 	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &view, value.handle());
 }
 

@@ -337,67 +337,6 @@ public:
 	Identifier name;
 };
 
-//! The column definition of a column, with a child for every nested field an identifier can be attached to
-static auto CV2TableCreateColumnDefinition(const Identifier &name, const LogicalType &type)
-    -> MultiFileColumnDefinition {
-	MultiFileColumnDefinition result(name, type);
-	switch (type.id()) {
-	case LogicalTypeId::STRUCT:
-		for (auto &child : StructType::GetChildTypes(type)) {
-			result.children.push_back(CV2TableCreateColumnDefinition(child.first, child.second));
-		}
-		break;
-	case LogicalTypeId::LIST:
-		result.children.push_back(CV2TableCreateColumnDefinition(Identifier("list"), ListType::GetChildType(type)));
-		break;
-	case LogicalTypeId::ARRAY:
-		result.children.push_back(CV2TableCreateColumnDefinition(Identifier("list"), ArrayType::GetChildType(type)));
-		break;
-	case LogicalTypeId::MAP: {
-		// the multi-file reader expects the entries of a MAP as a "key_value" STRUCT of the keys and the values
-		MultiFileColumnDefinition key_value(Identifier("key_value"), ListType::GetChildType(type));
-		key_value.children.push_back(CV2TableCreateColumnDefinition(Identifier("key"), MapType::KeyType(type)));
-		key_value.children.push_back(CV2TableCreateColumnDefinition(Identifier("value"), MapType::ValueType(type)));
-		result.children.push_back(std::move(key_value));
-		break;
-	}
-	case LogicalTypeId::UNION:
-		for (idx_t i = 0; i < UnionType::GetMemberCount(type); i++) {
-			result.children.push_back(
-			    CV2TableCreateColumnDefinition(UnionType::GetMemberName(type, i), UnionType::GetMemberType(type, i)));
-		}
-		break;
-	default:
-		break;
-	}
-	return result;
-}
-
-//! Resolves a child path - as documented for table_function_get_bind_info_set_column_identifier - to the column
-//! definition of the nested field it addresses
-static auto CV2TableResolveChildPath(MultiFileColumnDefinition &column, const vector<idx_t> &child_path)
-    -> MultiFileColumnDefinition & {
-	reference<MultiFileColumnDefinition> current(column);
-	for (auto child_index : child_path) {
-		auto &definition = current.get();
-		if (definition.type.id() == LogicalTypeId::MAP) {
-			// the keys and the values are the children of the "key_value" entry
-			if (child_index > 1) {
-				throw InvalidInputException("A MAP has two children: its keys (0) and its values (1), not %llu",
-				                            child_index);
-			}
-			current = definition.children[0].children[child_index];
-			continue;
-		}
-		if (child_index >= definition.children.size()) {
-			throw InvalidInputException("Child index %llu is out of range for a field of type %s", child_index,
-			                            definition.type.ToString());
-		}
-		current = definition.children[child_index];
-	}
-	return current.get();
-}
-
 //! What the "get bind info" callback describes a bound call with
 class CV2TableGetBindInfoInfo {
 public:
@@ -409,14 +348,8 @@ public:
 	//! The bound call - its result columns are the columns identifiers are attached to
 	const CV2TableFunctionData &bind_data;
 
-	//! The identifiers set on the result columns and their nested fields, by column and child path
-	struct ColumnIdentifier {
-		idx_t column_index;
-		vector<idx_t> child_path;
-		Value identifier;
-	};
-	vector<ColumnIdentifier> out_column_identifiers;
-	InsertionOrderPreservingMap<Value> out_file_metadata;
+	//! What the callback reports
+	BindInfo out_bind_info {ScanType::EXTERNAL};
 };
 
 static auto Convert(duckdb_v2_table_function_get_bind_info_info_handle info) -> CV2TableGetBindInfoInfo * {
@@ -426,11 +359,10 @@ static auto Convert(CV2TableGetBindInfoInfo *info) -> duckdb_v2_table_function_g
 	return reinterpret_cast<duckdb_v2_table_function_get_bind_info_info_handle>(info);
 }
 
-//! Asks the function to describe a bound call: the identifiers of the columns of the file it reads, and its metadata
+//! Asks the function to describe a bound call: e.g. the identifiers of its columns
 static auto CV2TableGetBindInfo(TableFunctionGetBindInfoInput &input) -> BindInfo {
-	BindInfo result(ScanType::EXTERNAL);
 	if (!input.bind_data) {
-		return result;
+		return BindInfo(ScanType::EXTERNAL);
 	}
 	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
 	const auto &info = *bind_data.info;
@@ -447,18 +379,7 @@ static auto CV2TableGetBindInfo(TableFunctionGetBindInfoInput &input) -> BindInf
 		err.ThrowAsException();
 	}
 
-	if (!args.out_column_identifiers.empty()) {
-		for (idx_t i = 0; i < bind_data.column_names.size(); i++) {
-			result.file_columns.push_back(
-			    CV2TableCreateColumnDefinition(bind_data.column_names[i], bind_data.column_types[i]));
-		}
-		for (auto &entry : args.out_column_identifiers) {
-			auto &definition = CV2TableResolveChildPath(result.file_columns[entry.column_index], entry.child_path);
-			definition.identifier = entry.identifier;
-		}
-	}
-	result.file_metadata = std::move(args.out_file_metadata);
-	return result;
+	return std::move(args.out_bind_info);
 }
 
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
@@ -1798,31 +1719,30 @@ duckdb_v2_table_function_get_bind_info_set_column_identifier(duckdb_v2_table_fun
 		}
 		duckdb::vector<duckdb::idx_t> path(child_path, child_path + child_path_length);
 		// verify the path addresses a nested field of the column, so a mistake is reported where it is made
-		auto definition =
-		    CV2TableCreateColumnDefinition(bind_data.column_names[column_index], bind_data.column_types[column_index]);
-		CV2TableResolveChildPath(definition, path);
+		auto definition = MultiFileColumnDefinition::CreateNested(bind_data.column_names[column_index],
+		                                                          bind_data.column_types[column_index]);
+		definition.ResolveChildPath(path);
 
-		for (auto &entry : args.out_column_identifiers) {
+		auto &identifiers = args.out_bind_info.column_identifiers;
+		for (auto &entry : identifiers) {
 			if (entry.column_index == column_index && entry.child_path == path) {
 				entry.identifier = value;
 				return;
 			}
 		}
-		args.out_column_identifiers.push_back({column_index, std::move(path), value});
+		identifiers.push_back({column_index, std::move(path), value});
 	});
 }
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_get_bind_info_add_file_metadata(duckdb_v2_table_function_get_bind_info_info_handle info,
-                                                         duckdb_v2_str *key, duckdb_v2_value_handle value,
-                                                         duckdb_v2_error_info_handle *err) {
+duckdb_v2_table_function_get_bind_info_set_option(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                  duckdb_v2_str *key, duckdb_v2_value_handle value,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(key);
 	DUCKDB_CHECK_ARG(value);
-	return WithErrorHandler(err, [&]() {
-		auto &metadata = Convert(info)->out_file_metadata;
-		metadata[duckdb::string(Convert(*key))] = *Convert(value);
-	});
+	return WithErrorHandler(
+	    err, [&]() { Convert(info)->out_bind_info.options[duckdb::string(Convert(*key))] = *Convert(value); });
 }
 
 //----------------------------------------------------------------------------------------------------------------------

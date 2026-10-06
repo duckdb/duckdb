@@ -1,5 +1,7 @@
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 
+#include <algorithm>
+
 #include "duckdb/common/bind_helpers.hpp"
 
 #include "duckdb/execution/execution_context.hpp"
@@ -104,8 +106,8 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	names.clear();
 	types.clear();
 	bind_data = function.bind(context, bind_input, types, names);
-	// a function can describe the file it bound in more detail than its names and types - e.g. attach the field ids of
-	// its columns, or the key-value metadata of the file
+	// a function can describe what it bound in more detail than its names and types - e.g. with the field ids of its
+	// columns, and options that describe the file, which are exposed as the metadata of the reader of the file
 	optional<BindInfo> bind_info;
 	if (function.get_bind_info && bind_data) {
 		TableFunctionGetBindInfoInput bind_info_input(context, bind_data.get());
@@ -115,18 +117,33 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 		// the function describes the columns of its file itself - names and types alone would lose their nested
 		// structure and the identifiers that map the files of a scan onto one another
 		columns = settings.get_file_columns(context, *bind_data);
-	} else if (bind_info && !bind_info->file_columns.empty()) {
-		if (bind_info->file_columns.size() != names.size()) {
-			throw InternalException("Table function %s described %llu columns of file \"%s\", but bound %llu",
-			                        function.name, bind_info->file_columns.size(), file.path, names.size());
+	} else if (bind_info && !bind_info->column_identifiers.empty()) {
+		columns.clear();
+		for (idx_t i = 0; i < names.size(); i++) {
+			columns.push_back(MultiFileColumnDefinition::CreateNested(names[i], types[i]));
 		}
-		columns = std::move(bind_info->file_columns);
+		for (auto &entry : bind_info->column_identifiers) {
+			if (entry.column_index >= columns.size()) {
+				throw InternalException("Table function %s attached an identifier to column %llu of file \"%s\", but "
+				                        "bound %llu",
+				                        function.name, entry.column_index, file.path, columns.size());
+			}
+			columns[entry.column_index].ResolveChildPath(entry.child_path).identifier = entry.identifier;
+		}
 	} else {
 		columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 	}
 	metadata.clear();
 	if (bind_info) {
-		metadata = std::move(bind_info->file_metadata);
+		// the options are kept unordered - sort them, so the same file always has the same metadata
+		vector<string> keys;
+		for (auto &option : bind_info->options) {
+			keys.push_back(option.first);
+		}
+		std::sort(keys.begin(), keys.end());
+		for (auto &key : keys) {
+			metadata.insert(key, bind_info->options[key]);
+		}
 	}
 
 	cardinality = optional_idx();

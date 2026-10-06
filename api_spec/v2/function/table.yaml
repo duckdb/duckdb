@@ -91,11 +91,10 @@ handles:
 
   table_function_get_bind_info_info:
     description: |
-      A borrowed opaque handle to the arguments supplied to a table function when the engine asks it to describe
-      what a bound call reads. The "get bind info" callback receives this handle next to the bind data of the call,
-      and can use it to describe the file the call reads in more detail than its columns - e.g. the field ids of its
-      columns, so that a multi-file function registered with `[[multi_file_function_register]]` can map the columns
-      of every file onto the columns of its scan by identifier.
+      A borrowed opaque handle to the arguments supplied to a table function when the engine asks it to describe a
+      bound call. The "get bind info" callback receives this handle, and can use it to describe the call in more
+      detail than its columns: with identifiers of its columns (e.g. field ids), and with options - key-value facts
+      about what the call reads.
 
   multi_file_function:
     description: |
@@ -1929,12 +1928,12 @@ functions:
     description: |
       Sets the optional "get bind info" callback of the table function.
 
-      The engine invokes the callback with the bind data of a bound call when it needs to know more about what the
-      call reads than its columns. A function that reads a file describes the file through it: a multi-file function
-      registered with `[[multi_file_function_register]]` asks the function it wraps for every file it binds, and
-      maps the columns of the files onto the columns of its scan with the field ids the callback reports, and exposes
-      the metadata it reports as the metadata of the reader of the file. The callback may be invoked more than once
-      for the same bind data, so it should only report what the bind already determined.
+      The engine invokes the callback with the bind data of a bound call when it needs to know more about the call
+      than its columns. E.g. a multi-file function registered with `[[multi_file_function_register]]` asks the
+      function it wraps for every file it binds: it maps the columns of the files onto the columns of its scan by the
+      identifiers the callback reports, and exposes the options it reports as the metadata of the reader of the file.
+      The callback may be invoked more than once for the same bind data, so it should only report what the bind
+      already determined.
     parameters:
       function:
         type: table_function
@@ -2025,14 +2024,15 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  table_function_get_bind_info_add_file_metadata:
+  table_function_get_bind_info_set_option:
     lifecycle:
       - [ "unstable", "v2.0.0", "2026-10-06" ]
     description: |
-      Adds an entry to the key-value metadata of the file the bound call reads.
+      Sets an option describing the bound call: a key-value fact about what the call reads, e.g. a property of the
+      file it reads. Setting a key again replaces its value.
 
-      A multi-file reader exposes it as the metadata of the reader of the file, e.g. to a custom multi-file reader of
-      another extension. Entries keep the order in which they were added; adding a key again replaces its value.
+      A multi-file function registered with `[[multi_file_function_register]]` exposes the options of the function it
+      wraps as the metadata of the reader of each file, e.g. to a custom multi-file reader of another extension.
     parameters:
       info:
         type: table_function_get_bind_info_info
@@ -2040,10 +2040,10 @@ functions:
       key:
         type: str
         indirection: 1
-        description: The key of the entry. Borrowed and copied.
+        description: The key of the option. Borrowed and copied.
       value:
         type: value
-        description: The value of the entry. Borrowed and copied.
+        description: The value of the option. Borrowed and copied.
       err:
         type: error_info
         indirection: 1

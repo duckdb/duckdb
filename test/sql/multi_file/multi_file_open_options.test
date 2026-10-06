@@ -279,7 +279,7 @@ SELECT * FROM read_single_parquet_file({'footer_size': 1::UBIGINT})
 statement error
 SELECT * FROM read_single_parquet_file(42)
 ----
-<REGEX>:.*can only take a list of strings, structs or variants.*
+<REGEX>:Binder Error.*reads a single file - given as a VARCHAR path or as a file struct, not as INTEGER.*
 
 query II
 SELECT * FROM read_single_csv_file({'filename': '{TEST_DIR}/open_options.csv', 'etag': 'my_etag'})

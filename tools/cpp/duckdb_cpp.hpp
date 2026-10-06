@@ -3849,11 +3849,11 @@ public:
 	/// the claimed batch only. The callback may run while the other scanning threads wait for it, so it should only
 	/// claim the work (e.g. reserve a block number) and leave reading it to the exec callback. Optional; unstable API.
 	using ClaimBatchCallback = void (*)(ClaimBatchInput &input);
-	/// Called with the bind data of a bound call when the engine needs to know more about what the call reads than its
-	/// columns: a function that reads a file describes the file through it, e.g. with the field ids of its columns. A
+	/// Called with the bind data of a bound call when the engine needs to know more about the call than its columns:
+	/// identifiers of its columns (e.g. field ids), and options - key-value facts about what the call reads. A
 	/// `MultiFileFunction` wrapping the function asks for every file it binds, maps the columns of the files by the
-	/// field ids, and exposes the metadata as that of the reader of the file. May be called more than once for the same
-	/// bind data: only report what the bind already determined. Optional; unstable API.
+	/// identifiers, and exposes the options as the metadata of the reader of the file. May be called more than once
+	/// for the same bind data: only report what the bind already determined. Optional; unstable API.
 	using GetBindInfoCallback = void (*)(GetBindInfoInput &input);
 
 	TableFunction(TableFunction &&) noexcept = default;
@@ -4472,9 +4472,9 @@ public:
 		auto SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path, const Value &identifier)
 		    -> void;
 
-		/// Adds an entry to the key-value metadata of the file the bound call reads, which a `MultiFileFunction`
-		/// exposes as the metadata of the reader of the file.
-		auto AddFileMetadata(const std::string &key, const Value &value) -> void;
+		/// Sets an option describing the bound call: a key-value fact about what the call reads. A `MultiFileFunction`
+		/// exposes the options as the metadata of the reader of the file. Setting a key again replaces its value.
+		auto SetOption(const std::string &key, const Value &value) -> void;
 
 		/// The context of the query the bound call is part of. Borrowed, valid only for the callback duration.
 		auto GetContext() const -> Context;
@@ -4509,8 +4509,8 @@ public:
 ///
 /// The single-file function can describe the file it reads in more detail than its columns with a get bind info
 /// callback (`TableFunction::SetGetBindInfoCallback`): the field ids of its columns, which the files of the scan are
-/// mapped onto one another by, and the metadata of the file. With a claim batch callback, the rows of a file keep
-/// their order also when several threads scan it.
+/// mapped onto one another by, and options, which become the metadata of the reader of the file. With a claim batch
+/// callback, the rows of a file keep their order also when several threads scan it.
 class MultiFileFunction final : public detail::Handle<MultiFileFunction> {
 	friend detail::Factory;
 

@@ -108,6 +108,62 @@ void MultiFileReader::AddParameters(TableFunction &table_function, MultiFilePara
 	}
 }
 
+MultiFileColumnDefinition MultiFileColumnDefinition::CreateNested(const Identifier &name, const LogicalType &type) {
+	MultiFileColumnDefinition result(name, type);
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		for (auto &child : StructType::GetChildTypes(type)) {
+			result.children.push_back(CreateNested(child.first, child.second));
+		}
+		break;
+	case LogicalTypeId::LIST:
+		result.children.push_back(CreateNested(Identifier("list"), ListType::GetChildType(type)));
+		break;
+	case LogicalTypeId::ARRAY:
+		result.children.push_back(CreateNested(Identifier("list"), ArrayType::GetChildType(type)));
+		break;
+	case LogicalTypeId::MAP: {
+		// the multi-file reader expects the entries of a MAP as a "key_value" STRUCT of the keys and the values
+		MultiFileColumnDefinition key_value(Identifier("key_value"), ListType::GetChildType(type));
+		key_value.children.push_back(CreateNested(Identifier("key"), MapType::KeyType(type)));
+		key_value.children.push_back(CreateNested(Identifier("value"), MapType::ValueType(type)));
+		result.children.push_back(std::move(key_value));
+		break;
+	}
+	case LogicalTypeId::UNION:
+		for (idx_t i = 0; i < UnionType::GetMemberCount(type); i++) {
+			result.children.push_back(
+			    CreateNested(UnionType::GetMemberName(type, i), UnionType::GetMemberType(type, i)));
+		}
+		break;
+	default:
+		break;
+	}
+	return result;
+}
+
+MultiFileColumnDefinition &MultiFileColumnDefinition::ResolveChildPath(const vector<idx_t> &child_path) {
+	reference<MultiFileColumnDefinition> current(*this);
+	for (auto child_index : child_path) {
+		auto &definition = current.get();
+		if (definition.type.id() == LogicalTypeId::MAP) {
+			// the keys and the values are the children of the "key_value" entry
+			if (child_index > 1) {
+				throw InvalidInputException("A MAP has two children: its keys (0) and its values (1), not %llu",
+				                            child_index);
+			}
+			current = definition.children[0].children[child_index];
+			continue;
+		}
+		if (child_index >= definition.children.size()) {
+			throw InvalidInputException("Child index %llu is out of range for a field of type %s", child_index,
+			                            definition.type.ToString());
+		}
+		current = definition.children[child_index];
+	}
+	return current.get();
+}
+
 OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
 	return OpenFileInfo::FromValue(input, function_name);
 }

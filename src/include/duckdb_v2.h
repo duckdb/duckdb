@@ -12118,11 +12118,10 @@ typedef struct _duckdb_v2_table_function_claim_batch_info {
 } * duckdb_v2_table_function_claim_batch_info_handle;
 
 /*!
- * A borrowed opaque handle to the arguments supplied to a table function when the engine asks it to describe what a
- * bound call reads. The "get bind info" callback receives this handle next to the bind data of the call, and can use it
- * to describe the file the call reads in more detail than its columns - e.g. the field ids of its columns, so that a
- * multi-file function registered with `duckdb_v2_multi_file_function_register()` can map the columns of every file onto
- * the columns of its scan by identifier.
+ * A borrowed opaque handle to the arguments supplied to a table function when the engine asks it to describe a bound
+ * call. The "get bind info" callback receives this handle, and can use it to describe the call in more detail than its
+ * columns: with identifiers of its columns (e.g. field ids), and with options - key-value facts about what the call
+ * reads.
  */
 typedef struct _duckdb_v2_table_function_get_bind_info_info {
 	void *internal_ptr;
@@ -13528,12 +13527,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(
 /*!
  * Sets the optional "get bind info" callback of the table function.
  *
- * The engine invokes the callback with the bind data of a bound call when it needs to know more about what the call
- * reads than its columns. A function that reads a file describes the file through it: a multi-file function registered
- * with `duckdb_v2_multi_file_function_register()` asks the function it wraps for every file it binds, and maps the
- * columns of the files onto the columns of its scan with the field ids the callback reports, and exposes the metadata
- * it reports as the metadata of the reader of the file. The callback may be invoked more than once for the same bind
- * data, so it should only report what the bind already determined.
+ * The engine invokes the callback with the bind data of a bound call when it needs to know more about the call than its
+ * columns. E.g. a multi-file function registered with `duckdb_v2_multi_file_function_register()` asks the function it
+ * wraps for every file it binds: it maps the columns of the files onto the columns of its scan by the identifiers the
+ * callback reports, and exposes the options it reports as the metadata of the reader of the file. The callback may be
+ * invoked more than once for the same bind data, so it should only report what the bind already determined.
  *
  * history:
  * - unstable: v2.0.0
@@ -13616,22 +13614,23 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_column_i
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Adds an entry to the key-value metadata of the file the bound call reads.
+ * Sets an option describing the bound call: a key-value fact about what the call reads, e.g. a property of the file it
+ * reads. Setting a key again replaces its value.
  *
- * A multi-file reader exposes it as the metadata of the reader of the file, e.g. to a custom multi-file reader of
- * another extension. Entries keep the order in which they were added; adding a key again replaces its value.
+ * A multi-file function registered with `duckdb_v2_multi_file_function_register()` exposes the options of the function
+ * it wraps as the metadata of the reader of each file, e.g. to a custom multi-file reader of another extension.
  *
  * history:
  * - unstable: v2.0.0
  *
  * @param info The get bind info handle.
- * @param key The key of the entry. Borrowed and copied.
- * @param value The value of the entry. Borrowed and copied.
+ * @param key The key of the option. Borrowed and copied.
+ * @param value The value of the option. Borrowed and copied.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_add_file_metadata(
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_option(
     duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
     duckdb_v2_error_info_handle *err);
 #endif
