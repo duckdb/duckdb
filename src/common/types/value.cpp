@@ -159,6 +159,12 @@ Value::Value(const Identifier &val) : Value(val.GetIdentifierName()) {
 Value::Value(const char *val) : Value(val ? string(val) : string()) {
 }
 
+static void VerifyStringValue(const Value &value) {
+	if (!value.IsValid()) {
+		throw ErrorManager::InvalidUnicodeError(StringValue::Get(value), "value construction");
+	}
+}
+
 Value::Value(std::nullptr_t val) : Value(LogicalType::VARCHAR) {
 }
 
@@ -166,24 +172,18 @@ Value::Value(string_t val) : Value(val.GetString()) {
 }
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false) {
-	if (!Value::StringIsValid(val.c_str(), val.size())) {
-		throw ErrorManager::InvalidUnicodeError(val, "value construction");
-	}
 	value_info_ = make_shared_ptr<StringValueInfo>(std::move(val));
+	VerifyStringValue(*this);
 }
 
 Value::Value(String val) : type_(LogicalType::VARCHAR), is_null(false) {
-	if (!Value::StringIsValid(val.c_str(), val.size())) {
-		throw ErrorManager::InvalidUnicodeError(val, "value construction");
-	}
 	value_info_ = make_shared_ptr<StringValueInfo>(val.ToStdString());
+	VerifyStringValue(*this);
 }
 
 Value::Value(std::string_view val) : type_(LogicalType::VARCHAR), is_null(false) {
-	if (!Value::StringIsValid(val.data(), val.size())) {
-		throw ErrorManager::InvalidUnicodeError(string(val), "value construction");
-	}
 	value_info_ = make_shared_ptr<StringValueInfo>(string(val));
+	VerifyStringValue(*this);
 }
 
 Value::~Value() {
@@ -2354,13 +2354,9 @@ static bool ValueIsValidShallow(const Value &value) {
 		return true;
 	}
 	auto &type = value.type();
-	bool valid = true;
 	switch (type.id()) {
-	case LogicalTypeId::VARCHAR: {
-		auto &str = StringValue::Get(value);
-		valid = Value::StringIsValid(str);
-		break;
-	}
+	case LogicalTypeId::VARCHAR:
+		return Value::StringIsValid(StringValue::Get(value));
 	case LogicalTypeId::ENUM: {
 		uint64_t index;
 		switch (type.InternalType()) {
@@ -2376,26 +2372,22 @@ static bool ValueIsValidShallow(const Value &value) {
 		default:
 			throw InternalException("Invalid physical type for ENUM");
 		}
-		valid = index < EnumType::GetSize(type);
-		break;
+		return index < EnumType::GetSize(type);
 	}
 	case LogicalTypeId::TIME: {
 		const auto micros = value.GetValueUnsafe<dtime_t>().value;
-		valid = micros >= 0 && micros <= Interval::MICROS_PER_DAY;
-		break;
+		return micros >= 0 && micros <= Interval::MICROS_PER_DAY;
 	}
 	case LogicalTypeId::TIME_NS: {
 		const auto nanos = value.GetValueUnsafe<dtime_ns_t>().value;
-		valid = nanos >= 0 && nanos <= Interval::NANOS_PER_DAY;
-		break;
+		return nanos >= 0 && nanos <= Interval::NANOS_PER_DAY;
 	}
 	case LogicalTypeId::TIME_TZ: {
 		const auto time_tz = value.GetValueUnsafe<dtime_tz_t>();
 		const auto micros = time_tz.time().value;
 		const auto offset = time_tz.offset();
-		valid = micros >= 0 && micros <= Interval::MICROS_PER_DAY && offset >= dtime_tz_t::MIN_OFFSET &&
-		        offset <= dtime_tz_t::MAX_OFFSET;
-		break;
+		return micros >= 0 && micros <= Interval::MICROS_PER_DAY && offset >= dtime_tz_t::MIN_OFFSET &&
+		       offset <= dtime_tz_t::MAX_OFFSET;
 	}
 	case LogicalTypeId::DECIMAL: {
 		const auto width = DecimalType::GetWidth(type);
@@ -2411,36 +2403,29 @@ static bool ValueIsValidShallow(const Value &value) {
 			} else {
 				decimal_value = value.GetValueUnsafe<int64_t>();
 			}
-			valid = decimal_value > -NumericHelper::POWERS_OF_TEN[width] &&
-			        decimal_value < NumericHelper::POWERS_OF_TEN[width];
-			break;
+			return decimal_value > -NumericHelper::POWERS_OF_TEN[width] &&
+			       decimal_value < NumericHelper::POWERS_OF_TEN[width];
 		}
 		case PhysicalType::INT128: {
 			const auto decimal_value = value.GetValueUnsafe<hugeint_t>();
-			valid = decimal_value > -Hugeint::POWERS_OF_TEN[width] && decimal_value < Hugeint::POWERS_OF_TEN[width];
-			break;
+			return decimal_value > -Hugeint::POWERS_OF_TEN[width] && decimal_value < Hugeint::POWERS_OF_TEN[width];
 		}
 		default:
 			throw InternalException("Invalid physical type for DECIMAL");
 		}
-		break;
 	}
 	case LogicalTypeId::UNION: {
 		auto &children = StructValue::GetChildren(value);
-		valid = children.size() == UnionType::GetMemberCount(type) + 1 &&
-		        children[0].GetValueUnsafe<union_tag_t>() < UnionType::GetMemberCount(type);
-		break;
+		return children.size() == UnionType::GetMemberCount(type) + 1 &&
+		       children[0].GetValueUnsafe<union_tag_t>() < UnionType::GetMemberCount(type);
 	}
 	case LogicalTypeId::STRUCT:
-		valid = StructValue::GetChildren(value).size() == StructType::GetChildCount(type);
-		break;
+		return StructValue::GetChildren(value).size() == StructType::GetChildCount(type);
 	case LogicalTypeId::ARRAY:
-		valid = ArrayValue::GetChildren(value).size() == ArrayType::GetSize(type);
-		break;
+		return ArrayValue::GetChildren(value).size() == ArrayType::GetSize(type);
 	default:
-		break;
+		return true;
 	}
-	return valid;
 }
 
 bool Value::IsValid() const {
