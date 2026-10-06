@@ -528,8 +528,10 @@ Appender::Appender(Connection &con, const Identifier &database_name, const Ident
 		defaults.push_back(column.HasDefaultValue() ? &column.DefaultValue() : nullptr);
 	}
 	auto &context_ref = *con.context;
-	auto binder = Binder::CreateBinder(context_ref);
+	// Bind inside the callback: creating the binder reaches the transaction, which for a snapshot participant is
+	// only safe while RunFunctionInTransaction holds the shared statement gate.
 	context_ref.RunFunctionInTransaction([&]() {
+		auto binder = Binder::CreateBinder(context_ref);
 		for (idx_t i = 0; i < types.size(); i++) {
 			auto &type = types[i];
 			auto &expr = defaults[i];

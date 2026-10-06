@@ -1,0 +1,224 @@
+# name: test/sql/transactions/transaction_snapshot_validation.test
+# description: Exported transaction snapshots: single-connection validation and token behaviour
+# group: [transactions]
+
+# Cases that need a second connection to observe the owner's uncommitted rows live in
+# test/api/test_transaction_snapshot.cpp: a snapshot token cannot be carried between connections
+# from a .test file, because the runner has no way to capture a query result into a variable.
+#
+# A failed statement invalidates the surrounding transaction, so each error case below gets its
+# own BEGIN/ROLLBACK pair.
+
+# ---------------------------------------------------------------- exporting
+
+statement error
+SELECT duckdb_export_transaction_snapshot()
+----
+must be called inside an explicit transaction
+
+# The token is a UUID, and exporting twice returns the same one for the same transaction.
+statement ok
+BEGIN
+
+statement ok
+SET VARIABLE snapshot_id = (SELECT duckdb_export_transaction_snapshot())
+
+query I
+SELECT length(getvariable('snapshot_id'))
+----
+36
+
+query I
+SELECT getvariable('snapshot_id') = duckdb_export_transaction_snapshot()
+----
+true
+
+statement ok
+ROLLBACK
+
+# A new transaction gets a new token.
+statement ok
+BEGIN
+
+query I
+SELECT getvariable('snapshot_id') = duckdb_export_transaction_snapshot()
+----
+false
+
+statement ok
+ROLLBACK
+
+# ------------------------------------------------- exporting a named database
+
+statement ok
+BEGIN
+
+statement error
+SELECT duckdb_export_transaction_snapshot('does_not_exist')
+----
+does not exist
+
+statement ok
+ROLLBACK
+
+# The per-connection temporary and system catalogs are not shareable.
+statement ok
+BEGIN
+
+statement error
+SELECT duckdb_export_transaction_snapshot('temp')
+----
+cannot be shared
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN
+
+statement error
+SELECT duckdb_export_transaction_snapshot('system')
+----
+cannot be shared
+
+statement ok
+ROLLBACK
+
+statement ok
+ATTACH ':memory:' AS database_a
+
+statement ok
+ATTACH ':memory:' AS database_b
+
+statement ok
+CREATE TABLE database_a.main.values_table (value INTEGER)
+
+statement ok
+CREATE TABLE database_b.main.values_table (value INTEGER)
+
+# With more than one candidate and no writes, the database to export is ambiguous.
+statement ok
+BEGIN
+
+statement ok
+SELECT * FROM database_a.main.values_table
+
+statement ok
+SELECT * FROM database_b.main.values_table
+
+statement error
+SELECT duckdb_export_transaction_snapshot()
+----
+ambiguous
+
+statement ok
+ROLLBACK
+
+# Naming the database resolves it.
+statement ok
+BEGIN
+
+statement ok
+SELECT * FROM database_a.main.values_table
+
+statement ok
+SELECT * FROM database_b.main.values_table
+
+statement ok
+SELECT duckdb_export_transaction_snapshot('database_a')
+
+statement ok
+ROLLBACK
+
+# The owner may write to one database and export another: it owns both transactions and commits
+# them together, and participants only ever read the one they are given.
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO database_b.main.values_table VALUES (1)
+
+statement ok
+SELECT duckdb_export_transaction_snapshot('database_a')
+
+statement ok
+ROLLBACK
+
+# Exporting the database it wrote to is equally fine.
+statement ok
+BEGIN
+
+statement ok
+INSERT INTO database_b.main.values_table VALUES (1)
+
+statement ok
+SELECT duckdb_export_transaction_snapshot('database_b')
+
+statement ok
+ROLLBACK
+
+# A read-only transaction can be exported; participants are read-only regardless.
+statement ok
+BEGIN TRANSACTION READ ONLY
+
+statement ok
+SELECT duckdb_export_transaction_snapshot('database_a')
+
+statement ok
+ROLLBACK
+
+# --------------------------------------------------- SET TRANSACTION SNAPSHOT
+
+statement error
+SET TRANSACTION SNAPSHOT 'irrelevant'
+----
+can only be used inside an explicit transaction
+
+statement ok
+BEGIN
+
+statement error
+SET TRANSACTION SNAPSHOT ''
+----
+requires a non-empty snapshot id
+
+statement ok
+ROLLBACK
+
+# Tokens are exact capabilities: an unknown or well-formed-but-wrong one is refused.
+statement ok
+BEGIN
+
+statement error
+SET TRANSACTION SNAPSHOT 'not-a-token'
+----
+Snapshot is no longer available
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN
+
+statement error
+SET TRANSACTION SNAPSHOT '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+----
+Snapshot is no longer available
+
+statement ok
+ROLLBACK
+
+# A connection that has exported its own transaction cannot then take part in another.
+statement ok
+BEGIN
+
+statement ok
+SELECT duckdb_export_transaction_snapshot('database_a')
+
+statement error
+SET TRANSACTION SNAPSHOT '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
+----
+already takes part in a shared transaction
+
+statement ok
+ROLLBACK
