@@ -34,7 +34,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_NEW_EXTENSION_BUILD: 1
   # Override extension CI matrix reduction with "enabled" or "disabled".
   # Use "disabled" on risky PRs to run the full extension matrix.
   # OVERRIDE_REDUCED_CI_MODE: disabled

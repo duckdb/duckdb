@@ -48,7 +48,6 @@ jobs:
       CC: gcc
       CXX: g++
       GEN: ninja
-      DUCKDB_NEW_EXTENSION_BUILD: 1
 
     steps:
       - uses: actions/checkout@v6
@@ -91,8 +90,6 @@ jobs:
     needs: check-draft
     if: github.event_name == 'workflow_dispatch' || github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
-    env:
-      DUCKDB_NEW_EXTENSION_BUILD: 1
     permissions:
       actions: read
       contents: read
@@ -133,7 +130,6 @@ jobs:
      runs-on: ubuntu-24.04
      env:
        GEN: ninja
-       DUCKDB_NEW_EXTENSION_BUILD: 1
 
      steps:
      - uses: actions/checkout@v6
@@ -168,7 +164,6 @@ jobs:
     needs: linux-memory-leaks
     env:
       GEN: ninja
-      DUCKDB_NEW_EXTENSION_BUILD: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs"
       DISABLE_SANITIZER: 1
@@ -214,7 +209,6 @@ jobs:
     needs: linux-memory-leaks
     env:
       GEN: ninja
-      DUCKDB_NEW_EXTENSION_BUILD: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
@@ -253,7 +247,6 @@ jobs:
     needs: linux-memory-leaks
     env:
       GEN: ninja
-      DUCKDB_NEW_EXTENSION_BUILD: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
     steps:
@@ -291,7 +284,6 @@ jobs:
       CC: clang
       CXX: clang++
       GEN: ninja
-      DUCKDB_NEW_EXTENSION_BUILD: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs"
       DISABLE_SANITIZER: 1
@@ -338,7 +330,6 @@ jobs:
     env:
       CC: clang-20
       CXX: clang++-20
-      DUCKDB_NEW_EXTENSION_BUILD: 1
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: 'icu;json;parquet;tpch'
@@ -378,9 +369,6 @@ jobs:
      name: Sqllogic tests
      runs-on: ubuntu-latest # Secondary task of this CI job is to test building duckdb on latest ubuntu
      needs: linux-memory-leaks
-     env:
-       DUCKDB_NEW_EXTENSION_BUILD: 1
-
      steps:
      - uses: actions/checkout@v6
        with:
@@ -413,7 +401,6 @@ jobs:
        CC: gcc
        CXX: g++
        GEN: ninja
-       DUCKDB_NEW_EXTENSION_BUILD: 1
 
      steps:
      - uses: actions/checkout@v6
@@ -446,7 +433,6 @@ jobs:
       CC: gcc
       CXX: g++
       GEN: ninja
-      DUCKDB_NEW_EXTENSION_BUILD: 1
 
     steps:
       - uses: actions/checkout@v6
@@ -505,7 +491,6 @@ jobs:
      CC: gcc
      CXX: g++
      GEN: ninja
-     DUCKDB_NEW_EXTENSION_BUILD: 1
      BUILD_BENCHMARK: 1
      BUILD_JEMALLOC: 1
      CORE_EXTENSIONS: "tpch;tpcds;httpfs"
@@ -583,7 +568,6 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
-      DUCKDB_NEW_EXTENSION_BUILD: 1
     needs: linux-memory-leaks
 
     steps:
@@ -628,7 +612,6 @@ jobs:
     needs: check-draft
     env:
       GEN: ninja
-      DUCKDB_NEW_EXTENSION_BUILD: 1
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
       FORCE_ASYNC_SINK_SOURCE: 1
 
@@ -742,7 +725,6 @@ jobs:
    needs: linux-memory-leaks
    env:
      GEN: ninja
-     DUCKDB_NEW_EXTENSION_BUILD: 1
      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
      HASH_ZERO: 1
      DISABLE_SANITIZER: 1
@@ -778,8 +760,6 @@ jobs:
   bwc-build:
     name: Build DuckDB
     runs-on: ubuntu-latest
-    env:
-      DUCKDB_NEW_EXTENSION_BUILD: 1
     outputs:
       groups: ${{ steps.resolve.outputs.groups }}
     steps:
@@ -949,8 +929,6 @@ jobs:
     name: CMake Reconfigure Check
     runs-on: ${{ matrix.os }}
     needs: check-draft
-    env:
-      DUCKDB_NEW_EXTENSION_BUILD: 1
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]

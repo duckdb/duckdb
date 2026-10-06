@@ -21,7 +21,6 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   DUCKDB_VERSION: ${{ inputs.duckdb_version }}
   DUCKDB_COMMIT: ${{ inputs.duckdb_commit }}
-  DUCKDB_NEW_EXTENSION_BUILD: 1
 
 jobs:
   xcode-debug:

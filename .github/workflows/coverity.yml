@@ -22,7 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       COVERITY_PROJECT_NAME: DuckDB
-      DUCKDB_NEW_EXTENSION_BUILD: 1
     steps:
     - uses: actions/checkout@v6
     - name: Download and extract the Coverity Build Tool
