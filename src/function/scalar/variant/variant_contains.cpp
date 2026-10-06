@@ -6,9 +6,20 @@
 
 namespace duckdb {
 
-static bool IsEqual(const VariantNode &haystack, const VariantNode &needle);
+//! Deepest nesting the comparison follows before it gives up, so a deeply nested VARIANT cannot overflow the stack
+static constexpr idx_t MAX_VARIANT_DEPTH = 1000;
 
-static bool IsObjectEqual(const VariantNode &haystack, const VariantNode &needle) {
+static void CheckDepth(idx_t depth) {
+	if (depth > MAX_VARIANT_DEPTH) {
+		throw InvalidInputException("VARIANT is nested more than %llu levels deep, which is more than variant_contains "
+		                            "supports",
+		                            MAX_VARIANT_DEPTH);
+	}
+}
+
+static bool IsEqual(const VariantNode &haystack, const VariantNode &needle, idx_t depth);
+
+static bool IsObjectEqual(const VariantNode &haystack, const VariantNode &needle, const idx_t depth) {
 	// for every needle we need to find an occurrence in the haystack
 	// elements in the haystack are not consumed, so multiple needles can be satisfied by one haystack element
 	for (const auto &needle_child : needle.GetObjectChildren()) {
@@ -17,7 +28,7 @@ static bool IsObjectEqual(const VariantNode &haystack, const VariantNode &needle
 			if (needle_child.key != haystack_child.key) {
 				continue;
 			}
-			if (IsEqual(haystack_child.value, needle_child.value)) {
+			if (IsEqual(haystack_child.value, needle_child.value, depth + 1)) {
 				found = true;
 				break;
 			}
@@ -29,11 +40,11 @@ static bool IsObjectEqual(const VariantNode &haystack, const VariantNode &needle
 	return true;
 }
 
-static bool IsArrayEqual(const VariantNode &haystack, const VariantNode &needle) {
+static bool IsArrayEqual(const VariantNode &haystack, const VariantNode &needle, const idx_t depth) {
 	for (const auto &needle_child : needle.GetArrayChildren()) {
 		auto found = false;
 		for (const auto &haystack_child : haystack.GetArrayChildren()) {
-			if (IsEqual(haystack_child, needle_child)) {
+			if (IsEqual(haystack_child, needle_child, depth + 1)) {
 				found = true;
 				break;
 			}
@@ -45,7 +56,8 @@ static bool IsArrayEqual(const VariantNode &haystack, const VariantNode &needle)
 	return true;
 }
 
-static bool IsEqual(const VariantNode &haystack, const VariantNode &needle) {
+static bool IsEqual(const VariantNode &haystack, const VariantNode &needle, const idx_t depth) {
+	CheckDepth(depth);
 	const auto haystack_type = haystack.GetTypeId();
 	const auto needle_type = needle.GetTypeId();
 	const auto haystack_category = GetVariantComparisonType(haystack_type);
@@ -55,9 +67,9 @@ static bool IsEqual(const VariantNode &haystack, const VariantNode &needle) {
 
 	switch (haystack_category) {
 	case VariantComparisonType::ARRAY:
-		return IsArrayEqual(haystack, needle);
+		return IsArrayEqual(haystack, needle, depth);
 	case VariantComparisonType::OBJECT:
-		return IsObjectEqual(haystack, needle);
+		return IsObjectEqual(haystack, needle, depth);
 	case VariantComparisonType::NULL_VALUE:
 		return true;
 	case VariantComparisonType::BOOLEAN:
@@ -90,22 +102,23 @@ static bool IsEqual(const VariantNode &haystack, const VariantNode &needle) {
 	return false;
 }
 
-static bool RecursiveHaystackWalk(const VariantNode &haystack, const VariantNode &needle) {
-	if (IsEqual(haystack, needle)) {
+static bool RecursiveHaystackWalk(const VariantNode &haystack, const VariantNode &needle, const idx_t depth) {
+	CheckDepth(depth);
+	if (IsEqual(haystack, needle, depth)) {
 		return true;
 	}
 
 	switch (haystack.GetTypeId()) {
 	case VariantLogicalType::ARRAY:
 		for (const auto &child : haystack.GetArrayChildren()) {
-			if (RecursiveHaystackWalk(child, needle)) {
+			if (RecursiveHaystackWalk(child, needle, depth + 1)) {
 				return true;
 			}
 		}
 		break;
 	case VariantLogicalType::OBJECT:
 		for (const auto &child : haystack.GetObjectChildren()) {
-			if (RecursiveHaystackWalk(child.value, needle)) {
+			if (RecursiveHaystackWalk(child.value, needle, depth + 1)) {
 				return true;
 			}
 		}
@@ -133,7 +146,7 @@ static void VariantContainsFunction(DataChunk &input, ExpressionState &state, Ve
 			result_writer.WriteNull();
 			continue;
 		}
-		result_writer.WriteValue(RecursiveHaystackWalk(haystacks[row_idx], needles[row_idx]));
+		result_writer.WriteValue(RecursiveHaystackWalk(haystacks[row_idx], needles[row_idx], 0));
 	}
 }
 
