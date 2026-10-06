@@ -1,0 +1,3 @@
+{"Root": {"Level1": {"Level2": [{"Leaf": 1}]}}}
+{"root": {"level1": {"LEVEL2": [{"leaf": 2}, {"LEAF": 3}]}}}
+{"ROOT": {"LEVEL1": {"level2": [{"lEaF": 4}]}}}

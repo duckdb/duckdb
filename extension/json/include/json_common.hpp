@@ -11,6 +11,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "yyjson.hpp"
 
@@ -25,6 +26,10 @@ struct JSONKey {
 };
 
 struct JSONKeyHash {
+	JSONKeyHash() : case_insensitive(false) {
+	}
+	explicit JSONKeyHash(bool case_insensitive_p) : case_insensitive(case_insensitive_p) {
+	}
 	inline std::size_t operator()(const JSONKey &k) const {
 		size_t result;
 		if (k.len >= sizeof(size_t)) {
@@ -33,22 +38,43 @@ struct JSONKeyHash {
 			result = 0;
 			memcpy(&result, k.ptr, k.len);
 		}
+		if (case_insensitive) {
+			auto bytes = reinterpret_cast<char *>(&result);
+			for (idx_t i = 0; i < sizeof(size_t); i++) {
+				bytes[i] = StringUtil::CharacterToLower(bytes[i]);
+			}
+		}
 		return result;
 	}
+	bool case_insensitive;
 };
 
 struct JSONKeyEquality {
+	JSONKeyEquality() : case_insensitive(false) {
+	}
+	explicit JSONKeyEquality(bool case_insensitive_p) : case_insensitive(case_insensitive_p) {
+	}
 	inline bool operator()(const JSONKey &a, const JSONKey &b) const {
 		if (a.len != b.len) {
 			return false;
 		}
+		if (case_insensitive) {
+			return StringUtil::CIEquals(a.ptr, a.len, b.ptr, b.len);
+		}
 		return memcmp(a.ptr, b.ptr, a.len) == 0;
 	}
+	bool case_insensitive;
 };
 
 template <typename T>
 using json_key_map_t = unordered_map<JSONKey, T, JSONKeyHash, JSONKeyEquality>;
 using json_key_set_t = unordered_set<JSONKey, JSONKeyHash, JSONKeyEquality>;
+
+//! Creates a key map that optionally matches keys case-insensitively (ASCII only)
+template <typename T>
+json_key_map_t<T> CreateJSONKeyMap(bool case_insensitive) {
+	return json_key_map_t<T>(0, JSONKeyHash(case_insensitive), JSONKeyEquality(case_insensitive));
+}
 
 //! The type of a single element of a JSON path
 enum class JSONPathElementType : uint8_t {

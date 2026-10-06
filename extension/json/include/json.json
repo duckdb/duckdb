@@ -29,6 +29,11 @@
         "id": 104,
         "name": "delay_error",
         "type": "bool"
+      },
+      {
+        "id": 105,
+        "name": "ignore_case",
+        "type": "bool"
       }
     ],
     "pointer_type": "none"
