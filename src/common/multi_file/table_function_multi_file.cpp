@@ -73,8 +73,14 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 		throw InternalException("Table function %s cannot be wrapped in a multi file function - it has no bind",
 		                        function.name);
 	}
+	// a function that takes the file as ANY gets it together with the options to open it with - one that takes a
+	// VARCHAR only gets its path
 	vector<Value> inputs;
-	inputs.emplace_back(file.path);
+	if (function.GetSignature().GetParameter(0).GetType().id() == LogicalTypeId::ANY) {
+		inputs.emplace_back(file.ToValue());
+	} else {
+		inputs.emplace_back(file.path);
+	}
 	auto parameters = named_parameters;
 	function.GetSignature().FillNamedDefaults(context, parameters);
 	vector<LogicalType> input_table_types;
@@ -84,7 +90,6 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 	TableFunctionBindInput bind_input(inputs, parameters, input_table_types, input_table_names,
 	                                  function.function_info.get(), nullptr, bound_function, empty_ref);
 	TableFunctionFileBindInput file_input;
-	file_input.file = file;
 	file_input.multi_file_options = file_options;
 	file_input.multi_file_scan = options.multi_file_scan;
 	file_input.schema_only = schema_only;
@@ -96,25 +101,33 @@ void TableFunctionFileReader::BindFunction(ClientContext &context, const TableFu
 		file_input.expected_bind_data = options.schema_bind_data.get();
 	}
 	bind_input.multi_file_input = file_input;
-	TableFunctionFileBindInfo file_info;
-	bind_input.file_info = file_info;
 	names.clear();
 	types.clear();
 	bind_data = function.bind(context, bind_input, types, names);
+	// a function can describe the file it bound in more detail than its names and types - e.g. attach the field ids of
+	// its columns, or the key-value metadata of the file
+	optional<BindInfo> bind_info;
+	if (function.get_bind_info && bind_data) {
+		TableFunctionGetBindInfoInput bind_info_input(context, bind_data.get());
+		bind_info = function.get_bind_info(bind_info_input);
+	}
 	if (settings.get_file_columns && bind_data) {
 		// the function describes the columns of its file itself - names and types alone would lose their nested
 		// structure and the identifiers that map the files of a scan onto one another
 		columns = settings.get_file_columns(context, *bind_data);
-	} else if (!file_info.columns.empty()) {
-		if (file_info.columns.size() != names.size()) {
+	} else if (bind_info && !bind_info->file_columns.empty()) {
+		if (bind_info->file_columns.size() != names.size()) {
 			throw InternalException("Table function %s described %llu columns of file \"%s\", but bound %llu",
-			                        function.name, file_info.columns.size(), file.path, names.size());
+			                        function.name, bind_info->file_columns.size(), file.path, names.size());
 		}
-		columns = std::move(file_info.columns);
+		columns = std::move(bind_info->file_columns);
 	} else {
 		columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 	}
-	metadata = std::move(file_info.metadata);
+	metadata.clear();
+	if (bind_info) {
+		metadata = std::move(bind_info->file_metadata);
+	}
 
 	cardinality = optional_idx();
 	if (function.cardinality) {
@@ -773,9 +786,10 @@ TableFunction TableFunctionMultiFileWrapper::CreateFunction(TableFunction single
                                                             table_function_bind_t bind) {
 	auto &wrapped_signature = single_file_function.GetSignature();
 	if (wrapped_signature.GetPositionalParameterCount() != 1 ||
-	    wrapped_signature.GetParameter(0).GetType() != LogicalType::VARCHAR) {
-		throw InternalException("Only table functions taking a single VARCHAR file path can be wrapped in a multi "
-		                        "file function, %s does not",
+	    (wrapped_signature.GetParameter(0).GetType() != LogicalType::VARCHAR &&
+	     wrapped_signature.GetParameter(0).GetType().id() != LogicalTypeId::ANY)) {
+		throw InternalException("Only table functions taking a single file - an ANY file or a VARCHAR file path - can "
+		                        "be wrapped in a multi file function, %s does not",
 		                        single_file_function.name);
 	}
 	if (settings.reader_type.empty()) {

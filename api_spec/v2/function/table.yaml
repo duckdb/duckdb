@@ -89,6 +89,14 @@ handles:
       next batch of work. The "claim batch" callback receives this handle and can use it to claim the next part of
       the scan from the shared global state for the thread's local state, and to report whether it claimed one.
 
+  table_function_get_bind_info_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a table function when the engine asks it to describe
+      what a bound call reads. The "get bind info" callback receives this handle next to the bind data of the call,
+      and can use it to describe the file the call reads in more detail than its columns - e.g. the field ids of its
+      columns, so that a multi-file function registered with `[[multi_file_function_register]]` can map the columns
+      of every file onto the columns of its scan by identifier.
+
   multi_file_function:
     description: |
       An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already
@@ -228,6 +236,20 @@ callbacks:
       context:
         type: context
         description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  table_function_get_bind_info_callback:
+    parameters:
+      info:
+        type: table_function_get_bind_info_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query the bound call is part of.
       err:
         type: error_info
         indirection: 1
@@ -1899,32 +1921,93 @@ functions:
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
-  # File readers
+  # Get Bind Info Callback Functions
   #---------------------------------------------------------------------------------------------------------------------
-  table_function_bind_set_result_column_identifier:
+  table_function_set_get_bind_info_callback:
     lifecycle:
-      - [ "unstable", "v2.0.0", "2026-09-18" ]
+      - [ "unstable", "v2.0.0", "2026-10-06" ]
     description: |
-      Attaches an identifier to a result column, or to a field nested inside one.
+      Sets the optional "get bind info" callback of the table function.
 
-      Identifiers are only consulted when the function reads a file as part of a multi-file function registered
-      with `[[multi_file_function_register]]`, and are ignored otherwise. A multi-file reader can then map the
-      columns of every file onto the columns of the scan by identifier rather than by name - e.g. by the field ids
-      of a file format that carries them, so that renamed columns and fields are still found. An identifier is an
-      INTEGER field id or a VARCHAR name.
+      The engine invokes the callback with the bind data of a bound call when it needs to know more about what the
+      call reads than its columns. A function that reads a file describes the file through it: a multi-file function
+      registered with `[[multi_file_function_register]]` asks the function it wraps for every file it binds, and
+      maps the columns of the files onto the columns of its scan with the field ids the callback reports, and exposes
+      the metadata it reports as the metadata of the reader of the file. The callback may be invoked more than once
+      for the same bind data, so it should only report what the bind already determined.
+    parameters:
+      function:
+        type: table_function
+        description: The function to set the callback of.
+      callback:
+        type: table_function_get_bind_info_callback
+        description: The "get bind info" callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
 
-      The nested field is addressed by a path of child indexes, starting at the result column at `column_index`:
-      a STRUCT field by its index, the elements of a LIST or ARRAY by `0`, the keys of a MAP by `0` and its values
-      by `1`, and a UNION member by its index. An empty path addresses the result column itself. Setting an
-      identifier again for the same column or field replaces it. Fails with `ERROR_INPUT_INVALID` when the column
-      index is out of range, or the path does not address a nested field of the column's type.
+  table_function_get_bind_info_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-06" ]
+    description: Retrieves the user data set via `[[table_function_set_user_data]]`.
     parameters:
       info:
-        type: table_function_bind_info
-        description: The bind info handle.
+        type: table_function_get_bind_info_info
+        description: The get bind info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_get_bind_info_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-06" ]
+    description: Retrieves the bind data the function's bind callback set for the bound call being described.
+    parameters:
+      info:
+        type: table_function_get_bind_info_info
+        description: The get bind info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  table_function_get_bind_info_set_column_identifier:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-06" ]
+    description: |
+      Attaches an identifier to a result column of the bound call, or to a field nested inside one.
+
+      A multi-file reader can then map the columns of every file onto the columns of its scan by identifier rather
+      than by name - e.g. by the field ids of a file format that carries them, so that renamed columns and fields are
+      still found. An identifier is an INTEGER field id or a VARCHAR name.
+
+      The nested field is addressed by a path of child indexes, starting at the result column at `column_index`: a
+      STRUCT field by its index, the elements of a LIST or ARRAY by `0`, the keys of a MAP by `0` and its values by
+      `1`, and a UNION member by its index. An empty path addresses the result column itself. Setting an identifier
+      again for the same column or field replaces it. Fails with `ERROR_INPUT_INVALID` when the column index is out
+      of range, or the path does not address a nested field of the column's type.
+    parameters:
+      info:
+        type: table_function_get_bind_info_info
+        description: The get bind info handle.
       column_index:
         type: idx
-        description: The index of the result column, in the order the columns were declared.
+        description: The index of the result column, in the order the bind callback declared the columns.
       child_path:
         type: idx
         indirection: 1
@@ -1942,20 +2025,18 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
-  table_function_bind_add_file_metadata:
+  table_function_get_bind_info_add_file_metadata:
     lifecycle:
-      - [ "unstable", "v2.0.0", "2026-09-18" ]
+      - [ "unstable", "v2.0.0", "2026-10-06" ]
     description: |
-      Adds an entry to the metadata of the file the function reads.
+      Adds an entry to the key-value metadata of the file the bound call reads.
 
-      File metadata is only consulted when the function reads a file as part of a multi-file function registered
-      with `[[multi_file_function_register]]`, and is ignored otherwise: it is the key-value metadata the reader of
-      the file exposes to the multi-file reader, e.g. to a custom multi-file reader of another extension. Entries
-      keep the order in which they were added; adding a key again replaces its value.
+      A multi-file reader exposes it as the metadata of the reader of the file, e.g. to a custom multi-file reader of
+      another extension. Entries keep the order in which they were added; adding a key again replaces its value.
     parameters:
       info:
-        type: table_function_bind_info
-        description: The bind info handle.
+        type: table_function_get_bind_info_info
+        description: The get bind info handle.
       key:
         type: str
         indirection: 1
@@ -1963,37 +2044,6 @@ functions:
       value:
         type: value
         description: The value of the entry. Borrowed and copied.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  table_function_bind_get_file_open_options:
-    lifecycle:
-      - [ "unstable", "v2.0.0", "2026-10-06" ]
-    description: |
-      Creates open options for the file the function reads, carrying what is already known about the file.
-
-      When the function reads a file as part of a multi-file function registered with
-      `[[multi_file_function_register]]`, the multi-file reader can know more about the file than its path: the
-      options a caller passed along with it (e.g. `read_x([{'filename': 'f.x', 'file_size': 42}])`), or what a file
-      system reported about it while globbing. The returned options carry those values, so that opening the file with
-      them lets the file system skip work it would otherwise repeat, such as asking a remote store for the size of the
-      file. When the function is not bound as part of a multi-file scan, the returned options carry no values.
-
-      The options carry no flags: set them with `[[file_open_options_set_flag]]` before passing the options to
-      `[[file_system_open]]`. The caller owns the returned handle and must destroy it with
-      `[[file_open_options_destroy]]`.
-    parameters:
-      info:
-        type: table_function_bind_info
-        description: The bind info handle.
-      options:
-        type: file_open_options
-        indirection: 1
-        kind: OUT
-        description: On success, receives the new options. Owned by the caller; destroy via `[[file_open_options_destroy]]`.
       err:
         type: error_info
         indirection: 1
@@ -2082,10 +2132,16 @@ functions:
     description: |
       Sets the name of the table function that reads a single file, which the multi-file function wraps.
 
-      The single-file function must be registered before the multi-file function is, and must take the path of
-      the file to read as its only positional VARCHAR parameter. It is bound once for every file that is read, and
-      every named parameter it declares is also a named parameter of the multi-file function, forwarded to it as
-      given. Everything that involves several files - globbing, lists of files, hive partitioning, the `filename`
+      The single-file function must be registered before the multi-file function is, and must take the file to read
+      as its only positional parameter, of type ANY. It is bound once for every file that is read, and receives the
+      file the way a multi-file function takes one: as the VARCHAR path of the file when there is nothing more to
+      know about it, and otherwise as a STRUCT holding the path in its `filename` field and the options to open the
+      file with in its other fields - e.g. the size of the file, as a file system reported it while globbing, or the
+      options a caller passed along with the file (`read_x([{'filename': 'f.x', 'file_size': 42}])`). Opening the file
+      with those options, set with `[[file_open_options_set_value]]`, lets the file system skip work it would
+      otherwise repeat, such as asking a remote store for the size of the file. A single-file function that takes a
+      VARCHAR parameter instead is still accepted, and only receives the path. Every named parameter the
+      single-file function declares is also a named parameter of the multi-file function, forwarded to it as given. Everything that involves several files - globbing, lists of files, hive partitioning, the `filename`
       column, `union_by_name` and the like - is provided by the multi-file function on top of it. The name is
       borrowed and copied. A single-file function must be set before registration.
     parameters:
@@ -2158,7 +2214,7 @@ functions:
       accepts the options every multi-file function accepts (e.g. `filename`, `hive_partitioning`,
       `union_by_name`) next to the named parameters of the single-file function. Registration requires a name and
       a single-file function, and fails when no table function by that name is registered or it does not take the
-      path of a file as its only positional VARCHAR parameter. The caller still owns the handle after registration
+      file to read as its only positional parameter (see `[[multi_file_function_set_single_file_function]]`). The caller still owns the handle after registration
       and must destroy it with `[[multi_file_function_destroy]]`, which does not affect the registered function.
     parameters:
       function:

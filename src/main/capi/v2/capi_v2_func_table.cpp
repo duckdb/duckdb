@@ -28,6 +28,7 @@ public:
 	bool cardinality_set = false;
 
 	vector<LogicalType> column_types;
+	vector<Identifier> column_names;
 
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		auto copy = make_uniq<CV2TableFunctionData>();
@@ -37,6 +38,7 @@ public:
 		copy->cardinality_is_exact = cardinality_is_exact;
 		copy->cardinality_set = cardinality_set;
 		copy->column_types = column_types;
+		copy->column_names = column_names;
 		return std::move(copy);
 	}
 
@@ -131,18 +133,6 @@ public:
 	bool out_cardinality_is_exact = false;
 	bool out_cardinality_set = false;
 	OrderPreservationType out_order_preservation = OrderPreservationType::INSERTION_ORDER;
-
-	//! The identifiers set on the result columns and their nested fields, by column and child path
-	struct ColumnIdentifier {
-		idx_t column_index;
-		vector<idx_t> child_path;
-		Value identifier;
-	};
-	vector<ColumnIdentifier> out_column_identifiers;
-	InsertionOrderPreservingMap<Value> out_file_metadata;
-
-	//! The file the function reads, when it is bound as part of a multi-file scan
-	optional_ptr<const OpenFileInfo> in_file;
 };
 
 static auto Convert(duckdb_v2_table_function_bind_info_handle info) -> CV2TableBindInfo * {
@@ -340,6 +330,7 @@ public:
 	duckdb_v2_table_function_partition_data_callback_fn partition_data_cb = nullptr;
 	duckdb_v2_table_function_partitioning_callback_fn partitioning_cb = nullptr;
 	duckdb_v2_table_function_claim_batch_callback_fn claim_batch_cb = nullptr;
+	duckdb_v2_table_function_get_bind_info_callback_fn get_bind_info_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 	bool projection_pushdown = false;
 
@@ -382,7 +373,7 @@ static auto CV2TableCreateColumnDefinition(const Identifier &name, const Logical
 	return result;
 }
 
-//! Resolves a child path - as documented for table_function_bind_set_result_column_identifier - to the column
+//! Resolves a child path - as documented for table_function_get_bind_info_set_column_identifier - to the column
 //! definition of the nested field it addresses
 static auto CV2TableResolveChildPath(MultiFileColumnDefinition &column, const vector<idx_t> &child_path)
     -> MultiFileColumnDefinition & {
@@ -407,20 +398,67 @@ static auto CV2TableResolveChildPath(MultiFileColumnDefinition &column, const ve
 	return current.get();
 }
 
-//! Describes the file the bind read to the multi-file reader: the identifiers of its columns, and its metadata
-static void CV2TableDescribeFile(CV2TableBindInfo &args, TableFunctionFileBindInfo &file_info) {
+//! What the "get bind info" callback describes a bound call with
+class CV2TableGetBindInfoInfo {
+public:
+	explicit CV2TableGetBindInfoInfo(const CV2TableFunctionData &bind_data_p) : bind_data(bind_data_p) {
+	}
+
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	//! The bound call - its result columns are the columns identifiers are attached to
+	const CV2TableFunctionData &bind_data;
+
+	//! The identifiers set on the result columns and their nested fields, by column and child path
+	struct ColumnIdentifier {
+		idx_t column_index;
+		vector<idx_t> child_path;
+		Value identifier;
+	};
+	vector<ColumnIdentifier> out_column_identifiers;
+	InsertionOrderPreservingMap<Value> out_file_metadata;
+};
+
+static auto Convert(duckdb_v2_table_function_get_bind_info_info_handle info) -> CV2TableGetBindInfoInfo * {
+	return reinterpret_cast<CV2TableGetBindInfoInfo *>(info);
+}
+static auto Convert(CV2TableGetBindInfoInfo *info) -> duckdb_v2_table_function_get_bind_info_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_get_bind_info_info_handle>(info);
+}
+
+//! Asks the function to describe a bound call: the identifiers of the columns of the file it reads, and its metadata
+static auto CV2TableGetBindInfo(TableFunctionGetBindInfoInput &input) -> BindInfo {
+	BindInfo result(ScanType::EXTERNAL);
+	if (!input.bind_data) {
+		return result;
+	}
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+
+	CV2TableGetBindInfoInfo args(bind_data);
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	info.get_bind_info_cb(Convert(&args), Convert(&input.context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
 	if (!args.out_column_identifiers.empty()) {
-		vector<MultiFileColumnDefinition> columns;
-		for (idx_t i = 0; i < args.out_column_names.size(); i++) {
-			columns.push_back(CV2TableCreateColumnDefinition(args.out_column_names[i], args.out_column_types[i]));
+		for (idx_t i = 0; i < bind_data.column_names.size(); i++) {
+			result.file_columns.push_back(
+			    CV2TableCreateColumnDefinition(bind_data.column_names[i], bind_data.column_types[i]));
 		}
 		for (auto &entry : args.out_column_identifiers) {
-			auto &definition = CV2TableResolveChildPath(columns[entry.column_index], entry.child_path);
+			auto &definition = CV2TableResolveChildPath(result.file_columns[entry.column_index], entry.child_path);
 			definition.identifier = entry.identifier;
 		}
-		file_info.columns = std::move(columns);
 	}
-	file_info.metadata = std::move(args.out_file_metadata);
+	result.file_metadata = std::move(args.out_file_metadata);
+	return result;
 }
 
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
@@ -431,7 +469,6 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	CV2ConstantBindInfo bind_info(input.table_function, info.user_data ? info.user_data->GetData() : nullptr,
 	                              input.inputs, input.named_parameters);
 	CV2TableBindInfo args = {};
-	args.in_file = TableFunctionFileBindInput::Get(input).file;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -456,11 +493,9 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 
 	// The binder hands each call site its own copy of the function, so this does not leak into other calls.
 	input.table_function.order_preservation_type = args.out_order_preservation;
-	if (input.file_info) {
-		CV2TableDescribeFile(args, *input.file_info);
-	}
 
 	result->column_types = args.out_column_types;
+	result->column_names = args.out_column_names;
 	return_types = std::move(args.out_column_types);
 	names = std::move(args.out_column_names);
 	return std::move(result);
@@ -854,6 +889,9 @@ public:
 			function.get_partition_info = CV2TableGetPartitionInfo;
 		}
 		function.projection_pushdown = info.projection_pushdown;
+		if (info.get_bind_info_cb) {
+			function.get_bind_info = CV2TableGetBindInfo;
+		}
 
 		info.name = name;
 		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
@@ -954,14 +992,17 @@ protected:
 		}
 		for (auto &function : entry->Cast<TableFunctionCatalogEntry>().functions.functions) {
 			auto &signature = function->GetSignature();
-			if (signature.GetRequiredParameterCount() == 1 && signature.GetParameter(0).AcceptsPosition() &&
-			    signature.GetParameter(0).GetType() == LogicalType::VARCHAR) {
+			if (signature.GetRequiredParameterCount() != 1 || !signature.GetParameter(0).AcceptsPosition()) {
+				continue;
+			}
+			auto &type = signature.GetParameter(0).GetType();
+			if (type == LogicalType::VARCHAR || type.id() == LogicalTypeId::ANY) {
 				return *function;
 			}
 		}
 		throw InvalidInputException(
-		    "Table function \"%s\" cannot read single files: it must take the path of the file to read as its only "
-		    "positional VARCHAR parameter.",
+		    "Table function \"%s\" cannot read single files: it must take the file to read as its only positional "
+		    "parameter, of type ANY (or VARCHAR).",
 		    single_file_function);
 	}
 
@@ -1704,71 +1745,83 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(duckdb_v2_table
 //----------------------------------------------------------------------------------------------------------------------
 
 DUCKDB_V2_ERROR
-duckdb_v2_table_function_bind_set_result_column_identifier(duckdb_v2_table_function_bind_info_handle info,
-                                                           idx_t column_index, const idx_t *child_path,
-                                                           idx_t child_path_length, duckdb_v2_value_handle identifier,
-                                                           duckdb_v2_error_info_handle *err) {
+duckdb_v2_table_function_set_get_bind_info_callback(duckdb_v2_table_function_handle function,
+                                                    duckdb_v2_table_function_get_bind_info_callback_fn callback,
+                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.get_bind_info_cb = callback; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_get_user_data(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                     void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_get_bind_data(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                     void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_set_column_identifier(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                             idx_t column_index, const idx_t *child_path,
+                                                             idx_t child_path_length, duckdb_v2_value_handle identifier,
+                                                             duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(identifier);
 	return WithErrorHandler(err, [&]() {
-		auto &bind_info = *Convert(info);
-		if (column_index >= bind_info.out_column_types.size()) {
+		auto &args = *Convert(info);
+		auto &bind_data = args.bind_data;
+		if (column_index >= bind_data.column_types.size()) {
 			throw duckdb::InvalidInputException(
-			    "Index out of bounds in duckdb_v2_table_function_bind_set_result_column_identifier: result column %llu "
-			    "has not been declared",
+			    "Index out of bounds in duckdb_v2_table_function_get_bind_info_set_column_identifier: result column "
+			    "%llu has not been declared",
 			    column_index);
 		}
 		if (child_path_length > 0 && !child_path) {
-			throw duckdb::InvalidInputException(
-			    "duckdb_v2_table_function_bind_set_result_column_identifier: the child path cannot be null unless it "
-			    "is empty");
+			throw duckdb::InvalidInputException("duckdb_v2_table_function_get_bind_info_set_column_identifier: the "
+			                                    "child path cannot be null unless it is empty");
 		}
 		const auto &value = *Convert(identifier);
 		const auto identifier_type = value.type().id();
 		if (value.IsNull() ||
 		    (identifier_type != duckdb::LogicalTypeId::INTEGER && identifier_type != duckdb::LogicalTypeId::VARCHAR)) {
-			throw duckdb::InvalidInputException(
-			    "duckdb_v2_table_function_bind_set_result_column_identifier: an identifier must be a non-NULL INTEGER "
-			    "or VARCHAR, got %s",
-			    value.ToString());
+			throw duckdb::InvalidInputException("duckdb_v2_table_function_get_bind_info_set_column_identifier: an "
+			                                    "identifier must be a non-NULL INTEGER or VARCHAR, got %s",
+			                                    value.ToString());
 		}
 		duckdb::vector<duckdb::idx_t> path(child_path, child_path + child_path_length);
 		// verify the path addresses a nested field of the column, so a mistake is reported where it is made
-		auto definition = CV2TableCreateColumnDefinition(bind_info.out_column_names[column_index],
-		                                                 bind_info.out_column_types[column_index]);
+		auto definition =
+		    CV2TableCreateColumnDefinition(bind_data.column_names[column_index], bind_data.column_types[column_index]);
 		CV2TableResolveChildPath(definition, path);
 
-		for (auto &entry : bind_info.out_column_identifiers) {
+		for (auto &entry : args.out_column_identifiers) {
 			if (entry.column_index == column_index && entry.child_path == path) {
 				entry.identifier = value;
 				return;
 			}
 		}
-		bind_info.out_column_identifiers.push_back({column_index, std::move(path), value});
+		args.out_column_identifiers.push_back({column_index, std::move(path), value});
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_file_metadata(duckdb_v2_table_function_bind_info_handle info,
-                                                                duckdb_v2_str *key, duckdb_v2_value_handle value,
-                                                                duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_add_file_metadata(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                         duckdb_v2_str *key, duckdb_v2_value_handle value,
+                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(key);
 	DUCKDB_CHECK_ARG(value);
 	return WithErrorHandler(err, [&]() {
 		auto &metadata = Convert(info)->out_file_metadata;
 		metadata[duckdb::string(Convert(*key))] = *Convert(value);
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_file_open_options(duckdb_v2_table_function_bind_info_handle info,
-                                                                    duckdb_v2_file_open_options_handle *options,
-                                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(options);
-	*options = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &file = Convert(info)->in_file;
-		*options = CreateFileOpenOptions(file ? file->extended_info : nullptr);
 	});
 }
 

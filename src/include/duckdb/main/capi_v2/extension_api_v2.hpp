@@ -1361,12 +1361,6 @@ typedef struct {
 	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *reader_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_single_file_function)
 	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_add_file_metadata)
-	(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_result_column_identifier)
-	(duckdb_v2_table_function_bind_info_handle info, idx_t column_index, const idx_t *child_path,
-	 idx_t child_path_length, duckdb_v2_value_handle identifier, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_bind_data)
 	(duckdb_v2_table_function_claim_batch_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_global_state)
@@ -1380,8 +1374,18 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_claim_batch_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_claim_batch_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_get_file_open_options)
-	(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_file_open_options_handle *options,
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_add_file_metadata)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_get_bind_data)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_get_user_data)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_set_column_identifier)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, idx_t column_index, const idx_t *child_path,
+	 idx_t child_path_length, duckdb_v2_value_handle identifier, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_get_bind_info_callback)
+	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_get_bind_info_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
@@ -1996,9 +2000,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_multi_file_function_set_reader_type = duckdb_v2_multi_file_function_set_reader_type;
 	result.duckdb_v2_multi_file_function_set_single_file_function =
 	    duckdb_v2_multi_file_function_set_single_file_function;
-	result.duckdb_v2_table_function_bind_add_file_metadata = duckdb_v2_table_function_bind_add_file_metadata;
-	result.duckdb_v2_table_function_bind_set_result_column_identifier =
-	    duckdb_v2_table_function_bind_set_result_column_identifier;
 	result.duckdb_v2_table_function_claim_batch_get_bind_data = duckdb_v2_table_function_claim_batch_get_bind_data;
 	result.duckdb_v2_table_function_claim_batch_get_global_state =
 	    duckdb_v2_table_function_claim_batch_get_global_state;
@@ -2006,7 +2007,13 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_claim_batch_get_user_data = duckdb_v2_table_function_claim_batch_get_user_data;
 	result.duckdb_v2_table_function_claim_batch_set_claimed = duckdb_v2_table_function_claim_batch_set_claimed;
 	result.duckdb_v2_table_function_set_claim_batch_callback = duckdb_v2_table_function_set_claim_batch_callback;
-	result.duckdb_v2_table_function_bind_get_file_open_options = duckdb_v2_table_function_bind_get_file_open_options;
+	result.duckdb_v2_table_function_get_bind_info_add_file_metadata =
+	    duckdb_v2_table_function_get_bind_info_add_file_metadata;
+	result.duckdb_v2_table_function_get_bind_info_get_bind_data = duckdb_v2_table_function_get_bind_info_get_bind_data;
+	result.duckdb_v2_table_function_get_bind_info_get_user_data = duckdb_v2_table_function_get_bind_info_get_user_data;
+	result.duckdb_v2_table_function_get_bind_info_set_column_identifier =
+	    duckdb_v2_table_function_get_bind_info_set_column_identifier;
+	result.duckdb_v2_table_function_set_get_bind_info_callback = duckdb_v2_table_function_set_get_bind_info_callback;
 	return result;
 }
 

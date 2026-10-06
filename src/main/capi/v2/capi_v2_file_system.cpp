@@ -75,15 +75,6 @@ static auto Convert(CV2File *handle) -> duckdb_v2_file_handle {
 	return reinterpret_cast<duckdb_v2_file_handle>(handle);
 }
 
-auto CreateFileOpenOptions(shared_ptr<ExtendedOpenFileInfo> extended_info) -> duckdb_v2_file_open_options_handle {
-	auto options = make_uniq<CV2FileOpenOptions>();
-	if (extended_info) {
-		// a copy, so that values set on the options do not leak back into the file they were created for
-		options->extended_info = make_shared_ptr<ExtendedOpenFileInfo>(*extended_info);
-	}
-	return Convert(options.release());
-}
-
 // Applies one C flag to the engine's flag set. The C enum is a list of names rather than a bitmask, so each value
 // maps to exactly one engine flag and anything else is a caller error.
 static void ApplyFileFlag(CV2FileOpenOptions &options, DUCKDB_V2_FILE_FLAG flag) {

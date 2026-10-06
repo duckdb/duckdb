@@ -3626,6 +3626,7 @@ struct TableFunctionInfo {
 	TableFunction::PartitionDataCallback partition_data_callback = nullptr;
 	TableFunction::PartitioningCallback partitioning_callback = nullptr;
 	TableFunction::ClaimBatchCallback claim_batch_callback = nullptr;
+	TableFunction::GetBindInfoCallback get_bind_info_callback = nullptr;
 	detail::UserData user_data;
 
 	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
@@ -3634,12 +3635,13 @@ struct TableFunctionInfo {
 	                  TableFunction::FilterPushdownCallback filter_pushdown_callback,
 	                  TableFunction::PartitionDataCallback partition_data_callback,
 	                  TableFunction::PartitioningCallback partitioning_callback,
-	                  TableFunction::ClaimBatchCallback claim_batch_callback, detail::UserData user_data)
+	                  TableFunction::ClaimBatchCallback claim_batch_callback,
+	                  TableFunction::GetBindInfoCallback get_bind_info_callback, detail::UserData user_data)
 	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
 	      init_local_callback(init_local_callback), exec_callback(exec_callback), progress_callback(progress_callback),
 	      filter_pushdown_callback(filter_pushdown_callback), partition_data_callback(partition_data_callback),
 	      partitioning_callback(partitioning_callback), claim_batch_callback(claim_batch_callback),
-	      user_data(std::move(user_data)) {
+	      get_bind_info_callback(get_bind_info_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const TableFunctionInfo &other) const {
@@ -3649,7 +3651,8 @@ struct TableFunctionInfo {
 		       filter_pushdown_callback == other.filter_pushdown_callback &&
 		       partition_data_callback == other.partition_data_callback &&
 		       partitioning_callback == other.partitioning_callback &&
-		       claim_batch_callback == other.claim_batch_callback && user_data.get() == other.user_data.get();
+		       claim_batch_callback == other.claim_batch_callback &&
+		       get_bind_info_callback == other.get_bind_info_callback && user_data.get() == other.user_data.get();
 	}
 };
 
@@ -3951,6 +3954,31 @@ auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> Tabl
 	return *this;
 }
 
+auto TableFunction::SetGetBindInfoCallback(GetBindInfoCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_get_bind_info_callback, handle(), nullptr);
+		get_bind_info_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_get_bind_info_info_handle info,
+	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_get_bind_info_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<GetBindInfoInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.get_bind_info_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_get_bind_info_callback, handle(), trampoline);
+	get_bind_info_callback = callback;
+	return *this;
+}
+
 auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 	CheckedAPICall(duckdb_v2_table_function_set_projection_pushdown, handle(), enable);
 	return *this;
@@ -3959,10 +3987,10 @@ auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 auto TableFunction::Register() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
-	auto info = std::unique_ptr<TableFunctionInfo>(
-	    new TableFunctionInfo(bind_callback, init_global_callback, init_local_callback, exec_callback,
-	                          progress_callback, filter_pushdown_callback, partition_data_callback,
-	                          partitioning_callback, claim_batch_callback, std::move(user_data)));
+	auto info = std::unique_ptr<TableFunctionInfo>(new TableFunctionInfo(
+	    bind_callback, init_global_callback, init_local_callback, exec_callback, progress_callback,
+	    filter_pushdown_callback, partition_data_callback, partitioning_callback, claim_batch_callback,
+	    get_bind_info_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
@@ -3999,32 +4027,6 @@ auto TableFunction::BindInput::SetOrderPreservation(OrderPreservation order) -> 
 	CheckedAPICall(duckdb_v2_table_function_bind_set_order_preservation,
 	               static_cast<duckdb_v2_table_function_bind_info_handle>(result),
 	               static_cast<DUCKDB_V2_ORDER_PRESERVATION>(order));
-}
-
-auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void {
-	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index,
-	               static_cast<const idx_t *>(nullptr), static_cast<idx_t>(0), identifier.handle());
-}
-
-auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path,
-                                                   const Value &identifier) -> void {
-	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index, child_path.data(),
-	               static_cast<idx_t>(child_path.size()), identifier.handle());
-}
-
-auto TableFunction::BindInput::AddFileMetadata(const std::string &key, const Value &value) -> void {
-	auto view = ToStr(key);
-	CheckedAPICall(duckdb_v2_table_function_bind_add_file_metadata,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &view, value.handle());
-}
-
-auto TableFunction::BindInput::GetFileOpenOptions() const -> FileOpenOptions {
-	duckdb_v2_file_open_options_handle options = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_bind_get_file_open_options,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &options);
-	return detail::Factory::Make<FileOpenOptions>(options);
 }
 
 void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
@@ -4412,7 +4414,45 @@ auto TableFunction::ClaimBatchInput::SetClaimed(bool claimed) -> void {
 	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), claimed);
 }
 
+void *TableFunction::GetBindInfoInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_get_bind_data,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::GetBindInfoInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_get_user_data,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::GetBindInfoInput::SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void {
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_set_column_identifier,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), column_index,
+	               static_cast<const idx_t *>(nullptr), static_cast<idx_t>(0), identifier.handle());
+}
+
+auto TableFunction::GetBindInfoInput::SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path,
+                                                          const Value &identifier) -> void {
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_set_column_identifier,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), column_index,
+	               child_path.data(), static_cast<idx_t>(child_path.size()), identifier.handle());
+}
+
+auto TableFunction::GetBindInfoInput::AddFileMetadata(const std::string &key, const Value &value) -> void {
+	auto view = ToStr(key);
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_add_file_metadata,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &view, value.handle());
+}
+
 auto TableFunction::ClaimBatchInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+auto TableFunction::GetBindInfoInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
 }
 
@@ -5696,6 +5736,67 @@ auto FileOpenOptions::SetFlag(FileFlags flag) & -> FileOpenOptions & {
 auto FileOpenOptions::SetValue(std::string_view name, const Value &value) & -> FileOpenOptions & {
 	auto name_str = ToStr(name);
 	CheckedAPICall(duckdb_v2_file_open_options_set_value, handle(), &name_str, value.handle());
+	return *this;
+}
+
+namespace {
+
+//! The field of a file struct that holds the path of the file - every other field is an option to open it with
+constexpr const char *FILE_PATH_FIELD = "filename";
+
+//! Throws unless the file is a VARCHAR path or a STRUCT, and returns its type
+auto GetFileType(const Value &file) -> LogicalType {
+	if (file.IsNull()) {
+		throw InvalidInputException("A file cannot be NULL");
+	}
+	auto type = file.GetLogicalType();
+	if (type.GetTypeId() != LogicalTypeId::VARCHAR && type.GetTypeId() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("A file must be a VARCHAR path or a STRUCT with a \"filename\" field, not " +
+		                            type.ToText());
+	}
+	return type;
+}
+
+} // namespace
+
+auto GetFilePath(const Value &file) -> std::string {
+	auto type = GetFileType(file);
+	if (type.GetTypeId() == LogicalTypeId::VARCHAR) {
+		return std::string(file.Get<varchar_t>().view());
+	}
+	for (idx_t i = 0; i < type.GetStructChildCount(); i++) {
+		if (type.GetStructChildName(i) != FILE_PATH_FIELD) {
+			continue;
+		}
+		auto path = file.GetChild(i);
+		if (path.IsNull() || path.GetLogicalType().GetTypeId() != LogicalTypeId::VARCHAR) {
+			break;
+		}
+		return std::string(path.Get<varchar_t>().view());
+	}
+	throw InvalidInputException("A file struct must have a non-NULL VARCHAR \"filename\" field holding the path of "
+	                            "the file");
+}
+
+auto FileOpenOptions::SetValues(const Value &file) & -> FileOpenOptions & {
+	auto type = GetFileType(file);
+	if (type.GetTypeId() == LogicalTypeId::VARCHAR) {
+		return *this;
+	}
+	// validates the path field, so that an invalid file is reported however it is used
+	GetFilePath(file);
+	for (idx_t i = 0; i < type.GetStructChildCount(); i++) {
+		auto name = type.GetStructChildName(i);
+		if (name == FILE_PATH_FIELD) {
+			continue;
+		}
+		auto option = file.GetChild(i);
+		if (option.IsNull()) {
+			// a NULL option is an option that was not specified
+			continue;
+		}
+		SetValue(name, option);
+	}
 	return *this;
 }
 
