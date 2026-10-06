@@ -847,7 +847,7 @@ static unique_ptr<ColumnReader> CreateInt96StructReader(ClientContext &context, 
 	auto expr = CreateInt96AsStructExpression(context);
 	auto result = make_uniq<ExpressionColumnReader>(context, std::move(children), std::move(expr), schema);
 	result->owned_schema = std::move(child_schema);
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, const ColumnIndex &column_id,
