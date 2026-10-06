@@ -1,0 +1,23 @@
+# name: test/sql/order/order_by_negative_zero.test
+# description: ORDER BY preserves the sign of zero of the sorted values
+# group: [order]
+
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES ('-0.0'::DOUBLE, '-0.0'::FLOAT), (1.0, 1.0), ('0.0'::DOUBLE, '0.0'::FLOAT)) t(d, f);
+
+query II
+SELECT 1 / d, 1 / f FROM (SELECT d, f FROM t ORDER BY d, f) ORDER BY ALL
+----
+-inf	-inf
+1.0	1.0
+inf	inf
+
+query I
+SELECT x FROM (VALUES ({'a': '-0.0'::DOUBLE})) t(x) ORDER BY x
+----
+{'a': -0.0}
+
+query I
+SELECT d FROM t ORDER BY d LIMIT 1
+----
+-0.0

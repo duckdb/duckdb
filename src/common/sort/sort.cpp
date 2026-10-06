@@ -1,4 +1,5 @@
 #include "duckdb/common/sorting/sort.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/main/settings.hpp"
@@ -64,7 +65,11 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	unordered_map<idx_t, idx_t> input_column_to_key;
 	for (idx_t key_idx = 0; key_idx < orders.size(); key_idx++) {
 		const auto &key_order_expr = *orders[key_idx].expression;
-		if (key_order_expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		// decoding floating point values from the sort key loses the sign of zero and the NaN payload
+		const auto lossless_key = !TypeVisitor::Contains(key_order_expr.GetReturnType(), [](const LogicalType &type) {
+			return type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE;
+		});
+		if (lossless_key && key_order_expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
 			input_column_to_key.emplace(key_order_expr.Cast<BoundReferenceExpression>().Index(), key_idx);
 		}
 	}
