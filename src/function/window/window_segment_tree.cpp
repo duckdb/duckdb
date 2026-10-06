@@ -15,12 +15,13 @@ bool WindowSegmentTree::CanAggregate(const BoundWindowExpression &wexpr) {
 		return false;
 	}
 
-	if (!wexpr.AggregateFunction()->CanAggregate()) {
+	auto &aggr = *wexpr.AggregateFunction();
+	if (!aggr.CanAggregate()) {
 		return false;
 	}
 
-	//	Don't use segment trees for custom windowing
-	if (wexpr.AggregateFunction()->CanWindow()) {
+	//	Don't use segment trees for custom windowing or holistic aggregates
+	if (aggr.CanWindow() || aggr.IsHolistic()) {
 		return false;
 	}
 

@@ -90,11 +90,12 @@ duckdb_v2_value_handle Emit(Value value) {
 
 // Gate for the constructors that take a type rather than a payload. ANY is a
 // signature wildcard; a value carries data, so reject it.
-const LogicalType &RequireValueType(duckdb_v2_logical_type_handle type) {
+LogicalType RequireValueType(duckdb_v2_logical_type_handle type) {
 	if (!type) {
 		throw InvalidInputException("logical type handle cannot be null");
 	}
-	auto &lt = *Convert(type);
+	auto lt_ref = Convert(type);
+	auto &lt = *lt_ref;
 	if (lt.id() == LogicalTypeId::ANY) {
 		throw InvalidInputException("type cannot be ANY");
 	}
@@ -176,7 +177,8 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_null(duckdb_v2_logical_type_handle type, 
 			throw duckdb::InvalidInputException("duckdb_v2_value_create_null: type cannot be ANY");
 		}
 		// Value(LogicalType) constructs a typed NULL — exactly what we want.
-		auto *v = new duckdb::Value(*Convert(type));
+		auto value_type = Convert(type);
+		auto *v = new duckdb::Value(*value_type);
 		*out_value = Convert(v);
 	});
 }
@@ -193,10 +195,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_logical_type(duckdb_v2_value_handle value, d
 	DUCKDB_CHECK_ARG(value);
 	DUCKDB_CHECK_ARG(out_type);
 	*out_type = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto *lt = new duckdb::LogicalType(Convert(value)->type());
-		*out_type = Convert(lt);
-	});
+	return WithErrorHandler(err, [&]() { *out_type = Convert(Convert(value)->type()); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_value_to_string(duckdb_v2_value_handle value, char *out_string, idx_t out_capacity,
@@ -335,8 +334,7 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_type(duckdb_v2_value_handle value, duckdb_v2
 	return WithErrorHandler(err, [&]() {
 		RequireTypedValue(value, duckdb::LogicalTypeId::TYPE);
 		// TypeValue::GetType deserializes the stored type into a fresh copy.
-		auto *lt = new duckdb::LogicalType(duckdb::TypeValue::GetType(*Convert(value)));
-		*out_type = Convert(lt);
+		*out_type = Convert(duckdb::TypeValue::GetType(*Convert(value)));
 	});
 }
 
@@ -1115,7 +1113,8 @@ duckdb::vector<duckdb::Value> CollectChildren(const duckdb_v2_value_handle *chil
 duckdb::LogicalType ResolveChildType(duckdb::ClientContext &ctx, duckdb_v2_logical_type_handle declared,
                                      const duckdb::vector<duckdb::Value> &children, const char *what) {
 	if (declared) {
-		return *Convert(declared);
+		auto declared_type = Convert(declared);
+		return *declared_type;
 	}
 	if (children.empty()) {
 		throw duckdb::InvalidInputException(std::string("cannot resolve the ") + what +
@@ -1361,7 +1360,8 @@ static void CastValueV2(duckdb::ClientContext &ctx, duckdb_v2_value_handle value
 	*out_value = nullptr;
 	// Non-strict, through the context's cast function set (registered
 	// custom casts included). Cast failures propagate.
-	auto casted = Convert(value)->CastAs(ctx, *Convert(target_type));
+	auto target = Convert(target_type);
+	auto casted = Convert(value)->CastAs(ctx, *target);
 	*out_value = Convert(new duckdb::Value(std::move(casted)));
 }
 

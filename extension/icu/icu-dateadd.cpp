@@ -133,7 +133,7 @@ timestamp_tz_t ICUCalendarAdd::Operation(interval_t interval, timestamp_tz_t tim
 
 template <>
 timestamp_tz_t ICUCalendarSub::Operation(timestamp_tz_t timestamp, interval_t interval, TZCalendar &calendar) {
-	const interval_t negated {-interval.months, -interval.days, -interval.micros};
+	const auto negated = Interval::Invert(interval);
 	return ICUCalendarAdd::template Operation<timestamp_tz_t, interval_t, timestamp_tz_t>(timestamp, negated, calendar);
 }
 

@@ -157,6 +157,16 @@ jobs:
         path: repository
         if-no-files-found: error
 
+    - name: Package release artifact
+      shell: bash
+      run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=. RELEASE_ARTIFACT_TARBALL=build/windows-release-amd64-build.tar.gz
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: build/windows-release-amd64-build.tar.gz
+        if-no-files-found: error
+        archive: false
+
  win-release-32:
     name: Windows (32 Bit)
     needs:
@@ -212,7 +222,7 @@ jobs:
      GEN: ninja
      CC: clang-cl
      CXX: clang-cl
-     EXTRA_CMAKE_VARIABLES: -DBUILD_UNITTESTS=FALSE -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
+     EXTRA_CMAKE_VARIABLES: -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
 
    steps:
      - uses: actions/checkout@v6
@@ -295,6 +305,16 @@ jobs:
          name: release-core-extensions-windows-arm64
          path: repository
          if-no-files-found: error
+
+     - name: Package release artifact
+       shell: bash
+       run: make release-artifact RELEASE_ARTIFACT_SOURCE_DIR=. RELEASE_ARTIFACT_TARBALL=build/windows-release-arm64-build.tar.gz
+
+     - uses: actions/upload-artifact@v7
+       with:
+         path: build/windows-release-arm64-build.tar.gz
+         if-no-files-found: error
+         archive: false
 
  mingw:
      name: MinGW (64 Bit)
@@ -404,3 +424,13 @@ jobs:
            name: release-core-extensions-windows-mingw
            path: build/release/repository
            if-no-files-found: error
+
+       - name: Package release artifact
+         shell: bash
+         run: make release-artifact RELEASE_ARTIFACT_TARBALL=build/windows-release-mingw-build.tar.gz
+
+       - uses: actions/upload-artifact@v7
+         with:
+           path: build/windows-release-mingw-build.tar.gz
+           if-no-files-found: error
+           archive: false

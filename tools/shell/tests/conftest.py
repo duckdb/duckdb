@@ -147,6 +147,7 @@ class ShellTest:
         "COPILOT_AGENT",
         "COPILOT_CLI",
         "COPILOT_AGENT_SESSION_ID",
+        "DUCKDB_AGENT_MODE",
     ]
 
     def get_environment(self):

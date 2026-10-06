@@ -628,6 +628,7 @@ public:
 	static QualifiedName StringToQualifiedName(vector<string> input);
 	static QualifiedColumnName StringToQualifiedColumnName(const vector<string> &input);
 	static LogicalType GetIntervalTargetType(DatePartSpecifier date_part);
+	static LogicalType ApplyColumnCollation(const optional<LogicalType> &type, unique_ptr<ParsedExpression> collation);
 	static void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
 	                                 GroupByNode &result, vector<ProjectionIndex> &result_set);
 	static vector<GroupingSet> GroupByExpressionUnfolding(GroupByExpressionInfo &group_by_expr,
@@ -1426,10 +1427,9 @@ public:
 	static void InitializeRelOptionNameTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeRelOptionNameTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
-	static void InitializeDottedIdentifierStringTrampoline(PEGTransformer &transformer,
-	                                                       GeneratedTransformProcess &process);
-	static unique_ptr<TransformResultValue>
-	FinalizeDottedIdentifierStringTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static void InitializeDottedColLabelTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeDottedColLabelTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
 	static void InitializeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
 	                                                     GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeRelOptionArgumentOptTrampoline(PEGTransformer &transformer,
@@ -1811,6 +1811,15 @@ public:
 	static void InitializeGeneratedColumnTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTrampoline(PEGTransformer &transformer,
 	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedTrampoline(PEGTransformer &transformer,
+	                                                                    GeneratedTransformProcess &process);
+	static void InitializeGeneratedAlwaysTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedAlwaysTrampoline(PEGTransformer &transformer,
+	                                                                          GeneratedTransformProcess &process);
+	static void InitializeGeneratedByDefaultTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static unique_ptr<TransformResultValue> FinalizeGeneratedByDefaultTrampoline(PEGTransformer &transformer,
+	                                                                             GeneratedTransformProcess &process);
 	static void InitializeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
 	                                                    GeneratedTransformProcess &process);
 	static unique_ptr<TransformResultValue> FinalizeGeneratedColumnTypeTrampoline(PEGTransformer &transformer,
@@ -4175,6 +4184,7 @@ public:
 	static string TransformSetNullability(PEGTransformer &transformer);
 	static unique_ptr<AlterTableInfo> TransformAlterType(PEGTransformer &transformer, const bool &has_result,
 	                                                     const optional<LogicalType> &type,
+	                                                     optional<ColumnConstraintEntry> column_collation,
 	                                                     optional<unique_ptr<ParsedExpression>> using_expression);
 	static unique_ptr<ParsedExpression> TransformUsingExpression(PEGTransformer &transformer,
 	                                                             unique_ptr<ParsedExpression> expression);
@@ -4444,9 +4454,8 @@ public:
 	static unique_ptr<CreateStatement>
 	TransformCreateIndexStmt(PEGTransformer &transformer, const optional<bool> &unique_index,
 	                         const optional<bool> &if_not_exists, const optional<Identifier> &index_name,
-	                         unique_ptr<BaseTableRef> base_table_name,
-	                         const optional<vector<string>> &insert_column_list, const optional<Identifier> &index_type,
-	                         optional<vector<unique_ptr<ParsedExpression>>> index_element,
+	                         unique_ptr<BaseTableRef> base_table_name, const optional<Identifier> &index_type,
+	                         vector<unique_ptr<ParsedExpression>> index_element,
 	                         optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
 	                         optional<unique_ptr<ParsedExpression>> where_clause);
 	static case_insensitive_map_t<unique_ptr<ParsedExpression>>
@@ -4469,7 +4478,8 @@ public:
 	TransformRelOption(PEGTransformer &transformer, const Identifier &rel_option_name,
 	                   optional<unique_ptr<ParsedExpression>> rel_option_argument_opt);
 	static Identifier TransformRelOptionName(PEGTransformer &transformer, const string &child);
-	static string TransformDottedIdentifierString(PEGTransformer &transformer, const vector<string> &dotted_identifier);
+	static string TransformDottedColLabel(PEGTransformer &transformer, const string &col_label,
+	                                      const optional<vector<string>> &dot_col_label);
 	static unique_ptr<ParsedExpression> TransformRelOptionArgumentOpt(PEGTransformer &transformer,
 	                                                                  unique_ptr<ParsedExpression> def_arg);
 	static unique_ptr<ParsedExpression> TransformDefArgNull(PEGTransformer &transformer, const Value &null_literal);
@@ -4590,7 +4600,7 @@ public:
 	static CreateTableColumnElement TransformCreateTableConstraint(PEGTransformer &transformer,
 	                                                               unique_ptr<Constraint> top_level_constraint);
 	static ConstraintColumnDefinition
-	TransformColumnDefinition(PEGTransformer &transformer, const vector<string> &dotted_identifier,
+	TransformColumnDefinition(PEGTransformer &transformer, const Identifier &identifier,
 	                          const optional<LogicalType> &type, optional<GeneratedColumnDefinition> generated_column,
 	                          optional<vector<ColumnConstraintEntry>> column_constraint);
 	static ColumnConstraintEntry TransformNameableColumnConstraint(PEGTransformer &transformer, const bool &has_result,
@@ -4640,9 +4650,12 @@ public:
 	static string TransformDotColLabel(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformColLabelIdentifier(PEGTransformer &transformer, const string &col_label);
 	static Identifier TransformStringLiteralIdentifier(PEGTransformer &transformer, const string &string_literal);
-	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer, const bool &has_result,
+	static GeneratedColumnDefinition TransformGeneratedColumn(PEGTransformer &transformer,
+	                                                          const optional<bool> &generated_always,
 	                                                          unique_ptr<ParsedExpression> expression,
 	                                                          const optional<bool> &generated_column_type);
+	static bool TransformGeneratedAlways(PEGTransformer &transformer);
+	static bool TransformGeneratedByDefault(PEGTransformer &transformer);
 	static bool TransformCommitAction(PEGTransformer &transformer, const bool &preserve_or_delete);
 	static bool TransformPreserveRows(PEGTransformer &transformer);
 	static bool TransformDeleteRows(PEGTransformer &transformer);

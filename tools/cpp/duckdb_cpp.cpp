@@ -14,6 +14,10 @@
 #if !defined(DUCKDB_CPP_API_LOADABLE) && !defined(DUCKDB_BUILD_STATIC_EXTENSION)
 #define DUCKDB_BUILD_STATIC_EXTENSION
 #endif
+// The parts of the C++ API marked "Unstable API" wrap the not yet stabilized part of the C API.
+#ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
+#define DUCKDB_V2_API_ALLOW_UNSTABLE 1
+#endif
 #include "duckdb_extension_v2.h"
 
 // The vtable global the redirects reference. It is *defined* by the extension's entrypoint, which is what populates it,
@@ -146,6 +150,10 @@ struct HandleTraits<TableFunction> {
 template <>
 struct HandleTraits<CopyFunction> {
 	using handle = duckdb_v2_copy_function_handle;
+};
+template <>
+struct HandleTraits<MultiFileFunction> {
+	using handle = duckdb_v2_multi_file_function_handle;
 };
 template <>
 struct HandleTraits<CustomType> {
@@ -314,7 +322,9 @@ auto WithExceptionGuard(duckdb_v2_error_info_handle *err, T callback) -> DUCKDB_
 		callback();
 	} catch (const Exception &ex) {
 		code = static_cast<DUCKDB_V2_ERROR>(ex.GetCode());
-		text = ex.what();
+		// An error raised by the engine carries its error-type prefix in what(); the engine adds that prefix again when
+		// it reports the error, so pass on the message without it.
+		text = ex.GetRawMessage().empty() ? ex.what() : ex.GetRawMessage();
 	} catch (const std::exception &ex) {
 		code = DUCKDB_V2_ERROR_API;
 		text = ex.what();
@@ -940,6 +950,12 @@ bool LogicalType::operator==(const LogicalType &other) const {
 	bool result = false;
 	CheckedAPICall(duckdb_v2_logical_type_is_equal, handle(), other.handle(), &result);
 	return result;
+}
+
+auto LogicalType::Copy() const -> LogicalType {
+	duckdb_v2_logical_type_handle copy = nullptr;
+	CheckedAPICall(duckdb_v2_logical_type_copy, handle(), &copy);
+	return detail::Factory::Make<LogicalType>(copy);
 }
 
 auto LogicalType::GetTypeId() const -> LogicalTypeId {
@@ -2209,6 +2225,12 @@ auto DataChunk::GetRowCount() const -> idx_t {
 	idx_t count = 0;
 	CheckedAPICall(duckdb_v2_data_chunk_get_size, handle(), &count);
 	return count;
+}
+
+auto DataChunk::GetCapacity() const -> idx_t {
+	idx_t capacity = 0;
+	CheckedAPICall(duckdb_v2_data_chunk_get_capacity, handle(), &capacity);
+	return capacity;
 }
 
 auto DataChunk::GetVectorCount() const -> idx_t {
@@ -3603,6 +3625,7 @@ struct TableFunctionInfo {
 	TableFunction::FilterPushdownCallback filter_pushdown_callback = nullptr;
 	TableFunction::PartitionDataCallback partition_data_callback = nullptr;
 	TableFunction::PartitioningCallback partitioning_callback = nullptr;
+	TableFunction::ClaimBatchCallback claim_batch_callback = nullptr;
 	detail::UserData user_data;
 
 	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
@@ -3610,11 +3633,13 @@ struct TableFunctionInfo {
 	                  TableFunction::ProgressCallback progress_callback,
 	                  TableFunction::FilterPushdownCallback filter_pushdown_callback,
 	                  TableFunction::PartitionDataCallback partition_data_callback,
-	                  TableFunction::PartitioningCallback partitioning_callback, detail::UserData user_data)
+	                  TableFunction::PartitioningCallback partitioning_callback,
+	                  TableFunction::ClaimBatchCallback claim_batch_callback, detail::UserData user_data)
 	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
 	      init_local_callback(init_local_callback), exec_callback(exec_callback), progress_callback(progress_callback),
 	      filter_pushdown_callback(filter_pushdown_callback), partition_data_callback(partition_data_callback),
-	      partitioning_callback(partitioning_callback), user_data(std::move(user_data)) {
+	      partitioning_callback(partitioning_callback), claim_batch_callback(claim_batch_callback),
+	      user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const TableFunctionInfo &other) const {
@@ -3623,7 +3648,8 @@ struct TableFunctionInfo {
 		       progress_callback == other.progress_callback &&
 		       filter_pushdown_callback == other.filter_pushdown_callback &&
 		       partition_data_callback == other.partition_data_callback &&
-		       partitioning_callback == other.partitioning_callback && user_data.get() == other.user_data.get();
+		       partitioning_callback == other.partitioning_callback &&
+		       claim_batch_callback == other.claim_batch_callback && user_data.get() == other.user_data.get();
 	}
 };
 
@@ -3900,6 +3926,31 @@ auto TableFunction::SetPartitioningCallback(PartitioningCallback callback) & -> 
 	return *this;
 }
 
+auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_claim_batch_callback, handle(), nullptr);
+		claim_batch_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_claim_batch_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_claim_batch_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<ClaimBatchInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.claim_batch_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_claim_batch_callback, handle(), trampoline);
+	claim_batch_callback = callback;
+	return *this;
+}
+
 auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 	CheckedAPICall(duckdb_v2_table_function_set_projection_pushdown, handle(), enable);
 	return *this;
@@ -3908,9 +3959,10 @@ auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 auto TableFunction::Register() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
-	auto info = std::unique_ptr<TableFunctionInfo>(new TableFunctionInfo(
-	    bind_callback, init_global_callback, init_local_callback, exec_callback, progress_callback,
-	    filter_pushdown_callback, partition_data_callback, partitioning_callback, std::move(user_data)));
+	auto info = std::unique_ptr<TableFunctionInfo>(
+	    new TableFunctionInfo(bind_callback, init_global_callback, init_local_callback, exec_callback,
+	                          progress_callback, filter_pushdown_callback, partition_data_callback,
+	                          partitioning_callback, claim_batch_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
@@ -3947,6 +3999,25 @@ auto TableFunction::BindInput::SetOrderPreservation(OrderPreservation order) -> 
 	CheckedAPICall(duckdb_v2_table_function_bind_set_order_preservation,
 	               static_cast<duckdb_v2_table_function_bind_info_handle>(result),
 	               static_cast<DUCKDB_V2_ORDER_PRESERVATION>(order));
+}
+
+auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void {
+	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index,
+	               static_cast<const idx_t *>(nullptr), static_cast<idx_t>(0), identifier.handle());
+}
+
+auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path,
+                                                   const Value &identifier) -> void {
+	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index, child_path.data(),
+	               static_cast<idx_t>(child_path.size()), identifier.handle());
+}
+
+auto TableFunction::BindInput::AddFileMetadata(const std::string &key, const Value &value) -> void {
+	auto view = ToStr(key);
+	CheckedAPICall(duckdb_v2_table_function_bind_add_file_metadata,
+	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &view, value.handle());
 }
 
 void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
@@ -4300,6 +4371,96 @@ auto TableFunction::PartitioningInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
 }
 
+void *TableFunction::ClaimBatchInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_bind_data,
+	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::ClaimBatchInput::GetGlobalStateInternal() const {
+	void *global_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_global_state,
+	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &global_state);
+	return RequireGlobalState(global_state);
+}
+
+void *TableFunction::ClaimBatchInput::GetLocalStateInternal() const {
+	void *local_state = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_local_state,
+	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &local_state);
+	return RequireLocalState(local_state);
+}
+
+void *TableFunction::ClaimBatchInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_claim_batch_get_user_data,
+	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::ClaimBatchInput::SetClaimed(bool claimed) -> void {
+	CheckedAPICall(duckdb_v2_table_function_claim_batch_set_claimed,
+	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), claimed);
+}
+
+auto TableFunction::ClaimBatchInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Multi-File Function
+//----------------------------------------------------------------------------------------------------------------------
+
+MultiFileFunction::MultiFileFunction(void *impl) : detail::Handle<MultiFileFunction>(impl) {
+}
+
+MultiFileFunction::~MultiFileFunction() {
+	auto _h = handle();
+	duckdb_v2_multi_file_function_destroy(&_h);
+}
+
+auto MultiFileFunction::Create(const Connection &conn) -> MultiFileFunction {
+	duckdb_v2_multi_file_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_multi_file_function_create_with_connection, conn.handle(), &_h);
+	return detail::Factory::Make<MultiFileFunction>(_h);
+}
+
+auto MultiFileFunction::Create(const Extension &extension) -> MultiFileFunction {
+	duckdb_v2_multi_file_function_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_multi_file_function_create_with_extension, extension.handle(), &_h);
+	return detail::Factory::Make<MultiFileFunction>(_h);
+}
+
+auto MultiFileFunction::SetName(const std::string &name) & -> MultiFileFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_name, handle(), &view);
+	return *this;
+}
+
+auto MultiFileFunction::SetSingleFileFunction(const std::string &name) & -> MultiFileFunction & {
+	auto view = ToStr(name);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_single_file_function, handle(), &view);
+	return *this;
+}
+
+auto MultiFileFunction::SetReaderType(const std::string &reader_type) & -> MultiFileFunction & {
+	auto view = ToStr(reader_type);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_reader_type, handle(), &view);
+	return *this;
+}
+
+auto MultiFileFunction::SetFileExtension(const std::string &extension) & -> MultiFileFunction & {
+	auto view = ToStr(extension);
+	CheckedAPICall(duckdb_v2_multi_file_function_set_file_extension, handle(), &view);
+	return *this;
+}
+
+auto MultiFileFunction::Register() -> void {
+	CheckedAPICall(duckdb_v2_multi_file_function_register, handle());
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Bound Expression
 //----------------------------------------------------------------------------------------------------------------------
@@ -4416,6 +4577,7 @@ struct CopyFunctionInfo {
 	CopyFunction::CopyToBatchCallback copy_to_batch_callback = nullptr;
 	CopyFunction::CopyToFlushCallback copy_to_flush_callback = nullptr;
 	CopyFunction::CopyToFinalizeCallback copy_to_finalize_callback = nullptr;
+	CopyFunction::CopyToStatisticsCallback copy_to_statistics_callback = nullptr;
 	CopyFunction::CopyFromBindCallback copy_from_bind_callback = nullptr;
 	CopyFunction::CopyFromInitGlobalCallback copy_from_init_global_callback = nullptr;
 	CopyFunction::CopyFromInitLocalCallback copy_from_init_local_callback = nullptr;
@@ -4429,6 +4591,7 @@ struct CopyFunctionInfo {
 	                 CopyFunction::CopyToBatchCallback copy_to_batch_callback,
 	                 CopyFunction::CopyToFlushCallback copy_to_flush_callback,
 	                 CopyFunction::CopyToFinalizeCallback copy_to_finalize_callback,
+	                 CopyFunction::CopyToStatisticsCallback copy_to_statistics_callback,
 	                 CopyFunction::CopyFromBindCallback copy_from_bind_callback,
 	                 CopyFunction::CopyFromInitGlobalCallback copy_from_init_global_callback,
 	                 CopyFunction::CopyFromInitLocalCallback copy_from_init_local_callback,
@@ -4437,7 +4600,7 @@ struct CopyFunctionInfo {
 	    : copy_to_bind_callback(copy_to_bind_callback), copy_to_batch_size_callback(copy_to_batch_size_callback),
 	      copy_to_init_callback(copy_to_init_callback), copy_to_batch_callback(copy_to_batch_callback),
 	      copy_to_flush_callback(copy_to_flush_callback), copy_to_finalize_callback(copy_to_finalize_callback),
-	      copy_from_bind_callback(copy_from_bind_callback),
+	      copy_to_statistics_callback(copy_to_statistics_callback), copy_from_bind_callback(copy_from_bind_callback),
 	      copy_from_init_global_callback(copy_from_init_global_callback),
 	      copy_from_init_local_callback(copy_from_init_local_callback),
 	      copy_from_exec_callback(copy_from_exec_callback), copy_from_progress_callback(copy_from_progress_callback),
@@ -4451,6 +4614,7 @@ struct CopyFunctionInfo {
 		       copy_to_batch_callback == other.copy_to_batch_callback &&
 		       copy_to_flush_callback == other.copy_to_flush_callback &&
 		       copy_to_finalize_callback == other.copy_to_finalize_callback &&
+		       copy_to_statistics_callback == other.copy_to_statistics_callback &&
 		       copy_from_bind_callback == other.copy_from_bind_callback &&
 		       copy_from_init_global_callback == other.copy_from_init_global_callback &&
 		       copy_from_init_local_callback == other.copy_from_init_local_callback &&
@@ -4695,6 +4859,31 @@ auto CopyFunction::SetCopyToFinalizeCallback(CopyToFinalizeCallback callback) & 
 	return *this;
 }
 
+auto CopyFunction::SetCopyToStatisticsCallback(CopyToStatisticsCallback callback) & -> CopyFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_copy_to_set_statistics_callback, handle(), nullptr);
+		copy_to_statistics_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_copy_to_statistics_info_handle info, duckdb_v2_context_handle context,
+	                            duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_copy_to_statistics_get_user_data, info, &user_data);
+			const auto &function = *static_cast<CopyFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::Factory::Make<CopyToStatisticsInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.copy_to_statistics_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_copy_to_set_statistics_callback, handle(), trampoline);
+	copy_to_statistics_callback = callback;
+	return *this;
+}
+
 auto CopyFunction::SetCopyFromBindCallback(CopyFromBindCallback callback) & -> CopyFunction & {
 	if (!callback) {
 		CheckedAPICall(duckdb_v2_copy_from_set_bind_callback, handle(), nullptr);
@@ -4825,8 +5014,9 @@ auto CopyFunction::Register() -> void {
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<CopyFunctionInfo>(new CopyFunctionInfo(
 	    copy_to_bind_callback, copy_to_batch_size_callback, copy_to_init_callback, copy_to_batch_callback,
-	    copy_to_flush_callback, copy_to_finalize_callback, copy_from_bind_callback, copy_from_init_global_callback,
-	    copy_from_init_local_callback, copy_from_exec_callback, copy_from_progress_callback, std::move(user_data)));
+	    copy_to_flush_callback, copy_to_finalize_callback, copy_to_statistics_callback, copy_from_bind_callback,
+	    copy_from_init_global_callback, copy_from_init_local_callback, copy_from_exec_callback,
+	    copy_from_progress_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<CopyFunctionInfo>, detail::TypedEquals<CopyFunctionInfo>};
 	CheckedAPICall(duckdb_v2_copy_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
@@ -5051,6 +5241,42 @@ void *CopyFunction::CopyToFinalizeInput::GetUserDataInternal() const {
 }
 
 auto CopyFunction::CopyToFinalizeInput::GetContext() const -> Context {
+	return detail::Factory::Make<Context>(context);
+}
+
+void *CopyFunction::CopyToStatisticsInput::GetBindDataInternal() const {
+	void *data = nullptr;
+	CheckedAPICall(duckdb_v2_copy_to_statistics_get_bind_data,
+	               static_cast<duckdb_v2_copy_to_statistics_info_handle>(args), &data);
+	return RequireCopyBindData(data);
+}
+
+void *CopyFunction::CopyToStatisticsInput::GetInitDataInternal() const {
+	void *data = nullptr;
+	CheckedAPICall(duckdb_v2_copy_to_statistics_get_init_data,
+	               static_cast<duckdb_v2_copy_to_statistics_info_handle>(args), &data);
+	return RequireCopyInitData(data);
+}
+
+void *CopyFunction::CopyToStatisticsInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_copy_to_statistics_get_user_data,
+	               static_cast<duckdb_v2_copy_to_statistics_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const CopyFunctionInfo *>(user_data);
+	return RequireCopyUserData(function.user_data);
+}
+
+auto CopyFunction::CopyToStatisticsInput::SetRowCount(idx_t row_count) -> void {
+	CheckedAPICall(duckdb_v2_copy_to_statistics_set_row_count,
+	               static_cast<duckdb_v2_copy_to_statistics_info_handle>(args), row_count);
+}
+
+auto CopyFunction::CopyToStatisticsInput::SetFileSize(idx_t file_size_bytes) -> void {
+	CheckedAPICall(duckdb_v2_copy_to_statistics_set_file_size,
+	               static_cast<duckdb_v2_copy_to_statistics_info_handle>(args), file_size_bytes);
+}
+
+auto CopyFunction::CopyToStatisticsInput::GetContext() const -> Context {
 	return detail::Factory::Make<Context>(context);
 }
 

@@ -26,7 +26,7 @@ class JSONReader;
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size,
+	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData buffer, idx_t buffer_size,
 	                 idx_t buffer_start);
 
 public:
@@ -251,7 +251,7 @@ private:
 	void FinalizeBuffer(JSONReaderScanState &scan_state);
 
 	//! Insert/get/remove buffer (grabs the lock)
-	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
+	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> buffer);
 	optional_ptr<JSONBufferHandle> GetBuffer(idx_t buffer_idx);
 	AllocatedData RemoveBuffer(JSONBufferHandle &handle);
 

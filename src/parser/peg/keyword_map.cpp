@@ -157,6 +157,7 @@ DefaultKeywordMaps DuckDBKeywordHelper::InitializeKeywordMaps() {
 	unreserved_keyword_map.insert("delimiter");
 	unreserved_keyword_map.insert("delimiters");
 	unreserved_keyword_map.insert("depends");
+	unreserved_keyword_map.insert("destroy");
 	unreserved_keyword_map.insert("detach");
 	unreserved_keyword_map.insert("dictionary");
 	unreserved_keyword_map.insert("disable");
@@ -318,6 +319,7 @@ DefaultKeywordMaps DuckDBKeywordHelper::InitializeKeywordMaps() {
 	unreserved_keyword_map.insert("ref");
 	unreserved_keyword_map.insert("referencing");
 	unreserved_keyword_map.insert("refresh");
+	unreserved_keyword_map.insert("register");
 	unreserved_keyword_map.insert("reindex");
 	unreserved_keyword_map.insert("relative");
 	unreserved_keyword_map.insert("release");
@@ -327,6 +329,7 @@ DefaultKeywordMaps DuckDBKeywordHelper::InitializeKeywordMaps() {
 	unreserved_keyword_map.insert("replica");
 	unreserved_keyword_map.insert("reset");
 	unreserved_keyword_map.insert("resource");
+	unreserved_keyword_map.insert("resources");
 	unreserved_keyword_map.insert("respect");
 	unreserved_keyword_map.insert("restart");
 	unreserved_keyword_map.insert("restrict");

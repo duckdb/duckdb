@@ -37,7 +37,7 @@ CreateTableColumnList <- List(CreateTableColumnElement)
 CreateTableColumnElement <- CreateTableColumnDefinition / CreateTableConstraint
 CreateTableColumnDefinition <- ColumnDefinition
 CreateTableConstraint <- TopLevelConstraint
-ColumnDefinition <- DottedIdentifier Type? GeneratedColumn? ColumnConstraint*
+ColumnDefinition <- Identifier Type? GeneratedColumn? ColumnConstraint*
 ColumnConstraint <- NameableColumnConstraint / ColumnCollation
 NameableColumnConstraint <- ConstraintNameClause? ColumnConstraintElement
 ColumnConstraintElement <- NotNullConstraint / UniqueConstraint / PrimaryKeyConstraint / DefaultValue / CheckConstraint / ForeignKeyConstraint / ColumnCompression
@@ -90,8 +90,9 @@ ColLabelIdentifier <- ColLabel
 StringLiteralIdentifier <- StringLiteral
 GeneratedColumn <- Generated? 'AS' Parens(Expression) GeneratedColumnType?
 
-Generated <- 'GENERATED' AlwaysOrByDefault?
-AlwaysOrByDefault <- 'ALWAYS' / ('BY' 'DEFAULT')
+Generated <- GeneratedAlways / GeneratedByDefault
+GeneratedAlways <- 'GENERATED' 'ALWAYS'
+GeneratedByDefault <- 'GENERATED' 'BY' 'DEFAULT'
 GeneratedColumnType <- VirtualGeneratedColumn / StoredGeneratedColumn
 
 CommitAction <- 'ON' 'COMMIT' PreserveOrDelete 'ROWS'

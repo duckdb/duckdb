@@ -219,10 +219,10 @@ CreateThriftFileProtocol(QueryContext context, CachingFileHandle &file_handle, b
 }
 
 static bool ShouldAndCanPrefetch(ClientContext &context, CachingFileHandle &file_handle) {
-	Value disable_prefetch = false;
+	bool disable_prefetch = false;
 	context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
 	// local files also prefetch by default, the async I/O overlaps with decoding
-	return file_handle.CanSeek() && !disable_prefetch.GetValue<bool>();
+	return file_handle.CanSeek() && !disable_prefetch;
 }
 
 //! Coalescing gap for the scan's prefetch I/O, either pinned through a setting or chosen by the cost model
@@ -755,7 +755,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 			throw InternalException("Can't locate the child by name '%s' in the VARIANT column", field_name);
 		}
 		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
-		if (child_column.type.id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(child_column.type)) {
 			throw InternalException("Extracted field for '%s' from 'typed_value', is not a struct (received: %s)",
 			                        field_name, child_column.type.ToString());
 		}
@@ -822,7 +822,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
 			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
-		case LogicalTypeId::STRUCT: {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE: {
 			if (column_id.IsPushdownExtract()) {
 				auto &child = indexes[0];
 				auto child_index = child.GetPrimaryIndex();
@@ -1173,7 +1174,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw IOException("Failed to read Parquet file \"%s\": root schema element has no children", file.path);
 	}
 	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx, context);
-	if (root.type.id() != LogicalTypeId::STRUCT) {
+	if (!StructType::IsStruct(root.type)) {
 		throw InvalidInputException("Failed to read Parquet file \"%s\": Root element of Parquet file must be a struct",
 		                            file.path);
 	}
@@ -1247,13 +1248,8 @@ void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
 }
 
 ParquetOptions::ParquetOptions(ClientContext &context) {
-	Value lookup_value;
-	if (context.TryGetCurrentSetting("binary_as_string", lookup_value)) {
-		binary_as_string = lookup_value.GetValue<bool>();
-	}
-	if (context.TryGetCurrentSetting("debug_delta_only_variant_encoding_enabled", lookup_value)) {
-		variant_legacy_encoding = lookup_value.GetValue<bool>();
-	}
+	context.TryGetCurrentSetting("binary_as_string", binary_as_string);
+	context.TryGetCurrentSetting("debug_delta_only_variant_encoding_enabled", variant_legacy_encoding);
 }
 
 MultiFileColumnDefinition ParquetColumnDefinition::ToMultiFileColumnDefinition() const {
@@ -1343,9 +1339,9 @@ ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, Parq
 }
 
 bool ParquetReader::MetadataCacheEnabled(ClientContext &context) {
-	Value metadata_cache = false;
+	bool metadata_cache = false;
 	context.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
-	return metadata_cache.GetValue<bool>();
+	return metadata_cache;
 }
 
 shared_ptr<ParquetFileMetadataCache> ParquetReader::GetMetadataCacheEntry(ClientContext &context,
@@ -1564,7 +1560,7 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 	// Handle MAP value extraction.
 	if (leaf_reader->Type().id() == LogicalTypeId::MAP && function.Function().GetName() == "map_extract_value") {
 		auto &entry_reader = leaf_reader->Cast<ListColumnReader>().GetChildReader();
-		if (entry_reader.Type().id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(entry_reader.Type())) {
 			return false;
 		}
 		auto &struct_reader = entry_reader.Cast<StructColumnReader>();
@@ -1576,7 +1572,7 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 	}
 
 	// Handle STRUCT type.
-	if (leaf_reader->Type().id() == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(leaf_reader->Type())) {
 		idx_t child_idx;
 		if (!TryGetStructExtractChildIndex(function, child_idx)) {
 			return false;
@@ -1643,10 +1639,7 @@ static bool TryGetComparisonBloomFilterLeaf(ColumnReader &column_reader, const E
 		return false;
 	}
 
-	auto leaf_comparison = BoundComparisonExpression::Create(
-	    comparison_type, make_uniq<BoundReferenceExpression>(leaf_reader->Type(), 0ULL),
-	    make_uniq<BoundConstantExpression>(constant->GetValue()));
-	leaf_filter = make_uniq<ExpressionFilter>(std::move(leaf_comparison));
+	leaf_filter = ExpressionFilter::CreateComparisonFilter(comparison_type, constant->GetValue());
 	return true;
 }
 

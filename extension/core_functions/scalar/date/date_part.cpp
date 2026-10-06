@@ -627,11 +627,14 @@ struct DatePart {
 
 		template <typename TA, typename TB, typename TR>
 		static TR Operation(TA interval, TB timetz) {
+			auto offset = interval.micros / Interval::MICROS_PER_SEC;
+			if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
+				throw OutOfRangeException("Timezone offset out of range: %s", Interval::ToString(interval));
+			}
 			auto time = Time::NormalizeTimeTZ(timetz);
 			date_t date(0);
 			time = Interval::Add(time, interval, date);
-			auto offset = UnsafeNumericCast<int32_t>(interval.micros / Interval::MICROS_PER_SEC);
-			return TR(time, offset);
+			return TR(time, UnsafeNumericCast<int32_t>(offset));
 		}
 
 		template <typename TA, typename TB, typename TR>
@@ -2432,11 +2435,20 @@ ScalarFunctionSet GetCachedDatepartFunction() {
 	    OP::template PropagateStatistics<timestamp_t>);
 }
 
+void SetNonDecreasingExceptInterval(ScalarFunctionSet &functions) {
+	functions.ApplyToFunctions([](ScalarFunction &function) {
+		// Interval components need not preserve the normalized interval ordering.
+		if (function.GetSignature().GetParameter(0).GetType() != LogicalType::INTERVAL) {
+			function.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+		}
+	});
+}
+
 } // namespace
 
 ScalarFunctionSet YearFun::GetFunctions() {
 	auto set = GetCachedDatepartFunction<DatePart::YearOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
@@ -2450,19 +2462,19 @@ ScalarFunctionSet DayFun::GetFunctions() {
 
 ScalarFunctionSet DecadeFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::DecadeOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
 ScalarFunctionSet CenturyFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::CenturyOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
 ScalarFunctionSet MillenniumFun::GetFunctions() {
 	auto set = GetDatePartFunction<DatePart::MillenniumOperator>();
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
@@ -2525,7 +2537,7 @@ ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 
 ScalarFunctionSet EpochFun::GetFunctions() {
 	auto set = GetTimePartFunction<DatePart::EpochOperator, double>(LogicalType::DOUBLE, "temporal");
-	set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(set);
 	return set;
 }
 
@@ -2584,7 +2596,7 @@ ScalarFunctionSet EpochMsFun::GetFunctions() {
 	inverse_fun.GetSignature().AddParameter("temporal", LogicalType::BIGINT);
 	operator_set.AddFunction(inverse_fun);
 
-	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
+	SetNonDecreasingExceptInterval(operator_set);
 	// these overflow at the representable extremes, so the failure must be reportable
 	operator_set.SetFallible();
 	return operator_set;

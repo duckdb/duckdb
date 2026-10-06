@@ -108,6 +108,8 @@ public:
 
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
 	DUCKDB_API void Append(DataChunk &new_chunk);
+	//! Appends a copy of another ColumnDataCollection to this
+	DUCKDB_API void Append(const ColumnDataCollection &other);
 
 	//! Appends the other ColumnDataCollection to this, destroying the other data collection
 	DUCKDB_API void Combine(ColumnDataCollection &other);

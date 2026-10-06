@@ -246,17 +246,7 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	if (PushFilters() == FilterResult::UNSATISFIABLE) {
 		return FilterResult::UNSATISFIABLE;
 	}
-	// split up the filters by AND predicate
-	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(std::move(expr));
-	LogicalFilter::SplitPredicates(expressions);
-	// push the filters into the combiner
-	for (auto &child_expr : expressions) {
-		if (combiner.AddFilter(std::move(child_expr)) == FilterResult::UNSATISFIABLE) {
-			return FilterResult::UNSATISFIABLE;
-		}
-	}
-	return FilterResult::SUCCESS;
+	return combiner.AddConjuncts(std::move(expr));
 }
 
 void FilterPushdown::GenerateFilters() {

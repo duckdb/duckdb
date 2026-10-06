@@ -26,6 +26,7 @@ namespace duckdb {
 enum class TablePartitionInfo : uint8_t;
 struct PartitionStatistics;
 struct TableFunctionFileBindInput;
+struct TableFunctionFileBindInfo;
 struct TableFunctionFileInitInput;
 
 //! Controls how a table function manages parallelism.
@@ -132,6 +133,10 @@ struct TableFunctionBindInput {
 	optional_ptr<unique_ptr<LogicalOperator>> input_plan;
 	//! (Optional) Set when a multi-file scan binds this function to read one of its files
 	optional_ptr<const TableFunctionFileBindInput> multi_file_input;
+	//! (Optional) Set when binding a single file of a multi-file scan. The bind can describe the file it binds in more
+	//! detail than its names and types - e.g. attach the field ids of its columns, or the key-value metadata of the
+	//! file - which the multi-file reader then uses to read the file
+	optional_ptr<TableFunctionFileBindInfo> file_info;
 };
 
 struct TableFunctionInitInput {
