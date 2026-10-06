@@ -106,6 +106,10 @@ static unique_ptr<FunctionData> ListResizeBind(BindScalarFunctionInput &input) {
 		return make_uniq<VariableReturnBindData>(bound_function.GetReturnType());
 	}
 
+	if (arguments[0]->GetReturnType().id() != LogicalTypeId::LIST) {
+		throw BinderException("%s can only operate on LISTs", bound_function.GetName());
+	}
+
 	// Attempt implicit casting, if the default type does not match list the list child type.
 	if (bound_function.GetArguments().size() == 3 &&
 	    ListType::GetChildType(arguments[0]->GetReturnType()) != arguments[2]->GetReturnType() &&
