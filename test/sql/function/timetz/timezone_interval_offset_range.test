@@ -16,12 +16,12 @@ NULL
 statement error
 SELECT timezone(INTERVAL '16 hours', TIMETZ '12:00:00+00');
 ----
-Out of Range Error: Time zone offset 16:00:00 is out of range
+Out of Range Error: Timezone offset out of range: 16:00:00
 
 statement error
 SELECT timezone(INTERVAL '-16 hours', TIMETZ '12:00:00+00');
 ----
-Out of Range Error: Time zone offset -16:00:00 is out of range
+Out of Range Error: Timezone offset out of range: -16:00:00
 
 statement error
 SELECT timezone(INTERVAL '9223372036854775807 microseconds', TIMETZ '12:00:00+00');

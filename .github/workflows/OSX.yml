@@ -148,10 +148,22 @@ jobs:
           mkdir -p \
             build/release_arm64/libs \
             build/release_arm64/src \
+            build/release_arm64/test/extension \
             build/release_amd64/libs \
-            build/release_amd64/src
+            build/release_amd64/src \
+            build/release_amd64/test/extension
           lipo -extract arm64 -output build/release_arm64/duckdb build/release/duckdb
           lipo -extract x86_64 -output build/release_amd64/duckdb build/release/duckdb
+          lipo -extract arm64 -output build/release_arm64/test/unittest build/release/test/unittest
+          lipo -extract x86_64 -output build/release_amd64/test/unittest build/release/test/unittest
+          cp -p build/release/test/run build/release_arm64/test/run
+          cp -p build/release/test/run build/release_amd64/test/run
+
+          for extension in build/release/test/extension/*.duckdb_extension; do
+            extension_name="$(basename "$extension")"
+            lipo -extract arm64 -output "build/release_arm64/test/extension/$extension_name" "$extension"
+            lipo -extract x86_64 -output "build/release_amd64/test/extension/$extension_name" "$extension"
+          done
 
           for library in build/release/src/libduckdb*.dylib; do
             library_name="$(basename "$library")"
@@ -201,6 +213,9 @@ jobs:
           cmake --build "$extension_build_dir" --target "${loadable_targets[@]}"
           cmake --build "$extension_build_dir" --target duckdb_local_extension_repo
 
+          cp -a build/release/repository build/release_arm64/
+          cp -a "$extension_build_dir/repository" build/release_amd64/
+
           make cli-release-artifact ARTIFACT_SUFFIX=osx-universal CLI_BINARY=build/release/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-arm64 CLI_BINARY=build/release_arm64/duckdb
           make cli-release-artifact ARTIFACT_SUFFIX=osx-amd64 CLI_BINARY=build/release_amd64/duckdb
@@ -219,6 +234,13 @@ jobs:
             duckdb-shared-libs-osx-amd64.tar.gz \
             duckdb-static-libs-osx-arm64.tar.gz \
             duckdb-static-libs-osx-amd64.tar.gz
+
+          make release-artifact \
+            RELEASE_ARTIFACT_SOURCE_DIR=build/release_arm64 \
+            RELEASE_ARTIFACT_TARBALL=build/release-artifacts/osx-release-arm64-build.tar.gz
+          make release-artifact \
+            RELEASE_ARTIFACT_SOURCE_DIR=build/release_amd64 \
+            RELEASE_ARTIFACT_TARBALL=build/release-artifacts/osx-release-amd64-build.tar.gz
 
       - uses: actions/upload-artifact@v7
         with:
@@ -271,6 +293,18 @@ jobs:
           name: release-core-extensions-osx-amd64
           path: build/release_amd64/core_extensions/repository
           if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: build/release-artifacts/osx-release-arm64-build.tar.gz
+          if-no-files-found: error
+          archive: false
+
+      - uses: actions/upload-artifact@v7
+        with:
+          path: build/release-artifacts/osx-release-amd64-build.tar.gz
+          if-no-files-found: error
+          archive: false
 
       - name: Unit Test
         shell: bash

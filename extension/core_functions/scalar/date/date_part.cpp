@@ -629,9 +629,7 @@ struct DatePart {
 		static TR Operation(TA interval, TB timetz) {
 			auto offset = interval.micros / Interval::MICROS_PER_SEC;
 			if (offset < dtime_tz_t::MIN_OFFSET || offset > dtime_tz_t::MAX_OFFSET) {
-				throw OutOfRangeException("Time zone offset %s is out of range, expected a value between -15:59:59 "
-				                          "and +15:59:59",
-				                          Interval::ToString(interval));
+				throw OutOfRangeException("Timezone offset out of range: %s", Interval::ToString(interval));
 			}
 			auto time = Time::NormalizeTimeTZ(timetz);
 			date_t date(0);
