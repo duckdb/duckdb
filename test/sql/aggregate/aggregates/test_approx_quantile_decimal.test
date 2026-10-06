@@ -1,0 +1,50 @@
+# name: test/sql/aggregate/aggregates/test_approx_quantile_decimal.test
+# description: Test approx_quantile with DECIMAL types
+# group: [aggregates]
+
+statement ok
+SET debug_verify_serializer = true;
+
+statement ok
+CREATE TABLE decimals(d DECIMAL(10,2));
+
+statement ok
+INSERT INTO decimals VALUES (1.55);
+
+# the result keeps the DECIMAL type, width and scale of the input
+query TT
+SELECT approx_quantile(d, 0.5), typeof(approx_quantile(d, 0.5)) FROM decimals;
+----
+1.55	DECIMAL(10,2)
+
+query TT
+SELECT approx_quantile(d, [0.1, 0.9]), typeof(approx_quantile(d, [0.1, 0.9])) FROM decimals;
+----
+[1.55, 1.55]	DECIMAL(10,2)[]
+
+# every physical type a DECIMAL can be stored as
+query TT
+SELECT approx_quantile(1.55::DECIMAL(4,2), 0.5), typeof(approx_quantile(1.55::DECIMAL(4,2), 0.5));
+----
+1.55	DECIMAL(4,2)
+
+query TT
+SELECT approx_quantile(1.55::DECIMAL(9,2), 0.5), typeof(approx_quantile(1.55::DECIMAL(9,2), 0.5));
+----
+1.55	DECIMAL(9,2)
+
+query TT
+SELECT approx_quantile(1.55::DECIMAL(18,2), 0.5), typeof(approx_quantile(1.55::DECIMAL(18,2), 0.5));
+----
+1.55	DECIMAL(18,2)
+
+query TT
+SELECT approx_quantile(1.55::DECIMAL(38,2), 0.5), typeof(approx_quantile(1.55::DECIMAL(38,2), 0.5));
+----
+1.55	DECIMAL(38,2)
+
+# the exported state round-trips with the DECIMAL type intact
+query I
+SELECT finalize(approx_quantile(d, 0.5) EXPORT_STATE) = approx_quantile(d, 0.5) FROM decimals;
+----
+true
