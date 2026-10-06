@@ -2348,6 +2348,82 @@ void Value::Serialize(Serializer &serializer) const {
 	SerializeInternal(serializer, true);
 }
 
+//! Verify that a deserialized value is within the domain of its type
+static void VerifyDeserializedValue(const LogicalType &type, const Value &value) {
+	bool valid = true;
+	switch (type.id()) {
+	case LogicalTypeId::ENUM: {
+		uint64_t index;
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			index = value.GetValueUnsafe<uint8_t>();
+			break;
+		case PhysicalType::UINT16:
+			index = value.GetValueUnsafe<uint16_t>();
+			break;
+		case PhysicalType::UINT32:
+			index = value.GetValueUnsafe<uint32_t>();
+			break;
+		default:
+			throw InternalException("Invalid physical type for ENUM");
+		}
+		valid = index < EnumType::GetSize(type);
+		break;
+	}
+	case LogicalTypeId::TIME: {
+		const auto micros = value.GetValueUnsafe<dtime_t>().value;
+		valid = micros >= 0 && micros <= Interval::MICROS_PER_DAY;
+		break;
+	}
+	case LogicalTypeId::TIME_NS: {
+		const auto nanos = value.GetValueUnsafe<dtime_ns_t>().value;
+		valid = nanos >= 0 && nanos <= Interval::NANOS_PER_DAY;
+		break;
+	}
+	case LogicalTypeId::TIME_TZ: {
+		const auto time_tz = value.GetValueUnsafe<dtime_tz_t>();
+		const auto micros = time_tz.time().value;
+		const auto offset = time_tz.offset();
+		valid = micros >= 0 && micros <= Interval::MICROS_PER_DAY && offset >= dtime_tz_t::MIN_OFFSET &&
+		        offset <= dtime_tz_t::MAX_OFFSET;
+		break;
+	}
+	case LogicalTypeId::DECIMAL: {
+		const auto width = DecimalType::GetWidth(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+		case PhysicalType::INT64: {
+			int64_t decimal_value;
+			if (type.InternalType() == PhysicalType::INT16) {
+				decimal_value = value.GetValueUnsafe<int16_t>();
+			} else if (type.InternalType() == PhysicalType::INT32) {
+				decimal_value = value.GetValueUnsafe<int32_t>();
+			} else {
+				decimal_value = value.GetValueUnsafe<int64_t>();
+			}
+			valid = decimal_value > -NumericHelper::POWERS_OF_TEN[width] &&
+			        decimal_value < NumericHelper::POWERS_OF_TEN[width];
+			break;
+		}
+		case PhysicalType::INT128: {
+			const auto decimal_value = value.GetValueUnsafe<hugeint_t>();
+			valid = decimal_value > -Hugeint::POWERS_OF_TEN[width] && decimal_value < Hugeint::POWERS_OF_TEN[width];
+			break;
+		}
+		default:
+			throw InternalException("Invalid physical type for DECIMAL");
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	if (!valid) {
+		throw SerializationException("Failed to deserialize value: value is out of range for type %s", type.ToString());
+	}
+}
+
 Value Value::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadPropertyWithExplicitDefault<LogicalType>(100, "type", LogicalTypeId::INVALID);
 	if (type.InternalType() == PhysicalType::INVALID) {
@@ -2469,6 +2545,7 @@ Value Value::Deserialize(Deserializer &deserializer) {
 	default:
 		throw NotImplementedException("Unimplemented type for Deserialize");
 	}
+	VerifyDeserializedValue(type, new_value);
 	return new_value;
 }
 
