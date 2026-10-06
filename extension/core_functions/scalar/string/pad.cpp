@@ -25,6 +25,28 @@ static pair<idx_t, idx_t> PadCountChars(const idx_t len, const char *data, const
 	return pair<idx_t, idx_t>(nbytes, nchars);
 }
 
+static idx_t PaddingByteCount(const idx_t len, const string_t &pad) {
+	//  Count the bytes InsertPadding will write
+	auto data = pad.GetData();
+	auto size = pad.GetSize();
+	if (len == 0 || size == 0) {
+		return 0;
+	}
+	auto pad_chars = PadCountChars(NumericLimits<idx_t>::Maximum(), data, size).second;
+	auto remainder = PadCountChars(len % pad_chars, data, size).first;
+	return (len / pad_chars) * size + remainder;
+}
+
+static void CheckPadResultSize(const idx_t len, const string_t &pad, const pair<idx_t, idx_t> &written,
+                               const char *name) {
+	auto result_size = written.first + PaddingByteCount(len - written.second, pad);
+	if (result_size > string_t::MAX_STRING_SIZE) {
+		throw OutOfRangeException(
+		    "Cannot create a string of size: '%d' in %s, the maximum supported string size is: '%d'", result_size, name,
+		    string_t::MAX_STRING_SIZE);
+	}
+}
+
 static bool InsertPadding(const idx_t len, const string_t &pad, vector<char> &result) {
 	//  Copy the padding until the output is long enough
 	auto data = pad.GetData();
@@ -68,6 +90,7 @@ static string_t LeftPadFunction(const string_t &str, const int32_t len, const st
 
 	//  Count how much of str will fit in the output
 	auto written = PadCountChars(UnsafeNumericCast<idx_t>(len), data_str, size_str);
+	CheckPadResultSize(UnsafeNumericCast<idx_t>(len), pad, written, "LPAD");
 
 	//  Left pad by the number of characters still needed
 	if (!InsertPadding(UnsafeNumericCast<idx_t>(len) - written.second, pad, result)) {
@@ -97,6 +120,7 @@ static string_t RightPadFunction(const string_t &str, const int32_t len, const s
 
 	// Count how much of str will fit in the output
 	auto written = PadCountChars(UnsafeNumericCast<idx_t>(len), data_str, size_str);
+	CheckPadResultSize(UnsafeNumericCast<idx_t>(len), pad, written, "RPAD");
 
 	//  Append as much of the original string as fits
 	result.insert(result.end(), data_str, data_str + written.first);
