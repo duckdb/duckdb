@@ -708,10 +708,11 @@ BindingReplacementGraph RecursiveDependentJoinPlanner::PlanOperator(unique_ptr<L
 
 		for (idx_t i = 0; i < op_ptr->children.size(); i++) {
 			D_ASSERT(op_ptr->children[i]);
-			auto old_child_bindings = op_ptr->children[i]->GetColumnBindings();
-			auto child_replacements = PlanOperator(op_ptr->children[i]);
-			ColumnBindingRewrite::ApplyToChild(op_ptr, i, std::move(old_child_bindings), child_replacements);
-			operator_replacements.Merge(child_replacements);
+			ColumnBindingRewrite::RewriteChild(
+			    op_ptr, i, [&](unique_ptr<LogicalOperator> &child, BindingReplacementGraph &child_replacements) {
+				    child_replacements = PlanOperator(child);
+				    operator_replacements.Merge(child_replacements);
+			    });
 		}
 	}
 	ColumnBindingRewrite::ValidateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
@@ -723,10 +724,11 @@ BindingReplacementGraph RecursiveDependentJoinPlanner::PlanAnyJoinCondition(uniq
 	BindingReplacementGraph operator_replacements;
 
 	for (idx_t child_index = 0; child_index < op_ptr->children.size(); child_index++) {
-		auto old_child_bindings = op_ptr->children[child_index]->GetColumnBindings();
-		auto child_replacements = PlanOperator(op_ptr->children[child_index]);
-		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
-		operator_replacements.Merge(child_replacements);
+		ColumnBindingRewrite::RewriteChild(
+		    op_ptr, child_index, [&](unique_ptr<LogicalOperator> &child, BindingReplacementGraph &child_replacements) {
+			    child_replacements = PlanOperator(child);
+			    operator_replacements.Merge(child_replacements);
+		    });
 	}
 
 	BindingReplacementGraph pair_replacements;
@@ -742,10 +744,11 @@ BindingReplacementGraph RecursiveDependentJoinPlanner::PlanAnyJoinCondition(uniq
 	D_ASSERT(join.condition);
 	PlanJoinSubqueries(join, join.condition, JoinSide::LEFT);
 	for (idx_t child_index = 0; child_index < join.children.size(); child_index++) {
-		auto old_child_bindings = join.children[child_index]->GetColumnBindings();
-		auto child_replacements = PlanOperator(join.children[child_index]);
-		ColumnBindingRewrite::ApplyToChild(op_ptr, child_index, std::move(old_child_bindings), child_replacements);
-		operator_replacements.Merge(child_replacements);
+		ColumnBindingRewrite::RewriteChild(
+		    op_ptr, child_index, [&](unique_ptr<LogicalOperator> &child, BindingReplacementGraph &child_replacements) {
+			    child_replacements = PlanOperator(child);
+			    operator_replacements.Merge(child_replacements);
+		    });
 	}
 	ColumnBindingRewrite::ValidateOutput(old_output, op_ptr->GetColumnBindings(), operator_replacements);
 	return operator_replacements;
