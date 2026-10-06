@@ -179,7 +179,7 @@ SELECT NULL::DECIMAL(9,2) a, [1,NULL] b, {'x': 2} c WHERE false;
 query TT
 EXPLAIN (SQL) SELECT NULL::DECIMAL(9,2) a, [1,NULL] b, {'x': 2} c WHERE false;
 ----
-sql	<REGEX>:.*WHERE .*false.*
+sql	<REGEX>:.*WHERE .*FALSE.*
 
 # This signature has no SQL representation; check native execution with verification disabled.
 statement ok
