@@ -152,7 +152,7 @@ enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
 
-enum class ConstraintTiming : uint8_t;
+enum class ConstraintCheckMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
 
@@ -844,7 +844,7 @@ template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
-const char* EnumUtil::ToChars<ConstraintTiming>(ConstraintTiming value);
+const char* EnumUtil::ToChars<ConstraintCheckMode>(ConstraintCheckMode value);
 
 template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
@@ -1790,7 +1790,7 @@ template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
-ConstraintTiming EnumUtil::FromString<ConstraintTiming>(const char *value);
+ConstraintCheckMode EnumUtil::FromString<ConstraintCheckMode>(const char *value);
 
 template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);

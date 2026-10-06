@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/enums/constraint_check_mode.hpp"
 #include "duckdb/common/enums/index_removal_type.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/shared_ptr.hpp"
@@ -111,7 +112,7 @@ private:
 //! The IndexEntry provides a stable logical identity which refers to an interchangeable snapshot of an index.
 class IndexEntry : public enable_shared_from_this<IndexEntry> {
 public:
-	explicit IndexEntry(unique_ptr<Index> index);
+	IndexEntry(unique_ptr<Index> index, ConstraintCheckMode check_mode);
 	//! Append a chunk to the physical index, buffering it while the index is unbound.
 	void Append(DataChunk &chunk, Vector &row_ids);
 	//! Appends a chunk using delete and checkpoint indexes where required.
@@ -126,6 +127,8 @@ public:
 	                     optional_idx active_checkpoint);
 	//! Returns whether the physical index enforces a unique constraint.
 	bool IsUnique() const;
+	//! Returns whether the constraint enforced by the physical index is only checked when committing.
+	bool IsDeferred() const;
 	//! Returns whether the physical index matches the foreign key columns and role.
 	bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, ForeignKeyType fk_type) const;
 	//! Returns the name of the physical index.
@@ -167,8 +170,10 @@ public:
 	IndexStorageInfo SerializeToWAL(const case_insensitive_map_t<Value> &options);
 	//! Merges checkpoint deltas into the bound physical index and marks the checkpoint as written.
 	void MergeCheckpointDeltas(optional_idx checkpoint_id);
-	//! Adds transaction-local copies of the physical index to the target lists when required.
+	//! Adds the required transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
+	//! Adds only the transaction-local delete index.
+	void InitializeLocalDeleteIndex(TableIndexList &delete_indexes) const;
 
 public:
 	//! Acquire shared access to a stable physical index.
@@ -193,12 +198,16 @@ private:
 	friend class IndexReadHandle;
 	template <class>
 	friend class IndexWriteHandle;
+	void InitializeLocalIndexesInternal(TableIndexList &delete_indexes,
+	                                    optional_ptr<TableIndexList> append_indexes) const;
 
 	atomic<IndexBindState> bind_state;
 	//! Phase-fair lock protecting the physical index and all delta indexes owned by this entry.
 	mutable StorageLock lock;
 	//! The physical index owned by this stable logical entry.
 	unique_ptr<Index> owned_index;
+	//! Whether the enforced constraint is deferred. Derived from the catalog constraint, not serialized.
+	const ConstraintCheckMode check_mode;
 	IndexDeltas deltas;
 };
 

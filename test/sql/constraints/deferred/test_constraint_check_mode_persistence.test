@@ -1,8 +1,8 @@
-# name: test/sql/constraints/deferred/test_constraint_timing_persistence.test
-# description: Preserve explicit and default constraint timing across database reopen
+# name: test/sql/constraints/deferred/test_constraint_check_mode_persistence.test
+# description: Preserve explicit and default constraint check mode across database reopen
 # group: [deferred]
 
-load {TEST_DIR}/constraint_timing.db readwrite v2.0.0
+load {TEST_DIR}/constraint_check_mode.db readwrite v2.0.0
 
 statement ok
 CREATE TABLE t(a INTEGER UNIQUE, b INTEGER UNIQUE IMMEDIATE, c INTEGER PRIMARY KEY IMMEDIATE);

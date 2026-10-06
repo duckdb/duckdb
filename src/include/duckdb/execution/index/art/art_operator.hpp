@@ -149,15 +149,15 @@ public:
 					status = GateStatus::GATE_SET;
 					continue;
 				}
-				// A unique ART may temporarily contain a gated two-row leaf during commit for
-				// DELETE + INSERT of the same key: commit appends the new row first, then
-				// commit-delete cleanup removes the old row ID. No other main-ART append should
-				// enter during that window because commit-time main-index appends are serialized
-				// by the WAL lock or transaction manager commit lock.
-				//
-				// Local append and delete indexes should not contain such gates either.
-				// Note that VerifyLeaf may still legitimately observe the temporary duplicate
-				// leaf state.
+				// A key in a unique ART has a single row ID. The exception is a commit that deleted the key's
+				// committed row and appends the key again: the new row ID sits next to the deleted one (a gate)
+				// until the commit removes the deleted row ID. Commit-time appends are serialized, so this gate
+				// was created by the current commit, and this insert appends the same key a second time, e.g.,
+				// for a deferred constraint. That is a constraint violation, provided that the gate holds the row
+				// this commit deleted. Otherwise, the index is corrupted.
+				if (GateContainsDeletedRow(arena, art, active_node_ptr, key, delete_index_info)) {
+					return ARTConflictType::CONSTRAINT;
+				}
 				throw FatalException("Corrupted unique ART index \"%s\": encountered an existing gated leaf in unique "
 				                     "index while inserting",
 				                     art.name);
@@ -334,6 +334,26 @@ public:
 	}
 
 private:
+	//! Returns true, if the gate contains the row ID that a delete index stores for the key.
+	static bool GateContainsDeletedRow(ArenaAllocator &arena, const ART &art, const NodePtr &gate_ptr,
+	                                   const ARTKey &key, DeleteIndexInfo delete_index_info) {
+		if (!delete_index_info.delete_indexes) {
+			return false;
+		}
+		for (auto &delete_index : *delete_index_info.delete_indexes) {
+			auto &delete_art = delete_index.get().Cast<ART>();
+			auto delete_leaf_ptr = Lookup(delete_art, delete_art.root_ptr, key, 0);
+			if (!delete_leaf_ptr || delete_leaf_ptr.Get().GetType() != NType::LEAF_INLINED) {
+				continue;
+			}
+			auto deleted_row_id = ARTKey::CreateARTKey<row_t>(arena, delete_leaf_ptr.Get().GetRowId());
+			if (LookupInLeaf(art, gate_ptr, deleted_row_id)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	static ARTConflictType InsertIntoInlined(ArenaAllocator &arena, ART &art, NodePtr &node_ptr, const ARTKey &key,
 	                                         const ARTKey &row_id, const idx_t depth, const GateStatus status,
 	                                         DeleteIndexInfo delete_index_info, const IndexAppendMode append_mode) {

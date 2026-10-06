@@ -75,7 +75,9 @@ static const DefaultView internal_views[] = {
     {"pg_catalog", "pg_constraint",
      "SELECT table_oid*1000000+constraint_index oid, constraint_text conname, schema_oid connamespace, CASE "
      "constraint_type WHEN 'CHECK' then 'c' WHEN 'UNIQUE' then 'u' WHEN 'PRIMARY KEY' THEN 'p' WHEN 'FOREIGN KEY' THEN "
-     "'f' ELSE 'x' END contype, false condeferrable, false condeferred, true convalidated, table_oid conrelid, 0 "
+     "'f' ELSE 'x' END contype, constraint_check_mode = 'DEFERRED' condeferrable, constraint_check_mode = 'DEFERRED' "
+     "condeferred, true convalidated, table_oid "
+     "conrelid, 0 "
      "contypid, 0 conindid, 0 conparentid, 0 confrelid, NULL confupdtype, NULL confdeltype, NULL confmatchtype, true "
      "conislocal, 0 coninhcount, false connoinherit, constraint_column_indexes conkey, NULL confkey, NULL conpfeqop, "
      "NULL conppeqop, NULL conffeqop, NULL conexclop, expression conbin FROM duckdb_constraints()"},
@@ -197,7 +199,9 @@ static const DefaultView internal_views[] = {
     {"information_schema", "table_constraints",
      "SELECT database_name constraint_catalog, schema_name constraint_schema, constraint_name, database_name "
      "table_catalog, schema_name table_schema, table_name, CASE constraint_type WHEN 'NOT NULL' THEN 'CHECK' ELSE "
-     "constraint_type END constraint_type, 'NO' is_deferrable, 'NO' initially_deferred, 'YES' enforced, 'YES' "
+     "constraint_type END constraint_type, CASE WHEN constraint_check_mode = 'DEFERRED' THEN 'YES' ELSE 'NO' END "
+     "is_deferrable, CASE WHEN "
+     "constraint_check_mode = 'DEFERRED' THEN 'YES' ELSE 'NO' END initially_deferred, 'YES' enforced, 'YES' "
      "nulls_distinct FROM duckdb_constraints() WHERE constraint_type = 'PRIMARY KEY' OR constraint_type = 'FOREIGN "
      "KEY' OR constraint_type = 'UNIQUE' OR constraint_type = 'CHECK' OR constraint_type = 'NOT NULL';"},
     {"information_schema", "constraint_column_usage",
