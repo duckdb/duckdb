@@ -240,9 +240,12 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		auto max_tree_depth = Settings::Get<MaxExpressionDepthSetting>(context);
 		CheckTreeDepth(*plan, max_tree_depth);
 
-		RewriteTriggersToDependent(*this->binder, *this->plan);
-		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
-		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+		// A LogicalPlanStatement carries an already planned (and possibly optimized) plan
+		if (statement.type != StatementType::LOGICAL_PLAN_STATEMENT) {
+			RewriteTriggersToDependent(*this->binder, *this->plan);
+			RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
+			this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+		}
 		D_ASSERT(!ContainsDependentJoin(*this->plan));
 		D_ASSERT(VerifyPlannedExpressions(*this->plan));
 		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));
