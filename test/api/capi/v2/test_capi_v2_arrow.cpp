@@ -186,13 +186,13 @@ void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_cont
 	duckdb_v2_data_chunk_destroy(&imported);
 }
 
-void RegisterArrowRoundtrip(duckdb_v2_connection_handle conn) {
+void RegisterArrowRoundtrip(EnvFixture &fx) {
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name = Convert("arrow_roundtrip");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto any = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("x");
@@ -355,13 +355,13 @@ void ArrowRangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_
 	global.emitted += static_cast<int64_t>(rows);
 }
 
-void RegisterArrowRoundtripRange(duckdb_v2_connection_handle conn) {
+void RegisterArrowRoundtripRange(EnvFixture &fx) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name = Convert("arrow_roundtrip_range");
 	REQUIRE(duckdb_v2_table_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_table_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("n");
@@ -555,13 +555,12 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 }
 
 // Registers a no-argument-meaning probe that runs `exec` once.
-void RegisterArrowProbe(duckdb_v2_connection_handle conn, const char *name,
-                        duckdb_v2_scalar_function_exec_callback_fn exec) {
+void RegisterArrowProbe(EnvFixture &fx, const char *name, duckdb_v2_scalar_function_exec_callback_fn exec) {
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto fname = Convert(name);
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &fname, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto integer = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("x");
@@ -730,7 +729,7 @@ void ArrowTopLevelValidityExec(duckdb_v2_scalar_function_exec_info_handle info, 
 
 TEST_CASE("V2 arrow: a flat round-trip preserves values", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	RegisterArrowRoundtrip(fx.conn);
+	RegisterArrowRoundtrip(fx);
 
 	REQUIRE(ArrowQueryBool(fx.conn, "SELECT bool_and(arrow_roundtrip(i) IS NOT DISTINCT FROM i) "
 	                                "FROM range(-100, 100) t(i)"));
@@ -749,7 +748,7 @@ TEST_CASE("V2 arrow: a flat round-trip preserves values", "[capi_v2][arrow]") {
 
 TEST_CASE("V2 arrow: NULLs survive a round-trip", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	RegisterArrowRoundtrip(fx.conn);
+	RegisterArrowRoundtrip(fx);
 
 	// Every third value is NULL, so validity has to cross both ways.
 	REQUIRE(ArrowQueryBool(fx.conn, "SELECT bool_and(arrow_roundtrip(v) IS NOT DISTINCT FROM v) "
@@ -764,7 +763,7 @@ TEST_CASE("V2 arrow: NULLs survive a round-trip", "[capi_v2][arrow]") {
 
 TEST_CASE("V2 arrow: nested values survive a round-trip", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	RegisterArrowRoundtrip(fx.conn);
+	RegisterArrowRoundtrip(fx);
 
 	REQUIRE(ArrowQueryBool(fx.conn, "SELECT bool_and(arrow_roundtrip(l) IS NOT DISTINCT FROM l) "
 	                                "FROM (SELECT [i, i + 1, i + 2] AS l FROM range(30) t(i))"));
@@ -781,7 +780,7 @@ TEST_CASE("V2 arrow: nested values survive a round-trip", "[capi_v2][arrow]") {
 
 TEST_CASE("V2 arrow: a multi-column round-trip preserves rows", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	RegisterArrowRoundtripRange(fx.conn);
+	RegisterArrowRoundtripRange(fx);
 
 	REQUIRE(ArrowQueryBool(fx.conn, "SELECT bool_and(s = 'r' || i) FROM arrow_roundtrip_range(100)"));
 	REQUIRE(ArrowQueryBool(fx.conn, "SELECT count(*) = 100 AND min(i) = 0 AND max(i) = 99 "
@@ -846,7 +845,7 @@ TEST_CASE("V2 arrow: a dictionary column resolves to VARCHAR by default", "[capi
 	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto fname = Convert("enum_probe");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &fname, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("x");
@@ -885,7 +884,7 @@ TEST_CASE("V2 arrow: a dictionary column resolves to VARCHAR by default", "[capi
 #if (STANDARD_VECTOR_SIZE >= 8)
 TEST_CASE("V2 arrow: a batch size caps the output in both directions", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	RegisterArrowProbe(fx.conn, "arrow_split_probe", ArrowSplitExec);
+	RegisterArrowProbe(fx, "arrow_split_probe", ArrowSplitExec);
 
 	SECTION("no maximum gives one output per input") {
 		arrow_split_observed = {};
@@ -971,7 +970,7 @@ TEST_CASE("V2 arrow: a batch size caps the output in both directions", "[capi_v2
 TEST_CASE("V2 arrow: a top-level struct array's own validity bitmap is honored", "[capi_v2][arrow]") {
 	EnvFixture fx;
 	ExecSQL(fx.conn, "CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')");
-	RegisterArrowProbe(fx.conn, "arrow_toplevel_validity_probe", ArrowTopLevelValidityExec);
+	RegisterArrowProbe(fx, "arrow_toplevel_validity_probe", ArrowTopLevelValidityExec);
 	RunArrowProbe(fx.conn, "SELECT arrow_toplevel_validity_probe(1)");
 
 	REQUIRE(arrow_toplevel_validity_observed.append_rc == DUCKDB_V2_ERROR_NONE);
@@ -989,7 +988,7 @@ TEST_CASE("V2 arrow: a top-level struct array's own validity bitmap is honored",
 
 TEST_CASE("V2 arrow: the exporter accepts input without draining first", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	RegisterArrowProbe(fx.conn, "arrow_split_probe", ArrowSplitExec);
+	RegisterArrowProbe(fx, "arrow_split_probe", ArrowSplitExec);
 	arrow_split_observed = {};
 	arrow_split_rows = 4;
 	arrow_split_export_batch = 0;
@@ -1004,7 +1003,7 @@ TEST_CASE("V2 arrow: the exporter accepts input without draining first", "[capi_
 
 TEST_CASE("V2 arrow: a dictionary column survives an importer split", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	RegisterArrowProbe(fx.conn, "arrow_split_probe", ArrowSplitExec);
+	RegisterArrowProbe(fx, "arrow_split_probe", ArrowSplitExec);
 	arrow_split_export_batch = 0;
 	arrow_split_appends = 1;
 
@@ -1410,7 +1409,7 @@ TEST_CASE("V2 arrow result: the schema describes the arrays before, during and a
 
 TEST_CASE("V2 arrow result: parameters bind by position and by name", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	auto value = MakeInt64Value(fx.conn, 10);
+	auto value = MakeInt64Value(fx.ctx, 10);
 
 	ArrowResult positional;
 	REQUIRE(QueryArrow(fx.conn, "SELECT $1::BIGINT + i FROM range(3) t(i)", 0, &positional, nullptr, nullptr, &value,
@@ -1442,7 +1441,7 @@ TEST_CASE("V2 arrow result: a prepared statement executes as an Arrow result, re
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, statement, false, &prepared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_destroy(&statement);
 	for (int64_t base : {0, 100}) {
-		auto value = MakeInt64Value(fx.conn, base);
+		auto value = MakeInt64Value(fx.ctx, base);
 		ArrowResult r;
 		REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, &value, 1, 0, &r, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
@@ -1460,7 +1459,7 @@ TEST_CASE("V2 arrow result: a prepared statement executes as an Arrow result, re
 	statement = ParseOne(fx.conn, "INSERT INTO t SELECT * FROM range($1::BIGINT)");
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, statement, false, &prepared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_destroy(&statement);
-	auto value = MakeInt64Value(fx.conn, 17);
+	auto value = MakeInt64Value(fx.ctx, 17);
 	ArrowResult r;
 	REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, &value, 1, 0, &r, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);

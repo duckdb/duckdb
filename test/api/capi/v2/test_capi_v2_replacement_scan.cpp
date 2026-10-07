@@ -282,16 +282,16 @@ DUCKDB_V2_ERROR ReplQueryError(duckdb_v2_connection_handle conn, const char *sql
 // ---------------------------------------------------------------------------
 
 // A single-column BIGINT collection holding the given values.
-duckdb_v2_column_data_collection_handle ReplMakeCollection(duckdb_v2_connection_handle conn,
+duckdb_v2_column_data_collection_handle ReplMakeCollection(duckdb_v2_context_handle ctx,
                                                            const std::vector<int64_t> &values) {
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_logical_type_handle types[1] = {bigint};
 
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(conn), types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_column_data_collection_create(ctx, types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto chunk_rc = duckdb_v2_data_chunk_create(ContextOf(conn), types, 1, &chunk, nullptr);
+	auto chunk_rc = duckdb_v2_data_chunk_create(ctx, types, 1, &chunk, nullptr);
 	duckdb_v2_logical_type_destroy(&bigint);
 	REQUIRE(chunk_rc == DUCKDB_V2_ERROR_NONE);
 
@@ -608,7 +608,7 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 
 TEST_CASE("V2 replacement scan: claims a column data collection", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {10, 20});
+	auto cdc = ReplMakeCollection(fx.ctx, {10, 20});
 
 	ReplRegistry registry;
 	registry.name = "my_batch";
@@ -635,7 +635,7 @@ TEST_CASE("V2 replacement scan: claims a column data collection", "[capi_v2][rep
 
 TEST_CASE("V2 replacement scan: collection column names", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {5, 6});
+	auto cdc = ReplMakeCollection(fx.ctx, {5, 6});
 
 	ReplRegistry registry;
 	registry.name = "named_batch";
@@ -656,7 +656,7 @@ TEST_CASE("V2 replacement scan: collection column names", "[capi_v2][replacement
 
 TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {10, 20});
+	auto cdc = ReplMakeCollection(fx.ctx, {10, 20});
 
 	ReplRegistry registry;
 	registry.name = "cached_batch";
@@ -692,7 +692,7 @@ TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", 
 
 TEST_CASE("V2 replacement scan: empty collection binds and yields no rows", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {});
+	auto cdc = ReplMakeCollection(fx.ctx, {});
 
 	ReplRegistry registry;
 	registry.name = "empty_batch";
@@ -707,7 +707,7 @@ TEST_CASE("V2 replacement scan: empty collection binds and yields no rows", "[ca
 
 TEST_CASE("V2 replacement scan: collection column name validation", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.conn, {1, 2});
+	auto cdc = ReplMakeCollection(fx.ctx, {1, 2});
 
 	ReplRegistry registry;
 	registry.name = "probe_batch";

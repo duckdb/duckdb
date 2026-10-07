@@ -329,7 +329,7 @@ void ArgProbeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_con
 
 TEST_CASE("V2 scalar: register on connection and execute", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	auto function = MakeScalar(fx.conn, "my_add");
 	auto sig = SigOf(function);
@@ -351,12 +351,12 @@ TEST_CASE("V2 scalar: register on connection and execute", "[capi_v2][scalar_fun
 
 TEST_CASE("V2 scalar: parameter defaults and named-argument calls", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	// defsum(a INTEGER, b INTEGER DEFAULT 5) -> a + b
 	auto function = MakeScalar(fx.conn, "defsum");
 	auto sig = SigOf(function);
-	auto five = MakeInt32Value(fx.conn, 5);
+	auto five = MakeInt32Value(fx.ctx, 5);
 	SigParam(sig, "a", integer);
 	SigParam(sig, "b", integer, five);
 	duckdb_v2_value_destroy(&five);
@@ -376,7 +376,7 @@ TEST_CASE("V2 scalar: parameter defaults and named-argument calls", "[capi_v2][s
 
 TEST_CASE("V2 scalar: variadic tail", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	// vsum(INTEGER...) -> INTEGER
 	auto function = MakeScalar(fx.conn, "vsum");
@@ -401,7 +401,7 @@ TEST_CASE("V2 scalar: variadic tail", "[capi_v2][scalar_function]") {
 
 TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	auto function = MakeScalar(fx.conn, "vsum_retry");
 	auto sig = SigOf(function);
 
@@ -430,8 +430,8 @@ TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2
 
 TEST_CASE("V2 scalar: bind callback resolves ANY return and data flows", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	auto function = MakeScalar(fx.conn, "any_double");
 	auto sig = SigOf(function);
@@ -476,8 +476,8 @@ TEST_CASE("V2 scalar: bind callback resolves ANY return and data flows", "[capi_
 
 TEST_CASE("V2 scalar: bind reads argument count, types and constants", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// arg_probe(x ANY, y INTEGER) -> ANY
 	auto function = MakeScalar(fx.conn, "arg_probe");
@@ -525,7 +525,7 @@ TEST_CASE("V2 scalar: bind reads argument count, types and constants", "[capi_v2
 // An error set in the exec callback's slot fails the query with its code.
 TEST_CASE("V2 scalar: exec error propagates to the result", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	auto function = MakeScalar(fx.conn, "always_fails");
 	auto sig = SigOf(function);
@@ -558,8 +558,8 @@ TEST_CASE("V2 scalar: exec error propagates to the result", "[capi_v2][scalar_fu
 
 TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// No name.
 	{
@@ -615,7 +615,7 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 	{
 		auto function = MakeScalar(fx.conn, "bad_default_order");
 		auto sig = SigOf(function);
-		auto five = MakeInt32Value(fx.conn, 5);
+		auto five = MakeInt32Value(fx.ctx, 5);
 		SigParam(sig, "a", integer, five);
 		SigParam(sig, "b", integer);
 		duckdb_v2_value_destroy(&five);
@@ -683,7 +683,7 @@ void Const42Exec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_cont
 
 TEST_CASE("V2 scalar: function properties", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	// SPECIAL null handling: the exec callback runs even for a NULL argument and produces a value.
 	auto function = MakeScalar(fx.conn, "always42");
@@ -921,8 +921,8 @@ Counts ExecCounts() {
 
 TEST_CASE("V2 scalar: parameter kinds lay out the argument list", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto one = MakeInt32Value(fx.conn, 1);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto one = MakeInt32Value(fx.ctx, 1);
 
 	auto function = MakeScalar(fx.conn, "kw_sum");
 	auto sig = SigOf(function);
@@ -994,8 +994,8 @@ TEST_CASE("V2 scalar: parameter kinds lay out the argument list", "[capi_v2][sca
 
 TEST_CASE("V2 scalar: parameter kind refusals", "[capi_v2][scalar_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto one = MakeInt32Value(fx.conn, 1);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto one = MakeInt32Value(fx.ctx, 1);
 
 	SECTION("a kind outside the enum") {
 		auto function = MakeScalar(fx.conn, "bad_kind");

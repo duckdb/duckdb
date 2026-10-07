@@ -19,11 +19,11 @@ namespace test_capi_v2 {
 namespace {
 
 // Build a single-column INTEGER chunk holding the given values.
-duckdb_v2_data_chunk_handle MakeIntChunk(duckdb_v2_connection_handle conn, const std::vector<int32_t> &vals) {
-	auto int_type = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+duckdb_v2_data_chunk_handle MakeIntChunk(duckdb_v2_context_handle ctx, const std::vector<int32_t> &vals) {
+	auto int_type = MakeType(ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle types[1] = {int_type};
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(ContextOf(conn), types, 1, &chunk, nullptr);
+	auto rc = duckdb_v2_data_chunk_create(ctx, types, 1, &chunk, nullptr);
 	duckdb_v2_logical_type_destroy(&int_type);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 
@@ -39,11 +39,11 @@ duckdb_v2_data_chunk_handle MakeIntChunk(duckdb_v2_connection_handle conn, const
 }
 
 // A single-column INTEGER collection.
-duckdb_v2_column_data_collection_handle MakeIntCollection(duckdb_v2_connection_handle conn) {
-	auto int_type = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+duckdb_v2_column_data_collection_handle MakeIntCollection(duckdb_v2_context_handle ctx) {
+	auto int_type = MakeType(ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle types[1] = {int_type};
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	auto rc = duckdb_v2_column_data_collection_create(ContextOf(conn), types, 1, &cdc, nullptr);
+	auto rc = duckdb_v2_column_data_collection_create(ctx, types, 1, &cdc, nullptr);
 	duckdb_v2_logical_type_destroy(&int_type);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(cdc != nullptr);
@@ -51,9 +51,9 @@ duckdb_v2_column_data_collection_handle MakeIntCollection(duckdb_v2_connection_h
 }
 
 // Append the values through a fresh append state.
-void AppendInts(duckdb_v2_connection_handle conn, duckdb_v2_column_data_collection_handle cdc,
+void AppendInts(duckdb_v2_context_handle ctx, duckdb_v2_column_data_collection_handle cdc,
                 const std::vector<int32_t> &vals) {
-	auto chunk = MakeIntChunk(conn, vals);
+	auto chunk = MakeIntChunk(ctx, vals);
 	duckdb_v2_column_data_collection_append_state_handle st = nullptr;
 	auto create_rc = duckdb_v2_column_data_collection_append_state_create(cdc, &st, nullptr);
 	auto append_rc = create_rc == DUCKDB_V2_ERROR_NONE
@@ -73,13 +73,13 @@ idx_t RowCount(duckdb_v2_column_data_collection_handle cdc) {
 
 // Drain a single-column INTEGER collection through shared + worker scan
 // states, returning all values in scan order.
-std::vector<int32_t> ScanInts(duckdb_v2_connection_handle conn, duckdb_v2_column_data_collection_handle cdc) {
+std::vector<int32_t> ScanInts(duckdb_v2_context_handle ctx, duckdb_v2_column_data_collection_handle cdc) {
 	duckdb_v2_column_data_collection_shared_scan_state_handle shared = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_shared_scan_state_create(cdc, &shared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_column_data_collection_worker_scan_state_handle worker = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_worker_scan_state_create(cdc, &worker, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto chunk = MakeIntChunk(conn, {});
+	auto chunk = MakeIntChunk(ctx, {});
 	std::vector<int32_t> out;
 	auto scan_rc = DUCKDB_V2_ERROR_NONE;
 	while (true) {
@@ -113,14 +113,14 @@ std::vector<int32_t> ScanInts(duckdb_v2_connection_handle conn, duckdb_v2_column
 
 TEST_CASE("V2: column_data_collection append + scan round-trip", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
+	auto cdc = MakeIntCollection(fx.ctx);
 
 	REQUIRE(RowCount(cdc) == 0);
-	AppendInts(fx.conn, cdc, {1, 2, 3});
-	AppendInts(fx.conn, cdc, {4, 5});
+	AppendInts(fx.ctx, cdc, {1, 2, 3});
+	AppendInts(fx.ctx, cdc, {4, 5});
 	REQUIRE(RowCount(cdc) == 5);
 
-	auto values = ScanInts(fx.conn, cdc);
+	auto values = ScanInts(fx.ctx, cdc);
 	REQUIRE(values == std::vector<int32_t> {1, 2, 3, 4, 5});
 
 	REQUIRE(duckdb_v2_column_data_collection_destroy(&cdc) == DUCKDB_V2_ERROR_NONE);
@@ -130,14 +130,14 @@ TEST_CASE("V2: column_data_collection append + scan round-trip", "[capi_v2][colu
 // A completed scan reports did_produce_chunk = false and resets the chunk.
 TEST_CASE("V2: column_data_collection scan completion resets the chunk", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
-	AppendInts(fx.conn, cdc, {7});
+	auto cdc = MakeIntCollection(fx.ctx);
+	AppendInts(fx.ctx, cdc, {7});
 
 	duckdb_v2_column_data_collection_shared_scan_state_handle shared = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_shared_scan_state_create(cdc, &shared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_column_data_collection_worker_scan_state_handle worker = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_worker_scan_state_create(cdc, &worker, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = MakeIntChunk(fx.conn, {});
+	auto chunk = MakeIntChunk(fx.ctx, {});
 
 	bool did_produce = false;
 	REQUIRE(duckdb_v2_column_data_collection_scan(cdc, shared, worker, chunk, &did_produce, nullptr) ==
@@ -161,17 +161,17 @@ TEST_CASE("V2: column_data_collection scan completion resets the chunk", "[capi_
 // More rows than one chunk holds: values survive the chunk boundary in order.
 TEST_CASE("V2: column_data_collection multi-chunk scan", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
+	auto cdc = MakeIntCollection(fx.ctx);
 
 	std::vector<int32_t> full(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < full.size(); i++) {
 		full[i] = static_cast<int32_t>(i);
 	}
-	AppendInts(fx.conn, cdc, full);
-	AppendInts(fx.conn, cdc, {-1, -2, -3});
+	AppendInts(fx.ctx, cdc, full);
+	AppendInts(fx.ctx, cdc, {-1, -2, -3});
 	REQUIRE(RowCount(cdc) == STANDARD_VECTOR_SIZE + 3);
 
-	auto values = ScanInts(fx.conn, cdc);
+	auto values = ScanInts(fx.ctx, cdc);
 	auto expected = full;
 	expected.insert(expected.end(), {-1, -2, -3});
 	REQUIRE(values == expected);
@@ -186,16 +186,15 @@ TEST_CASE("V2: column_data_collection multi-chunk scan", "[capi_v2][column_data_
 #if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: column_data_collection VARCHAR round-trip", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto varchar_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	auto varchar_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	duckdb_v2_logical_type_handle types[1] = {varchar_type};
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 1, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_column_data_collection_create(fx.ctx, types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	const std::vector<std::string> strings = {"a", "a string too long for the inline representation", ""};
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), types, 1, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(fx.ctx, types, 1, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&varchar_type);
 	duckdb_v2_vector_handle vec = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -216,11 +215,10 @@ TEST_CASE("V2: column_data_collection VARCHAR round-trip", "[capi_v2][column_dat
 	duckdb_v2_column_data_collection_worker_scan_state_handle worker = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_worker_scan_state_create(cdc, &worker, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto scan_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	auto scan_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	duckdb_v2_logical_type_handle scan_types[1] = {scan_type};
 	duckdb_v2_data_chunk_handle scan_chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), scan_types, 1, &scan_chunk, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(fx.ctx, scan_types, 1, &scan_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&scan_type);
 
 	bool did_produce = false;
@@ -252,29 +250,28 @@ TEST_CASE("V2: column_data_collection VARCHAR round-trip", "[capi_v2][column_dat
 
 TEST_CASE("V2: column_data_collection combine consumes the source", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto target = MakeIntCollection(fx.conn);
-	auto source = MakeIntCollection(fx.conn);
-	AppendInts(fx.conn, target, {1, 2, 3});
-	AppendInts(fx.conn, source, {4, 5});
+	auto target = MakeIntCollection(fx.ctx);
+	auto source = MakeIntCollection(fx.ctx);
+	AppendInts(fx.ctx, target, {1, 2, 3});
+	AppendInts(fx.ctx, source, {4, 5});
 
 	REQUIRE(duckdb_v2_column_data_collection_combine(target, &source, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(source == nullptr);
 	REQUIRE(RowCount(target) == 5);
-	REQUIRE(ScanInts(fx.conn, target) == std::vector<int32_t> {1, 2, 3, 4, 5});
+	REQUIRE(ScanInts(fx.ctx, target) == std::vector<int32_t> {1, 2, 3, 4, 5});
 
 	duckdb_v2_column_data_collection_destroy(&target);
 }
 
 TEST_CASE("V2: column_data_collection combine refusals", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto target = MakeIntCollection(fx.conn);
+	auto target = MakeIntCollection(fx.ctx);
 
 	// Mismatching types: the source survives the refusal.
-	auto bigint_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_logical_type_handle types[1] = {bigint_type};
 	duckdb_v2_column_data_collection_handle source = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 1, &source, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_column_data_collection_create(fx.ctx, types, 1, &source, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&bigint_type);
 
 	REQUIRE(duckdb_v2_column_data_collection_combine(target, &source, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
@@ -301,41 +298,41 @@ TEST_CASE("V2: column_data_collection combine refusals", "[capi_v2][column_data_
 
 TEST_CASE("V2: column_data_collection reset keeps types, drops rows", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
-	AppendInts(fx.conn, cdc, {1, 2, 3});
+	auto cdc = MakeIntCollection(fx.ctx);
+	AppendInts(fx.ctx, cdc, {1, 2, 3});
 	REQUIRE(RowCount(cdc) == 3);
 
 	REQUIRE(duckdb_v2_column_data_collection_reset(cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(RowCount(cdc) == 0);
 
 	// The collection is appendable again through a fresh state.
-	AppendInts(fx.conn, cdc, {9, 8});
+	AppendInts(fx.ctx, cdc, {9, 8});
 	REQUIRE(RowCount(cdc) == 2);
-	REQUIRE(ScanInts(fx.conn, cdc) == std::vector<int32_t> {9, 8});
+	REQUIRE(ScanInts(fx.ctx, cdc) == std::vector<int32_t> {9, 8});
 
 	duckdb_v2_column_data_collection_destroy(&cdc);
 }
 
 TEST_CASE("V2: column_data_collection clear keeps types, drops rows", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
-	AppendInts(fx.conn, cdc, {1, 2, 3});
+	auto cdc = MakeIntCollection(fx.ctx);
+	AppendInts(fx.ctx, cdc, {1, 2, 3});
 	REQUIRE(RowCount(cdc) == 3);
 
 	// Same observable effect as reset; the difference is that the buffers are retained for the next appends.
 	REQUIRE(duckdb_v2_column_data_collection_clear(cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(RowCount(cdc) == 0);
-	REQUIRE(ScanInts(fx.conn, cdc).empty());
+	REQUIRE(ScanInts(fx.ctx, cdc).empty());
 
-	AppendInts(fx.conn, cdc, {9, 8});
+	AppendInts(fx.ctx, cdc, {9, 8});
 	REQUIRE(RowCount(cdc) == 2);
-	REQUIRE(ScanInts(fx.conn, cdc) == std::vector<int32_t> {9, 8});
+	REQUIRE(ScanInts(fx.ctx, cdc) == std::vector<int32_t> {9, 8});
 
 	// Repeated fill/clear cycles are the point of it.
 	for (int round = 0; round < 3; round++) {
 		REQUIRE(duckdb_v2_column_data_collection_clear(cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
-		AppendInts(fx.conn, cdc, {round});
-		REQUIRE(ScanInts(fx.conn, cdc) == std::vector<int32_t> {round});
+		AppendInts(fx.ctx, cdc, {round});
+		REQUIRE(ScanInts(fx.ctx, cdc) == std::vector<int32_t> {round});
 	}
 
 	duckdb_v2_column_data_collection_destroy(&cdc);
@@ -351,27 +348,25 @@ TEST_CASE("V2: column_data_collection clear null arg", "[capi_v2][column_data_co
 
 TEST_CASE("V2: column_data_collection create refusals", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto int_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle types[2] = {int_type, nullptr};
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
 
 	// Null connection / types / out slot.
 	REQUIRE(duckdb_v2_column_data_collection_create(nullptr, types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(cdc == nullptr);
-	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), nullptr, 1, &cdc, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(fx.ctx, nullptr, 1, &cdc, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(cdc == nullptr);
-	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 1, nullptr, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(fx.ctx, types, 1, nullptr, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// A collection must have at least one column.
-	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 0, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_create(fx.ctx, types, 0, &cdc, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(cdc == nullptr);
 
 	// A null element in the types array.
-	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 2, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_column_data_collection_create(fx.ctx, types, 2, &cdc, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(cdc == nullptr);
 
 	duckdb_v2_logical_type_destroy(&int_type);
@@ -379,25 +374,24 @@ TEST_CASE("V2: column_data_collection create refusals", "[capi_v2][column_data_c
 
 TEST_CASE("V2: column_data_collection append refuses mismatching chunks", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
+	auto cdc = MakeIntCollection(fx.ctx);
 	duckdb_v2_column_data_collection_append_state_handle st = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_append_state_create(cdc, &st, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// Wrong column count.
-	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto int_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle two_types[2] = {int_type, int_type};
 	duckdb_v2_data_chunk_handle two_cols = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), two_types, 2, &two_cols, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(fx.ctx, two_types, 2, &two_cols, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, two_cols, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_data_chunk_destroy(&two_cols);
 	duckdb_v2_logical_type_destroy(&int_type);
 
 	// Wrong column type.
-	auto double_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE);
+	auto double_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE);
 	duckdb_v2_logical_type_handle double_types[1] = {double_type};
 	duckdb_v2_data_chunk_handle double_chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), double_types, 1, &double_chunk, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(fx.ctx, double_types, 1, &double_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, double_chunk, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_logical_type_destroy(&double_type);
 
@@ -418,18 +412,18 @@ TEST_CASE("V2: column_data_collection append refuses mismatching chunks", "[capi
 
 TEST_CASE("V2: column_data_collection scan refuses mismatching chunks", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
-	AppendInts(fx.conn, cdc, {1});
+	auto cdc = MakeIntCollection(fx.ctx);
+	AppendInts(fx.ctx, cdc, {1});
 
 	duckdb_v2_column_data_collection_shared_scan_state_handle shared = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_shared_scan_state_create(cdc, &shared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_column_data_collection_worker_scan_state_handle worker = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_worker_scan_state_create(cdc, &worker, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto double_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE);
+	auto double_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE);
 	duckdb_v2_logical_type_handle types[1] = {double_type};
 	duckdb_v2_data_chunk_handle wrong_chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), types, 1, &wrong_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(fx.ctx, types, 1, &wrong_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&double_type);
 
 	bool did_produce = false;
@@ -480,7 +474,7 @@ TEST_CASE("V2: column_data_collection destroy null-safety", "[capi_v2][column_da
 
 TEST_CASE("V2: column_data_collection parallel scan", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
+	auto cdc = MakeIntCollection(fx.ctx);
 
 	constexpr idx_t CHUNKS = 8;
 	int64_t expected_sum = 0;
@@ -490,7 +484,7 @@ TEST_CASE("V2: column_data_collection parallel scan", "[capi_v2][column_data_col
 			vals[i] = static_cast<int32_t>(c * STANDARD_VECTOR_SIZE + i);
 			expected_sum += vals[i];
 		}
-		AppendInts(fx.conn, cdc, vals);
+		AppendInts(fx.ctx, cdc, vals);
 	}
 	const idx_t total_rows = CHUNKS * STANDARD_VECTOR_SIZE;
 	REQUIRE(RowCount(cdc) == total_rows);
@@ -506,7 +500,7 @@ TEST_CASE("V2: column_data_collection parallel scan", "[capi_v2][column_data_col
 	for (idx_t t = 0; t < THREADS; t++) {
 		REQUIRE(duckdb_v2_column_data_collection_worker_scan_state_create(cdc, &states[t], nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
-		chunks[t] = MakeIntChunk(fx.conn, {});
+		chunks[t] = MakeIntChunk(fx.ctx, {});
 	}
 
 	std::vector<idx_t> rows_seen(THREADS, 0);
@@ -565,11 +559,11 @@ TEST_CASE("V2: column_data_collection parallel scan", "[capi_v2][column_data_col
 
 TEST_CASE("V2: data_chunk_create through a connection's context", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto int_type = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle types[1] = {int_type};
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(ContextOf(fx.conn), types, 1, &chunk, nullptr);
+	auto rc = duckdb_v2_data_chunk_create(fx.ctx, types, 1, &chunk, nullptr);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(chunk != nullptr);
 	idx_t vec_count = 0;
@@ -590,14 +584,14 @@ TEST_CASE("V2: data_chunk_create through a connection's context", "[capi_v2][col
 #if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2: data_chunk_copy outlives the scan", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto cdc = MakeIntCollection(fx.conn);
-	AppendInts(fx.conn, cdc, {10, 20, 30});
+	auto cdc = MakeIntCollection(fx.ctx);
+	AppendInts(fx.ctx, cdc, {10, 20, 30});
 
 	duckdb_v2_column_data_collection_shared_scan_state_handle shared = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_shared_scan_state_create(cdc, &shared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_column_data_collection_worker_scan_state_handle worker = nullptr;
 	REQUIRE(duckdb_v2_column_data_collection_worker_scan_state_create(cdc, &worker, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto chunk = MakeIntChunk(fx.conn, {});
+	auto chunk = MakeIntChunk(fx.ctx, {});
 
 	bool did_produce = false;
 	REQUIRE(duckdb_v2_column_data_collection_scan(cdc, shared, worker, chunk, &did_produce, nullptr) ==
@@ -605,7 +599,7 @@ TEST_CASE("V2: data_chunk_copy outlives the scan", "[capi_v2][column_data_collec
 	REQUIRE(did_produce);
 
 	duckdb_v2_data_chunk_handle copy = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_copy(fx.ctx, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(copy != nullptr);
 
 	// Tear down everything the scanned chunk borrowed from.
@@ -632,11 +626,11 @@ TEST_CASE("V2: data_chunk_copy outlives the scan", "[capi_v2][column_data_collec
 
 TEST_CASE("V2: data_chunk_copy refusals and empty copy", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
-	auto chunk = MakeIntChunk(fx.conn, {});
+	auto chunk = MakeIntChunk(fx.ctx, {});
 
 	// An empty chunk copies to an empty chunk.
 	duckdb_v2_data_chunk_handle copy = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_copy(fx.ctx, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
 	idx_t size = 99;
 	REQUIRE(duckdb_v2_data_chunk_get_size(copy, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(size == 0);
@@ -645,9 +639,9 @@ TEST_CASE("V2: data_chunk_copy refusals and empty copy", "[capi_v2][column_data_
 	// Null arguments.
 	REQUIRE(duckdb_v2_data_chunk_copy(nullptr, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(copy == nullptr);
-	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), nullptr, &copy, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy(fx.ctx, nullptr, &copy, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(copy == nullptr);
-	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), chunk, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy(fx.ctx, chunk, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
 }

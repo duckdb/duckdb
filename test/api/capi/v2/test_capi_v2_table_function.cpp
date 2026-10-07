@@ -216,11 +216,11 @@ void RangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_conte
 }
 
 // Registers my_range on the connection, optionally with partition callbacks.
-void RegisterRange(duckdb_v2_connection_handle conn, const char *name = "my_range",
+void RegisterRange(EnvFixture &fx, const char *name = "my_range",
                    duckdb_v2_table_function_partitioning_callback_fn info_cb = nullptr,
                    duckdb_v2_table_function_partition_data_callback_fn data_cb = nullptr) {
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto function = MakeTable(conn, name);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(fx.conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, RangeInitGlobalCb, nullptr) ==
@@ -598,7 +598,7 @@ void ProgressCb(duckdb_v2_table_function_progress_info_handle info, duckdb_v2_co
 
 TEST_CASE("V2 table: register on connection and scan", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterRange(fx.conn);
+	RegisterRange(fx);
 
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM my_range(10)") == 10);
 	REQUIRE(QueryI64(fx.conn, "SELECT sum(i)::BIGINT FROM my_range(10)") == 45);
@@ -619,7 +619,7 @@ TEST_CASE("V2 table: register on connection and scan", "[capi_v2][table_function
 #if (STANDARD_VECTOR_SIZE > 2)
 TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	auto function = MakeTable(fx.conn, "my_pairs");
 	TableSigParam(SigOf(function), "n", integer);
@@ -662,8 +662,8 @@ TEST_CASE("V2 table: multiple result columns share the batch row count", "[capi_
 
 TEST_CASE("V2 table: parameter defaults, named arguments and varargs", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto seven = MakeInt64Value(fx.conn, 7);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto seven = MakeInt64Value(fx.ctx, 7);
 
 	auto function = MakeTable(fx.conn, "my_args");
 	auto sig = SigOf(function);
@@ -786,7 +786,7 @@ TEST_CASE("V2 table: bind and exec errors propagate to the result", "[capi_v2][t
 
 TEST_CASE("V2 table: registration refusals", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 
 	// No name.
 	{
@@ -828,7 +828,7 @@ TEST_CASE("V2 table: registration refusals", "[capi_v2][table_function]") {
 	{
 		auto function = MakeTable(fx.conn, "bad_defaults");
 		auto sig = SigOf(function);
-		auto seven = MakeInt64Value(fx.conn, 7);
+		auto seven = MakeInt64Value(fx.ctx, 7);
 		TableSigParam(sig, "a", bigint, seven);
 		TableSigParam(sig, "b", bigint);
 		duckdb_v2_value_destroy(&seven);
@@ -857,7 +857,7 @@ TEST_CASE("V2 table: progress callback reports scan progress", "[capi_v2][table_
 		ExecSQL(fx.conn, setup_sql);
 	}
 
-	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	auto function = MakeTable(fx.conn, "my_progress");
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1254,10 +1254,9 @@ void FailingPushdownCb(duckdb_v2_table_function_filter_pushdown_info_handle, duc
 	SetErrorInfo(err, DUCKDB_V2_ERROR_INPUT_INVALID, "pushdown refused");
 }
 
-void RegisterClaim(duckdb_v2_connection_handle conn, const char *name,
-                   duckdb_v2_table_function_filter_pushdown_callback_fn pushdown) {
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto function = MakeTable(conn, name);
+void RegisterClaim(EnvFixture &fx, const char *name, duckdb_v2_table_function_filter_pushdown_callback_fn pushdown) {
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(fx.conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
 	duckdb_v2_opaque user_data = {&claim_user_data_marker, nullptr, nullptr};
 	REQUIRE(duckdb_v2_table_function_set_user_data(function, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1298,7 +1297,7 @@ TEST_CASE("V2 table: projection pushdown narrows the output chunk", "[capi_v2][t
 
 TEST_CASE("V2 table: claimed filters are no longer applied by the engine", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterClaim(fx.conn, "claim_probe", ClaimPushdownCb);
+	RegisterClaim(fx, "claim_probe", ClaimPushdownCb);
 
 	// Nothing to claim: every row comes through.
 	claim_saw_user_data = false;
@@ -1315,7 +1314,7 @@ TEST_CASE("V2 table: claimed filters are no longer applied by the engine", "[cap
 
 TEST_CASE("V2 table: filter pushdown errors fail the query", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterClaim(fx.conn, "claim_fail", FailingPushdownCb);
+	RegisterClaim(fx, "claim_fail", FailingPushdownCb);
 
 	// Without a predicate there is nothing to offer, so the callback never runs.
 	REQUIRE(QueryI64(fx.conn, "SELECT count(*) FROM claim_fail(5)") == 5);
@@ -1677,11 +1676,11 @@ void PartProbeGetPartitionInfoCb(duckdb_v2_table_function_partitioning_info_hand
 }
 
 // Registers part_probe's bind/init_global/exec with the given partition callbacks.
-void RegisterPartProbeVariant(duckdb_v2_connection_handle conn, const char *name,
+void RegisterPartProbeVariant(EnvFixture &fx, const char *name,
                               duckdb_v2_table_function_partitioning_callback_fn info_cb,
                               duckdb_v2_table_function_partition_data_callback_fn data_cb) {
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto function = MakeTable(conn, name);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(fx.conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, PartProbeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, PartProbeInitGlobalCb, nullptr) ==
@@ -1694,8 +1693,8 @@ void RegisterPartProbeVariant(duckdb_v2_connection_handle conn, const char *name
 	duckdb_v2_logical_type_destroy(&bigint);
 }
 
-void RegisterPartProbe(duckdb_v2_connection_handle conn, const char *name) {
-	RegisterPartProbeVariant(conn, name, PartProbeGetPartitionInfoCb, PartProbeGetPartitionDataCb);
+void RegisterPartProbe(EnvFixture &fx, const char *name) {
+	RegisterPartProbeVariant(fx, name, PartProbeGetPartitionInfoCb, PartProbeGetPartitionDataCb);
 }
 
 // Reports batch index 0, 1, 0: decreasing on the third group, to trip the "batch index must not decrease" guard.
@@ -1924,9 +1923,9 @@ void ProjPartProbeGetPartitionInfoCb(duckdb_v2_table_function_partitioning_info_
 	    info, DUCKDB_V2_TABLE_PARTITION_INFO_SINGLE_VALUE_PARTITIONS, err);
 }
 
-void RegisterProjPartProbe(duckdb_v2_connection_handle conn, const char *name) {
-	auto bigint = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto function = MakeTable(conn, name);
+void RegisterProjPartProbe(EnvFixture &fx, const char *name) {
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto function = MakeTable(fx.conn, name);
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, ProjPartProbeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, PartProbeInitGlobalCb, nullptr) ==
@@ -1946,7 +1945,7 @@ void RegisterProjPartProbe(duckdb_v2_connection_handle conn, const char *name) {
 
 TEST_CASE("V2 table: partition_data reports declared columns under projection pushdown", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterProjPartProbe(fx.conn, "proj_part_probe");
+	RegisterProjPartProbe(fx, "proj_part_probe");
 
 	// Only "part_col" is scanned, so declared index 1 is scan position 0; reporting 0 would name the INTEGER "pad"
 	// and the BIGINT partition value would be refused.
@@ -1972,7 +1971,7 @@ TEST_CASE("V2 table: partition_data reports declared columns under projection pu
 
 TEST_CASE("V2 table: partitioning requires partition_data", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	auto function = MakeTable(fx.conn, "info_only_probe");
 	TableSigParam(SigOf(function), "n", bigint);
 	REQUIRE(duckdb_v2_table_function_set_bind_callback(function, RangeBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -2008,7 +2007,7 @@ TEST_CASE("V2 table: partition_data restores batch order", "[capi_v2][table_func
 
 TEST_CASE("V2 table: partition_data and partitioning feed a partitioned aggregate", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterPartProbe(fx.conn, "part_probe");
+	RegisterPartProbe(fx, "part_probe");
 
 	// partitioning claims the requested column set only for "part_col": GROUP BY part_col unlocks the
 	// partitioned aggregate, GROUP BY val does not.
@@ -2031,7 +2030,7 @@ TEST_CASE("V2 table: partition_data and partitioning feed a partitioned aggregat
 
 TEST_CASE("V2 table: partition_data batch index must not decrease on the same thread", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterPartProbeVariant(fx.conn, "decreasing_batch_probe", AlwaysPartitionedInfoCb, DecreasingBatchIndexDataCb);
+	RegisterPartProbeVariant(fx, "decreasing_batch_probe", AlwaysPartitionedInfoCb, DecreasingBatchIndexDataCb);
 
 	auto message = QueryError(fx.conn, "SELECT part_col, count(*) FROM decreasing_batch_probe(3) GROUP BY part_col");
 	REQUIRE(message.find("decreasing_batch_probe") != std::string::npos);
@@ -2044,7 +2043,7 @@ TEST_CASE("V2 table: partition_data batch index must not decrease on the same th
 TEST_CASE("V2 table: partition_data partition value must not change without the batch index",
           "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterPartProbeVariant(fx.conn, "constant_batch_probe", AlwaysPartitionedInfoCb, ConstantBatchIndexDataCb);
+	RegisterPartProbeVariant(fx, "constant_batch_probe", AlwaysPartitionedInfoCb, ConstantBatchIndexDataCb);
 
 	auto message = QueryError(fx.conn, "SELECT part_col, count(*) FROM constant_batch_probe(3) GROUP BY part_col");
 	REQUIRE(message.find("constant_batch_probe") != std::string::npos);
@@ -2052,9 +2051,9 @@ TEST_CASE("V2 table: partition_data partition value must not change without the 
 
 TEST_CASE("V2 table: partition_data completeness and error failures", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterRange(fx.conn, "no_batch_index_probe", AlwaysPartitionedInfoCb, NoBatchIndexDataCb);
-	RegisterRange(fx.conn, "no_partition_value_probe", AlwaysPartitionedInfoCb, NoPartitionValueDataCb);
-	RegisterRange(fx.conn, "failing_partition_data_probe", AlwaysPartitionedInfoCb, FailingGetPartitionDataCb);
+	RegisterRange(fx, "no_batch_index_probe", AlwaysPartitionedInfoCb, NoBatchIndexDataCb);
+	RegisterRange(fx, "no_partition_value_probe", AlwaysPartitionedInfoCb, NoPartitionValueDataCb);
+	RegisterRange(fx, "failing_partition_data_probe", AlwaysPartitionedInfoCb, FailingGetPartitionDataCb);
 
 	auto missing_batch = QueryError(fx.conn, "SELECT i, count(*) FROM no_batch_index_probe(3) GROUP BY i");
 	REQUIRE(missing_batch.find("no_batch_index_probe") != std::string::npos);
@@ -2069,7 +2068,7 @@ TEST_CASE("V2 table: partition_data completeness and error failures", "[capi_v2]
 
 TEST_CASE("V2 table: partitioning failures only surface for a partitioned aggregate", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	RegisterRange(fx.conn, "failing_partition_info_probe", FailingGetPartitionInfoCb, NoBatchIndexDataCb);
+	RegisterRange(fx, "failing_partition_info_probe", FailingGetPartitionInfoCb, NoBatchIndexDataCb);
 
 	// The callback only runs while the optimizer is considering a partitioned aggregate for this scan; a plain
 	// scan never reaches it.
@@ -2217,9 +2216,9 @@ std::vector<idx_t> TableArgCounts() {
 
 TEST_CASE("V2 table: named-only parameters and kwargs", "[capi_v2][table_function]") {
 	EnvFixture fx;
-	auto bigint = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto any = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
-	auto one = MakeInt64Value(fx.conn, 1);
+	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto one = MakeInt64Value(fx.ctx, 1);
 
 	auto function = MakeTable(fx.conn, "my_kw");
 	auto sig = SigOf(function);

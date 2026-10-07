@@ -21,10 +21,10 @@ std::string DbSetting(duckdb_v2_instance_handle instance, const char *name) {
 	return result;
 }
 
-std::string ConnSetting(duckdb_v2_connection_handle conn, const char *name) {
+std::string ConnSetting(duckdb_v2_context_handle ctx, const char *name) {
 	duckdb_v2_option_handle opt = nullptr;
 	auto name_str = Convert(name);
-	REQUIRE(duckdb_v2_context_get_option_by_name(ContextOf(conn), &name_str, &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_context_get_option_by_name(ctx, &name_str, &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_str setting = {nullptr, 0};
 	REQUIRE(duckdb_v2_option_get_setting(opt, &setting, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto result = Convert(setting);
@@ -69,10 +69,10 @@ void OptionProbeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_
 	static_cast<int32_t *>(raw)[0] = 1;
 }
 
-void RegisterOptionProbe(duckdb_v2_connection_handle conn) {
-	auto integer = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+void RegisterOptionProbe(EnvFixture &fx) {
+	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name = Convert("probe_option");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_function_signature_handle sig = nullptr;
@@ -98,7 +98,7 @@ TEST_CASE("V2 db option: set + get round-trip", "[capi_v2][db][option]") {
 	REQUIRE(!after.empty());
 	REQUIRE(after != default_value); // mutation visible
 	// ... and visible to a connection, as a GLOBAL write.
-	REQUIRE(ConnSetting(fx.conn, "memory_limit") == after);
+	REQUIRE(ConnSetting(fx.ctx, "memory_limit") == after);
 }
 
 TEST_CASE("V2 db option: get populates description and aliases", "[capi_v2][db][option]") {
@@ -195,6 +195,8 @@ TEST_CASE("V2 conn option: set LOCAL is invisible to other connections", "[capi_
 	EnvFixture fx;
 	duckdb_v2_connection_handle other = nullptr;
 	duckdb_v2_connection_create(fx.instance, &other, nullptr);
+	duckdb_v2_context_handle other_ctx = nullptr;
+	duckdb_v2_connection_get_context(other, &other_ctx, nullptr);
 
 	// max_execution_time is LOCAL_DEFAULT, so a LOCAL-scope write stays
 	// session-local — perfect for this test.
@@ -202,9 +204,9 @@ TEST_CASE("V2 conn option: set LOCAL is invisible to other connections", "[capi_
 	auto setting_str = Convert("5000");
 	REQUIRE(duckdb_v2_connection_set_option(fx.conn, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_LOCAL, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(ConnSetting(fx.conn, "max_execution_time") == "5000");
+	REQUIRE(ConnSetting(fx.ctx, "max_execution_time") == "5000");
 	// The other connection sees the static default ("0"), not "5000".
-	REQUIRE(ConnSetting(other, "max_execution_time") != "5000");
+	REQUIRE(ConnSetting(other_ctx, "max_execution_time") != "5000");
 
 	duckdb_v2_connection_destroy(&other);
 }
@@ -213,15 +215,17 @@ TEST_CASE("V2 conn option: set GLOBAL is visible everywhere", "[capi_v2][conn][o
 	EnvFixture fx;
 	duckdb_v2_connection_handle other = nullptr;
 	duckdb_v2_connection_create(fx.instance, &other, nullptr);
+	duckdb_v2_context_handle other_ctx = nullptr;
+	duckdb_v2_connection_get_context(other, &other_ctx, nullptr);
 
 	auto name_str = Convert("memory_limit");
 	auto setting_str = Convert("2GB");
 	REQUIRE(duckdb_v2_connection_set_option(fx.conn, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_GLOBAL,
 	                                        nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto fx_setting = ConnSetting(fx.conn, "memory_limit");
+	auto fx_setting = ConnSetting(fx.ctx, "memory_limit");
 	REQUIRE(!fx_setting.empty());
-	REQUIRE(fx_setting == ConnSetting(other, "memory_limit"));     // GLOBAL write seen identically by both
+	REQUIRE(fx_setting == ConnSetting(other_ctx, "memory_limit")); // GLOBAL write seen identically by both
 	REQUIRE(fx_setting == DbSetting(fx.instance, "memory_limit")); // ... and by the database itself
 
 	duckdb_v2_connection_destroy(&other);
@@ -246,7 +250,7 @@ TEST_CASE("V2 conn option: AUTOMATIC scope mirrors bare SQL `SET`", "[capi_v2][c
 	auto setting_str = Convert("5000");
 	REQUIRE(duckdb_v2_connection_set_option(fx.conn, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
 	                                        nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(ConnSetting(fx.conn, "max_execution_time") == "5000");
+	REQUIRE(ConnSetting(fx.ctx, "max_execution_time") == "5000");
 }
 
 TEST_CASE("V2 conn option: unknown name errors", "[capi_v2][conn][option]") {
@@ -259,8 +263,7 @@ TEST_CASE("V2 conn option: unknown name errors", "[capi_v2][conn][option]") {
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 	duckdb_v2_option_handle opt = nullptr;
-	REQUIRE(duckdb_v2_context_get_option_by_name(ContextOf(fx.conn), &name_str, &opt, &err) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_context_get_option_by_name(fx.ctx, &name_str, &opt, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(opt == nullptr);
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -298,7 +301,9 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 		REQUIRE(applied != "2GB");
 		duckdb_v2_connection_handle conn = nullptr;
 		duckdb_v2_connection_create(instance, &conn, nullptr);
-		REQUIRE(ConnSetting(conn, "memory_limit") == applied);
+		duckdb_v2_context_handle ctx = nullptr;
+		duckdb_v2_connection_get_context(conn, &ctx, nullptr);
+		REQUIRE(ConnSetting(ctx, "memory_limit") == applied);
 		duckdb_v2_connection_destroy(&conn);
 		duckdb_v2_instance_destroy(&instance);
 	}
@@ -377,7 +382,7 @@ TEST_CASE("V2 db option: options set before the first open are startup options",
 TEST_CASE("V2 context option: read through a context inside a callback", "[capi_v2][context][option]") {
 	EnvFixture fx;
 	option_probe = OptionProbe {};
-	RegisterOptionProbe(fx.conn);
+	RegisterOptionProbe(fx);
 	auto name_str = Convert("max_execution_time");
 	auto setting_str = Convert("4242");
 	REQUIRE(duckdb_v2_connection_set_option(fx.conn, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_LOCAL, nullptr) ==
@@ -393,7 +398,7 @@ TEST_CASE("V2 context option: read through a context inside a callback", "[capi_
 	// The context sees the connection's LOCAL override, and the same option space.
 	REQUIRE(option_probe.setting == "4242");
 	idx_t count = 0;
-	duckdb_v2_context_get_option_count(ContextOf(fx.conn), &count, nullptr);
+	duckdb_v2_context_get_option_count(fx.ctx, &count, nullptr);
 	REQUIRE(option_probe.count == count);
 	REQUIRE(option_probe.unknown_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(option_probe.by_index_rc == DUCKDB_V2_ERROR_NONE);
@@ -510,7 +515,7 @@ TEST_CASE("V2 option: accessor null-arg validation", "[capi_v2][option]") {
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(duckdb_v2_connection_set_option(nullptr, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
 		                                        nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_context_get_option_by_name(ContextOf(fx.conn), &name_str, nullptr, nullptr) ==
+		REQUIRE(duckdb_v2_context_get_option_by_name(fx.ctx, &name_str, nullptr, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(duckdb_v2_context_get_option_by_name(nullptr, &name_str, &out, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
