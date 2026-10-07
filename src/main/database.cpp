@@ -112,8 +112,8 @@ DatabaseInstance::~DatabaseInstance() {
 
 	buffer_manager.reset();
 
-	// flush allocations and disable the background thread
-	config.block_allocator->FlushAll();
+	// Flush allocations and disable the background thread.
+	config.block_allocator->FlushAll(optional_idx(), true);
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
 	config.db_cache_entry.reset();

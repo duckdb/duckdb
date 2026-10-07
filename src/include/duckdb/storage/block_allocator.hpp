@@ -53,10 +53,12 @@ public:
 	bool SupportsFlush() const;
 	optional_idx DecayDelay() const;
 	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
-	//! Pass the owning database's scheduler to reclaim eligible blocks at idle opportunities.
-	void ThreadIdle(optional_ptr<TaskScheduler> scheduler = nullptr) const DUCKDB_EXCLUDES(flush_lock);
-	//! Best-effort reclamation of free pool blocks and fallback allocations.
-	void FlushAll(optional_idx extra_memory = optional_idx()) const noexcept DUCKDB_EXCLUDES(flush_lock);
+	//! Reclaim at idle; shutdown only returns cached blocks and notifies the fallback allocator.
+	void ThreadIdle(optional_ptr<TaskScheduler> scheduler = nullptr, bool shutdown = false) const
+	    DUCKDB_EXCLUDES(flush_lock);
+	//! Best-effort flushing; shutdown leaves pool blocks for unmapping and flushes fallback allocations.
+	void FlushAll(optional_idx extra_memory = optional_idx(), bool shutdown = false) const noexcept
+	    DUCKDB_EXCLUDES(flush_lock);
 	//! Memory freed since the last flush, which the allocator may still hold
 	idx_t GetDeallocatedSinceFlush() const;
 	//! Flush if at least threshold bytes were freed since the last flush, returns whether a flush happened

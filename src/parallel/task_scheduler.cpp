@@ -40,7 +40,7 @@ TaskScheduler::~TaskScheduler() {
 		for (auto &pool : pools) {
 			pool->RelaunchThreads(*this, true);
 		}
-		BlockAllocator::Get(db).FlushAll();
+		BlockAllocator::Get(db).FlushAll(optional_idx(), true);
 	} catch (...) {
 		// nothing we can do in the destructor if this fails
 	}
@@ -203,7 +203,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 	if (block_allocator.SupportsFlush()) {
 		block_allocator.ThreadFlush(Settings::Get<AllocatorBackgroundThreadsSetting>(db), 0,
 		                            GetPool(TaskSchedulerType::REGULAR).NumberOfThreads());
-		block_allocator.ThreadIdle();
+		block_allocator.ThreadIdle(nullptr, true);
 	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");

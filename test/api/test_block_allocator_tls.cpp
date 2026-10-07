@@ -8,6 +8,7 @@
 #include "duckdb/storage/storage_info.hpp"
 
 #include <chrono>
+#include <cerrno>
 #include <condition_variable>
 #include <thread>
 #include <unordered_set>
@@ -269,6 +270,14 @@ TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity"
 	SECTION("Sub-block flush") {
 		allocator.FlushAll(BLOCK_SIZE - 1);
 	}
+	SECTION("Shutdown flush preserves warm pool blocks") {
+		const optional_idx flush_size;
+		STATIC_REQUIRE(noexcept(allocator.FlushAll(flush_size, true)));
+		allocator.FlushAll(flush_size, true);
+	}
+	SECTION("Thread shutdown preserves warm pool blocks") {
+		allocator.ThreadIdle(nullptr, true);
+	}
 	SECTION("Byte-limited flush") {
 		expected_reclaimed = 17;
 		allocator.FlushAll(expected_reclaimed * BLOCK_SIZE + BLOCK_SIZE / 2);
@@ -405,6 +414,66 @@ TEST_CASE("BlockAllocator supplies an idle decay delay when enabled", "[api][blo
 }
 
 #ifndef DUCKDB_NO_THREADS
+TEST_CASE("BlockAllocator worker exit returns blocks without reclaiming them", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 16;
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
+	Allocator fallback;
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
+	std::thread worker([&]() {
+		vector<data_ptr_t> blocks;
+		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+			auto block = allocator.AllocateData(BLOCK_SIZE);
+			block[0] = 42;
+			block[BLOCK_SIZE - 1] = 42;
+			blocks.push_back(block);
+		}
+		for (auto block : blocks) {
+			allocator.FreeData(block, BLOCK_SIZE);
+		}
+		atomic<bool> running {false};
+		scheduler.ExecuteForever(&running);
+	});
+	worker.join();
+	REQUIRE(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT);
+
+	bool reclaimed = false;
+	SECTION("Returned blocks stay available for warm reuse") {
+	}
+	SECTION("Resizing workers still reclaims the pool") {
+		scheduler.SetThreads(2, 1);
+		scheduler.RelaunchThreads();
+		scheduler.SetThreads(1, 1);
+		scheduler.RelaunchThreads();
+		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 0);
+		reclaimed = true;
+	}
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		if (!reclaimed) {
+			CHECK(block[0] == 42);
+			CHECK(block[BLOCK_SIZE - 1] == 42);
+		}
+#if defined(__linux__) || defined(_WIN32)
+		else {
+			CHECK(block[0] == 0);
+			CHECK(block[BLOCK_SIZE - 1] == 0);
+		}
+#endif
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+}
+
 namespace {
 class BlockAllocatorAsyncGate {
 public:
@@ -476,6 +545,9 @@ TEST_CASE("BlockAllocator idle reclamation uses the async task queue", "[api][bl
 	live.pop_back();
 	allocator.FreeData(freed, BLOCK_SIZE);
 	BlockAllocatorTestHelper::Expire(allocator);
+	allocator.ThreadIdle(scheduler, true);
+	CHECK(scheduler.GetNumberOfTasks() == 0);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
 	for (idx_t i = 0; i < 32; i++) {
 		allocator.ThreadIdle(scheduler);
 	}
@@ -834,7 +906,7 @@ TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][blo
 	allocator.FreeData(live_second, BLOCK_SIZE);
 }
 
-TEST_CASE("BlockAllocator discard failure does not interrupt database shutdown", "[api][block_allocator]") {
+TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][block_allocator]") {
 	DBConfig config;
 	config.options.maximum_threads = 1;
 	config.options.async_threads = 0;
@@ -844,13 +916,16 @@ TEST_CASE("BlockAllocator discard failure does not interrupt database shutdown",
 	auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
 	block[0] = 42;
 	if (mlock(block, 1) != 0) {
-		WARN("Cannot lock a page to exercise discard failure during shutdown");
+		WARN("Cannot lock a page to exercise unmapping during shutdown");
 		allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
 		return;
 	}
 	allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
 	// Unmapping the pool during destruction also releases the page lock.
 	CHECK_NOTHROW(db.reset());
+	unsigned char residency;
+	CHECK(mincore(block, 1, &residency) == -1);
+	CHECK(errno == ENOMEM);
 }
 #endif
 #endif
