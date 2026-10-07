@@ -1134,6 +1134,14 @@ static bool TryCastTimestampBase(const SRC &input, DST &result, bool strict = tr
 			++result.value;
 		}
 		result.value /= 2;
+		// rounding can go past the largest (or smallest) timestamp - the result must still be a valid timestamp
+		if (DST::PRECISION < Interval::MICROS_PER_SEC) {
+			int64_t micros;
+			if (!TryMultiplyOperator::Operation(result.value, Interval::MICROS_PER_SEC / DST::PRECISION, micros) ||
+			    !timestamp_t(micros).IsFinite()) {
+				return false;
+			}
+		}
 		return true;
 	}
 }
