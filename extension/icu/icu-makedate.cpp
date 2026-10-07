@@ -122,9 +122,12 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename T>
 	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
+		// the smallest valid timestamp is 290308-12-22 (BC) 00:00:00
+		static const auto min_timestamp = Timestamp::FromDatetime(
+		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0));
 		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, [&](T micros) {
 			const auto result = timestamp_t(micros);
-			if (!result.IsFinite()) {
+			if (!result.IsFinite() || result < min_timestamp) {
 				throw ConversionException("Timestamp microseconds out of range: %ld", micros);
 			}
 			return result;
