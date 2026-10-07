@@ -7,14 +7,12 @@ require tpch
 statement ok
 CALL dbgen(sf=1);
 
-# R has two most frequent comments - check the frequency of the mode instead of its value
+# Break ties by comment value.
 query II
-SELECT l_returnflag, (SELECT count(*) FROM lineitem l WHERE l.l_returnflag = m.l_returnflag AND l.l_comment = m.mode_comment)
-FROM (SELECT l_returnflag, mode(l_comment) mode_comment FROM lineitem WHERE l_returnflag <> 'N' GROUP BY l_returnflag) m
-ORDER BY ALL;
+select l_returnflag, mode(l_comment ORDER BY l_comment) from lineitem where l_returnflag <> 'N' group by l_returnflag order by l_returnflag;
 ----
-A	244
-R	228
+A	 furiously
+R	 carefully
 
 # run a windowed mode
 query I
