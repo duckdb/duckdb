@@ -126,6 +126,17 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const Parque
 	}
 	return std::move(*result);
 }
+//! Statistics values that do not fit in the width of the decimal are ignored
+template <class T>
+static Value ParquetDecimalStatsValue(T value, uint8_t width, uint8_t scale) {
+	const auto max_value = Hugeint::POWERS_OF_TEN[width];
+	const auto hugeint_value = hugeint_t(value);
+	if (hugeint_value >= max_value || hugeint_value <= -max_value) {
+		return Value();
+	}
+	return Value::DECIMAL(value, width, scale);
+}
+
 Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                                    const std::string &stats) {
 	auto stats_data = const_data_ptr_cast(stats.c_str());
@@ -200,25 +211,25 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			if (stats.size() != sizeof(int32_t)) {
 				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
-			return Value::DECIMAL(Load<int32_t>(stats_data), width, scale);
+			return ParquetDecimalStatsValue(Load<int32_t>(stats_data), width, scale);
 		case ParquetExtraTypeInfo::DECIMAL_INT64:
 			if (stats.size() != sizeof(int64_t)) {
 				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
-			return Value::DECIMAL(Load<int64_t>(stats_data), width, scale);
+			return ParquetDecimalStatsValue(Load<int64_t>(stats_data), width, scale);
 		case ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY:
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT32:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT64:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT128:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
 				    scale);
 			default:
