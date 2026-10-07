@@ -126,23 +126,27 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
                                        CurrentTransactionState transaction_context_state) {
 	// Quick check: do we need preprocessing at all?
 	bool needs_preprocessing = false;
+	// Only PRAGMA and multi-statements touch the catalog and need a valid transaction. A single "ROLLBACK" that's
+	// pre-processed must still be accepted when the current transaction is aborted.
+	bool requires_valid_transaction = false;
 	for (auto &stmt : statements) {
 		if (stmt->type == StatementType::PRAGMA_STATEMENT || stmt->type == StatementType::MULTI_STATEMENT) {
 			needs_preprocessing = true;
-			break;
+			requires_valid_transaction = true;
+		} else if (stmt->type == StatementType::TRANSACTION_STATEMENT) {
+			needs_preprocessing = true;
 		}
 	}
 	if (!needs_preprocessing) {
 		return;
 	}
 
-	context.RunFunctionInTransactionInternal(lock,
-	                                         [&] { PreprocessInternal(lock, statements, transaction_context_state); });
+	context.RunFunctionInTransactionInternal(
+	    lock, [&] { PreprocessInternal(lock, statements, transaction_context_state); }, requires_valid_transaction);
 }
 
 void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
                                                const CurrentTransactionState transaction_context_state) {
-	CurrentTransactionState chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto query = statements[i]->query;

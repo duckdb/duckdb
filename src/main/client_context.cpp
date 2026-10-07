@@ -409,8 +409,8 @@ StatementIterator ClientContext::IterateStatements(const string &query) {
 	return StatementIterator(ParseIterator(*this, query));
 }
 
-void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
-                                         optional_ptr<ClientContextLock> lock) {
+void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer, optional_ptr<ClientContextLock> lock,
+                                         optional_ptr<StatementPreprocessor> preprocessor) {
 	// Acquire our own lock if the caller doesn't hold one (e.g. the shell); own_lock keeps it alive
 	// for the duration of the preprocess pass.
 	unique_ptr<ClientContextLock> own_lock;
@@ -418,10 +418,14 @@ void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffe
 		own_lock = LockContext();
 		lock = own_lock.get();
 	}
-	StatementPreprocessor preprocessor(*this);
+	unique_ptr<StatementPreprocessor> own_preprocessor;
+	if (!preprocessor) {
+		own_preprocessor = make_uniq<StatementPreprocessor>(*this);
+		preprocessor = own_preprocessor.get();
+	}
 	const CurrentTransactionState transaction_state =
 	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-	preprocessor.Preprocess(*lock, buffer, transaction_state);
+	preprocessor->Preprocess(*lock, buffer, transaction_state);
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
