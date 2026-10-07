@@ -8,6 +8,7 @@
 #include "reader/variant_column_reader.hpp"
 #include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 #include "column_reader.hpp"
+#include "parquet_reader.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
