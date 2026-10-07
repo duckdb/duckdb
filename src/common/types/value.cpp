@@ -1825,8 +1825,7 @@ string Value::NestedToSQLString(const Value &value, const std::function<string(c
 	switch (type.id()) {
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
-		// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
-		bool is_unnamed = type.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type);
+		bool is_unnamed = type.id() == LogicalTypeId::TUPLE;
 		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type);
 		auto &struct_values = StructValue::GetChildren(value);
@@ -2359,6 +2358,9 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		return new_value;
 	}
 	new_value.is_null = false;
+	if (type.IsNested() && !type.HasParameters()) {
+		throw SerializationException("Failed to deserialize value: type %s is missing its type info", type.ToString());
+	}
 
 	if (type.id() == LogicalTypeId::TYPE) {
 		// special case for TYPE values: deserialize the type as a nested object

@@ -40,8 +40,9 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 	auto first_param = input.GetValue(0, 0);
 	auto second_param = input.GetValue(1, 0);
 
-	auto &enum_vector =
-	    first_param.IsNull() ? EnumType::GetValuesInsertOrder(types[1]) : EnumType::GetValuesInsertOrder(types[0]);
+	// the binder guarantees that at least one of the parameters is an ENUM
+	auto &enum_type = types[0].id() == LogicalTypeId::ENUM ? types[0] : types[1];
+	auto &enum_vector = EnumType::GetValuesInsertOrder(enum_type);
 
 	if (first_param.IsNull()) {
 		start = 0;
@@ -49,7 +50,7 @@ static void EnumRangeBoundaryFunction(DataChunk &input, ExpressionState &state, 
 		start = first_param.GetValue<uint32_t>();
 	}
 	if (second_param.IsNull()) {
-		end = EnumType::GetSize(types[0]);
+		end = EnumType::GetSize(enum_type);
 	} else {
 		end = second_param.GetValue<uint32_t>() + 1;
 	}

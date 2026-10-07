@@ -1145,6 +1145,9 @@ Bool:
     - WithNoData
     - CommitAction
     - PreserveOrDelete
+    - Generated
+    - GeneratedAlways
+    - GeneratedByDefault
     - GeneratedColumnType
     - VirtualGeneratedColumn
     - StoredGeneratedColumn
@@ -1910,8 +1913,6 @@ excluded_rules:
   - CharacterType
   - IntervalNumber
   - AtTimeZoneOperator
-  - Generated
-  - AlwaysOrByDefault
   - ConstraintNameClause
   - UsingSample
   - TableSample
