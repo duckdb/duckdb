@@ -136,9 +136,13 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	auto &layout = local_state.layout;
 
 	auto count = input.size();
+	// initialize the states - fields that are NULL in the input are not written by the deserialization
+	AggregateStateInput state_input(bind_data.aggr, bind_data.bind_data.get());
 	auto state_vec_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses, count);
 	for (idx_t i = 0; i < count; i++) {
-		state_vec_writer.WriteValue(local_state.state_buffer.get() + i * layout.total_state_size);
+		data_ptr_t state_ptr = local_state.state_buffer.get() + i * layout.total_state_size;
+		bind_data.aggr.GetStateInitCallback()(state_input, &state_ptr, 1);
+		state_vec_writer.WriteValue(state_ptr);
 	}
 
 	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[0], count,
