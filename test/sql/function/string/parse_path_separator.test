@@ -19,7 +19,7 @@ INSERT INTO paths VALUES
 query IT
 SELECT id, parse_path(path, separator) FROM paths ORDER BY id;
 ----
-1	[a, b\c]
+1	[a, 'b\\c']
 2	[a/b, c]
 3	[a, b, c]
 4	[a, b, c]
@@ -34,7 +34,7 @@ FROM (VALUES (1, NULL), (2, 'forward_slash'), (3, 'backslash')) t(id, separator)
 ORDER BY id;
 ----
 [a, b, c]
-[a, b\c]
+[a, 'b\\c']
 [a/b, c]
 
 # Constant options and omitted options keep their existing behavior.
@@ -63,7 +63,7 @@ SELECT id, parse_path(path[1], separator)
 FROM (VALUES (0, ['a/b\c'], NULL), (1, ['a/b\c'], 'forward_slash'), (2, ['a/b\c'], 'backslash')) t(id, path, separator)
 WHERE id <> 0 ORDER BY id;
 ----
-1	[a, b\c]
+1	[a, 'b\\c']
 2	[a/b, c]
 
 statement ok
