@@ -251,7 +251,10 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, idx_t row_group_num_row
 	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
-	D_ASSERT(chunk->__isset.meta_data);
+	if (!chunk->__isset.meta_data) {
+		throw InvalidInputException("Failed to read file \"%s\": column chunk is missing its metadata",
+		                            Reader().GetFileName());
+	}
 
 	if (chunk->__isset.file_path) {
 		throw InvalidInputException("Failed to read file \"%s\": Only inlined data files are supported (no references)",
