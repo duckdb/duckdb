@@ -100,7 +100,7 @@ LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType 
 		for (auto &entry : child_types) {
 			child_list_t<LogicalType> child_children;
 			child_children.emplace_back("value", LogicalType::BLOB);
-			if (entry.second.id() != LogicalTypeId::VARIANT) {
+			if (entry.second.id() != LogicalTypeId::VARIANT && entry.second.id() != LogicalTypeId::SQLNULL) {
 				child_children.emplace_back("typed_value", TransformTypedValueRecursive(entry.second));
 			}
 			replaced_types.emplace_back(entry.first, LogicalType::STRUCT(child_children));
@@ -111,7 +111,7 @@ LogicalType VariantColumnWriter::TransformTypedValueRecursive(const LogicalType 
 		auto &child_type = ListType::GetChildType(type);
 		child_list_t<LogicalType> replaced_types;
 		replaced_types.emplace_back("value", LogicalType::BLOB);
-		if (child_type.id() != LogicalTypeId::VARIANT) {
+		if (child_type.id() != LogicalTypeId::VARIANT && child_type.id() != LogicalTypeId::SQLNULL) {
 			replaced_types.emplace_back("typed_value", TransformTypedValueRecursive(child_type));
 		}
 		return LogicalType::LIST(LogicalType::STRUCT(replaced_types));
