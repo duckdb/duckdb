@@ -299,7 +299,7 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "avg");
+	auto decimal_type = arguments[0]->GetReturnType();
 	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
 	function.SetName("avg");
 	function.GetArguments()[0] = decimal_type;
@@ -316,7 +316,7 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	// The first is already opted-in during `BindDecimalAvg`
 	AggregateFunction decimal_avg({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalAvg);
-	decimal_avg.GetSignature().AddParameter("x", LogicalTypeId::DECIMAL);
+	decimal_avg.GetSignature().AddPositionalOnly("x", LogicalTypeId::DECIMAL);
 	avg.AddFunction(decimal_avg);
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT16));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));

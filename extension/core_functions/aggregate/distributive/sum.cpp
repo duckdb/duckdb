@@ -295,7 +295,7 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	AggregateFunction aggr({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                       SumNoOverflowBind);
-	aggr.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	aggr.GetSignature().AddPositionalOnly("arg", LogicalTypeId::DECIMAL);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
@@ -419,7 +419,7 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalSum(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "sum");
+	auto decimal_type = arguments[0]->GetReturnType();
 	function.ReplaceImplementation(GetSumAggregate(decimal_type.InternalType()));
 	function.SetName("sum");
 	function.GetArguments()[0] = decimal_type;
@@ -485,7 +485,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	// decimal
 	AggregateFunction decimal_sum({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSum);
-	decimal_sum.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	decimal_sum.GetSignature().AddPositionalOnly("arg", LogicalTypeId::DECIMAL);
 	sum.AddFunction(decimal_sum);
 	sum.AddFunction(GetSumAggregate(PhysicalType::BOOL));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
