@@ -31,7 +31,7 @@ enum class StatisticsPropagationMode : uint8_t { FILTER_SIMPLIFICATION, FULL };
 
 class StatisticsPropagator {
 public:
-	StatisticsPropagator(Optimizer &optimizer, LogicalOperator &root,
+	StatisticsPropagator(Optimizer &optimizer, unique_ptr<LogicalOperator> &root,
 	                     StatisticsPropagationMode mode = StatisticsPropagationMode::FULL);
 
 	unique_ptr<NodeStatistics> PropagateStatistics(unique_ptr<LogicalOperator> &node_ptr);
@@ -46,6 +46,10 @@ public:
 		return removed_expressions;
 	}
 
+	//! Evaluate a function when every argument is known to be constant from its statistics.
+	static unique_ptr<BaseStatistics> PropagateConstantInputs(ClientContext &context,
+	                                                          const BoundFunctionExpression &func,
+	                                                          const vector<BaseStatistics> &child_stats);
 	//! Derive output statistics of a monotone function by evaluating it at the corners of its
 	//! argument ranges (see ArgProperties). Returns nullptr when the bounds cannot be derived.
 	static unique_ptr<BaseStatistics> PropagateMonotoneBounds(ClientContext &context,
@@ -145,8 +149,8 @@ private:
 	Optimizer &optimizer;
 	ClientContext &context;
 	StatisticsPropagationMode mode;
-	//! The root of the query plan
-	optional_ptr<LogicalOperator> root;
+	//! Reference to the owning pointer so root replacements remain visible
+	unique_ptr<LogicalOperator> &root;
 	//! The map of ColumnBinding -> statistics for the various nodes
 	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
 	//! The statistics of a materialized CTE definition, which hold for every reference to it

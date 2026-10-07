@@ -98,7 +98,8 @@ public:
 	idx_t MaxThreads(ClientContext &context) const;
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state,
 	                            const vector<ColumnIndex> &column_indexes);
-	idx_t NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state);
+	optional_idx NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	                              bool initialize_columns = true);
 
 	//! Scans up to STANDARD_VECTOR_SIZE elements from the table starting
 	//! from offset and store them in result. Offset is incremented with how many
@@ -289,9 +290,9 @@ public:
 	//! AddIndex initializes an index and adds it to the table's index list.
 	//! It is either empty, or initialized via its index storage information.
 	void AddIndex(const ColumnList &columns, const vector<LogicalIndex> &column_indexes, const IndexConstraintType type,
-	              IndexStorageInfo index_info);
+	              IndexStorageInfo index_info, idx_t index_oid);
 	//! AddIndex moves an index to this table's index list.
-	void AddIndex(unique_ptr<Index> index);
+	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
 
 	//! Returns a list of the partition stats
 	vector<PartitionStatistics> GetPartitionStats(ClientContext &context);

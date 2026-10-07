@@ -146,11 +146,28 @@ public:
 
 	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
+	//! Read one quoted token with doubled-quote escaping. On failure, leave pos and result unchanged.
+	DUCKDB_API static bool TryParseQuotedString(const string &str, idx_t &pos, string &result, char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
 	DUCKDB_API static string Join(const vector<Identifier> &input, const string &separator);
 	DUCKDB_API static string Join(const set<string> &input, const string &separator);
+
+	//! Join container elements transformed to strings using the given separator
+	template <class CONTAINER, class FUNC>
+	static string Join(const CONTAINER &input, const string &separator, const FUNC &f) {
+		string result;
+		bool first = true;
+		for (const auto &entry : input) {
+			if (!first) {
+				result += separator;
+			}
+			result += f(entry);
+			first = false;
+		}
+		return result;
+	}
 
 	//! Encode special URL characters in a string
 	DUCKDB_API static string URLEncode(const string &str, bool encode_slash = true);
@@ -243,7 +260,7 @@ public:
 
 	//! Format a string using printf semantics
 	template <typename... ARGS>
-	static string Format(const string fmt_str, ARGS... params) {
+	static string Format(const string &fmt_str, const ARGS &...params) {
 		return Exception::ConstructMessage(fmt_str, params...);
 	}
 

@@ -25,9 +25,9 @@ SET legacy_metrics_format=true;
 The 'legacy_metrics_format' setting is deprecated and will be removed in a future release.
 
 statement error
-SET null_on_division_by_zero=true;
+SET error_on_division_by_zero=false;
 ----
-The 'null_on_division_by_zero' setting is deprecated and will be removed in a future release.
+The 'error_on_division_by_zero' setting is deprecated and will be removed in a future release.
 
 statement error
 SET experimental_metadata_reuse=false;

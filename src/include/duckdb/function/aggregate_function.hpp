@@ -19,6 +19,7 @@
 namespace duckdb {
 
 class BufferManager;
+class FunctionBinder;
 class InterruptState;
 class BoundAggregateFunction;
 struct AggregateRewriteInput;
@@ -75,6 +76,19 @@ public:
 private:
 	BoundAggregateFunction &bound_function;
 };
+
+class FunctionExpression;
+
+struct AggregateFunctionUnbindInput {
+	AggregateFunctionUnbindInput(const BoundAggregateExpression &expression_p,
+	                             vector<unique_ptr<ParsedExpression>> children_p);
+	~AggregateFunctionUnbindInput();
+
+	const BoundAggregateExpression &expression;
+	vector<unique_ptr<ParsedExpression>> children;
+};
+
+typedef unique_ptr<FunctionExpression> (*aggregate_function_unbind_t)(AggregateFunctionUnbindInput &input);
 
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)(AggregateStateInput &input);
@@ -193,6 +207,9 @@ public:
 	bool HasBindCallback() const { return bind != nullptr; }
 	bind_aggregate_function_t GetBindCallback() const { return bind; }
 	void SetBindCallback(bind_aggregate_function_t callback) { bind = callback; }
+	bool HasUnbindCallback() const { return unbind != nullptr; }
+	aggregate_function_unbind_t GetUnbindCallback() const { return unbind; }
+	void SetUnbindCallback(aggregate_function_unbind_t callback) { unbind = callback; }
 
 	bool HasStateInitCallback() const { return initialize != nullptr; }
 	aggregate_initialize_t GetStateInitCallback() const { return initialize; }
@@ -295,6 +312,7 @@ public:
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind = nullptr;
+	aggregate_function_unbind_t unbind = nullptr;
 
 	//! The destructor method (may be null)
 	aggregate_destructor_t destructor = nullptr;
@@ -336,6 +354,9 @@ public:
 
 	//! Whether a single input row finalizes to that input's first argument unchanged
 	bool single_value_identity = false;
+
+	//! Whether an aggregate is holistic (e.g., don't use it for window segment trees...)
+	bool is_holistic = false;
 
 	bool operator==(const AggregateFunctionProperties &rhs) const;
 	bool operator!=(const AggregateFunctionProperties &rhs) const;
@@ -383,6 +404,10 @@ public: // Properties
 	auto HasSingleValueIdentity() const -> bool { return properties.single_value_identity; }
 	auto SetSingleValueIdentity(bool value) -> void { properties.single_value_identity = value; }
 
+	//! Whether the aggregate is holistic.
+	auto IsHolistic() const -> bool { return properties.is_holistic; }
+	auto SetIsHolistic(bool value) -> void { properties.is_holistic = value; }
+
 	// Derived properties
 	bool CanAggregate() const { return callbacks.update || callbacks.combine || callbacks.finalize; }
 	bool CanWindow() const { return callbacks.window  || callbacks.window_batch; }
@@ -392,6 +417,9 @@ public: // Callbacks
 	auto HasBindCallback() const -> bool { return callbacks.bind != nullptr; }
 	auto GetBindCallback() const -> bind_aggregate_function_t { return callbacks.bind; }
 	auto SetBindCallback(bind_aggregate_function_t callback) -> void { callbacks.bind = callback; }
+	auto HasUnbindCallback() const -> bool { return callbacks.unbind != nullptr; }
+	auto GetUnbindCallback() const -> aggregate_function_unbind_t { return callbacks.unbind; }
+	auto SetUnbindCallback(aggregate_function_unbind_t callback) -> void { callbacks.unbind = callback; }
 
 	auto HasStateInitCallback() const -> bool { return callbacks.initialize != nullptr; }
 	auto GetStateInitCallback() const -> aggregate_initialize_t { return callbacks.initialize; }
@@ -645,7 +673,7 @@ public:
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static AggregateFunction NullaryAggregate(LogicalType return_type) {
+	static AggregateFunction NullaryAggregate(const LogicalType &return_type) {
 		AggregateFunction result(
 		    Identifier(), {}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::NullaryScatterUpdate<STATE, OP>,
@@ -658,7 +686,7 @@ public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction
-	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
+	UnaryAggregate(const LogicalType &input_type, const LogicalType &return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		AggregateFunction result(Identifier(), {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
@@ -688,7 +716,7 @@ public:
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
-	                                         LogicalType return_type) {
+	                                         const LogicalType &return_type) {
 		AggregateFunction result({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
@@ -841,6 +869,7 @@ public:
 
 	//! Swap in a different implementation, keeping the definition this was bound from intact
 	void ReplaceImplementation(const AggregateFunction &function);
+	void ReplaceImplementation(const BoundAggregateFunction &function);
 
 	DUCKDB_API bool operator==(const BoundAggregateFunction &rhs) const;
 	DUCKDB_API bool operator!=(const BoundAggregateFunction &rhs) const;
@@ -854,11 +883,40 @@ public:
 	const shared_ptr<const AggregateFunction> &GetDefinition() const {
 		return definition;
 	}
-	//! Restore the definition after the bound function has been replaced wholesale
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const AggregateFunction> definition_p) {
 		definition = std::move(definition_p);
+		if (definition) {
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
+		}
 	}
-
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
 	AggregateStateLayout GetStateType(optional_ptr<FunctionData> bind_data) const {
 		D_ASSERT(callbacks.get_state_type);
 		AggregateLayoutInput input(*this, bind_data);
@@ -873,7 +931,18 @@ public:
 	}
 
 private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
 	shared_ptr<const AggregateFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionSerializer;
+	friend class FunctionBinder;
 };
 
 // Defined here (after BoundAggregateFunction is complete) so the lambda body can call GetReturnType().

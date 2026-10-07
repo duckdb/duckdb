@@ -6,17 +6,28 @@
 
 namespace duckdb {
 
-//! A per-type name, used to identify transform results without RTTI.
-//! The address of a static member cannot be used for this: a loadable extension links its own copy of
-//! DuckDB, so the same instantiation exists at a different address in each image. Comparing the name
-//! keeps a transform result created in one image castable in the other.
+template <class T>
+struct TransformResultTypeIdentifier {
+	static const char *GetName() {
+		static_assert(AlwaysFalse<T>::VALUE,
+		              "Transform result types must be registered with DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE");
+		return nullptr;
+	}
+};
+
+//! Registers a stable name for a transform result type. Invoke this macro from namespace duckdb.
+#define DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE(NAME, ...)                                                               \
+	template <>                                                                                                        \
+	struct TransformResultTypeIdentifier<__VA_ARGS__> {                                                                \
+		static constexpr const char *GetName() {                                                                       \
+			return NAME;                                                                                               \
+		}                                                                                                              \
+	};
+
+//! A stable per-type name, used to identify transform results across loadable extension boundaries without RTTI.
 template <class T>
 const char *TransformResultTypeName() {
-#ifdef _MSC_VER
-	return __FUNCSIG__;
-#else
-	return __PRETTY_FUNCTION__;
-#endif
+	return TransformResultTypeIdentifier<T>::GetName();
 }
 
 struct DUCKDB_API TransformResultValue {

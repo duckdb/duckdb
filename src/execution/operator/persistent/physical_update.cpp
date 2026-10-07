@@ -301,19 +301,30 @@ SinkCombineResultType PhysicalUpdate::Combine(ExecutionContext &context, Operato
 //===--------------------------------------------------------------------===//
 class UpdateSourceState : public GlobalSourceState {
 public:
-	explicit UpdateSourceState(const PhysicalUpdate &op) {
+	explicit UpdateSourceState(const PhysicalUpdate &op) : total_rows(1), rows_scanned(0) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<UpdateGlobalState>();
 			g.return_collection.InitializeScan(scan_state);
+			total_rows = g.return_collection.Count();
 		}
 	}
 
 	ColumnDataScanState scan_state;
+	idx_t total_rows;
+	atomic<idx_t> rows_scanned;
 };
 
 unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<UpdateSourceState>(*this);
+}
+
+ProgressData PhysicalUpdate::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	auto &state = gstate.Cast<UpdateSourceState>();
+	ProgressData progress;
+	progress.total = double(MaxValue<idx_t>(state.total_rows, 1));
+	progress.done = state.total_rows == 0 ? 1.0 : double(state.rows_scanned.load(std::memory_order_relaxed));
+	return progress;
 }
 
 SourceResultType PhysicalUpdate::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
@@ -322,10 +333,12 @@ SourceResultType PhysicalUpdate::GetDataInternal(ExecutionContext &context, Data
 	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (!return_chunk) {
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.updated_count.load())));
+		state.rows_scanned.store(1, std::memory_order_relaxed);
 		return SourceResultType::FINISHED;
 	}
 
 	g.return_collection.Scan(state.scan_state, chunk);
+	state.rows_scanned.fetch_add(chunk.size(), std::memory_order_relaxed);
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }

@@ -1,3 +1,4 @@
+#include "duckdb_v2.h"
 #include "test_capi_v2.hpp"
 
 #include <atomic>
@@ -384,20 +385,29 @@ void ToNoopFlush(duckdb_v2_copy_to_flush_info_handle, duckdb_v2_context_handle, 
 // Fail the query through a callback's error slot.
 void FailingToBind(duckdb_v2_copy_to_bind_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy to bind failed on purpose"));
+	auto text_str = Convert("copy to bind failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 void FailingToBatch(duckdb_v2_copy_to_batch_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy to batch failed on purpose"));
+	auto text_str = Convert("copy to batch failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 void FailingToBatchSize(duckdb_v2_copy_to_batch_size_info_handle, duckdb_v2_context_handle,
                         duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy to batch size failed on purpose"));
+	auto text_str = Convert("copy to batch size failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 // Leaves the target unset, which the engine refuses.
 void EmptyToBatchSize(duckdb_v2_copy_to_batch_size_info_handle, duckdb_v2_context_handle,
                       duckdb_v2_error_info_handle *) {
+}
+
+// Sets the target to an invalid (0) value.
+void ZeroToBatchSize(duckdb_v2_copy_to_batch_size_info_handle info, duckdb_v2_context_handle,
+                     duckdb_v2_error_info_handle *) {
+	duckdb_v2_copy_to_batch_size_set_target(info, 0, NULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -663,11 +673,13 @@ void FromNoopExec(duckdb_v2_copy_from_exec_info_handle, duckdb_v2_context_handle
 }
 void FailingFromBind(duckdb_v2_copy_from_bind_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy from bind failed on purpose"));
+	auto text_str = Convert("copy from bind failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 void FailingFromExec(duckdb_v2_copy_from_exec_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy from exec failed on purpose"));
+	auto text_str = Convert("copy from exec failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 } // namespace
@@ -908,6 +920,7 @@ TEST_CASE("V2 copy: callback errors propagate to the result", "[capi_v2][copy_fu
 	register_to("to_batch_fails", nullptr, nullptr, FailingToBatch);
 	register_to("to_bind_fails", FailingToBind, nullptr, ToNoopBatch);
 	register_to("to_batch_size_fails", nullptr, FailingToBatchSize, ToNoopBatch);
+	register_to("to_batch_size_zero", nullptr, ZeroToBatchSize, ToNoopBatch);
 	register_to("to_batch_size_empty", nullptr, EmptyToBatchSize, ToNoopBatch);
 
 	// Registers a COPY FROM function with the given bind and exec callbacks.
@@ -929,13 +942,16 @@ TEST_CASE("V2 copy: callback errors propagate to the result", "[capi_v2][copy_fu
 	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_bind_fails")) == DUCKDB_V2_ERROR_IO_GENERAL);
 	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_fails")) ==
 	        DUCKDB_V2_ERROR_IO_GENERAL);
-	// A batch size callback that sets no target fails the statement.
-	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_empty")) ==
+	// A batch size of 0 should fail.
+	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_zero")) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(RunFailingCopy(fx.conn, CopyFromStatement("target", path, "from_bind_fails")) ==
 	        DUCKDB_V2_ERROR_IO_GENERAL);
 	REQUIRE(RunFailingCopy(fx.conn, CopyFromStatement("target", path, "from_exec_fails")) ==
 	        DUCKDB_V2_ERROR_IO_GENERAL);
+
+	// A batch size callback that sets no target does not fail.
+	REQUIRE(RunFailingCopy(fx.conn, CopyToStatement(source, path, "to_batch_size_empty")) == DUCKDB_V2_ERROR_NONE);
 }
 
 TEST_CASE("V2 copy: registration refusals", "[capi_v2][copy_function]") {

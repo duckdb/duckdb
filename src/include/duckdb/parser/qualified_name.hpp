@@ -50,6 +50,30 @@ struct QualifiedName {
 	QualifiedName(vector<Identifier> schema_path_p, Identifier name_p) : path(std::move(schema_path_p)) {
 		path.push_back(std::move(name_p));
 	}
+	//! Construct from a complete path, including its final name.
+	static QualifiedName FromPath(vector<Identifier> path) {
+		QualifiedName result;
+		result.path = std::move(path);
+		return result;
+	}
+	//! Qualify a schema path with an explicit catalog, without inferring a catalog from the path's length.
+	static QualifiedName FromCatalogSchema(Identifier catalog, vector<Identifier> schema_path, Identifier name) {
+		if (schema_path.empty()) {
+			return QualifiedName(std::move(catalog), Identifier(), std::move(name));
+		}
+		if (!catalog.empty()) {
+			schema_path.insert(schema_path.begin(), std::move(catalog));
+		}
+		return QualifiedName(std::move(schema_path), std::move(name));
+	}
+	//! Return the qualification as a name in its own right.
+	QualifiedName Parent() const {
+		auto result = *this;
+		if (!result.path.empty()) {
+			result.path.pop_back();
+		}
+		return result;
+	}
 
 	//! The catalog is the first element of the path, but only when the path is fully qualified ([catalog,
 	//! schema..., name])

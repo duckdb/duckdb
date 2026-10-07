@@ -119,7 +119,9 @@ struct ApproxQuantileOperation {
 			return;
 		}
 		if (!state.h) {
-			state.h = new duckdb_tdigest::TDigest(unary_input.input.allocator, 100);
+			// the digest and its buffers live in the aggregate's arena, so an aborted query does not leak them
+			auto &allocator = unary_input.input.allocator;
+			state.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		state.h->add(val);
 		state.pos++;
@@ -132,17 +134,11 @@ struct ApproxQuantileOperation {
 		}
 		D_ASSERT(source.h);
 		if (!target.h) {
-			target.h = new duckdb_tdigest::TDigest(aggr_input_data.allocator, 100);
+			auto &allocator = aggr_input_data.allocator;
+			target.h = allocator.Make<duckdb_tdigest::TDigest>(allocator, 100);
 		}
 		target.h->merge(source.h);
 		target.pos += source.pos;
-	}
-
-	template <class STATE>
-	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		if (state.h) {
-			delete state.h;
-		}
 	}
 
 	static bool IgnoreNull() {
@@ -282,11 +278,11 @@ void ApproxQuantileImportState(AggregateImportInputData &input) {
 			}
 			centroids.emplace_back(mean_entry.GetValue(), weight_entry.GetValue());
 		}
-		auto digest = make_uniq<duckdb_tdigest::TDigest>(
+		auto digest = input.allocator.Make<duckdb_tdigest::TDigest>(
 		    std::move(centroids), duckdb::arena_vector<duckdb_tdigest::Centroid>(input.allocator), 100, 0, 0);
 		digest->setMinMax(min_entry.GetValue(), max_entry.GetValue());
 		state.pos = count_entry.GetValue();
-		state.h = digest.release();
+		state.h = digest;
 	}
 }
 
@@ -345,6 +341,9 @@ float CheckApproxQuantile(const Value &quantile_val) {
 		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NULL");
 	}
 	auto quantile = quantile_val.GetValue<float>();
+	if (Value::IsNan(quantile)) {
+		throw BinderException("APPROXIMATE QUANTILE parameter cannot be NaN");
+	}
 	if (quantile < 0 || quantile > 1) {
 		throw BinderException("APPROXIMATE QUANTILE can only take parameters in range [0, 1]");
 	}
@@ -414,7 +413,7 @@ AggregateFunction GetApproximateQuantileAggregate(const LogicalType &type) {
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
 	fun.GetSignature().GetParameter(0).SetName("x");
-	fun.GetSignature().AddParameter("quantile", LogicalType::FLOAT);
+	fun.GetSignature().AddParameter("pos", LogicalType::FLOAT);
 	return fun;
 }
 
@@ -459,7 +458,7 @@ AggregateFunction ApproxQuantileListAggregate(const LogicalType &input_type, con
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
 	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::NoClusterUpdate(), AggregateFunction::NoBind());
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>
@@ -538,8 +537,9 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.SetDeserializeCallback(ApproximateQuantileBindData::Deserialize);
 	fun.SetStateExportCallbacks(ApproxQuantileGetStateType, ApproxQuantileExportState, ApproxQuantileImportState);
 	// temporarily push an argument so we can bind the actual quantile
+	fun.GetSignature().GetParameter(0).SetName("x");
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
-	fun.GetSignature().AddParameter(list_of_float);
+	fun.GetSignature().AddParameter("pos", list_of_float);
 	return fun;
 }
 
@@ -548,17 +548,18 @@ unique_ptr<FunctionData> ApproxQuantileDecimalDeserialize(Deserializer &deserial
 	auto bind_data = ApproximateQuantileBindData::Deserialize(deserializer, function);
 	auto &return_type = deserializer.Get<const LogicalType &>();
 	if (return_type.id() == LogicalTypeId::LIST) {
-		function.ReplaceImplementation(ApproxQuantileDecimalListFunction(function.GetArguments()[0]));
+		ReplaceApproxQuantileDecimal(function, ApproxQuantileDecimalListFunction(function.GetArguments()[0]));
 	} else {
-		function.ReplaceImplementation(ApproxQuantileDecimalFunction(function.GetArguments()[0]));
+		ReplaceApproxQuantileDecimal(function, ApproxQuantileDecimalFunction(function.GetArguments()[0]));
 	}
 	return bind_data;
 }
 
 AggregateFunction GetApproxQuantileDecimal() {
 	// stub function - the actual function is set during bind or deserialize
-	AggregateFunction fun({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL, nullptr, nullptr,
-	                      nullptr, nullptr, nullptr, nullptr, BindApproxQuantileDecimal);
+	AggregateFunction fun({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      BindApproxQuantileDecimal);
+	fun.GetSignature().AddParameter("x", LogicalTypeId::DECIMAL).AddParameter("pos", LogicalType::FLOAT);
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproxQuantileDecimalDeserialize);
 	return fun;
@@ -566,9 +567,11 @@ AggregateFunction GetApproxQuantileDecimal() {
 
 AggregateFunction GetApproxQuantileDecimalList() {
 	// stub function - the actual function is set during bind or deserialize
-	AggregateFunction fun({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::FLOAT)},
-	                      LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr, nullptr, nullptr,
+	AggregateFunction fun({}, LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr, nullptr, nullptr,
 	                      nullptr, BindApproxQuantileDecimalList);
+	fun.GetSignature()
+	    .AddParameter("x", LogicalTypeId::DECIMAL)
+	    .AddParameter("pos", LogicalType::LIST(LogicalType::FLOAT));
 	fun.SetSerializeCallback(ApproximateQuantileBindData::Serialize);
 	fun.SetDeserializeCallback(ApproxQuantileDecimalDeserialize);
 	return fun;

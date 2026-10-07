@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_duckdb.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/multi_file/multi_file_function.hpp"
@@ -249,10 +250,9 @@ AttachedDatabase &DuckDBReader::GetAttachedDatabase() {
 		auto &db_manager = DatabaseManager::Get(context);
 		AttachInfo info;
 		info.path = file.path;
-		// use invalid UTF-8 so that a conflicting database name cannot be attached by a user
-		info.name = Identifier("\x80__duckdb_reader_" + info.path);
-
-		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+		// a unique name per reader: each reader detaches its own attachment when it finishes
+		info.name = GenerateInternalName("__duckdb_reader_");
+		info.on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
 		unordered_map<string, Value> attach_kv;
 		AttachOptions attach_options(attach_kv, AccessMode::READ_ONLY);
 		attach_options.visibility = AttachVisibility::HIDDEN;
@@ -499,10 +499,10 @@ void DuckDBMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &
 }
 
 void ReadDuckDBAddNamedParameters(TableFunction &table_function) {
-	table_function.named_parameters["schema_name"] = LogicalType::VARCHAR;
-	table_function.named_parameters["table_name"] = LogicalType::VARCHAR;
-
-	MultiFileReader::AddParameters(table_function);
+	// extends the options MultiFileFunction declares
+	table_function.GetSignature().ExtendTypedKwargs([](TypedKwargs &options) {
+		options.Add("schema_name", LogicalType::VARCHAR).Add("table_name", LogicalType::VARCHAR);
+	});
 }
 
 static vector<column_t> DuckDBGetRowIdColumns(ClientContext &, optional_ptr<FunctionData>) {
@@ -539,7 +539,7 @@ unique_ptr<TableRef> ReadDuckDBTableFunction::ReplacementScan(ClientContext &con
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	children.push_back(ConstantExpression::String(table_name));
 	table_function->function = make_uniq<FunctionExpression>("read_duckdb", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {

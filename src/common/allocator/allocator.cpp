@@ -9,6 +9,13 @@
 
 #include <cstdint>
 
+#if defined(__linux__) && INTPTR_MAX == INT64_MAX
+#include <cinttypes>
+#include <cstdio>
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
+
 #ifdef __GLIBC__
 #include <malloc.h>
 #endif
@@ -114,6 +121,43 @@ Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_
 }
 
 Allocator::~Allocator() {
+}
+
+#if defined(__linux__) && INTPTR_MAX == INT64_MAX && defined(MADV_HUGEPAGE)
+static idx_t GetHugePageSize() {
+	auto file = fopen("/sys/kernel/mm/transparent_hugepage/hpage_pmd_size", "r");
+	if (!file) {
+		return 0;
+	}
+	int64_t huge_page_size = 0;
+	char trailing;
+	auto fields = fscanf(file, "%" SCNd64 " %c", &huge_page_size, &trailing);
+	fclose(file);
+	auto page_size = sysconf(_SC_PAGESIZE);
+	if (fields != 1 || page_size <= 0 || huge_page_size < page_size || (huge_page_size & (huge_page_size - 1)) != 0 ||
+	    huge_page_size % page_size != 0) {
+		return 0;
+	}
+	return NumericCast<idx_t>(huge_page_size);
+}
+#endif
+
+AllocatedData Allocator::TryAllocateHuge(idx_t size) {
+	auto result = Allocate(size);
+#if defined(__linux__) && INTPTR_MAX == INT64_MAX && defined(MADV_HUGEPAGE)
+	static constexpr idx_t MIN_ADVISE_SIZE = 8ULL * 1024 * 1024;
+	if (size >= MIN_ADVISE_SIZE) {
+		static const idx_t huge_page_size = GetHugePageSize();
+		if (huge_page_size != 0 && size / huge_page_size >= 4) {
+			const auto base = reinterpret_cast<uintptr_t>(result.get());
+			const auto offset = (huge_page_size - base % huge_page_size) % huge_page_size;
+			const auto length = ((size - offset) / huge_page_size) * huge_page_size;
+			// Only advise complete huge pages contained in this allocation.
+			madvise(result.get() + offset, length, MADV_HUGEPAGE);
+		}
+	}
+#endif
+	return result;
 }
 
 data_ptr_t Allocator::AllocateData(idx_t size) {

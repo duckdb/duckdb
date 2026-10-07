@@ -2,6 +2,9 @@
 
 #include "duckdb/parser/sql_statement.hpp"
 
+#include <algorithm>
+#include <utility>
+
 namespace duckdb::capiv2 {
 namespace {
 
@@ -20,6 +23,18 @@ struct StatementIteratorWrapperV2 {
 	//! iterator yields nothing further: next() returns a NULL statement idempotently.
 	bool finished = false;
 };
+
+//! Binding-index order, as statement_bind's parameter schema; positional indices may be gapped ($1, $3).
+auto ParameterNamesInBindingOrder(const duckdb::SQLStatement &statement)
+    -> vector<std::pair<idx_t, duckdb_v2_identifier_t>> {
+	vector<std::pair<idx_t, duckdb_v2_identifier_t>> names;
+	names.reserve(statement.named_param_map.size());
+	for (auto &entry : statement.named_param_map) {
+		names.emplace_back(entry.second, Convert(entry.first));
+	}
+	std::sort(names.begin(), names.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+	return names;
+}
 
 } // namespace
 
@@ -100,6 +115,56 @@ DUCKDB_V2_ERROR duckdb_v2_statement_iterator_next(duckdb_v2_statement_iterator_h
 			error.Throw();
 		}
 		*out_statement = Convert(statement.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_type(duckdb_v2_sql_statement_handle statement,
+                                                 DUCKDB_V2_STATEMENT_TYPE *out_type, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_type);
+	*out_type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	return WithErrorHandler(err, [&]() { *out_type = Convert(Convert(statement)->type); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_text(duckdb_v2_sql_statement_handle statement, duckdb_v2_str *out_text,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_text);
+	*out_text = duckdb_v2_str {nullptr, 0};
+	return WithErrorHandler(err, [&]() {
+		// The parse paths already store the statement's own slice in `query`; `stmt_location` covers all of it.
+		auto &query = Convert(statement)->query;
+		if (!query.empty()) {
+			*out_text = Convert(query);
+		}
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_count(duckdb_v2_sql_statement_handle statement, idx_t *out_count,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_count);
+	*out_count = 0;
+	return WithErrorHandler(err, [&]() { *out_count = Convert(statement)->named_param_map.size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_sql_statement_get_parameter_name(duckdb_v2_sql_statement_handle statement, idx_t index,
+                                                           duckdb_v2_identifier_t *out_name,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(statement);
+	DUCKDB_CHECK_ARG(out_name);
+	*out_name = duckdb_v2_identifier_t {nullptr, 0};
+	return WithErrorHandler(err, [&]() {
+		auto names = ParameterNamesInBindingOrder(*Convert(statement));
+		if (index >= names.size()) {
+			throw duckdb::Exception(duckdb::ExceptionType::OUT_OF_RANGE,
+			                        duckdb::StringUtil::Format("Parameter index %llu is out of range for a statement "
+			                                                   "with %llu parameters in "
+			                                                   "duckdb_v2_sql_statement_get_parameter_name.",
+			                                                   static_cast<uint64_t>(index),
+			                                                   static_cast<uint64_t>(names.size())));
+		}
+		*out_name = names[index].second;
 	});
 }
 

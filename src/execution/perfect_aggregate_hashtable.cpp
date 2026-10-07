@@ -56,7 +56,7 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	RowOperations::InitializeStates(*layout_ptr, addresses, *FlatVector::IncrementalSelectionVector(), init_count);
 }
 
-PerfectAggregateHashTable::~PerfectAggregateHashTable() {
+PerfectAggregateHashTable::~PerfectAggregateHashTable() { // NOLINT(bugprone-exception-escape)
 	Destroy();
 }
 
