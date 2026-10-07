@@ -145,7 +145,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		if (stats.size() != sizeof(bool)) {
 			throw InvalidInputException("Incorrect stats size for type BOOLEAN");
 		}
-		return Value::BOOLEAN(Load<bool>(stats_data));
+		return Value::BOOLEAN(Load<uint8_t>(stats_data) != 0);
 	}
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
