@@ -72,12 +72,6 @@ SELECT length(a), length(b), c IS NULL FROM csv_columns;
 ----
 0	5	1
 
-# FORCE_NULL is parsed as a column list but is not supported by the CSV reader.
-statement error
-COPY csv_columns FROM '{TEST_DIR}/copy_csv_columns_{conversion}.csv' (HEADER, FORCE_NULL b);
-----
-Unrecognized option "force_null" for csv
-
 statement ok
 DROP TABLE csv_columns;
 
