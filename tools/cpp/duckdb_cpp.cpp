@@ -543,7 +543,17 @@ auto Instance::Connect() -> Connection {
 // Connection
 //---------------------------------------------------------------------------
 
-Connection::Connection(void *impl, bool owned) : detail::Handle<Connection>(impl), owned(owned) {
+namespace {
+auto GetConnectionContext(void *conn) -> duckdb_v2_context_handle {
+	duckdb_v2_context_handle ctx = nullptr;
+	CheckedAPICall(duckdb_v2_connection_get_context, static_cast<duckdb_v2_connection_handle>(conn), &ctx);
+	return ctx;
+}
+} // namespace
+
+Connection::Connection(void *impl, bool owned)
+    : detail::Handle<Connection>(impl), context(detail::Factory::Make<Context>(GetConnectionContext(impl))),
+      owned(owned) {
 }
 
 Connection::~Connection() {
@@ -551,25 +561,6 @@ Connection::~Connection() {
 		auto _h = handle();
 		duckdb_v2_connection_destroy(&_h);
 	}
-}
-
-auto Connection::GetOptionCount() const -> size_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_connection_get_option_count, handle(), &count);
-	return static_cast<size_t>(count);
-}
-
-auto Connection::GetOptionByIndex(size_t index) const -> InstanceOption {
-	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_connection_get_option_by_index, handle(), static_cast<idx_t>(index), &option);
-	return detail::Factory::Make<InstanceOption>(option);
-}
-
-auto Connection::GetOption(std::string_view name) const -> InstanceOption {
-	duckdb_v2_option_handle option = nullptr;
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(duckdb_v2_connection_get_option_by_name, handle(), &name_str, &option);
-	return detail::Factory::Make<InstanceOption>(option);
 }
 
 auto Connection::SetOption(std::string_view name, std::string_view value) -> void {
@@ -585,51 +576,6 @@ auto Connection::SetOption(std::string_view name, std::string_view value, Settin
 	auto setting_str = duckdb_v2_str {value.data(), value.size()};
 	CheckedAPICall(duckdb_v2_connection_set_option, handle(), &name_str, &setting_str,
 	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
-}
-
-auto Connection::ParseType(std::string_view text) -> LogicalType {
-	duckdb_v2_logical_type_handle type = nullptr;
-	auto text_str = duckdb_v2_str {text.data(), text.size()};
-	CheckedAPICall(duckdb_v2_connection_create_type_from_text, handle(), &text_str, &type);
-	return detail::Factory::Make<LogicalType>(type);
-}
-
-auto Connection::CreateType(std::string_view name) -> LogicalType {
-	return CreateType(name, {});
-}
-
-auto Connection::CreateType(std::string_view name, const std::vector<TypeParam> &params) -> LogicalType {
-	return CreateType(QualifiedName::Create({std::string(name)}), params);
-}
-
-auto Connection::GetFileSystem() const -> FileSystem {
-	duckdb_v2_file_system_handle fs = nullptr;
-	CheckedAPICall(duckdb_v2_file_system_get_from_connection, handle(), &fs);
-	return detail::Factory::Make<FileSystem>(fs);
-}
-
-auto Connection::CreateType(const QualifiedName &name) -> LogicalType {
-	return CreateType(name, {});
-}
-
-auto Connection::CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType {
-	TypeParamArrays split(params);
-	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_connection_create_type_from_name, handle(), name.handle(), split.names(), split.values(),
-	               static_cast<idx_t>(params.size()), &type);
-	return detail::Factory::Make<LogicalType>(type);
-}
-
-auto Connection::CreateType(LogicalTypeId id) -> LogicalType {
-	return CreateType(id, {});
-}
-
-auto Connection::CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) -> LogicalType {
-	TypeParamArrays split(params);
-	duckdb_v2_logical_type_handle type = nullptr;
-	CheckedAPICall(duckdb_v2_connection_create_type_from_id, handle(), static_cast<DUCKDB_V2_LOGICAL_TYPE_ID>(id),
-	               split.names(), split.values(), static_cast<idx_t>(params.size()), &type);
-	return detail::Factory::Make<LogicalType>(type);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -859,6 +805,25 @@ Context::~Context() {
 	// Context lifetime is managed by DuckDB, so we don't destroy the handle here
 }
 
+auto Context::GetOptionCount() const -> size_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_context_get_option_count, handle(), &count);
+	return static_cast<size_t>(count);
+}
+
+auto Context::GetOptionByIndex(size_t index) const -> InstanceOption {
+	duckdb_v2_option_handle option = nullptr;
+	CheckedAPICall(duckdb_v2_context_get_option_by_index, handle(), static_cast<idx_t>(index), &option);
+	return detail::Factory::Make<InstanceOption>(option);
+}
+
+auto Context::GetOption(std::string_view name) const -> InstanceOption {
+	duckdb_v2_option_handle option = nullptr;
+	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
+	CheckedAPICall(duckdb_v2_context_get_option_by_name, handle(), &name_str, &option);
+	return detail::Factory::Make<InstanceOption>(option);
+}
+
 //----------------------------------------------------------------------------------------------------------------------
 // Extension
 //----------------------------------------------------------------------------------------------------------------------
@@ -908,7 +873,7 @@ auto Context::CreateType(std::string_view name, const std::vector<TypeParam> &pa
 
 auto Context::GetFileSystem() const -> FileSystem {
 	duckdb_v2_file_system_handle fs = nullptr;
-	CheckedAPICall(duckdb_v2_file_system_get_from_context, handle(), &fs);
+	CheckedAPICall(duckdb_v2_context_get_file_system, handle(), &fs);
 	return detail::Factory::Make<FileSystem>(fs);
 }
 
@@ -970,17 +935,10 @@ auto LogicalType::GetName() const -> std::string_view {
 	return FromStr(name);
 }
 
-auto LogicalType::WithAlias(const Context &ctx, std::string_view alias) const -> LogicalType {
+auto LogicalType::WithAlias(Context &ctx, std::string_view alias) const -> LogicalType {
 	duckdb_v2_logical_type_handle new_type = nullptr;
 	auto alias_name_str = ToStr(alias);
 	CheckedAPICall(duckdb_v2_context_create_type_with_alias, ctx.handle(), handle(), &alias_name_str, &new_type);
-	return detail::Factory::Make<LogicalType>(new_type);
-}
-
-auto LogicalType::WithAlias(const Connection &conn, std::string_view alias) const -> LogicalType {
-	duckdb_v2_logical_type_handle new_type = nullptr;
-	auto alias_name_str = ToStr(alias);
-	CheckedAPICall(duckdb_v2_connection_create_type_with_alias, conn.handle(), handle(), &alias_name_str, &new_type);
 	return detail::Factory::Make<LogicalType>(new_type);
 }
 
@@ -1217,15 +1175,9 @@ auto Value::ToText() const -> std::string {
 	return RenderText(duckdb_v2_value_to_string, handle());
 }
 
-auto Value::Cast(const Context &ctx, const LogicalType &target) const -> Value {
+auto Value::Cast(Context &ctx, const LogicalType &target) const -> Value {
 	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_cast_with_context, ctx.handle(), handle(), target.handle(), &value);
-	return detail::Factory::Make<Value>(value);
-}
-
-auto Value::Cast(const Connection &conn, const LogicalType &target) const -> Value {
-	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_cast_with_connection, conn.handle(), handle(), target.handle(), &value);
+	CheckedAPICall(duckdb_v2_value_cast, ctx.handle(), handle(), target.handle(), &value);
 	return detail::Factory::Make<Value>(value);
 }
 
@@ -1363,149 +1315,78 @@ auto Value::Get() const -> LogicalType {
 	return detail::Factory::Make<Value>(handle);
 
 // Connection
-auto Value::CreateNull(Connection &conn, const LogicalType &type) -> Value {
-	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_null_with_connection, conn.handle(), type.handle(), &value);
-	return detail::Factory::Make<Value>(value);
-}
-
-auto Value::Create(Connection &conn, bool value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bool_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, uint8_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_utinyint_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, uint16_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_usmallint_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, uint32_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uint_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, uint64_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_ubigint_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, uint128_t value) -> Value {
-	auto value_uhugeint = ToC(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uhugeint_with_connection, &value_uhugeint)
-}
-
-auto Value::Create(Connection &conn, int8_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_tinyint_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, int16_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_smallint_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, int32_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_int_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, int64_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bigint_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, int128_t value) -> Value {
-	auto value_hugeint = ToC(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_hugeint_with_connection, &value_hugeint)
-}
-
-auto Value::Create(Connection &conn, float value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_float_with_connection, value)
-}
-
-auto Value::Create(Connection &conn, double value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_double_with_connection, value)
-}
-auto Value::Create(Connection &conn, blob_t value) -> Value {
-	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_blob_with_connection, &value_str)
-}
-auto Value::Create(Connection &conn, varchar_t value) -> Value {
-	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_varchar_with_connection, &value_str)
-}
-auto Value::Create(Connection &conn, const LogicalType &value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_type_with_connection, value.handle())
-}
-
 // Context
 auto Value::CreateNull(Context &ctx, const LogicalType &type) -> Value {
 	duckdb_v2_value_handle value = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_null_with_context, ctx.handle(), type.handle(), &value);
+	CheckedAPICall(duckdb_v2_value_create_null, ctx.handle(), type.handle(), &value);
 	return detail::Factory::Make<Value>(value);
 }
 auto Value::Create(Context &ctx, bool value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bool_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bool, value)
 }
 
 auto Value::Create(Context &ctx, uint8_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_utinyint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_utinyint, value)
 }
 
 auto Value::Create(Context &ctx, uint16_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_usmallint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_usmallint, value)
 }
 
 auto Value::Create(Context &ctx, uint32_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uint, value)
 }
 
 auto Value::Create(Context &ctx, uint64_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_ubigint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_ubigint, value)
 }
 
 auto Value::Create(Context &ctx, uint128_t value) -> Value {
 	auto value_uhugeint = ToC(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uhugeint_with_context, &value_uhugeint)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uhugeint, &value_uhugeint)
 }
 
 auto Value::Create(Context &ctx, int8_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_tinyint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_tinyint, value)
 }
 
 auto Value::Create(Context &ctx, int16_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_smallint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_smallint, value)
 }
 
 auto Value::Create(Context &ctx, int32_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_int_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_int, value)
 }
 
 auto Value::Create(Context &ctx, int64_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bigint_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bigint, value)
 }
 
 auto Value::Create(Context &ctx, int128_t value) -> Value {
 	auto value_hugeint = ToC(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_hugeint_with_context, &value_hugeint)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_hugeint, &value_hugeint)
 }
 
 auto Value::Create(Context &ctx, float value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_float_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_float, value)
 }
 
 auto Value::Create(Context &ctx, double value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_double_with_context, value)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_double, value)
 }
 
 auto Value::Create(Context &ctx, blob_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_blob_with_context, &value_str)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_blob, &value_str)
 }
 
 auto Value::Create(Context &ctx, varchar_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_varchar_with_context, &value_str)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_varchar, &value_str)
 }
 
 auto Value::Create(Context &ctx, const LogicalType &value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_type_with_context, value.handle())
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_type, value.handle())
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1523,12 +1404,8 @@ auto Value::Get() const -> date_t {
 	return date_t {payload};
 }
 
-auto Value::Create(Connection &conn, date_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_date_with_connection, value.days)
-}
-
 auto Value::Create(Context &ctx, date_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_date_with_context, value.days)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_date, value.days)
 }
 
 template <>
@@ -1538,12 +1415,8 @@ auto Value::Get() const -> dtime_t {
 	return dtime_t {payload};
 }
 
-auto Value::Create(Connection &conn, dtime_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_with_connection, value.micros)
-}
-
 auto Value::Create(Context &ctx, dtime_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_with_context, value.micros)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time, value.micros)
 }
 
 template <>
@@ -1553,12 +1426,8 @@ auto Value::Get() const -> dtime_ns_t {
 	return dtime_ns_t {payload};
 }
 
-auto Value::Create(Connection &conn, dtime_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_ns_with_connection, value.nanos)
-}
-
 auto Value::Create(Context &ctx, dtime_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_ns_with_context, value.nanos)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_ns, value.nanos)
 }
 
 template <>
@@ -1568,12 +1437,8 @@ auto Value::Get() const -> dtime_tz_t {
 	return dtime_tz_t(payload);
 }
 
-auto Value::Create(Connection &conn, dtime_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_time_tz_with_connection, value.GetBits())
-}
-
 auto Value::Create(Context &ctx, dtime_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_tz_with_context, value.GetBits())
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_time_tz, value.GetBits())
 }
 
 template <>
@@ -1583,12 +1448,8 @@ auto Value::Get() const -> timestamp_t {
 	return timestamp_t {payload};
 }
 
-auto Value::Create(Connection &conn, timestamp_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_with_connection, value.micros)
-}
-
 auto Value::Create(Context &ctx, timestamp_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_with_context, value.micros)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp, value.micros)
 }
 
 template <>
@@ -1598,12 +1459,8 @@ auto Value::Get() const -> timestamp_s_t {
 	return timestamp_s_t {payload};
 }
 
-auto Value::Create(Connection &conn, timestamp_s_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_sec_with_connection, value.seconds)
-}
-
 auto Value::Create(Context &ctx, timestamp_s_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_sec_with_context, value.seconds)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_sec, value.seconds)
 }
 
 template <>
@@ -1613,12 +1470,8 @@ auto Value::Get() const -> timestamp_ms_t {
 	return timestamp_ms_t {payload};
 }
 
-auto Value::Create(Connection &conn, timestamp_ms_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_ms_with_connection, value.millis)
-}
-
 auto Value::Create(Context &ctx, timestamp_ms_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ms_with_context, value.millis)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ms, value.millis)
 }
 
 template <>
@@ -1628,12 +1481,8 @@ auto Value::Get() const -> timestamp_ns_t {
 	return timestamp_ns_t {payload};
 }
 
-auto Value::Create(Connection &conn, timestamp_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_ns_with_connection, value.nanos)
-}
-
 auto Value::Create(Context &ctx, timestamp_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ns_with_context, value.nanos)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_ns, value.nanos)
 }
 
 template <>
@@ -1643,12 +1492,8 @@ auto Value::Get() const -> timestamp_tz_t {
 	return timestamp_tz_t {payload};
 }
 
-auto Value::Create(Connection &conn, timestamp_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_tz_with_connection, value.micros)
-}
-
 auto Value::Create(Context &ctx, timestamp_tz_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz_with_context, value.micros)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz, value.micros)
 }
 
 template <>
@@ -1658,12 +1503,8 @@ auto Value::Get() const -> timestamp_tz_ns_t {
 	return timestamp_tz_ns_t {payload};
 }
 
-auto Value::Create(Connection &conn, timestamp_tz_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_timestamp_tz_ns_with_connection, value.nanos)
-}
-
 auto Value::Create(Context &ctx, timestamp_tz_ns_t value) -> Value {
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz_ns_with_context, value.nanos)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_timestamp_tz_ns, value.nanos)
 }
 
 auto ToC(interval_t value) -> duckdb_v2_interval_t {
@@ -1677,14 +1518,9 @@ auto Value::Get() const -> interval_t {
 	return interval_t {payload.months, payload.days, payload.micros};
 }
 
-auto Value::Create(Connection &conn, interval_t value) -> Value {
-	auto value_interval = ToC(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_interval_with_connection, &value_interval)
-}
-
 auto Value::Create(Context &ctx, interval_t value) -> Value {
 	auto value_interval = ToC(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_interval_with_context, &value_interval)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_interval, &value_interval)
 }
 
 void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
@@ -1700,17 +1536,10 @@ void Value::GetDecimal(int128_t &out, uint8_t width, uint8_t scale) const {
 	out = FromC(payload);
 }
 
-auto Value::CreateDecimal(Connection &conn, int128_t value, uint8_t width, uint8_t scale) -> Value {
-	duckdb_v2_value_handle out = nullptr;
-	auto value_hugeint = ToC(value);
-	CheckedAPICall(duckdb_v2_value_create_decimal_with_connection, conn.handle(), &value_hugeint, width, scale, &out);
-	return detail::Factory::Make<Value>(out);
-}
-
 auto Value::CreateDecimal(Context &ctx, int128_t value, uint8_t width, uint8_t scale) -> Value {
 	duckdb_v2_value_handle out = nullptr;
 	auto value_hugeint = ToC(value);
-	CheckedAPICall(duckdb_v2_value_create_decimal_with_context, ctx.handle(), &value_hugeint, width, scale, &out);
+	CheckedAPICall(duckdb_v2_value_create_decimal, ctx.handle(), &value_hugeint, width, scale, &out);
 	return detail::Factory::Make<Value>(out);
 }
 
@@ -1765,34 +1594,19 @@ auto Value::Get() const -> uuid_t {
 	return uuid_t(FromC(payload));
 }
 
-auto Value::Create(Connection &conn, bit_t value) -> Value {
-	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bit_with_connection, &value_str)
-}
-
 auto Value::Create(Context &ctx, bit_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bit_with_context, &value_str)
-}
-
-auto Value::Create(Connection &conn, bignum_t value) -> Value {
-	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_bignum_with_connection, &value_str)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bit, &value_str)
 }
 
 auto Value::Create(Context &ctx, bignum_t value) -> Value {
 	auto value_str = ToStr(value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bignum_with_context, &value_str)
-}
-
-auto Value::Create(Connection &conn, uuid_t value) -> Value {
-	auto value_hugeint = ToC(value.value);
-	MAKE_VALUE_IMPL(conn, duckdb_v2_value_create_uuid_with_connection, &value_hugeint)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_bignum, &value_str)
 }
 
 auto Value::Create(Context &ctx, uuid_t value) -> Value {
 	auto value_hugeint = ToC(value.value);
-	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uuid_with_context, &value_hugeint)
+	MAKE_VALUE_IMPL(ctx, duckdb_v2_value_create_uuid, &value_hugeint)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1825,48 +1639,25 @@ auto FromHandle(duckdb_v2_value_handle value) -> Value {
 
 } // namespace
 
-auto Value::CreateList(Connection &conn, ValueList values) -> Value {
-	auto children = ChildHandles(values);
-	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_connection, conn.handle(), nullptr, DataOrNull(children),
-	               static_cast<idx_t>(children.size()), &out);
-	return FromHandle(out);
-}
-
 auto Value::CreateList(Context &ctx, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_context, ctx.handle(), nullptr, DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_list, ctx.handle(), nullptr, DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
-	return FromHandle(out);
-}
-
-auto Value::CreateList(Connection &conn, const LogicalType &child_type) -> Value {
-	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_connection, conn.handle(), child_type.handle(), nullptr,
-	               static_cast<idx_t>(0), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateList(Context &ctx, const LogicalType &child_type) -> Value {
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_list_with_context, ctx.handle(), child_type.handle(), nullptr,
-	               static_cast<idx_t>(0), &out);
-	return FromHandle(out);
-}
-
-auto Value::CreateArray(Connection &conn, ValueList values) -> Value {
-	auto children = ChildHandles(values);
-	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_array_with_connection, conn.handle(), nullptr, DataOrNull(children),
-	               static_cast<idx_t>(children.size()), &out);
+	CheckedAPICall(duckdb_v2_value_create_list, ctx.handle(), child_type.handle(), nullptr, static_cast<idx_t>(0),
+	               &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateArray(Context &ctx, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_array_with_context, ctx.handle(), nullptr, DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_array, ctx.handle(), nullptr, DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
@@ -1889,34 +1680,18 @@ struct StructArrays {
 
 } // namespace
 
-auto Value::CreateStruct(Connection &conn, NamedValueList values) -> Value {
-	StructArrays split(values);
-	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_struct_with_connection, conn.handle(), DataOrNull(split.names),
-	               DataOrNull(split.children), static_cast<idx_t>(values.size()), &out);
-	return FromHandle(out);
-}
-
 auto Value::CreateStruct(Context &ctx, NamedValueList values) -> Value {
 	StructArrays split(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_struct_with_context, ctx.handle(), DataOrNull(split.names),
-	               DataOrNull(split.children), static_cast<idx_t>(values.size()), &out);
-	return FromHandle(out);
-}
-
-auto Value::CreateTuple(Connection &conn, ValueList values) -> Value {
-	auto children = ChildHandles(values);
-	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_tuple_with_connection, conn.handle(), DataOrNull(children),
-	               static_cast<idx_t>(children.size()), &out);
+	CheckedAPICall(duckdb_v2_value_create_struct, ctx.handle(), DataOrNull(split.names), DataOrNull(split.children),
+	               static_cast<idx_t>(values.size()), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateTuple(Context &ctx, ValueList values) -> Value {
 	auto children = ChildHandles(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_tuple_with_context, ctx.handle(), DataOrNull(children),
+	CheckedAPICall(duckdb_v2_value_create_tuple, ctx.handle(), DataOrNull(children),
 	               static_cast<idx_t>(children.size()), &out);
 	return FromHandle(out);
 }
@@ -1939,33 +1714,18 @@ struct MapArrays {
 
 } // namespace
 
-auto Value::CreateMap(Connection &conn, KeyValueList values) -> Value {
-	MapArrays split(values);
-	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_connection, conn.handle(), nullptr, nullptr, DataOrNull(split.keys),
-	               DataOrNull(split.entries), static_cast<idx_t>(values.size()), &out);
-	return FromHandle(out);
-}
-
 auto Value::CreateMap(Context &ctx, KeyValueList values) -> Value {
 	MapArrays split(values);
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_context, ctx.handle(), nullptr, nullptr, DataOrNull(split.keys),
+	CheckedAPICall(duckdb_v2_value_create_map, ctx.handle(), nullptr, nullptr, DataOrNull(split.keys),
 	               DataOrNull(split.entries), static_cast<idx_t>(values.size()), &out);
-	return FromHandle(out);
-}
-
-auto Value::CreateMap(Connection &conn, const LogicalType &key_type, const LogicalType &value_type) -> Value {
-	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_connection, conn.handle(), key_type.handle(), value_type.handle(),
-	               nullptr, nullptr, static_cast<idx_t>(0), &out);
 	return FromHandle(out);
 }
 
 auto Value::CreateMap(Context &ctx, const LogicalType &key_type, const LogicalType &value_type) -> Value {
 	duckdb_v2_value_handle out = nullptr;
-	CheckedAPICall(duckdb_v2_value_create_map_with_context, ctx.handle(), key_type.handle(), value_type.handle(),
-	               nullptr, nullptr, static_cast<idx_t>(0), &out);
+	CheckedAPICall(duckdb_v2_value_create_map, ctx.handle(), key_type.handle(), value_type.handle(), nullptr, nullptr,
+	               static_cast<idx_t>(0), &out);
 	return FromHandle(out);
 }
 
@@ -2170,30 +1930,10 @@ auto ExtractTypeHandles(const std::vector<LogicalType> &types) -> std::vector<du
 }
 } // namespace
 
-DataChunk::DataChunk(const std::vector<LogicalType> &types) {
+DataChunk::DataChunk(Context &ctx, const std::vector<LogicalType> &types) {
 	const auto type_pointers = ExtractTypeHandles(types);
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_data_chunk_create, type_pointers.data(), type_pointers.size(), &chunk);
-
-	impl = chunk;
-	owned = true;
-}
-
-DataChunk::DataChunk(const Connection &conn, const std::vector<LogicalType> &types) {
-	const auto type_pointers = ExtractTypeHandles(types);
-	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_data_chunk_create_with_connection, conn.handle(), type_pointers.data(),
-	               type_pointers.size(), &chunk);
-
-	impl = chunk;
-	owned = true;
-}
-
-DataChunk::DataChunk(const Context &ctx, const std::vector<LogicalType> &types) {
-	const auto type_pointers = ExtractTypeHandles(types);
-	duckdb_v2_data_chunk_handle chunk = nullptr;
-	CheckedAPICall(duckdb_v2_data_chunk_create_with_context, ctx.handle(), type_pointers.data(), type_pointers.size(),
-	               &chunk);
+	CheckedAPICall(duckdb_v2_data_chunk_create, ctx.handle(), type_pointers.data(), type_pointers.size(), &chunk);
 
 	impl = chunk;
 	owned = true;
@@ -2209,15 +1949,9 @@ DataChunk::~DataChunk() {
 	}
 }
 
-auto DataChunk::Copy(const Connection &conn) const -> DataChunk {
+auto DataChunk::Copy(Context &ctx) const -> DataChunk {
 	duckdb_v2_data_chunk_handle copy = nullptr;
-	CheckedAPICall(duckdb_v2_data_chunk_copy_with_connection, conn.handle(), handle(), &copy);
-	return detail::Factory::Make<DataChunk>(copy, true);
-}
-
-auto DataChunk::Copy(const Context &ctx) const -> DataChunk {
-	duckdb_v2_data_chunk_handle copy = nullptr;
-	CheckedAPICall(duckdb_v2_data_chunk_copy_with_context, ctx.handle(), handle(), &copy);
+	CheckedAPICall(duckdb_v2_data_chunk_copy, ctx.handle(), handle(), &copy);
 	return detail::Factory::Make<DataChunk>(copy, true);
 }
 
@@ -2273,19 +2007,11 @@ ColumnDataCollection::WorkerScanState::~WorkerScanState() {
 	duckdb_v2_column_data_collection_worker_scan_state_destroy(&_h);
 }
 
-ColumnDataCollection::ColumnDataCollection(const Connection &conn, const std::vector<LogicalType> &types) {
+ColumnDataCollection::ColumnDataCollection(Context &ctx, const std::vector<LogicalType> &types) {
 	const auto type_pointers = ExtractTypeHandles(types);
 	duckdb_v2_column_data_collection_handle collection = nullptr;
-	CheckedAPICall(duckdb_v2_column_data_collection_create_with_connection, conn.handle(), type_pointers.data(),
-	               type_pointers.size(), &collection);
-	impl = collection;
-}
-
-ColumnDataCollection::ColumnDataCollection(const Context &ctx, const std::vector<LogicalType> &types) {
-	const auto type_pointers = ExtractTypeHandles(types);
-	duckdb_v2_column_data_collection_handle collection = nullptr;
-	CheckedAPICall(duckdb_v2_column_data_collection_create_with_context, ctx.handle(), type_pointers.data(),
-	               type_pointers.size(), &collection);
+	CheckedAPICall(duckdb_v2_column_data_collection_create, ctx.handle(), type_pointers.data(), type_pointers.size(),
+	               &collection);
 	impl = collection;
 }
 
@@ -2494,7 +2220,7 @@ auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width
 ArrowImporter::ArrowImporter(void *impl) : detail::Handle<ArrowImporter>(impl) {
 }
 
-ArrowImporter::ArrowImporter(const Context &context, ArrowSchema &schema, idx_t batch_size)
+ArrowImporter::ArrowImporter(Context &context, ArrowSchema &schema, idx_t batch_size)
     : detail::Handle<ArrowImporter>(nullptr) {
 	duckdb_v2_arrow_importer_handle importer = nullptr;
 	CheckedAPICall(duckdb_v2_arrow_importer_create, context.handle(), &schema, batch_size, &importer);
@@ -2530,7 +2256,7 @@ auto ArrowImporter::NextChunk() -> DataChunk {
 ArrowExporter::ArrowExporter(void *impl) : detail::Handle<ArrowExporter>(impl) {
 }
 
-ArrowExporter::ArrowExporter(const Context &context, const std::vector<LogicalType> &types,
+ArrowExporter::ArrowExporter(Context &context, const std::vector<LogicalType> &types,
                              const std::vector<std::string> &names, idx_t batch_size)
     : detail::Handle<ArrowExporter>(nullptr) {
 	// LogicalType is a Handle with a vtable, so its storage is not layout-compatible with a raw
@@ -2695,8 +2421,8 @@ auto FunctionBindInput::FindArg(const std::string &name) const -> std::optional<
 	return index;
 }
 
-auto FunctionBindInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto FunctionBindInput::GetContext() -> Context & {
+	return context;
 }
 
 auto FunctionSignature::SetReturnType(const LogicalType &type) -> FunctionSignature & {
@@ -3014,8 +2740,8 @@ void *ScalarFunction::InitInput::GetUserDataInternal() const {
 	return RequireUserData(function.user_data);
 }
 
-auto ScalarFunction::InitInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto ScalarFunction::InitInput::GetContext() -> Context & {
+	return context;
 }
 
 void *ScalarFunction::ExecInput::GetBindDataInternal() const {
@@ -3073,8 +2799,8 @@ auto ScalarFunction::ExecInput::GetResult() const -> Vector {
 	return detail::Factory::Make<Vector>(vector);
 }
 
-auto ScalarFunction::ExecInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto ScalarFunction::ExecInput::GetContext() -> Context & {
+	return context;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4046,8 +3772,8 @@ auto TableFunction::InitGlobalInput::SetMaxThreads(idx_t max_threads) -> void {
 	               static_cast<duckdb_v2_table_function_init_global_info_handle>(args), max_threads);
 }
 
-auto TableFunction::InitGlobalInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::InitGlobalInput::GetContext() -> Context & {
+	return context;
 }
 
 auto TableFunction::InitGlobalInput::GetColumnCount() const -> idx_t {
@@ -4092,8 +3818,8 @@ void *TableFunction::InitLocalInput::GetUserDataInternal() const {
 	return RequireTableUserData(function.user_data);
 }
 
-auto TableFunction::InitLocalInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::InitLocalInput::GetContext() -> Context & {
+	return context;
 }
 
 auto TableFunction::InitLocalInput::GetColumnCount() const -> idx_t {
@@ -4147,8 +3873,8 @@ auto TableFunction::ExecInput::GetOutputChunk() const -> DataChunk {
 	return detail::Factory::Make<DataChunk>(chunk, false);
 }
 
-auto TableFunction::ExecInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::ExecInput::GetContext() -> Context & {
+	return context;
 }
 
 auto TableFunction::ExecInput::GetColumnCount() const -> idx_t {
@@ -4192,8 +3918,8 @@ auto TableFunction::ProgressInput::SetProgress(double progress) -> void {
 	               static_cast<duckdb_v2_table_function_progress_info_handle>(args), progress);
 }
 
-auto TableFunction::ProgressInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::ProgressInput::GetContext() -> Context & {
+	return context;
 }
 
 void *TableFunction::FilterPushdownInput::GetBindDataInternal() const {
@@ -4244,8 +3970,8 @@ auto TableFunction::FilterPushdownInput::GetColumnIndex(idx_t index) const -> id
 	return column_index;
 }
 
-auto TableFunction::FilterPushdownInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::FilterPushdownInput::GetContext() -> Context & {
+	return context;
 }
 
 void *TableFunction::PartitionDataInput::GetBindDataInternal() const {
@@ -4315,8 +4041,8 @@ auto TableFunction::PartitionDataInput::SetPartitionValue(idx_t index, const Val
 	               static_cast<duckdb_v2_table_function_partition_data_info_handle>(args), index, value.handle());
 }
 
-auto TableFunction::PartitionDataInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::PartitionDataInput::GetContext() -> Context & {
+	return context;
 }
 
 void *TableFunction::PartitioningInput::GetBindDataInternal() const {
@@ -4367,8 +4093,8 @@ auto TableFunction::PartitioningInput::SetPartitionInfo(PartitionInfo partition_
 	               static_cast<DUCKDB_V2_TABLE_PARTITION_INFO>(partition_info));
 }
 
-auto TableFunction::PartitioningInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::PartitioningInput::GetContext() -> Context & {
+	return context;
 }
 
 void *TableFunction::ClaimBatchInput::GetBindDataInternal() const {
@@ -4405,8 +4131,8 @@ auto TableFunction::ClaimBatchInput::SetClaimed(bool claimed) -> void {
 	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), claimed);
 }
 
-auto TableFunction::ClaimBatchInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto TableFunction::ClaimBatchInput::GetContext() -> Context & {
+	return context;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5088,8 +4814,8 @@ auto CopyFunction::CopyToBindInput::GetOptionValue(idx_t index) const -> Value {
 	return detail::Factory::Make<Value>(value);
 }
 
-auto CopyFunction::CopyToBindInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyToBindInput::GetContext() -> Context & {
+	return context;
 }
 
 void *CopyFunction::CopyToBatchSizeInput::GetBindDataInternal() const {
@@ -5112,8 +4838,8 @@ auto CopyFunction::CopyToBatchSizeInput::SetTarget(idx_t rows) -> void {
 	               rows);
 }
 
-auto CopyFunction::CopyToBatchSizeInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyToBatchSizeInput::GetContext() -> Context & {
+	return context;
 }
 
 void CopyFunction::CopyToInitInput::SetInitDataInternal(void *data, void (*destructor)(void *)) {
@@ -5142,8 +4868,8 @@ auto CopyFunction::CopyToInitInput::GetFilePath() const -> std::string {
 	return std::string(FromStr(path));
 }
 
-auto CopyFunction::CopyToInitInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyToInitInput::GetContext() -> Context & {
+	return context;
 }
 
 void CopyFunction::CopyToBatchInput::SetBatchDataInternal(void *data, void (*destructor)(void *)) {
@@ -5181,8 +4907,8 @@ auto CopyFunction::CopyToBatchInput::TakeBatch() -> ColumnDataCollection {
 	return detail::Factory::Make<ColumnDataCollection>(collection);
 }
 
-auto CopyFunction::CopyToBatchInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyToBatchInput::GetContext() -> Context & {
+	return context;
 }
 
 void *CopyFunction::CopyToFlushInput::GetBindDataInternal() const {
@@ -5214,8 +4940,8 @@ void *CopyFunction::CopyToFlushInput::GetUserDataInternal() const {
 	return RequireCopyUserData(function.user_data);
 }
 
-auto CopyFunction::CopyToFlushInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyToFlushInput::GetContext() -> Context & {
+	return context;
 }
 
 void *CopyFunction::CopyToFinalizeInput::GetBindDataInternal() const {
@@ -5240,8 +4966,8 @@ void *CopyFunction::CopyToFinalizeInput::GetUserDataInternal() const {
 	return RequireCopyUserData(function.user_data);
 }
 
-auto CopyFunction::CopyToFinalizeInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyToFinalizeInput::GetContext() -> Context & {
+	return context;
 }
 
 void *CopyFunction::CopyToStatisticsInput::GetBindDataInternal() const {
@@ -5276,8 +5002,8 @@ auto CopyFunction::CopyToStatisticsInput::SetFileSize(idx_t file_size_bytes) -> 
 	               static_cast<duckdb_v2_copy_to_statistics_info_handle>(args), file_size_bytes);
 }
 
-auto CopyFunction::CopyToStatisticsInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyToStatisticsInput::GetContext() -> Context & {
+	return context;
 }
 
 void *CopyFunction::CopyFromBindInput::GetUserDataInternal() const {
@@ -5349,8 +5075,8 @@ auto CopyFunction::CopyFromBindInput::SetCardinality(idx_t cardinality, bool is_
 	               cardinality, is_exact);
 }
 
-auto CopyFunction::CopyFromBindInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyFromBindInput::GetContext() -> Context & {
+	return context;
 }
 
 void CopyFunction::CopyFromInitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
@@ -5379,8 +5105,8 @@ auto CopyFunction::CopyFromInitGlobalInput::SetMaxThreads(idx_t max_threads) -> 
 	               static_cast<duckdb_v2_copy_from_init_global_info_handle>(args), max_threads);
 }
 
-auto CopyFunction::CopyFromInitGlobalInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyFromInitGlobalInput::GetContext() -> Context & {
+	return context;
 }
 
 void CopyFunction::CopyFromInitLocalInput::SetLocalStateInternal(void *data, void (*destructor)(void *)) {
@@ -5411,8 +5137,8 @@ void *CopyFunction::CopyFromInitLocalInput::GetUserDataInternal() const {
 	return RequireCopyUserData(function.user_data);
 }
 
-auto CopyFunction::CopyFromInitLocalInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyFromInitLocalInput::GetContext() -> Context & {
+	return context;
 }
 
 void *CopyFunction::CopyFromExecInput::GetBindDataInternal() const {
@@ -5452,8 +5178,8 @@ auto CopyFunction::CopyFromExecInput::GetOutputChunk() const -> DataChunk {
 	return detail::Factory::Make<DataChunk>(chunk, false);
 }
 
-auto CopyFunction::CopyFromExecInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyFromExecInput::GetContext() -> Context & {
+	return context;
 }
 
 void *CopyFunction::CopyFromProgressInput::GetBindDataInternal() const {
@@ -5483,8 +5209,8 @@ auto CopyFunction::CopyFromProgressInput::SetProgress(double progress) -> void {
 	               static_cast<duckdb_v2_copy_from_progress_info_handle>(args), progress);
 }
 
-auto CopyFunction::CopyFromProgressInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CopyFunction::CopyFromProgressInput::GetContext() -> Context & {
+	return context;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -5633,8 +5359,8 @@ auto CastFunction::ExecInput::GetMode() const -> CastMode {
 	return static_cast<CastMode>(mode);
 }
 
-auto CastFunction::ExecInput::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto CastFunction::ExecInput::GetContext() -> Context & {
+	return context;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -6006,8 +5732,8 @@ auto ReplacementScan::Input::SetAlias(std::string_view alias) -> void {
 	               &alias_str);
 }
 
-auto ReplacementScan::Input::GetContext() const -> Context {
-	return detail::Factory::Make<Context>(context);
+auto ReplacementScan::Input::GetContext() -> Context & {
+	return context;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -6064,7 +5790,7 @@ void Appender::Initialize(Connection &conn, const std::string &query, std::vecto
 	buffer = std::make_shared<Buffer>();
 	buffer->name = buffer_name;
 	buffer->column_names = column_names;
-	buffer->collection = std::make_unique<ColumnDataCollection>(conn, types);
+	buffer->collection = std::make_unique<ColumnDataCollection>(conn.GetContext(), types);
 
 	// The scan makes the buffer visible to the statement under its name. It is connection-scoped, so it is invisible
 	// to every other connection, and it holds the buffer by shared_ptr because it outlives this object.

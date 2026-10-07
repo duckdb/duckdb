@@ -168,7 +168,7 @@ duckdb_v2_logical_type_handle RegisterTemperatureType(duckdb_v2_connection_handl
 	duckdb_v2_custom_type_destroy(&custom);
 
 	duckdb_v2_logical_type_handle temperature = nullptr;
-	REQUIRE(duckdb_v2_connection_create_type_with_alias(conn, integer, &name_str, &temperature, nullptr) ==
+	REQUIRE(duckdb_v2_context_create_type_with_alias(ContextOf(conn), integer, &name_str, &temperature, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	return temperature;
 }

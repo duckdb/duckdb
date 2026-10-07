@@ -431,7 +431,8 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.bind_cb(Convert(&bind_info), Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.bind_cb(Convert(&bind_info), Convert(&args), Convert(&callback_context), &err_ptr);
 
 	// Take ownership of whatever the callback set before reporting an error, so it is destroyed either way.
 	auto result = make_uniq<CV2TableFunctionData>();
@@ -499,7 +500,8 @@ static auto CV2TableInitGlobal(ClientContext &context, TableFunctionInitInput &i
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.init_global_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.init_global_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (args.out_global_state.ptr) {
 		result->handle =
@@ -538,7 +540,8 @@ static auto CV2TableInitLocal(ExecutionContext &context, TableFunctionInitInput 
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.init_local_cb(Convert(&args), Convert(&context.client), &err_ptr);
+	CV2CallbackContext callback_context(context.client);
+	info.init_local_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (args.out_local_state.ptr) {
 		result->handle =
@@ -569,7 +572,8 @@ static auto CV2TableClaimNextBatch(ClientContext &context, TableFunctionInput &i
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.claim_batch_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.claim_batch_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -639,7 +643,8 @@ static auto CV2TableExecBatch(ClientContext &context, TableFunctionInput &input,
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.exec_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.exec_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -688,7 +693,8 @@ static auto CV2TableProgress(ClientContext &context, const FunctionData *bind_da
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.progress_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.progress_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -717,7 +723,8 @@ static auto CV2TableFilterPushdown(ClientContext &context, LogicalGet &get, Func
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.filter_pushdown_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.filter_pushdown_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -775,7 +782,8 @@ static auto CV2TableGetPartitionData(ClientContext &context, TableFunctionGetPar
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.partition_data_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.partition_data_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -798,7 +806,8 @@ static auto CV2TableGetPartitionInfo(ClientContext &context, TableFunctionPartit
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.partitioning_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.partitioning_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();

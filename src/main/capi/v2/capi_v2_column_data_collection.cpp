@@ -78,27 +78,17 @@ static void VerifyChunkTypes(const ColumnDataCollection &collection, const DataC
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_connection(
-    duckdb_v2_connection_handle conn, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
-    duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(types_array);
-	DUCKDB_CHECK_ARG(out_collection);
-	return WithErrorHandler(err, [&]() {
-		CreateColumnDataCollection(*Convert(conn)->context, types_array, types_count, out_collection,
-		                           "duckdb_v2_column_data_collection_create_with_connection");
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create_with_context(
-    duckdb_v2_context_handle context, const duckdb_v2_logical_type_handle *types_array, idx_t types_count,
-    duckdb_v2_column_data_collection_handle *out_collection, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_column_data_collection_create(duckdb_v2_context_handle context,
+                                                        const duckdb_v2_logical_type_handle *types_array,
+                                                        idx_t types_count,
+                                                        duckdb_v2_column_data_collection_handle *out_collection,
+                                                        duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(context);
 	DUCKDB_CHECK_ARG(types_array);
 	DUCKDB_CHECK_ARG(out_collection);
 	return WithErrorHandler(err, [&]() {
-		CreateColumnDataCollection(*Convert(context), types_array, types_count, out_collection,
-		                           "duckdb_v2_column_data_collection_create_with_context");
+		CreateColumnDataCollection(Convert(context)->context, types_array, types_count, out_collection,
+		                           "duckdb_v2_column_data_collection_create");
 	});
 }
 

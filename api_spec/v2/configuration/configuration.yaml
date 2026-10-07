@@ -260,9 +260,8 @@ functions:
       Reads a config option through a context.
 
       The context is a connection seen from inside DuckDB, so this reads the
-      same cascade `[[connection_get_option_by_name]]` does: the LOCAL override if the
-      connection set one, otherwise the GLOBAL value, otherwise the static
-      default. Aliases resolve transparently, and an unknown name returns
+      connection's cascade: the LOCAL override if the connection set one,
+      otherwise the GLOBAL value, otherwise the static default. Aliases resolve transparently, and an unknown name returns
       ERROR_INPUT_INVALID. The caller destroys the returned option. A context
       is a read scope: options are written through an instance or connection.
     role: getter

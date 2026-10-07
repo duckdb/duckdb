@@ -24,7 +24,7 @@ std::string DbSetting(duckdb_v2_instance_handle instance, const char *name) {
 std::string ConnSetting(duckdb_v2_connection_handle conn, const char *name) {
 	duckdb_v2_option_handle opt = nullptr;
 	auto name_str = Convert(name);
-	REQUIRE(duckdb_v2_connection_get_option_by_name(conn, &name_str, &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_context_get_option_by_name(ContextOf(conn), &name_str, &opt, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_str setting = {nullptr, 0};
 	REQUIRE(duckdb_v2_option_get_setting(opt, &setting, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto result = Convert(setting);
@@ -259,7 +259,8 @@ TEST_CASE("V2 conn option: unknown name errors", "[capi_v2][conn][option]") {
 	REQUIRE(err != nullptr);
 	duckdb_v2_error_info_destroy(&err);
 	duckdb_v2_option_handle opt = nullptr;
-	REQUIRE(duckdb_v2_connection_get_option_by_name(fx.conn, &name_str, &opt, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_context_get_option_by_name(ContextOf(fx.conn), &name_str, &opt, &err) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(opt == nullptr);
 	duckdb_v2_error_info_destroy(&err);
 }
@@ -392,7 +393,7 @@ TEST_CASE("V2 context option: read through a context inside a callback", "[capi_
 	// The context sees the connection's LOCAL override, and the same option space.
 	REQUIRE(option_probe.setting == "4242");
 	idx_t count = 0;
-	duckdb_v2_connection_get_option_count(fx.conn, &count, nullptr);
+	duckdb_v2_context_get_option_count(ContextOf(fx.conn), &count, nullptr);
 	REQUIRE(option_probe.count == count);
 	REQUIRE(option_probe.unknown_rc == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(option_probe.by_index_rc == DUCKDB_V2_ERROR_NONE);
@@ -509,7 +510,7 @@ TEST_CASE("V2 option: accessor null-arg validation", "[capi_v2][option]") {
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(duckdb_v2_connection_set_option(nullptr, &name_str, &setting_str, DUCKDB_V2_SETTING_SCOPE_AUTOMATIC,
 		                                        nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-		REQUIRE(duckdb_v2_connection_get_option_by_name(fx.conn, &name_str, nullptr, nullptr) ==
+		REQUIRE(duckdb_v2_context_get_option_by_name(ContextOf(fx.conn), &name_str, nullptr, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		REQUIRE(duckdb_v2_context_get_option_by_name(nullptr, &name_str, &out, nullptr) ==
 		        DUCKDB_V2_ERROR_INPUT_INVALID);

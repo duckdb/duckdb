@@ -280,7 +280,57 @@ inline auto Convert(CV2Instance *instance) -> duckdb_v2_instance_handle {
 	return reinterpret_cast<duckdb_v2_instance_handle>(instance);
 }
 
-using CV2Connection = duckdb::Connection;
+//! A context handle: the client context plus how a call through it obtains a transaction.
+class CV2Context {
+public:
+	explicit CV2Context(ClientContext &context) : context(context) {
+	}
+	virtual ~CV2Context() = default;
+
+	//! Runs `fn` with a transaction active on the context.
+	virtual void WithContext(const std::function<void(ClientContext &)> &fn) = 0;
+
+	ClientContext &context;
+};
+
+//! A context handed to a callback: the context lock is held and a transaction is already active.
+class CV2CallbackContext final : public CV2Context {
+public:
+	explicit CV2CallbackContext(ClientContext &context) : CV2Context(context) {
+	}
+
+	void WithContext(const std::function<void(ClientContext &)> &fn) override {
+		fn(context);
+	}
+};
+
+//! A context taken from a connection: each call joins the connection's transaction, or runs in one of its own.
+class CV2ConnectionContext final : public CV2Context {
+public:
+	explicit CV2ConnectionContext(ClientContext &context) : CV2Context(context) {
+	}
+
+	void WithContext(const std::function<void(ClientContext &)> &fn) override {
+		context.RunFunctionInTransaction([&]() { fn(context); });
+	}
+};
+
+inline auto Convert(duckdb_v2_context_handle ctx) -> CV2Context * {
+	return reinterpret_cast<CV2Context *>(ctx);
+}
+
+inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
+	return reinterpret_cast<duckdb_v2_context_handle>(ctx);
+}
+
+//! A connection handle: the connection plus the context handle it lends out.
+class CV2Connection : public Connection {
+public:
+	explicit CV2Connection(DuckDB &database) : Connection(database), context_handle(*context) {
+	}
+
+	CV2ConnectionContext context_handle;
+};
 
 inline auto Convert(duckdb_v2_connection_handle conn) -> CV2Connection * {
 	return reinterpret_cast<CV2Connection *>(conn);
@@ -297,16 +347,6 @@ inline auto Convert(duckdb_v2_sql_statement_handle stmt) -> CV2SQLStatement * {
 }
 inline auto Convert(CV2SQLStatement *stmt) -> duckdb_v2_sql_statement_handle {
 	return reinterpret_cast<duckdb_v2_sql_statement_handle>(stmt);
-}
-
-using CV2Context = duckdb::ClientContext;
-
-inline auto Convert(duckdb_v2_context_handle ctx) -> CV2Context * {
-	return reinterpret_cast<CV2Context *>(ctx);
-}
-
-inline auto Convert(CV2Context *ctx) -> duckdb_v2_context_handle {
-	return reinterpret_cast<duckdb_v2_context_handle>(ctx);
 }
 
 //! The extension handle's backing struct is the load state in capi_v2_extension.cpp, not an ExtensionLoader, so it

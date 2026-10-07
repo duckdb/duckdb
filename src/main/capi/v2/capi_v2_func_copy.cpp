@@ -382,7 +382,8 @@ static auto CV2CopyToBind(ClientContext &context, CopyFunctionBindInput &input, 
 	CV2ErrorInfo err = {};
 	if (info.to_bind_cb) {
 		auto err_ptr = Convert(&err);
-		info.to_bind_cb(Convert(&args), Convert(&context), &err_ptr);
+		CV2CallbackContext callback_context(context);
+		info.to_bind_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 	}
 
 	auto result = MakeBindData(input.function_info, std::move(args.out_bind_data));
@@ -401,7 +402,8 @@ static auto CV2CopyToBatchSize(ClientContext &context, FunctionData &bind_data) 
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_batch_size_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_batch_size_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -425,7 +427,8 @@ static auto CV2CopyToInitGlobal(ClientContext &context, FunctionData &bind_data,
 	CV2ErrorInfo err = {};
 	if (info.to_init_cb) {
 		auto err_ptr = Convert(&err);
-		info.to_init_cb(Convert(&args), Convert(&context), &err_ptr);
+		CV2CallbackContext callback_context(context);
+		info.to_init_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 	}
 
 	auto result = make_uniq<CV2CopyToGlobalState>();
@@ -452,7 +455,8 @@ static auto CV2CopyToPrepareBatch(ClientContext &context, FunctionData &bind_dat
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_batch_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_batch_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	auto result = make_uniq<CV2CopyToBatchData>();
 	if (args.out_batch_data.ptr) {
@@ -478,7 +482,8 @@ static auto CV2CopyToFlushBatch(ClientContext &context, FunctionData &bind_data,
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_flush_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_flush_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -496,7 +501,8 @@ static auto CV2CopyToReportStatistics(ClientContext &context, FunctionData &bind
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.to_statistics_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.to_statistics_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -518,7 +524,8 @@ static auto CV2CopyToFinalize(ClientContext &context, FunctionData &bind_data, G
 
 		CV2ErrorInfo err = {};
 		auto err_ptr = Convert(&err);
-		info.to_finalize_cb(Convert(&args), Convert(&context), &err_ptr);
+		CV2CallbackContext callback_context(context);
+		info.to_finalize_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 		if (err.HasError()) {
 			err.ThrowAsException();
@@ -582,7 +589,8 @@ static auto CV2CopyFromBind(ClientContext &context, CopyFromFunctionBindInput &i
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.from_bind_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.from_bind_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	auto result = MakeBindData(function_info, std::move(args.out_bind_data));
 	result->cardinality = args.out_cardinality;
@@ -611,7 +619,8 @@ static auto CV2CopyFromInitGlobal(ClientContext &context, TableFunctionInitInput
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.from_init_global_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.from_init_global_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (args.out_global_state.ptr) {
 		result->handle =
@@ -645,7 +654,8 @@ static auto CV2CopyFromInitLocal(ExecutionContext &context, TableFunctionInitInp
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.from_init_local_cb(Convert(&args), Convert(&context.client), &err_ptr);
+	CV2CallbackContext callback_context(context.client);
+	info.from_init_local_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	unique_ptr<LocalTableFunctionState> result = nullptr;
 	if (args.out_local_state.ptr) {
@@ -680,7 +690,8 @@ static auto CV2CopyFromExec(ClientContext &context, TableFunctionInput &input, D
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.from_exec_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.from_exec_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();
@@ -720,7 +731,8 @@ static auto CV2CopyFromProgress(ClientContext &context, const FunctionData *bind
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.from_progress_cb(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	info.from_progress_cb(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();

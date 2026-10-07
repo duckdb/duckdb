@@ -5,8 +5,7 @@ module: file system
 # whatever is configured, including virtual and remote file systems registered
 # by other extensions.
 #
-# A file system is borrowed from a context or a connection and lives as long as
-# that does. Files opened through it are owned by the caller.
+# A file system is borrowed from a context and lives as long as that does. Files opened through it are owned by the caller.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Enums
@@ -60,9 +59,8 @@ handles:
   file_system:
     description: |
       A borrowed opaque handle to a file system. Obtained from
-      `[[file_system_get_from_context]]` or `[[file_system_get_from_connection]]`, and used to open files with
-      `[[file_system_open]]`. Borrowed: the handle belongs to the context or connection it came from, is valid only
-      for as long as that is, and must not be destroyed.
+      `[[context_get_file_system]]`, and used to open files with `[[file_system_open]]`. Borrowed: the handle belongs
+      to the context it came from, is valid only for as long as that is, and must not be destroyed.
 
   file_open_options:
     description: |
@@ -84,41 +82,17 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # File System
   #---------------------------------------------------------------------------------------------------------------------
-  file_system_get_from_context:
+  context_get_file_system:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-02" ]
     description: |
       Borrows the file system of a context.
 
-      Use this from inside a callback, where a context is in hand. The returned handle is borrowed: it is valid only
-      for as long as the context is, and must not be destroyed.
+      The returned handle is borrowed: it is valid only for as long as the context is, and must not be destroyed.
     parameters:
       context:
         type: context
         description: The context to take the file system from.
-      file_system:
-        type: file_system
-        indirection: 1
-        kind: OUT
-        description: Receives the borrowed file system.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  file_system_get_from_connection:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-02" ]
-    description: |
-      Borrows the file system of a connection.
-
-      The connection form of `[[file_system_get_from_context]]`, for callers outside a callback. The returned handle
-      is borrowed: it is valid only for as long as the connection is, and must not be destroyed.
-    parameters:
-      connection:
-        type: connection
-        description: The connection to take the file system from.
       file_system:
         type: file_system
         indirection: 1

@@ -167,7 +167,8 @@ static auto CV2AggregateBind(BindAggregateFunctionInput &input) -> unique_ptr<Fu
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.bind_cb(Convert(&bind_info), Convert(&result_info), Convert(&input.GetClientContext()), &err_ptr);
+	CV2CallbackContext callback_context(input.GetClientContext());
+	info.bind_cb(Convert(&bind_info), Convert(&result_info), Convert(&callback_context), &err_ptr);
 
 	unique_ptr<FunctionData> result = nullptr;
 	if (bind_info.out_bind_data) {

@@ -397,13 +397,28 @@ enum class LogLevel : uint32_t {
 	LOG_FATAL = 60,
 };
 
-/// A borrowed handle to the client context of a running operation.
-/// Only valid for the duration of the callback it was handed to, it is generally not safe to store.
+/// A borrowed handle to a client context: the one a callback is handed, valid only for the duration of that callback,
+/// or the one a `Connection` holds, valid for as long as the connection is.
 class Context final : public detail::Handle<Context> {
 	friend detail::Factory;
 
 public:
 	~Context() override;
+	Context(Context &&) noexcept = default;
+	Context &operator=(Context &&) noexcept = default;
+
+	/// How many settings this context exposes.
+	auto GetOptionCount() const -> size_t;
+
+	/// One setting with its current value in this context.
+	/// @param index Setting index in [0, GetOptionCount()).
+	auto GetOptionByIndex(size_t index) const -> InstanceOption;
+
+	/// One setting with its current value in this context.
+	/// @param name The setting's name or one of its aliases.
+	/// @return The setting.
+	/// @throws InvalidInputException When no setting goes by that name.
+	auto GetOption(std::string_view name) const -> InstanceOption;
 
 	/// Parses a SQL type expression into an owned type: primitives, parameterized kinds, and extension types alike.
 	/// @param text A type as SQL spells it, e.g. "DECIMAL(18, 3)" or "STRUCT(a INTEGER, b VARCHAR)".
@@ -649,13 +664,14 @@ class Connection final : public detail::Handle<Connection> {
 	friend detail::Factory;
 
 public:
-	Connection(Connection &&other) noexcept {
+	Connection(Connection &&other) noexcept : context(std::move(other.context)) {
 		std::swap(impl, other.impl);
 		std::swap(owned, other.owned);
 	}
 
 	Connection &operator=(Connection &&other) noexcept {
 		std::swap(impl, other.impl);
+		std::swap(context, other.context);
 		std::swap(owned, other.owned);
 		return *this;
 	}
@@ -673,18 +689,11 @@ public:
 
 	~Connection() override;
 
-	/// How many settings this connection exposes.
-	auto GetOptionCount() const -> size_t;
-
-	/// One setting with its current value on this connection.
-	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> InstanceOption;
-
-	/// One setting with its current value on this connection.
-	/// @param name The setting's name or one of its aliases.
-	/// @return The setting.
-	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> InstanceOption;
+	/// The context of this connection: the scope that creates values, types and data chunks, reads settings, and
+	/// reaches the file system. Valid for as long as this connection is.
+	auto GetContext() -> Context & {
+		return context;
+	}
 
 	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
@@ -763,45 +772,6 @@ public:
 	/// `require_cacheable` is set and the plan would not be reused.
 	auto Prepare(const SqlStatement &statement, bool require_cacheable = false) -> PreparedStatement;
 
-	/// `Context::ParseType` outside a callback.
-	/// @param text A type as SQL spells it, e.g. "DECIMAL(18, 3)" or "STRUCT(a INTEGER, b VARCHAR)".
-	auto ParseType(std::string_view text) -> LogicalType;
-
-	/// `Context::CreateType` outside a callback.
-	/// @param name The type's unqualified name, e.g. "LIST" or "DECIMAL".
-	/// @param params The type's parameters, in the order SQL takes them. A `TypeParam` with an empty name is
-	/// positional.
-	auto CreateType(std::string_view name, const std::vector<TypeParam> &params) -> LogicalType;
-	/// Parameterless overload of the above.
-	auto CreateType(std::string_view name) -> LogicalType;
-
-	/// `CreateType` for a name that may be catalog- or schema-qualified. An unqualified name is resolved along the
-	/// search path and then in the system catalog; a qualified one is resolved exactly as written.
-	auto CreateType(const QualifiedName &name, const std::vector<TypeParam> &params) -> LogicalType;
-	/// Parameterless overload of the above.
-	auto CreateType(const QualifiedName &name) -> LogicalType;
-
-	/// The file system this connection reads and writes through. Borrowed, and valid only while the connection is.
-	auto GetFileSystem() const -> FileSystem;
-
-	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
-	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
-	/// parameterized kinds such as LIST or DECIMAL require parameters.
-	/// @param params The type's parameters, as in the name-keyed overload.
-	auto CreateType(LogicalTypeId id, const std::vector<TypeParam> &params) -> LogicalType;
-	/// Parameterless overload of the above.
-	auto CreateType(LogicalTypeId id) -> LogicalType;
-
-	/// Starts composing a type step by step.
-	/// @return A `TypeBuilder` over this connection, for composing a nested type without assembling the parameter
-	/// vector by hand.
-	auto CreateType() -> TypeBuilder<Connection>;
-
-	/// Creates a `Value` on this connection; see `Value::Create` for the accepted C++ types.
-	/// @param value The C++ value to convert.
-	template <class T>
-	auto CreateValue(T &&value) -> Value;
-
 	/// Asks the running query to stop. `QueryResult::Step` then reports CANCELLED, and `FetchChunk` / `Drain` throw
 	/// `InterruptException`. Callable from any thread, and a no-op when no query is running.
 	auto Interrupt() -> void;
@@ -818,6 +788,7 @@ public:
 
 private:
 	explicit Connection(void *impl, bool owned);
+	Context context;
 	bool owned = false; // TODO: This should be fixed C++ side
 };
 
@@ -1036,10 +1007,7 @@ public:
 	/// this type, unless it is explicitly registered in the catalog separately.
 	/// @param ctx The context to create the copy in.
 	/// @param alias The name the copy carries. Must not be empty.
-	auto WithAlias(const Context &ctx, std::string_view alias) const -> LogicalType;
-
-	/// `WithAlias` outside a callback.
-	auto WithAlias(const Connection &conn, std::string_view alias) const -> LogicalType;
+	auto WithAlias(Context &ctx, std::string_view alias) const -> LogicalType;
 
 	/// An owned copy of this type.
 	auto Copy() const -> LogicalType;
@@ -1552,10 +1520,7 @@ public:
 	/// @param ctx The context to cast in.
 	/// @param target The type to cast to.
 	/// @return The converted value. Throws when the cast is not allowed or the value does not fit.
-	auto Cast(const Context &ctx, const LogicalType &target) const -> Value;
-
-	/// `Cast` outside a callback.
-	auto Cast(const Connection &conn, const LogicalType &target) const -> Value;
+	auto Cast(Context &ctx, const LogicalType &target) const -> Value;
 
 	/// Reads the value as `T`, where `T` is one of the primitive types above, or `LogicalType` for a TYPE value.
 	/// Numeric, temporal and boolean values of another type are converted, following cast rules; the remaining `T`s
@@ -1582,61 +1547,17 @@ public:
 	}
 
 	/// A NULL of the given type.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param type The type the NULL carries.
-	static auto CreateNull(Connection &conn, const LogicalType &type) -> Value;
-
-	/// `CreateNull` inside a callback.
 	static auto CreateNull(Context &ctx, const LogicalType &type) -> Value;
 
 	/// Creates a value from a C++ value. The overload picked decides the SQL type, so `dtime_t` yields TIME and
 	/// `dtime_ns_t` yields TIME_NS; a `LogicalType` yields a TYPE value. Types with no overload here do not compile --
 	/// cast or build them through the composite constructors instead. Byte strings are copied in, so the value does not
 	/// borrow from the `varchar_t` / `blob_t` handed to it.
-	/// @param conn The connection to create the value on.
-	/// @param value The C++ value to convert.
-	static auto Create(Connection &conn, bool value) -> Value;
-	static auto Create(Connection &conn, uint8_t value) -> Value;
-	static auto Create(Connection &conn, uint16_t value) -> Value;
-	static auto Create(Connection &conn, uint32_t value) -> Value;
-	static auto Create(Connection &conn, uint64_t value) -> Value;
-	static auto Create(Connection &conn, uint128_t value) -> Value;
-	static auto Create(Connection &conn, int8_t value) -> Value;
-	static auto Create(Connection &conn, int16_t value) -> Value;
-	static auto Create(Connection &conn, int32_t value) -> Value;
-	static auto Create(Connection &conn, int64_t value) -> Value;
-	static auto Create(Connection &conn, int128_t value) -> Value;
-	static auto Create(Connection &conn, float value) -> Value;
-	static auto Create(Connection &conn, double value) -> Value;
-	static auto Create(Connection &conn, varchar_t value) -> Value;
-	static auto Create(Connection &conn, blob_t value) -> Value;
-	static auto Create(Connection &conn, const LogicalType &type) -> Value;
-	static auto Create(Connection &conn, date_t value) -> Value;
-	static auto Create(Connection &conn, dtime_t value) -> Value;
-	static auto Create(Connection &conn, dtime_ns_t value) -> Value;
-	static auto Create(Connection &conn, dtime_tz_t value) -> Value;
-	static auto Create(Connection &conn, timestamp_t value) -> Value;
-	static auto Create(Connection &conn, timestamp_s_t value) -> Value;
-	static auto Create(Connection &conn, timestamp_ms_t value) -> Value;
-	static auto Create(Connection &conn, timestamp_ns_t value) -> Value;
-	static auto Create(Connection &conn, timestamp_tz_t value) -> Value;
-	static auto Create(Connection &conn, timestamp_tz_ns_t value) -> Value;
-	static auto Create(Connection &conn, interval_t value) -> Value;
-
-	template <int8_t WIDTH, uint8_t SCALE>
-	static auto Create(Connection &conn, decimal_t<WIDTH, SCALE> value) -> Value {
-		return CreateDecimal(conn, WidenDecimal(value.value), WIDTH, SCALE);
-	}
-
-	static auto Create(Connection &conn, bit_t value) -> Value;
-	static auto Create(Connection &conn, bignum_t value) -> Value;
-	static auto Create(Connection &conn, uuid_t value) -> Value;
-	template <class T>
-	static auto Create(Connection &conn, T value) -> Value = delete;
-
-	/// `Create` inside a callback.
 	/// @param ctx The context to create the value in.
 	/// @param value The C++ value to convert.
+
 	static auto Create(Context &ctx, bool value) -> Value;
 	static auto Create(Context &ctx, uint8_t value) -> Value;
 	static auto Create(Context &ctx, uint16_t value) -> Value;
@@ -1681,72 +1602,51 @@ public:
 	// casting one of these to it.
 	//
 	// Children are borrowed for the duration of the call and copied into the result, so the caller keeps its inputs
-	// and nothing in the result points back at them. Each comes in both scope forms, like `Create` and `CreateNull`.
+	// and nothing in the result points back at them.
 	using ValueList = const std::vector<Value> &;
 	using NamedValueList = const std::vector<std::pair<std::string, Value>> &;
 	using KeyValueList = const std::vector<std::pair<Value, Value>> &;
 
 	/// A LIST of the given elements.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param values The elements. The element type is the common type of all of them and each is cast to it, so
 	/// mixing INTEGER and VARCHAR yields VARCHAR elements. Must not be empty: with no element there is no type to
 	/// infer, so use the child-type overload for an empty LIST.
 	/// @throws Exception When the elements have no common type.
-	static auto CreateList(Connection &conn, ValueList values) -> Value;
-
-	/// `CreateList` inside a callback.
 	static auto CreateList(Context &ctx, ValueList values) -> Value;
 
 	/// An empty LIST.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param child_type The element type, not the LIST type.
-	static auto CreateList(Connection &conn, const LogicalType &child_type) -> Value;
-
-	/// `CreateList` inside a callback.
 	static auto CreateList(Context &ctx, const LogicalType &child_type) -> Value;
 
 	/// An ARRAY of the given elements, its size being how many there are.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param values The elements, typed as in `CreateList`. Must not be empty: the smallest ARRAY holds one element.
-	static auto CreateArray(Connection &conn, ValueList values) -> Value;
-
-	/// `CreateArray` inside a callback.
 	static auto CreateArray(Context &ctx, ValueList values) -> Value;
 
 	/// A TUPLE, i.e. a struct whose fields have no names.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param values The fields, in order. May be empty: the empty tuple is a type of its own.
-	static auto CreateTuple(Connection &conn, ValueList values = {}) -> Value;
-
-	/// `CreateTuple` inside a callback.
 	static auto CreateTuple(Context &ctx, ValueList values = {}) -> Value;
 
 	/// A STRUCT of the given fields.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param values The (name, value) fields, in order. Names should be unique and either all set or all empty; this
 	/// is not validated. May be empty: the empty struct is a type of its own.
-	static auto CreateStruct(Connection &conn, NamedValueList values = {}) -> Value;
-
-	/// `CreateStruct` inside a callback.
 	static auto CreateStruct(Context &ctx, NamedValueList values = {}) -> Value;
 
 	/// A MAP of the given entries.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param values The (key, value) entries. The key and value types are the common types over all entries, and each
 	/// entry is cast to them, as in `CreateList`. Keys must be unique and not NULL. Must not be empty: with no entry
 	/// there are no types to infer, so use the key/value-type overload for an empty MAP.
-	static auto CreateMap(Connection &conn, KeyValueList values) -> Value;
-
-	/// `CreateMap` inside a callback.
 	static auto CreateMap(Context &ctx, KeyValueList values) -> Value;
 
 	/// An empty MAP.
-	/// @param conn The connection to create the value on.
+	/// @param ctx The context to create the value in.
 	/// @param key_type The key type, not the MAP type.
 	/// @param value_type The value type, not the MAP type.
-	static auto CreateMap(Connection &conn, const LogicalType &key_type, const LogicalType &value_type) -> Value;
-
-	/// `CreateMap` inside a callback.
 	static auto CreateMap(Context &ctx, const LogicalType &key_type, const LogicalType &value_type) -> Value;
 
 	/// How many children a composite value has: elements for LIST and ARRAY, fields for STRUCT and TUPLE, two per
@@ -1769,7 +1669,6 @@ private:
 
 	/// @internal The runtime forwarder behind the templated DECIMAL constructors, so those can be defined in the header
 	/// without naming a C type.
-	static auto CreateDecimal(Connection &conn, int128_t value, uint8_t width, uint8_t scale) -> Value;
 	static auto CreateDecimal(Context &ctx, int128_t value, uint8_t width, uint8_t scale) -> Value;
 
 	/// @internal Sign-extends a DECIMAL's backing integer to the widest storage tier, so one entry point can carry
@@ -1846,11 +1745,6 @@ template <>
 auto Value::Get() const -> LogicalType;
 
 template <class T>
-auto Connection::CreateValue(T &&value) -> Value {
-	return Value::Create(*this, std::forward<T>(value));
-}
-
-template <class T>
 auto Context::CreateValue(T &&value) -> Value {
 	return Value::Create(*this, std::forward<T>(value));
 }
@@ -1890,7 +1784,7 @@ private:
 };
 
 /// Builds a type a piece at a time, without assembling a parameter vector by hand. Start one from
-/// `Context::CreateType()` or `Connection::CreateType()`, chain the setters, and call `Build`.
+/// `Context::CreateType()`, chain the setters, and call `Build`.
 /// Nested types are added by passing a callback that fills in a builder of its own.
 template <class CTX>
 class TypeBuilder {
@@ -2348,18 +2242,11 @@ class DataChunk final : public detail::Handle<DataChunk> {
 
 public:
 	/// An empty chunk with a column per type, ready to be filled: write the columns' data and give every column its
-	/// row count with `Vector::SetSize`.
+	/// row count with `Vector::SetSize`. The chunk's memory is allocated through the context's database, so it is
+	/// accounted to that database.
+	/// @param ctx The context whose database supplies the chunk's memory.
 	/// @param types One type per column. Types containing ANY are rejected.
-	explicit DataChunk(const std::vector<LogicalType> &types);
-
-	/// Like `DataChunk(types)`, but the chunk's memory is allocated through the connection's database rather than the
-	/// default allocator, so it is accounted to that database.
-	/// @param conn The connection whose database supplies the chunk's memory.
-	/// @param types One type per column. Types containing ANY are rejected.
-	DataChunk(const Connection &conn, const std::vector<LogicalType> &types);
-
-	/// The `Context` flavor of the connection-scoped constructor, inside a callback.
-	DataChunk(const Context &ctx, const std::vector<LogicalType> &types);
+	DataChunk(Context &ctx, const std::vector<LogicalType> &types);
 
 	DataChunk(DataChunk &&other) noexcept {
 		std::swap(impl, other.impl);
@@ -2388,14 +2275,11 @@ public:
 	/// @return A borrowed handle, valid for as long as this chunk is.
 	auto GetVector(idx_t index) const -> Vector;
 
-	/// A deep copy of this chunk, its memory allocated through the connection's database. The copy is flattened and
+	/// A deep copy of this chunk, its memory allocated through the context's database. The copy is flattened and
 	/// owns all its data, so it stays valid after this chunk -- or whatever backs it, such as a
 	/// `ColumnDataCollection` scan -- is gone.
-	/// @param conn The connection whose database supplies the copy's memory.
-	auto Copy(const Connection &conn) const -> DataChunk;
-
-	/// The `Context` flavor of `Copy`, inside a callback.
-	auto Copy(const Context &ctx) const -> DataChunk;
+	/// @param ctx The context whose database supplies the copy's memory.
+	auto Copy(Context &ctx) const -> DataChunk;
 
 private:
 	explicit DataChunk(void *impl, bool owned);
@@ -2460,14 +2344,11 @@ public:
 		explicit WorkerScanState(void *impl);
 	};
 
-	/// An empty collection, its memory managed by the connection's database.
-	/// @param conn The connection whose database supplies the collection's memory.
+	/// An empty collection, its memory managed by the context's database.
+	/// @param ctx The context whose database supplies the collection's memory.
 	/// @param types One type per column, at least one; every chunk appended must match them exactly. Types containing
 	/// ANY are rejected.
-	ColumnDataCollection(const Connection &conn, const std::vector<LogicalType> &types);
-
-	/// The `Context` flavor, inside a callback.
-	ColumnDataCollection(const Context &ctx, const std::vector<LogicalType> &types);
+	ColumnDataCollection(Context &ctx, const std::vector<LogicalType> &types);
 
 	ColumnDataCollection(ColumnDataCollection &&) noexcept = default;
 	ColumnDataCollection &operator=(ColumnDataCollection &&) noexcept = default;
@@ -2655,7 +2536,7 @@ public:
 	/// @param batch_size Maximum rows per chunk. A long array is split across several chunks, and rows left over
 	/// that do not fill a batch are held back and joined with the next array unless flushed. 0 means no maximum:
 	/// one chunk per array.
-	ArrowImporter(const Context &context, ArrowSchema &schema, idx_t batch_size = 0);
+	ArrowImporter(Context &context, ArrowSchema &schema, idx_t batch_size = 0);
 
 	ArrowImporter(ArrowImporter &&) noexcept = default;
 	ArrowImporter &operator=(ArrowImporter &&) noexcept = default;
@@ -2703,7 +2584,7 @@ public:
 	/// @param batch_size Maximum rows per array. A long chunk is split across several arrays, and rows left over
 	/// that do not fill a batch are held back and joined with the next chunk unless flushed. 0 means no maximum:
 	/// one array per chunk.
-	ArrowExporter(const Context &context, const std::vector<LogicalType> &types, const std::vector<std::string> &names,
+	ArrowExporter(Context &context, const std::vector<LogicalType> &types, const std::vector<std::string> &names,
 	              idx_t batch_size = 0);
 
 	ArrowExporter(ArrowExporter &&) noexcept = default;
@@ -2983,17 +2864,17 @@ public:
 	auto FindArg(const std::string &name) const -> std::optional<idx_t>;
 
 	/// The binding context. Borrowed, valid only for the callback duration.
-	auto GetContext() const -> Context;
+	auto GetContext() -> Context &;
 
 protected:
-	FunctionBindInput(void *args, void *context) : args(args), context(context) {
+	FunctionBindInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 	}
 
 	/// The user data slot of the function, which carries the function's info table
 	void *GetFunctionInfo() const;
 
 	void *args;
-	void *context;
+	Context context;
 
 private:
 	void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
@@ -3199,14 +3080,14 @@ public:
 		}
 
 		/// The context the function is initialized in. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		InitInput(void *args, void *context) : args(args), context(context) {
+		InitInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetInitDataInternal(void *data, void (*destructor)(void *));
 		void *GetBindDataInternal() const;
@@ -3259,14 +3140,14 @@ public:
 		auto GetResult() const -> Vector;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		ExecInput(void *args, void *context) : args(args), context(context) {
+		ExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetInitDataInternal() const;
@@ -4029,14 +3910,14 @@ public:
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The scan's context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		InitGlobalInput(void *args, void *context) : args(args), context(context) {
+		InitGlobalInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetGlobalStateInternal(void *data, void (*destructor)(void *));
 		void *GetBindDataInternal() const;
@@ -4085,14 +3966,14 @@ public:
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The scan's context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		InitLocalInput(void *args, void *context) : args(args), context(context) {
+		InitLocalInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetLocalStateInternal(void *data, void (*destructor)(void *));
 		void *GetBindDataInternal() const;
@@ -4148,14 +4029,14 @@ public:
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		ExecInput(void *args, void *context) : args(args), context(context) {
+		ExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
@@ -4196,14 +4077,14 @@ public:
 		auto SetProgress(double progress) -> void;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		ProgressInput(void *args, void *context) : args(args), context(context) {
+		ProgressInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
@@ -4256,14 +4137,14 @@ public:
 		auto GetColumnIndex(idx_t index) const -> idx_t;
 
 		/// The query's context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		FilterPushdownInput(void *args, void *context) : args(args), context(context) {
+		FilterPushdownInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
@@ -4329,14 +4210,14 @@ public:
 		auto SetPartitionValue(idx_t index, const Value &value) -> void;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		PartitionDataInput(void *args, void *context) : args(args), context(context) {
+		PartitionDataInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
@@ -4379,14 +4260,14 @@ public:
 		auto SetPartitionInfo(PartitionInfo partition_info) -> void;
 
 		/// The query's context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		PartitioningInput(void *args, void *context) : args(args), context(context) {
+		PartitioningInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
@@ -4434,14 +4315,14 @@ public:
 		auto SetClaimed(bool claimed) -> void;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		ClaimBatchInput(void *args, void *context) : args(args), context(context) {
+		ClaimBatchInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
@@ -4727,14 +4608,14 @@ public:
 		auto GetOptionValue(idx_t index) const -> Value;
 
 		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyToBindInput(void *args, void *context) : args(args), context(context) {
+		CopyToBindInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
@@ -4766,14 +4647,14 @@ public:
 		auto SetTarget(idx_t rows) -> void;
 
 		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyToBatchSizeInput(void *args, void *context) : args(args), context(context) {
+		CopyToBatchSizeInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetUserDataInternal() const;
@@ -4812,14 +4693,14 @@ public:
 		auto GetFilePath() const -> std::string;
 
 		/// The query context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyToInitInput(void *args, void *context) : args(args), context(context) {
+		CopyToInitInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetInitDataInternal(void *data, void (*destructor)(void *));
 		void *GetBindDataInternal() const;
@@ -4868,14 +4749,14 @@ public:
 		auto TakeBatch() -> ColumnDataCollection;
 
 		/// The query context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyToBatchInput(void *args, void *context) : args(args), context(context) {
+		CopyToBatchInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetBatchDataInternal(void *data, void (*destructor)(void *));
 		void *GetBindDataInternal() const;
@@ -4917,14 +4798,14 @@ public:
 		}
 
 		/// The query context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyToFlushInput(void *args, void *context) : args(args), context(context) {
+		CopyToFlushInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetInitDataInternal() const;
@@ -4959,14 +4840,14 @@ public:
 		}
 
 		/// The query context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyToFinalizeInput(void *args, void *context) : args(args), context(context) {
+		CopyToFinalizeInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetInitDataInternal() const;
@@ -5007,14 +4888,15 @@ public:
 		auto SetFileSize(idx_t file_size_bytes) -> void;
 
 		/// The query context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyToStatisticsInput(void *args, void *context) : args(args), context(context) {
+		CopyToStatisticsInput(void *args, void *context)
+		    : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetInitDataInternal() const;
@@ -5082,14 +4964,14 @@ public:
 		auto SetCardinality(idx_t cardinality, bool is_exact) -> void;
 
 		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyFromBindInput(void *args, void *context) : args(args), context(context) {
+		CopyFromBindInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
@@ -5129,14 +5011,15 @@ public:
 		auto SetMaxThreads(idx_t max_threads) -> void;
 
 		/// The query context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyFromInitGlobalInput(void *args, void *context) : args(args), context(context) {
+		CopyFromInitGlobalInput(void *args, void *context)
+		    : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetGlobalStateInternal(void *data, void (*destructor)(void *));
 		void *GetBindDataInternal() const;
@@ -5179,14 +5062,15 @@ public:
 		}
 
 		/// The query context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyFromInitLocalInput(void *args, void *context) : args(args), context(context) {
+		CopyFromInitLocalInput(void *args, void *context)
+		    : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void SetLocalStateInternal(void *data, void (*destructor)(void *));
 		void *GetBindDataInternal() const;
@@ -5236,14 +5120,14 @@ public:
 		auto GetOutputChunk() const -> DataChunk;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyFromExecInput(void *args, void *context) : args(args), context(context) {
+		CopyFromExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
@@ -5284,14 +5168,15 @@ public:
 		auto SetProgress(double progress) -> void;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		CopyFromProgressInput(void *args, void *context) : args(args), context(context) {
+		CopyFromProgressInput(void *args, void *context)
+		    : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetBindDataInternal() const;
 		void *GetGlobalStateInternal() const;
@@ -5408,14 +5293,14 @@ public:
 		auto GetMode() const -> CastMode;
 
 		/// The execution context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		ExecInput(void *args, void *context) : args(args), context(context) {
+		ExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetUserDataInternal() const;
 	};
@@ -5816,14 +5701,14 @@ public:
 		auto SetAlias(std::string_view alias) -> void;
 
 		/// The binding context. Borrowed, valid only for the callback duration.
-		auto GetContext() const -> Context;
+		auto GetContext() -> Context &;
 
 	private:
-		Input(void *args, void *context) : args(args), context(context) {
+		Input(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
 		}
 
 		void *args;
-		void *context;
+		Context context;
 
 		void *GetUserDataInternal() const;
 	};
@@ -6138,10 +6023,6 @@ private:
 };
 
 inline auto Context::CreateType() -> TypeBuilder<Context> {
-	return TypeBuilder(*this);
-}
-
-inline auto Connection::CreateType() -> TypeBuilder<Connection> {
 	return TypeBuilder(*this);
 }
 

@@ -247,23 +247,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_id(duckdb_v2_context_handle c
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_type);
 	return WithErrorHandler(err, [&]() {
-		// A context arrives with the lock held and a transaction active.
-		CreateLogicalTypeFromIdV2(*Convert(ctx), type_id, param_names, param_values, param_count, out_type, fn);
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_id(duckdb_v2_connection_handle conn,
-                                                         DUCKDB_V2_LOGICAL_TYPE_ID type_id,
-                                                         const duckdb_v2_identifier_t *param_names,
-                                                         const duckdb_v2_value_handle *param_values, idx_t param_count,
-                                                         duckdb_v2_logical_type_handle *out_type,
-                                                         duckdb_v2_error_info_handle *err) {
-	static const char *fn = "duckdb_v2_connection_create_type_from_id";
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_type);
-	return WithErrorHandler(err, [&]() {
-		auto &context = *Convert(conn)->context;
-		context.RunFunctionInTransaction([&]() {
+		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
 			CreateLogicalTypeFromIdV2(context, type_id, param_names, param_values, param_count, out_type, fn);
 		});
 	});
@@ -285,20 +269,8 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_text(duckdb_v2_context_handle
 	DUCKDB_CHECK_ARG(out_type);
 	DUCKDB_CHECK_ARG(text);
 	return WithErrorHandler(err, [&]() {
-		// A context arrives with the lock held and a transaction active.
-		CreateLogicalTypeFromTextV2(*Convert(ctx), text, out_type);
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_text(duckdb_v2_connection_handle conn, const duckdb_v2_str *text,
-                                                           duckdb_v2_logical_type_handle *out_type,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_type);
-	DUCKDB_CHECK_ARG(text);
-	return WithErrorHandler(err, [&]() {
-		auto &context = *Convert(conn)->context;
-		context.RunFunctionInTransaction([&]() { CreateLogicalTypeFromTextV2(context, text, out_type); });
+		Convert(ctx)->WithContext(
+		    [&](duckdb::ClientContext &context) { CreateLogicalTypeFromTextV2(context, text, out_type); });
 	});
 }
 
@@ -325,24 +297,9 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_type_from_name(duckdb_v2_context_handle
 	DUCKDB_CHECK_ARG(out_type);
 	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() {
-		// A context arrives with the lock held and a transaction active.
-		CreateLogicalTypeFromArgsV2(*Convert(ctx), name, param_names, param_values, param_count, out_type);
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_connection_create_type_from_name(duckdb_v2_connection_handle conn,
-                                                           duckdb_v2_qname_handle name,
-                                                           const duckdb_v2_identifier_t *param_names,
-                                                           const duckdb_v2_value_handle *param_values,
-                                                           idx_t param_count, duckdb_v2_logical_type_handle *out_type,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_type);
-	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(err, [&]() {
-		auto &context = *Convert(conn)->context;
-		context.RunFunctionInTransaction(
-		    [&]() { CreateLogicalTypeFromArgsV2(context, name, param_names, param_values, param_count, out_type); });
+		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
+			CreateLogicalTypeFromArgsV2(context, name, param_names, param_values, param_count, out_type);
+		});
 	});
 }
 
@@ -477,18 +434,6 @@ DUCKDB_V2_ERROR duckdb_v2_context_create_type_with_alias(duckdb_v2_context_handl
                                                          duckdb_v2_logical_type_handle *out_type,
                                                          duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
-	DUCKDB_CHECK_ARG(base_type);
-	DUCKDB_CHECK_ARG(alias_name);
-	DUCKDB_CHECK_ARG(out_type);
-	return WithErrorHandler(err, [&]() { *out_type = Convert(AliasOf(base_type, alias_name, out_type)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_v2_connection_handle conn,
-                                                            duckdb_v2_logical_type_handle base_type,
-                                                            const duckdb_v2_identifier_t *alias_name,
-                                                            duckdb_v2_logical_type_handle *out_type,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(base_type);
 	DUCKDB_CHECK_ARG(alias_name);
 	DUCKDB_CHECK_ARG(out_type);

@@ -23,7 +23,7 @@ public:
 // one. The state exists purely to forward it to the exec callback.
 class CV2CastLocalState final : public FunctionLocalState {
 public:
-	optional_ptr<ClientContext> context;
+	unique_ptr<CV2CallbackContext> context;
 };
 
 class CV2CastExecInfo {
@@ -50,7 +50,7 @@ static auto CV2CastInitLocalState(CastLocalStateParameters &parameters) -> uniqu
 		throw InvalidInputException("Cannot initialize local state for extension cast function without a context");
 	}
 
-	state->context = parameters.context;
+	state->context = make_uniq<CV2CallbackContext>(*parameters.context);
 	return std::move(state);
 }
 
@@ -67,9 +67,9 @@ static auto CV2CastExec(Vector &input, Vector &output, idx_t count, CastParamete
 	args.count = count;
 	args.mode = is_try_cast ? DUCKDB_V2_CAST_MODE_TRY : DUCKDB_V2_CAST_MODE_NORMAL;
 
-	optional_ptr<ClientContext> context = nullptr;
+	optional_ptr<CV2Context> context = nullptr;
 	if (parameters.local_state) {
-		context = parameters.local_state->Cast<CV2CastLocalState>().context;
+		context = parameters.local_state->Cast<CV2CastLocalState>().context.get();
 	}
 
 	CV2ErrorInfo err = {};

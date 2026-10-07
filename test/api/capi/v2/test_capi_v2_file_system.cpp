@@ -14,7 +14,7 @@ namespace {
 
 duckdb_v2_file_system_handle FsOf(duckdb_v2_connection_handle conn) {
 	duckdb_v2_file_system_handle fs = nullptr;
-	REQUIRE(duckdb_v2_file_system_get_from_connection(conn, &fs, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_context_get_file_system(ContextOf(conn), &fs, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(fs != nullptr);
 	return fs;
 }
@@ -113,14 +113,14 @@ TEST_CASE("V2 file system: write, read back, and seek", "[capi_v2][file_system]"
 	duckdb_v2_file_destroy(&handle);
 }
 
-TEST_CASE("V2 file system: borrowed from a context or a connection", "[capi_v2][file_system]") {
+TEST_CASE("V2 file system: borrowed from a context", "[capi_v2][file_system]") {
 	EnvFixture fx;
 	duckdb_v2_file_system_handle from_conn = nullptr;
-	REQUIRE(duckdb_v2_file_system_get_from_connection(fx.conn, &from_conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_context_get_file_system(ContextOf(fx.conn), &from_conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(from_conn != nullptr);
 	// Borrowed: there is no destroy, and asking twice gives the same file system.
 	duckdb_v2_file_system_handle again = nullptr;
-	REQUIRE(duckdb_v2_file_system_get_from_connection(fx.conn, &again, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_context_get_file_system(ContextOf(fx.conn), &again, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(again == from_conn);
 }
 
@@ -258,9 +258,8 @@ TEST_CASE("V2 file system: null arguments and destroy null-safety", "[capi_v2][f
 	idx_t count = 0;
 	char buffer[4] = {0};
 
-	REQUIRE(duckdb_v2_file_system_get_from_connection(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_system_get_from_connection(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_file_system_get_from_context(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_context_get_file_system(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_context_get_file_system(ContextOf(fx.conn), nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_file_open_options_handle options = nullptr;
 	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_READ, nullptr) == DUCKDB_V2_ERROR_NONE);

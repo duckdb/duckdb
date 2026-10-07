@@ -128,12 +128,15 @@ handles:
       A borrowed handle to a client context: a connection seen from inside
       DuckDB. Handed out within DuckDB-managed scopes — function bind / init /
       exec callbacks, replacement scans, and the extension entrypoint — and
-      valid only for the duration of that scope; the caller never destroys it.
-      A context is the scope for reading (settings, the file system) and for
-      constructing values and types, not for registration: catalog entries and
-      instance-level hooks are installed through an extension or a connection.
-      A transaction is always active while a context is handed out, which is
-      what the context-scoped constructors assume.
+      valid only for the duration of that scope, or taken from a connection
+      with `[[connection_get_context]]` and valid for as long as the
+      connection is; the caller never destroys it. A context is the scope for
+      reading (settings, the file system) and for constructing values and
+      types, not for registration: catalog entries and instance-level hooks
+      are installed through an extension or a connection. Within a callback
+      scope a transaction is already active; through a connection's context,
+      calls that need one run in the connection's transaction or open their
+      own.
 structs:
   str:
     description: |

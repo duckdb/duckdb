@@ -118,25 +118,14 @@ static void ApplyFileFlag(CV2FileOpenOptions &options, DUCKDB_V2_FILE_FLAG flag)
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_file_system_get_from_context(duckdb_v2_context_handle context,
-                                                       duckdb_v2_file_system_handle *out_file_system,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_context_get_file_system(duckdb_v2_context_handle context,
+                                                  duckdb_v2_file_system_handle *out_file_system,
+                                                  duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(context);
 	DUCKDB_CHECK_ARG(out_file_system);
 	*out_file_system = nullptr;
-	return WithErrorHandler(err, [&]() { *out_file_system = Convert(GetFileSystemSlot(*Convert(context)).get()); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_file_system_get_from_connection(duckdb_v2_connection_handle connection,
-                                                          duckdb_v2_file_system_handle *out_file_system,
-                                                          duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(connection);
-	DUCKDB_CHECK_ARG(out_file_system);
-	*out_file_system = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &context = *Convert(connection)->context;
-		*out_file_system = Convert(GetFileSystemSlot(context).get());
-	});
+	return WithErrorHandler(err,
+	                        [&]() { *out_file_system = Convert(GetFileSystemSlot(Convert(context)->context).get()); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_file_open_options_create(duckdb_v2_file_system_handle file_system,

@@ -426,6 +426,13 @@ inline DUCKDB_V2_RESULT_STEP_STATUS StepUntilCancelled(duckdb_v2_result_handle r
 	return status;
 }
 
+// The borrowed context of a connection.
+inline duckdb_v2_context_handle ContextOf(duckdb_v2_connection_handle conn) {
+	duckdb_v2_context_handle ctx = nullptr;
+	REQUIRE(duckdb_v2_connection_get_context(conn, &ctx, nullptr) == DUCKDB_V2_ERROR_NONE);
+	return ctx;
+}
+
 // Executes a side-effecting statement (DDL, DML, SET, ...) to completion (query + drain + destroy).
 // Streaming execution is lazy, so a statement only takes effect once its result is stepped.
 inline void ExecSQL(duckdb_v2_connection_handle conn, const char *sql) {
@@ -500,33 +507,32 @@ inline DUCKDB_V2_ERROR V2VectorAssignString(duckdb_v2_vector_handle vec, idx_t i
 // Value Helpers
 //----------------------------------------------------------------------------------------------------------------------
 
-// The typed constructors, in their connection form: the tests hold a
-// connection, not a live context.
+// The typed constructors, through the context of the connection the tests hold.
 inline duckdb_v2_value_handle MakeBoolValue(duckdb_v2_connection_handle conn, bool payload) {
 	duckdb_v2_value_handle value = nullptr;
-	REQUIRE(duckdb_v2_value_create_bool_with_connection(conn, payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_bool(ContextOf(conn), payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeInt32Value(duckdb_v2_connection_handle conn, int32_t payload) {
 	duckdb_v2_value_handle value = nullptr;
-	REQUIRE(duckdb_v2_value_create_int_with_connection(conn, payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_int(ContextOf(conn), payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeInt64Value(duckdb_v2_connection_handle conn, int64_t payload) {
 	duckdb_v2_value_handle value = nullptr;
-	REQUIRE(duckdb_v2_value_create_bigint_with_connection(conn, payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_bigint(ContextOf(conn), payload, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeVarcharValue(duckdb_v2_connection_handle conn, const char *s) {
 	duckdb_v2_value_handle value = nullptr;
 	auto value_str = Convert(s);
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(conn, &value_str, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_varchar(ContextOf(conn), &value_str, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeBlobValue(duckdb_v2_connection_handle conn, const void *data, idx_t len) {
 	duckdb_v2_value_handle value = nullptr;
 	duckdb_v2_str bytes = {static_cast<const char *>(data), len};
-	REQUIRE(duckdb_v2_value_create_blob_with_connection(conn, &bytes, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_blob(ContextOf(conn), &bytes, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 
@@ -537,7 +543,7 @@ inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_connection_handle conn
                                                 const char *text) {
 	auto varchar = MakeVarcharValue(conn, text);
 	duckdb_v2_value_handle value = nullptr;
-	auto rc = duckdb_v2_value_cast_with_connection(conn, varchar, type, &value, nullptr);
+	auto rc = duckdb_v2_value_cast(ContextOf(conn), varchar, type, &value, nullptr);
 	duckdb_v2_value_destroy(&varchar);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(value != nullptr);
@@ -547,7 +553,7 @@ inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_connection_handle conn
 inline duckdb_v2_value_handle MakeValueFromText(duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID id,
                                                 const char *text) {
 	duckdb_v2_logical_type_handle type = nullptr;
-	REQUIRE(duckdb_v2_connection_create_type_from_id(conn, id, nullptr, nullptr, 0, &type, nullptr) ==
+	REQUIRE(duckdb_v2_context_create_type_from_id(ContextOf(conn), id, nullptr, nullptr, 0, &type, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	auto value = MakeValueFromText(conn, type, text);
 	duckdb_v2_logical_type_destroy(&type);
@@ -632,20 +638,20 @@ inline std::string ConsumeBlob(duckdb_v2_value_handle &value) {
 
 inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID id) {
 	duckdb_v2_logical_type_handle t = nullptr;
-	REQUIRE(duckdb_v2_connection_create_type_from_id(conn, id, nullptr, nullptr, 0, &t, nullptr) ==
+	REQUIRE(duckdb_v2_context_create_type_from_id(ContextOf(conn), id, nullptr, nullptr, 0, &t, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	return t;
 }
 
 inline duckdb_v2_value_handle MakeTypeValue(duckdb_v2_connection_handle conn, duckdb_v2_logical_type_handle t) {
 	duckdb_v2_value_handle v = nullptr;
-	REQUIRE(duckdb_v2_value_create_type_with_connection(conn, t, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_type(ContextOf(conn), t, &v, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return v;
 }
 
 inline duckdb_v2_value_handle MakeTypeValue(duckdb_v2_connection_handle conn, DUCKDB_V2_LOGICAL_TYPE_ID id) {
 	duckdb_v2_logical_type_handle t = nullptr;
-	duckdb_v2_connection_create_type_from_id(conn, id, nullptr, nullptr, 0, &t, nullptr);
+	duckdb_v2_context_create_type_from_id(ContextOf(conn), id, nullptr, nullptr, 0, &t, nullptr);
 	auto v = MakeTypeValue(conn, t);
 	duckdb_v2_logical_type_destroy(&t);
 	return v;
@@ -666,9 +672,9 @@ inline duckdb_v2_logical_type_handle MakeType(duckdb_v2_connection_handle conn, 
 	DUCKDB_V2_ERROR rc = duckdb_v2_qname_create(parts, 1, &qname, nullptr);
 	duckdb_v2_logical_type_handle t = nullptr;
 	if (rc == DUCKDB_V2_ERROR_NONE) {
-		rc = duckdb_v2_connection_create_type_from_name(conn, qname, names ? name_views.data() : nullptr,
-		                                                values.empty() ? nullptr : values.data(), values.size(), &t,
-		                                                nullptr);
+		rc = duckdb_v2_context_create_type_from_name(ContextOf(conn), qname, names ? name_views.data() : nullptr,
+		                                             values.empty() ? nullptr : values.data(), values.size(), &t,
+		                                             nullptr);
 	}
 	duckdb_v2_qname_destroy(&qname);
 	for (auto &v : values) {

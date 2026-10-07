@@ -166,23 +166,6 @@ DUCKDB_V2_ERROR duckdb_v2_value_destroy(duckdb_v2_value_handle *value) {
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_null(duckdb_v2_logical_type_handle type, duckdb_v2_value_handle *out_value,
-                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(type);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() {
-		// ANY is a signature wildcard; a value carries data, so reject it.
-		if (Convert(type)->id() == duckdb::LogicalTypeId::ANY) {
-			throw duckdb::InvalidInputException("duckdb_v2_value_create_null: type cannot be ANY");
-		}
-		// Value(LogicalType) constructs a typed NULL — exactly what we want.
-		auto value_type = Convert(type);
-		auto *v = new duckdb::Value(*value_type);
-		*out_value = Convert(v);
-	});
-}
-
 DUCKDB_V2_ERROR duckdb_v2_value_is_null(duckdb_v2_value_handle value, bool *out_is_null,
                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(value);
@@ -462,322 +445,141 @@ DUCKDB_V2_ERROR duckdb_v2_value_get_interval(duckdb_v2_value_handle value, duckd
 // ---------------------------------------------------------------------------
 // Typed constructors
 //
-// Two forms per type: the context form for a live bind / execution context,
-// the connection form for outside one. Both are gated on their handle, which
-// is what makes a value's construction scoped to a catalog.
+// Gated on the context handle, which is what makes a value's construction
+// scoped to a catalog.
 // ---------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_bool_with_context(duckdb_v2_context_handle ctx, bool in_value,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_bool(duckdb_v2_context_handle ctx, bool in_value,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::BOOLEAN(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_bool_with_connection(duckdb_v2_connection_handle conn, bool in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::BOOLEAN(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_tinyint_with_context(duckdb_v2_context_handle ctx, int8_t in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_tinyint(duckdb_v2_context_handle ctx, int8_t in_value,
+                                               duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TINYINT(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_tinyint_with_connection(duckdb_v2_connection_handle conn, int8_t in_value,
-                                                               duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TINYINT(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_smallint_with_context(duckdb_v2_context_handle ctx, int16_t in_value,
-                                                             duckdb_v2_value_handle *out_value,
-                                                             duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_smallint(duckdb_v2_context_handle ctx, int16_t in_value,
+                                                duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::SMALLINT(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_smallint_with_connection(duckdb_v2_connection_handle conn, int16_t in_value,
-                                                                duckdb_v2_value_handle *out_value,
-                                                                duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::SMALLINT(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_int_with_context(duckdb_v2_context_handle ctx, int32_t in_value,
-                                                        duckdb_v2_value_handle *out_value,
-                                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_int(duckdb_v2_context_handle ctx, int32_t in_value,
+                                           duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::INTEGER(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_int_with_connection(duckdb_v2_connection_handle conn, int32_t in_value,
-                                                           duckdb_v2_value_handle *out_value,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::INTEGER(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                           duckdb_v2_value_handle *out_value,
-                                                           duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_bigint(duckdb_v2_context_handle ctx, int64_t in_value,
+                                              duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::BIGINT(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_bigint_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                              duckdb_v2_value_handle *out_value,
-                                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::BIGINT(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_context(duckdb_v2_context_handle ctx,
-                                                            const duckdb_v2_hugeint_t *in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint(duckdb_v2_context_handle ctx, const duckdb_v2_hugeint_t *in_value,
+                                               duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::HUGEINT(Convert(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_hugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                               const duckdb_v2_hugeint_t *in_value,
-                                                               duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::HUGEINT(Convert(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_utinyint_with_context(duckdb_v2_context_handle ctx, uint8_t in_value,
-                                                             duckdb_v2_value_handle *out_value,
-                                                             duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_utinyint(duckdb_v2_context_handle ctx, uint8_t in_value,
+                                                duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UTINYINT(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_utinyint_with_connection(duckdb_v2_connection_handle conn, uint8_t in_value,
-                                                                duckdb_v2_value_handle *out_value,
-                                                                duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UTINYINT(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_usmallint_with_context(duckdb_v2_context_handle ctx, uint16_t in_value,
-                                                              duckdb_v2_value_handle *out_value,
-                                                              duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_usmallint(duckdb_v2_context_handle ctx, uint16_t in_value,
+                                                 duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::USMALLINT(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_usmallint_with_connection(duckdb_v2_connection_handle conn, uint16_t in_value,
-                                                                 duckdb_v2_value_handle *out_value,
-                                                                 duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::USMALLINT(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_uint_with_context(duckdb_v2_context_handle ctx, uint32_t in_value,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_uint(duckdb_v2_context_handle ctx, uint32_t in_value,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UINTEGER(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_uint_with_connection(duckdb_v2_connection_handle conn, uint32_t in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UINTEGER(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_context(duckdb_v2_context_handle ctx, uint64_t in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint(duckdb_v2_context_handle ctx, uint64_t in_value,
+                                               duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UBIGINT(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_ubigint_with_connection(duckdb_v2_connection_handle conn, uint64_t in_value,
-                                                               duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UBIGINT(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_context(duckdb_v2_context_handle ctx,
-                                                             const duckdb_v2_uhugeint_t *in_value,
-                                                             duckdb_v2_value_handle *out_value,
-                                                             duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint(duckdb_v2_context_handle ctx, const duckdb_v2_uhugeint_t *in_value,
+                                                duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UHUGEINT(Convert(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_uhugeint_with_connection(duckdb_v2_connection_handle conn,
-                                                                const duckdb_v2_uhugeint_t *in_value,
-                                                                duckdb_v2_value_handle *out_value,
-                                                                duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UHUGEINT(Convert(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_float_with_context(duckdb_v2_context_handle ctx, float in_value,
-                                                          duckdb_v2_value_handle *out_value,
-                                                          duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_float(duckdb_v2_context_handle ctx, float in_value,
+                                             duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::FLOAT(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_float_with_connection(duckdb_v2_connection_handle conn, float in_value,
-                                                             duckdb_v2_value_handle *out_value,
-                                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::FLOAT(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_double_with_context(duckdb_v2_context_handle ctx, double in_value,
-                                                           duckdb_v2_value_handle *out_value,
-                                                           duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_double(duckdb_v2_context_handle ctx, double in_value,
+                                              duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::DOUBLE(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_double_with_connection(duckdb_v2_connection_handle conn, double in_value,
-                                                              duckdb_v2_value_handle *out_value,
-                                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::DOUBLE(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_context(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_varchar(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
+                                               duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value(Convert(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_varchar_with_connection(duckdb_v2_connection_handle conn,
-                                                               const duckdb_v2_str *in_value,
-                                                               duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value(Convert(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_context(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_blob(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::BLOB_RAW(std::string(Convert(in_value)))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_blob_with_connection(duckdb_v2_connection_handle conn,
-                                                            const duckdb_v2_str *in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::BLOB_RAW(std::string(Convert(in_value)))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_null_with_context(duckdb_v2_context_handle ctx,
-                                                         duckdb_v2_logical_type_handle type,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_null(duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle type,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value(RequireValueType(type))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_null_with_connection(duckdb_v2_connection_handle conn,
-                                                            duckdb_v2_logical_type_handle type,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value(RequireValueType(type))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_type_with_context(duckdb_v2_context_handle ctx,
-                                                         duckdb_v2_logical_type_handle in_type,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_type(duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle in_type,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TYPE(RequireValueType(in_type))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_type_with_connection(duckdb_v2_connection_handle conn,
-                                                            duckdb_v2_logical_type_handle in_type,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TYPE(RequireValueType(in_type))); });
@@ -789,99 +591,49 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_type_with_connection(duckdb_v2_connection
 // The duals of the temporal accessors: same units, no range checking.
 // ---------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_date_with_context(duckdb_v2_context_handle ctx, int32_t in_value,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_date(duckdb_v2_context_handle ctx, int32_t in_value,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::DATE(duckdb::date_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_date_with_connection(duckdb_v2_connection_handle conn, int32_t in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::DATE(duckdb::date_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_time_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_time(duckdb_v2_context_handle ctx, int64_t in_value,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIME(duckdb::dtime_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_time_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIME(duckdb::dtime_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_time_ns_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_time_ns(duckdb_v2_context_handle ctx, int64_t in_value,
+                                               duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIME_NS(duckdb::dtime_ns_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_time_ns_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                               duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIME_NS(duckdb::dtime_ns_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_time_tz_with_context(duckdb_v2_context_handle ctx, uint64_t in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_time_tz(duckdb_v2_context_handle ctx, uint64_t in_value,
+                                               duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIMETZ(duckdb::dtime_tz_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_time_tz_with_connection(duckdb_v2_connection_handle conn, uint64_t in_value,
-                                                               duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIMETZ(duckdb::dtime_tz_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                              duckdb_v2_value_handle *out_value,
-                                                              duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp(duckdb_v2_context_handle ctx, int64_t in_value,
+                                                 duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIMESTAMP(duckdb::timestamp_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                                 duckdb_v2_value_handle *out_value,
-                                                                 duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::TIMESTAMP(duckdb::timestamp_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                  duckdb_v2_value_handle *out_value,
-                                                                  duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec(duckdb_v2_context_handle ctx, int64_t in_value,
+                                                     duckdb_v2_value_handle *out_value,
+                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
@@ -889,19 +641,9 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec_with_context(duckdb_v2_cont
 	    err, [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPSEC(duckdb::timestamp_sec_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_sec_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                                     duckdb_v2_value_handle *out_value,
-                                                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(
-	    err, [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPSEC(duckdb::timestamp_sec_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                 duckdb_v2_value_handle *out_value,
-                                                                 duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms(duckdb_v2_context_handle ctx, int64_t in_value,
+                                                    duckdb_v2_value_handle *out_value,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
@@ -909,19 +651,9 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms_with_context(duckdb_v2_conte
 	                        [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPMS(duckdb::timestamp_ms_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ms_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                                    duckdb_v2_value_handle *out_value,
-                                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err,
-	                        [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPMS(duckdb::timestamp_ms_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                 duckdb_v2_value_handle *out_value,
-                                                                 duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns(duckdb_v2_context_handle ctx, int64_t in_value,
+                                                    duckdb_v2_value_handle *out_value,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
@@ -929,19 +661,9 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns_with_context(duckdb_v2_conte
 	                        [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPNS(duckdb::timestamp_ns_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_ns_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                                    duckdb_v2_value_handle *out_value,
-                                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err,
-	                        [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPNS(duckdb::timestamp_ns_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                 duckdb_v2_value_handle *out_value,
-                                                                 duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz(duckdb_v2_context_handle ctx, int64_t in_value,
+                                                    duckdb_v2_value_handle *out_value,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
@@ -949,19 +671,9 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_with_context(duckdb_v2_conte
 	                        [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_with_connection(duckdb_v2_connection_handle conn, int64_t in_value,
-                                                                    duckdb_v2_value_handle *out_value,
-                                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err,
-	                        [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPTZ(duckdb::timestamp_tz_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_context(duckdb_v2_context_handle ctx, int64_t in_value,
-                                                                    duckdb_v2_value_handle *out_value,
-                                                                    duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns(duckdb_v2_context_handle ctx, int64_t in_value,
+                                                       duckdb_v2_value_handle *out_value,
+                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
@@ -969,32 +681,9 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_context(duckdb_v2_co
 	    err, [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPTZNS(duckdb::timestamp_tz_ns_t(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_timestamp_tz_ns_with_connection(duckdb_v2_connection_handle conn,
-                                                                       int64_t in_value,
-                                                                       duckdb_v2_value_handle *out_value,
-                                                                       duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(
-	    err, [&]() { *out_value = Emit(duckdb::Value::TIMESTAMPTZNS(duckdb::timestamp_tz_ns_t(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_context(duckdb_v2_context_handle ctx,
-                                                             const duckdb_v2_interval_t *in_value,
-                                                             duckdb_v2_value_handle *out_value,
-                                                             duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_interval(duckdb_v2_context_handle ctx, const duckdb_v2_interval_t *in_value,
+                                                duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::INTERVAL(Convert(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duckdb_v2_connection_handle conn,
-                                                                const duckdb_v2_interval_t *in_value,
-                                                                duckdb_v2_value_handle *out_value,
-                                                                duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::INTERVAL(Convert(in_value))); });
@@ -1007,79 +696,34 @@ DUCKDB_V2_ERROR duckdb_v2_value_create_interval_with_connection(duckdb_v2_connec
 // plus its width and scale, an internal 128-bit form, or opaque storage bytes.
 // ---------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_context(duckdb_v2_context_handle ctx,
-                                                            const duckdb_v2_hugeint_t *in_value, uint8_t width,
-                                                            uint8_t scale, duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_decimal(duckdb_v2_context_handle ctx, const duckdb_v2_hugeint_t *in_value,
+                                               uint8_t width, uint8_t scale, duckdb_v2_value_handle *out_value,
+                                               duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildDecimal(in_value, width, scale)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_context(duckdb_v2_context_handle ctx,
-                                                         const duckdb_v2_hugeint_t *in_value,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_uuid(duckdb_v2_context_handle ctx, const duckdb_v2_hugeint_t *in_value,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UUID(Convert(in_value))); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_context(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
-                                                        duckdb_v2_value_handle *out_value,
-                                                        duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_bit(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
+                                           duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildBit(in_value)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_context(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
-                                                           duckdb_v2_value_handle *out_value,
-                                                           duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_bignum(duckdb_v2_context_handle ctx, const duckdb_v2_str *in_value,
+                                              duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildBignum(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_decimal_with_connection(duckdb_v2_connection_handle conn,
-                                                               const duckdb_v2_hugeint_t *in_value, uint8_t width,
-                                                               uint8_t scale, duckdb_v2_value_handle *out_value,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildDecimal(in_value, width, scale)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_uuid_with_connection(duckdb_v2_connection_handle conn,
-                                                            const duckdb_v2_hugeint_t *in_value,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(duckdb::Value::UUID(Convert(in_value))); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_bit_with_connection(duckdb_v2_connection_handle conn,
-                                                           const duckdb_v2_str *in_value,
-                                                           duckdb_v2_value_handle *out_value,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildBit(in_value)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_bignum_with_connection(duckdb_v2_connection_handle conn,
-                                                              const duckdb_v2_str *in_value,
-                                                              duckdb_v2_value_handle *out_value,
-                                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildBignum(in_value)); });
@@ -1187,124 +831,62 @@ duckdb::Value BuildMap(duckdb::ClientContext &ctx, duckdb_v2_logical_type_handle
 
 } // namespace
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_context(duckdb_v2_context_handle ctx,
-                                                         duckdb_v2_logical_type_handle child_type,
-                                                         const duckdb_v2_value_handle *children, idx_t child_count,
-                                                         duckdb_v2_value_handle *out_value,
-                                                         duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_list(duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle child_type,
+                                            const duckdb_v2_value_handle *children, idx_t child_count,
+                                            duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
-	return WithErrorHandler(err,
-	                        [&]() { *out_value = Emit(BuildList(*Convert(ctx), child_type, children, child_count)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_list_with_connection(duckdb_v2_connection_handle conn,
-                                                            duckdb_v2_logical_type_handle child_type,
-                                                            const duckdb_v2_value_handle *children, idx_t child_count,
-                                                            duckdb_v2_value_handle *out_value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction([&]() { *out_value = Emit(BuildList(ctx, child_type, children, child_count)); });
+		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
+			*out_value = Emit(BuildList(context, child_type, children, child_count));
+		});
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_context(duckdb_v2_context_handle ctx,
-                                                          duckdb_v2_logical_type_handle child_type,
-                                                          const duckdb_v2_value_handle *children, idx_t child_count,
-                                                          duckdb_v2_value_handle *out_value,
-                                                          duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_array(duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle child_type,
+                                             const duckdb_v2_value_handle *children, idx_t child_count,
+                                             duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
-	return WithErrorHandler(err,
-	                        [&]() { *out_value = Emit(BuildArray(*Convert(ctx), child_type, children, child_count)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_array_with_connection(duckdb_v2_connection_handle conn,
-                                                             duckdb_v2_logical_type_handle child_type,
-                                                             const duckdb_v2_value_handle *children, idx_t child_count,
-                                                             duckdb_v2_value_handle *out_value,
-                                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction([&]() { *out_value = Emit(BuildArray(ctx, child_type, children, child_count)); });
+		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
+			*out_value = Emit(BuildArray(context, child_type, children, child_count));
+		});
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_struct_with_context(duckdb_v2_context_handle ctx,
-                                                           const duckdb_v2_identifier_t *names,
-                                                           const duckdb_v2_value_handle *children, idx_t field_count,
-                                                           duckdb_v2_value_handle *out_value,
-                                                           duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_struct(duckdb_v2_context_handle ctx, const duckdb_v2_identifier_t *names,
+                                              const duckdb_v2_value_handle *children, idx_t field_count,
+                                              duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildStruct(names, children, field_count)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_struct_with_connection(duckdb_v2_connection_handle conn,
-                                                              const duckdb_v2_identifier_t *names,
-                                                              const duckdb_v2_value_handle *children, idx_t field_count,
-                                                              duckdb_v2_value_handle *out_value,
-                                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildStruct(names, children, field_count)); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_create_tuple_with_context(duckdb_v2_context_handle ctx,
-                                                          const duckdb_v2_value_handle *children, idx_t field_count,
-                                                          duckdb_v2_value_handle *out_value,
-                                                          duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_create_tuple(duckdb_v2_context_handle ctx, const duckdb_v2_value_handle *children,
+                                             idx_t field_count, duckdb_v2_value_handle *out_value,
+                                             duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildTuple(children, field_count)); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_create_tuple_with_connection(duckdb_v2_connection_handle conn,
-                                                             const duckdb_v2_value_handle *children, idx_t field_count,
-                                                             duckdb_v2_value_handle *out_value,
-                                                             duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() { *out_value = Emit(BuildTuple(children, field_count)); });
-}
-
 DUCKDB_V2_ERROR
-duckdb_v2_value_create_map_with_context(duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle key_type,
-                                        duckdb_v2_logical_type_handle value_type, const duckdb_v2_value_handle *keys,
-                                        const duckdb_v2_value_handle *values, idx_t entry_count,
-                                        duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
+duckdb_v2_value_create_map(duckdb_v2_context_handle ctx, duckdb_v2_logical_type_handle key_type,
+                           duckdb_v2_logical_type_handle value_type, const duckdb_v2_value_handle *keys,
+                           const duckdb_v2_value_handle *values, idx_t entry_count, duckdb_v2_value_handle *out_value,
+                           duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
-	DUCKDB_CHECK_ARG(out_value);
-	*out_value = nullptr;
-	return WithErrorHandler(
-	    err, [&]() { *out_value = Emit(BuildMap(*Convert(ctx), key_type, value_type, keys, values, entry_count)); });
-}
-
-DUCKDB_V2_ERROR
-duckdb_v2_value_create_map_with_connection(duckdb_v2_connection_handle conn, duckdb_v2_logical_type_handle key_type,
-                                           duckdb_v2_logical_type_handle value_type, const duckdb_v2_value_handle *keys,
-                                           const duckdb_v2_value_handle *values, idx_t entry_count,
-                                           duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(out_value);
 	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction(
-		    [&]() { *out_value = Emit(BuildMap(ctx, key_type, value_type, keys, values, entry_count)); });
+		Convert(ctx)->WithContext([&](duckdb::ClientContext &context) {
+			*out_value = Emit(BuildMap(context, key_type, value_type, keys, values, entry_count));
+		});
 	});
 }
 
@@ -1365,26 +947,15 @@ static void CastValueV2(duckdb::ClientContext &ctx, duckdb_v2_value_handle value
 	*out_value = Convert(new duckdb::Value(std::move(casted)));
 }
 
-DUCKDB_V2_ERROR duckdb_v2_value_cast_with_connection(duckdb_v2_connection_handle conn, duckdb_v2_value_handle value,
-                                                     duckdb_v2_logical_type_handle target_type,
-                                                     duckdb_v2_value_handle *out_value,
-                                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(value);
-	DUCKDB_CHECK_ARG(target_type);
-	DUCKDB_CHECK_ARG(out_value);
-	return WithErrorHandler(err, [&]() {
-		auto &ctx = *Convert(conn)->context;
-		ctx.RunFunctionInTransaction([&]() { CastValueV2(ctx, value, target_type, out_value); });
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_value_cast_with_context(duckdb_v2_context_handle ctx, duckdb_v2_value_handle value,
-                                                  duckdb_v2_logical_type_handle target_type,
-                                                  duckdb_v2_value_handle *out_value, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_value_cast(duckdb_v2_context_handle ctx, duckdb_v2_value_handle value,
+                                     duckdb_v2_logical_type_handle target_type, duckdb_v2_value_handle *out_value,
+                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(value);
 	DUCKDB_CHECK_ARG(target_type);
 	DUCKDB_CHECK_ARG(out_value);
-	return WithErrorHandler(err, [&]() { CastValueV2(*Convert(ctx), value, target_type, out_value); });
+	return WithErrorHandler(err, [&]() {
+		Convert(ctx)->WithContext(
+		    [&](duckdb::ClientContext &context) { CastValueV2(context, value, target_type, out_value); });
+	});
 }

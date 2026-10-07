@@ -1633,15 +1633,15 @@ void PartProbeGetPartitionDataCb(duckdb_v2_table_function_partition_data_info_ha
 	}
 
 	duckdb_v2_value_handle wrong_type = nullptr;
-	if (duckdb_v2_value_create_int_with_context(context, static_cast<int32_t>(global.last_group), &wrong_type,
-	                                            nullptr) == DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_int(context, static_cast<int32_t>(global.last_group), &wrong_type, nullptr) ==
+	    DUCKDB_V2_ERROR_NONE) {
 		part_probe_wrong_type_partition_value_rc =
 		    duckdb_v2_table_function_partition_data_set_partition_value(info, 0, wrong_type, nullptr);
 		duckdb_v2_value_destroy(&wrong_type);
 	}
 
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	// Exactly one column is ever requested, so index 1 is always out of range.
@@ -1717,7 +1717,7 @@ void DecreasingBatchIndexDataCb(duckdb_v2_table_function_partition_data_info_han
 		return;
 	}
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_table_function_partition_data_set_partition_value(info, 0, value, err);
@@ -1743,7 +1743,7 @@ void ConstantBatchIndexDataCb(duckdb_v2_table_function_partition_data_info_handl
 		return;
 	}
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_table_function_partition_data_set_partition_value(info, 0, value, err);
@@ -1902,7 +1902,7 @@ void ProjPartProbeGetPartitionDataCb(duckdb_v2_table_function_partition_data_inf
 	}
 	proj_part_probe_reported_column = column;
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(context, global.last_group, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_table_function_partition_data_set_partition_value(info, 0, value, err);

@@ -44,7 +44,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx, DUCKDB_V2_LO
 		const duckdb::string type(Convert(log_type));
 		const auto *type_name = type.empty() ? duckdb::DefaultLogType::NAME : type.c_str();
 
-		auto &logger = duckdb::Logger::Get(*Convert(ctx));
+		auto &logger = duckdb::Logger::Get(Convert(ctx)->context);
 		if (logger.ShouldLog(type_name, log_level)) {
 			logger.WriteLog(type_name, log_level, duckdb::string(Convert(message)));
 		}

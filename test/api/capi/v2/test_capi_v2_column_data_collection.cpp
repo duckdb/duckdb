@@ -10,7 +10,7 @@
 //
 // Scans hand back borrowed data: a scanned chunk's vectors reference buffers
 // pinned by the worker scan state, valid until that worker's next scan or the
-// state's destruction. data_chunk_copy_with_connection is the escape hatch
+// state's destruction. data_chunk_copy is the escape hatch
 // and is pinned as such below.
 // ---------------------------------------------------------------------------
 
@@ -23,7 +23,7 @@ duckdb_v2_data_chunk_handle MakeIntChunk(duckdb_v2_connection_handle conn, const
 	auto int_type = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle types[1] = {int_type};
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto rc = duckdb_v2_data_chunk_create_with_connection(conn, types, 1, &chunk, nullptr);
+	auto rc = duckdb_v2_data_chunk_create(ContextOf(conn), types, 1, &chunk, nullptr);
 	duckdb_v2_logical_type_destroy(&int_type);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 
@@ -43,7 +43,7 @@ duckdb_v2_column_data_collection_handle MakeIntCollection(duckdb_v2_connection_h
 	auto int_type = MakeType(conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle types[1] = {int_type};
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	auto rc = duckdb_v2_column_data_collection_create_with_connection(conn, types, 1, &cdc, nullptr);
+	auto rc = duckdb_v2_column_data_collection_create(ContextOf(conn), types, 1, &cdc, nullptr);
 	duckdb_v2_logical_type_destroy(&int_type);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(cdc != nullptr);
@@ -189,13 +189,13 @@ TEST_CASE("V2: column_data_collection VARCHAR round-trip", "[capi_v2][column_dat
 	auto varchar_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	duckdb_v2_logical_type_handle types[1] = {varchar_type};
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 1, &cdc, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 1, &cdc, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 
 	const std::vector<std::string> strings = {"a", "a string too long for the inline representation", ""};
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(types, 1, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), types, 1, &chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&varchar_type);
 	duckdb_v2_vector_handle vec = nullptr;
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -219,7 +219,8 @@ TEST_CASE("V2: column_data_collection VARCHAR round-trip", "[capi_v2][column_dat
 	auto scan_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	duckdb_v2_logical_type_handle scan_types[1] = {scan_type};
 	duckdb_v2_data_chunk_handle scan_chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(scan_types, 1, &scan_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), scan_types, 1, &scan_chunk, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&scan_type);
 
 	bool did_produce = false;
@@ -272,7 +273,7 @@ TEST_CASE("V2: column_data_collection combine refusals", "[capi_v2][column_data_
 	auto bigint_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_logical_type_handle types[1] = {bigint_type};
 	duckdb_v2_column_data_collection_handle source = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 1, &source, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 1, &source, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&bigint_type);
 
@@ -355,22 +356,21 @@ TEST_CASE("V2: column_data_collection create refusals", "[capi_v2][column_data_c
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
 
 	// Null connection / types / out slot.
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(nullptr, types, 1, &cdc, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(nullptr, types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(cdc == nullptr);
+	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), nullptr, 1, &cdc, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(cdc == nullptr);
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, nullptr, 1, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(cdc == nullptr);
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 1, nullptr, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 1, nullptr, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// A collection must have at least one column.
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 0, &cdc, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 0, &cdc, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(cdc == nullptr);
 
 	// A null element in the types array.
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(fx.conn, types, 2, &cdc, nullptr) ==
+	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(fx.conn), types, 2, &cdc, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(cdc == nullptr);
 
@@ -387,7 +387,7 @@ TEST_CASE("V2: column_data_collection append refuses mismatching chunks", "[capi
 	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle two_types[2] = {int_type, int_type};
 	duckdb_v2_data_chunk_handle two_cols = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(two_types, 2, &two_cols, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), two_types, 2, &two_cols, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, two_cols, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_data_chunk_destroy(&two_cols);
 	duckdb_v2_logical_type_destroy(&int_type);
@@ -396,7 +396,8 @@ TEST_CASE("V2: column_data_collection append refuses mismatching chunks", "[capi
 	auto double_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE);
 	duckdb_v2_logical_type_handle double_types[1] = {double_type};
 	duckdb_v2_data_chunk_handle double_chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(double_types, 1, &double_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), double_types, 1, &double_chunk, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_column_data_collection_append(cdc, st, double_chunk, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_logical_type_destroy(&double_type);
 
@@ -428,7 +429,7 @@ TEST_CASE("V2: column_data_collection scan refuses mismatching chunks", "[capi_v
 	auto double_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_DOUBLE);
 	duckdb_v2_logical_type_handle types[1] = {double_type};
 	duckdb_v2_data_chunk_handle wrong_chunk = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_create(types, 1, &wrong_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_create(ContextOf(fx.conn), types, 1, &wrong_chunk, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_logical_type_destroy(&double_type);
 
 	bool did_produce = false;
@@ -562,13 +563,13 @@ TEST_CASE("V2: column_data_collection parallel scan", "[capi_v2][column_data_col
 // data_chunk create/copy variants
 // ===========================================================================
 
-TEST_CASE("V2: data_chunk_create_with_connection", "[capi_v2][column_data_collection]") {
+TEST_CASE("V2: data_chunk_create through a connection's context", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
 	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_logical_type_handle types[1] = {int_type};
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto rc = duckdb_v2_data_chunk_create_with_connection(fx.conn, types, 1, &chunk, nullptr);
+	auto rc = duckdb_v2_data_chunk_create(ContextOf(fx.conn), types, 1, &chunk, nullptr);
 	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(chunk != nullptr);
 	idx_t vec_count = 0;
@@ -576,9 +577,8 @@ TEST_CASE("V2: data_chunk_create_with_connection", "[capi_v2][column_data_collec
 	REQUIRE(vec_count == 1);
 	duckdb_v2_data_chunk_destroy(&chunk);
 
-	// Null connection.
-	REQUIRE(duckdb_v2_data_chunk_create_with_connection(nullptr, types, 1, &chunk, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	// Null context.
+	REQUIRE(duckdb_v2_data_chunk_create(nullptr, types, 1, &chunk, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(chunk == nullptr);
 
 	duckdb_v2_logical_type_destroy(&int_type);
@@ -588,7 +588,7 @@ TEST_CASE("V2: data_chunk_create_with_connection", "[capi_v2][column_data_collec
 // scan states, the collection, and the source chunk — is destroyed. This
 // pins the documented escape hatch for the zero-copy scan.
 #if (STANDARD_VECTOR_SIZE > 2)
-TEST_CASE("V2: data_chunk_copy_with_connection outlives the scan", "[capi_v2][column_data_collection]") {
+TEST_CASE("V2: data_chunk_copy outlives the scan", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
 	auto cdc = MakeIntCollection(fx.conn);
 	AppendInts(fx.conn, cdc, {10, 20, 30});
@@ -605,7 +605,7 @@ TEST_CASE("V2: data_chunk_copy_with_connection outlives the scan", "[capi_v2][co
 	REQUIRE(did_produce);
 
 	duckdb_v2_data_chunk_handle copy = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(copy != nullptr);
 
 	// Tear down everything the scanned chunk borrowed from.
@@ -630,26 +630,24 @@ TEST_CASE("V2: data_chunk_copy_with_connection outlives the scan", "[capi_v2][co
 }
 #endif
 
-TEST_CASE("V2: data_chunk_copy_with_connection refusals and empty copy", "[capi_v2][column_data_collection]") {
+TEST_CASE("V2: data_chunk_copy refusals and empty copy", "[capi_v2][column_data_collection]") {
 	EnvFixture fx;
 	auto chunk = MakeIntChunk(fx.conn, {});
 
 	// An empty chunk copies to an empty chunk.
 	duckdb_v2_data_chunk_handle copy = nullptr;
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), chunk, &copy, nullptr) == DUCKDB_V2_ERROR_NONE);
 	idx_t size = 99;
 	REQUIRE(duckdb_v2_data_chunk_get_size(copy, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(size == 0);
 	duckdb_v2_data_chunk_destroy(&copy);
 
 	// Null arguments.
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(nullptr, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy(nullptr, chunk, &copy, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(copy == nullptr);
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, nullptr, &copy, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), nullptr, &copy, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(copy == nullptr);
-	REQUIRE(duckdb_v2_data_chunk_copy_with_connection(fx.conn, chunk, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_data_chunk_copy(ContextOf(fx.conn), chunk, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_data_chunk_destroy(&chunk);
 }

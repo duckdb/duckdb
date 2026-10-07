@@ -61,8 +61,9 @@ TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_
 	REQUIRE_FALSE(instance.GetOption("allow_community_extensions").GetDefaultValue().empty());
 
 	auto conn = instance.Connect();
-	REQUIRE(conn.GetOptionCount() == instance.GetOptionCount());
-	REQUIRE_FALSE(conn.GetOptionByIndex(0).GetName().empty());
+	auto &ctx = conn.GetContext();
+	REQUIRE(ctx.GetOptionCount() == instance.GetOptionCount());
+	REQUIRE_FALSE(ctx.GetOptionByIndex(0).GetName().empty());
 }
 
 TEST_CASE("Stable C++API: Instance SetDefault selects the database for new connections", "[cpp_api]") {
@@ -150,14 +151,14 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	// max_execution_time is LOCAL_DEFAULT: a LOCAL write on conn_a stays
 	// invisible to conn_b.
 	conn_a.SetOption("max_execution_time", "5000", SettingScope::LOCAL);
-	REQUIRE(conn_a.GetOption("max_execution_time").GetValue() == "5000");
-	REQUIRE(conn_b.GetOption("max_execution_time").GetValue() != "5000");
+	REQUIRE(conn_a.GetContext().GetOption("max_execution_time").GetValue() == "5000");
+	REQUIRE(conn_b.GetContext().GetOption("max_execution_time").GetValue() != "5000");
 
 	// A GLOBAL write on conn_a is visible identically on conn_b. The options
 	// must outlive the borrowed views their getters return.
 	conn_a.SetOption("memory_limit", "987MB", SettingScope::GLOBAL);
-	auto option_a = conn_a.GetOption("memory_limit");
-	auto option_b = conn_b.GetOption("memory_limit");
+	auto option_a = conn_a.GetContext().GetOption("memory_limit");
+	auto option_b = conn_b.GetContext().GetOption("memory_limit");
 	auto seen_a = option_a.GetValue();
 	auto seen_b = option_b.GetValue();
 	REQUIRE_FALSE(seen_a.empty());
@@ -167,22 +168,22 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	REQUIRE_THROWS_MATCHES(conn_a.SetOption("allow_community_extensions", "false", SettingScope::LOCAL), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
-TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOption default", "[cpp_api]") {
+TEST_CASE("Stable C++API: Context::GetOption by name and the scopeless SetOption default", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
 	auto instance = env.Open(":memory:");
 	auto conn = instance.Connect();
+	auto &ctx = conn.GetContext();
 
-	auto option = conn.GetOption("allow_community_extensions");
+	auto option = ctx.GetOption("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
 
 	// The scopeless overload uses Automatic scope (SQL `SET` semantics).
 	conn.SetOption("max_execution_time", "4242");
-	REQUIRE(conn.GetOption("max_execution_time").GetValue() == "4242");
+	REQUIRE(ctx.GetOption("max_execution_time").GetValue() == "4242");
 
-	REQUIRE_THROWS_MATCHES(conn.GetOption("no_such_option_xyz"), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(ctx.GetOption("no_such_option_xyz"), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: Instance::Attach with a name and options", "[cpp_api]") {
 	using namespace duckdb::cxx;

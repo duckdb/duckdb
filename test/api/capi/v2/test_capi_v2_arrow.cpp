@@ -159,7 +159,7 @@ void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_cont
 		return;
 	}
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(&arg_type, 1, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(context, &arg_type, 1, &input, err);
 	duckdb_v2_logical_type_destroy(&arg_type);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -311,7 +311,7 @@ void ArrowRangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_
 	}
 	duckdb_v2_logical_type_handle types[2] = {bigint, varchar};
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(types, 2, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(context, types, 2, &input, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	duckdb_v2_logical_type_destroy(&varchar);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
@@ -446,7 +446,7 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 	}
 
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(&column_type, 1, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(context, &column_type, 1, &input, err);
 	duckdb_v2_logical_type_destroy(&column_type);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		ArrowRoundtripDestroy(rt);
@@ -537,7 +537,7 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 	auto varchar = ArrowTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR, nullptr);
 	if (varchar) {
 		duckdb_v2_data_chunk_handle wrong = nullptr;
-		if (duckdb_v2_data_chunk_create(&varchar, 1, &wrong, nullptr) == DUCKDB_V2_ERROR_NONE) {
+		if (duckdb_v2_data_chunk_create(context, &varchar, 1, &wrong, nullptr) == DUCKDB_V2_ERROR_NONE) {
 			arrow_split_observed.type_mismatch_rc =
 			    duckdb_v2_arrow_exporter_append(rt->exporter, &wrong, false, false, nullptr);
 			duckdb_v2_data_chunk_destroy(&wrong);
@@ -625,7 +625,7 @@ void ArrowTopLevelValidityExec(duckdb_v2_scalar_function_exec_info_handle info, 
 
 	constexpr idx_t rows = 16;
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(types, 2, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(context, types, 2, &input, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	duckdb_v2_logical_type_destroy(&mood);
 	if (rc != DUCKDB_V2_ERROR_NONE) {

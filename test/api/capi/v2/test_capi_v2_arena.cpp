@@ -23,7 +23,7 @@ struct StringChunk {
 	explicit StringChunk(DUCKDB_V2_LOGICAL_TYPE_ID id) {
 		auto t = MakeType(env.conn, id);
 		duckdb_v2_logical_type_handle types[1] = {t};
-		auto rc = duckdb_v2_data_chunk_create(types, 1, &chunk, nullptr);
+		auto rc = duckdb_v2_data_chunk_create(ContextOf(env.conn), types, 1, &chunk, nullptr);
 		duckdb_v2_logical_type_destroy(&t);
 		REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
 		// A REQUIRE throw in a ctor skips the dtor: destroy before failing.

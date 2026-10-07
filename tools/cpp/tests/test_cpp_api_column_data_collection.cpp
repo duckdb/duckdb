@@ -16,9 +16,10 @@ using namespace duckdb::cxx;
 
 // Build a single-column INTEGER chunk holding the given values.
 DataChunk MakeIntChunk(Connection &conn, const std::vector<int32_t> &vals) {
+	auto &ctx = conn.GetContext();
 	std::vector<LogicalType> types;
-	types.push_back(conn.ParseType("INTEGER"));
-	DataChunk chunk(conn, types);
+	types.push_back(ctx.ParseType("INTEGER"));
+	DataChunk chunk(ctx, types);
 	auto vec = chunk.GetVector(0);
 	vec.SetSize(vals.size());
 	auto *data = vec.GetDataMutable<int32_t>();
@@ -51,10 +52,11 @@ TEST_CASE("Stable C++API: ColumnDataCollection round-trip", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
+	auto &ctx = conn.GetContext();
 
 	std::vector<LogicalType> types;
-	types.push_back(conn.ParseType("INTEGER"));
-	ColumnDataCollection collection(conn, types);
+	types.push_back(ctx.ParseType("INTEGER"));
+	ColumnDataCollection collection(ctx, types);
 	REQUIRE(collection.GetRowCount() == 0);
 
 	// Append twice through one state, then once through the one-shot form.
@@ -71,11 +73,12 @@ TEST_CASE("Stable C++API: ColumnDataCollection combine consumes the source", "[c
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
+	auto &ctx = conn.GetContext();
 
 	std::vector<LogicalType> types;
-	types.push_back(conn.ParseType("INTEGER"));
-	ColumnDataCollection target(conn, types);
-	ColumnDataCollection source(conn, types);
+	types.push_back(ctx.ParseType("INTEGER"));
+	ColumnDataCollection target(ctx, types);
+	ColumnDataCollection source(ctx, types);
 	target.Append(MakeIntChunk(conn, {1, 2}));
 	source.Append(MakeIntChunk(conn, {3}));
 
@@ -86,8 +89,8 @@ TEST_CASE("Stable C++API: ColumnDataCollection combine consumes the source", "[c
 
 	// A refused merge throws and leaves the source alive.
 	std::vector<LogicalType> other_types;
-	other_types.push_back(conn.ParseType("BIGINT"));
-	ColumnDataCollection mismatched(conn, other_types);
+	other_types.push_back(ctx.ParseType("BIGINT"));
+	ColumnDataCollection mismatched(ctx, other_types);
 	REQUIRE_THROWS_MATCHES(target.Combine(std::move(mismatched)), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	REQUIRE(mismatched); // NOLINT: pinning the not-consumed state
@@ -97,10 +100,11 @@ TEST_CASE("Stable C++API: ColumnDataCollection reset", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
+	auto &ctx = conn.GetContext();
 
 	std::vector<LogicalType> types;
-	types.push_back(conn.ParseType("INTEGER"));
-	ColumnDataCollection collection(conn, types);
+	types.push_back(ctx.ParseType("INTEGER"));
+	ColumnDataCollection collection(ctx, types);
 	collection.Append(MakeIntChunk(conn, {1, 2, 3}));
 	REQUIRE(collection.GetRowCount() == 3);
 
@@ -116,10 +120,11 @@ TEST_CASE("Stable C++API: ColumnDataCollection clear", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
+	auto &ctx = conn.GetContext();
 
 	std::vector<LogicalType> types;
-	types.push_back(conn.ParseType("INTEGER"));
-	ColumnDataCollection collection(conn, types);
+	types.push_back(ctx.ParseType("INTEGER"));
+	ColumnDataCollection collection(ctx, types);
 
 	// Same observable effect as Reset; the difference is that the buffers survive for the next appends.
 	for (int32_t round = 0; round < 3; round++) {
@@ -138,17 +143,18 @@ TEST_CASE("Stable C++API: ColumnDataCollection scan refuses a mismatching chunk"
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
+	auto &ctx = conn.GetContext();
 
 	std::vector<LogicalType> types;
-	types.push_back(conn.ParseType("INTEGER"));
-	ColumnDataCollection collection(conn, types);
+	types.push_back(ctx.ParseType("INTEGER"));
+	ColumnDataCollection collection(ctx, types);
 	collection.Append(MakeIntChunk(conn, {1}));
 
 	auto shared = collection.CreateSharedScanState();
 	auto worker = collection.CreateWorkerScanState();
 	std::vector<LogicalType> wrong_types;
-	wrong_types.push_back(conn.ParseType("DOUBLE"));
-	DataChunk wrong_chunk(conn, wrong_types);
+	wrong_types.push_back(ctx.ParseType("DOUBLE"));
+	DataChunk wrong_chunk(ctx, wrong_types);
 	REQUIRE_THROWS_MATCHES(collection.Scan(shared, worker, wrong_chunk), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
@@ -156,10 +162,11 @@ TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
+	auto &ctx = conn.GetContext();
 
 	std::vector<LogicalType> types;
-	types.push_back(conn.ParseType("INTEGER"));
-	ColumnDataCollection collection(conn, types);
+	types.push_back(ctx.ParseType("INTEGER"));
+	ColumnDataCollection collection(ctx, types);
 	collection.Append(MakeIntChunk(conn, {10}));
 
 	// Scan one chunk, copy it, then tear down everything it borrowed from.
@@ -168,7 +175,7 @@ TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
 		auto worker = collection.CreateWorkerScanState();
 		auto chunk = MakeIntChunk(conn, {});
 		REQUIRE(collection.Scan(shared, worker, chunk));
-		return chunk.Copy(conn);
+		return chunk.Copy(ctx);
 	}();
 	collection.Reset();
 

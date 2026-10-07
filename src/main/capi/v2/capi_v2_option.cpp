@@ -83,7 +83,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_name(duckdb_v2_context_handle ct
 	DUCKDB_CHECK_ARG(out_option);
 	*out_option = nullptr;
 	return WithErrorHandler(err, [&]() {
-		CV2OptionSource source(*Convert(ctx));
+		CV2OptionSource source(Convert(ctx)->context);
 		*out_option = Convert(CV2Option::FromName(source, ConvertIdentifierName(name)).release());
 	});
 }
@@ -92,7 +92,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_get_option_count(duckdb_v2_context_handle ctx,
                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	DUCKDB_CHECK_ARG(out_count);
-	return WithErrorHandler(err, [&]() { *out_count = CV2Option::Count(CV2OptionSource(*Convert(ctx))); });
+	return WithErrorHandler(err, [&]() { *out_count = CV2Option::Count(CV2OptionSource(Convert(ctx)->context)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_index(duckdb_v2_context_handle ctx, idx_t index,
@@ -102,7 +102,7 @@ DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_index(duckdb_v2_context_handle c
 	DUCKDB_CHECK_ARG(out_option);
 	*out_option = nullptr;
 	return WithErrorHandler(err, [&]() {
-		CV2OptionSource source(*Convert(ctx));
+		CV2OptionSource source(Convert(ctx)->context);
 		*out_option = Convert(CV2Option::FromIndex(source, index).release());
 	});
 }

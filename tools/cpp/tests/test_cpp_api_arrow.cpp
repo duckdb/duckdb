@@ -22,6 +22,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
+	auto &ctx = conn.GetContext();
 
 	// Both handles need a Context, which only a callback has, so the round-trip runs inside a scalar function. A
 	// callback must not use Catch assertions, so what it observes is latched and checked after the query.
@@ -39,7 +40,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 	auto function = ScalarFunction::Create(conn);
 	function.SetName("cpp_arrow_probe");
 	function.SetExecCallback([](ScalarFunction::ExecInput &input) {
-		auto context = input.GetContext();
+		auto &context = input.GetContext();
 
 		std::vector<LogicalType> types;
 		types.push_back(context.ParseType("BIGINT"));
@@ -83,7 +84,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 			out[i] = 1;
 		}
 	});
-	const auto integer = conn.ParseType("INTEGER");
+	const auto integer = ctx.ParseType("INTEGER");
 	function.GetSignature().AddParameter("x", integer).SetReturnType(integer);
 	function.Register();
 

@@ -114,7 +114,8 @@ static auto CV2ReplacementScanTrampoline(ClientContext &context, ReplacementScan
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	scan_data.callback(Convert(&args), Convert(&context), &err_ptr);
+	CV2CallbackContext callback_context(context);
+	scan_data.callback(Convert(&args), Convert(&callback_context), &err_ptr);
 
 	if (err.HasError()) {
 		err.ThrowAsException();

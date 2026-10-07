@@ -31,7 +31,8 @@ TEST_CASE("Stable C++API: file system round-trip", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto fs = conn.GetFileSystem();
+	auto &ctx = conn.GetContext();
+	auto fs = ctx.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_roundtrip.bin");
 
 	{
@@ -57,7 +58,8 @@ TEST_CASE("Stable C++API: file flags", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto fs = conn.GetFileSystem();
+	auto &ctx = conn.GetContext();
+	auto fs = ctx.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_flags.bin");
 
 	{
@@ -97,7 +99,8 @@ TEST_CASE("Stable C++API: file system refusals", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto fs = conn.GetFileSystem();
+	auto &ctx = conn.GetContext();
+	auto fs = ctx.GetFileSystem();
 
 	// A missing file without a create flag.
 	REQUIRE_THROWS_AS(fs.OpenFile(duckdb::TestCreatePath("cpp_fs_missing.bin"), {FileFlags::READ}), Exception);
@@ -113,7 +116,8 @@ TEST_CASE("Stable C++API: file handle close then destroy", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto fs = conn.GetFileSystem();
+	auto &ctx = conn.GetContext();
+	auto fs = ctx.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_close.bin");
 
 	auto file = fs.OpenFile(path, {FileFlags::WRITE, FileFlags::FILE_CREATE_NEW});
@@ -126,7 +130,8 @@ TEST_CASE("Stable C++API: positional file read and write", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto fs = conn.GetFileSystem();
+	auto &ctx = conn.GetContext();
+	auto fs = ctx.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_positional.bin");
 
 	auto file =
@@ -153,14 +158,15 @@ TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto fs = conn.GetFileSystem();
+	auto &ctx = conn.GetContext();
+	auto fs = ctx.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_options.bin");
 
 	auto options = fs.CreateOpenOptions();
 	options.SetFlag(FileFlags::WRITE)
 	    .SetFlag(FileFlags::FILE_CREATE_NEW)
-	    .SetValue("file_size", Value::Create(conn, int64_t {4}))
-	    .SetValue("made_up_option", Value::Create(conn, varchar_t("nobody-reads-this")));
+	    .SetValue("file_size", Value::Create(ctx, int64_t {4}))
+	    .SetValue("made_up_option", Value::Create(ctx, varchar_t("nobody-reads-this")));
 
 	{
 		auto file = fs.OpenFile(path, options);

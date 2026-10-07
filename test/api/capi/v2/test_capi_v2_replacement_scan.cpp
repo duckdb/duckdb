@@ -91,7 +91,7 @@ void ReplClaimRange(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 		return;
 	}
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, 2, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(context, 2, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto rc = duckdb_v2_replacement_scan_add_argument(info, value, err);
@@ -146,7 +146,7 @@ void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 	// An argument before a function name is refused. The error slot is not touched by a failing call, so these
 	// probes pass nullptr and read the return code instead.
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(context, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	repl_observed.bare_argument_rc = duckdb_v2_replacement_scan_add_argument(info, value, nullptr);
@@ -161,7 +161,7 @@ void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 	repl_observed.mixed_form_rc = duckdb_v2_replacement_scan_set_subquery(info, &sql_str, nullptr);
 
 	duckdb_v2_value_handle two = nullptr;
-	if (duckdb_v2_value_create_bigint_with_context(context, 2, &two, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(context, 2, &two, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_replacement_scan_add_argument(info, two, err);
@@ -288,11 +288,10 @@ duckdb_v2_column_data_collection_handle ReplMakeCollection(duckdb_v2_connection_
 	duckdb_v2_logical_type_handle types[1] = {bigint};
 
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create_with_connection(conn, types, 1, &cdc, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_column_data_collection_create(ContextOf(conn), types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto chunk_rc = duckdb_v2_data_chunk_create_with_connection(conn, types, 1, &chunk, nullptr);
+	auto chunk_rc = duckdb_v2_data_chunk_create(ContextOf(conn), types, 1, &chunk, nullptr);
 	duckdb_v2_logical_type_destroy(&bigint);
 	REQUIRE(chunk_rc == DUCKDB_V2_ERROR_NONE);
 
