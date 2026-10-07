@@ -217,3 +217,16 @@ query II
 SELECT typeof(ts), ts::VARCHAR FROM read_parquet('{TEST_DIR}/int64_ns.parquet', int96_as='struct')
 ----
 TIMESTAMP_NS	1992-01-01 12:03:27.123456789
+
+# Verify TIMESTAMPTZ_NS statistics
+statement ok
+COPY (SELECT TIMESTAMPTZ_NS '2026-09-16 10:20:30.123456789+00' AS ts)
+TO '{TEST_DIR}/timezone_stats.parquet' (FORMAT PARQUET);
+
+query II
+SELECT stats_min_value, stats_max_value
+FROM parquet_metadata('{TEST_DIR}/timezone_stats.parquet');
+----
+2026-09-16 10:20:30.123456789+00	2026-09-16 10:20:30.123456789+00
+
+

@@ -338,6 +338,9 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 				break;
 			}
 		}
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ_NS) {
+			return Value::TIMESTAMPTZNS(timestamp_tz_ns_t(timestamp_value.value));
+		}
 		return Value::TIMESTAMPNS(timestamp_value);
 	}
 	case LogicalTypeId::UUID: {
