@@ -297,7 +297,7 @@ COPY (SELECT 1 AS i) TO '{TEST_DIR}/return_column_types_null.json' (RETURN_COLUM
 ----
 COPY (FORMAT JSON) parameter "return_column_types" cannot be NULL
 
-# JSON binds the query a second time to describe it, with the parameter types of each EXECUTE
+# JSON describes the parameter types of each EXECUTE
 statement ok
 PREPARE copy_json_parameter AS COPY (SELECT $1 AS x) TO '{TEST_DIR}/return_column_types_parameter.json' (RETURN_COLUMN_TYPES, OVERWRITE);
 
@@ -311,16 +311,45 @@ EXECUTE copy_json_parameter(42);
 ----
 1	[{'name': x, 'type': INTEGER, 'type_details': INTEGER, 'precision': NULL, 'scale': NULL}]
 
-# The second bind doesn't run the query: the sequence advances once per row written
+# JSON rewrites the query, but binds it once: the option doesn't change what the query does
 statement ok
-CREATE SEQUENCE return_column_types_seq;
+CREATE SEQUENCE return_column_types_seq_off;
+
+statement ok
+CREATE SEQUENCE return_column_types_seq_on;
+
+statement ok
+COPY (FROM range(nextval('return_column_types_seq_off'))) TO '{TEST_DIR}/return_column_types_seq_off.json';
 
 query II
-COPY (SELECT nextval('return_column_types_seq') AS n FROM range(3)) TO '{TEST_DIR}/return_column_types_seq.json' (RETURN_COLUMN_TYPES);
+COPY (FROM range(nextval('return_column_types_seq_on'))) TO '{TEST_DIR}/return_column_types_seq_on.json' (RETURN_COLUMN_TYPES);
 ----
-3	[{'name': n, 'type': BIGINT, 'type_details': BIGINT, 'precision': NULL, 'scale': NULL}]
+1	[{'name': range, 'type': BIGINT, 'type_details': BIGINT, 'precision': NULL, 'scale': NULL}]
 
-query I
-SELECT currval('return_column_types_seq');
+query II
+SELECT (SELECT count(*) FROM '{TEST_DIR}/return_column_types_seq_on.json') = (SELECT count(*) FROM '{TEST_DIR}/return_column_types_seq_off.json'),
+       currval('return_column_types_seq_on') = currval('return_column_types_seq_off');
 ----
-3
+true	true
+
+# JSON keeps the partition columns out of the JSON object, but they are described in their place in the query
+foreach write_partition_columns false true
+
+query III
+COPY (SELECT 'x' AS s, range % 2 AS p, range::DECIMAL(9,2) AS d FROM range(4)) TO '{TEST_DIR}/return_column_types_json_partitioned_{write_partition_columns}' (FORMAT JSON, PARTITION_BY (p), WRITE_PARTITION_COLUMNS {write_partition_columns}, RETURN_FILES, RETURN_COLUMN_TYPES);
+----
+4	<REGEX>:.*p=0.*p=1.*	[{'name': s, 'type': VARCHAR, 'type_details': VARCHAR, 'precision': NULL, 'scale': NULL}, {'name': p, 'type': BIGINT, 'type_details': BIGINT, 'precision': NULL, 'scale': NULL}, {'name': d, 'type': DECIMAL, 'type_details': 'DECIMAL(9,2)', 'precision': 9, 'scale': 2}]
+
+endloop
+
+# DATEFORMAT rewrites the JSON call and the date partition column it formats, but the columns describe the query
+query III
+COPY (SELECT DATE '2024-01-01' + range::INTEGER AS dt, range::DECIMAL(4,1) AS v FROM range(2)) TO '{TEST_DIR}/return_column_types_json_dateformat' (FORMAT JSON, PARTITION_BY (dt), DATEFORMAT '%Y%m%d', RETURN_FILES, RETURN_COLUMN_TYPES);
+----
+2	<REGEX>:.*dt=20240101.*dt=20240102.*	[{'name': dt, 'type': DATE, 'type_details': DATE, 'precision': NULL, 'scale': NULL}, {'name': v, 'type': DECIMAL, 'type_details': 'DECIMAL(4,1)', 'precision': 4, 'scale': 1}]
+
+# Duplicate names are described as JSON writes them
+query II
+COPY (SELECT 1 AS a, 'x' AS a, 3 AS a_1) TO '{TEST_DIR}/return_column_types_duplicates.json' (RETURN_COLUMN_TYPES);
+----
+1	[{'name': a, 'type': INTEGER, 'type_details': INTEGER, 'precision': NULL, 'scale': NULL}, {'name': a_1, 'type': VARCHAR, 'type_details': VARCHAR, 'precision': NULL, 'scale': NULL}, {'name': a_1_1, 'type': INTEGER, 'type_details': INTEGER, 'precision': NULL, 'scale': NULL}]
