@@ -2137,6 +2137,7 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 		++state.row_groups_skipped;
 	} else {
 		++state.row_groups_read;
+		state.bytes_scanned += to_scan_compressed_bytes;
 		QueryProfiler::Get(context).TrackBytesScanned(to_scan_compressed_bytes);
 	}
 	if (state.op) {

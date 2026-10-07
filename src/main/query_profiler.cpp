@@ -471,6 +471,7 @@ void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	intermediate_size_bytes += other.intermediate_size_bytes;
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
+	bytes_scanned += other.bytes_scanned;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -760,6 +761,9 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	}
 	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
+	}
+	if (info.MetricIsTracked<MetricOperatorBytesScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+		result["bytes_scanned"] = Value::UBIGINT(bytes_scanned);
 	}
 	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&
 	    operator_type == PhysicalOperatorType::TABLE_SCAN) {
@@ -1146,6 +1150,7 @@ void QueryProfiler::FinalizeMetricsInternal() {
 		metrics->SetMetric<MetricQueryTotalIntermediateSizeBytes>(cumulative_metrics.intermediate_size_bytes);
 		metrics->SetMetric<MetricQueryTotalRowGroupsScanned>(cumulative_metrics.row_groups_scanned);
 		metrics->SetMetric<MetricQueryTotalRowGroupsToScan>(cumulative_metrics.total_row_groups_to_scan);
+		metrics->SetMetric<MetricQueryTotalBytesScanned>(cumulative_metrics.bytes_scanned);
 	}
 	query_metrics.FinalizeMetrics(*metrics);
 	metrics_finalized = true;

@@ -242,6 +242,8 @@ public:
 	//! profiling metrics (the profiler sums them across threads).
 	idx_t row_groups_read = 0;
 	idx_t row_groups_skipped = 0;
+	//! Compressed size of the column chunks of the row groups read, surfaced as bytes_scanned the same way
+	idx_t bytes_scanned = 0;
 
 	//! Prefetch cost model
 	PrefetchCostModelState cost_model_state;

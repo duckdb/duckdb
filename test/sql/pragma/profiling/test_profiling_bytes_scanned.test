@@ -53,7 +53,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/bytes_scanned_two_columns.json';
 
 statement ok
-SET tracked_metrics = ['query.total_bytes_scanned'];
+SET tracked_metrics = ['query.total_bytes_scanned', 'operator.bytes_scanned', 'operator.type'];
 
 statement ok
 SELECT sum(i), max(s) FROM '{TEST_DIR}/bytes_scanned_1.parquet';
@@ -66,6 +66,22 @@ SELECT query.total_bytes_scanned = (SELECT sum(bytes) FROM chunks WHERE file_nam
 FROM '{TEST_DIR}/bytes_scanned_two_columns.json';
 ----
 true
+
+# the query total is the sum over the scan operators
+statement ok
+CREATE MACRO scan_bytes(profile) AS TABLE
+WITH RECURSIVE ops(op) AS (
+    SELECT unnest(operator)::JSON AS op FROM read_json(profile)
+    UNION ALL
+    SELECT unnest((op->'children')::JSON[]) FROM ops WHERE json_array_length(op->'children') > 0
+)
+SELECT (op->>'bytes_scanned')::BIGINT AS bytes FROM ops WHERE op->>'type' = 'TABLE_SCAN';
+
+query II
+SELECT count(*), sum(bytes) = (SELECT sum(bytes) FROM chunks WHERE file_name LIKE '%_1.parquet')
+FROM scan_bytes('{TEST_DIR}/bytes_scanned_two_columns.json');
+----
+1	true
 
 # row groups skipped by their statistics are not counted: only the last row group can hold i >= 4096
 query I
@@ -124,7 +140,7 @@ statement ok
 PRAGMA profiling_output = '{TEST_DIR}/bytes_scanned_twice.json';
 
 statement ok
-SET tracked_metrics = ['query.total_bytes_scanned'];
+SET tracked_metrics = ['query.total_bytes_scanned', 'operator.bytes_scanned', 'operator.type'];
 
 statement ok
 SELECT (SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_1.parquet') + (SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_1.parquet');
@@ -137,3 +153,31 @@ SELECT query.total_bytes_scanned = 2 * (SELECT sum(bytes) FROM chunks WHERE file
 FROM '{TEST_DIR}/bytes_scanned_twice.json';
 ----
 true
+
+query II
+SELECT count(*), bool_and(bytes = (SELECT sum(bytes) FROM chunks WHERE file_name LIKE '%_1.parquet' AND col = 'i'))
+FROM scan_bytes('{TEST_DIR}/bytes_scanned_twice.json');
+----
+2	true
+
+# a secure view hides how much of the table behind it was scanned, as it does for rows and row groups
+statement ok
+CREATE SECURE VIEW secure_scan AS SELECT i FROM '{TEST_DIR}/bytes_scanned_1.parquet';
+
+statement ok
+CREATE VIEW regular_scan AS SELECT i FROM '{TEST_DIR}/bytes_scanned_1.parquet';
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM secure_scan
+----
+analyzed_plan	<REGEX>:[\s\S]*"total_bytes_scanned": 0[\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM secure_scan
+----
+analyzed_plan	<!REGEX>:[\s\S]*"bytes_scanned": [1-9][\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM regular_scan
+----
+analyzed_plan	<!REGEX>:[\s\S]*"total_bytes_scanned": 0[\s\S]*

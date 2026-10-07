@@ -23,10 +23,12 @@ public:
 	//! counted more, so that a reader can be released without losing what it counted.
 	//! "scanned" is handed over and cleared on every report - the profiler sums what each thread reports, so a
 	//! scanned row group must be handed over exactly once. "total" is the size of the scan, which every thread
-	//! reports identically and the profiler does not sum, so it is never cleared
+	//! reports identically and the profiler does not sum, so it is never cleared. "bytes scanned" is handed over
+	//! like "scanned"
 	mutex metrics_lock;
 	idx_t collected_scanned = 0;
 	idx_t collected_total = 0;
+	idx_t collected_bytes_scanned = 0;
 };
 
 class TableFunctionMultiFileLocalState : public LocalTableFunctionState {
@@ -193,6 +195,7 @@ void TableFunctionFileReader::CollectMetrics(ClientContext &context, GlobalTable
 	TableFunctionGetMetricsInput input(context, bind_data.get(), nullptr, global_state.get(), file_metrics);
 	function.get_metrics(input);
 	gstate.collected_scanned += file_metrics.row_groups_scanned;
+	gstate.collected_bytes_scanned += file_metrics.bytes_scanned;
 	// the function reports the size of its file as a whole - only add what it has grown by since we last asked
 	gstate.collected_total += file_metrics.total_row_groups_to_scan - collected_file_total;
 	collected_file_total = file_metrics.total_row_groups_to_scan;
@@ -745,6 +748,8 @@ static void TableFunctionMultiFileGetMetrics(TableFunctionGetMetricsInput &input
 	// the row groups scanned are handed over once - the profiler sums what every thread reports
 	input.operator_metrics.row_groups_scanned += scan_state.collected_scanned;
 	scan_state.collected_scanned = 0;
+	input.operator_metrics.bytes_scanned += scan_state.collected_bytes_scanned;
+	scan_state.collected_bytes_scanned = 0;
 	// the size of the scan is reported as-is - it is not summed across the threads that report it
 	input.operator_metrics.total_row_groups_to_scan = scan_state.collected_total;
 }

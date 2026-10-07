@@ -191,6 +191,13 @@ struct MetricStorageWriteToWALLatency {
 };
 
 // Operator metrics
+struct MetricOperatorBytesScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "operator.bytes_scanned";
+	static constexpr const char *Description = "Compressed size of the Parquet column chunks scanned by the operator";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricOperatorCPUTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "operator.cpu_time";

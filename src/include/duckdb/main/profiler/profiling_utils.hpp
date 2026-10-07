@@ -39,7 +39,8 @@ public:
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
 	atomic<idx_t> bytes_written;
-	// Always tracked as well: the compressed size of the column data scanned, not the bytes read to scan it
+	// Always tracked as well, so it can be read while the query runs: the compressed size of the column data scanned.
+	// Not reported - query.total_bytes_scanned is summed over the operator tree, so that secure views hide theirs
 	atomic<idx_t> bytes_scanned;
 	// Thread-safe memory allocation counter (updated from allocator callbacks on any thread)
 	atomic<idx_t> total_memory_allocated;
