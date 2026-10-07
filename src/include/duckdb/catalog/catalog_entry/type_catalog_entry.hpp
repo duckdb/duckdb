@@ -27,7 +27,9 @@ public:
 
 	LogicalType user_type;
 
-	bind_logical_type_function_t bind_function;
+	//! The constructors that bind type modifiers to this type. Always holds at least one overload - a type that takes
+	//! no modifiers has a single constructor that resolves to user_type.
+	TypeConstructorSet constructors;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;

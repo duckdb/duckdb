@@ -1,0 +1,62 @@
+# name: test/optimizer/statistics/statistics_case_convert.test
+# description: Statistics propagation for the lower/upper functions
+# group: [statistics]
+
+statement ok
+CREATE TABLE t_strict_null(s VARCHAR NOT NULL);
+
+statement ok
+INSERT INTO t_strict_null SELECT range::VARCHAR FROM range(6144);
+
+statement ok
+CREATE TABLE t_nullable(s VARCHAR);
+
+statement ok
+INSERT INTO t_nullable SELECT CASE WHEN range % 1024 = 0 THEN NULL ELSE range::VARCHAR END FROM range(6144);
+
+# the input cannot be NULL, so neither can lower(s): the scan is pruned entirely
+query II
+EXPLAIN SELECT count(*) FROM t_strict_null WHERE lower(s) IS NULL;
+----
+physical_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT count(*) FROM t_strict_null WHERE lower(s) IS NULL;
+----
+0
+
+# upper(s) IS NOT NULL is always true - the filter is removed
+query II
+EXPLAIN SELECT count(*) FROM t_strict_null WHERE upper(s) IS NOT NULL;
+----
+physical_plan	<!REGEX>:.*IS NOT NULL.*
+
+query I
+SELECT count(*) FROM t_strict_null WHERE upper(s) IS NOT NULL;
+----
+6144
+
+# if the input can be NULL the filter must be kept
+query II
+EXPLAIN SELECT count(*) FROM t_nullable WHERE lower(s) IS NULL;
+----
+physical_plan	<REGEX>:.*IS NULL.*
+
+query I
+SELECT count(*) FROM t_nullable WHERE lower(s) IS NULL;
+----
+6
+
+query I
+SELECT count(*) FROM t_nullable WHERE upper(s) IS NOT NULL;
+----
+6138
+
+# case conversion is not byte-length preserving for unicode: only null-ness is propagated
+statement ok
+CREATE TABLE t_unicode AS SELECT 'ɐɐɐ' AS s FROM range(2048);
+
+query I
+SELECT count(*) FROM t_unicode WHERE strlen(upper(s)) > 6;
+----
+2048

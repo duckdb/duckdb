@@ -1,0 +1,19 @@
+diff --git a/src/inet_extension.cpp b/src/inet_extension.cpp
+index 40295dc..46d916c 100644
+--- a/src/inet_extension.cpp
++++ b/src/inet_extension.cpp
+@@ -56,10 +56,14 @@ static void LoadInternal(ExtensionLoader &loader) {
+   // Add - function with ALTER_ON_CONFLICT
+   ScalarFunction substract_fun("-", {inet_type, LogicalType::HUGEINT},
+                                inet_type, INetFunctions::Subtract);
++  // throws when the address over- or underflows
++  substract_fun.SetFallible();
+   loader.AddFunctionOverload(substract_fun);
+ 
+   ScalarFunction add_fun("+", {inet_type, LogicalType::HUGEINT}, inet_type,
+                          INetFunctions::Add);
++  // throws when the address over- or underflows
++  add_fun.SetFallible();
+   loader.AddFunctionOverload(add_fun);
+ 
+   // Add IP range operators

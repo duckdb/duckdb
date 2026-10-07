@@ -31,10 +31,7 @@ bool ShreddingType::operator==(const ShreddingType &other) const {
 	if (set != other.set) {
 		return false;
 	}
-	if (!set) {
-		return true;
-	}
-	if (type != other.type) {
+	if (set && type != other.type) {
 		return false;
 	}
 	if (!children.types && !other.children.types) {
@@ -79,18 +76,12 @@ static ShreddingType ConvertShreddingTypeRecursive(const LogicalType &type) {
 	}
 
 	switch (type.id()) {
-	case LogicalTypeId::STRUCT: {
-		ShreddingType res(type);
-		auto &children = StructType::GetChildTypes(type);
-		for (auto &entry : children) {
-			res.AddChild(entry.first, ConvertShreddingTypeRecursive(entry.second));
-		}
-		return res;
-	}
+	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::LIST: {
 		ShreddingType res(type);
-		const auto &child = ListType::GetChildType(type);
-		res.AddChild("element", ConvertShreddingTypeRecursive(child));
+		for (auto &entry : LogicalType::GetNamedChildTypes(type)) {
+			res.AddChild(entry.first, ConvertShreddingTypeRecursive(entry.second));
+		}
 		return res;
 	}
 	default:

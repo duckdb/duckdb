@@ -30,7 +30,7 @@ public:
 	string GetName() const override;
 	bool CanHandleFile(const string &path) override;
 	bool CanSeek() override;
-	string GetVersionTag(FileHandle &handle) override;
+	FileMetadata Stats(FileHandle &handle) override;
 };
 
 //! A file system that returns no ETag and timestamp_t(0) for Last-Modified, simulating servers that do not
@@ -40,8 +40,18 @@ public:
 	string GetName() const override;
 	bool CanHandleFile(const string &path) override;
 	bool CanSeek() override;
-	string GetVersionTag(FileHandle &handle) override;
-	timestamp_t GetLastModifiedTime(FileHandle &handle) override;
+	FileMetadata Stats(FileHandle &handle) override;
+};
+
+//! A file system without validators that grants a freshness deadline, simulating servers that send
+//! no ETag/Last-Modified but do send Cache-Control max-age.
+class FreshnessOnlyFileSystem : public NoValidationMetadataFileSystem {
+public:
+	string GetName() const override;
+	FileMetadata Stats(FileHandle &handle) override;
+
+	//! Freshness lifetime granted on each stat; negative values produce an already-expired deadline.
+	int64_t max_age_micros = 600 * 1000000LL;
 };
 
 //! In-memory DuckDB with the external file cache forced to also cache local files (off by default), so the external

@@ -71,7 +71,12 @@ string StatementTypeToString(StatementType type) {
 		return "CONNECT";
 	case StatementType::DISCONNECT_STATEMENT:
 		return "DISCONNECT";
+	case StatementType::EXTERNAL_RESOURCE_STATEMENT:
+		return "EXTERNAL_RESOURCE";
+	case StatementType::PASSTHROUGH_STATEMENT:
+		return "PASSTHROUGH";
 	case StatementType::INVALID_STATEMENT:
+	case StatementType::ENUM_SIZE:
 		break;
 	}
 	return "INVALID";

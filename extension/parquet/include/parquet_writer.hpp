@@ -151,6 +151,8 @@ public:
 struct ParquetWriterOptions {
 	//! The file path to use for the written parquet file
 	string file_name;
+	//! The flags to use when opening the written parquet file
+	FileOpenFlags open_flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW;
 	//! Types of the columns
 	vector<LogicalType> sql_types;
 	//! Names of the columns
@@ -167,6 +169,8 @@ struct ParquetWriterOptions {
 	optional_idx dictionary_size_limit;
 	//! The maximum bytes of string-data to put into the dictionary, per column/field
 	idx_t string_dictionary_page_size_limit;
+	//! The maximum uncompressed size of a data page
+	idx_t data_page_size_limit;
 	//! Whether to use bloom filters or not
 	bool enable_bloom_filters;
 	//! Maximum ratio of false-positives to allow in the written bloom filter
@@ -230,6 +234,9 @@ public:
 	}
 	idx_t StringDictionaryPageSizeLimit() const {
 		return options.string_dictionary_page_size_limit;
+	}
+	idx_t DataPageSizeLimit() const {
+		return options.data_page_size_limit;
 	}
 	bool EnableBloomFilters() const {
 		return options.enable_bloom_filters;

@@ -1,0 +1,92 @@
+# name: test/sql/storage/rowid_gaps/indexed_remap_same_key_rowid_collision.test
+# description: vacuum remap handles new rowids colliding with processed old rowids inside one duplicate-key leaf
+# group: [rowid_gaps]
+
+# Remapped rowids overlap old rowids inside one duplicate-key leaf.
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_remap_collision.db' AS remap_collision (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+CREATE TABLE remap_collision.t AS
+SELECT i, CASE WHEN i IN (2, 6143) THEN 9 ELSE 7 END AS g
+FROM range(6144) tbl(i);
+
+statement ok
+CHECKPOINT remap_collision;
+
+statement ok
+CREATE UNIQUE INDEX t_i_idx ON remap_collision.t(i);
+
+statement ok
+CREATE INDEX t_g_idx ON remap_collision.t(g);
+
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_collision.t WHERE i IN (2, 5, 2045, 2048, 4094, 4096, 6143) ORDER BY i;
+----
+2	2
+5	5
+2045	2045
+2048	2048
+4094	4094
+4096	4096
+6143	6143
+
+query II
+SELECT rowid, i FROM remap_collision.t WHERE g = 9 ORDER BY i;
+----
+2	2
+6143	6143
+
+# Keep every third row in the first two row groups.
+statement ok
+DELETE FROM remap_collision.t WHERE i < 4096 AND i % 3 <> 2;
+
+statement ok
+FORCE CHECKPOINT remap_collision;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('remap_collision.t');
+----
+2
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM remap_collision.t;
+----
+0	6143	3413
+
+query II
+SELECT rowid, i FROM remap_collision.t WHERE i IN (2, 5, 2045, 2048, 4094, 4096, 6143) ORDER BY i;
+----
+0	2
+1	5
+681	2045
+682	2048
+1364	4094
+4096	4096
+6143	6143
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM remap_collision.t WHERE i = 4096;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM remap_collision.t WHERE g = 9;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM remap_collision.t WHERE g = 9 ORDER BY i;
+----
+0	2
+6143	6143
+
+query I
+SELECT count(*) FROM remap_collision.t WHERE g = 7;
+----
+3411

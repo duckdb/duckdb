@@ -56,23 +56,25 @@ int64_t SequenceCatalogEntry::NextValue(DuckTransaction &transaction) {
 	lock_guard<mutex> seqlock(lock);
 	int64_t result;
 	result = data.counter;
-	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, data.counter);
+	int64_t next_counter;
+	bool overflow = !TryAddOperator::Operation(data.counter, data.increment, next_counter);
 	if (data.cycle) {
 		if (overflow) {
-			data.counter = data.increment < 0 ? data.max_value : data.min_value;
-		} else if (data.counter < data.min_value) {
-			data.counter = data.max_value;
-		} else if (data.counter > data.max_value) {
-			data.counter = data.min_value;
+			next_counter = data.increment < 0 ? data.max_value : data.min_value;
+		} else if (next_counter < data.min_value) {
+			next_counter = data.max_value;
+		} else if (next_counter > data.max_value) {
+			next_counter = data.min_value;
 		}
 	} else {
 		if (result < data.min_value || (overflow && data.increment < 0)) {
-			throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", name, data.min_value);
+			throw SequenceException("nextval: reached minimum value of sequence %s (%lld)", name, data.min_value);
 		}
 		if (result > data.max_value || overflow) {
 			throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", name, data.max_value);
 		}
 	}
+	data.counter = next_counter;
 	data.last_value = result;
 	data.usage_count++;
 	if (!temporary) {
@@ -85,7 +87,7 @@ int64_t SequenceCatalogEntry::SetValue(DuckTransaction &transaction, int64_t val
 	{
 		lock_guard<mutex> seqlock(lock);
 		if (value < data.min_value || value > data.max_value) {
-			throw SequenceException("setval: value %lld is out of bounds for sequence \"%s\" (%lld..%lld)", value, name,
+			throw SequenceException("setval: value %lld is out of bounds for sequence %s (%lld..%lld)", value, name,
 			                        data.min_value, data.max_value);
 		}
 
@@ -115,7 +117,7 @@ unique_ptr<CreateInfo> SequenceCatalogEntry::GetInfo() const {
 	auto seq_data = GetData();
 
 	auto result = make_uniq<CreateSequenceInfo>();
-	result->SetQualifiedName(QualifiedName(catalog.GetName(), schema.name, name));
+	result->SetQualifiedName(schema.GetQualifiedName(name));
 	result->usage_count = seq_data.usage_count;
 	result->increment = seq_data.increment;
 	result->min_value = seq_data.min_value;

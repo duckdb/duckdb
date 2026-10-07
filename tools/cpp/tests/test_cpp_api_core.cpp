@@ -1,0 +1,287 @@
+#include "catch.hpp"
+#include "duckdb_cpp.hpp"
+
+#include "test_cpp_api.hpp"
+#include "test_helpers.hpp"
+
+#include <algorithm>
+#include <atomic>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <sstream>
+
+// ---------------------------------------------------------------------------
+// Stable C++ API tests: environment, database options, filesystem, logging,
+// exceptions, replacement scans.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("Stable C++API: Instance GetOption by name and option target scope", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto instance = env.Open(":memory:");
+
+	// Instance-resolved options carry their declared scope.
+	auto option = instance.GetOption("allow_community_extensions");
+	REQUIRE(option.GetName() == "allow_community_extensions");
+	REQUIRE(option.GetTargetScope() == OptionTargetScope::GLOBAL_ONLY);
+
+	// An alias resolves to its canonical option.
+	REQUIRE(instance.GetOption("memory_limit").GetName() == "max_memory");
+
+	REQUIRE_THROWS_MATCHES(instance.GetOption("no_such_option"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	REQUIRE(env.GetInstanceCount() == 0);
+	auto instance = env.Open(":memory:");
+	REQUIRE(env.GetInstanceCount() == 1);
+
+	REQUIRE(instance.GetOptionCount() > 0);
+	bool found_memory_limit = false;
+	for (size_t i = 0; i < instance.GetOptionCount(); i++) {
+		auto option = instance.GetOptionByIndex(i);
+		if (option.GetName() != "max_memory") {
+			continue;
+		}
+		found_memory_limit = true;
+		REQUIRE_FALSE(option.GetDescription().empty());
+		REQUIRE(option.GetAliasCount() > 0);
+		bool found_alias = false;
+		for (size_t alias_idx = 0; alias_idx < option.GetAliasCount(); alias_idx++) {
+			found_alias |= option.GetAliasByIndex(alias_idx) == "memory_limit";
+		}
+		REQUIRE(found_alias);
+	}
+	REQUIRE(found_memory_limit);
+	REQUIRE_FALSE(instance.GetOption("allow_community_extensions").GetDefaultValue().empty());
+
+	auto conn = instance.Connect();
+	REQUIRE(conn.GetOptionCount() == instance.GetOptionCount());
+	REQUIRE_FALSE(conn.GetOptionByIndex(0).GetName().empty());
+}
+
+TEST_CASE("Stable C++API: Instance SetDefault selects the database for new connections", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto first_path = duckdb::TestCreatePath("cpp_api_default_first.duckdb");
+	auto second_path = duckdb::TestCreatePath("cpp_api_default_second.duckdb");
+	duckdb::DeleteDatabase(first_path);
+	duckdb::DeleteDatabase(second_path);
+
+	Environment env;
+	{
+		auto instance = env.CreateInstance();
+		instance.Attach(first_path, "first", {}, true);
+		instance.Attach(second_path, "second");
+		instance.SetDefault(second_path);
+
+		auto conn = instance.Connect();
+		auto result = conn.Execute("SELECT current_database()");
+		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<varchar_t>().view() == "cpp_api_default_second");
+	}
+	duckdb::DeleteDatabase(first_path);
+	duckdb::DeleteDatabase(second_path);
+}
+TEST_CASE("Stable C++API: RenderQuotedIdentifier quotes only when required", "[cpp_api]") {
+	using duckdb::cxx::RenderQuotedIdentifier;
+	REQUIRE(RenderQuotedIdentifier("col") == "col");
+	REQUIRE(RenderQuotedIdentifier("MyCol") == "MyCol");
+	REQUIRE(RenderQuotedIdentifier("select") == "\"select\"");
+	REQUIRE(RenderQuotedIdentifier("my col") == "\"my col\"");
+	REQUIRE(RenderQuotedIdentifier("a\"b") == "\"a\"\"b\"");
+}
+
+TEST_CASE("Stable C++API: LibraryVersion reports the engine version", "[cpp_api]") {
+	const auto version = duckdb::cxx::LibraryVersion();
+	REQUIRE_FALSE(version.empty());
+
+	// The engine agrees; the C entry point reports the same text as a borrowed view.
+	duckdb_v2_str raw = {nullptr, 0};
+	REQUIRE(duckdb_v2_library_version(&raw, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(version == std::string(raw.ptr, raw.len));
+}
+
+TEST_CASE("Stable C++API: Exception carries the code and message body", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
+
+	// Binder error: GetCode() is the identity, GetRawMessage() the unprefixed body.
+	try {
+		conn.Execute("SELECT * FROM no_such_table");
+		FAIL("expected a Catalog error");
+	} catch (const Exception &ex) {
+		REQUIRE(ex.GetCode() == DUCKDB_V2_ERROR_DATABASE_CATALOG);
+		REQUIRE(std::string(ex.GetRawMessage()).find("no_such_table") != std::string::npos);
+		REQUIRE(std::string(ex.GetRawMessage()).rfind("Catalog Error:", 0) != 0);
+		// what() is the full prefixed message and contains the body.
+		REQUIRE(std::string(ex.what()).rfind("Catalog Error:", 0) == 0);
+		REQUIRE(std::string(ex.what()).find(ex.GetRawMessage()) != std::string::npos);
+	}
+
+	// Parse error surfaces lazily: ParseSQL only sets up the iterator, the first
+	// Next() yields "SELECT 1", and the parse error for "SELEKT 2" surfaces from the
+	// Next() that reaches it. Same shape: Parser code, unprefixed body.
+	try {
+		auto iter = conn.ParseSQL("SELECT 1; SELEKT 2");
+		REQUIRE(iter.Next());
+		iter.Next();
+		FAIL("expected a Parser error");
+	} catch (const Exception &ex) {
+		REQUIRE(ex.GetCode() == DUCKDB_V2_ERROR_QUERY_PARSER);
+		REQUIRE(std::string(ex.GetRawMessage()).rfind("Parser Error:", 0) != 0);
+	}
+}
+TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly across connections", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto instance = env.Open(":memory:");
+	auto conn_a = instance.Connect();
+	auto conn_b = instance.Connect();
+
+	// max_execution_time is LOCAL_DEFAULT: a LOCAL write on conn_a stays
+	// invisible to conn_b.
+	conn_a.SetOption("max_execution_time", "5000", SettingScope::LOCAL);
+	REQUIRE(conn_a.GetOption("max_execution_time").GetValue() == "5000");
+	REQUIRE(conn_b.GetOption("max_execution_time").GetValue() != "5000");
+
+	// A GLOBAL write on conn_a is visible identically on conn_b. The options
+	// must outlive the borrowed views their getters return.
+	conn_a.SetOption("memory_limit", "987MB", SettingScope::GLOBAL);
+	auto option_a = conn_a.GetOption("memory_limit");
+	auto option_b = conn_b.GetOption("memory_limit");
+	auto seen_a = option_a.GetValue();
+	auto seen_b = option_b.GetValue();
+	REQUIRE_FALSE(seen_a.empty());
+	REQUIRE(std::string(seen_a) == std::string(seen_b));
+
+	// A GLOBAL_ONLY option rejects a LOCAL scope.
+	REQUIRE_THROWS_MATCHES(conn_a.SetOption("allow_community_extensions", "false", SettingScope::LOCAL), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+TEST_CASE("Stable C++API: Connection::GetOption by name and the scopeless SetOption default", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
+
+	auto option = conn.GetOption("allow_community_extensions");
+	REQUIRE(option.GetName() == "allow_community_extensions");
+
+	// The scopeless overload uses Automatic scope (SQL `SET` semantics).
+	conn.SetOption("max_execution_time", "4242");
+	REQUIRE(conn.GetOption("max_execution_time").GetValue() == "4242");
+
+	REQUIRE_THROWS_MATCHES(conn.GetOption("no_such_option_xyz"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+TEST_CASE("Stable C++API: Instance::Attach with a name and options", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto path = duckdb::TestCreatePath("cpp_api_attach_options.duckdb");
+	duckdb::DeleteDatabase(path);
+
+	Environment env;
+	auto instance = env.CreateInstance();
+	instance.Attach(":memory:", true);
+	instance.Attach(path, "named", {{"BLOCK_SIZE", "16384"}});
+	auto conn = instance.Connect();
+	conn.Execute("CREATE TABLE named.t(i INTEGER)").Drain();
+	{
+		auto result = conn.Execute("SELECT block_size FROM pragma_database_size() WHERE database_name = 'named'");
+		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 16384);
+	}
+	instance.Detach("named");
+
+	// Re-attaching read-only, and as the default for later sessions.
+	instance.Attach(path, "named", {{"READ_ONLY", "true"}}, true);
+	auto later = instance.Connect();
+	REQUIRE_THROWS_AS(later.Execute("INSERT INTO t VALUES (1)"), Exception);
+	later.Execute("SELECT * FROM t").Drain();
+
+	// An option the engine rejects fails the attach, not the option.
+	REQUIRE_THROWS_AS(instance.Attach(":memory:", "other", {{"no_such_attach_option", "1"}}), Exception);
+
+	duckdb::DeleteDatabase(path);
+}
+
+TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	auto path = duckdb::TestCreatePath("cpp_api_readonly.duckdb");
+	duckdb::DeleteDatabase(path);
+
+	Environment env;
+	{
+		// Seed the database, then close (scope exit) to free the exclusive-open
+		// slot for the read-only reopen.
+		auto instance = env.Open(path);
+		auto conn = instance.Connect();
+		conn.Execute("CREATE TABLE t(i INTEGER)").Drain();
+		conn.Execute("INSERT INTO t VALUES (1), (2)").Drain();
+	}
+
+	{
+		auto ro_instance = env.CreateInstance();
+		ro_instance.SetOption("access_mode", "READ_ONLY");
+		ro_instance.Attach(path, true);
+		auto ro_conn = ro_instance.Connect();
+
+		// Reads see the seeded data. Scoped so the live result is released
+		// before the write attempts below.
+		{
+			auto result = ro_conn.Execute("SELECT count(*) FROM t");
+			auto chunk = result.FetchChunk();
+			REQUIRE(chunk.GetVector(0).GetValue(0).Get<int64_t>() == 2);
+		}
+
+		// Writes are rejected: both DML and DDL.
+		REQUIRE_THROWS_AS(ro_conn.Execute("INSERT INTO t VALUES (3)"), Exception);
+		REQUIRE_THROWS_AS(ro_conn.Execute("CREATE TABLE u(i INTEGER)"), Exception);
+
+		// The data is unchanged after the rejected write attempts.
+		auto after = ro_conn.Execute("SELECT count(*) FROM t");
+		REQUIRE(after.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 2);
+	}
+
+	duckdb::DeleteDatabase(path);
+}
+TEST_CASE("Stable C++API: typed exceptions carry their error code", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	// Each typed exception fixes its code in the implementation; throwing one
+	// is how a callback names its error class without any code vocabulary.
+	REQUIRE(InvalidInputException("boom").GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE(InterruptException("stop").GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_RUNTIME_INTERRUPT));
+
+	// They are catchable through the Exception base, preserving the code.
+	try {
+		throw InvalidInputException("bad arg");
+	} catch (const Exception &caught) {
+		REQUIRE(caught.GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_INPUT_INVALID));
+	}
+
+	// The base Exception with a raw code still works.
+	Exception raw(static_cast<uint32_t>(DUCKDB_V2_ERROR_QUERY_BINDER), "parse boom");
+	REQUIRE(raw.GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_QUERY_BINDER));
+
+	// A thrown-and-caught engine error classifies back correctly end to end.
+	Environment env;
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
+	try {
+		conn.Execute("SELECT * FROM no_such_table_xyz");
+		FAIL("expected a Catalog error");
+	} catch (const Exception &caught) {
+		REQUIRE(caught.GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_DATABASE_CATALOG));
+	}
+}

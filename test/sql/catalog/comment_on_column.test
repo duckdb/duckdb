@@ -62,7 +62,7 @@ comment_on_column	test_view	test_view_column	very gezellige view column
 statement error
 COMMENT ON COLUMN bla.bloe.blie.blo IS NULL
 ----
-Catalog "bla" does not exist!
+Table with name "bla.bloe.blie" does not exist because schema "bla.bloe" does not exist.
 
 statement error
 COMMENT ON COLUMN blie.blo IS NULL
@@ -123,3 +123,16 @@ statement error
 COMMENT ON COLUMN aliased_view.nonexistent IS 'bad'
 ----
 View "aliased_view" does not have a column with name "nonexistent"
+
+# aliases that swap the query column names
+statement ok
+CREATE VIEW swapped_view(b, a) AS SELECT 1 AS a, 2 AS b;
+
+statement ok
+COMMENT ON COLUMN swapped_view.a IS 'visible a'
+
+query II
+SELECT column_name, comment FROM duckdb_columns() WHERE table_name='swapped_view' ORDER BY column_index;
+----
+b	NULL
+a	visible a

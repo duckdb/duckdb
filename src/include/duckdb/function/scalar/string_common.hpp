@@ -7,6 +7,8 @@
 namespace duckdb {
 
 bool IsAscii(const char *input, idx_t n);
+//! Decodes one codepoint and returns its length - throws an InternalException on invalid UTF-8
+idx_t DecodeCodepoint(const char *input, idx_t size, int32_t &codepoint);
 idx_t LowerLength(const char *input_data, idx_t input_length);
 void LowerCase(const char *input_data, idx_t input_length, char *result_data);
 idx_t FindStrInStr(const string_t &haystack_s, const string_t &needle_s);
@@ -14,6 +16,12 @@ idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const uns
 string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length);
 string_t SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length);
 string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length);
+//! Whether the offset and length are within the range supported by substring - it throws for values outside of it
+bool SubstringInSupportedRange(int64_t offset, int64_t length);
+unique_ptr<BaseStatistics> PropagateStringSliceStats(FunctionStatisticsInput &input, idx_t start_character_index,
+                                                     optional_idx character_count);
+//! Common util zonemap pruning for `prefix(s, constant)`.
+FilterPropagateResult PrefixFilterPrune(const FunctionStatisticsPruneInput &input);
 
 ScalarFunction GetStringContains();
 DUCKDB_API bool Glob(const char *s, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark = true);

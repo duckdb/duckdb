@@ -27,9 +27,9 @@ PEGTransformerFactory::TransformExportStatement(PEGTransformer &transformer, con
 				info->format = option.children[0].GetValue<string>();
 				info->is_format_auto_detected = false;
 			} else if (option.expression) {
-				info->parsed_options[StringUtil::Upper(option.name.GetIdentifierName())] = option.expression->Copy();
+				info->parsed_options[option.name] = option.expression->Copy();
 			} else {
-				info->options[StringUtil::Upper(option.name.GetIdentifierName())] = option.children;
+				info->options[option.name] = option.children;
 			}
 		}
 	}
@@ -49,7 +49,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformImportStatement(PEGTran
                                                                          const string &string_literal) {
 	auto result = make_uniq<PragmaStatement>();
 	result->info->name = "import_database";
-	result->info->parameters.emplace_back(make_uniq<ConstantExpression>(Value(string_literal)));
+	result->info->parameters.emplace_back(ConstantExpression::String(string_literal));
 	return std::move(result);
 }
 

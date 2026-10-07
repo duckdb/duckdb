@@ -145,6 +145,8 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	if (tuple_count == 0) { // LCOV_EXCL_START
 		return;
 	} // LCOV_EXCL_STOP
+	auto byte_size = NumericCast<uint32_t>(segment_size);
+	segment->SetByteSize(byte_size);
 
 	// Merge the segment statistics into the global statistics.
 	global_stats->Merge(segment->GetStats());
@@ -162,8 +164,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		partial_block_lock = partial_block_manager.GetLock();
 
-		auto cast_segment_size = NumericCast<uint32_t>(segment_size);
-		auto allocation = partial_block_manager.GetBlockAllocation(cast_segment_size);
+		auto allocation = partial_block_manager.GetBlockAllocation(byte_size);
 		block_id = allocation.state.block_id;
 		offset_in_block = allocation.state.offset;
 
@@ -212,6 +213,7 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 	data_pointer.tuple_count = tuple_count;
 	auto &compression_function = segment->GetCompressionFunction();
 	data_pointer.compression_type = compression_function.type;
+	data_pointer.byte_size = byte_size;
 	if (compression_function.serialize_state) {
 		data_pointer.segment_state = compression_function.serialize_state(*segment);
 	}

@@ -5,8 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/parser/parsed_data/extra_drop_info.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 
@@ -69,23 +69,19 @@ SourceResultType PhysicalDrop::GetDataInternal(ExecutionContext &context, DataCh
 		}
 		auto &base_table_ref = trigger_extra.base_table->Cast<BaseTableRef>();
 		auto &table_entry = Catalog::GetEntry<TableCatalogEntry>(context.client, base_table_ref.GetQualifiedName());
-		auto &duck_table = table_entry.Cast<DuckTableEntry>();
-		auto transaction = duck_table.catalog.GetCatalogTransaction(context.client);
-		if (!duck_table.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
+		auto transaction = table_entry.ParentCatalog().GetCatalogTransaction(context.client);
+		if (!table_entry.DropTrigger(transaction, info->GetQualifiedName().Name(), info->cascade)) {
 			if (info->if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-				throw CatalogException("Trigger with name \"%s\" does not exist on table \"%s\"",
+				throw CatalogException("Trigger with name %s does not exist on table %s",
 				                       info->GetQualifiedName().Name(), base_table_ref.Table());
 			}
 		}
 		break;
 	}
 	default: {
-		// for a nested target the path is [catalog, schema_path..., name] and .Catalog() is empty, so read the catalog
-		// from the leading component; otherwise use .Catalog() (which may be empty -> the default catalog, e.g. for an
-		// unresolved DROP ... IF EXISTS of a missing entry)
-		auto &qname = info->GetQualifiedName();
-		auto &catalog_name = qname.Path().size() > 3 ? qname.Path().front() : qname.Catalog();
-		auto &catalog = Catalog::GetCatalog(context.client, catalog_name);
+		// the catalog may be empty -> the default catalog (e.g. for an unresolved DROP ... IF EXISTS of a missing
+		// entry)
+		auto &catalog = Catalog::GetCatalog(context.client, info->GetQualifiedName().Catalog());
 		catalog.DropEntry(context.client, *info);
 		break;
 	}

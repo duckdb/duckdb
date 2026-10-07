@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 
 namespace duckdb {
+class SchemaCatalogEntry;
 class DuckTableEntry;
 
 class PhysicalBatchInsert : public PhysicalOperator {
@@ -35,6 +36,8 @@ public:
 	optional_ptr<SchemaCatalogEntry> schema;
 	//! Create table info, in case of CREATE TABLE AS
 	unique_ptr<BoundCreateTableInfo> info;
+	//! Preferred input batch size
+	optional_idx preferred_batch_size;
 
 public:
 	// Source interface
@@ -50,14 +53,13 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
+	SinkNextBatchType UpdateMinBatchIndex(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
-	OperatorPartitionInfo RequiredPartitionInfo() const override {
-		return OperatorPartitionInfo::BatchIndex();
-	}
+	OperatorPartitionInfo RequiredPartitionInfo() const override;
 
 	bool IsSink() const override {
 		return true;
@@ -65,6 +67,10 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+
+	PipelineExternalInputSupport GetExternalInputSupport() const override {
+		return PipelineExternalInputSupport::SUPPORTED;
 	}
 
 private:

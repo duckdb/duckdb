@@ -967,3 +967,17 @@ NULL
 endloop
 
 endloop
+
+statement ok
+CREATE TABLE parts(p VARCHAR);
+
+statement ok
+INSERT INTO parts VALUES ('epoch'), ('julian'), ('year');
+
+query II
+SELECT p, date_part(p, TIMESTAMP '2023-05-15 10:00:00+00') 
+FROM parts;
+----
+epoch	1684144800
+julian	2460080.125
+year	2023

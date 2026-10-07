@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -22,7 +23,7 @@ struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("database_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

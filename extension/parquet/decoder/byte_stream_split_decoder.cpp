@@ -39,8 +39,16 @@ void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &re
 		decoded_data_buffer.resize(allocator, sizeof(double) * valid_count);
 		bss_decoder->GetBatch<double>(decoded_data_buffer.ptr, valid_count);
 		break;
+	case duckdb_parquet::Type::INT32:
+		decoded_data_buffer.resize(allocator, sizeof(int32_t) * valid_count);
+		bss_decoder->GetBatch<int32_t>(decoded_data_buffer.ptr, valid_count);
+		break;
+	case duckdb_parquet::Type::INT64:
+		decoded_data_buffer.resize(allocator, sizeof(int64_t) * valid_count);
+		bss_decoder->GetBatch<int64_t>(decoded_data_buffer.ptr, valid_count);
+		break;
 	default:
-		throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
+		throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT, DOUBLE, INT32 or INT64 data");
 	}
 
 	reader.Plain(decoded_data_buffer, defines, read_count, result_offset, result);
@@ -55,8 +63,14 @@ void ByteStreamSplitDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	case duckdb_parquet::Type::DOUBLE:
 		bss_decoder->Skip<double>(valid_count);
 		break;
+	case duckdb_parquet::Type::INT32:
+		bss_decoder->Skip<int32_t>(valid_count);
+		break;
+	case duckdb_parquet::Type::INT64:
+		bss_decoder->Skip<int64_t>(valid_count);
+		break;
 	default:
-		throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
+		throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT, DOUBLE, INT32 or INT64 data");
 	}
 }
 

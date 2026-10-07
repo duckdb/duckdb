@@ -15,11 +15,13 @@ namespace duckdb {
 class ExtensionLoader;
 
 struct ICUMakeDate : public ICUDateFunc {
-	static date_t Operation(icu::Calendar *calendar, timestamp_tz_t instant);
+	static date_t Operation(Calendar *calendar, timestamp_tz_t instant);
 
 	static bool CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
+	static bool CastNsToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
 	static BoundCastInfo BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target);
+	static BoundCastInfo BindCastNsToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 
 	static void AddCasts(ExtensionLoader &loader);
 
@@ -27,9 +29,12 @@ struct ICUMakeDate : public ICUDateFunc {
 };
 
 struct ICUToTimeTZ : public ICUDateFunc {
-	static dtime_tz_t Operation(icu::Calendar *calendar, dtime_tz_t timetz);
+	static dtime_tz_t Operation(Calendar *calendar, dtime_tz_t timetz);
 
-	static bool ToTimeTZ(icu::Calendar *calendar, timestamp_tz_t instant, dtime_tz_t &result);
+	//! Returns false if the instant cannot be converted. If no error_message is provided, an out-of-range time zone
+	//! offset throws, otherwise the error is written to error_message.
+	static bool ToTimeTZ(Calendar *calendar, timestamp_tz_t instant, dtime_tz_t &result,
+	                     optional_ptr<string> error_message = nullptr);
 
 	static bool CastToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 	static bool CastFromTime(Vector &source, Vector &result, idx_t count, CastParameters &parameters);

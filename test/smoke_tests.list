@@ -182,7 +182,7 @@ test/sql/storage/constraints/foreignkey/foreign_key_persistent.test
 test/sql/storage/delete/load_delete_modify.test
 test/sql/storage/extensions/extension_default.test
 test/sql/storage/lazy_load/lazy_load_limit.test
-test/sql/storage/memory/in_memory_compress.test
+test/sql/storage/memory/in_memory_disabled_zstd.test
 test/sql/storage/metadata/full_table_metadata_reuse.test
 test/sql/storage/mix/test_update_delete_string.test
 test/sql/storage/nested/struct_of_lists_unaligned.test

@@ -51,6 +51,20 @@ struct tpch_append_information {
 	idx_t active_row = DConstants::INVALID_INDEX;
 	idx_t active_col = 0;
 	bool finalized = false;
+	//! raw column pointers of the current chunk, so the per-value append path does no bounds or type checks
+	static constexpr idx_t MAX_COLUMNS = 16;
+	Vector *columns[MAX_COLUMNS];
+	data_ptr_t column_data[MAX_COLUMNS];
+
+	void RefreshColumnPointers() {
+		D_ASSERT(chunk.ColumnCount() <= MAX_COLUMNS);
+		for (idx_t col = 0; col < chunk.ColumnCount(); col++) {
+			auto &vector = chunk.data[col];
+			D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+			columns[col] = &vector;
+			column_data[col] = FlatVector::GetDataMutable(vector);
+		}
+	}
 
 	~tpch_append_information() {
 		if (optimistic_writer) {
@@ -61,6 +75,7 @@ struct tpch_append_information {
 	void Initialize(ClientContext &context, TableCatalogEntry &table, idx_t flush_count) {
 		appender = make_uniq<InternalAppender>(context, table, flush_count);
 		chunk.Initialize(context, table.GetTypes());
+		RefreshColumnPointers();
 	}
 
 	void InitializeOptimistic(ClientContext &context, DuckTableEntry &table,
@@ -75,6 +90,7 @@ struct tpch_append_information {
 		optimistic_collection_index = table.GetStorage().CreateOptimisticCollection(context, std::move(collection));
 		optimistic_collection = table.GetStorage().GetOptimisticCollection(context, optimistic_collection_index);
 		chunk.Initialize(context, table.GetTypes());
+		RefreshColumnPointers();
 	}
 
 	void ResetOptimisticCollection(ClientContext &context) {
@@ -102,6 +118,7 @@ struct tpch_append_information {
 			}
 		}
 		chunk.Reset();
+		RefreshColumnPointers();
 		row = 0;
 		active_col = 0;
 	}
@@ -161,7 +178,7 @@ struct tpch_append_information {
 			return;
 		}
 		FlushChunk();
-		TransactionData transaction_data(0, 0);
+		auto transaction_data = TransactionData::Unversioned();
 		auto &row_collection = *optimistic_collection->collection;
 		row_collection.FinalizeAppend(transaction_data, append_state);
 		finalized = true;
@@ -201,29 +218,32 @@ static void append_end_row(tpch_append_information &info) {
 static Vector &append_next_column(tpch_append_information &info) {
 	D_ASSERT(info.active_row != DConstants::INVALID_INDEX);
 	D_ASSERT(info.active_col < info.chunk.ColumnCount());
-	return info.chunk.data[info.active_col++];
+	return *info.columns[info.active_col++];
+}
+
+template <class T>
+static T *append_next_column_data(tpch_append_information &info) {
+	D_ASSERT(info.active_row != DConstants::INVALID_INDEX);
+	D_ASSERT(info.active_col < info.chunk.ColumnCount());
+	D_ASSERT(info.chunk.data[info.active_col].GetType().InternalType() == GetTypeId<T>());
+	return reinterpret_cast<T *>(info.column_data[info.active_col++]);
 }
 
 void append_int32(tpch_append_information &info, int32_t value) {
-	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<int32_t>(vector)[info.active_row] = value;
+	append_next_column_data<int32_t>(info)[info.active_row] = value;
 }
 
 void append_int64(tpch_append_information &info, int64_t value) {
-	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<int64_t>(vector)[info.active_row] = value;
+	append_next_column_data<int64_t>(info)[info.active_row] = value;
 }
 
 void append_string_reference(tpch_append_information &info, const char *value, idx_t length) {
 	// Only use for stable DBGEN strings; non-inlined string_t values keep a pointer until the chunk is appended.
-	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<string_t>(vector)[info.active_row] =
-	    string_t(value, UnsafeNumericCast<uint32_t>(length));
+	append_next_column_data<string_t>(info)[info.active_row] = string_t(value, UnsafeNumericCast<uint32_t>(length));
 }
 
 void append_decimal(tpch_append_information &info, int64_t value) {
-	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<int64_t>(vector)[info.active_row] = value;
+	append_next_column_data<int64_t>(info)[info.active_row] = value;
 }
 
 void append_char(tpch_append_information &info, char value) {
@@ -238,13 +258,12 @@ static date_t raw_tpch_date(DSS_HUGE value) {
 }
 
 void append_date(tpch_append_information &info, DSS_HUGE value) {
-	auto &vector = append_next_column(info);
-	FlatVector::GetDataMutable<date_t>(vector)[info.active_row] = raw_tpch_date(value);
+	append_next_column_data<date_t>(info)[info.active_row] = raw_tpch_date(value);
 }
 
 static string_t &append_empty_string(tpch_append_information &info, idx_t length) {
-	auto &vector = append_next_column(info);
-	auto data = FlatVector::GetDataMutable<string_t>(vector);
+	auto &vector = *info.columns[info.active_col];
+	auto data = append_next_column_data<string_t>(info);
 	data[info.active_row] = StringVector::EmptyString(vector, length);
 	return data[info.active_row];
 }
@@ -353,7 +372,7 @@ static DSS_HUGE PartSuppBridge(DBGenContext *ctx, DSS_HUGE part_key, DSS_HUGE su
 }
 
 static void AppendPartName(tpch_append_information &info, DBGenContext *ctx) {
-	permute_dist(&colors, &ctx->Seed[P_NAME_SD], ctx);
+	permute_dist(&colors, P_NAME_SCL, &ctx->Seed[P_NAME_SD], ctx);
 	idx_t length = 0;
 	for (idx_t i = 0; i < P_NAME_SCL; i++) {
 		length += NumericCast<idx_t>(colors.list[ctx->permute[i]].length);
@@ -778,10 +797,40 @@ const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::VARCHAR)};
 
 template <class T>
+static void ValidateTPCHTableSchema(const TableCatalogEntry &table, const string &table_name) {
+	const auto &columns = table.GetColumns();
+
+	if (columns.LogicalColumnCount() != T::ColumnCount) {
+		throw InvalidInputException(
+		    "TPC-H table \"%s\" has an incompatible schema: expected %llu columns but found %llu", table_name,
+		    (unsigned long long)T::ColumnCount, (unsigned long long)columns.LogicalColumnCount());
+	}
+
+	for (idx_t i = 0; i < T::ColumnCount; i++) {
+		const auto &column = columns.GetColumn(LogicalIndex(i));
+
+		if (column.Name() != Identifier(T::Columns[i])) {
+			throw InvalidInputException(
+			    "TPC-H table \"%s\" has an incompatible schema: expected column \"%s\" at position %llu but found %s",
+			    table_name, T::Columns[i], (unsigned long long)i, column.Name());
+		}
+
+		if (column.Type() != T::Types[i]) {
+			throw InvalidInputException(
+			    "TPC-H table \"%s\" has an incompatible schema: column \"%s\" has type %s but expected %s",
+			    table_name, T::Columns[i], column.Type().ToString(), T::Types[i].ToString());
+		}
+	}
+}
+
+template <class T>
 static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_name, const Identifier &schema,
                             string suffix) {
+	auto table_name = string(T::Name) + suffix;
+	auto qualified_name = QualifiedName(catalog_name, schema, Identifier(table_name));
+
 	auto info = make_uniq<CreateTableInfo>();
-	info->SetQualifiedName(QualifiedName(catalog_name, schema, Identifier(T::Name + suffix)));
+	info->SetQualifiedName(qualified_name);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
@@ -790,6 +839,10 @@ static void CreateTPCHTable(ClientContext &context, const Identifier &catalog_na
 	}
 	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 	catalog.CreateTable(context, std::move(info));
+
+	// Validate both newly created and pre-existing TPC-H tables before appending.
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, qualified_name);
+	ValidateTPCHTableSchema<T>(table, table_name);
 }
 
 void DBGenWrapper::CreateTPCHSchema(ClientContext &context, const Identifier &catalog, const Identifier &schema,
@@ -1083,9 +1136,24 @@ public:
 	TPCHDBGenGenerator(ClientContext &context, double flt_scale, const Identifier &catalog_name,
 	                   const Identifier &schema, string suffix, int children, int current_step)
 	    : context(context), flt_scale(flt_scale), children(children), current_step(current_step) {
+		// NaN compares false against every scale factor check, and reaches an out-of-range cast below
+		if (Value::IsNan(flt_scale)) {
+			throw InvalidInputException("DBGen requires a valid scale factor.");
+		}
+
+		if (flt_scale <= 0) {
+			Finish();
+			return;
+		}
+
+		if (flt_scale > MAX_SCALE) {
+			throw InvalidInputException("DBGen does not support a scale factor exceeding %d.",
+			                            static_cast<int>(MAX_SCALE));
+		}
+
 		InitializeBaseContext();
 
-		if (flt_scale == 0 || current_step >= children) {
+		if (current_step >= children) {
 			Finish();
 			return;
 		}
@@ -1093,7 +1161,7 @@ public:
 		auto &catalog = Catalog::GetCatalog(context, catalog_name);
 		parameters = make_uniq<TPCHDBgenParameters>(context, catalog, schema, suffix);
 
-		load_dists(10 * 1024 * 1024, &base_context); // 10MiB
+		load_dists(TEXT_POOL_SIZE, &base_context);
 		distributions_loaded = true;
 		/* have to do this after init */
 		base_context.tdefs[NATION].base = nations.count;
@@ -1316,9 +1384,6 @@ private:
 				parallel_work_offset++;
 			}
 			executor.WorkOnTasks();
-			if (executor.HasError()) {
-				executor.ThrowError();
-			}
 			for (idx_t appender_idx = 0; appender_idx < new_appenders.size(); appender_idx++) {
 				auto work_item_idx = parallel_work_offset - new_appenders.size() + appender_idx;
 				finished_appenders.push_back(make_uniq<FinishedDBGenAppender>(

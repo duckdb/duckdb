@@ -24,6 +24,7 @@ memory	main	tbl	[a]	[INTEGER]	false
 new_database	main	tbl	[b]	[INTEGER]	false
 new_database	s1	tbl	[c]	[INTEGER]	false
 
+# The bare shorthands (TABLES omitted) alias SHOW ALL TABLES.
 query IIIIII
 SHOW ALL
 ----

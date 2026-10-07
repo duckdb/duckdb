@@ -275,7 +275,7 @@ Parameter without a default follows parameter with a default
 statement error
 CREATE MACRO select_plus_floats(a, f := b) AS (SELECT a + f FROM floats)
 ----
-Binder Error: Default value for parameter 'f' cannot contain column names
+Binder Error: Default value for parameter "f" cannot contain column names
 
 # +(FLOAT, VARCHAR) does not work - but types are only checked once the macro is called
 statement ok

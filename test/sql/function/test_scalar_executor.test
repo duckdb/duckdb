@@ -1,0 +1,48 @@
+# name: test/sql/function/test_scalar_executor.test
+# description: Exercise scalar executor facades through representative SQL functions
+# group: [function]
+
+statement ok
+CREATE TABLE executor_input(i INTEGER, s VARCHAR);
+
+statement ok
+INSERT INTO executor_input VALUES (-3, 'aardvark'), (2, 'beta'), (NULL, NULL), (5, 'gamma');
+
+# Unary numeric/string execution and binary arithmetic over flat vectors.
+query ITI
+SELECT abs(i), upper(s), i + 10 FROM executor_input ORDER BY rowid;
+----
+3	AARDVARK	7
+2	BETA	12
+NULL	NULL	NULL
+5	GAMMA	15
+
+# The filter produces a dictionary input for the projection.
+query IT
+SELECT abs(i), upper(s) FROM executor_input WHERE i > 0 ORDER BY i;
+----
+2	BETA
+5	GAMMA
+
+# Ternary string execution, including NULL propagation.
+query T
+SELECT replace(s, 'a', 'x') FROM executor_input ORDER BY rowid;
+----
+xxrdvxrk
+betx
+NULL
+gxmmx
+
+# Unary optional-return execution.
+query T
+SELECT try_strptime(s, '%Y-%m-%d') FROM (VALUES ('2024-01-02'), ('invalid'), (NULL)) input(s);
+----
+2024-01-02 00:00:00
+NULL
+NULL
+
+# Variadic execution with six inputs.
+query T
+SELECT make_timestamp(2024, 1, 2, 3, 4, 5);
+----
+2024-01-02 03:04:05

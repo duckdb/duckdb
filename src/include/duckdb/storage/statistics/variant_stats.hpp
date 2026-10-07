@@ -71,11 +71,11 @@ public:
 
 	//! Returns the typed_value stats of a shredded stats entry
 	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &stats);
-	DUCKDB_API static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
+	static const BaseStatistics &GetTypedStats(const BaseStatistics &&stats) = delete;
 
 	//! Returns the untyped_value_index stats of a shredded stats entry - if there is any
 	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &stats);
-	DUCKDB_API static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
+	static optional_ptr<const BaseStatistics> GetUntypedStats(const BaseStatistics &&stats) = delete;
 
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 	DUCKDB_API static void SetUnshreddedStats(BaseStatistics &stats, const BaseStatistics &new_stats);
@@ -85,6 +85,8 @@ public:
 	//! Stats related to the 'shredded' column, which holds all structured data created during shredding
 	//! Returns the LogicalType that represents the shredding as a single DuckDB LogicalType (i.e STRUCT(col1 VARCHAR))
 	DUCKDB_API static LogicalType GetShreddedStructuredType(const BaseStatistics &stats);
+	//! Wraps each level of structured_type in typed_value
+	DUCKDB_API static LogicalType GetShreddingType(const LogicalType &structured_type);
 	DUCKDB_API static void CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type);
 	DUCKDB_API static bool IsShredded(const BaseStatistics &stats);
 	//! Determine if a given path inside the variant stats is shredded

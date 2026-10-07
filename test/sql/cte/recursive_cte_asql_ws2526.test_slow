@@ -1,0 +1,307 @@
+# name: test/sql/cte/recursive_cte_asql_ws2526.test_slow
+# description: Recursive workloads adapted from Advanced SQL WS 2025/26
+# group: [cte]
+
+statement ok
+SET threads=2;
+
+statement ok
+SET max_execution_time=30000;
+
+# CYK parsing with two recursive self-references
+statement ok
+CREATE TABLE asql_cyk_config(token_count INTEGER, max_iterations INTEGER);
+
+statement ok
+INSERT INTO asql_cyk_config VALUES (31, 11);
+
+statement ok
+CREATE TABLE asql_cyk_grammar(
+	lhs VARCHAR,
+	terminal VARCHAR,
+	left_symbol VARCHAR,
+	right_symbol VARCHAR,
+	start_symbol BOOLEAN
+);
+
+statement ok
+INSERT INTO asql_cyk_grammar VALUES
+	('expression', NULL, 'expression', 'sum', true),
+	('expression', NULL, 'term', 'product', true),
+	('expression', 'n', NULL, NULL, true),
+	('term', NULL, 'term', 'product', false),
+	('term', 'n', NULL, NULL, false),
+	('sum', NULL, 'plus', 'term', false),
+	('product', NULL, 'multiply', 'number', false),
+	('number', 'n', NULL, NULL, false),
+	('plus', '+', NULL, NULL, false),
+	('multiply', '*', NULL, NULL, false);
+
+statement ok
+CREATE TABLE asql_cyk_tokens(position INTEGER, token VARCHAR);
+
+statement ok
+INSERT INTO asql_cyk_tokens
+SELECT position::INTEGER + 1,
+       CASE
+	       WHEN position % 2 = 0 THEN 'n'
+	       WHEN (position // 2) % 2 = 0 THEN '+'
+	       ELSE '*'
+       END
+FROM asql_cyk_config, range(token_count) positions(position);
+
+statement ok
+SET VARIABLE asql_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/asql_cyk.sql')
+);
+
+query IIIT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+212	11	1	c3bfde6e8a8587e43d92d2363461eede
+
+statement ok
+SET VARIABLE asql_keyed_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/asql_cyk_using_key.sql')
+);
+
+query IIIT
+SELECT * FROM query(getvariable('asql_keyed_sql'));
+----
+212	11	1	c3bfde6e8a8587e43d92d2363461eede
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+statement ok
+PRAGMA explain_output='physical_only';
+
+query II
+EXPLAIN SELECT * FROM query(getvariable('asql_keyed_sql'));
+----
+physical_plan	<REGEX>:.*RECURSIVE_PARTIAL_KEY_JOIN.*
+
+# An invalid token must not be accepted.
+statement ok
+UPDATE asql_cyk_tokens SET token = '?' WHERE position = 16;
+
+query IIIT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+144	11	0	cc5b637f0454f358d342287d818682fa
+
+query IIIT
+SELECT * FROM query(getvariable('asql_keyed_sql'));
+----
+144	7	0	cc5b637f0454f358d342287d818682fa
+
+# One-dimensional diffusion, ordinary and keyed
+statement ok
+CREATE TABLE asql_fluid_config(width INTEGER, iterations INTEGER, rate DOUBLE);
+
+statement ok
+INSERT INTO asql_fluid_config VALUES (64, 60, 0.125);
+
+statement ok
+CREATE TABLE asql_fluid_initial(x INTEGER PRIMARY KEY, value DOUBLE);
+
+statement ok
+INSERT INTO asql_fluid_initial
+SELECT x::INTEGER,
+       CASE
+	       WHEN x BETWEEN 8 AND 15 THEN 8.0
+	       WHEN x BETWEEN 40 AND 51 THEN 5.0
+	       ELSE 0.0
+       END
+FROM asql_fluid_config, range(width) cells(x);
+
+statement ok
+SET VARIABLE asql_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/asql_fluid.sql')
+);
+
+query IIRRRT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+60	64	124.0	0.010751	5.570112	01e7dfe76b584e74d7b94e6b02ae4675
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+SET VARIABLE asql_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/asql_fluid_using_key.sql')
+);
+
+query IIRRRT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+60	64	124.0	0.010751	5.570112	01e7dfe76b584e74d7b94e6b02ae4675
+
+statement ok
+CALL disable_logging();
+
+query II
+SELECT info.final_state_rows::UBIGINT,
+       info.retained_build_executions::UBIGINT >= 1
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+64	1
+
+# The keyed final state is stable in single-threaded execution.
+statement ok
+SET threads=1;
+
+query IIRRRT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+60	64	124.0	0.010751	5.570112	01e7dfe76b584e74d7b94e6b02ae4675
+
+statement ok
+SET threads=2;
+
+# Marching Squares over loop-invariant spatial CTEs
+statement ok
+CREATE TABLE asql_marching_config(
+	width INTEGER,
+	height INTEGER,
+	min_x INTEGER,
+	max_x INTEGER,
+	min_y INTEGER,
+	max_y INTEGER
+);
+
+statement ok
+INSERT INTO asql_marching_config VALUES (64, 64, 16, 47, 16, 47);
+
+statement ok
+CREATE TABLE asql_marching_map(x INTEGER, y INTEGER, altitude INTEGER, PRIMARY KEY (x, y));
+
+statement ok
+INSERT INTO asql_marching_map
+SELECT x::INTEGER,
+       y::INTEGER,
+       CASE
+	       WHEN x BETWEEN min_x AND max_x AND y BETWEEN min_y AND max_y THEN 200
+	       ELSE 100
+       END
+FROM asql_marching_config, range(width) xs(x), range(height) ys(y);
+
+statement ok
+CREATE TABLE asql_marching_directions(
+	lower_left BOOLEAN,
+	lower_right BOOLEAN,
+	upper_left BOOLEAN,
+	upper_right BOOLEAN,
+	delta_x INTEGER,
+	delta_y INTEGER,
+	PRIMARY KEY (lower_left, lower_right, upper_left, upper_right)
+);
+
+statement ok
+INSERT INTO asql_marching_directions VALUES
+	(false, false, false, false, 1, 0),
+	(false, false, false, true, 1, 0),
+	(false, false, true, false, 0, 1),
+	(false, false, true, true, 1, 0),
+	(false, true, false, false, 0, -1),
+	(false, true, false, true, 0, -1),
+	(false, true, true, false, 0, 1),
+	(false, true, true, true, 0, -1),
+	(true, false, false, false, -1, 0),
+	(true, false, false, true, -1, 0),
+	(true, false, true, false, 0, 1),
+	(true, false, true, true, 1, 0),
+	(true, true, false, false, -1, 0),
+	(true, true, false, true, -1, 0),
+	(true, true, true, false, 0, 1),
+	(true, true, true, true, NULL, NULL);
+
+statement ok
+CALL enable_logging('PhysicalOperator', storage='memory');
+
+statement ok
+CALL truncate_duckdb_logs();
+
+statement ok
+SET VARIABLE asql_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/asql_marching_squares.sql')
+);
+
+query IIIIIT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+128	15	47	15	47	a0ea8a4af63e7f7c5f2be7ad659a245b
+
+statement ok
+CALL disable_logging();
+
+# The invariant spatial hash builds are retained across the 128 recursion epochs.
+query II
+SELECT info.epochs::UBIGINT,
+       info.retained_build_executions::UBIGINT >= 1
+FROM duckdb_logs_parsed('PhysicalOperator')
+WHERE class = 'PhysicalRecursiveCTE' AND event = 'RuntimeMetrics';
+----
+128	1
+
+# Branching Sudoku search with list-valued state
+statement ok
+CREATE TABLE asql_sudoku_config(puzzle_count INTEGER);
+
+statement ok
+INSERT INTO asql_sudoku_config VALUES (4);
+
+statement ok
+CREATE TABLE asql_sudoku_puzzles(puzzle INTEGER PRIMARY KEY, board INTEGER[]);
+
+statement ok
+INSERT INTO asql_sudoku_puzzles
+SELECT puzzle::INTEGER,
+       list(
+	       CASE
+		       WHEN (position * 17 + 5) % 81 < 24 THEN 0
+		       ELSE ((position // 9) * 3 + (position // 9) // 3 + position % 9) % 9 + 1
+	       END
+	       ORDER BY position
+       )::INTEGER[]
+FROM asql_sudoku_config,
+     range(puzzle_count) puzzles(puzzle),
+     range(81) cells(position)
+GROUP BY puzzle;
+
+statement ok
+SET VARIABLE asql_sql = (
+	SELECT content FROM read_text('benchmark/recursive_cte/queries/performance/asql_sudoku.sql')
+);
+
+query IIT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+4	4	23348c17008a2919983afe2935dcd1df
+
+# A blank with no valid candidate must exhaust its recursive branch.
+statement ok
+INSERT INTO asql_sudoku_puzzles
+SELECT 4,
+       list(
+	       CASE
+		       WHEN position = 0 THEN 0
+		       WHEN position = 9 THEN 1
+		       ELSE ((position // 9) * 3 + (position // 9) // 3 + position % 9) % 9 + 1
+	       END
+	       ORDER BY position
+       )::INTEGER[]
+FROM range(81) cells(position);
+
+query IIT
+SELECT * FROM query(getvariable('asql_sql'));
+----
+4	4	23348c17008a2919983afe2935dcd1df
+
+statement ok
+RESET max_execution_time;

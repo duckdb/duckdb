@@ -7,6 +7,7 @@
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/logging/logger.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 
@@ -139,6 +140,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 	auto &plan = CreatePlan(*op.children[0]);
 	auto *limit_child = &plan;
 	auto total_limit = GetLimit(op.limit_val, op.offset_val);
+	if (op.offset_val.Type() != LimitNodeType::UNSET && !PreserveInsertionOrder(plan)) {
+		DUCKDB_LOG_WARNING(context,
+		                   "OFFSET is applied to a query whose row order is not guaranteed - the result may "
+		                   "differ between runs. This happens when the query contains order-breaking operators (e.g. "
+		                   "hash joins or aggregations), reads from a source that does not preserve order, or when "
+		                   "preserve_insertion_order=false. Add an ORDER BY to make the result deterministic.");
+	}
 	// Unpartitioned hash tables become expensive to Combine at large sizes
 	static constexpr idx_t LIMITED_DISTINCT_THRESHOLD = 100000;
 	if (total_limit.IsValid() && total_limit.GetIndex() <= LIMITED_DISTINCT_THRESHOLD) {

@@ -20,12 +20,15 @@ public:
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
 
-			//	If the argument order is a prefix of the partition ordering
+			//	If the argument order is the entire partition ordering
 			//	(and the optimizer is enabled), then we can just use the partition ordering.
+			//	A prefix is not sufficient because peer boundaries use all of the ordering keys.
 			auto &wexpr = executor.wexpr;
 			auto &arg_orders = executor.wexpr.ArgOrders();
+			auto &orders = wexpr.OrderBy();
 			const auto optimize = Settings::Get<EnableOptimizerSetting>(client);
-			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.OrderBy(), arg_orders) != arg_orders.size()) {
+			const auto shared = BoundWindowExpression::GetSharedOrders(orders, arg_orders);
+			if (!optimize || shared != arg_orders.size() || arg_orders.size() != orders.size()) {
 				token_tree = make_uniq<WindowTokenTree>(client, arg_orders, executor.arg_order_idx, payload_count);
 			}
 		}
@@ -132,7 +135,7 @@ struct WindowPeerExecutor : public WindowExecutor {
 		return true;
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state) {
+	                       Vector &result, WindowExecutorStreamingState &state) {
 		state.Cast<WindowPeerStreamingState>().Evaluate(result);
 	}
 };
@@ -163,8 +166,8 @@ struct WindowRankExecutor : public WindowPeerExecutor {
 	                    idx_t row_idx, OperatorSinkInput &sink);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowPeerStreamingState>(Value((int64_t)1));
 	}
 };
@@ -254,8 +257,8 @@ struct WindowDenseRankExecutor : public WindowPeerExecutor {
 	                    idx_t row_idx, OperatorSinkInput &sink);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowPeerStreamingState>(Value((int64_t)1));
 	}
 };
@@ -365,8 +368,8 @@ struct WindowPercentRankExecutor : public WindowPeerExecutor {
 	                    idx_t row_idx, OperatorSinkInput &sink);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowPeerStreamingState>(Value((double)0));
 	}
 };
@@ -408,8 +411,11 @@ unique_ptr<LocalSinkState> WindowPercentRankExecutor::GetLocal(ExecutionContext 
 }
 
 static inline double PercentRank(const idx_t begin, const idx_t end, const uint64_t rank) {
-	auto denom = static_cast<double>(NumericCast<int64_t>(end - begin - 1));
-	return denom > 0 ? ((double)rank - 1) / denom : 0;
+	if (end <= begin + 1) {
+		return 0;
+	}
+	const auto denom = static_cast<double>(NumericCast<int64_t>(end - begin - 1));
+	return ((double)rank - 1) / denom;
 }
 
 void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
@@ -424,16 +430,20 @@ void WindowPercentRankExecutor::GetData(ExecutionContext &context, DataChunk &ev
 		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				const auto rank = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
-				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], rank));
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
+				const auto rank = gpeer.token_tree->Rank(begin, end, row_idx);
+				rdata.WriteValue(PercentRank(begin, end, rank));
 			}
 		} else {
 			//	Clamp peer to the frame
 			auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
-				lpeer.rank = (frame_peer_begin - frame_begin[i]) + 1;
-				rdata.WriteValue(PercentRank(frame_begin[i], frame_end[i], lpeer.rank));
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
+				const auto frame_peer_begin = MaxValue(begin, peer_begin[i]);
+				lpeer.rank = (frame_peer_begin - begin) + 1;
+				rdata.WriteValue(PercentRank(begin, end, lpeer.rank));
 			}
 		}
 		return;
@@ -497,9 +507,13 @@ unique_ptr<LocalSinkState> WindowCumeDistExecutor::GetLocal(ExecutionContext &co
 }
 
 static inline double CumeDist(const idx_t begin, const idx_t end, const idx_t peer_end) {
+	if (end <= begin) {
+		return 0;
+	}
 	const auto denom = static_cast<double>(NumericCast<int64_t>(end - begin));
-	const auto num = static_cast<double>(peer_end - begin);
-	return denom > 0 ? (num / denom) : 0;
+	const auto num_begin = MaxValue(peer_end, begin);
+	const auto num = static_cast<double>(num_begin - begin);
+	return num / denom;
 }
 
 void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_chunk, DataChunk &bounds,
@@ -513,15 +527,19 @@ void WindowCumeDistExecutor::GetData(ExecutionContext &context, DataChunk &eval_
 		auto frame_end = FlatVector::GetData<const idx_t>(bounds.data[FRAME_END]);
 		if (gpeer.token_tree) {
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				const auto peer_end = gpeer.token_tree->PeerEnd(frame_begin[i], frame_end[i], row_idx);
-				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], peer_end));
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
+				const auto peer_end = gpeer.token_tree->PeerEnd(begin, end, row_idx);
+				rdata.WriteValue(CumeDist(begin, end, peer_end));
 			}
 		} else {
 			auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
+				const auto begin = frame_begin[i];
+				const auto end = MaxValue(frame_end[i], begin);
 				//	Clamp the peer end to the frame
-				const auto frame_peer_end = MinValue(peer_end[i], frame_end[i]);
-				rdata.WriteValue(CumeDist(frame_begin[i], frame_end[i], frame_peer_end));
+				const auto frame_peer_end = MinValue(peer_end[i], end);
+				rdata.WriteValue(CumeDist(begin, end, frame_peer_end));
 			}
 		}
 		return;

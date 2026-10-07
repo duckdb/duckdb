@@ -1,0 +1,7 @@
+# name: benchmark/recursive_cte/aoc2022_day24.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/aoc2022/recursive_cte_aoc2022.benchmark.in
+DAY=day24
+BENCHMARK_NAME=AoC 2022 day24 recursive blizzard basin
+DESCRIPTION=Precompute moving hazards and run three dependent recursive traversals

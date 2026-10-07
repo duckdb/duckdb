@@ -28,7 +28,13 @@ bool ShellState::UseDescribeRenderMode(const duckdb::SQLStatement &statement, st
 		return false;
 	}
 	auto &showref = select_node.from_table->Cast<duckdb::ShowRef>();
-	if (showref.show_type != duckdb::ShowType::DESCRIBE) {
+	// DESCRIBE always uses the compact describe rendering. Using SHOW to describe something - bareword "SHOW name" or
+	// "SHOW (query)" - is deprecated, but while it is still supported we render it the same way for consistency with
+	// DESCRIBE. Note that a bareword "SHOW name" may instead resolve to a setting value at execution time; that is a
+	// regular (non-describe) result, which ExecuteStatement detects from the result shape and renders with the default
+	// mode.
+	bool is_show = showref.show_type == duckdb::ShowType::SHOW && (!showref.GetTableName().empty() || showref.query);
+	if (showref.show_type != duckdb::ShowType::DESCRIBE && !is_show) {
 		return false;
 	}
 	describe_table_name = "Describe";
@@ -431,7 +437,32 @@ idx_t ShellState::GetMaxRenderWidth() const {
 	return max_render_width;
 }
 
+//! One line per table, for a reader that cannot use the box layout: "db.schema.name (table, ~N rows): col TYPE, ..."
+static void RenderTableMetadataCompact(ShellState &state, vector<ShellTableInfo> &tables) {
+	for (auto &table : tables) {
+		string line = table.database_name + "." + table.schema_name + "." + table.table_name;
+		line += table.is_view ? " (view" : " (table";
+		if (table.estimated_size.IsValid()) {
+			line += StringUtil::Format(", ~%llu rows", table.estimated_size.GetIndex());
+		}
+		line += "):";
+		for (idx_t c = 0; c < table.columns.size(); c++) {
+			auto &column = table.columns[c];
+			line += c == 0 ? " " : ", ";
+			line += column.column_name + " " + column.column_type;
+			if (column.is_primary_key) {
+				line += " PK";
+			}
+		}
+		state.Print(line + "\n");
+	}
+}
+
 void ShellState::RenderTableMetadata(vector<ShellTableInfo> &tables) {
+	if (agent_mode_active) {
+		RenderTableMetadataCompact(*this, tables);
+		return;
+	}
 	idx_t max_render_width = GetMaxRenderWidth();
 	duckdb::BoxRendererConfig config;
 	// figure out the render width of each table

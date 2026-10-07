@@ -21,6 +21,17 @@ select to_json({n: 42})
 ----
 {"n":42}
 
+# Temporal types use their dedicated JSON formatting paths
+query TTTTT
+SELECT
+	to_json(TIMESTAMP '2026-01-02 03:04:05.123456'),
+	to_json(TIMESTAMP_MS '2026-01-02 03:04:05.123'),
+	to_json(TIMESTAMP_S '2026-01-02 03:04:05'),
+	to_json(TIMESTAMPTZ '2026-01-02 03:04:05+00'),
+	to_json(TIMESTAMPTZ_NS '2026-01-02 03:04:05.123456789+00')
+----
+"2026-01-02 03:04:05.123456"	"2026-01-02 03:04:05.123"	"2026-01-02 03:04:05"	"2026-01-02 03:04:05+00"	"2026-01-02 03:04:05.123456789+00"
+
 # issue #22828
 query T
 select to_json(42::VARIANT)
@@ -127,6 +138,11 @@ query T
 select json_object('nested', [{nested2: 1}, {nested2: 2}, {nested2: 3}])
 ----
 {"nested":[{"nested2":1},{"nested2":2},{"nested2":3}]}
+
+query T
+select [{'a': 1, 'b': [1]}::VARIANT]::JSON
+----
+[{"a":1,"b":[1]}]
 
 statement ok
 create table test (a int, b double, c varchar, d int[], e uinteger)

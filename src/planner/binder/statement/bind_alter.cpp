@@ -5,6 +5,9 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_schema_info.hpp"
 #include "duckdb/parser/parsed_data/comment_on_column_info.hpp"
 #include "duckdb/parser/statement/alter_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -41,12 +44,13 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto bound_constraint =
 	    BindUniqueConstraint(*constraint_info.constraint, table_info.GetQualifiedName().Name(), column_list);
 	auto &bound_unique = bound_constraint->Cast<BoundUniqueConstraint>();
+	auto &unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 
 	// Create the CreateIndexInfo.
 	auto create_index_info = make_uniq<CreateIndexInfo>();
 	create_index_info->table = table_info.GetQualifiedName().Name();
 	create_index_info->index_type = ART::TYPE_NAME;
-	create_index_info->constraint_type = IndexConstraintType::PRIMARY;
+	create_index_info->constraint_type = unique_constraint.GetIndexConstraintType();
 
 	for (const auto &physical_index : bound_unique.keys) {
 		auto &col = column_list.GetColumn(physical_index);
@@ -56,15 +60,12 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 		create_index_info->parsed_expressions.push_back(parsed->Copy());
 	}
 
-	auto unique_constraint = constraint_info.constraint->Cast<UniqueConstraint>();
 	auto index_name = unique_constraint.GetName(table_info.GetQualifiedName().Name());
 	create_index_info->SetIndexName(index_name);
 	D_ASSERT(!create_index_info->GetIndexName().empty());
 
 	// Plan the table scan.
-	TableDescription table_description(QualifiedName(table_info.GetQualifiedName().Catalog(),
-	                                                 table_info.GetQualifiedName().Schema(),
-	                                                 table_info.GetQualifiedName().Name()));
+	TableDescription table_description(table_info.GetQualifiedName());
 	auto table_ref = make_uniq<BaseTableRef>(table_description);
 	auto bound_table = Bind(*table_ref);
 	if (bound_table.plan->type != LogicalOperatorType::LOGICAL_GET) {
@@ -94,6 +95,11 @@ static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
 		case AlterTableType::ALTER_COLUMN_TYPE: {
 			auto &alter_column_info = table_info.Cast<ChangeColumnTypeInfo>();
 			binder.BindLogicalType(alter_column_info.target_type);
+			if (!alter_column_info.expression) {
+				// without USING, the column is cast to the target type
+				alter_column_info.expression = make_uniq<CastExpression>(
+				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_path));
+			}
 		} break;
 		default:
 			break;
@@ -115,7 +121,20 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		return result;
 	}
 
-	BindSchemaOrCatalog(stmt.info->GetQualifiedNameMutable());
+	if (stmt.info->type == AlterType::ALTER_SCHEMA) {
+		// resolve the schema path the same way as CREATE SCHEMA does
+		auto &info = stmt.info->Cast<AlterSchemaInfo>();
+		info.SetQualifiedName(ResolveCatalog(context, info.GetQualifiedName()));
+		auto &catalog = Catalog::GetCatalog(context, info.SchemaCatalog());
+		auto &properties = GetStatementProperties();
+		properties.return_type = StatementReturnType::NOTHING;
+		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
+		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
+		return result;
+	}
+
+	// resolve the (possibly nested) catalog/schema qualification of the altered entry
+	stmt.info->SetQualifiedName(BindTableName(stmt.info->GetQualifiedName()));
 
 	optional_ptr<CatalogEntry> entry;
 	if (stmt.info->type == AlterType::SET_COLUMN_COMMENT) {
@@ -129,12 +148,8 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		}
 	} else {
 		// For any other ALTER, we retrieve the catalog entry directly.
-		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), QualifiedName(stmt.info->GetQualifiedName().Name()));
-		entry =
-		    entry_retriever.GetEntry(EntryLookupInfo(lookup_info, QualifiedName(stmt.info->GetQualifiedName().Catalog(),
-		                                                                        stmt.info->GetQualifiedName().Schema(),
-		                                                                        lookup_info.GetEntryIdentifier())),
-		                             stmt.info->if_not_found);
+		EntryLookupInfo lookup_info(stmt.info->GetCatalogType(), stmt.info->GetQualifiedName());
+		entry = entry_retriever.GetEntry(lookup_info, stmt.info->if_not_found);
 	}
 
 	auto &properties = GetStatementProperties();
@@ -163,10 +178,9 @@ BoundStatement Binder::Bind(AlterStatement &stmt) {
 		// We can only alter temporary tables and views in read-only mode.
 		properties.RegisterDBModify(catalog, context, DatabaseModificationType::ALTER_TABLE);
 	}
-	stmt.info->SetQualifiedName(
-	    QualifiedName(catalog.GetName(), entry->ParentSchema().name, stmt.info->GetQualifiedName().Name()));
+	stmt.info->SetQualifiedName(entry->ParentSchema().GetQualifiedName(stmt.info->GetQualifiedName().Name()));
 
-	if (!stmt.info->IsAddPrimaryKey()) {
+	if (!stmt.info->IsAddUniqueConstraint()) {
 		result.plan = make_uniq<LogicalAlter>(std::move(stmt.info));
 		return result;
 	}

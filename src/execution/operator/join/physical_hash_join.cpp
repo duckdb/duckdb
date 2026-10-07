@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/logging/log_manager.hpp"
 
 #include "duckdb/common/assert.hpp"
@@ -50,6 +51,7 @@ PhysicalHashJoin::PhysicalHashJoin(PhysicalPlan &physical_plan, LogicalOperator 
     : PhysicalComparisonJoin(physical_plan, op, PhysicalOperatorType::HASH_JOIN, std::move(conds), join_type,
                              estimated_cardinality),
       delim_types(std::move(delim_types)) {
+	D_ASSERT(join_type != JoinType::MARK || !predicate);
 	filter_pushdown = std::move(pushdown_info_p);
 
 	children.push_back(left);
@@ -296,12 +298,24 @@ unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientC
 	return result;
 }
 
-//! True iff the build subtree funnels multiple producer pipelines into one sink (UNION ALL, recursive CTE),
-//! breaking the "decide layout once on the first chunk" contract. Conservative: may over-exclude, never misses one.
+//! Check for producers that can change a build column's dictionary between chunks.
 static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
-	if (op.type == PhysicalOperatorType::UNION || op.type == PhysicalOperatorType::RECURSIVE_CTE ||
-	    op.type == PhysicalOperatorType::RECURSIVE_KEY_CTE) {
+	switch (op.type) {
+	case PhysicalOperatorType::UNION:
+	case PhysicalOperatorType::RECURSIVE_CTE:
+	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
 		return true;
+	case PhysicalOperatorType::CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
+		// CTE producers are not children of their scans and may forward different dictionaries.
+		return true;
+	default:
+		break;
+	}
+	if (op.IsSink() && op.children.size() == 1) {
+		// Single-input sinks materialize their input and become the source of a new pipeline.
+		return false;
 	}
 	for (const auto &child : op.children) {
 		if (BuildSideHasMultipleSources(child.get())) {
@@ -339,8 +353,7 @@ public:
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
 		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
 		can_use_perfect_hash = use_perfect_hash;
-		// A multi-source build side (UNION ALL / recursive CTE) feeds the sink from several producers,
-		// disqualifying dict-surviving. Computed once from the static plan; cannot change at runtime.
+		// Multiple build producers can change dictionaries after the layout has been published.
 		build_side_multi_source = BuildSideHasMultipleSources(op.children[1].get());
 		// For external hash join
 		external = Settings::Get<DebugForceExternalSetting>(context);
@@ -479,7 +492,7 @@ public:
 		join_keys.Initialize(allocator, op.condition_types);
 
 		if (!op.payload_columns.col_types.empty()) {
-			payload_chunk.Initialize(allocator, op.payload_columns.col_types);
+			payload_chunk.InitializeEmpty(op.payload_columns.col_types);
 		}
 
 		hash_table = op.InitializeHashTable(context, gstate.hash_table->GetRadixBits());
@@ -673,7 +686,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			// we need these to correctly deal with the cases of either:
 			// - (1) the group being empty [in which case the result is always false, even if the comparison is NULL]
 			// - (2) the group containing a NULL value [in which case FALSE becomes NULL]
-			auto &info = result->correlated_mark_join_info;
+			auto &info = result->mark_join_info;
 
 			vector<LogicalType> delim_payload_types;
 			vector<AggregateObject> correlated_aggregates;
@@ -683,17 +696,17 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			// we need a count_star and a count to get counts with and without NULLs
 
 			FunctionBinder function_binder(context);
-			aggr = function_binder.BindAggregateFunction(CountStarFun::GetFunction(), {}, nullptr,
-			                                             AggregateType::NON_DISTINCT);
+			aggr = function_binder.BindAggregateFunction(GetBuiltinAggregateFunction(context, CountStarFun::Name, {}),
+			                                             {}, nullptr, AggregateType::NON_DISTINCT);
 			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());
 			info.correlated_aggregates.push_back(std::move(aggr));
 
-			auto count_fun = CountFunctionBase::GetFunction();
+			auto count_fun = GetBuiltinAggregateFunction(context, CountFun::Name, {LogicalType::BIGINT});
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
-			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.GetReturnType(), 0U));
-			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
+			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun->GetReturnType(), 0U));
+			aggr = function_binder.BindAggregateFunction(std::move(count_fun), std::move(children), nullptr,
 			                                             AggregateType::NON_DISTINCT);
 			correlated_aggregates.emplace_back(*aggr);
 			delim_payload_types.push_back(aggr->GetReturnType());
@@ -703,8 +716,20 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(
 			    context, allocator, delim_types, delim_payload_types, std::move(correlated_aggregates));
 			info.correlated_types = delim_types;
-			info.group_chunk.Initialize(allocator, delim_types);
+			info.group_chunk.InitializeEmpty(delim_types);
 			info.result_chunk.Initialize(allocator, delim_payload_types);
+		}
+	}
+	const bool has_row_equality =
+	    conditions.size() > 1 ||
+	    (conditions.size() == 1 && conditions[0].GetLHS().GetReturnType().id() == LogicalTypeId::TUPLE);
+	if (delim_types.empty() && join_type == JoinType::MARK && has_row_equality) {
+		bool all_equal = true;
+		for (auto &condition : conditions) {
+			all_equal = all_equal && condition.GetComparisonType() == ExpressionType::COMPARE_EQUAL;
+		}
+		if (all_equal) {
+			result->InitializeUncorrelatedMarkJoin();
 		}
 	}
 	return result;
@@ -1355,86 +1380,18 @@ static unique_ptr<ExpressionFilter> CreateSelectivityOptionalExpressionFilter(un
                                                                               const LogicalType &column_type,
                                                                               SelectivityOptionalFilterType type);
 
-static LogicalType GetRuntimeFilterInputType(const JoinFilterPushdownColumn &column, const LogicalType &runtime_type) {
-	if (column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION && !column.runtime_filter_casts.empty()) {
-		return column.runtime_filter_casts.back().target_type;
-	}
-	return runtime_type;
-}
-
 struct RuntimeFilterInput {
 	unique_ptr<Expression> expression;
 	bool preserves_cast_errors;
 };
 
-static bool RuntimeFilterCastCanFail(const LogicalType &source_type, const LogicalType &target_type) {
-	if (source_type == target_type) {
-		return false;
-	}
-	if (source_type.id() == LogicalTypeId::VARIANT || target_type.id() == LogicalTypeId::VARIANT ||
-	    !source_type.IsIntegral() || !target_type.IsIntegral()) {
-		return true;
-	}
-
-	const auto source_size = GetTypeIdSize(source_type.InternalType());
-	const auto target_size = GetTypeIdSize(target_type.InternalType());
-	if (source_size > target_size) {
-		return true;
-	}
-	if (source_type.IsSigned() == target_type.IsSigned()) {
-		return false;
-	}
-	if (source_type.IsSigned()) {
-		return true;
-	}
-	return source_size >= target_size;
-}
-
-static bool RuntimeFilterUsesTryCast(const JoinFilterPushdownColumn &column) {
-	auto source_type = column.storage_type;
-	for (auto &cast : column.runtime_filter_casts) {
-		if (cast.mode == RuntimeFilterCastMode::TRY_CAST || RuntimeFilterCastCanFail(source_type, cast.target_type)) {
-			return true;
-		}
-		source_type = cast.target_type;
-	}
-	return false;
-}
-
-static bool RequiresRuntimeFilterExpressionReconstruction(const JoinFilterPushdownColumn &column,
-                                                          const LogicalType &runtime_type) {
-	if (column.mode != JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION) {
-		return false;
-	}
-	auto source_type = column.storage_type;
-	for (auto &cast : column.runtime_filter_casts) {
-		if (RuntimeFilterCastCanFail(source_type, cast.target_type)) {
-			return true;
-		}
-		source_type = cast.target_type;
-	}
-	D_ASSERT(source_type == GetRuntimeFilterInputType(column, runtime_type));
-	return false;
-}
-
 static RuntimeFilterInput CreateRuntimeFilterInputExpression(ClientContext &context,
                                                              const JoinFilterPushdownColumn &column,
                                                              const LogicalType &runtime_type) {
-	D_ASSERT(column.storage_type.IsValid());
-	unique_ptr<Expression> input = make_uniq<BoundReferenceExpression>(column.storage_type, idx_t(0));
-	auto source_type = column.storage_type;
 	bool preserves_cast_errors = false;
-	for (auto &cast : column.runtime_filter_casts) {
-		const auto cast_can_fail = RuntimeFilterCastCanFail(source_type, cast.target_type);
-		const auto is_try_cast = cast.mode == RuntimeFilterCastMode::TRY_CAST || cast_can_fail;
-		if (source_type != cast.target_type) {
-			input = BoundCastExpression::AddCastToType(context, std::move(input), cast.target_type, is_try_cast);
-		}
-		preserves_cast_errors |= cast.mode == RuntimeFilterCastMode::DEFAULT_CAST && cast_can_fail;
-		source_type = cast.target_type;
-	}
-	D_ASSERT(source_type == GetRuntimeFilterInputType(column, runtime_type));
-	return {std::move(input), preserves_cast_errors};
+	auto expression = RuntimeFilterCastUtil::CreateRuntimeFilterInputExpression(context, column, preserves_cast_errors);
+	D_ASSERT(expression->GetReturnType() == RuntimeFilterCastUtil::GetRuntimeFilterInputType(column, runtime_type));
+	return {std::move(expression), preserves_cast_errors};
 }
 
 static unique_ptr<Expression> PreserveRuntimeFilterCastErrors(unique_ptr<Expression> filter_expr,
@@ -1535,7 +1492,7 @@ static unique_ptr<Expression> CreateRuntimeFilterExpression(ClientContext &conte
                                                             float selectivity_threshold, idx_t n_vectors_to_check) {
 	const auto key_name = ht.conditions[0].GetRHS().ToString();
 	const auto key_type = ht.conditions[0].GetLHS().GetReturnType();
-	auto filter_input_type = GetRuntimeFilterInputType(deferred.column, key_type);
+	auto filter_input_type = RuntimeFilterCastUtil::GetRuntimeFilterInputType(deferred.column, key_type);
 	auto input = CreateRuntimeFilterInputExpression(context, deferred.column, key_type);
 	const auto filters_null_values = !input.preserves_cast_errors && !ht.NullValuesAreEqual(0);
 	vector<unique_ptr<Expression>> children;
@@ -1597,7 +1554,7 @@ static void PublishDeferredRuntimeFilters(ClientContext &context, JoinHashTable 
 		           {{"kind", GetRuntimeFilterTypeName(deferred.type)},
 		            {"storage_type", deferred.column.storage_type.ToString()},
 		            {"reconstruction_mode", GetRuntimeFilterReconstructionModeName(deferred.column.mode)},
-		            {"uses_try_cast", to_string(RuntimeFilterUsesTryCast(deferred.column))}});
+		            {"uses_try_cast", to_string(RuntimeFilterCastUtil::RuntimeFilterUsesTryCast(deferred.column))}});
 	}
 	gstate.deferred_runtime_filters.clear();
 }
@@ -1623,12 +1580,12 @@ static void CreateDynamicMinMaxFilter(const PhysicalComparisonJoin &op, const Jo
 static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type,
                                                                unique_ptr<Expression> input, const Value &constant,
                                                                const LogicalType &comparison_logical_type) {
-	auto constant_value = constant;
-	if (!constant_value.DefaultTryCastAs(comparison_logical_type)) {
+	auto constant_value = constant.DefaultTryCastAs(comparison_logical_type);
+	if (!constant_value) {
 		return nullptr;
 	}
 	return BoundComparisonExpression::Create(comparison_type, std::move(input),
-	                                         make_uniq<BoundConstantExpression>(std::move(constant_value)));
+	                                         make_uniq<BoundConstantExpression>(std::move(*constant_value)));
 }
 
 static unique_ptr<Expression> CreateComparisonExpressionFilter(ExpressionType comparison_type, const Value &constant,
@@ -1672,7 +1629,8 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 		return false;
 	}
 
-	const auto reconstruct_expression = RequiresRuntimeFilterExpressionReconstruction(column, runtime_type);
+	const auto reconstruct_expression =
+	    RuntimeFilterCastUtil::RequiresRuntimeFilterExpressionReconstruction(column, runtime_type);
 	auto filter_input_type = column.storage_type;
 	unique_ptr<Expression> filter_input;
 	unique_ptr<Expression> null_check_input;
@@ -1689,11 +1647,11 @@ bool JoinFilterPushdownInfo::PushInFilter(ClientContext &context, const JoinFilt
 
 	value_set_t unique_ht_values;
 	for (idx_t k = 0; k < key_count; k++) {
-		auto value = build_vector.GetValue(k);
-		if (!value.DefaultTryCastAs(filter_input_type)) {
+		auto value = build_vector.GetValue(k).DefaultTryCastAs(filter_input_type);
+		if (!value) {
 			return false;
 		}
-		unique_ht_values.insert(std::move(value));
+		unique_ht_values.insert(std::move(*value));
 	}
 	vector<Value> in_list(unique_ht_values.begin(), unique_ht_values.end());
 
@@ -1775,16 +1733,18 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			auto min_val = min_val_before_cast;
 			auto max_val = max_val_before_cast;
 			const bool reconstruct_filter_expression =
-			    RequiresRuntimeFilterExpressionReconstruction(pushdown_column, min_val_before_cast.type());
+			    RuntimeFilterCastUtil::RequiresRuntimeFilterExpressionReconstruction(pushdown_column,
+			                                                                         min_val_before_cast.type());
 
 			// Cast to storage type, skip if fails
 			if (pushdown_column.storage_type.IsValid() && !reconstruct_filter_expression) {
-				if (!min_val.DefaultTryCastAs(pushdown_column.storage_type)) {
+				auto cast_min = min_val.DefaultTryCastAs(pushdown_column.storage_type);
+				auto cast_max = max_val.DefaultTryCastAs(pushdown_column.storage_type);
+				if (!cast_min || !cast_max) {
 					continue;
 				}
-				if (!max_val.DefaultTryCastAs(pushdown_column.storage_type)) {
-					continue;
-				}
+				min_val = std::move(*cast_min);
+				max_val = std::move(*cast_max);
 			}
 
 			if (min_val.IsNull() || max_val.IsNull()) {
@@ -1795,7 +1755,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::FinalizeFilters(ClientContext &con
 			}
 
 			auto condition_type = min_val.type();
-			auto runtime_filter_input_type = GetRuntimeFilterInputType(pushdown_column, condition_type);
+			auto runtime_filter_input_type =
+			    RuntimeFilterCastUtil::GetRuntimeFilterInputType(pushdown_column, condition_type);
 			bool can_emit_runtime_filters = pushdown_column.mode == JoinFilterPushdownMode::RECONSTRUCT_EXPRESSION;
 			if (can_emit_runtime_filters && ht) {
 				can_emit_runtime_filters = runtime_filter_input_type == ht->conditions[0].GetLHS().GetReturnType();
@@ -2048,6 +2009,7 @@ public:
 	DataChunk lhs_join_keys;
 	TupleDataChunkState join_key_state;
 	DataChunk lhs_probe_data;
+	DataChunk lhs_output_data;
 
 	ExpressionExecutor probe_executor;
 	JoinHashTable::ScanStructure scan_structure;
@@ -2068,17 +2030,15 @@ public:
 	}
 
 	void Reset() override {
-		auto &sink = op.sink_state->Cast<HashJoinGlobalSinkState>();
 		ResetCachingState();
 		lhs_join_keys.Reset();
 		lhs_probe_data.Reset();
+		lhs_output_data.Reset();
 		scan_structure.Reset();
 		perfect_hash_join_state.reset();
 		spill_state = JoinHashTable::ProbeSpillLocalAppendState();
 		TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
-		if (spill_chunk.ColumnCount() == 0) {
-			spill_chunk.Initialize(BufferAllocator::Get(sink.context), sink.probe_types);
-		} else {
+		if (spill_chunk.ColumnCount() != 0) {
 			spill_chunk.Reset();
 		}
 		// discard cached build-side pointers; the HT may have been reset between iterations (e.g. recursive CTE)
@@ -2097,7 +2057,10 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 
 	// initialize probe data with ALL probe columns (output + predicate)
 	if (!lhs_probe_columns.col_types.empty()) {
-		state->lhs_probe_data.Initialize(allocator, lhs_probe_columns.col_types);
+		state->lhs_probe_data.InitializeEmpty(lhs_probe_columns.col_types);
+	}
+	if (!lhs_output_columns.col_types.empty()) {
+		state->lhs_output_data.InitializeEmpty(lhs_output_columns.col_types);
 	}
 
 	for (auto &cond : conditions) {
@@ -2110,7 +2073,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 	}
 
 	if (sink.external) {
-		state->spill_chunk.Initialize(allocator, sink.probe_types);
+		state->spill_chunk.InitializeEmpty(sink.probe_types);
 		sink.InitializeProbeSpill();
 	}
 
@@ -2130,12 +2093,19 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 	D_ASSERT(!sink.scanned_data);
 
 	if (sink.hash_table->Count() == 0) {
+		if (sink.hash_table->HasUncorrelatedMarkJoin()) {
+			state.lhs_join_keys.Reset();
+			state.probe_executor.Execute(input, state.lhs_join_keys);
+			state.lhs_probe_data.ReferenceColumns(input, lhs_probe_columns.col_idxs);
+			sink.hash_table->ConstructMarkJoinResult(state.lhs_join_keys, state.lhs_probe_data, chunk);
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
 		if (EmptyResultIfRHSIsEmpty()) {
 			return OperatorResultType::FINISHED;
 		}
 		// for empty result, only need output columns (no predicate evaluation)
-		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
-		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_probe_data, chunk);
+		state.lhs_output_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
+		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state.lhs_output_data, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
@@ -2146,8 +2116,8 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 			state.perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
 		}
 		// for perfect hash join, when predicate is NULL, only output columns are needed
-		state.lhs_probe_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
-		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_probe_data, chunk,
+		state.lhs_output_data.ReferenceColumns(input, lhs_output_columns.col_idxs);
+		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, state.lhs_output_data, chunk,
 		                                                         *state.perfect_hash_join_state);
 	}
 
@@ -2251,6 +2221,8 @@ public:
 	idx_t full_outer_chunk_idx = DConstants::INVALID_INDEX;
 	atomic<idx_t> full_outer_chunk_count;
 	atomic<idx_t> full_outer_chunk_done;
+	//! Chunks of the full/outer scan that have been scanned, updated while scanning (for progress)
+	atomic<idx_t> full_outer_chunk_progress;
 	idx_t full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
 
 	vector<InterruptState> blocked_tasks;
@@ -2269,6 +2241,7 @@ private:
 		full_outer_chunk_idx = DConstants::INVALID_INDEX;
 		full_outer_chunk_count = 0;
 		full_outer_chunk_done = 0;
+		full_outer_chunk_progress = 0;
 		full_outer_chunks_per_thread = DConstants::INVALID_INDEX;
 		blocked_tasks.clear();
 		GlobalSourceState::Reset(context);
@@ -2311,6 +2284,7 @@ public:
 	DataChunk lhs_probe_chunk;
 	DataChunk lhs_join_keys;
 	DataChunk lhs_probe_data;
+	DataChunk lhs_output_data;
 	TupleDataChunkState join_key_state;
 	ExpressionExecutor lhs_join_key_executor;
 
@@ -2323,6 +2297,8 @@ public:
 	idx_t full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
 	idx_t full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 	unique_ptr<JoinHTScanState> full_outer_scan_state;
+	//! Chunks of the current full/outer scan that were added to the global progress
+	idx_t full_outer_chunks_reported = 0;
 
 private:
 	void ResetState() {
@@ -2336,12 +2312,14 @@ private:
 		lhs_probe_chunk.Reset();
 		lhs_join_keys.Reset();
 		lhs_probe_data.Reset();
+		lhs_output_data.Reset();
 		TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 		scan_structure.Reset();
 		empty_ht_probe_in_progress = false;
 		full_outer_chunk_idx_from = DConstants::INVALID_INDEX;
 		full_outer_chunk_idx_to = DConstants::INVALID_INDEX;
 		full_outer_scan_state.reset();
+		full_outer_chunks_reported = 0;
 	}
 
 public:
@@ -2482,6 +2460,7 @@ void HashJoinGlobalSourceState::PrepareScanHT(HashJoinGlobalSinkState &sink) {
 	full_outer_chunk_idx = 0;
 	full_outer_chunk_count = data_collection.ChunkCount();
 	full_outer_chunk_done = 0;
+	full_outer_chunk_progress = 0;
 
 	full_outer_chunks_per_thread =
 	    MaxValue<idx_t>((full_outer_chunk_count + sink.num_threads - 1) / sink.num_threads, 1);
@@ -2537,7 +2516,8 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(ExecutionContext &context, Gl
 	lhs_join_keys.Initialize(allocator, op.condition_types);
 
 	// initialize with PROBE columns (not just output)
-	lhs_probe_data.Initialize(allocator, op.lhs_probe_columns.col_types);
+	lhs_probe_data.InitializeEmpty(op.lhs_probe_columns.col_types);
+	lhs_output_data.InitializeEmpty(op.lhs_output_columns.col_types);
 
 	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 
@@ -2619,10 +2599,15 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	// reference ALL probe columns
 	lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_probe_columns.col_idxs);
 
+	if (sink.hash_table->Count() == 0 && sink.hash_table->HasUncorrelatedMarkJoin()) {
+		sink.hash_table->ConstructMarkJoinResult(lhs_join_keys, lhs_probe_data, chunk);
+		empty_ht_probe_in_progress = true;
+		return;
+	}
 	if (sink.hash_table->Count() == 0 && !gstate.op.EmptyResultIfRHSIsEmpty()) {
 		// for empty result, only need output columns (no predicate evaluation)
-		lhs_probe_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_output_columns.col_idxs);
-		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_probe_data,
+		lhs_output_data.ReferenceColumns(lhs_probe_chunk, gstate.op.lhs_output_columns.col_idxs);
+		gstate.op.ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, lhs_output_data,
 		                                   chunk);
 		empty_ht_probe_in_progress = true;
 		return;
@@ -2641,9 +2626,17 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 	if (!full_outer_scan_state) {
 		full_outer_scan_state = make_uniq<JoinHTScanState>(sink.hash_table->GetDataCollection(),
 		                                                   full_outer_chunk_idx_from, full_outer_chunk_idx_to);
+		full_outer_chunks_reported = 0;
 	}
 	sink.hash_table->ScanFullOuter(*full_outer_scan_state, addresses, chunk);
 
+	auto chunks_scanned =
+	    chunk.size() == 0 ? full_outer_chunk_idx_to - full_outer_chunk_idx_from : full_outer_scan_state->chunks_done;
+	if (chunks_scanned > full_outer_chunks_reported) {
+		gstate.full_outer_chunk_progress.fetch_add(chunks_scanned - full_outer_chunks_reported,
+		                                           std::memory_order_relaxed);
+		full_outer_chunks_reported = chunks_scanned;
+	}
 	if (chunk.size() == 0) {
 		full_outer_scan_state = nullptr;
 		annotated_lock_guard<annotated_mutex> guard(gstate.lock);
@@ -2702,11 +2695,11 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 
 	if (!sink.external) {
 		if (PropagatesBuildSide(join_type)) {
-			res.done = static_cast<double>(gstate.full_outer_chunk_done);
+			res.done = static_cast<double>(gstate.full_outer_chunk_progress.load(std::memory_order_relaxed));
 			res.total = static_cast<double>(gstate.full_outer_chunk_count);
 			return res;
 		}
-		res.done = 0.0;
+		res.done = gstate.global_stage == HashJoinSourceStage::DONE ? 1.0 : 0.0;
 		res.total = 1.0;
 		return res;
 	}

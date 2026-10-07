@@ -15,13 +15,9 @@
     {
       "reason": "TODO",
       "paths": [
-        "test/fuzzer/sqlsmith/current_schemas_null.test",
-        "test/sql/catalog/test_set_search_path.test",
         "test/sql/json/test_json_serialize_sql.test",
-        "test/sql/settings/drop_set_schema.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
-        "test/sql/table_function/duckdb_databases.test",
-        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
+        "test/sql/table_function/duckdb_databases.test"
       ]
     },
     {

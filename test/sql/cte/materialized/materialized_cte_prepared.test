@@ -49,6 +49,33 @@ WHERE tag IN ('ALLOCATOR', 'IN_MEMORY_TABLE')
 0	ALLOCATOR
 0	IN_MEMORY_TABLE
 
+# Batch-aware direct consumers reset their external executors between prepared executions.
+statement ok
+CREATE TABLE prepared_batch_source AS SELECT i FROM range(100000) t(i);
+
+statement ok
+CREATE TABLE prepared_batch_target(i BIGINT);
+
+statement ok
+PREPARE direct_batch_cte AS
+INSERT INTO prepared_batch_target
+WITH c AS MATERIALIZED (SELECT i FROM prepared_batch_source)
+SELECT i FROM c;
+
+loop i 0 5
+
+query I
+EXECUTE direct_batch_cte
+----
+100000
+
+endloop
+
+query III
+SELECT count(*), min(i), max(i) FROM prepared_batch_target;
+----
+500000	0	99999
+
 statement ok
 create table a(i integer);
 

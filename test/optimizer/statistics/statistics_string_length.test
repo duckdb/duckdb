@@ -28,3 +28,112 @@ query II
 EXPLAIN ANALYZE SELECT sum(strlen(v)) FROM varying_string_lengths WHERE strlen(v) < 10;
 ----
 analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+# unicode partitions: every codepoint takes at most four bytes, so a partition whose shortest
+# string has 40 bytes cannot contain anything shorter than ceil(40 / 4) = 10 characters
+statement ok
+CREATE TABLE unicode_min_lengths AS
+SELECT CASE WHEN i < 122880 THEN 'é' || repeat('a', i % 10 + 4) ELSE repeat('é', 20) END AS v
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(length(v)) FROM unicode_min_lengths WHERE length(v) < 10;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+# group A holds characters 5..14, half of which match - group B holds exactly 20 characters
+query I
+SELECT sum(length(v)) FROM unicode_min_lengths WHERE length(v) < 10;
+----
+430080
+
+# rounding boundary: 41 bytes imply at least ceil(41 / 4) = 11 characters, so group A is
+# dropped while the three-character strings of group B still have to be read
+statement ok
+CREATE TABLE odd_byte_lengths AS
+SELECT CASE WHEN i < 122880 THEN repeat('é', 20) || 'a' ELSE 'ééé' END AS v
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(length(v)) FROM odd_byte_lengths WHERE length(v) < 11;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(length(v)) FROM odd_byte_lengths WHERE length(v) < 11;
+----
+368640
+
+# grapheme clusters can span arbitrarily many codepoints - each row below is a single cluster
+# of 37 bytes and 19 codepoints, so the strengthened byte-derived bound must stay exclusive
+# to length() and must never apply to length_grapheme()
+statement ok
+CREATE TABLE grapheme_clusters AS
+SELECT 'e' || repeat(chr(771), 18) AS v
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(length_grapheme(v)) FROM grapheme_clusters WHERE length_grapheme(v) < 10;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 2.*
+
+query I
+SELECT sum(length_grapheme(v)) FROM grapheme_clusters WHERE length_grapheme(v) < 10;
+----
+245760
+
+# codepoint counting on the same data: every row has exactly 19 codepoints, nothing matches
+query II
+EXPLAIN ANALYZE SELECT sum(length(v)) FROM grapheme_clusters WHERE length(v) < 10;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(length(v)) FROM grapheme_clusters WHERE length(v) < 10;
+----
+NULL
+
+# empty strings make the minimum byte length zero - the bound degrades to zero and the
+# partition must still be read
+statement ok
+CREATE TABLE empty_strings AS
+SELECT CASE WHEN i < 122880 THEN '' ELSE repeat('é', 20) END AS v
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(length(v)) FROM empty_strings WHERE length(v) < 10;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 2.*
+
+query I
+SELECT sum(length(v)) FROM empty_strings WHERE length(v) < 10;
+----
+0
+
+# NULL never satisfies a comparison - once every non-NULL value of a partition fails the
+# predicate, the partition can be dropped regardless of how many NULLs it holds
+statement ok
+CREATE TABLE null_mix AS
+SELECT CASE WHEN i % 2 = 0 THEN NULL::VARCHAR ELSE repeat('é', 20) END AS v
+FROM range(245760) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT sum(length(v)) FROM null_mix WHERE length(v) < 10;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*
+
+query I
+SELECT sum(length(v)) FROM null_mix WHERE length(v) < 10;
+----
+NULL
+
+# an entirely NULL partition satisfies no comparison either
+statement ok
+CREATE TABLE null_only AS
+SELECT CASE WHEN i < 122880 THEN NULL::VARCHAR ELSE 'x' END AS v
+FROM range(245760) tbl(i);
+
+query I
+SELECT count(*) FROM null_only WHERE length(v) > 5;
+----
+0

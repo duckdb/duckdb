@@ -10,21 +10,13 @@ set(EXTENSION_NAME demo_capi)
 
 set(EXTENSION_FILES add_numbers.cpp capi_demo.cpp)
 
-option(
-  USE_UNSTABLE_C_API
-  "Use the unstable C Extension API (extension will be tied to exact DuckDB version)"
-  TRUE)
-
-if(USE_UNSTABLE_C_API)
-  build_loadable_extension_capi_unstable(${EXTENSION_NAME} ${EXTENSION_FILES})
-  build_static_extension_capi_unstable(${EXTENSION_NAME} ${EXTENSION_FILES})
-else()
-  # Minimum supported DuckDB version
-  set(CAPI_MAJOR 1)
-  set(CAPI_MINOR 2)
-  set(CAPI_PATCH 0)
-  build_loadable_extension_capi(${EXTENSION_NAME} ${CAPI_MAJOR} ${CAPI_MINOR}
-                                ${CAPI_PATCH} ${EXTENSION_FILES})
-  build_static_extension_capi(${EXTENSION_NAME} ${CAPI_MAJOR} ${CAPI_MINOR}
+# This demo targets the V1 C API. There is no unstable flavor of it any more:
+# everything that used to be unstable was stabilized into v1.5.6, and the
+# unstable helpers now build against the V2 API instead.
+set(CAPI_MAJOR 1)
+set(CAPI_MINOR 5)
+set(CAPI_PATCH 6)
+build_loadable_extension_capi(${EXTENSION_NAME} ${CAPI_MAJOR} ${CAPI_MINOR}
                               ${CAPI_PATCH} ${EXTENSION_FILES})
-endif()
+build_static_extension_capi(${EXTENSION_NAME} ${CAPI_MAJOR} ${CAPI_MINOR}
+                            ${CAPI_PATCH} ${EXTENSION_FILES})

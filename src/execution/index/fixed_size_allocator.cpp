@@ -269,6 +269,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer old_ptr) {
 
 	auto old_handle = GetHandle(old_ptr);
 	auto new_handle = GetHandle(new_ptr);
+	new_handle.MarkModified();
 
 	memcpy(new_handle.GetPtr(), old_handle.GetPtr(), segment_size);
 	return new_ptr;
@@ -338,8 +339,14 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 		auto allocation_size = info.allocation_sizes[i];
 
 		// create the FixedSizeBuffer
-		buffers[buffer_id] =
-		    make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
+		if (info.transient_block_handles) {
+			D_ASSERT(info.transient_block_handles->size() == info.buffer_ids.size());
+			buffers[buffer_id] = make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size,
+			                                                std::move((*info.transient_block_handles)[i]));
+		} else {
+			buffers[buffer_id] =
+			    make_uniq<FixedSizeBuffer>(block_manager, segment_count, allocation_size, buffer_block_pointer);
+		}
 		total_segment_count += segment_count;
 	}
 

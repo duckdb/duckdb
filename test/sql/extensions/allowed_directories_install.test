@@ -13,7 +13,7 @@ SET enable_external_access=false;
 
 # error messsage `Failed to download extension` means duckdb
 statement error
-INSTALL bogus FROM 'http://not.existent';
+INSTALL bogus FROM 'http://example.com';
 ----
 Failed to download extension
 
@@ -23,6 +23,6 @@ set extension_directory='/tmp'
 
 # duckdb will throw permission error because /tmp is not allowed
 statement error
-INSTALL bogus FROM 'http://not.existent';
+INSTALL bogus FROM 'http://example.com';
 ----
 Permission Error: Cannot access directory

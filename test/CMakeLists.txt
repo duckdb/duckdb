@@ -3,14 +3,27 @@ include_directories(../third_party/sqlite/include)
 include_directories(include)
 include_directories(extension/debug_fs/include)
 
-# Allows loading tests from registered extensions
-include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
-add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
 add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 add_definitions(-DDUCKDB_PATCH_VERSION=${DUCKDB_PATCH_VERSION})
 
 set(UNITTEST_OBJECT_FILES)
+
+if(TARGET parquet_extension)
+  # A static link of parquet through its generated static extension loader: the
+  # describe member it names has to register the extension. Once registered
+  # before main, once by the program calling duckdb_register_static_extensions
+  # itself. Both are run by the Static extension link step in Main.yml.
+  add_executable(static_link_smoke static_link/static_link_smoke.c)
+  target_link_libraries(static_link_smoke duckdb_static)
+  duckdb_link_extensions(static_link_smoke parquet)
+
+  add_executable(static_link_explicit_smoke static_link/static_link_smoke.c)
+  target_compile_definitions(static_link_explicit_smoke
+                             PRIVATE STATIC_LINK_EXPLICIT)
+  target_link_libraries(static_link_explicit_smoke duckdb_static)
+  duckdb_link_extensions(static_link_explicit_smoke EXPLICIT parquet)
+endif()
 
 if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(api)
@@ -24,6 +37,7 @@ if(${ENABLE_UNITTEST_CPP_TESTS})
   add_subdirectory(optimizer)
   add_subdirectory(serialize)
   add_subdirectory(sql)
+  add_subdirectory(sql_export)
   add_subdirectory(ossfuzz)
   add_subdirectory(mbedtls)
   add_subdirectory(encryption)
@@ -50,6 +64,16 @@ else()
 endif()
 
 add_executable(unittest unittest.cpp ${UNITTEST_OBJECT_FILES})
+
+# Enable best-effort stack traces for fatal signals in the test runner without
+# enabling stack traces for every DuckDB exception.
+if((CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED) OR APPLE)
+  target_compile_definitions(unittest PRIVATE DUCKDB_UNITTEST_CRASH_STACKTRACE)
+endif()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT MUSL_ENABLED)
+  set_target_properties(unittest PROPERTIES ENABLE_EXPORTS ON)
+endif()
 
 set(RUN_WRAPPER_UNITTEST_NAME "unittest")
 if(WIN32)
@@ -81,10 +105,11 @@ endif()
 if(TARGET duckdb AND NOT WIN32)
   # Some tests reference internal third-party symbols (e.g. re2/mbedtls) that
   # are linked into duckdb but not exported from the shared library.
-  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls)
+  target_link_libraries(unittest duckdb test_helpers duckdb_re2 duckdb_mbedtls
+                        duckdb_cpp_api)
 else()
   # On Windows, tests require internal DuckDB symbols that are not DLL-exported.
-  target_link_libraries(unittest duckdb_static test_helpers)
+  target_link_libraries(unittest duckdb_static test_helpers duckdb_cpp_api)
   link_extension_libraries(unittest "")
 endif()
 

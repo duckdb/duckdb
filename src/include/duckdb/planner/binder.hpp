@@ -19,6 +19,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
@@ -44,6 +45,7 @@ class BoundResultModifier;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
+struct ExternalResourceOptions;
 class LimitModifier;
 class OrderBinder;
 class TableCatalogEntry;
@@ -53,11 +55,14 @@ class UpdateSetInfo;
 class LogicalProjection;
 class LogicalGet;
 class LogicalUpdate;
+class CopyQueryNode;
 class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
+class FunctionSignature;
 class TableFunction;
+class BoundTableFunction;
 class TableStorageInfo;
 class BoundConstraint;
 class AtClause;
@@ -238,6 +243,12 @@ public:
 	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
 
 public:
+	//! Whether the expression is COUNT(tbl.*)
+	static bool IsQualifiedCountStar(const ParsedExpression &expr);
+	//! Rewrites COUNT(tbl.*) into a COUNT that skips the rows NULL-extended by an outer join, or returns nullptr
+	unique_ptr<ParsedExpression> TryRewriteQualifiedCountStar(const ParsedExpression &expr);
+
+public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
@@ -289,6 +300,9 @@ public:
 	//! names and names with a single schema level keep the (catalog, schema, name) shape so that the search path
 	//! applies; a nested schema path yields a fully resolved [catalog, schema path..., name].
 	static QualifiedName BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name);
+	//! Register a read of the catalog owning the entry - required when bind data holds a reference to the entry,
+	//! so that cached prepared statement plans are invalidated when the catalog changes
+	static void RegisterEntryRead(optional_ptr<Binder> binder, ClientContext &context, CatalogEntry &entry);
 	QualifiedName BindTableName(const QualifiedName &name);
 	//! Resolve the (possibly nested) name of a CREATE SCHEMA statement into a canonical [catalog, parents..., schema]
 	void BindCreateSchema(CreateSchemaInfo &info);
@@ -296,9 +310,6 @@ public:
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
-	//! Check usage, and cast named parameters to their types
-	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
-	                                QueryErrorContext &error_context, const Identifier &func_name);
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
 	BoundStatement Bind(TableRef &ref);
@@ -308,6 +319,8 @@ public:
 
 	optional_ptr<CatalogEntry> GetCatalogEntry(const Identifier &catalog, const Identifier &schema,
 	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
+	//! Look up an entry using the qualification carried in the lookup info (which can be a nested schema path)
+	optional_ptr<CatalogEntry> GetCatalogEntry(const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Find all candidate common table expression by name; returns empty vector if none exists
 	optional_ptr<CTEBinding> GetCTEBinding(const BindingAlias &name);
@@ -316,11 +329,21 @@ public:
 	void AddBoundView(ViewCatalogEntry &view);
 
 	void BeginSubqueryBind(Binder &parent, ExpressionBinder &binder);
-	ExpressionBinder &GetActiveBinder();
-	bool HasActiveBinder();
+	//! The innermost enclosing scope
+	ExpressionBinder &GetInnermostScope();
+	bool HasEnclosingScope();
 	void FinishSubqueryBind();
 
-	vector<reference<ExpressionBinder>> &GetActiveBinders();
+	//! The scopes enclosing this binder, stored outermost first
+	const vector<reference<ExpressionBinder>> &GetEnclosingScopes() const;
+	//! Add an enclosing scope that expressions bound by this binder can resolve against
+	void PushScope(ExpressionBinder &binder);
+	//! Remove the innermost enclosing scope
+	void PopScope();
+	//! Remove and return the scopes added since the chain had `count` entries
+	vector<reference<ExpressionBinder>> SaveScopesAfter(idx_t count);
+	//! Restore scopes previously removed by SaveScopesAfter
+	void RestoreScopes(const vector<reference<ExpressionBinder>> &scopes);
 
 	void MergeCorrelatedColumns(CorrelatedColumns &other);
 	//! Add a correlated column to this binder (if it does not exist)
@@ -344,6 +367,8 @@ public:
 	static void BindSchemaOrCatalog(ClientContext &context, QualifiedName &qualified_name);
 
 	void BindLogicalType(LogicalType &type);
+	//! Resolve a type expression into a concrete type
+	LogicalType BindLogicalType(const ParsedExpression &type_expr);
 
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &table_name, const Identifier &column_name,
 	                                         ErrorData &error);
@@ -351,6 +376,9 @@ public:
 	                                         const Identifier &column_name, ErrorData &error);
 	optional_ptr<Binding> GetMatchingBinding(const Identifier &catalog_name, const Identifier &schema_name,
 	                                         const Identifier &table_name, const Identifier &column_name,
+	                                         ErrorData &error);
+	//! Look up a binding for a (possibly nested) table qualification
+	optional_ptr<Binding> GetMatchingBinding(const BindingAlias &alias, const Identifier &column_name,
 	                                         ErrorData &error);
 
 	void SetBindingMode(BindingMode mode);
@@ -378,7 +406,8 @@ public:
 	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
 	                                  optional_ptr<duckdb_re2::RE2> regex);
 
-	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes, idx_t column_count = 1,
+	                                           TableIndex table_index = TableIndex());
 
 	void SetSearchPath(Catalog &catalog, const Identifier &schema);
 
@@ -396,8 +425,6 @@ private:
 	shared_ptr<GlobalBinderState> global_binder_state;
 	//! Active binders
 	vector<reference<ExpressionBinder>> active_binders;
-	//! Whether or not the binder has any unplanned dependent joins that still need to be planned/flattened
-	bool has_unplanned_dependent_joins = false;
 	//! Whether or not outside dependent joins have been planned and flattened
 	bool is_outside_flattened = true;
 	//! LEGACY: Whether or not the binder can contain NULLs as the root of expressions
@@ -463,6 +490,14 @@ private:
 	BoundStatement Bind(MergeIntoStatement &stmt);
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
+	BoundStatement Bind(ExternalResourceStatement &stmt);
+	//! Bind + constant-fold a single EXTERNAL RESOURCE expression (a create param, or the REGISTER handle).
+	Value BindExternalResourceValue(unique_ptr<ParsedExpression> &expr);
+	//! Bind + constant-fold the create params of an EXTERNAL RESOURCE statement or clause.
+	void BindExternalResourceParams(case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_params,
+	                                unordered_map<string, Value> &params);
+	//! Bind the `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` clause. Shared by ATTACH and CONNECT.
+	void BindExternalResource(ExternalResourceOptions &external_resource);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
@@ -515,7 +550,7 @@ private:
 	                                 const vector<const_reference<TriggerCatalogEntry>> &triggers,
 	                                 TriggerEventType event_type);
 	//! Registers a row scope binding (named "new" for INSERT, "old" for DELETE) so child binders resolve
-	//! NEW.col / OLD.col at depth=1. The returned binder is pushed onto GetActiveBinders().
+	//! NEW.col / OLD.col at depth=1. The returned binder is pushed as an enclosing scope.
 	//! The caller must keep it alive until the matching pop_back().
 	unique_ptr<ExpressionBinder> SetupRowScope(TableIndex table_index, const vector<Identifier> &col_names,
 	                                           const vector<LogicalType> &col_types, const string &scope_name);
@@ -524,6 +559,7 @@ private:
 	BoundStatement BindNode(UpdateQueryNode &node);
 	BoundStatement BindNode(DeleteQueryNode &node);
 	BoundStatement BindNode(MergeQueryNode &node);
+	BoundStatement BindNode(CopyQueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
@@ -536,6 +572,8 @@ private:
 	BoundStatement Bind(BaseTableRef &ref);
 	BoundStatement Bind(BoundRefWrapper &ref);
 	BoundStatement Bind(JoinRef &ref);
+	//! Rewrites a NEAREST BY join into a lateral join over a top-k subquery and binds the result
+	BoundStatement BindNearestJoin(JoinRef &ref);
 	BoundStatement Bind(SubqueryRef &ref);
 	BoundStatement Bind(TableFunctionRef &ref);
 	BoundStatement Bind(EmptyTableRef &ref);
@@ -556,13 +594,14 @@ private:
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                                 BoundStatement &subquery, ErrorData &error);
+	                                 vector<unique_ptr<ParsedExpression>> &expressions,
+	                                 vector<unique_ptr<Expression>> &positional_arguments,
+	                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                 BoundStatement &subquery, bool &table_in_out, ErrorData &error);
 	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions, BoundStatement &subquery);
 	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
-	BoundStatement BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
-	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
+	BoundStatement BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
+	                                         vector<Value> parameters, named_argument_map_t named_parameters,
 	                                         vector<LogicalType> input_table_types,
 	                                         vector<Identifier> input_table_names,
 	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
@@ -572,7 +611,7 @@ private:
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);
 	void BindCopyOptions(CopyInfo &info);
-	case_insensitive_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
+	identifier_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifiers(BoundQueryNode &result, TableIndex table_index, const vector<Identifier> &names,
@@ -610,6 +649,8 @@ private:
 	                                   vector<unique_ptr<ParsedExpression>> &replacements, StarExpression &star,
 	                                   optional_ptr<duckdb_re2::RE2> regex);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
+	void NormalizeFilterStarExpression(ParsedExpression &expr);
+	void NormalizeFilterStarExpressions(SelectNode &statement);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(Identifier &catalog_name, Identifier &schema_name);
@@ -620,17 +661,22 @@ private:
 	Identifier BindCatalog(const Identifier &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
-	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name);
-
-	LogicalType BindLogicalTypeInternal(const unique_ptr<ParsedExpression> &type_expr);
+	vector<CatalogSearchEntry> GetSearchPath(Catalog &catalog, const Identifier &schema_name,
+	                                         bool default_schema_precedence = false);
 
 	BoundStatement BindSelectNode(SelectNode &statement, BoundStatement from_table);
 
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const Identifier &target_database_name);
 	unique_ptr<LogicalOperator> BindCopyDatabaseData(Catalog &source_catalog, const Identifier &target_database_name);
 
-	BoundStatement BindShowQuery(ShowRef &ref);
-	BoundStatement BindShowTable(ShowRef &ref);
+	BoundStatement BindDescribeQuery(ShowRef &ref);
+	BoundStatement BindDescribeTable(ShowRef &ref);
+	//! Describes a ShowRef target: its query if it has one, otherwise the named table
+	BoundStatement BindDescribe(ShowRef &ref);
+	//! Binds the Postgres-style "SHOW name" (settings-first, with a deprecated table/query describe fallback)
+	BoundStatement BindShow(ShowRef &ref);
+	//! Binds "SHOW name" to the value of the setting "name", returns false if no such setting exists
+	bool TryBindShowSetting(ShowRef &ref, BoundStatement &result);
 	BoundStatement BindSummarize(ShowRef &ref);
 
 	void BindInsertColumnList(TableCatalogEntry &table, vector<Identifier> &columns, bool default_values,

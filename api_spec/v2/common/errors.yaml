@@ -1,0 +1,161 @@
+module: errors
+enums:
+  ERROR:
+    description: "Error codes for API calls."
+    values:
+      ERROR_NONE:
+        value: 0
+        description: "Success."
+      # Unspecified internal API error
+      ERROR_API:
+        value: 1
+        description: "Generic API error."
+      # IO: Input/Output and File System errors
+      ERROR_IO_FILE_NOT_FOUND:
+        value: 1001
+        description: "The specified file could not be found."
+      ERROR_IO_READ_FAILURE:
+        value: 1002
+        description: "Failed to read from the storage device."
+      ERROR_IO_EOF:
+        value: 1003
+        description: "Unexpected end of file reached."
+      ERROR_IO_GENERAL:
+        value: 1004
+        description: "A generic I/O error occurred while reading or writing data."
+      ERROR_IO_NETWORK:
+        value: 1005
+        description: "A network-level failure occurred during an I/O operation."
+      ERROR_IO_HTTP:
+        value: 1006
+        description: "An HTTP request issued by the database failed."
+      # Invalid Input: errors related to user-provided data or parameters
+      ERROR_INPUT_INVALID:
+        value: 2001
+        description: "General invalid input error."
+      ERROR_INPUT_PARAMETER_INVALID:
+        value: 2002
+        description: "A specific function parameter is malformed."
+      ERROR_INPUT_OUT_OF_RANGE:
+        value: 2003
+        description: "A provided value is outside the acceptable range."
+      ERROR_INPUT_OBJECT_SIZE:
+        value: 2004
+        description: "An object exceeded its maximum permitted size."
+      # Resource: errors related to resource availability and lifecycle
+      ERROR_RESOURCE_IN_USE:
+        value: 3001
+        description: "The requested resource is already in use."
+      ERROR_RESOURCE_OUT_OF_MEMORY:
+        value: 3002
+        description: "An allocation failed because the system ran out of memory."
+      ERROR_RESOURCE_CONNECTION:
+        value: 3003
+        description: "A connection-level failure occurred (e.g. the connection has been closed or invalidated)."
+      ERROR_RESOURCE_DEPENDENCY:
+        value: 3004
+        description: "An operation failed because of an unresolved dependency between catalog objects."
+      ERROR_RESOURCE_MISSING_EXTENSION:
+        value: 3005
+        description: "An extension required by the operation is not loaded."
+      ERROR_RESOURCE_AUTOLOAD:
+        value: 3006
+        description: "Autoloading an extension failed."
+      # Type: errors related to value types, conversions, and arithmetic
+      ERROR_TYPE_CONVERSION:
+        value: 4001
+        description: "A value could not be converted to the requested type."
+      ERROR_TYPE_UNKNOWN:
+        value: 4002
+        description: "An unknown or unsupported type was encountered."
+      ERROR_TYPE_INVALID:
+        value: 4003
+        description: "A type was used in a context where it is not valid."
+      ERROR_TYPE_MISMATCH:
+        value: 4004
+        description: "Two values or expressions have incompatible types."
+      ERROR_TYPE_DECIMAL:
+        value: 4005
+        description: "A decimal value is out of range or otherwise invalid."
+      ERROR_TYPE_DIVIDE_BY_ZERO:
+        value: 4006
+        description: "Division by zero was attempted."
+      # Query: errors raised during query parsing, planning, and execution
+      ERROR_QUERY_PARSER:
+        value: 5001
+        description: "The query could not be parsed."
+      ERROR_QUERY_SYNTAX:
+        value: 5002
+        description: "The query contains a syntax error."
+      ERROR_QUERY_BINDER:
+        value: 5003
+        description: "Binding the query against the catalog failed (e.g. unknown column or table)."
+      ERROR_QUERY_PLANNER:
+        value: 5004
+        description: "The query could not be translated into a logical plan."
+      ERROR_QUERY_OPTIMIZER:
+        value: 5005
+        description: "An error occurred during query optimization."
+      ERROR_QUERY_EXPRESSION:
+        value: 5006
+        description: "An expression in the query is invalid or could not be evaluated."
+      ERROR_QUERY_EXECUTOR:
+        value: 5007
+        description: "An error occurred while executing the physical plan."
+      ERROR_QUERY_SCHEDULER:
+        value: 5008
+        description: "The task scheduler reported an error while running the query."
+      ERROR_QUERY_NOT_IMPLEMENTED:
+        value: 5009
+        description: "The requested feature or operation is not implemented."
+      ERROR_QUERY_PARAMETER_NOT_RESOLVED:
+        value: 5010
+        description: "A prepared-statement parameter has not been bound to a value."
+      ERROR_QUERY_PARAMETER_NOT_ALLOWED:
+        value: 5011
+        description: "A prepared-statement parameter was used in a position where it is not allowed."
+      # Database: errors related to catalog, transactions, and persistent state
+      ERROR_DATABASE_CATALOG:
+        value: 6001
+        description: "A catalog operation failed (e.g. object not found or already exists)."
+      ERROR_DATABASE_TRANSACTION:
+        value: 6002
+        description: "A transaction-level error occurred (e.g. conflict or aborted transaction)."
+      ERROR_DATABASE_CONSTRAINT:
+        value: 6003
+        description: "A constraint (primary key, unique, foreign key, NOT NULL, check) was violated."
+      ERROR_DATABASE_INDEX:
+        value: 6004
+        description: "An index operation failed."
+      ERROR_DATABASE_SEQUENCE:
+        value: 6005
+        description: "A sequence operation failed (e.g. overflow or invalid usage)."
+      ERROR_DATABASE_STATISTICS:
+        value: 6006
+        description: "An error related to catalog statistics occurred."
+      ERROR_DATABASE_SERIALIZATION:
+        value: 6007
+        description: "Serializing or deserializing a database object failed."
+      # Configuration: errors related to settings, configuration, and permissions
+      ERROR_CONFIGURATION_SETTINGS:
+        value: 7001
+        description: "A settings-related error occurred (e.g. setting an unknown option)."
+      ERROR_CONFIGURATION_INVALID:
+        value: 7002
+        description: "The database configuration is invalid."
+      ERROR_CONFIGURATION_PERMISSION:
+        value: 7003
+        description: "The operation is not permitted under the current configuration."
+      # Runtime: internal, fatal, and interrupt-level runtime errors
+      ERROR_RUNTIME_INTERNAL:
+        value: 8001
+        description: "An internal invariant was violated; this indicates a bug in DuckDB."
+      ERROR_RUNTIME_FATAL:
+        value: 8002
+        description: "A fatal error occurred; the database is no longer usable."
+      ERROR_RUNTIME_INTERRUPT:
+        value: 8003
+        description: "The operation was interrupted (e.g. by a cancel request)."
+      ERROR_RUNTIME_NULL_POINTER:
+        value: 8004
+        description: "A required pointer was unexpectedly null."

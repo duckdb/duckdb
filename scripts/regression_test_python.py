@@ -89,10 +89,10 @@ class TPCHData:
         result = BenchmarkResult(benchmark_name)
         for _ in range(nruns):
             duration = 0.0
-            start = time.time()
+            start = time.monotonic()
             rel = self.conn.sql(query)
             res = collector(rel)
-            end = time.time()
+            end = time.monotonic()
             duration = float(end - start)
             del res
             padding = " " * len(str(nruns))
@@ -125,14 +125,14 @@ class TPCHBenchmarker:
             duration = 0.0
             # Execute all queries
             for i, query in enumerate(TPCH_QUERIES):
-                start = time.time()
+                start = time.monotonic()
                 rel = self.con.sql(query)
                 if rel:
                     res = collector(rel)
                     del res
                 else:
                     print_msg(f"Query '{query}' did not produce output")
-                end = time.time()
+                end = time.monotonic()
                 query_time = float(end - start)
                 print_msg(f"Q{str(i).ljust(len(str(nruns)), ' ')}: {query_time}")
                 duration += float(end - start)
@@ -231,13 +231,13 @@ class ArrowDictionaryBenchmark:
         result = BenchmarkResult(benchmark_name)
         for _ in range(nruns):
             duration = 0.0
-            start = time.time()
+            start = time.monotonic()
             res = self.con.execute(
                 """
                 select * from arrow_table
             """
             ).fetchall()
-            end = time.time()
+            end = time.monotonic()
             duration = float(end - start)
             assert self.expected == res
             del res
@@ -274,9 +274,9 @@ class SelectAndCallBenchmark:
                 print_msg(rel.type)
                 for _ in range(nruns):
                     duration = 0.0
-                    start = time.time()
+                    start = time.monotonic()
                     rel.fetchall()
-                    end = time.time()
+                    end = time.monotonic()
                     duration = float(end - start)
                     padding = " " * len(str(nruns))
                     print_msg(f"T{padding}: {duration}s")
@@ -308,10 +308,10 @@ class PandasDFLoadBenchmark:
         for _ in range(nruns):
             duration = 0.0
             pandas_df = pd.read_csv('wide_table.csv')
-            start = time.time()
+            start = time.monotonic()
             for _ in range(30):
                 res = self.con.execute("""select * from pandas_df""").df()
-            end = time.time()
+            end = time.monotonic()
             duration = float(end - start)
             del res
             result.add(duration)
@@ -341,10 +341,10 @@ class PandasAnalyzerBenchmark:
         pandas_df = pd.DataFrame(data, columns=['Column'], dtype=object)
         for _ in range(nruns):
             duration = 0.0
-            start = time.time()
+            start = time.monotonic()
             for _ in range(30):
                 res = self.con.execute("""select * from pandas_df""").df()
-            end = time.time()
+            end = time.monotonic()
             duration = float(end - start)
             del res
             result.add(duration)

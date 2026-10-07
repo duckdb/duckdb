@@ -1,0 +1,58 @@
+# name: test/sql/join/inner/right_semi_dict_emission_dead_end.test
+# description: Test RIGHT_SEMI hash join over a window aggregate with dictionary emission
+# group: [inner]
+
+statement ok
+CREATE TABLE big (f BOOLEAN, s VARCHAR);
+
+statement ok
+INSERT INTO big SELECT (i % 3) = 0, ['a', '', 'dup', 'zzz'][(i % 4) + 1] FROM generate_series(1, 30) t(i);
+
+statement ok
+CREATE VIEW v AS SELECT MAX(f) OVER (PARTITION BY s) AS f, s FROM big;
+
+statement ok
+CREATE TABLE p (pb BOOLEAN);
+
+statement ok
+INSERT INTO p VALUES (TRUE), (TRUE), (NULL);
+
+# The build side is emitted as dictionary vectors, so the chain pointer of each row holds
+# an index rather than a pointer. Marking a chain as found parks the probe pointer on the
+# dead end row, whose chain field is zero, and index zero belongs to a real row. Following
+# it walked an unrelated chain and segfaulted.
+query I
+SELECT COUNT(*) FROM p WHERE p.pb IN (SELECT x.f FROM v x JOIN v y ON x.s = y.s CROSS JOIN v z);
+----
+2
+
+# same query without the join reordering that produces RIGHT_SEMI
+statement ok
+SET disabled_optimizers='build_side_probe_side';
+
+query I
+SELECT COUNT(*) FROM p WHERE p.pb IN (SELECT x.f FROM v x JOIN v y ON x.s = y.s CROSS JOIN v z);
+----
+2
+
+statement ok
+RESET disabled_optimizers;
+
+# related shapes over the same view
+statement ok
+INSERT INTO p VALUES (FALSE);
+
+query I
+SELECT COUNT(*) FROM p WHERE p.pb NOT IN (SELECT x.f FROM v x JOIN v y ON x.s = y.s);
+----
+1
+
+query I
+SELECT COUNT(*) FROM p WHERE EXISTS (SELECT 1 FROM v x WHERE x.f = p.pb);
+----
+2
+
+query I
+SELECT COUNT(*) FROM p WHERE p.pb IN (SELECT f FROM v);
+----
+2

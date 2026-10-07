@@ -150,7 +150,7 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 		auto ref_count = CountCTEReferences(*op, cte.table_index);
 		if (ref_count == 0) {
 			if (cte.children[0]->HasSideEffects()) {
-				// DML CTEs must always execute for side effects even when unreferenced
+				// Side-effecting CTEs must always execute even when unreferenced
 				return;
 			}
 			// this CTE is not referenced, we can remove it
@@ -158,11 +158,8 @@ void CTEInlining::TryInlining(unique_ptr<LogicalOperator> &op) {
 			return;
 		}
 		if (cte.children[0]->HasSideEffects()) {
-			// Never inline a DML CTE: inlining removes the LOGICAL_MATERIALIZED_CTE
-			// node that guarantees the DML executes exactly once and before the query
-			// side reads the modified table.  With ref_count==1, inlining would merge
-			// the DML into the query pipeline so it no longer precedes the scan.
-			// With ref_count>1 and requires_copy, the DML would execute once per copy.
+			// Never inline a side-effecting CTE: the LOGICAL_MATERIALIZED_CTE guarantees
+			// that it executes exactly once and before the query side.
 			return;
 		}
 		if (ContainsDelimGet(*cte.children[0]) && HasCTEReferenceBelowDelimJoin(*op->children[1], cte.table_index)) {
@@ -254,25 +251,8 @@ bool CTEInlining::Inline(unique_ptr<LogicalOperator> &op, LogicalOperator &mater
 					return false;
 				}
 			}
-			vector<unique_ptr<Expression>> proj_expressions;
-			definition->ResolveOperatorTypes();
-			vector<LogicalType> types = definition->types;
-			vector<ColumnBinding> bindings =
-			    requires_copy ? copy->GetColumnBindings() : definition->GetColumnBindings();
-
-			idx_t col_idx = 0;
-			for (auto &col : bindings) {
-				proj_expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], col));
-				col_idx++;
-			}
-			auto proj = make_uniq<LogicalProjection>(cteref.table_index, std::move(proj_expressions));
-
-			if (requires_copy) {
-				proj->children.push_back(std::move(copy));
-			} else {
-				proj->children.push_back(std::move(definition));
-			}
-			op = std::move(proj);
+			op = LogicalProjection::CreateIdentity(cteref.table_index,
+			                                       requires_copy ? std::move(copy) : std::move(definition));
 			return true;
 		}
 		return true;

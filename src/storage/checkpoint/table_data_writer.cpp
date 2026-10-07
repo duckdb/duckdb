@@ -1,4 +1,5 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -27,7 +28,7 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, QueryContext contex
 		// older storage versions require legacy start row to be written
 		require_legacy_start_row = true;
 	}
-	can_persist_rowid_gaps = storage_compatibility.storage_version >= StorageVersion::V2_0_0;
+	can_persist_rowid_gaps = storage_compatibility.CanPersistRowIdGaps();
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -195,7 +196,6 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	if (!v1_0_0_storage) {
 		serialization_info.options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
-	serialization_info.checkpoint_id = GetCheckpointOptions().transaction_id;
 
 	auto index_storage_infos = info.GetIndexes().SerializeToDisk(context, serialization_info);
 

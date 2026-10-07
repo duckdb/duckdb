@@ -9,9 +9,6 @@ set(DuckDB_EXTENSIONS "@DUCKDB_EXTENSION_NAMES@")
 
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
-if("icu" IN_LIST DuckDB_EXTENSIONS AND NOT @WITH_INTERNAL_ICU@)
-    find_dependency(ICU COMPONENTS i18n uc data)
-endif()
 
 # Compute paths
 get_filename_component(DuckDB_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)

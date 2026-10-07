@@ -133,6 +133,12 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 	return make_uniq<GlobalSourceState>();
 }
 
+unique_ptr<GlobalSourceState>
+PhysicalOperator::GetGlobalSourceState(ClientContext &context, const OperatorPartitionInfo &partition_info) const {
+	(void)partition_info;
+	return GetGlobalSourceState(context);
+}
+
 // LCOV_EXCL_START
 SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
@@ -190,6 +196,11 @@ SinkNextBatchType PhysicalOperator::NextBatch(ExecutionContext &context, Operato
 	return SinkNextBatchType::READY;
 }
 
+SinkNextBatchType PhysicalOperator::UpdateMinBatchIndex(ExecutionContext &context,
+                                                        OperatorSinkNextBatchInput &input) const {
+	return SinkNextBatchType::READY;
+}
+
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<LocalSinkState>();
 }
@@ -210,6 +221,8 @@ OperatorCachingMode PhysicalOperator::SelectOperatorCachingMode(ExecutionContext
 	if (!Settings::Get<EnableCachingOperatorsSetting>(context.client)) {
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline) {
+		return OperatorCachingMode::NONE;
+	} else if (context.pipeline->CanStopSourceEarly()) {
 		return OperatorCachingMode::NONE;
 	} else if (!context.pipeline->GetSink()) {
 		return OperatorCachingMode::NONE;

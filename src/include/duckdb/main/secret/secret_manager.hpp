@@ -99,6 +99,8 @@ public:
 	static constexpr const char *TEMPORARY_STORAGE_NAME = "memory";
 	static constexpr const char *LOCAL_FILE_STORAGE_NAME = "local_file";
 	static constexpr const char *TRANSACTION_STORAGE_NAME = "transaction";
+	//! Connection-scoped storage: secrets live only for the creating connection and are reaped when it closes.
+	static constexpr const char *CONNECTION_STORAGE_NAME = "connection";
 
 	//! Static Helper Functions
 	DUCKDB_API static SecretManager &Get(ClientContext &context);
@@ -141,6 +143,8 @@ public:
 
 	//! List all secret types
 	DUCKDB_API vector<SecretType> AllSecretTypes();
+	//! List all secret functions
+	DUCKDB_API vector<CreateSecretFunction> AllSecretFunctions();
 
 	//! Secret Manager settings
 	DUCKDB_API virtual void SetEnablePersistentSecrets(bool enabled);
@@ -166,7 +170,7 @@ private:
 	//! Lookup a SecretType, throws if not found
 	SecretType LookupTypeInternal(const Identifier &type);
 	//! Try to lookup a SecretType
-	bool TryLookupTypeInternal(const string &type, SecretType &type_out);
+	bool TryLookupTypeInternal(const Identifier &type, SecretType &type_out);
 	//! Register a secret provider
 	void RegisterSecretFunctionInternal(CreateSecretFunction function, OnCreateConflict on_conflict);
 	//! Lookup a CreateSecretFunction
@@ -181,13 +185,14 @@ private:
 	void LoadSecretStorageInternal(unique_ptr<SecretStorage> storage);
 
 	//! Autoload extension for specific secret type
-	void AutoloadExtensionForType(const string &type);
+	void AutoloadExtensionForType(const Identifier &type);
 	//! Autoload extension for specific secret function
-	void AutoloadExtensionForFunction(const string &type, const string &provider);
+	void AutoloadExtensionForFunction(const Identifier &type, const Identifier &provider);
 
 	//! Will throw appropriate error message when type not found
 	[[noreturn]] void ThrowTypeNotFoundError(const Identifier &type, const string &secret_path = "");
-	[[noreturn]] void ThrowProviderNotFoundError(const string &type, const string &provider, bool was_default = false);
+	[[noreturn]] void ThrowProviderNotFoundError(const Identifier &type, const Identifier &provider,
+	                                             bool was_default = false);
 
 	//! Thread-safe accessors for secret_storages
 	vector<reference<SecretStorage>> GetSecretStorages();

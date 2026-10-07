@@ -135,8 +135,9 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 }
 
 static void GetContainsFunctionInternal(ScalarFunctionSet &set, const LogicalType &lhs, const LogicalType &rhs) {
-	set.AddFunction(ScalarFunction({lhs, rhs}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr,
-	                               JSONFunctionLocalState::Init));
+	ScalarFunction fun({}, LogicalType::BOOLEAN, JSONContainsFunction, nullptr, nullptr, JSONFunctionLocalState::Init);
+	fun.GetSignature().AddParameter("haystack", lhs).AddParameter("needle", rhs);
+	set.AddFunction(fun);
 }
 
 ScalarFunctionSet JSONFunctions::GetContainsFunction() {
@@ -144,9 +145,7 @@ ScalarFunctionSet JSONFunctions::GetContainsFunction() {
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::VARCHAR);
 	GetContainsFunctionInternal(set, LogicalType::VARCHAR, LogicalType::JSON());
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::VARCHAR);
-	for (auto &func : set.functions) {
-		func.SetFallible();
-	}
+	set.SetFallible();
 	GetContainsFunctionInternal(set, LogicalType::JSON(), LogicalType::JSON());
 	// TODO: implement json_contains that accepts path argument as well
 

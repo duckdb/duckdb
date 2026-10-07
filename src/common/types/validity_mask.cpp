@@ -1,4 +1,5 @@
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
@@ -297,19 +298,34 @@ void ValidityMask::Read(ReadStream &reader, idx_t count) {
 	Initialize(count);
 	// deserialize the storage type
 	auto flag = reader.Read<ValiditySerialization>();
-	if (flag == ValiditySerialization::BITMASK) {
+	switch (flag) {
+	case ValiditySerialization::BITMASK:
 		// deserialize the bitmask
 		reader.ReadData(data_ptr_cast(GetData()), ValidityMask::ValidityMaskSize(count));
 		return;
+	case ValiditySerialization::VALID_VALUES:
+	case ValiditySerialization::INVALID_VALUES:
+		break;
+	default:
+		throw DataCorruptionException("Corrupted validity mask: unrecognized serialization type %u",
+		                              static_cast<uint8_t>(flag));
 	}
 	auto is_u32 = count >= NumericLimits<uint16_t>::Maximum();
 	auto is_valid = flag == ValiditySerialization::VALID_VALUES;
-	auto serialize_count = reader.Read<uint32_t>();
+	idx_t serialize_count = reader.Read<uint32_t>();
+	if (serialize_count > count) {
+		throw DataCorruptionException("Corrupted validity mask: entry count %llu exceeds the mask size of %llu",
+		                              serialize_count, count);
+	}
 	if (is_valid) {
 		SetAllInvalid(count);
 	}
 	for (idx_t i = 0; i < serialize_count; i++) {
 		idx_t index = is_u32 ? reader.Read<uint32_t>() : reader.Read<uint16_t>();
+		if (index >= count) {
+			throw DataCorruptionException("Corrupted validity mask: index %llu exceeds the mask size of %llu", index,
+			                              count);
+		}
 		Set(index, is_valid);
 	}
 }

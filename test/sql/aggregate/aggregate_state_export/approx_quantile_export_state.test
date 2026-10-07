@@ -85,3 +85,13 @@ query I
 SELECT finalize(combine(approx_quantile(i, 0.5) EXPORT_STATE, (SELECT approx_quantile(j, 0.5) EXPORT_STATE FROM range(500, 1001) s(j)))) FROM range(1, 500) t(i);
 ----
 500
+
+# a non-empty state must contain at least one centroid
+statement error
+SELECT finalize(to_aggregate_state(
+    {'count': 1::UBIGINT, 'min': 0.0::DOUBLE, 'max': 0.0::DOUBLE,
+     'centroids': []::STRUCT(mean DOUBLE, weight DOUBLE)[]},
+    'approx_quantile', ['DOUBLE', 'FLOAT'], [NULL, 0.5::FLOAT]
+));
+----
+Invalid Input Error: Invalid approx_quantile state - non-zero count requires at least one centroid

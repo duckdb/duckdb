@@ -19,8 +19,10 @@
 
 namespace duckdb {
 
-struct ParserCache;
+class ClientContext;
+struct CompiledGrammar;
 struct MatcherToken;
+class TokenIterator;
 class GroupByNode;
 struct UnicodeSpace {
 	UnicodeSpace(idx_t pos, idx_t bytes) : pos(pos), bytes(bytes) {
@@ -35,7 +37,15 @@ struct UnicodeSpace {
 //! plan and executed.
 class Parser {
 public:
-	explicit Parser(ParserOptions options = ParserOptions());
+	//! Snapshot the connection's parser settings, extensions and cached grammar.
+	explicit Parser(ClientContext &context);
+	//! Preserve identifier spelling when reparsing generated SQL.
+	explicit Parser(ClientContext &context, IdentifierCaseMode identifier_case_mode);
+	//! Explicit standalone configuration, without a client context.
+	explicit Parser(const ParserOptions &options);
+	Parser(Parser &&other) noexcept;
+	//! Built-in semantics and shared built-in grammar, independent of any connection.
+	static Parser GetBuiltinParser();
 	~Parser();
 
 	//! The parsed SQL statements from an invocation to ParseQuery.
@@ -48,22 +58,21 @@ public:
 	//! variable.
 	void ParseQuery(const string &query);
 
-	//! Parse a single TopLevelStatement from an already-tokenized stream starting at
-	//! `token_cursor`. On success advances `token_cursor` past the consumed tokens and returns
+	//! Parse a single TopLevelStatement from an already-tokenized stream. On success advances
+	//! `token_iterator` past the consumed tokens and returns
 	//! the SQLStatement. Returns nullptr at end-of-input or when the matched TLS was a
 	//! separator-only run (no statement). Throws ParserException on syntax error.
 	//!
 	//! Does NOT populate `stmt->query` — the caller owns the source string and can slice it
-	//! using `stmt->stmt_location` / `stmt->stmt_length` if needed.
-	DUCKDB_API unique_ptr<SQLStatement> ParseTopLevelStatement(vector<MatcherToken> &tokens, idx_t &token_cursor);
+	//! using `stmt->stmt_location` if needed.
+	DUCKDB_API unique_ptr<SQLStatement> ParseTopLevelStatement(TokenIterator &token_iterator);
 
-	//! Run the `parse_function` extensions over the tail of `query` starting at `token_cursor`,
+	//! Run the `parse_function` extensions over the unconsumed tail of `query`,
 	//! the way `ParseQuery` does in its catch handler. Returns the produced `ExtensionStatement`
-	//! and advances `token_cursor` past the bytes the extension claimed. Returns nullptr if no
+	//! and advances `token_iterator` past the bytes the extension claimed. Returns nullptr if no
 	//! extension claims the segment. Used by both `ParseQuery` and the lazy `ParseIterator`
 	//! so the two paths handle PEG failures identically.
-	DUCKDB_API unique_ptr<SQLStatement> TryParseExtensionStatement(vector<MatcherToken> &tokens, idx_t &token_cursor,
-	                                                               const string &query);
+	DUCKDB_API unique_ptr<SQLStatement> TryParseExtensionStatement(TokenIterator &token_iterator, const string &query);
 
 	//! Tokenize a query, returning the raw tokens together with their locations
 	static vector<SimplifiedToken> Tokenize(const string &query);
@@ -78,23 +87,23 @@ public:
 	// Returns the Keyword category
 	static KeywordCategory ToKeywordCategory(const string &text);
 	//! Parses a list of expressions (i.e. the list found in a SELECT clause)
-	DUCKDB_API static vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list,
-	                                                                           ParserOptions options = ParserOptions());
+	DUCKDB_API vector<unique_ptr<ParsedExpression>> ParseExpressionList(const string &select_list);
+	//! Parses exactly one expression, throwing an InternalException otherwise
+	DUCKDB_API unique_ptr<ParsedExpression> ParseSingleExpression(const string &expression);
+	//! Parses a single SELECT statement into its node
+	DUCKDB_API unique_ptr<QueryNode> ParseSelectNode(const string &query);
 	//! Parses a list of GROUP BY expressions
-	static GroupByNode ParseGroupByList(const string &group_by, ParserOptions options = ParserOptions());
+	GroupByNode ParseGroupByList(const string &group_by);
 	//! Parses a list as found in an ORDER BY expression (i.e. including optional ASCENDING/DESCENDING modifiers)
-	static vector<OrderByNode> ParseOrderList(const string &select_list, ParserOptions options = ParserOptions());
+	vector<OrderByNode> ParseOrderList(const string &select_list);
 	//! Parses an update list (i.e. the list found in the SET clause of an UPDATE statement)
-	static void ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
-	                            vector<unique_ptr<ParsedExpression>> &expressions,
-	                            ParserOptions options = ParserOptions());
+	void ParseUpdateList(const string &update_list, vector<Identifier> &update_columns,
+	                     vector<unique_ptr<ParsedExpression>> &expressions);
 	//! Parses a VALUES list (i.e. the list of expressions after a VALUES clause)
-	static vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list,
-	                                                                    ParserOptions options = ParserOptions());
+	vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list);
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
-	static ColumnList ParseColumnList(const string &column_list, ParserOptions options = ParserOptions());
-	static ColumnDefinition ParseColumnDefinition(const string &column_definition,
-	                                              ParserOptions options = ParserOptions());
+	ColumnList ParseColumnList(const string &column_list);
+	ColumnDefinition ParseColumnDefinition(const string &column_definition);
 
 	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
 
@@ -105,9 +114,9 @@ public:
 	void ThrowParserOverrideError(ParserOverrideResult &result);
 
 private:
-	ParserCache &GetCache();
+	CompiledGrammar &GetGrammar();
 
 	ParserOptions options;
-	unique_ptr<ParserCache> local_cache;
+	shared_ptr<CompiledGrammar> compiled_grammar;
 };
 } // namespace duckdb

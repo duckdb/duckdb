@@ -1,0 +1,92 @@
+# name: test/sql/cte/recursive_cte_invariant_build.test
+# description: Reuse invariant recursive CTE builds only when they are repeatable
+# group: [cte]
+
+statement ok
+SET threads=1
+
+statement ok
+SET enable_caching_operators=true
+
+# A volatile projection on an otherwise invariant hash-join build must execute every recursive iteration.
+statement ok
+CREATE SEQUENCE hash_build_sequence START 1
+
+query II
+WITH RECURSIVE r(i, x) AS (
+	SELECT 0, NULL::BIGINT
+	UNION ALL
+	SELECT r.i + 1, build.x
+	FROM r
+	JOIN (
+		SELECT i AS k, nextval('hash_build_sequence') AS x
+		FROM range(100) t(i)
+	) build ON build.k = r.i % 100
+	WHERE r.i < 3
+)
+SELECT list(x ORDER BY i), currval('hash_build_sequence') FROM r;
+----
+[NULL, 1, 102, 203]	400
+
+# Cross-product build state has the same repeatability requirement.
+statement ok
+CREATE SEQUENCE cross_build_sequence START 1
+
+query II
+WITH RECURSIVE r(i, x) AS (
+	SELECT 0, NULL::BIGINT
+	UNION ALL
+	SELECT r.i + 1, build.x
+	FROM r
+	CROSS JOIN (SELECT nextval('cross_build_sequence') AS x) build
+	WHERE r.i < 3
+)
+SELECT list(x ORDER BY i), currval('cross_build_sequence') FROM r;
+----
+[NULL, 1, 2, 3]	4
+
+# Non-repeatability must propagate through dependent materialized pipelines.
+statement ok
+CREATE SEQUENCE nested_build_sequence START 1
+
+query II
+WITH RECURSIVE r(i, x) AS (
+	SELECT 0, NULL::BIGINT
+	UNION ALL
+	SELECT r.i + 1, build.x
+	FROM r
+	JOIN (
+		WITH values_with_sequence AS MATERIALIZED (
+			SELECT i AS k, nextval('nested_build_sequence') AS x
+			FROM range(4) t(i)
+		)
+		SELECT * FROM values_with_sequence
+	) build ON build.k = r.i % 4
+	WHERE r.i < 3
+)
+SELECT list(x ORDER BY i), currval('nested_build_sequence') FROM r;
+----
+[NULL, 1, 6, 11]	16
+
+# Parallel build execution must make the same repeatability decision.
+statement ok
+SET threads=8
+
+statement ok
+CREATE SEQUENCE parallel_build_sequence START 1
+
+query II
+WITH RECURSIVE r(i, x) AS (
+	SELECT 0, NULL::BIGINT
+	UNION ALL
+	SELECT r.i + 1, build.x
+	FROM r
+	JOIN (
+		SELECT i AS k, nextval('parallel_build_sequence') AS x
+		FROM range(8192) t(i)
+	) build ON build.k = r.i % 8192
+	WHERE r.i < 3
+)
+SELECT count(*), currval('parallel_build_sequence') FROM r;
+----
+4	32768

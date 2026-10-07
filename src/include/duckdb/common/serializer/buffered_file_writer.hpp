@@ -18,12 +18,13 @@ namespace duckdb {
 
 class BufferedFileWriter : public WriteStream {
 public:
-	static constexpr FileOpenFlags DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+	DUCKDB_API static const FileOpenFlags DEFAULT_OPEN_FLAGS;
 
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold. The optional QueryContext is used to attribute
 	//! the written bytes to the query's I/O metrics.
-	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, FileOpenFlags open_flags = DEFAULT_OPEN_FLAGS,
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path,
+	                              const FileOpenFlags &open_flags = DEFAULT_OPEN_FLAGS,
 	                              QueryContext context = QueryContext());
 
 	FileSystem &fs;

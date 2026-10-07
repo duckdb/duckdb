@@ -1,0 +1,41 @@
+# name: test/extension/load_extension_capi_v2.test
+# description: Load an extension built against the V2 C API through the C++ API
+# group: [extension]
+
+require notmingw
+
+require skip_reload
+
+require allow_unsigned_extensions
+
+statement ok
+CALL enable_logging();
+
+statement ok
+SET logging_level='info';
+
+statement ok
+LOAD '{BUILD_DIRECTORY}/test/extension/cpp_api_demo.duckdb_extension';
+
+query I
+SELECT extension_version FROM duckdb_extensions() WHERE extension_name = 'cpp_api_demo';
+----
+default-version
+
+# The entrypoint bound a type through the context it was handed, then logged through it. The entry lands in the
+# CONNECTION scope because LOAD lends the calling connection's context.
+query III
+SELECT scope, log_level, message FROM duckdb_logs WHERE type = 'CppApiDemo';
+----
+CONNECTION	INFO	cpp_api_demo loaded, parsed STRUCT(a INTEGER, b VARCHAR)
+
+# An entrypoint that throws fails the load, and the exception type survives the round trip through the error slot
+statement error
+LOAD '{BUILD_DIRECTORY}/test/extension/cpp_api_demo_fail.duckdb_extension';
+----
+<REGEX>:Invalid Input Error.*cpp_api_demo_fail always fails to load.*
+
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'cpp_api_demo_fail' AND installed;
+----
+0

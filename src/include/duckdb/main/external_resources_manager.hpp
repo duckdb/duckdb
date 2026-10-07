@@ -44,6 +44,29 @@ struct ExternalResource {
 //! one in effect at registration. Returns empty if the callback cannot be resolved.
 string QualifyTableCallback(ClientContext &context, const string &name);
 
+//! A deleter binding for an external resource: runs `<deleter_function>(<deleter_payload>)` to tear the
+//! resource down. Used to reap a resource on a failed CREATE/REGISTER and to run DESTROY.
+class ResourceDeleter {
+public:
+	ResourceDeleter(DatabaseInstance &db, string deleter_function, Value deleter_payload, string resource_type,
+	                string resource_name);
+
+	//! The teardown query `SELECT * FROM <deleter_function>(<deleter_payload>)`, with the function name
+	//! safely quoted. Empty if there is no deleter. The single source of the teardown SQL.
+	string DeleteSQL() const;
+	//! Run the teardown on a private internal connection; throws on failure, with a retry hint.
+	void Delete();
+	//! Best-effort teardown: logs a warning on failure instead of throwing.
+	void TryDelete();
+
+private:
+	DatabaseInstance &db;
+	string deleter_function;
+	Value deleter_payload;
+	string resource_type;
+	string resource_name;
+};
+
 //! In-memory, instance-scoped manager of external resource instances (shared across connections). The
 //! external resources themselves are durable, but this manager is not: it is the instance's local view of
 //! what it manages, rebuilt across restarts via REGISTER. A name is claimed by its first registration.

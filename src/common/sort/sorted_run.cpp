@@ -27,24 +27,11 @@ SortedRunScanState::SortedRunScanState(ClientContext &context, const Sort &sort_
 void SortedRunScanState::Scan(const SortedRun &sorted_run, const Vector &sort_key_pointers, DataChunk &chunk) {
 	const auto sort_key_type = sort.key_layout->GetSortKeyType();
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_8>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedScan<SortKeyType::NO_PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_16>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_24>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedScan<SortKeyType::PAYLOAD_FIXED_32>(sorted_run, sort_key_pointers, chunk);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedScan<SortKeyType::PAYLOAD_VARIABLE_32>(sorted_run, sort_key_pointers, chunk);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedScan<SortKeyType::SORT_KEY_TYPE>(sorted_run, sort_key_pointers, chunk);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::ScanPartition for %s",
 		                              EnumUtil::ToString(sort_key_type));
@@ -192,14 +179,11 @@ static void TemplatedSetPayloadPointer(const Vector &key_locations, const Vector
 static void SetPayloadPointer(const Vector &key_locations, const Vector &payload_locations,
                               const SortKeyType &sort_key_type) {
 	switch (sort_key_type) {
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_16>(key_locations, payload_locations);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_24>(key_locations, payload_locations);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_32>(key_locations, payload_locations);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_VARIABLE_32>(key_locations, payload_locations);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedSetPayloadPointer<SortKeyType::SORT_KEY_TYPE>(key_locations, payload_locations);
+		DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SetPayloadPointer for %s", EnumUtil::ToString(sort_key_type));
 	}
@@ -274,24 +258,11 @@ static void TemplatedSort(ClientContext &context, TupleDataCollection &key_data,
 static void SortSwitch(ClientContext &context, TupleDataCollection &key_data, bool is_index_sort) {
 	const auto sort_key_type = key_data.GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_8>(context, key_data, is_index_sort);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_16>(context, key_data, is_index_sort);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_24>(context, key_data, is_index_sort);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_32>(context, key_data, is_index_sort);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_VARIABLE_32>(context, key_data, is_index_sort);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_16>(context, key_data, is_index_sort);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_24>(context, key_data, is_index_sort);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_32>(context, key_data, is_index_sort);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedSort<SortKeyType::PAYLOAD_VARIABLE_32>(context, key_data, is_index_sort);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedSort<SortKeyType::SORT_KEY_TYPE>(context, key_data, is_index_sort);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("TemplatedSort for %s", EnumUtil::ToString(sort_key_type));
 	}
@@ -412,16 +383,11 @@ static void Reorder(ClientContext &context, unique_ptr<TupleDataCollection> &key
                     unique_ptr<TupleDataCollection> &payload_data) {
 	const auto sort_key_type = key_data->GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedReorder<SortKeyType::NO_PAYLOAD_VARIABLE_32>(context, key_data, payload_data);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedReorder<SortKeyType::PAYLOAD_FIXED_16>(context, key_data, payload_data);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedReorder<SortKeyType::PAYLOAD_FIXED_24>(context, key_data, payload_data);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedReorder<SortKeyType::PAYLOAD_FIXED_32>(context, key_data, payload_data);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedReorder<SortKeyType::PAYLOAD_VARIABLE_32>(context, key_data, payload_data);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedReorder<SortKeyType::SORT_KEY_TYPE>(context, key_data, payload_data);
+		DUCKDB_FOR_EACH_REORDERABLE_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("TemplatedReorderPayload for %s", EnumUtil::ToString(sort_key_type));
 	}

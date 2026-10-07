@@ -1,7 +1,8 @@
 #include "duckdb/logging/log_type.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/http_util.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/logging/file_system_logger.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -22,6 +23,7 @@ constexpr LogLevel CheckpointLogType::LEVEL;
 constexpr LogLevel AdaptiveFilterLogType::LEVEL;
 constexpr LogLevel ParquetPrefetchLogType::LEVEL;
 constexpr LogLevel AsyncTaskScheduleLogType::LEVEL;
+constexpr LogLevel ProgressVerificationLogType::LEVEL;
 
 //===--------------------------------------------------------------------===//
 // QueryLogType
@@ -94,6 +96,14 @@ static Value CreateHTTPHeadersValue(const HTTPHeaders &headers) {
 	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, keys, values);
 }
 
+static string HTTPStatusToLogString(HTTPStatusCode status) {
+	try {
+		return EnumUtil::ToString(status);
+	} catch (const NotImplementedException &) {
+		return to_string(static_cast<uint16_t>(status));
+	}
+}
+
 string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response) {
 	child_list_t<Value> request_child_list = {
 	    {"type", Value(EnumUtil::ToString(request.type))},
@@ -109,7 +119,7 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	Value response_value;
 	if (response) {
 		child_list_t<Value> response_child_list = {
-		    {"status", Value(EnumUtil::ToString(response->status))},
+		    {"status", Value(HTTPStatusToLogString(response->status))},
 		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
 		    {"headers", CreateHTTPHeadersValue(response->headers)},
 		};
@@ -149,17 +159,32 @@ static Value StringPairIterableToMap(const ITERABLE &iterable) {
 	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(keys), std::move(values));
 }
 
-string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &class_p,
-                                                    const string &event, const vector<pair<string, string>> &info) {
+template <class PARAMETERS>
+static string ConstructPhysicalOperatorLogMessage(PhysicalOperatorType operator_type, const PARAMETERS &parameters,
+                                                  const string &class_p, const string &event,
+                                                  const vector<pair<string, string>> &info) {
 	child_list_t<Value> child_list = {
-	    {"operator_type", EnumUtil::ToString(physical_operator.type)},
-	    {"parameters", StringPairIterableToMap(physical_operator.ParamsToString())},
+	    {"operator_type", EnumUtil::ToString(operator_type)},
+	    {"parameters", StringPairIterableToMap(parameters)},
 	    {"class", class_p},
 	    {"event", event},
 	    {"info", StringPairIterableToMap(info)},
 	};
 
 	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+string PhysicalOperatorLogType::ConstructLogMessage(const PhysicalOperator &physical_operator, const string &class_p,
+                                                    const string &event, const vector<pair<string, string>> &info) {
+	return ConstructPhysicalOperatorLogMessage(physical_operator.type, physical_operator.ParamsToString(), class_p,
+	                                           event, info);
+}
+
+string PhysicalOperatorLogType::ConstructLogMessage(PhysicalOperatorType operator_type,
+                                                    const vector<pair<string, string>> &parameters,
+                                                    const string &class_p, const string &event,
+                                                    const vector<pair<string, string>> &info) {
+	return ConstructPhysicalOperatorLogMessage(operator_type, parameters, class_p, event, info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -356,6 +381,33 @@ string AsyncTaskScheduleLogType::ConstructLogMessage(const string &pool, idx_t t
 	child_list_t<Value> child_list = {
 	    {"pool", Value(pool)},
 	    {"task_count", Value::BIGINT(static_cast<int64_t>(task_count))},
+	};
+	return Value::STRUCT(std::move(child_list)).ToString();
+}
+
+//===--------------------------------------------------------------------===//
+// ProgressVerificationLogType
+//===--------------------------------------------------------------------===//
+ProgressVerificationLogType::ProgressVerificationLogType() : LogType(NAME, LEVEL, GetLogType()) {
+}
+
+LogicalType ProgressVerificationLogType::GetLogType() {
+	child_list_t<LogicalType> child_list = {
+	    {"invariant", LogicalType::VARCHAR},
+	    {"operator", LogicalType::VARCHAR},
+	    {"pipeline", LogicalType::VARCHAR},
+	    {"detail", LogicalType::VARCHAR},
+	};
+	return LogicalType::STRUCT(child_list);
+}
+
+string ProgressVerificationLogType::ConstructLogMessage(const string &invariant, const string &operator_name,
+                                                        const string &pipeline, const string &detail) {
+	child_list_t<Value> child_list = {
+	    {"invariant", Value(invariant)},
+	    {"operator", Value(operator_name)},
+	    {"pipeline", Value(pipeline)},
+	    {"detail", Value(detail)},
 	};
 	return Value::STRUCT(std::move(child_list)).ToString();
 }

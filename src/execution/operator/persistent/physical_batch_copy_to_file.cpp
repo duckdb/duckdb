@@ -7,10 +7,13 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/batch_memory_manager.hpp"
 #include "duckdb/execution/operator/persistent/batch_task_manager.hpp"
+#include "duckdb/execution/operator/persistent/copy_batch_slicer.hpp"
+#include "duckdb/execution/operator/persistent/copy_output_lifecycle.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_info.hpp"
 #include "duckdb/logging/logger.hpp"
 #include "duckdb/logging/log_type.hpp"
 
@@ -47,6 +50,10 @@ InsertionOrderPreservingMap<string> PhysicalBatchCopyToFile::ParamsToString() co
 	return result;
 }
 
+OperatorPartitionInfo PhysicalBatchCopyToFile::RequiredPartitionInfo() const {
+	return OperatorPartitionInfo::BatchIndex(batch_size.IsValid() ? batch_size : optional_idx(DEFAULT_ROW_GROUP_SIZE));
+}
+
 //===--------------------------------------------------------------------===//
 // States
 //===--------------------------------------------------------------------===//
@@ -80,11 +87,13 @@ public:
 
 public:
 	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
-	    : memory_manager(context_p, minimum_memory_per_thread), initialized(false), rows_copied(0),
-	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	    : output_lifecycle(context_p), memory_manager(context_p, minimum_memory_per_thread), initialized(false),
+	      rows_copied(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
+	//! Destroy after global_state so its handle closes before cleanup.
+	CopyOutputLifecycle output_lifecycle;
 	BatchMemoryManager memory_manager;
 	BatchTaskManager<BatchCopyTask> task_manager;
 	mutex lock;
@@ -121,6 +130,7 @@ public:
 			return;
 		}
 		// initialize writing to the file
+		output_lifecycle.RegisterFile(op.file_path);
 		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
 		if (op.function.initialize_operator) {
 			op.function.initialize_operator(*global_state, op);
@@ -329,14 +339,14 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
+	gstate.memory_manager.FinalCheck();
 	if (function.copy_to_finalize && gstate.global_state) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
-
 		if (use_tmp_file) {
 			PhysicalCopyToFile::MoveTmpFile(context, file_path);
 		}
 	}
-	gstate.memory_manager.FinalCheck();
+	gstate.output_lifecycle.MarkSuccessful();
 	return SinkFinalizeType::READY;
 }
 
@@ -488,6 +498,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	}
 	unique_ptr<FixedRawBatchData> append_batch;
 	ColumnDataAppendState append_state;
+	CopyBatchSlicer batch_slicer(children[0].get().GetTypes(), batch_size_bytes);
 	// now perform the actual repartitioning
 	for (auto &current_batch : raw_batches) {
 		if (!append_batch) {
@@ -521,20 +532,23 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 		append_batch->memory_usage += current_batch->memory_usage;
 		// iterate the collection while appending
 		for (auto &chunk : current_collection.Chunks()) {
-			// append the chunk to the collection
-			append_batch->collection->Append(append_state, chunk);
-			const CopyFunctionBatchAnalyzer batch_analyzer(*append_batch->collection, batch_size, batch_size_bytes);
-			if (!batch_analyzer.MeetsFlushCriteria()) {
-				// the collection is still under the desired batch size - continue
-				continue;
-			}
-			// the collection is full - move it to the result and create a new one
-			task_manager.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
+			idx_t offset = 0;
+			while (offset < chunk.size()) {
+				auto &slice = batch_slicer.Slice(chunk, offset, *append_batch->collection);
+				append_batch->collection->Append(append_state, slice);
+				const CopyFunctionBatchAnalyzer batch_analyzer(*append_batch->collection, batch_size, batch_size_bytes);
+				if (!batch_analyzer.MeetsFlushCriteria()) {
+					continue; // the collection is still under the desired batch size
+				}
+				// the collection is full - move it to the result and create a new one
+				task_manager.AddTask(
+				    make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
 
-			auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
-			new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
-			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
-			append_batch->collection->InitializeAppend(append_state);
+				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
+				new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
+				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
+				append_batch->collection->InitializeAppend(append_state);
+			}
 		}
 	}
 	if (append_batch && append_batch->collection->Count() > 0) {
@@ -663,6 +677,13 @@ SinkNextBatchType PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context,
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 
 	state.InitializeCollection(context.client, *this);
+	return SinkNextBatchType::READY;
+}
+
+SinkNextBatchType PhysicalBatchCopyToFile::UpdateMinBatchIndex(ExecutionContext &,
+                                                               OperatorSinkNextBatchInput &input) const {
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
+	gstate.memory_manager.UpdateMinBatchIndex(input.local_state.partition_info.min_batch_index.GetIndex());
 	return SinkNextBatchType::READY;
 }
 

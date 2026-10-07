@@ -100,7 +100,7 @@ PerColumnMetadataBlocks PerColumnMetadataBlocks::Merge(const PerColumnMetadataBl
 	return result;
 }
 
-void PerColumnMetadataBlocks::RemoveColumn(idx_t col_idx) {
+void PerColumnMetadataBlocks::ClearColumn(idx_t col_idx) {
 	idx_t start = data.size();
 	idx_t end = data.size();
 	for (idx_t i = 0; i < data.size(); i++) {
@@ -119,6 +119,15 @@ void PerColumnMetadataBlocks::RemoveColumn(idx_t col_idx) {
 	}
 	if (start < data.size()) {
 		data.erase(data.begin() + NumericCast<int64_t>(start), data.begin() + NumericCast<int64_t>(end));
+	}
+}
+
+void PerColumnMetadataBlocks::RemoveColumn(idx_t col_idx) {
+	ClearColumn(col_idx);
+	for (auto &entry : data) {
+		if (entry.is_column_index && entry.index > col_idx) {
+			entry.index--;
+		}
 	}
 }
 

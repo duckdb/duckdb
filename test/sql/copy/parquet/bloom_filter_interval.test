@@ -1,0 +1,158 @@
+# name: test/sql/copy/parquet/bloom_filter_interval.test
+# description: Test bloom filters on INTERVAL columns
+# group: [parquet]
+
+require parquet
+
+statement ok
+COPY (
+	SELECT
+		((i % 100) * 2) * INTERVAL '1 day' AS iv,
+		i::BIGINT AS payload
+	FROM range(20480) t(i)
+) TO '{TEST_DIR}/bloom_interval.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	DICTIONARY_SIZE_LIMIT 1000,
+	BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+);
+
+query I
+SELECT count(*)
+FROM parquet_kv_metadata('{TEST_DIR}/bloom_interval.parquet')
+WHERE key = 'duckdb.interval_bloom_filter'
+	AND decode(value) = 'normalized-v1';
+----
+1
+
+query I
+SELECT BOOL_AND(bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_interval.parquet', 'iv', INTERVAL '101 days');
+----
+true
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_interval.parquet')
+WHERE iv = INTERVAL '101 days';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_interval.parquet')
+WHERE iv IN (INTERVAL '101 days', INTERVAL '103 days');
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Nested INTERVAL columns use the same normalized bloom filter encoding.
+statement ok
+COPY (
+	SELECT
+		[((i % 100) * 2) * INTERVAL '1 day'] AS iv_list,
+		{'iv': ((i % 100) * 2) * INTERVAL '1 day'} AS iv_struct,
+		i::BIGINT AS payload
+	FROM range(20480) t(i)
+) TO '{TEST_DIR}/bloom_interval_nested.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	DICTIONARY_SIZE_LIMIT 1000,
+	BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+);
+
+query I
+SELECT count(*)
+FROM parquet_kv_metadata('{TEST_DIR}/bloom_interval_nested.parquet')
+WHERE key = 'duckdb.interval_bloom_filter'
+	AND decode(value) = 'normalized-v1';
+----
+1
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_interval_nested.parquet')
+WHERE iv_list[1] = INTERVAL '101 days';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+query II
+EXPLAIN ANALYZE
+SELECT sum(payload)
+FROM read_parquet('{TEST_DIR}/bloom_interval_nested.parquet')
+WHERE iv_struct.iv = INTERVAL '101 days';
+----
+analyzed_plan	<REGEX>:(?s).*Row Groups Scanned: 0 / 10.*
+
+# Equivalent intervals can have different Parquet encodings.
+statement ok
+COPY (
+	SELECT
+		iv,
+		[iv] AS iv_list,
+		{'iv': iv} AS iv_struct
+	FROM (
+		SELECT CASE i % 4
+			WHEN 0 THEN INTERVAL '101 days'
+			WHEN 1 THEN INTERVAL '3 months 11 days'
+			WHEN 2 THEN INTERVAL '1 day'
+			ELSE INTERVAL '24 hours'
+		END AS iv
+		FROM range(4096) t(i)
+	)
+) TO '{TEST_DIR}/bloom_interval_equivalent.parquet' (
+	FORMAT PARQUET,
+	ROW_GROUP_SIZE 2048,
+	DICTIONARY_SIZE_LIMIT 1000,
+	BLOOM_FILTER_FALSE_POSITIVE_RATIO 0.0001
+);
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_interval_equivalent.parquet')
+WHERE iv = INTERVAL '101 days';
+----
+2048
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_interval_equivalent.parquet')
+WHERE iv_list[1] = INTERVAL '101 days';
+----
+2048
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_interval_equivalent.parquet')
+WHERE iv_struct.iv = INTERVAL '101 days';
+----
+2048
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_interval_equivalent.parquet')
+WHERE iv = INTERVAL '1 day';
+----
+2048
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_interval_equivalent.parquet')
+WHERE iv_list[1] = INTERVAL '1 day';
+----
+2048
+
+query I
+SELECT count(*)
+FROM read_parquet('{TEST_DIR}/bloom_interval_equivalent.parquet')
+WHERE iv_struct.iv = INTERVAL '1 day';
+----
+2048
+
+query I
+SELECT BOOL_AND(NOT bloom_filter_excludes)
+FROM parquet_bloom_probe('{TEST_DIR}/bloom_interval_equivalent.parquet', 'iv', INTERVAL '101 days');
+----
+true

@@ -36,9 +36,7 @@
       "reason": "Unknown failure (empty reason)",
       "paths": [
         "test/sql/copy/parquet/test_parquet_remote.test",
-        "test/sql/cte/recursive_cte_key_variant.test",
-        "test/sql/table_function/test_information_schema_columns.test",
-        "test/sql/table_function/test_range_function.test"
+        "test/sql/cte/recursive_cte_key_variant.test"
       ]
     },
     {

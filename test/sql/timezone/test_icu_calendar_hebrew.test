@@ -1,0 +1,193 @@
+# name: test/sql/timezone/test_icu_calendar_hebrew.test
+# description: The Hebrew calendar
+# group: [timezone]
+
+require icu
+
+statement ok
+SET TimeZone='UTC'
+
+statement ok
+SET Calendar='hebrew'
+
+# hebrew dates
+query IIIIIII
+SELECT ts, year(ts), month(ts), day(ts), era(ts), dayofyear(ts), monthname(ts) FROM (VALUES
+  ('2024-06-15 12:00:00+00'::TIMESTAMPTZ), ('1970-01-01 00:00:00+00'), ('2024-10-02 12:00:00+00'),
+  ('2024-10-03 12:00:00+00'), ('2023-09-15 12:00:00+00'), ('2023-09-16 12:00:00+00'),
+  ('2022-03-01 12:00:00+00'), ('2024-03-01 12:00:00+00'), ('0001-01-01 12:00:00+00'),
+  ('1000-01-01 12:00:00+00'), ('2100-01-01 12:00:00+00'), ('1900-01-01 12:00:00+00')) t(ts)
+----
+5784-10-09 12:00:00+00	5784	10	9	0	274	October
+5730-04-23 00:00:00+00	5730	4	23	0	111	April
+5784-13-29 12:00:00+00	5784	13	29	0	383	Undecimber
+5785-01-01 12:00:00+00	5785	1	1	0	1	January
+5783-13-29 12:00:00+00	5783	13	29	0	355	Undecimber
+5784-01-01 12:00:00+00	5784	1	1	0	1	January
+5782-06-28 12:00:00+00	5782	6	28	0	176	June
+5784-06-21 12:00:00+00	5784	6	21	0	168	June
+3761-04-18 12:00:00+00	3761	4	18	0	108	April
+4760-04-16 12:00:00+00	4760	4	16	0	105	April
+5860-04-20 12:00:00+00	5860	4	20	0	109	April
+5660-05-01 12:00:00+00	5660	5	1	0	119	May
+
+# leap months
+query II
+SELECT y, count(*) FROM (SELECT year(ts) y FROM generate_series('2015-01-01 12:00:00+00'::TIMESTAMPTZ, '2035-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 1 DAY) t(ts) GROUP BY ALL) GROUP BY ALL ORDER BY ALL
+----
+5775	1
+5776	1
+5777	1
+5778	1
+5779	1
+5780	1
+5781	1
+5782	1
+5783	1
+5784	1
+5785	1
+5786	1
+5787	1
+5788	1
+5789	1
+5790	1
+5791	1
+5792	1
+5793	1
+5794	1
+5795	1
+
+query II
+SELECT y, max(m) FROM (SELECT year(ts) y, month(ts) m FROM generate_series('2015-01-01 12:00:00+00'::TIMESTAMPTZ, '2035-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 1 DAY) t(ts)) GROUP BY ALL ORDER BY ALL
+----
+5775	13
+5776	13
+5777	13
+5778	13
+5779	13
+5780	13
+5781	13
+5782	13
+5783	13
+5784	13
+5785	13
+5786	13
+5787	13
+5788	13
+5789	13
+5790	13
+5791	13
+5792	13
+5793	13
+5794	13
+5795	4
+
+# constructing dates
+query I
+SELECT make_timestamptz(5784, 1, 1, 0, 0, 0.0, 'UTC')
+----
+5784-01-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(5784, 6, 1, 0, 0, 0.0, 'UTC')
+----
+5784-06-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(5784, 7, 1, 0, 0, 0.0, 'UTC')
+----
+5784-07-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(5784, 13, 29, 0, 0, 0.0, 'UTC')
+----
+5784-13-29 00:00:00+00
+
+query I
+SELECT make_timestamptz(5783, 6, 1, 0, 0, 0.0, 'UTC')
+----
+5783-07-01 00:00:00+00
+
+query I
+SELECT make_timestamptz(5783, 13, 29, 0, 0, 0.0, 'UTC')
+----
+5783-13-29 00:00:00+00
+
+query I
+SELECT make_timestamptz(1, 1, 1, 0, 0, 0.0, 'UTC')
+----
+0001-01-01 00:00:00+00
+
+# truncation and parts
+query I
+SELECT date_trunc('year', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+5784-01-01 00:00:00+00
+
+query I
+SELECT date_trunc('month', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+5784-10-01 00:00:00+00
+
+query I
+SELECT date_trunc('quarter', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+5784-10-01 00:00:00+00
+
+query I
+SELECT date_trunc('week', '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+5784-10-04 00:00:00+00
+
+query I
+SELECT last_day('2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2024-07-06
+
+query I
+SELECT last_day('2023-11-15 12:00:00+00'::TIMESTAMPTZ)
+----
+2023-12-12
+
+query I
+SELECT date_part(['year','month','day','era','dayofyear','week','isoyear'], '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+{'year': 5784, 'month': 10, 'day': 9, 'era': 0, 'dayofyear': 274, 'week': 39, 'isoyear': 5784}
+
+# differences
+query I
+SELECT date_diff('year', '1900-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+124
+
+query I
+SELECT date_diff('month', '2023-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+13
+
+query I
+SELECT date_diff('month', '2022-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+25
+
+query I
+SELECT date_diff('day', '2023-06-15 12:00:00+00'::TIMESTAMPTZ, '2024-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+366
+
+statement error
+SELECT age('2024-06-15 12:00:00+00'::TIMESTAMPTZ, '1900-06-15 12:00:00+00'::TIMESTAMPTZ)
+----
+Not implemented Error: INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+statement error
+SELECT age('2024-03-01 12:00:00+00'::TIMESTAMPTZ, '2022-03-01 12:00:00+00'::TIMESTAMPTZ)
+----
+Not implemented Error: INTERVALs do not work with 13 month calendars. Try using DATE_DIFF instead.
+
+# a sweep over three centuries
+query II
+SELECT count(*), sum(hash(ts::VARCHAR)) FROM generate_series('1900-01-01 12:00:00+00'::TIMESTAMPTZ, '2200-01-01 12:00:00+00'::TIMESTAMPTZ, INTERVAL 7 DAY) t(ts)
+----
+15654	144495125444903609880723
+

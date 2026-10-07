@@ -1,3 +1,4 @@
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/swap.hpp"
@@ -6,12 +7,10 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
-
-namespace {
 
 struct ListSliceBindData : public FunctionData {
 	ListSliceBindData(const LogicalType &return_type_p, bool begin_is_empty_p, bool end_is_empty_p)
@@ -35,6 +34,8 @@ bool ListSliceBindData::Equals(const FunctionData &other_p) const {
 unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 	return make_uniq<ListSliceBindData>(return_type, begin_is_empty, end_is_empty);
 }
+
+namespace {
 
 template <typename INDEX_TYPE>
 idx_t CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
@@ -298,17 +299,25 @@ void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	}
 }
 
+//! An omitted slice bound is parsed as an empty list constructor (see OperatorExpression::EmptySliceBound)
 bool CheckIfParamIsEmpty(duckdb::unique_ptr<duckdb::Expression> &param) {
-	bool is_empty = false;
-	if (param->GetReturnType().id() == LogicalTypeId::LIST) {
-		auto empty_list = make_uniq<BoundConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
-		is_empty = param->Equals(*empty_list);
-		if (!is_empty) {
-			// if the param is not empty, the user has entered a list instead of a BIGINT
-			throw BinderException("The upper and lower bounds of the slice must be a BIGINT");
+	if (param->GetReturnType().id() != LogicalTypeId::LIST) {
+		return false;
+	}
+	if (param->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+		auto &function = param->Cast<BoundFunctionExpression>();
+		if (function.Function().GetName() == "list_value" && function.GetChildren().empty()) {
+			return true;
 		}
 	}
-	return is_empty;
+	if (param->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		auto &value = param->Cast<BoundConstantExpression>().GetValue();
+		if (!value.IsNull() && ListValue::GetChildren(value).empty()) {
+			return true;
+		}
+	}
+	// the user has entered a list instead of a BIGINT
+	throw BinderException("The upper and lower bounds of the slice must be a BIGINT");
 }
 
 unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
@@ -372,16 +381,94 @@ unique_ptr<FunctionData> ArraySliceBind(BindScalarFunctionInput &input) {
 	return make_uniq<ListSliceBindData>(bound_function.GetReturnType(), begin_is_empty, end_is_empty);
 }
 
+bool TryGetConstantSliceIndex(const Expression &expression, int64_t &result) {
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+		return false;
+	}
+	auto &value = expression.Cast<BoundConstantExpression>().GetValue();
+	if (value.IsNull()) {
+		return false;
+	}
+	result = value.GetValue<int64_t>();
+	return true;
+}
+
+unique_ptr<BaseStatistics> ArraySlicePropagateStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &expr = input.expr;
+	auto &children = expr.GetChildren();
+	if (expr.GetReturnType().id() != LogicalTypeId::VARCHAR || children.size() != 3 || !input.bind_data) {
+		return nullptr;
+	}
+
+	auto &bind_data = input.bind_data->Cast<ListSliceBindData>();
+	int64_t begin = 0;
+	if (!bind_data.begin_is_empty && (!TryGetConstantSliceIndex(*children[1], begin) || begin < 0)) {
+		return nullptr;
+	}
+	idx_t start_character_index = begin > 0 ? NumericCast<idx_t>(begin - 1) : 0;
+
+	optional_idx character_count;
+	if (!bind_data.end_is_empty) {
+		int64_t end = 0;
+		if (!TryGetConstantSliceIndex(*children[2], end) || end < 0) {
+			return nullptr;
+		}
+		auto end_character_count = NumericCast<idx_t>(end);
+		character_count =
+		    end_character_count > start_character_index ? (end_character_count - start_character_index) : 0;
+	}
+	return PropagateStringSliceStats(input, start_character_index, character_count);
+}
+
+unique_ptr<ParsedExpression> ArraySliceUnbind(FunctionUnbindInput &input) {
+	if ((input.children.size() != 3 && input.children.size() != 4) || !input.expression.BindInfo()) {
+		return nullptr;
+	}
+	auto &data = input.expression.BindInfo()->Cast<ListSliceBindData>();
+	for (idx_t i = 1; i < 3; i++) {
+		auto &child = *input.expression.GetChildren()[i];
+		if (child.GetReturnType().id() != LogicalTypeId::LIST) {
+			continue;
+		}
+		if (child.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+			auto &value = child.Cast<BoundConstantExpression>().GetValue();
+			if (!value.IsNull() && ListValue::GetChildren(value).empty()) {
+				continue;
+			}
+		} else if (child.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
+			auto &function = child.Cast<BoundFunctionExpression>();
+			auto &definition = function.Function().GetDefinition();
+			if (definition && definition->GetQualifiedName() == QualifiedName("system", "main", "list_value") &&
+			    function.GetChildren().empty()) {
+				continue;
+			}
+		}
+		return nullptr;
+	}
+	if (data.begin_is_empty) {
+		input.children[1] = OperatorExpression::EmptySliceBound();
+	}
+	if (data.end_is_empty) {
+		input.children[2] = OperatorExpression::EmptySliceBound();
+	}
+	return make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(input.children));
+}
+
 } // namespace
 ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,
-	                   ArraySliceBind);
+	ScalarFunction fun({}, LogicalType::ANY, ArraySliceFunction, ArraySliceBind);
+	fun.GetSignature()
+	    .AddParameter("list", LogicalType::ANY)
+	    .AddParameter("begin", LogicalType::ANY)
+	    .AddParameter("end", LogicalType::ANY);
+	fun.SetStatisticsCallback(ArraySlicePropagateStats);
+	fun.SetUnbindCallback(ArraySliceUnbind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	fun.SetFallible();
 	ScalarFunctionSet set;
 	set.AddFunction(fun);
-	fun.GetSignature().AddParameter(LogicalType::BIGINT);
+	fun.GetSignature().AddParameter("step", LogicalType::BIGINT);
 	set.AddFunction(fun);
 	return set;
 }

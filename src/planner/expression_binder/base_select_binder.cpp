@@ -40,6 +40,21 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	}
 }
 
+bool BaseSelectBinder::ClaimsAlias(ColumnRefExpression &colref) {
+	if (!ExpressionBinder::IsPotentialAlias(colref)) {
+		return false;
+	}
+	auto &alias_map = node.bind_state.alias_map;
+	return alias_map.find(colref.ColumnNames().back()) != alias_map.end();
+}
+
+bool BaseSelectBinder::MatchesGroup(ParsedExpression &expr) {
+	// the groups are keyed by the qualified form, so qualify against this scope before matching
+	auto qualified = expr.Copy();
+	ExpressionBinder::QualifyColumnNames(binder, qualified);
+	return TryBindGroup(*qualified).IsValid();
+}
+
 ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	if (inside_aggregate) {
 		return ProjectionIndex();
@@ -118,7 +133,7 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, Proj
 
 		if (node.groups.grouping_sets.size() <= 1) {
 			// if there are no more than two grouping sets, you can return the uncollated first expression.
-			// "first" meaning the aggreagte function.
+			// "first" meaning the aggregate function.
 			return BindResult(std::move(uncollated_first_expression));
 		}
 

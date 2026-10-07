@@ -36,13 +36,13 @@ struct CommitInfo {
 class DuckTransaction : public Transaction {
 public:
 	DuckTransaction(DuckTransactionManager &manager, ClientContext &context, transaction_t start_time,
-	                transaction_t transaction_id, idx_t catalog_version);
+	                SnapshotView view, idx_t catalog_version);
 	~DuckTransaction() override;
 
 	//! The start timestamp of this transaction
 	transaction_t start_time;
-	//! The transaction id of this transaction
-	transaction_t transaction_id;
+	//! What this transaction sees: its own writes, and everything before its visibility bound
+	SnapshotView view;
 	//! The commit id of this transaction, if it has successfully been committed
 	transaction_t commit_id;
 
@@ -64,6 +64,7 @@ public:
 	void SetModifications(DatabaseModificationType type) override;
 
 	bool ShouldWriteToWAL(AttachedDatabase &db);
+	ErrorData PreFlushOptimisticBlocks(AttachedDatabase &db) noexcept;
 	ErrorData WriteToWAL(ClientContext &context, AttachedDatabase &db,
 	                     unique_ptr<StorageCommitState> &commit_state) noexcept;
 	//! Commit the current transaction with the given commit identifier. Returns an error message if the transaction
@@ -76,7 +77,7 @@ public:
 	//! Rollback
 	ErrorData Rollback();
 	//! Cleanup the undo buffer
-	void Cleanup(transaction_t lowest_active_transaction);
+	void Cleanup(VisibilityBound lowest_visibility_bound);
 
 	bool ChangesMade();
 	UndoBufferProperties GetUndoProperties();
@@ -91,6 +92,10 @@ public:
 	DuckTransactionManager &GetTransactionManager();
 	bool IsDuckTransaction() const override {
 		return true;
+	}
+	SnapshotView GetSnapshotView() const override;
+	transaction_t GetTransactionId() const {
+		return view.transaction_id;
 	}
 
 	unique_ptr<StorageLockKey> TryGetCheckpointLock();

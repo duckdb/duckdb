@@ -50,10 +50,10 @@ void Binder::BindUpdateSet(TableIndex proj_index, unique_ptr<LogicalOperator> &r
 		}
 		auto &column = table.GetColumn(colname);
 		if (column.Generated()) {
-			throw BinderException("Cant update column \"%s\" because it is a generated column!", column.Name());
+			throw BinderException("Cant update column %s because it is a generated column!", column.Name());
 		}
 		if (std::find(columns.begin(), columns.end(), column.Physical()) != columns.end()) {
-			throw BinderException("Multiple assignments to same column \"%s\"", colname);
+			throw BinderException("Multiple assignments to same column %s", colname);
 		}
 		columns.push_back(column.Physical());
 		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
@@ -206,6 +206,9 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 		update->return_chunk = true;
 	}
 	update->capture_old_rows = capture_old_rows;
+	// UPDATE ... FROM can match a target row via multiple source rows, so deduplicate keeping the first match;
+	// a plain UPDATE cannot produce duplicate row-ids, so it keeps the lock-free path.
+	update->row_id_handling = node.from_table ? RowIdHandling::KEEP_FIRST : RowIdHandling::ASSUME_UNIQUE;
 	// bind the default values
 	auto &catalog_name = table.ParentCatalog().GetName();
 	auto &schema_name = table.ParentSchema().name;
@@ -282,7 +285,7 @@ BoundStatement Binder::BindNode(UpdateQueryNode &node) {
 	result.plan = std::move(update);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/common/sql_identifier.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
 
 namespace duckdb {
 
@@ -12,10 +12,8 @@ const Identifier &CreateSchemaInfo::SchemaName() const {
 }
 
 const Identifier &CreateSchemaInfo::SchemaCatalog() const {
-	static const Identifier EMPTY;
-	auto &path = GetQualifiedName().Path();
 	// the catalog is the leading component once the path carries [catalog, schema, <empty name>]
-	return path.size() >= 3 ? path[0] : EMPTY;
+	return GetQualifiedName().Catalog();
 }
 
 vector<Identifier> CreateSchemaInfo::ParentSchemas() const {
@@ -33,39 +31,61 @@ bool CreateSchemaInfo::IsNested() const {
 	return GetQualifiedName().Path().size() > 3;
 }
 
+bool CreateSchemaInfo::ShouldReplaceOnConflict() const {
+	switch (on_conflict) {
+	case OnCreateConflict::ERROR_ON_CONFLICT:
+		throw CatalogException::EntryAlreadyExists(CatalogType::SCHEMA_ENTRY, SchemaName());
+	case OnCreateConflict::IGNORE_ON_CONFLICT:
+		return false;
+	case OnCreateConflict::REPLACE_ON_CONFLICT:
+		return true;
+	default:
+		throw InternalException("Unsupported OnCreateConflict for CreateSchema");
+	}
+}
+
 unique_ptr<CreateInfo> CreateSchemaInfo::Copy() const {
 	auto result = make_uniq<CreateSchemaInfo>();
 	CopyProperties(*result);
+	for (auto &option : options) {
+		result->options.emplace(option.first, option.second->Copy());
+	}
 	return std::move(result);
 }
 
 string CreateSchemaInfo::ToString() const {
-	string qualified;
-	auto &path = GetQualifiedName().Path();
-	// the last element is the (empty) trailing name slot - the schema itself is the element before it
-	for (idx_t i = 0; i + 1 < path.size(); i++) {
-		if (!qualified.empty()) {
-			qualified += ".";
+	auto qualified = GetQualifiedName().Parent().ToString();
+
+	string temp = temporary ? "TEMPORARY " : "";
+	if (!options.empty()) {
+		qualified += " WITH (";
+		idx_t i = 0;
+		for (auto &entry : options) {
+			if (i > 0) {
+				qualified += ", ";
+			}
+			qualified += SQLString(entry.first) + "=" + entry.second->ToString();
+			i++;
 		}
-		qualified += SQLIdentifier(path[i]);
+		qualified += ")";
 	}
 
 	string ret = "";
 	switch (on_conflict) {
 	case OnCreateConflict::ALTER_ON_CONFLICT: {
-		ret += "CREATE SCHEMA " + qualified + " ON CONFLICT INSERT OR REPLACE;";
+		ret += "CREATE " + temp + "SCHEMA " + qualified + " ON CONFLICT INSERT OR REPLACE;";
 		break;
 	}
 	case OnCreateConflict::IGNORE_ON_CONFLICT: {
-		ret += "CREATE SCHEMA IF NOT EXISTS " + qualified + ";";
+		ret += "CREATE " + temp + "SCHEMA IF NOT EXISTS " + qualified + ";";
 		break;
 	}
 	case OnCreateConflict::REPLACE_ON_CONFLICT: {
-		ret += "CREATE OR REPLACE SCHEMA " + qualified + ";";
+		ret += "CREATE OR REPLACE " + temp + "SCHEMA " + qualified + ";";
 		break;
 	}
 	case OnCreateConflict::ERROR_ON_CONFLICT: {
-		ret += "CREATE SCHEMA " + qualified + ";";
+		ret += "CREATE " + temp + "SCHEMA " + qualified + ";";
 		break;
 	}
 	}

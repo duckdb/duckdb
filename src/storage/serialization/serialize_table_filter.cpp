@@ -64,11 +64,13 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 void ExpressionFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(200, "expr", expr);
+	serializer.WritePropertyWithDefault<vector<ProjectionIndex>>(201, "column_indexes", column_indexes, vector<ProjectionIndex>());
 }
 
 unique_ptr<TableFilter> ExpressionFilter::Deserialize(Deserializer &deserializer) {
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(200, "expr");
-	auto result = duckdb::unique_ptr<ExpressionFilter>(new ExpressionFilter(std::move(expr)));
+	auto column_indexes = deserializer.ReadPropertyWithExplicitDefault<vector<ProjectionIndex>>(201, "column_indexes", vector<ProjectionIndex>());
+	auto result = duckdb::unique_ptr<ExpressionFilter>(new ExpressionFilter(std::move(expr), std::move(column_indexes)));
 	return std::move(result);
 }
 

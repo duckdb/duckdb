@@ -186,6 +186,12 @@ bool OuterJoinSimplification::HasRequiredColumns(const vector<ColumnBinding> &bi
 	return false;
 }
 
+void OuterJoinSimplification::EraseNullRequiredColumns(LogicalOperator &child) {
+	for (const auto &binding : child.GetColumnBindings()) {
+		null_required_columns.erase(binding);
+	}
+}
+
 void OuterJoinSimplification::MarkEliminatedNullColumns(const vector<ColumnBinding> &bindings) {
 	for (const auto &binding : bindings) {
 		eliminated_null_columns.insert(binding);
@@ -297,6 +303,7 @@ void OuterJoinSimplification::VisitInnerOrSemiJoin(LogicalComparisonJoin &join, 
 void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, LogicalOperator &op) {
 	if (TryConvertLeftToAntiJoin(join)) {
 		AddRequiredColumns(join.conditions);
+		EraseNullRequiredColumns(*join.children[1]);
 		VisitOperatorChildren(op);
 		return;
 	}
@@ -308,6 +315,14 @@ void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, Logica
 	}
 
 	AddRequiredColumns(join.conditions);
+	// NULL values in the NULL-extended side can be introduced by this join itself,
+	// so columns of that side are not guaranteed to be NULL below the join
+	if (join.join_type == JoinType::LEFT || join.join_type == JoinType::OUTER) {
+		EraseNullRequiredColumns(*join.children[1]);
+	}
+	if (join.join_type == JoinType::RIGHT || join.join_type == JoinType::OUTER) {
+		EraseNullRequiredColumns(*join.children[0]);
+	}
 	VisitOperatorChildren(op);
 }
 
@@ -376,7 +391,8 @@ void OuterJoinSimplification::VisitTopN(LogicalTopN &top_n, LogicalOperator &op)
 	for (const auto &order_node : top_n.orders) {
 		AddRequiredColumns(*order_node.expression);
 	}
-	VisitOperatorChildren(op);
+	OuterJoinSimplification child_simplification(required_columns);
+	child_simplification.VisitOperator(*op.children[0]);
 }
 
 void OuterJoinSimplification::VisitAggregate(LogicalAggregate &aggregate, LogicalOperator &op) {
@@ -431,9 +447,11 @@ void OuterJoinSimplification::VisitOperator(LogicalOperator &op) {
 		VisitTopN(top_n, op);
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_LIMIT:
-		VisitOperatorChildren(op);
+	case LogicalOperatorType::LOGICAL_LIMIT: {
+		OuterJoinSimplification child_simplification(required_columns);
+		child_simplification.VisitOperator(*op.children[0]);
 		return;
+	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggregate = op.Cast<LogicalAggregate>();
 		VisitAggregate(aggregate, op);

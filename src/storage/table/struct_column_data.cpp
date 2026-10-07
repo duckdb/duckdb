@@ -16,8 +16,6 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
     : ColumnData(block_manager, info, column_index, std::move(type_p), data_type, parent) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
-	// unnamed structs are deserialized as TUPLEs and never produced as a column type otherwise
-	D_ASSERT(type.id() != LogicalTypeId::STRUCT || child_types.empty() || !StructType::IsUnnamed(type));
 	if (type.id() == LogicalTypeId::VARIANT) {
 		throw NotImplementedException("A table cannot be created from a VARIANT column yet");
 	}
@@ -46,6 +44,20 @@ void StructColumnData::SetDataType(ColumnDataType data_type) {
 
 idx_t StructColumnData::GetMaxEntry() {
 	return sub_columns[0]->GetMaxEntry();
+}
+
+FilterPropagateResult StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
+                                                     optional_ptr<SegmentNode<ColumnSegment>> &checked_segment) {
+	if (state.expression_state) {
+		checked_segment = nullptr;
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	if (state.storage_index.IsPushdownExtract()) {
+		auto children = GetStructChildren(state);
+		D_ASSERT(children.size() == 1);
+		return children[0].col.CheckZonemap(children[0].state, filter, checked_segment);
+	}
+	return CheckValidityZonemap(state, filter, checked_segment, *validity);
 }
 
 vector<StructColumnData::StructColumnDataChild> StructColumnData::GetStructChildren(ColumnScanState &state) const {

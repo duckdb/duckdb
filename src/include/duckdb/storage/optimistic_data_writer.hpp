@@ -26,6 +26,8 @@ struct OptimisticWriteCollection {
 
 	void MergeStorage(OptimisticWriteCollection &collection);
 	void FinalizeFlush();
+	// Reset the accounting fields to match a freshly-replaced collection
+	void ResetCollectionAccounting();
 };
 
 enum class OptimisticWritePartialManagers { PER_COLUMN, GLOBAL };
@@ -51,6 +53,9 @@ public:
 	void Merge(unique_ptr<PartialBlockManager> &other_manager);
 	//! Rollback
 	void Rollback();
+
+	//! Whether this writer can write to disk at all (not temporary / in-memory / read-only)
+	bool CanWriteToDisk() const;
 
 	//! Return the client context.
 	ClientContext &GetClientContext() {

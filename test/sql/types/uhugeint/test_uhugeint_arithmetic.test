@@ -97,8 +97,13 @@ SELECT 100::UHUGEINT // 20::UHUGEINT, 90::UHUGEINT // 20::UHUGEINT
 5	4
 
 # division by zero
-query I
+statement error
 SELECT 100::UHUGEINT // 0::UHUGEINT
+----
+<REGEX>:.*Division by zero.*
+
+query I
+SELECT TRY(100::UHUGEINT // 0::UHUGEINT)
 ----
 NULL
 
@@ -115,8 +120,13 @@ SELECT 100::UHUGEINT % 20::UHUGEINT, 90::UHUGEINT % 20::UHUGEINT
 0	10
 
 # modulo by zero
-query I
+statement error
 SELECT 100::UHUGEINT % 0::UHUGEINT
+----
+<REGEX>:.*Division by zero.*
+
+query I
+SELECT TRY(100::UHUGEINT % 0::UHUGEINT)
 ----
 NULL
 

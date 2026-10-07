@@ -47,7 +47,7 @@ static AsyncResult DBGenYield() {
 }
 
 static unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                          vector<LogicalType> &return_types, vector<string> &names) {
+                                          vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<DBGenFunctionData>();
 
 	// Set the current catalog and schema.
@@ -159,7 +159,7 @@ unique_ptr<GlobalTableFunctionState> TPCHInit(ClientContext &context, TableFunct
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -193,7 +193,8 @@ static void TPCHQueryFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 static duckdb::unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+                                                            vector<LogicalType> &return_types,
+                                                            vector<Identifier> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -237,25 +238,31 @@ static void TPCHQueryAnswerFunction(ClientContext &context, TableFunctionInput &
 }
 
 static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &parameters) {
+	if (parameters.values[0].IsNull()) {
+		throw InvalidInputException("Cannot use NULL as argument for the TPC-H query number");
+	}
 	auto index = parameters.values[0].GetValue<int32_t>();
 	return tpch::DBGenWrapper::GetQuery(index);
 }
 
 static void LoadInternal(ExtensionLoader &loader) {
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind, DbgenInit);
-	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	dbgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
-	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
-	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
-	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
-	dbgen_func.named_parameters["step"] = LogicalType::UINTEGER;
+	dbgen_func.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("sf", LogicalType::DOUBLE)
+		    .Add("overwrite", LogicalType::BOOLEAN)
+		    .Add("catalog", LogicalType::VARCHAR)
+		    .Add("schema", LogicalType::VARCHAR)
+		    .Add("suffix", LogicalType::VARCHAR)
+		    .Add("children", LogicalType::UINTEGER)
+		    .Add("step", LogicalType::UINTEGER);
+	});
 	dbgen_func.call_return_type = StatementReturnType::NOTHING;
 	dbgen_func.table_scan_progress = DbgenProgress;
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
-	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery, {LogicalType::BIGINT});
+	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery,
+	                                            FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
 	loader.RegisterFunction(tpch_func);
 
 	// create the TPCH_QUERIES function that returns the query
@@ -267,9 +274,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(tpch_query_answer_func);
 }
 
+// LCOV_EXCL_START
 void TpchExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
+// LCOV_EXCL_STOP
 
 std::string TpchExtension::GetQuery(int query) {
 	return tpch::DBGenWrapper::GetQuery(query);
@@ -279,6 +288,7 @@ std::string TpchExtension::GetAnswer(double sf, int query) {
 	return tpch::DBGenWrapper::GetAnswer(sf, query);
 }
 
+// LCOV_EXCL_START
 std::string TpchExtension::Name() {
 	return "tpch";
 }
@@ -290,6 +300,7 @@ std::string TpchExtension::Version() const {
 	return "";
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
 

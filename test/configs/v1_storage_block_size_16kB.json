@@ -13,21 +13,41 @@
   "inherit_skip_tests": "test/configs/force_storage.json",
   "skip_tests": [
     {
+      "reason": "Keyword-only arguments cannot be serialized to v1.x storage.",
+      "paths": [
+        "test/extension/test_function_args_kwargs.test"
+      ]
+    },
+    {
       "reason": "TODO",
       "paths": [
-        "test/fuzzer/sqlsmith/current_schemas_null.test",
-        "test/sql/catalog/test_set_search_path.test",
         "test/sql/json/test_json_serialize_sql.test",
-        "test/sql/settings/drop_set_schema.test",
         "test/sql/storage/buffer_manager_temp_dir.test",
-        "test/sql/table_function/duckdb_databases.test",
-        "test/sql/storage/read_duckdb/read_duckdb_basic.test"
+        "test/sql/table_function/duckdb_databases.test"
       ]
     },
     {
       "reason": "ALP is disabled for non-default block sizes.",
       "paths": [
         "test/sql/storage/compression/alp/alp_min_max.test"
+      ]
+    },
+    {
+      "reason": "CREATE SECURE VIEW requires v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/view/secure_view.test",
+        "test/sql/optimizer/secure_view_explain.test",
+        "test/sql/optimizer/secure_view_pushdown.test",
+        "test/sql/optimizer/secure_view_statistics.test",
+        "test/sql/sql_export/secure_view_sql_export.test",
+        "test/sql/sql_export/secure_view_predicates.test"
+      ]
+    },
+    {
+      "reason": "Stored aggregate-state and TUPLE columns require v2.0.0 storage.",
+      "paths": [
+        "test/sql/sql_export/empty_aggregate_state.test",
+        "test/sql/sql_export/mark_condition_shapes.test"
       ]
     }
   ]

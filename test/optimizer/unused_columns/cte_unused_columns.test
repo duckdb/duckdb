@@ -29,3 +29,48 @@ WITH test AS MATERIALIZED (SELECT * FROM o_order)
 SELECT col0, col6, t2.* FROM test, (SELECT col1 FROM test) t2;
 ----
 logical_opt	<!REGEX>:.*col[2-5].*
+
+statement ok
+CREATE TABLE cte_fanout(source_key INTEGER, unused_payload VARCHAR);
+
+statement ok
+INSERT INTO cte_fanout VALUES (1, 'wide'), (2, 'column');
+
+query II
+EXPLAIN
+WITH c AS MATERIALIZED (SELECT * FROM cte_fanout)
+SELECT sum(source_key)
+FROM (
+    SELECT source_key FROM c
+    UNION ALL
+    SELECT source_key FROM c
+);
+----
+logical_opt	<!REGEX>:.*unused_payload.*
+
+query II
+EXPLAIN
+WITH c AS MATERIALIZED (SELECT * FROM cte_fanout)
+SELECT sum(source_key)
+FROM (
+    SELECT source_key FROM c
+    UNION ALL
+    SELECT source_key FROM c
+    UNION ALL
+    SELECT source_key FROM c
+);
+----
+logical_opt	<!REGEX>:.*unused_payload.*
+
+query I
+WITH c AS MATERIALIZED (SELECT * FROM cte_fanout)
+SELECT sum(source_key)
+FROM (
+    SELECT source_key FROM c
+    UNION ALL
+    SELECT source_key FROM c
+    UNION ALL
+    SELECT source_key FROM c
+);
+----
+9

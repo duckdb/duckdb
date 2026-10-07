@@ -1,0 +1,22 @@
+# name: test/optimizer/pushdown/scalar_function_pushdown_limit.test
+# description: Test Parquet With Pushing Down Scalar Function With Limit
+# group: [pushdown]
+
+require parquet
+
+statement ok
+CREATE TABLE pep_test (str VARCHAR);
+
+statement ok
+INSERT INTO pep_test VALUES ('Hello'), ('Hi'), ('Hey');
+
+statement ok
+COPY (SELECT * FROM pep_test) TO '{TEST_DIR}/pe-pushdown-limit.parquet';
+
+statement ok
+CREATE VIEW pe AS SELECT str FROM '{TEST_DIR}/pe-pushdown-limit.parquet';
+
+query II
+EXPLAIN (FORMAT json) SELECT strlen(str) FROM pe LIMIT 1;
+----
+physical_plan	<!REGEX>:.*PROJECTION.*

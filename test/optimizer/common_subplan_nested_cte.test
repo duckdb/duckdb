@@ -22,6 +22,16 @@ INSERT INTO person_knows VALUES (1, 10), (2, 10);
 
 # Extracting a nested common subplan creates new CTE reader bindings. A later
 # common subplan must retain the canonical identities of those generated bindings.
+# The first COLUMN_LIFETIME pass narrows the extracted subplan to live columns, so this shape does not
+# form by default. Disabling it exposes the defect, and per-pass verification reports the pass at fault.
+statement ok
+SET debug_verify_column_bindings = true;
+
+foreach do '' 'column_lifetime'
+
+statement ok
+SET disabled_optimizers TO {do};
+
 query III
 WITH RECURSIVE
 interest_source AS (
@@ -71,3 +81,11 @@ LIMIT 20;
 ----
 1	2	1
 2	1	1
+
+endloop
+
+statement ok
+RESET disabled_optimizers;
+
+statement ok
+RESET debug_verify_column_bindings;

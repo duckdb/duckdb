@@ -53,7 +53,7 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 	if (!state.last_result) {
 		throw BinderException("Failed to query last result \"_\": no result available");
 	}
-	return make_uniq<ColumnDataRef>(state.last_result->Collection(), StringsToIdentifiers(state.last_result->names));
+	return make_uniq<ColumnDataRef>(state.last_result->Collection(), state.last_result->GetNames());
 }
 
 // Runs after the binder has finished. Releases the previous last_result early if it's
@@ -61,6 +61,9 @@ unique_ptr<TableRef> ShellScanLastResult(ClientContext &context, ReplacementScan
 // would have fired)
 void ShellPostBind(PlannerExtensionInput &input, BoundStatement &statement) {
 	auto &state = duckdb_shell::ShellState::Get();
+	if (!state.conn || !RefersToSameObject(*state.conn->context, input.context)) {
+		return;
+	}
 	if (state.last_result_referenced) {
 		return;
 	}
@@ -84,7 +87,7 @@ struct ShellHistoryData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> ShellHistoryBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("id");
 	return_types.emplace_back(LogicalType::BIGINT);
 	names.emplace_back("sql");
@@ -118,8 +121,9 @@ static void ShellHistoryFunction(ClientContext &context, TableFunctionInput &dat
 
 void ShellExtension::Load(ExtensionLoader &loader) {
 	loader.SetDescription("Adds CLI-specific support and functionalities");
-	loader.RegisterFunction(
-	    ScalarFunction("getenv", {LogicalType::VARCHAR}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind));
+	ScalarFunction getenv_fun("getenv", {}, LogicalType::VARCHAR, GetEnvFunction, GetEnvBind);
+	getenv_fun.GetSignature().AddParameter("name", LogicalType::VARCHAR);
+	loader.RegisterFunction(getenv_fun);
 
 	TableFunction shell_history("shell_history", {}, ShellHistoryFunction, ShellHistoryBind, ShellHistoryInit);
 	loader.RegisterFunction(shell_history);

@@ -17,6 +17,7 @@
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
+#include "duckdb/optimizer/join_order/join_order_operator.hpp"
 
 namespace duckdb {
 
@@ -45,6 +46,15 @@ public:
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan);
 	//! Plan enumerator may not find a full plan and therefore will need to create cross  products to create edges.
 	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
+	//! Add the explicit cross-product edges required to connect the predicate graph.
+	bool ActivateRequiredCrossProducts();
+	//! Whether the predicate graph still has disconnected components.
+	bool RequiresCrossProduct() const;
+	bool IsConnectionApplicable(const NeighborInfo &connection, const JoinRelationSet &left,
+	                            const JoinRelationSet &right) const;
+	bool IsJoinOrderCandidate(optional_ptr<JoinOrderOperator> selected_operator, bool generated_cross_product,
+	                          JoinRelationSet &left, JoinRelationSet &right);
+	bool CanCreateCrossProduct(const JoinRelationSet &left, const JoinRelationSet &right) const;
 
 	//! Get a reference to the QueryGraphEdges structure that stores edges between nodes and hypernodes.
 	const QueryGraphEdges &GetQueryGraphEdges() const;
@@ -59,6 +69,11 @@ private:
 
 	//! Build the normalized predicate model after filter endpoints and stats bindings are populated.
 	void BuildPredicateModel();
+	void BuildInnerCompanionSets();
+	void ClearExtractedExpressions();
+	idx_t FindGraphComponent(RelationIndex relation);
+	idx_t GetGraphComponent(RelationIndex relation) const;
+	void ConnectGraphComponents(const JoinRelationSet &left, const JoinRelationSet &right);
 
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinRelationSet &set);
 
@@ -77,6 +92,12 @@ private:
 	//! Filter information including the column_bindings that join filters
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
+	vector<unique_ptr<JoinOrderOperator>> join_operators;
+	unordered_set<idx_t> operator_costing_predicates;
+	unordered_set<idx_t> reconstructed_operators;
+	vector<idx_t> inner_companion_roots;
+	vector<idx_t> graph_component_roots;
+	bool required_cross_products_activated = false;
 
 	QueryGraphEdges query_graph;
 	JoinPredicateModel predicate_model;

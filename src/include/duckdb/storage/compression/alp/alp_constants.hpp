@@ -16,22 +16,32 @@ namespace duckdb {
 
 class AlpConstants {
 public:
+	using EXPONENT_TYPE = uint8_t;
+	using FACTOR_TYPE = uint8_t;
+	using EXCEPTIONS_COUNT_TYPE = uint16_t;
+	using EXCEPTION_POSITION_TYPE = uint16_t;
+	using ENCODED_VALUE_TYPE = uint64_t;
+	using FRAME_OF_REFERENCE_TYPE = ENCODED_VALUE_TYPE;
+	using BIT_WIDTH_TYPE = uint8_t;
+	using METADATA_POINTER_TYPE = uint32_t;
+
 	static constexpr uint32_t ALP_VECTOR_SIZE = 1024;
 	static constexpr uint32_t RG_SAMPLES = 8;
 	static constexpr uint16_t SAMPLES_PER_VECTOR = 32;
 	// We calculate how many equidistant vector we must jump within a rowgroup
 	static constexpr uint32_t RG_SAMPLES_DUCKDB_JUMP = (DEFAULT_ROW_GROUP_SIZE / RG_SAMPLES) / STANDARD_VECTOR_SIZE;
 
-	static constexpr uint8_t HEADER_SIZE = sizeof(uint32_t);
+	static constexpr uint8_t HEADER_SIZE = sizeof(METADATA_POINTER_TYPE);
 	//! exponent can store the UNCOMPRESSED_MODE_SENTINEL value
-	static constexpr uint8_t EXPONENT_SIZE = sizeof(uint8_t);
-	static constexpr uint8_t UNCOMPRESSED_MODE_SENTINEL = std::numeric_limits<uint8_t>::max();
-	static constexpr uint8_t FACTOR_SIZE = sizeof(uint8_t);
-	static constexpr uint8_t EXCEPTIONS_COUNT_SIZE = sizeof(uint16_t);
-	static constexpr uint8_t EXCEPTION_POSITION_SIZE = sizeof(uint16_t);
-	static constexpr uint8_t FOR_SIZE = sizeof(uint64_t);
-	static constexpr uint8_t BIT_WIDTH_SIZE = sizeof(uint8_t);
-	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(uint32_t);
+	static constexpr uint8_t EXPONENT_SIZE = sizeof(EXPONENT_TYPE);
+	static constexpr EXPONENT_TYPE UNCOMPRESSED_MODE_SENTINEL = std::numeric_limits<EXPONENT_TYPE>::max();
+	static constexpr uint8_t FACTOR_SIZE = sizeof(FACTOR_TYPE);
+	static constexpr uint8_t EXCEPTIONS_COUNT_SIZE = sizeof(EXCEPTIONS_COUNT_TYPE);
+	static constexpr uint8_t EXCEPTION_POSITION_SIZE = sizeof(EXCEPTION_POSITION_TYPE);
+	static constexpr uint8_t FOR_SIZE = sizeof(FRAME_OF_REFERENCE_TYPE);
+	static constexpr uint8_t BIT_WIDTH_SIZE = sizeof(BIT_WIDTH_TYPE);
+	static constexpr BIT_WIDTH_TYPE MAX_BIT_WIDTH = sizeof(ENCODED_VALUE_TYPE) * 8;
+	static constexpr uint8_t METADATA_POINTER_SIZE = sizeof(METADATA_POINTER_TYPE);
 
 	static constexpr uint8_t SAMPLING_EARLY_EXIT_THRESHOLD = 2;
 

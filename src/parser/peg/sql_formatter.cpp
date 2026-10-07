@@ -8,8 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/parser/peg/sql_formatter.hpp"
+#include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 #include "duckdb/parser/peg/tokenizer/highlight_tokenizer.hpp"
-#include "duckdb/parser/peg/matcher.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -87,15 +88,17 @@ SQLFormatter::SQLFormatter(const FormatterConfig &config) : config(config) {
 }
 
 string SQLFormatter::Format(const string &sql) {
-	HighlightTokenizer tokenizer(sql);
-	tokenizer.TokenizeInput();
-	if (!tokenizer.tokens.empty()) {
-		auto back_type = tokenizer.tokens.back().type;
+	auto &keyword_helper = DuckDBKeywordHelper::Instance();
+	vector<MatcherToken> tokens;
+	HighlightTokenizerBehavior behavior(sql, tokens);
+	Tokenizer tokenizer(keyword_helper);
+	tokenizer.TokenizeInput(behavior);
+	if (!tokens.empty()) {
+		auto back_type = tokens.back().type;
 		if (back_type == TokenType::END_OF_INPUT || back_type == TokenType::END_OF_INPUT_AUTOCOMPLETE) {
-			tokenizer.tokens.pop_back();
+			tokens.pop_back();
 		}
 	}
-	const auto &tokens = tokenizer.tokens;
 
 	if (tokens.empty()) {
 		return sql;
@@ -162,25 +165,28 @@ bool SQLFormatter::IsClauseKeywordLine(const string &trimmed) {
 //! original casing is preserved.
 bool SQLFormatter::ShouldUppercase(const string &kw) {
 	static const std::unordered_set<string> uppercase_set = {
-	    "SELECT",     "DISTINCT",    "FROM",       "WHERE",       "HAVING",     "LIMIT",    "OFFSET",       "GROUP",
-	    "BY",         "ORDER",       "UNION",      "INTERSECT",   "EXCEPT",     "ALL",      "JOIN",         "INNER",
-	    "LEFT",       "RIGHT",       "FULL",       "OUTER",       "CROSS",      "NATURAL",  "ON",           "USING",
-	    "WITH",       "RECURSIVE",   "INSERT",     "INTO",        "UPDATE",     "DELETE",   "MERGE",        "MATCHED",
-	    "SET",        "VALUES",      "RETURNING",  "OVERRIDING",  "CREATE",     "DROP",     "ALTER",        "TRUNCATE",
-	    "TABLE",      "VIEW",        "INDEX",      "SCHEMA",      "DATABASE",   "SEQUENCE", "MATERIALIZED", "TEMP",
-	    "TEMPORARY",  "IF",          "NOT",        "EXISTS",      "OR",         "REPLACE",  "UNIQUE",       "PRIMARY",
-	    "KEY",        "FOREIGN",     "REFERENCES", "DEFAULT",     "CONSTRAINT", "CHECK",    "GENERATED",    "ALWAYS",
-	    "IDENTITY",   "STORED",      "VIRTUAL",    "COLUMN",      "ADD",        "RENAME",   "COPY",         "AND",
-	    "OR",         "NOT",         "IS",         "NULL",        "TRUE",       "FALSE",    "IN",           "LIKE",
-	    "ILIKE",      "GLOB",        "BETWEEN",    "SIMILAR",     "SOME",       "ANY",      "EXISTS",       "OVERLAPS",
-	    "CASE",       "WHEN",        "THEN",       "ELSE",        "END",        "AS",       "ASC",          "DESC",
-	    "NULLS",      "FIRST",       "LAST",       "OVER",        "PARTITION",  "ROWS",     "RANGE",        "GROUPS",
-	    "UNBOUNDED",  "PRECEDING",   "FOLLOWING",  "CURRENT",     "ROW",        "EXCLUDE",  "TIES",         "OTHERS",
-	    "CAST",       "TRY_CAST",    "QUALIFY",    "PIVOT",       "UNPIVOT",    "IN",       "BEGIN",        "COMMIT",
-	    "ROLLBACK",   "TRANSACTION", "SAVEPOINT",  "RELEASE",     "EXPLAIN",    "ANALYZE",  "DESCRIBE",     "SHOW",
-	    "PRAGMA",     "ATTACH",      "DETACH",     "CHECKPOINT",  "VACUUM",     "LOAD",     "INSTALL",      "FORCE",
-	    "POSITIONAL", "ASOF",        "LATERAL",    "TABLESAMPLE", "REPEATABLE", "USING",    "SYSTEM",       "BERNOULLI",
-	    "RESERVOIR"};
+	    "SELECT",     "DISTINCT",  "FROM",        "WHERE",      "HAVING",       "LIMIT",      "OFFSET",
+	    "GROUP",      "BY",        "ORDER",       "UNION",      "INTERSECT",    "EXCEPT",     "ALL",
+	    "JOIN",       "INNER",     "LEFT",        "RIGHT",      "FULL",         "OUTER",      "CROSS",
+	    "NATURAL",    "ON",        "USING",       "WITH",       "RECURSIVE",    "INSERT",     "INTO",
+	    "UPDATE",     "DELETE",    "MERGE",       "MATCHED",    "SET",          "VALUES",     "RETURNING",
+	    "OVERRIDING", "CREATE",    "DROP",        "ALTER",      "TRUNCATE",     "TABLE",      "VIEW",
+	    "INDEX",      "SCHEMA",    "DATABASE",    "SEQUENCE",   "MATERIALIZED", "TEMP",       "TEMPORARY",
+	    "IF",         "NOT",       "EXISTS",      "OR",         "REPLACE",      "UNIQUE",     "PRIMARY",
+	    "KEY",        "FOREIGN",   "REFERENCES",  "DEFAULT",    "CONSTRAINT",   "CHECK",      "GENERATED",
+	    "ALWAYS",     "IDENTITY",  "STORED",      "VIRTUAL",    "COLUMN",       "ADD",        "RENAME",
+	    "COPY",       "AND",       "OR",          "NOT",        "IS",           "NULL",       "TRUE",
+	    "FALSE",      "IN",        "LIKE",        "ILIKE",      "GLOB",         "BETWEEN",    "SIMILAR",
+	    "SOME",       "ANY",       "EXISTS",      "OVERLAPS",   "CASE",         "WHEN",       "THEN",
+	    "ELSE",       "END",       "AS",          "ASC",        "DESC",         "NULLS",      "FIRST",
+	    "LAST",       "OVER",      "PARTITION",   "ROWS",       "RANGE",        "GROUPS",     "UNBOUNDED",
+	    "PRECEDING",  "FOLLOWING", "CURRENT",     "ROW",        "EXCLUDE",      "TIES",       "OTHERS",
+	    "CAST",       "TRY_CAST",  "QUALIFY",     "PIVOT",      "UNPIVOT",      "IN",         "BEGIN",
+	    "COMMIT",     "ROLLBACK",  "TRANSACTION", "SAVEPOINT",  "RELEASE",      "EXPLAIN",    "ANALYZE",
+	    "DESCRIBE",   "SHOW",      "PRAGMA",      "ATTACH",     "DETACH",       "CHECKPOINT", "VACUUM",
+	    "LOAD",       "INSTALL",   "FORCE",       "POSITIONAL", "ASOF",         "LATERAL",    "TABLESAMPLE",
+	    "REPEATABLE", "USING",     "SYSTEM",      "BERNOULLI",  "RESERVOIR",    "NEAREST",    "APPROX",
+	    "EXACT",      "DISTANCE",  "SIMILARITY"};
 	return uppercase_set.count(kw) > 0;
 }
 

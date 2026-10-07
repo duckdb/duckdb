@@ -1,0 +1,12 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [recursive_cte]
+
+name ${BENCHMARK_NAME}
+group Recursive CTE
+
+load benchmark/recursive_cte/asql_ws2526/load/${LOAD}.sql
+
+run benchmark/recursive_cte/queries/performance/${QUERY}.sql
+
+result benchmark/recursive_cte/answers/performance/${QUERY}.csv

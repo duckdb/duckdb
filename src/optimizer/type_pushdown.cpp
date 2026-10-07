@@ -12,6 +12,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -55,10 +56,24 @@ void FindGetsAndProjections(LogicalOperator &op, Analyses &analyses, Projections
 		LogicalProjection &projection = op.Cast<LogicalProjection>();
 		D_ASSERT(projection.children.size() == 1);
 		auto &child = *projection.children[0];
-		if (!IsPassthrough(projection) || child.type != LogicalOperatorType::LOGICAL_GET) {
+		if (!IsPassthrough(projection)) {
 			break;
 		}
-		if (auto &get = child.Cast<LogicalGet>(); get.function.projection_expression_pushdown != nullptr) {
+
+		LogicalGet *get = nullptr;
+
+		// queries with LIMIT may include a STREAMING_LIMIT between PROJECTION and GET.
+		// See test/optimizer/pushdown/scalar_function_pushdown_limit.test
+		if (child.type == LogicalOperatorType::LOGICAL_LIMIT) {
+			if (auto &limit = child.Cast<LogicalLimit>();
+			    limit.children.size() == 1 && limit.children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+				get = &limit.children[0]->Cast<LogicalGet>();
+			}
+		} else if (child.type == LogicalOperatorType::LOGICAL_GET) {
+			get = &child.Cast<LogicalGet>();
+		}
+
+		if (get != nullptr && get->function.projection_expression_pushdown != nullptr) {
 			projections.emplace(projection.table_index, projection);
 		}
 		break;
@@ -77,7 +92,7 @@ optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Pr
 		return nullopt;
 	}
 	if (const auto it = analyses.find(binding.table_index); it != analyses.end()) {
-		return {{it->second, binding.column_index, nullptr}};
+		return {{it->second, binding.column_index, nullptr, binding.column_index}};
 	}
 
 	const auto projection_it = projections.find(binding.table_index);
@@ -95,7 +110,7 @@ optional<GetBinding> Resolve(ColumnBinding binding, Analyses &analyses, const Pr
 		return nullopt;
 	}
 	if (const auto it = analyses.find(get_binding.table_index); it != analyses.end()) {
-		return {{it->second, get_binding.column_index, &projection}};
+		return {{it->second, get_binding.column_index, &projection, binding.column_index}};
 	}
 	return nullopt;
 }
@@ -221,7 +236,7 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr,
 		return std::move(*ptr);
 	}
 
-	const auto &[analysis, column_index, projection] = *binding;
+	const auto &[analysis, column_index, projection, projection_column_index] = *binding;
 	if (CanPushdownColumn(analysis, column_index)) {
 		const LogicalType return_type = analysis.get.returned_types[analysis.StorageIndex(column_index)];
 		expr.SetReturnType(return_type);
@@ -229,7 +244,7 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundColumnRefExpression &expr,
 		// LogicalProjection::ResolveTypes, so we need to check whether types in
 		// projection have been resolved, and updated them only if needed.
 		if (projection != nullptr && !projection->types.empty()) {
-			projection->types[column_index] = return_type;
+			projection->types[projection_column_index] = return_type;
 		}
 	}
 
@@ -250,7 +265,7 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundFunctionExpression &expr, 
 		return nullptr;
 	}
 
-	const auto &[analysis, column_index, projection] = *binding;
+	const auto &[analysis, column_index, projection, projection_column_index] = *binding;
 	if (!CanPushdownColumn(analysis, column_index)) {
 		return std::move(*ptr);
 	}
@@ -259,7 +274,7 @@ unique_ptr<Expression> CastReplace::VisitReplace(BoundFunctionExpression &expr, 
 	bound_col_base->SetReturnType(return_type);
 	// Same as in CastReplace::VisitReplace(BoundColumnRefExpression)
 	if (projection != nullptr && !projection->types.empty()) {
-		projection->types[column_index] = return_type;
+		projection->types[projection_column_index] = return_type;
 	}
 	return std::move(bound_col_base);
 }

@@ -58,7 +58,7 @@ public:
 		qualified_name = QualifiedName(qualified_name.Catalog(), std::move(schema), qualified_name.Name());
 	}
 	void SetCatalog(Identifier catalog) {
-		qualified_name = QualifiedName(std::move(catalog), qualified_name.Schema(), qualified_name.Name());
+		qualified_name = qualified_name.WithCatalog(std::move(catalog));
 	}
 
 public:

@@ -92,7 +92,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			auto parser = Parser();
+			Parser parser(state.GetContext());
 			parser.ParseQuery(input.GetString());
 
 			auto statements_arr = yyjson_mut_arr(doc);
@@ -150,6 +150,7 @@ ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 
 	ScalarFunction func({}, LogicalType::JSON(), JsonSerializeFunction, JsonSerializeBind, nullptr,
 	                    JSONFunctionLocalState::Init);
+	func.GetProperties().SetRequiresExpressionNames(true);
 
 	func.GetSignature()
 	    .AddParameter("sql", LogicalType::VARCHAR)
@@ -240,8 +241,9 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 
 ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 	ScalarFunctionSet set("json_deserialize_sql");
-	auto function = ScalarFunction({LogicalType::JSON()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
-	                               nullptr, JSONFunctionLocalState::Init);
+	auto function = ScalarFunction({}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr, nullptr,
+	                               JSONFunctionLocalState::Init);
+	function.GetSignature().AddParameter("json", LogicalType::JSON());
 	function.SetFallible();
 	set.AddFunction(std::move(function));
 	return set;
@@ -254,6 +256,10 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 	JSONFunctionLocalState local_state(context);
 	auto alc = local_state.json_allocator->GetYYAlc();
 
+	if (parameters.values[0].IsNull()) {
+		throw BinderException("json_execute_serialized_sql cannot execute NULL plan");
+	}
+
 	auto input = parameters.values[0].GetValueUnsafe<string_t>();
 	auto stmts = DeserializeSelectStatement(input, alc);
 	if (stmts.size() != 1) {
@@ -263,8 +269,9 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 }
 
 PragmaFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
-	return PragmaFunctionSet(PragmaFunction::PragmaCall(
-	    "json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction, {LogicalType::VARCHAR}));
+	return PragmaFunctionSet(
+	    PragmaFunction::PragmaCall("json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction,
+	                               FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR)));
 }
 
 //----------------------------------------------------------------------
@@ -278,7 +285,7 @@ struct ExecuteSqlTableFunction {
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
+	                                     vector<LogicalType> &return_types, vector<Identifier> &names) {
 		JSONFunctionLocalState local_state(context);
 		auto alc = local_state.json_allocator->GetYYAlc();
 
@@ -303,7 +310,7 @@ struct ExecuteSqlTableFunction {
 	}
 
 	static void Function(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &data = (BindData &)*data_p.bind_data;
+		auto &data = data_p.bind_data->CastNoConst<BindData>();
 		if (!data.result) {
 			data.result = data.plan->Execute();
 		}
@@ -316,8 +323,9 @@ struct ExecuteSqlTableFunction {
 };
 
 TableFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
-	TableFunction func("json_execute_serialized_sql", {LogicalType::VARCHAR}, ExecuteSqlTableFunction::Function,
-	                   ExecuteSqlTableFunction::Bind);
+	TableFunction func("json_execute_serialized_sql",
+	                   FunctionSignature().AddPositionalOnly("serialized_sql", LogicalType::VARCHAR),
+	                   ExecuteSqlTableFunction::Function, ExecuteSqlTableFunction::Bind);
 	return TableFunctionSet(func);
 }
 

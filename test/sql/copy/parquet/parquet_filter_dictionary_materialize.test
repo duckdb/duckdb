@@ -1,0 +1,40 @@
+# name: test/sql/copy/parquet/parquet_filter_dictionary_materialize.test
+# description: Materialize a dictionary vector produced by a filtered Parquet scan
+# group: [parquet]
+
+require parquet
+
+# the last row is removed by the join filter pushed into the scan, so the decoded chunk backing the
+# dictionary has an entry that is never materialized - materializing the result must not read it
+statement ok
+COPY (SELECT i::BIGINT AS k, 'this is a sufficiently long string value number ' || i AS v,
+             'and here is another long string value number ' || i AS w
+      FROM range(1, 181) t(i))
+TO '{TEST_DIR}/dict_probe_side.parquet' (FORMAT parquet);
+
+statement ok
+COPY (SELECT ((i % 179) + 1)::BIGINT AS k FROM range(0, 409) t(i))
+TO '{TEST_DIR}/dict_build_side.parquet' (FORMAT parquet);
+
+query III
+SELECT count(*), count(DISTINCT b.v), count(DISTINCT b.w)
+FROM '{TEST_DIR}/dict_build_side.parquet' a JOIN '{TEST_DIR}/dict_probe_side.parquet' b ON (a.k=b.k)
+----
+409	179	179
+
+query II
+SELECT b.v, b.w
+FROM '{TEST_DIR}/dict_build_side.parquet' a JOIN '{TEST_DIR}/dict_probe_side.parquet' b ON (a.k=b.k)
+ORDER BY a.k LIMIT 2
+----
+this is a sufficiently long string value number 1	and here is another long string value number 1
+this is a sufficiently long string value number 1	and here is another long string value number 1
+
+statement ok
+SET disabled_optimizers='join_order';
+
+query III
+SELECT count(*), count(DISTINCT b.v), count(DISTINCT b.w)
+FROM '{TEST_DIR}/dict_build_side.parquet' a JOIN '{TEST_DIR}/dict_probe_side.parquet' b ON (a.k=b.k)
+----
+409	179	179

@@ -5,12 +5,31 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_cteref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
+
+optional_idx AggregateRewriteHelper::GetDirectReferenceIndex(const Expression &expression, LogicalOperator &input) {
+	auto bindings = input.GetColumnBindings();
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		auto index = expression.Cast<BoundReferenceExpression>().Index();
+		return index < bindings.size() ? optional_idx(index) : optional_idx();
+	}
+	if (expression.GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		return optional_idx();
+	}
+	auto binding = expression.Cast<BoundColumnRefExpression>().Binding();
+	for (idx_t index = 0; index < bindings.size(); index++) {
+		if (bindings[index] == binding) {
+			return optional_idx(index);
+		}
+	}
+	return optional_idx();
+}
 
 vector<Identifier> AggregateRewriteHelper::GenerateColumnNames(const string &prefix, idx_t column_count) {
 	vector<Identifier> result;
@@ -68,33 +87,29 @@ void AggregateRewriteHelper::StageVolatileAggregateInputs(Optimizer &optimizer, 
 		return;
 	}
 
-	child->ResolveOperatorTypes();
 	auto child_bindings = child->GetColumnBindings();
 	auto projection_index = optimizer.binder.GenerateTableIndex();
+	auto projection = LogicalProjection::CreateIdentity(projection_index, std::move(child));
 
 	column_binding_map_t<ColumnBinding> projection_replacements;
-	vector<unique_ptr<Expression>> projection_expressions;
-	projection_expressions.reserve(child_bindings.size());
 	for (idx_t col_idx = 0; col_idx < child_bindings.size(); col_idx++) {
 		projection_replacements[child_bindings[col_idx]] = ColumnBinding(projection_index, ProjectionIndex(col_idx));
-		projection_expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(child->types[col_idx], child_bindings[col_idx]));
 	}
 
 	for (auto &group : aggr.groups) {
-		StageVolatileExpression(group, projection_index, projection_expressions);
+		StageVolatileExpression(group, projection_index, projection->expressions);
 	}
 	for (auto &expr : aggr.expressions) {
 		auto &aggregate = expr->Cast<BoundAggregateExpression>();
 		for (auto &child_expr : aggregate.GetChildrenMutable()) {
-			StageVolatileExpression(child_expr, projection_index, projection_expressions);
+			StageVolatileExpression(child_expr, projection_index, projection->expressions);
 		}
 		if (aggregate.GetOrderBys()) {
 			for (auto &order : aggregate.GetOrderBysMutable()->orders) {
-				StageVolatileExpression(order.expression, projection_index, projection_expressions);
+				StageVolatileExpression(order.expression, projection_index, projection->expressions);
 			}
 		}
-		StageVolatileExpression(aggregate.GetFilterMutable(), projection_index, projection_expressions);
+		StageVolatileExpression(aggregate.GetFilterMutable(), projection_index, projection->expressions);
 	}
 
 	for (auto &group : aggr.groups) {
@@ -104,8 +119,6 @@ void AggregateRewriteHelper::StageVolatileAggregateInputs(Optimizer &optimizer, 
 		RebindExpression(expr, projection_replacements);
 	}
 
-	auto projection = make_uniq<LogicalProjection>(projection_index, std::move(projection_expressions));
-	projection->children.push_back(std::move(child));
 	child = std::move(projection);
 }
 

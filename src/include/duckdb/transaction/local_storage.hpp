@@ -33,7 +33,6 @@ class Vector;
 class WriteAheadLog;
 struct ColumnFetchState;
 struct LocalAppendState;
-struct DataTableInfo;
 struct ParallelCollectionScanState;
 struct TableAppendState;
 struct TransactionData;
@@ -70,8 +69,8 @@ public:
 	TableIndexList delete_indexes;
 	//! Set to INSERT_DUPLICATES, if we are skipping constraint checking during, e.g., WAL replay.
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
-	//! The number of deleted rows
-	idx_t deleted_rows;
+	//! The number of deleted rows (parallel DELETEs update it concurrently)
+	atomic<idx_t> deleted_rows;
 
 	//! The optimistic row group collections associated with this table.
 	vector<unique_ptr<OptimisticWriteCollection>> optimistic_collections;
@@ -86,8 +85,16 @@ public:
 	//! Write a new row group to disk (if possible)
 	void WriteNewRowGroup(idx_t flushed_row_group_idx);
 	void FlushBlocks();
+	//! Whether Flush() takes the bulk-append path for this storage: the append covers at least one
+	//! full row group and there are no deletes. Only depends on transaction-local state, i.e. this
+	//! can be decided before taking any locks.
+	bool IsBulkAppend() const;
+	//! Whether the optimistic writer of this storage writes to disk (not temporary / in-memory / read-only)
+	bool WritesToDisk() const;
+	//! Whether this storage holds optimistically written (flushed) row groups
+	bool HasFlushedRowGroups() const;
 	void Rollback();
-	idx_t EstimatedSize();
+	idx_t EstimatedSize() const;
 
 	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state);
 	void AppendToTable(DuckTransaction &transaction, TableAppendState &append_state);
@@ -115,8 +122,9 @@ private:
 class LocalTableManager {
 public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
-	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
-	optional_ptr<LocalTableStorage> GetStorage(DataTable &table) const;
+	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
+	vector<shared_ptr<LocalTableStorage>> GetEntries() const;
+	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table) const;
 	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
 	idx_t EstimatedSize() const;
 	bool IsEmpty() const;
@@ -124,7 +132,7 @@ public:
 
 private:
 	mutable mutex table_storage_lock;
-	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> table_storage;
+	reference_map_t<const DataTable, shared_ptr<LocalTableStorage>> table_storage;
 };
 
 //! The LocalStorage class holds appends that have not been committed yet
@@ -150,8 +158,8 @@ public:
 	void Scan(CollectionScanState &state, const vector<StorageIndex> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
-	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
-	                      CollectionScanState &scan_state);
+	optional_idx NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
+	                              CollectionScanState &scan_state, bool initialize_columns = true);
 
 	//! Begin appending to the local storage
 	void InitializeAppend(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
@@ -159,8 +167,7 @@ public:
 	void InitializeStorage(LocalAppendState &state, DataTable &table, DuckTableEntry &table_entry);
 
 	//! Append a chunk to the local storage
-	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk,
-	                   DataTableInfo &data_table_info);
+	static void Append(LocalAppendState &state, DuckTableEntry &table_entry, DataChunk &table_chunk);
 	//! Finish appending to the local storage
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
@@ -207,18 +214,27 @@ public:
 	//! Returns true, if the local storage contains the row id.
 	bool CanFetch(DataTable &table, const row_t row_id);
 	TableIndexList &GetIndexes(ClientContext &context, DataTable &table);
-	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
+	optional_ptr<LocalTableStorage> GetStorage(const DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
 	ClientContext &GetClientContext() const {
 		return context;
 	}
+	DuckTransaction &GetTransaction() const {
+		return transaction;
+	}
+
+	void FlushBulkAppendBlocksAndSync(AttachedDatabase &db);
+	bool SyncedFlushedBlocks() const {
+		return synced_flushed_blocks;
+	}
 
 private:
 	ClientContext &context;
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
+	bool synced_flushed_blocks = false;
 
 private:
 	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);

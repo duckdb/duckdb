@@ -142,7 +142,7 @@ TestLoggingInitLocal(ExecutionContext &context, TableFunctionInitInput &input, G
 
 static duckdb::unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, TableFunctionBindInput &input,
                                                         duckdb::vector<LogicalType> &return_types,
-                                                        duckdb::vector<string> &names) {
+                                                        duckdb::vector<Identifier> &names) {
 	names.emplace_back("value");
 	return_types.emplace_back(LogicalType::INTEGER);
 

@@ -22,6 +22,12 @@ namespace duckdb {
 class BlockHandle;
 
 struct CacheBlock {
+	CacheBlock(idx_t location_p, idx_t size_p) : location(location_p), size(size_p) {
+	}
+
+	const idx_t location;
+	const idx_t size;
+
 	mutable annotated_mutex mtx;
 	mutable std::condition_variable cv DUCKDB_GUARDED_BY(mtx);
 	CacheBlockState state DUCKDB_GUARDED_BY(mtx) = CacheBlockState::EMPTY;
@@ -32,9 +38,6 @@ struct CacheBlock {
 	//! Checksum over the buffer contents, used for verifying data was not modified after caching
 	hash_t checksum DUCKDB_GUARDED_BY(mtx) = 0;
 #endif
-
-	//! Reset the block to its initial empty state.
-	void Reinit() DUCKDB_EXCLUDES(mtx);
 };
 
 } // namespace duckdb

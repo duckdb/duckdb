@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-void ARTMerger::Init(Node &left, Node &right) {
+void ARTMerger::Init(NodePtr &left, NodePtr &right) {
 	Emplace(left, right, GateStatus::GATE_NOT_SET, 0);
 }
 
@@ -49,15 +49,15 @@ ARTConflictType ARTMerger::Merge() {
 			continue;
 		}
 
-		if (entry.right.IsLeafNode()) {
-			// Both left and right are leaf nodes.
-			D_ASSERT(entry.left.IsLeafNode());
+		if (entry.right.IsNestedLeaf()) {
+			// Both left and right are nested leaves.
+			D_ASSERT(entry.left.IsNestedLeaf());
 			MergeLeaves(entry);
 			continue;
 		}
 
-		if (entry.left.IsNode() && entry.right.IsNode()) {
-			// Both left and right are nodes.
+		if (entry.left.IsInternalNode() && entry.right.IsInternalNode()) {
+			// Both left and right are internal nodes.
 			MergeNodes(entry);
 			continue;
 		}
@@ -76,7 +76,7 @@ ARTConflictType ARTMerger::Merge() {
 	return ARTConflictType::NO_CONFLICT;
 }
 
-void ARTMerger::Emplace(Node &left, Node &right, const GateStatus parent_status, const idx_t depth) {
+void ARTMerger::Emplace(NodePtr &left, NodePtr &right, const GateStatus parent_status, const idx_t depth) {
 	const auto left_type = left.GetType();
 	const auto right_type = right.GetType();
 
@@ -110,23 +110,23 @@ ARTConflictType ARTMerger::MergeNodeAndInlined(NodeEntry &entry) {
 	                           DeleteIndexInfo(), IndexAppendMode::DEFAULT);
 }
 
-array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf) {
+array_ptr<uint8_t> ARTMerger::GetBytes(NodePtr &leaf) {
 	const auto type = leaf.GetType();
 	switch (type) {
 	case NType::NODE_7_LEAF:
-		return Node::Ref<Node7Leaf>(art, leaf, type).GetBytes();
+		return NodePtr::Ref<Node7Leaf>(art, leaf, type).GetBytes();
 	case NType::NODE_15_LEAF:
-		return Node::Ref<Node15Leaf>(art, leaf, type).GetBytes();
+		return NodePtr::Ref<Node15Leaf>(art, leaf, type).GetBytes();
 	case NType::NODE_256_LEAF:
-		return Node::Ref<Node256Leaf>(art, leaf, type).GetBytes(arena);
+		return NodePtr::Ref<Node256Leaf>(art, leaf, type).GetBytes(arena);
 	default:
 		throw InternalException("invalid node type for ARTMerger::GetBytes: %s", EnumUtil::ToString(type));
 	}
 }
 
 void ARTMerger::MergeLeaves(NodeEntry &entry) {
-	D_ASSERT(entry.left.IsLeafNode());
-	D_ASSERT(entry.right.IsLeafNode());
+	D_ASSERT(entry.left.IsNestedLeaf());
+	D_ASSERT(entry.right.IsNestedLeaf());
 	D_ASSERT(entry.left.GetGateStatus() == GateStatus::GATE_NOT_SET);
 	D_ASSERT(entry.right.GetGateStatus() == GateStatus::GATE_NOT_SET);
 
@@ -142,30 +142,30 @@ void ARTMerger::MergeLeaves(NodeEntry &entry) {
 	// FIXME: Obtain a reference to left once and
 	// FIXME: handle the different node type combinations.
 	for (idx_t i = 0; i < bytes.size(); i++) {
-		Node::InsertChild(art, entry.left, bytes[i]);
+		NodePtr::InsertChild(art, entry.left, bytes[i]);
 	}
-	Node::FreeNode(art, entry.right);
+	NodePtr::FreeNode(art, entry.right);
 }
 
-NodeChildren ARTMerger::ExtractChildren(Node &node) {
+NodeChildren ARTMerger::ExtractChildren(NodePtr &node) {
 	const auto type = node.GetType();
 	switch (type) {
 	case NType::NODE_4:
-		return Node::Ref<Node4>(art, node, type).ExtractChildren(arena);
+		return NodePtr::Ref<Node4>(art, node, type).ExtractChildren(arena);
 	case NType::NODE_16:
-		return Node::Ref<Node16>(art, node, type).ExtractChildren(arena);
+		return NodePtr::Ref<Node16>(art, node, type).ExtractChildren(arena);
 	case NType::NODE_48:
-		return Node::Ref<Node48>(art, node, type).ExtractChildren(arena);
+		return NodePtr::Ref<Node48>(art, node, type).ExtractChildren(arena);
 	case NType::NODE_256:
-		return Node::Ref<Node256>(art, node, type).ExtractChildren(arena);
+		return NodePtr::Ref<Node256>(art, node, type).ExtractChildren(arena);
 	default:
 		throw InternalException("invalid node type for ARTMerger::GetChildren: %s", EnumUtil::ToString(type));
 	}
 }
 
 void ARTMerger::MergeNodes(NodeEntry &entry) {
-	D_ASSERT(entry.left.IsNode());
-	D_ASSERT(entry.right.IsNode());
+	D_ASSERT(entry.left.IsInternalNode());
+	D_ASSERT(entry.right.IsInternalNode());
 
 	// Merge the smaller node into the bigger node.
 	if (entry.left.GetType() < entry.right.GetType()) {
@@ -177,7 +177,7 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	auto children = ExtractChildren(entry.right);
 	// As long as the arena is valid,
 	// the copied-out nodes (and their references) are valid.
-	Node::FreeNode(art, entry.right);
+	NodePtr::FreeNode(art, entry.right);
 
 	// First, we iterate and insert children.
 	// This might grow the node, so we need to do it prior to Emplace.
@@ -190,7 +190,7 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 			// There is no child at this byte.
 			// We can insert the right node's child at byte and are done.
 			auto &right_child = children.children[i];
-			Node::InsertChild(art, entry.left, byte, right_child);
+			NodePtr::InsertChild(art, entry.left, byte, right_child);
 			continue;
 		}
 		// There is a left and a right child at this byte.
@@ -207,9 +207,9 @@ void ARTMerger::MergeNodes(NodeEntry &entry) {
 	}
 }
 
-void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth,
-                                   const uint8_t pos) {
-	D_ASSERT(node.IsNode());
+void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status,
+                                   const idx_t parent_depth, const uint8_t pos) {
+	D_ASSERT(node.IsInternalNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
 	// Get the child at the prefix byte, or nullptr, if there is no child.
@@ -227,12 +227,13 @@ void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus pa
 
 	// There is no child at this prefix byte,
 	// so we can insert the remaining prefix and are done.
-	Node::InsertChild(art, node, byte, prefix);
+	NodePtr::InsertChild(art, node, byte, prefix);
 	prefix.Clear();
 }
 
-void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const GateStatus parent_status, const idx_t parent_depth) {
-	D_ASSERT(node.IsNode());
+void ARTMerger::MergeNodeAndPrefix(NodePtr &node, NodePtr &prefix, const GateStatus parent_status,
+                                   const idx_t parent_depth) {
+	D_ASSERT(node.IsInternalNode());
 	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
 	MergeNodeAndPrefix(node, prefix, parent_status, parent_depth, 0);
@@ -278,16 +279,16 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		const auto r_byte = Prefix::GetByte(art, entry.right, cast_pos);
 
 		// Split and reduce.
-		reference<Node> ref(entry.left);
-		Node l_child;
-		const auto status = Prefix::Split(art, ref, l_child, cast_pos);
+		reference<NodePtr> left_ref(entry.left);
+		NodePtr l_child;
+		const auto status = Prefix::Split(art, left_ref, l_child, cast_pos);
 		Prefix::Reduce(art, entry.right, cast_pos);
 
-		Node4::New(art, ref);
-		ref.get().SetGateStatus(status);
+		Node4::New(art, left_ref);
+		left_ref.get().SetGateStatus(status);
 
-		Node4::InsertChild(art, ref, l_byte, l_child);
-		Node4::InsertChild(art, ref, r_byte, entry.right);
+		Node4::InsertChild(art, left_ref, l_byte, l_child);
+		Node4::InsertChild(art, left_ref, r_byte, entry.right);
 		entry.right.Clear();
 		return;
 	}
@@ -296,12 +297,12 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// The prefixes match.
 		// Free the right prefix, but keep the reference to its child alive.
 		// Then, iterate on the left and right (reduced) child.
-		auto r_child = *r_prefix.ptr;
-		Node::FreeNode(art, entry.right);
+		auto r_child = *r_prefix.child_slot;
+		NodePtr::FreeNode(art, entry.right);
 		entry.right = r_child;
 
 		auto depth = entry.depth + l_prefix.data[count];
-		Emplace(*l_prefix.ptr, entry.right, entry.status, depth);
+		Emplace(*l_prefix.child_slot, entry.right, entry.status, depth);
 		return;
 	}
 
@@ -310,12 +311,12 @@ void ARTMerger::MergePrefixes(NodeEntry &entry) {
 		// We exhausted the right prefix.
 		// Ensure that we continue merging into left.
 		swap(entry.left, entry.right);
-		MergeNodeAndPrefix(*r_prefix.ptr, entry.right, entry.status, entry.depth + max_count, max_count);
+		MergeNodeAndPrefix(*r_prefix.child_slot, entry.right, entry.status, entry.depth + max_count, max_count);
 		return;
 	}
 
 	// We exhausted the left prefix.
-	MergeNodeAndPrefix(*l_prefix.ptr, entry.right, entry.status, entry.depth + max_count, max_count);
+	MergeNodeAndPrefix(*l_prefix.child_slot, entry.right, entry.status, entry.depth + max_count, max_count);
 }
 
 } // namespace duckdb

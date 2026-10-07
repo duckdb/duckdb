@@ -105,6 +105,9 @@ public:
 	unique_ptr<Expression> &GetExpression() {
 		return expression;
 	}
+	const unique_ptr<Expression> &GetExpression() const {
+		return expression;
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static BoundLimitNode Deserialize(Deserializer &deserializer);

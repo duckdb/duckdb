@@ -373,7 +373,7 @@ if __name__ == "__main__":
 
             run_sequentially = args.run_sequentially or test_pattern is not None
             stop_on_failure = args.stop_on_failure
-            start_time = time.time()
+            start_time = time.monotonic()
             nb_tests_run = 0
             if run_sequentially:
                 for test in tests:
@@ -400,7 +400,7 @@ if __name__ == "__main__":
                     if not r.is_successful():
                         failed_tests.append((old_duckdb_version, r.test_relative_path))
 
-            elapsed = time.time() - start_time
+            elapsed = time.monotonic() - start_time
             tps = nb_tests_run / elapsed if elapsed > 0 else 0
             nb_failed = nb_tests_run - nb_success
             logger.info(

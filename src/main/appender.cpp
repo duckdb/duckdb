@@ -321,10 +321,10 @@ void duckdb::BaseAppender::Append(DataChunk &target, const Value &value, idx_t c
 	if (value.type() == target.GetTypes()[col]) {
 		target.data[col].SetValue(row, value);
 	} else {
-		Value new_value;
 		string error_msg;
-		if (value.DefaultTryCastAs(target.GetTypes()[col], new_value, &error_msg)) {
-			target.data[col].SetValue(row, new_value);
+		auto new_value = value.DefaultTryCastAs(target.GetTypes()[col], &error_msg);
+		if (new_value) {
+			target.data[col].SetValue(row, *new_value);
 		} else {
 			throw InvalidInputException("type mismatch in Append, expected %s, got %s for column %d",
 			                            target.GetTypes()[col], value.type(), col);
@@ -467,10 +467,10 @@ CommonTableExpressionMap &GetCTEMap(SQLStatement &statement) {
 	}
 }
 
-unique_ptr<SQLStatement> BaseAppender::ParseStatement(unique_ptr<TableRef> table_ref, const string &query,
-                                                      const string &table_name) {
+unique_ptr<SQLStatement> BaseAppender::ParseStatement(ClientContext &context, unique_ptr<TableRef> table_ref,
+                                                      const string &query, const string &table_name) {
 	// Parse the query.
-	Parser parser;
+	Parser parser(context);
 	parser.ParseQuery(query);
 
 	// Must be a single statement.
@@ -512,8 +512,8 @@ Appender::Appender(Connection &con, const Identifier &database_name, const Ident
 
 	description = con.TableInfo(database_name, schema_name, table_name);
 	if (!description) {
-		throw CatalogException(
-		    StringUtil::Format("Table \"%s.%s.%s\" could not be found", database_name, schema_name, table_name));
+		throw CatalogException(StringUtil::Format("Table '%s.%s.%s' could not be found", SQLIdentifier(database_name),
+		                                          SQLIdentifier(schema_name), SQLIdentifier(table_name)));
 	}
 	if (description->readonly) {
 		throw InvalidInputException("Cannot append to a readonly database.");
@@ -623,7 +623,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 	auto query = ConstructQuery(*description, table_name, expected_names);
 
 	auto table_ref = GetColumnDataTableRef(collection, table_name, expected_names);
-	auto stmt = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
+	auto stmt = ParseStatement(*context_ref, std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(stmt));
 }
 
@@ -724,7 +724,7 @@ void QueryAppender::FlushInternal(ColumnDataCollection &collection) {
 		throw InvalidInputException("Attempting to flush query appender data on a closed connection");
 	}
 	auto table_ref = GetColumnDataTableRef(collection, table_name, names);
-	auto parsed_statement = ParseStatement(std::move(table_ref), query, table_name.GetIdentifierName());
+	auto parsed_statement = ParseStatement(*context_ref, std::move(table_ref), query, table_name.GetIdentifierName());
 	context_ref->Append(std::move(parsed_statement));
 }
 

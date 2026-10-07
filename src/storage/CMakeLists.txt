@@ -7,11 +7,6 @@ add_subdirectory(serialization)
 add_subdirectory(statistics)
 add_subdirectory(table)
 
-if(${EXIT_TIME_DESTRUCTORS_WARNING})
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
-endif()
-
 add_library_unity(
   duckdb_storage
   OBJECT
@@ -24,6 +19,7 @@ add_library_unity(
   database_handle.cpp
   data_pointer.cpp
   data_table.cpp
+  index_entry.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp

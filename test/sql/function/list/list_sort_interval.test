@@ -1,0 +1,98 @@
+# name: test/sql/function/list/list_sort_interval.test
+# description: list_sort for INTERVAL must order consistently with comparison/ORDER BY
+# group: [list]
+
+# Regression test for #25108:
+# list_sort's sort key must normalize intervals (1 month = 30 days, 1 day = 24h)
+# so list_sort agrees with comparison/ORDER BY - without changing the returned
+# values (the collation normalizes the KEY; the payload keeps the original form).
+
+query I
+SELECT i FROM (VALUES (INTERVAL '31 days'), (INTERVAL '1 month')) t(i) ORDER BY i
+----
+1 month
+31 days
+
+query I
+SELECT list_sort([INTERVAL '31 days', INTERVAL '1 month'])
+----
+[1 month, 31 days]
+
+query I
+SELECT list_reverse_sort([INTERVAL '31 days', INTERVAL '1 month'])
+----
+[31 days, 1 month]
+
+query I
+SELECT list_sort([INTERVAL '31 days', INTERVAL '1 month'], 'DESC')
+----
+[31 days, 1 month]
+
+# list_grade_up returns the rank of each element (grade 1 = smallest).
+# 31 days > 1 month, so 31 days gets grade 2, 1 month grade 1.
+query I
+SELECT list_grade_up([INTERVAL '31 days', INTERVAL '1 month'])
+----
+[2, 1]
+
+# list_distinct is a create_sort_key consumer that must round-trip the ORIGINAL
+# values (raw encode -> raw decode); the collation is pushed only onto the
+# list_sort key, so distinct still sees the un-normalized payload forms. Wrapped
+# in list_sort for a deterministic order (1 month < 31 days under normalization).
+query I
+SELECT list_sort(list_distinct([INTERVAL '31 days', INTERVAL '1 month', INTERVAL '31 days']))
+----
+[1 month, 31 days]
+
+# the original (non-normalized) values must be preserved by list_sort - the key is
+# normalized, the payload is not. '25 hours', '1500 minutes' and '1 day 1 hour' are
+# all equal under normalization and must come back byte-identical.
+query I
+SELECT list_sort([INTERVAL '25 hours', INTERVAL '1 day 1 hour', INTERVAL '1500 minutes'])
+----
+['25:00:00', '1 day 01:00:00', '25:00:00']
+
+query I
+SELECT list_sort([INTERVAL '25 hours', INTERVAL '1 day 1 hour', INTERVAL '1500 minutes'], 'DESC')
+----
+['25:00:00', '1 day 01:00:00', '25:00:00']
+
+# NULLS FIRST / NULLS LAST placement is orthogonal to the key collation: the null
+# bit lives in the key prefix and normalized_interval propagates NULLs unchanged.
+query I
+SELECT list_sort([INTERVAL '31 days', NULL, INTERVAL '1 month'], 'ASC', 'NULLS FIRST')
+----
+[NULL, 1 month, 31 days]
+
+query I
+SELECT list_sort([INTERVAL '31 days', NULL, INTERVAL '1 month'], 'ASC', 'NULLS LAST')
+----
+[1 month, 31 days, NULL]
+
+# Negative intervals are exactly where the raw (months, days, micros) encoding
+# diverges from normalized ordering (-31 days vs -1 month: raw puts -1 month
+# first because months = -1 < 0; ORDER BY puts -31 days first). The collated key
+# must agree with ORDER BY.
+query I
+SELECT i FROM (VALUES (INTERVAL '-31 days'), (INTERVAL '-1 month')) t(i) ORDER BY i
+----
+-31 days
+-1 month
+
+query I
+SELECT list_sort([INTERVAL '-31 days', INTERVAL '-1 month'])
+----
+[-31 days, -1 month]
+
+query I
+SELECT list_sort([INTERVAL '-31 days', INTERVAL '-1 month'], 'DESC')
+----
+[-1 month, -31 days]
+
+# create_sort_key itself remains the raw-struct encoder (its contract: encode the
+# value as given; callers push collations - Sort::Sort wraps already-collated
+# expressions). 31 days < 1 month under the RAW (months, days, micros) encoding.
+query I
+SELECT create_sort_key(INTERVAL '31 days', 'ASC NULLS LAST') < create_sort_key(INTERVAL '1 month', 'ASC NULLS LAST')
+----
+true

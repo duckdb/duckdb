@@ -1,0 +1,13 @@
+# name: test/sql/join/left_outer/left_join_issue_24540.test
+# description: left join do not assume right child is null.
+# group: [left_outer]
+
+query III
+SELECT * FROM (VALUES (1),(2),(NULL)) AS a(x)
+LEFT JOIN (SELECT p.y AS y, q.z AS z
+           FROM (VALUES (2),(3),(NULL)) AS p(y)
+           LEFT JOIN (VALUES (1),(3),(NULL)) AS q(z) ON p.y <> q.z) AS s
+ON a.x <> s.y
+WHERE s.z IS NULL;
+----
+NULL	NULL	NULL

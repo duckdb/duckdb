@@ -26,6 +26,8 @@ enum class JSONRecordType : uint8_t {
 	RECORDS = 1,
 	//! Any other JSON type, e.g., ARRAY
 	VALUES = 2,
+	//! GeoJSON Features, unnested into a geometry column plus one column per property
+	FEATURES = 3,
 };
 
 enum class JSONFormat : uint8_t {

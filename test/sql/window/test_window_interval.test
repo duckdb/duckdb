@@ -29,3 +29,12 @@ select j, i, sum(i) over (partition by j order by i) from a order by 1,2
 1 year	4	6
 2 years	1	1
 2 years	3	4
+
+# RANGE PRECEDING must include the lower endpoint when the order key normalises to whole months
+query III
+with src(id, k, x) as (values (1, interval '26' day, 10), (2, interval '30' day, 1))
+select id, k, sum(x) over (order by k range between interval '4' day preceding and current row)
+from src order by id
+----
+1	26 days	10
+2	30 days	11

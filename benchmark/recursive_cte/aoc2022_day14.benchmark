@@ -1,0 +1,7 @@
+# name: benchmark/recursive_cte/aoc2022_day14.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/aoc2022/recursive_cte_aoc2022.benchmark.in
+DAY=day14
+BENCHMARK_NAME=AoC 2022 day14 recursive sand simulation
+DESCRIPTION=Run a narrow recursive state machine with growing nested-list state

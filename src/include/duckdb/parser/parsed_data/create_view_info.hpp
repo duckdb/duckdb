@@ -11,8 +11,10 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 
+#include "duckdb/common/enums/view_security_type.hpp"
 #include "duckdb/common/identifier.hpp"
 namespace duckdb {
+class Parser;
 class SchemaCatalogEntry;
 
 enum class CreateViewBindingMode { BIND_ON_CREATE, SKIP_BINDING };
@@ -20,7 +22,7 @@ enum class CreateViewBindingMode { BIND_ON_CREATE, SKIP_BINDING };
 struct CreateViewInfo : public CreateInfo {
 public:
 	CreateViewInfo();
-	CreateViewInfo(SchemaCatalogEntry &schema, Identifier view_name);
+	CreateViewInfo(SchemaCatalogEntry &schema, const Identifier &view_name);
 	explicit CreateViewInfo(const QualifiedName &view_name);
 
 public:
@@ -43,17 +45,19 @@ public:
 	unique_ptr<SelectStatement> query;
 	//! Whether or not to bind the view on create
 	CreateViewBindingMode binding_mode = CreateViewBindingMode::BIND_ON_CREATE;
+	//! Whether this is a secure view - secure views act as an optimization barrier
+	ViewSecurityType security_type = ViewSecurityType::REGULAR_VIEW;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 
 	//! Gets a bound CreateViewInfo object from a SELECT statement and a view name, schema name, etc
-	DUCKDB_API static unique_ptr<CreateViewInfo> FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info);
+	DUCKDB_API static unique_ptr<CreateViewInfo> FromSelect(Parser &parser, unique_ptr<CreateViewInfo> info);
 	//! Gets a bound CreateViewInfo object from a CREATE VIEW statement
 	DUCKDB_API static unique_ptr<CreateViewInfo> FromCreateView(ClientContext &context, SchemaCatalogEntry &schema,
 	                                                            const string &sql);
 	//! Parse a SELECT statement from a SQL string
-	DUCKDB_API static unique_ptr<SelectStatement> ParseSelect(const string &sql);
+	DUCKDB_API static unique_ptr<SelectStatement> ParseSelect(Parser &parser, const string &sql);
 
 	DUCKDB_API void Serialize(Serializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);

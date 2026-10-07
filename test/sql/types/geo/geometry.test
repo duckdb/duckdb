@@ -151,6 +151,21 @@ SELECT '  POINT(1 2)'::GEOMETRY::VARCHAR;
 ----
 POINT (1 2)
 
+query I
+SELECT 'POINT(1 2)   '::GEOMETRY::VARCHAR;
+----
+POINT (1 2)
+
+statement error
+SELECT 'POINT(1 2) garbage'::GEOMETRY::VARCHAR;
+----
+<REGEX>:Conversion Error.*
+
+query I
+SELECT TRY_CAST('POINT(1 2) garbage' AS GEOMETRY);
+----
+NULL
+
 # Leading SRID (EWKT dialect, ignored by us)
 query I
 SELECT 'SRID=4326;POINT(1 2)'::GEOMETRY::VARCHAR;

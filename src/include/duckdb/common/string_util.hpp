@@ -128,6 +128,12 @@ public:
 	//! Returns true if the target string ends with the given suffix
 	DUCKDB_API static bool EndsWith(const string &str, const string &suffix);
 
+	//! Returns the size in bytes of the longest common prefix
+	DUCKDB_API static idx_t GetCommonPrefixSize(const string &left, const string &right);
+
+	//! Replaces a prefix with its exclusive upper bound in byte order
+	DUCKDB_API static bool FindNextPrefix(string &prefix);
+
 	//! Repeat a string multiple times
 	DUCKDB_API static string Repeat(const string &str, const idx_t n);
 
@@ -140,11 +146,28 @@ public:
 
 	//! Split the input string along a quote. Note that any escaping is NOT supported.
 	DUCKDB_API static vector<string> SplitWithQuote(const string &str, char delimiter = ',', char quote = '"');
+	//! Read one quoted token with doubled-quote escaping. On failure, leave pos and result unchanged.
+	DUCKDB_API static bool TryParseQuotedString(const string &str, idx_t &pos, string &result, char quote = '"');
 
 	//! Join multiple strings into one string. Components are concatenated by the given separator
 	DUCKDB_API static string Join(const vector<string> &input, const string &separator);
 	DUCKDB_API static string Join(const vector<Identifier> &input, const string &separator);
 	DUCKDB_API static string Join(const set<string> &input, const string &separator);
+
+	//! Join container elements transformed to strings using the given separator
+	template <class CONTAINER, class FUNC>
+	static string Join(const CONTAINER &input, const string &separator, const FUNC &f) {
+		string result;
+		bool first = true;
+		for (const auto &entry : input) {
+			if (!first) {
+				result += separator;
+			}
+			result += f(entry);
+			first = false;
+		}
+		return result;
+	}
 
 	//! Encode special URL characters in a string
 	DUCKDB_API static string URLEncode(const string &str, bool encode_slash = true);
@@ -225,6 +248,9 @@ public:
 	//! Case insensitive starts-with
 	DUCKDB_API static bool CIStartsWith(const string &str, const string &prefix);
 
+	//! Case insensitive ends-with
+	DUCKDB_API static bool CIEndsWith(const string &str, const string &suffix);
+
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 
@@ -234,7 +260,7 @@ public:
 
 	//! Format a string using printf semantics
 	template <typename... ARGS>
-	static string Format(const string fmt_str, ARGS... params) {
+	static string Format(const string &fmt_str, const ARGS &...params) {
 		return Exception::ConstructMessage(fmt_str, params...);
 	}
 

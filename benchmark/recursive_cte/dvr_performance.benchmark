@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/dvr_performance.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=dvr
+BENCHMARK_NAME=Recursive CTE DVR performance
+DESCRIPTION=Run the medium distance-vector-routing workload

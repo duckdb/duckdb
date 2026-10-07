@@ -104,6 +104,13 @@ CREATE TRIGGER trg_on_view AFTER INSERT ON base_view FOR EACH STATEMENT
 ----
 CREATE TRIGGER requires a base table, not a view or subquery
 
+# INSTEAD OF triggers are not yet supported (even on a base table)
+statement error
+CREATE TRIGGER trg_instead_of INSTEAD OF INSERT ON base_tbl FOR EACH STATEMENT
+    INSERT INTO base_tbl VALUES (1);
+----
+INSTEAD OF triggers are not yet supported
+
 # CREATE TRIGGER on a non-DuckDB table is rejected
 require sqlite_scanner
 

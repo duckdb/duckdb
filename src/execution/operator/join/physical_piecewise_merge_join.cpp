@@ -2,6 +2,7 @@
 
 #include <numeric>
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
@@ -452,24 +453,11 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 	const auto strict = MergeJoinStrictComparison(comparison);
 
 	switch (lstate.sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_8>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_16>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_24>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_FIXED_32>(lstate, gstate, match, strict);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::NO_PAYLOAD_VARIABLE_32>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_FIXED_16>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_FIXED_24>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_FIXED_32>(lstate, gstate, match, strict);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinSimpleBlocks<SortKeyType::PAYLOAD_VARIABLE_32>(lstate, gstate, match, strict);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedMergeJoinSimpleBlocks<SortKeyType::SORT_KEY_TYPE>(lstate, gstate, match, strict);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(lstate.sort_key_type));
 	}
@@ -614,24 +602,11 @@ static idx_t MergeJoinComplexBlocks(const SortKeyType &sort_key_type, ChunkMerge
 	const auto strict = MergeJoinStrictComparison(comparison);
 
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_8>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_16>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_24>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_FIXED_32>(l, r, strict, prev_left_index);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::NO_PAYLOAD_VARIABLE_32>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_FIXED_16>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_FIXED_24>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_FIXED_32>(l, r, strict, prev_left_index);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedMergeJoinComplexBlocks<SortKeyType::PAYLOAD_VARIABLE_32>(l, r, strict, prev_left_index);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedMergeJoinComplexBlocks<SortKeyType::SORT_KEY_TYPE>(l, r, strict, prev_left_index);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("MergeJoinSimpleBlocks for %s", EnumUtil::ToString(sort_key_type));
 	}
@@ -749,6 +724,9 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			if (predicate) {
 				result_count = state.pred_executor.SelectExpression(chunk, state.pred_matches);
 				chunk.Slice(state.pred_matches, result_count);
+				for (idx_t i = 0; i < result_count; i++) {
+					state.pred_matches.set_index(i, sel->get_index(state.pred_matches.get_index(i)));
+				}
 				sel = &state.pred_matches;
 			}
 
@@ -821,6 +799,7 @@ public:
 	}
 
 	TupleDataCollection &payload;
+	atomic<idx_t> rows_scanned {0};
 
 public:
 	idx_t MaxThreads() override {
@@ -848,6 +827,15 @@ public:
 unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(ClientContext &context) const {
 	auto &gsink = sink_state->Cast<MergeJoinGlobalState>();
 	return make_uniq<PiecewiseJoinGlobalScanState>(*gsink.table->sorted->payload_data);
+}
+
+ProgressData PhysicalPiecewiseMergeJoin::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	auto &state = gstate.Cast<PiecewiseJoinGlobalScanState>();
+	const auto total = state.payload.Count();
+	if (total == 0) {
+		return ProgressData {1.0, 1.0, false};
+	}
+	return ProgressData {double(state.rows_scanned.load()), double(total), false};
 }
 
 unique_ptr<LocalSourceState> PhysicalPiecewiseMergeJoin::GetLocalSourceState(ExecutionContext &context,
@@ -902,6 +890,9 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetDataInternal(ExecutionContext &c
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
+		}
+		gsource.rows_scanned.fetch_add(count, std::memory_order_relaxed);
+		if (result_count > 0) {
 			break;
 		}
 	}

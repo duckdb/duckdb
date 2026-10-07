@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!-- Opt the process into the Windows Segment Heap, avoiding the default
+     NT heap's lock contention under multi-threaded allocation (see #24027).
+     Ignored by Windows versions without Segment Heap support. -->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <heapType xmlns="http://schemas.microsoft.com/SMI/2020/WindowsSettings">SegmentHeap</heapType>
+    </windowsSettings>
+  </application>
+</assembly>

@@ -385,7 +385,7 @@ struct TestAllTypesBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFunctionBindInput &input,
-                                                 vector<LogicalType> &return_types, vector<string> &names) {
+                                                 vector<LogicalType> &return_types, vector<Identifier> &names) {
 	auto result = make_uniq<TestAllTypesBindData>();
 	bool use_large_enum = false;
 	bool use_large_bignum = false;
@@ -406,7 +406,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 	result->test_types = TestAllTypesFun::GetTestTypes(use_large_enum, use_large_bignum);
 	for (auto &test_type : result->test_types) {
 		return_types.push_back(test_type.type);
-		names.push_back(test_type.name);
+		names.emplace_back(test_type.name);
 	}
 	return std::move(result);
 }
@@ -445,8 +445,9 @@ static void TestAllTypesFunction(ClientContext &context, TableFunctionInput &dat
 
 void TestAllTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_all_types("test_all_types", {}, TestAllTypesFunction, TestAllTypesBind, TestAllTypesInit);
-	test_all_types.named_parameters["use_large_enum"] = LogicalType::BOOLEAN;
-	test_all_types.named_parameters["use_large_bignum"] = LogicalType::BOOLEAN;
+	test_all_types.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("use_large_enum", LogicalType::BOOLEAN).Add("use_large_bignum", LogicalType::BOOLEAN);
+	});
 	set.AddFunction(test_all_types);
 }
 

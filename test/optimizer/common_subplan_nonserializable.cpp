@@ -28,7 +28,7 @@ struct NonSerializableBindData : public TableFunctionData {
 };
 
 unique_ptr<FunctionData> NonSerializableBind(ClientContext &, TableFunctionBindInput &,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
+                                             vector<LogicalType> &return_types, vector<Identifier> &names) {
 	return_types.emplace_back(LogicalType::INTEGER);
 	names.emplace_back("i");
 	return make_uniq<NonSerializableBindData>();
@@ -67,7 +67,7 @@ string GetExplainPlan(Connection &con, const string &query) {
 	string explain;
 	for (idx_t row = 0; row < result->RowCount(); row++) {
 		for (idx_t col = 0; col < result->ColumnCount(); col++) {
-			explain += result->GetValue(col, row).ToString();
+			explain += result->Collection().GetValue(col, row).ToString();
 			explain += "\n";
 		}
 	}
@@ -88,8 +88,8 @@ TEST_CASE("Common subplan skips table functions without serialization callbacks"
 	auto result = con.Query(query);
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->RowCount() == 1);
-	REQUIRE(result->GetValue(0, 0).GetValue<int64_t>() == 1);
-	REQUIRE(result->GetValue(1, 0).GetValue<int64_t>() == 1);
+	REQUIRE(result->Collection().GetValue(0, 0).GetValue<int64_t>() == 1);
+	REQUIRE(result->Collection().GetValue(1, 0).GetValue<int64_t>() == 1);
 
 	REQUIRE_NO_FAIL(con.Query("PRAGMA explain_output='optimized_only'"));
 	const auto explain = GetExplainPlan(con, query);

@@ -134,14 +134,18 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 	return std::move(statement);
 }
 
-unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes) {
+unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes, idx_t column_count,
+                                                   TableIndex table_index) {
 	if (nodes.empty()) {
 		return nullptr;
 	}
 	if (nodes.size() == 1) {
 		return std::move(nodes[0]);
 	}
-	return make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes),
+	if (!table_index.IsValid()) {
+		table_index = GenerateTableIndex();
+	}
+	return make_uniq<LogicalSetOperation>(table_index, column_count, std::move(nodes),
 	                                      LogicalOperatorType::LOGICAL_UNION, true, false);
 }
 
@@ -167,6 +171,10 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	catalog_entry_vector_t tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
+		auto &schema_entry = schema.get();
+		if (schema_entry.ParentCatalog().IsTemporaryCatalog()) {
+			continue;
+		}
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.type == CatalogType::TABLE_ENTRY) {
 				tables.push_back(entry.Cast<TableCatalogEntry>());
@@ -224,7 +232,8 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 			id++;
 		}
 		info->is_from = false;
-		info->SetQualifiedName(QualifiedName(Identifier(catalog), table.schema.name, table.name));
+		// carry the full (possibly nested) schema path of the exported table
+		info->SetQualifiedName(table.schema.GetQualifiedName(table.name));
 
 		// We can not export generated columns
 		child_list_t<LogicalType> select_list;
@@ -241,8 +250,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		}
 
 		ExportedTableData exported_data;
-		exported_data.qualified_name =
-		    QualifiedName(Identifier(catalog), info->GetQualifiedName().Schema(), info->Table());
+		exported_data.qualified_name = info->GetQualifiedName();
 
 		exported_data.file_path = info->file_path;
 
@@ -294,7 +302,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	auto &function = copy_function.function;
 	if (function.copy_options) {
 		auto copy_options = GetFullCopyOptionsList(function, CopyOptionMode::READ_ONLY);
-		vector<string> erased_options;
+		vector<Identifier> erased_options;
 		for (auto &entry : options) {
 			if (copy_options.find(entry.first) == copy_options.end()) {
 				erased_options.push_back(entry.first);
@@ -316,7 +324,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	result.plan = std::move(export_node);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }

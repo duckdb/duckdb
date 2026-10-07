@@ -1,0 +1,34 @@
+# name: test/sql/extensions/extension_repositories_lock.test
+# description: Trusted extension repositories cannot be modified while the configuration is locked
+# group: [extensions]
+
+statement ok
+SET extension_repository_directory='{TEST_DIR}/extension_repositories_lock'
+
+statement ok
+SET allow_extension_repositories='allowed'
+
+# create a repository before locking the configuration
+statement ok
+CREATE EXTENSION REPOSITORY acme WITH PREFIX 'http://extensions.acme.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+
+statement ok
+SET lock_configuration=true
+
+# adding a repository would add a new trusted signing key, so it is blocked by the configuration lock
+statement error
+CREATE EXTENSION REPOSITORY evil WITH PREFIX 'http://evil.com' USING PUBLIC KEY 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt9+KeDkWJa7SiBb7AMdXAPV2qpRunztoC2c7DtRmN9+Lq2YQm4rMQmmAQcwyxTxcK8vwPKOiE4mLMwmQMvTty9tL+buREfvg5KJ+FY3Bv05cZYsf7VuYgUDcw41zSEE5W1thh5PiafcrMn7CPF0jN0oFfVvAHB/fAM0yaZGPKs3WYqnHAHa6v/cVMeiWZ/lQORCBqqL2hii1fEiuIqw6AOEoZVsN0/lqm7GfnD899zrzLOPRuP4YFg46drL1UyNdg+4TquJ2OV9kR4CAfdGRexqHFWLmoxkTfnUxJ4yL+gkV57K1H+smEdKrDhDX68pEFM/34E2eVKZoRU/0paxDZQIDAQAB'
+----
+<REGEX>:Invalid Input Error.*configuration has been locked.*
+
+# removing a repository is blocked as well
+statement error
+DROP EXTENSION REPOSITORY acme
+----
+<REGEX>:Invalid Input Error.*configuration has been locked.*
+
+# the repository that existed before the lock is unaffected
+query I
+SELECT repository_name FROM duckdb_extension_repositories() WHERE type='USER_PROVIDED'
+----
+acme

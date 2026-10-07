@@ -1,0 +1,101 @@
+w_substr|sm_type|web_name|30 days|31-60 days|61-90 days|91-120 days|>120 days
+NULL|EXPRESS|site_0|1044|1001|1039|1074|0
+NULL|EXPRESS|site_1|1027|1087|1014|1087|0
+NULL|EXPRESS|site_2|1011|1029|1032|1064|0
+NULL|EXPRESS|site_3|999|1016|1015|1019|0
+NULL|EXPRESS|site_4|1018|991|1042|997|0
+NULL|EXPRESS|site_5|992|1038|1003|1045|0
+NULL|EXPRESS|site_6|1042|1061|990|1026|0
+NULL|LIBRARY|site_0|766|796|799|804|0
+NULL|LIBRARY|site_1|778|820|790|784|0
+NULL|LIBRARY|site_2|727|788|753|811|0
+NULL|LIBRARY|site_3|755|732|791|780|0
+NULL|LIBRARY|site_4|727|825|775|706|0
+NULL|LIBRARY|site_5|765|735|817|784|0
+NULL|LIBRARY|site_6|759|763|780|786|0
+NULL|NEXT DAY|site_0|1001|1030|1025|1089|0
+NULL|NEXT DAY|site_1|999|995|1052|1053|0
+NULL|NEXT DAY|site_2|995|1023|1057|955|0
+NULL|NEXT DAY|site_3|1046|1049|1024|1018|0
+NULL|NEXT DAY|site_4|1057|1021|1001|1014|0
+NULL|NEXT DAY|site_5|1046|990|1002|1009|0
+NULL|NEXT DAY|site_6|986|1006|1080|1043|0
+NULL|OVERNIGHT|site_0|769|753|770|789|0
+NULL|OVERNIGHT|site_1|731|772|765|758|0
+NULL|OVERNIGHT|site_2|819|790|765|787|0
+NULL|OVERNIGHT|site_3|798|748|750|805|0
+NULL|OVERNIGHT|site_4|769|772|790|772|0
+NULL|OVERNIGHT|site_5|804|782|785|771|0
+NULL|OVERNIGHT|site_6|766|830|790|761|0
+NULL|REGULAR|site_0|777|801|782|775|0
+NULL|REGULAR|site_1|795|757|755|813|0
+NULL|REGULAR|site_2|785|772|778|757|0
+NULL|REGULAR|site_3|749|767|761|790|0
+NULL|REGULAR|site_4|769|795|797|813|0
+NULL|REGULAR|site_5|760|774|735|802|0
+NULL|REGULAR|site_6|776|751|807|775|0
+NULL|TWO DAY|site_0|762|724|760|792|0
+NULL|TWO DAY|site_1|748|804|768|796|0
+NULL|TWO DAY|site_2|773|763|809|795|0
+NULL|TWO DAY|site_3|758|833|706|805|0
+NULL|TWO DAY|site_4|773|763|755|783|0
+NULL|TWO DAY|site_5|777|744|751|771|0
+NULL|TWO DAY|site_6|781|742|760|783|0
+Bad cards must make.|EXPRESS|site_0|973|987|1069|1050|0
+Bad cards must make.|EXPRESS|site_1|1004|1006|1111|1026|0
+Bad cards must make.|EXPRESS|site_2|1038|992|1007|1072|0
+Bad cards must make.|EXPRESS|site_3|1060|1028|970|1068|0
+Bad cards must make.|EXPRESS|site_4|988|1017|1065|1009|0
+Bad cards must make.|EXPRESS|site_5|1019|1049|981|1030|0
+Bad cards must make.|EXPRESS|site_6|960|1054|992|1047|0
+Bad cards must make.|LIBRARY|site_0|750|746|786|854|0
+Bad cards must make.|LIBRARY|site_1|783|775|778|758|0
+Bad cards must make.|LIBRARY|site_2|726|786|799|776|0
+Bad cards must make.|LIBRARY|site_3|817|741|741|793|0
+Bad cards must make.|LIBRARY|site_4|798|771|770|827|0
+Bad cards must make.|LIBRARY|site_5|808|821|807|786|0
+Bad cards must make.|LIBRARY|site_6|750|821|768|769|0
+Bad cards must make.|NEXT DAY|site_0|1035|972|1026|1105|0
+Bad cards must make.|NEXT DAY|site_1|1022|1040|1059|1026|0
+Bad cards must make.|NEXT DAY|site_2|1005|976|1022|1059|0
+Bad cards must make.|NEXT DAY|site_3|1099|1031|981|1070|0
+Bad cards must make.|NEXT DAY|site_4|1023|1035|1015|1004|0
+Bad cards must make.|NEXT DAY|site_5|1072|1053|1041|1025|0
+Bad cards must make.|NEXT DAY|site_6|1065|1046|1113|1006|0
+Bad cards must make.|OVERNIGHT|site_0|781|731|753|793|0
+Bad cards must make.|OVERNIGHT|site_1|801|745|785|750|0
+Bad cards must make.|OVERNIGHT|site_2|783|818|757|799|0
+Bad cards must make.|OVERNIGHT|site_3|784|772|798|807|0
+Bad cards must make.|OVERNIGHT|site_4|823|786|790|754|0
+Bad cards must make.|OVERNIGHT|site_5|698|813|755|769|0
+Bad cards must make.|OVERNIGHT|site_6|789|833|802|732|0
+Bad cards must make.|REGULAR|site_0|762|745|756|766|0
+Bad cards must make.|REGULAR|site_1|784|769|793|803|0
+Bad cards must make.|REGULAR|site_2|765|750|735|803|0
+Bad cards must make.|REGULAR|site_3|798|801|784|792|0
+Bad cards must make.|REGULAR|site_4|789|807|808|788|0
+Bad cards must make.|REGULAR|site_5|745|723|771|779|0
+Bad cards must make.|REGULAR|site_6|785|752|815|770|0
+Bad cards must make.|TWO DAY|site_0|781|766|789|792|0
+Bad cards must make.|TWO DAY|site_1|734|769|802|769|0
+Bad cards must make.|TWO DAY|site_2|811|771|719|747|0
+Bad cards must make.|TWO DAY|site_3|777|797|787|806|0
+Bad cards must make.|TWO DAY|site_4|792|780|745|751|0
+Bad cards must make.|TWO DAY|site_5|787|755|799|750|0
+Bad cards must make.|TWO DAY|site_6|774|801|765|774|0
+Conventional childr|EXPRESS|site_0|970|1089|1018|1039|0
+Conventional childr|EXPRESS|site_1|1062|1002|995|1049|0
+Conventional childr|EXPRESS|site_2|1050|1040|1022|992|0
+Conventional childr|EXPRESS|site_3|1020|976|1039|1014|0
+Conventional childr|EXPRESS|site_4|1038|1074|1058|1049|0
+Conventional childr|EXPRESS|site_5|1038|1033|1034|1029|0
+Conventional childr|EXPRESS|site_6|978|1040|1096|1099|0
+Conventional childr|LIBRARY|site_0|710|783|785|806|0
+Conventional childr|LIBRARY|site_1|804|798|758|794|0
+Conventional childr|LIBRARY|site_2|741|750|754|786|0
+Conventional childr|LIBRARY|site_3|806|794|783|829|0
+Conventional childr|LIBRARY|site_4|767|742|758|829|0
+Conventional childr|LIBRARY|site_5|723|760|803|779|0
+Conventional childr|LIBRARY|site_6|756|753|757|803|0
+Conventional childr|NEXT DAY|site_0|956|1025|1047|1007|0
+Conventional childr|NEXT DAY|site_1|1033|1044|1034|1042|0

@@ -2,7 +2,6 @@
 #include "core_functions/scalar/map_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/types/value_map.hpp"
@@ -165,8 +164,10 @@ ScalarFunctionSet MapFun::GetFunctions() {
 
 	auto key_type = LogicalType::TEMPLATE("K");
 	auto val_type = LogicalType::TEMPLATE("V");
-	ScalarFunction value_func({LogicalType::LIST(key_type), LogicalType::LIST(val_type)},
-	                          LogicalType::MAP(key_type, val_type), MapFunction);
+	ScalarFunction value_func({}, LogicalType::MAP(key_type, val_type), MapFunction);
+	value_func.GetSignature()
+	    .AddParameter("keys", LogicalType::LIST(key_type))
+	    .AddParameter("values", LogicalType::LIST(val_type));
 	value_func.SetFallible();
 	value_func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 

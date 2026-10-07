@@ -1,0 +1,60 @@
+From 8fcd2be22cde1a69629a5e85839abbf8411f6f40 Mon Sep 17 00:00:00 2001
+From: Copilot <copilot@localhost>
+Date: Fri, 28 Aug 2026 13:14:08 +0200
+Subject: [PATCH 2/8] Complete automatic transform compatibility
+
+
+diff --git a/third_party/httplib/httplib.hpp b/third_party/httplib/httplib.hpp
+index 314804d..6ed12ad 100644
+--- a/third_party/httplib/httplib.hpp
++++ b/third_party/httplib/httplib.hpp
+@@ -11,6 +11,8 @@
+ #define CPPHTTPLIB_VERSION "0.53.1"
+ #define CPPHTTPLIB_VERSION_NUM "0x003501"
+ 
++#include "duckdb/common/helper.hpp"
++#include "duckdb/common/mutex.hpp"
+ #include "duckdb/common/re2_regex.hpp"
+ #include "duckdb/common/string.hpp"
+ #include "duckdb/original/std/memory.hpp"
+@@ -7837,8 +7839,9 @@ inline bool parse_status_line(const char *line, std::string &version,
+   REGEX_SCOPE const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+ #endif
+ 
+-  std::cmatch m;
+-  if (!RegexMatch(line, m, re)) { return false; }
++  Match m;
++  auto line_end = line + std::strlen(line);
++  if (!RegexMatch(line, line_end, m, re)) { return false; }
+   version = std::string(m[1]);
+   status = std::stoi(std::string(m[2]));
+   reason = std::string(m[3]);
+@@ -9574,9 +9577,8 @@ inline bool parse_www_authenticate(const Response &res,
+         return false;
+       } else if (type == "Digest") {
+         s = s.substr(pos + 1);
+-        auto beg = std::sregex_iterator(s.begin(), s.end(), re);
+-        for (auto i = beg; i != std::sregex_iterator(); ++i) {
+-          const auto &m = *i;
++        auto matches = duckdb_re2::RegexFindAll(s, re);
++        for (auto &m : matches) {
+           auto key = s.substr(static_cast<size_t>(m.position(1)),
+                               static_cast<size_t>(m.length(1)));
+           auto val = m.length(2) > 0
+@@ -12167,14 +12169,14 @@ inline Server &Server::Options(const std::string &pattern, Handler handler) {
+ inline Server &Server::WebSocket(const std::string &pattern,
+                                  WebSocketHandler handler) {
+   websocket_handlers_.push_back(
+-      {Regex(pattern), std::move(handler), nullptr});
++      {make_matcher(pattern), std::move(handler), nullptr});
+   return *this;
+ }
+ 
+ inline Server &Server::WebSocket(const std::string &pattern,
+                                  WebSocketHandler handler,
+                                  SubProtocolSelector sub_protocol_selector) {
+-  websocket_handlers_.push_back({Regex(pattern), std::move(handler),
++  websocket_handlers_.push_back({make_matcher(pattern), std::move(handler),
+                                  std::move(sub_protocol_selector)});
+   return *this;
+ }

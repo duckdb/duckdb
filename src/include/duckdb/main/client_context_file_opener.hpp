@@ -22,8 +22,8 @@ public:
 	}
 
 	Logger &GetLogger() const override;
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) override;
-	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override;
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result, FileOpenerInfo &info) override;
+	SettingLookupResult TryGetCurrentSetting(const Identifier &key, Value &result) override;
 
 	optional_ptr<ClientContext> TryGetClientContext() override {
 		return &context;

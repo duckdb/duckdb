@@ -17,6 +17,7 @@ struct FileHandle;
 struct BaseRequest;
 struct HTTPResponse;
 class PhysicalOperator;
+enum class PhysicalOperatorType : uint8_t;
 class AttachedDatabase;
 class RowGroup;
 struct DataTableInfo;
@@ -106,6 +107,9 @@ public:
 
 	static string ConstructLogMessage(const PhysicalOperator &op, const string &class_p, const string &event,
 	                                  const vector<pair<string, string>> &info);
+	static string ConstructLogMessage(PhysicalOperatorType operator_type,
+	                                  const vector<pair<string, string>> &parameters, const string &class_p,
+	                                  const string &event, const vector<pair<string, string>> &info);
 };
 
 class MetricsLogType : public LogType {
@@ -194,6 +198,19 @@ public:
 	static LogicalType GetLogType();
 
 	static string ConstructLogMessage(const string &pool, idx_t task_count);
+};
+
+class ProgressVerificationLogType : public LogType {
+public:
+	static constexpr const char *NAME = "ProgressVerification";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	ProgressVerificationLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const string &invariant, const string &operator_name, const string &pipeline,
+	                                  const string &detail);
 };
 
 class ExternalResourceLogType : public LogType {

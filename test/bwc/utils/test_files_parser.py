@@ -579,7 +579,7 @@ class LoadingStats:
     def __init__(self):
         self.skipped_count = 0
         self.skipped_count_per_reason = {}
-        self.start_time = time.time()
+        self.start_time = time.monotonic()
         self.nb_steps = 0
         self.nb_tests = 0
         self.nb_cached_queries = 0
@@ -611,7 +611,7 @@ class LoadingStats:
 
     def log_stats(self):
         logger.info(
-            f"Loaded {self.nb_tests} test files (with {self.nb_steps} steps) in {time.time() - self.start_time:.2f}s"
+            f"Loaded {self.nb_tests} test files (with {self.nb_steps} steps) in {time.monotonic() - self.start_time:.2f}s"
         )
         logger.info(
             f"  Cached queries: {self.nb_cached_queries} ({(self.nb_cached_queries/self.nb_tests*100) if self.nb_tests > 0 else 0:.2f}%)"

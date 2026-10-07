@@ -14,10 +14,10 @@ SELECT d+1 FROM decimals
 ----
 99000000000000001.0
 
-statement error
+query I
 SELECT d+1000000000000000.0 FROM decimals
 ----
-<REGEX>:Out of Range Error.*Overflow in addition of DECIMAL.*
+100000000000000000.0
 
 # subtraction
 query I
@@ -25,10 +25,10 @@ SELECT -1-d FROM decimals
 ----
 -99000000000000001.0
 
-statement error
+query I
 SELECT -1000000000000000.0-d FROM decimals
 ----
-<REGEX>:Out of Range Error.*Overflow in subtract of DECIMAL.*
+-100000000000000000.0
 
 # multiplication
 query I
@@ -40,3 +40,8 @@ statement error
 SELECT 2*d FROM decimals
 ----
 <REGEX>:Out of Range Error.*Overflow in multiplication of DECIMAL.*
+
+query II
+SELECT typeof(d+1000000000000000.0), typeof(-1000000000000000.0-d) FROM decimals
+----
+DECIMAL(19,1)	DECIMAL(19,1)

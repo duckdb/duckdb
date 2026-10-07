@@ -18,11 +18,23 @@ select column_name, column_type from (describe select * from generate_series(1, 
 ----
 i	BIGINT
 
+# range behaves like generate_series, even though Postgres does not have it
 query I
 select r from range(1, 3) r;
 ----
-{'range': 1}
-{'range': 2}
+1
+2
+
+query TT
+select column_name, column_type from (describe select * from range(1, 3) r);
+----
+r	BIGINT
+
+query I
+select r.range from range(1, 3) r;
+----
+1
+2
 
 query I
 select i from range(1, 3) r(i);
@@ -46,3 +58,84 @@ select column_name, column_type from (describe select * from unnest([1, 2]) t(i)
 ----
 i	INTEGER
 
+# the original column name remains available as a column alias
+query I
+select i.generate_series from generate_series(1, 2) i;
+----
+1
+2
+
+query I
+select i.unnest from unnest([1, 2]) i;
+----
+1
+2
+
+query I
+select r.unnest from unnest(range(0, 3)) as r;
+----
+0
+1
+2
+
+query I
+select i.i from unnest([1, 2]) i;
+----
+1
+2
+
+# the name of the result column follows the name that is used to reference it
+query TT
+select column_name, column_type from (describe select i from unnest([1, 2]) i);
+----
+i	INTEGER
+
+query TT
+select column_name, column_type from (describe select i.unnest from unnest([1, 2]) i);
+----
+unnest	INTEGER
+
+# star expansion does not emit the original column name
+query TT
+select column_name, column_type from (describe select i.* from unnest([1, 2]) i);
+----
+i	INTEGER
+
+# explicit column aliases take precedence - the original name is not kept around
+statement error
+select t.unnest from unnest([1, 2]) t(v);
+----
+<REGEX>:Binder Error:.*
+
+# the alias can be identical to the original column name
+query I
+select unnest.unnest from unnest([1, 2]) unnest;
+----
+1
+2
+
+# lateral unnest
+statement ok
+create table lists as select * from (values (1, [10, 20]), (2, [30])) t(id, l);
+
+query II
+select lst.id, x.unnest from lists lst, unnest(lst.l) as x order by 1, 2;
+----
+1	10
+1	20
+2	30
+
+# with ordinality
+query II
+select g.generate_series, g.ordinality from generate_series(1, 3) with ordinality as g;
+----
+1	1
+2	2
+3	3
+
+query I
+select g from generate_series(1, 3) with ordinality as g;
+----
+1
+2
+3

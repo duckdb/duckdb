@@ -1,0 +1,17 @@
+# name: test/sql/copy/csv/test_encoding_straddle_compressed.test
+# description: A multi-byte character straddling the encoded-buffer boundary must survive when a compressed file is read twice (duckdb/duckdb#20598)
+# group: [csv]
+
+require encodings
+
+# Compressed files are read once for sniffing and once for scanning, so the encoder has to start over
+
+query I
+SELECT right(value, 8) FROM read_csv('{DATA_DIR}/csv/encodings/straddle_cp932_1k.csv.gz', header=true, all_varchar=true, encoding='ibm-943_P15A-2003', buffer_size=1024) WHERE key='z'
+----
+ppp市tail
+
+query I
+SELECT right(value, 8) FROM read_csv('{DATA_DIR}/csv/encodings/straddle_gb18030_2k.csv.gz', header=true, all_varchar=true, encoding='gb18030', buffer_size=1024) WHERE key='z'
+----
+ppp¡tail

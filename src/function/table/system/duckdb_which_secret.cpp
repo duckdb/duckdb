@@ -25,7 +25,7 @@ struct DuckDBWhichSecretBindData : public TableFunctionData {
 };
 
 static unique_ptr<FunctionData> DuckDBWhichSecretBind(ClientContext &context, TableFunctionBindInput &input,
-                                                      vector<LogicalType> &return_types, vector<string> &names) {
+                                                      vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -67,7 +67,10 @@ void DuckDBWhichSecretFunction(ClientContext &context, TableFunctionInput &data_
 }
 
 void DuckDBWhichSecretFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("which_secret", {duckdb::LogicalType::VARCHAR, duckdb::LogicalType::VARCHAR},
+	set.AddFunction(TableFunction("which_secret",
+	                              FunctionSignature()
+	                                  .AddPositionalOnly("path", LogicalType::VARCHAR)
+	                                  .AddPositionalOnly("type", LogicalType::VARCHAR),
 	                              DuckDBWhichSecretFunction, DuckDBWhichSecretBind, DuckDBWhichSecretInit));
 }
 

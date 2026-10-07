@@ -1,4 +1,5 @@
 #include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/transaction/commit_state.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -28,17 +29,22 @@
 namespace duckdb {
 
 TransactionData::TransactionData(DuckTransaction &transaction_p) // NOLINT
-    : transaction(&transaction_p), transaction_id(transaction_p.transaction_id), start_time(transaction_p.start_time) {
+    : transaction(&transaction_p), view(transaction_p.GetSnapshotView()) {
 }
-TransactionData::TransactionData(transaction_t transaction_id_p, transaction_t start_time_p)
-    : transaction(nullptr), transaction_id(transaction_id_p), start_time(start_time_p) {
+TransactionData::TransactionData(transaction_t transaction_id_p, VisibilityBound visibility_bound_p)
+    : transaction(nullptr), view(transaction_id_p, visibility_bound_p) {
 }
 
 DuckTransaction::DuckTransaction(DuckTransactionManager &manager, ClientContext &context_p, transaction_t start_time,
-                                 transaction_t transaction_id, idx_t catalog_version_p)
-    : Transaction(manager, context_p), start_time(start_time), transaction_id(transaction_id), commit_id(0),
+                                 SnapshotView view_p, idx_t catalog_version_p)
+    : Transaction(manager, context_p), start_time(start_time), view(view_p), commit_id(0),
       catalog_version(catalog_version_p), awaiting_cleanup(false), undo_buffer(*this, context_p),
       storage(make_uniq<LocalStorage>(context_p, *this)) {
+	D_ASSERT(IsCommitted(start_time) && !IsCommitted(view.transaction_id));
+}
+
+SnapshotView DuckTransaction::GetSnapshotView() const {
+	return view;
 }
 
 DuckTransaction::~DuckTransaction() {
@@ -138,7 +144,7 @@ UndoBufferReference DuckTransaction::CreateUpdateInfo(DuckTableEntry &table_entr
 	idx_t alloc_size = UpdateInfo::GetAllocSize(type_size);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::UPDATE_TUPLE, alloc_size);
 	auto &update_info = UpdateInfo::Get(undo_entry);
-	UpdateInfo::Initialize(update_info, table_entry, transaction_id, row_group_start);
+	UpdateInfo::Initialize(update_info, table_entry, GetTransactionId(), row_group_start);
 	return undo_entry;
 }
 
@@ -206,6 +212,21 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 	return true;
 }
 
+ErrorData DuckTransaction::PreFlushOptimisticBlocks(AttachedDatabase &db) noexcept {
+	ErrorData error;
+	if (!ShouldWriteToWAL(db)) {
+		return error;
+	}
+	try {
+		storage->FlushBulkAppendBlocksAndSync(db);
+	} catch (std::exception &ex) {
+		// fail the commit: the flush machinery cannot safely be re-run after an error, and a failed
+		// fsync must not be retried (the retry can succeed without the data being durable)
+		error = ErrorData(ex);
+	}
+	return error;
+}
+
 ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &db,
                                       unique_ptr<StorageCommitState> &commit_state) noexcept {
 	ErrorData error_data;
@@ -222,13 +243,11 @@ ErrorData DuckTransaction::WriteToWAL(ClientContext &context, AttachedDatabase &
 
 		auto wal_timer = profiler.StartTimer<MetricStorageWriteToWALLatency>();
 		undo_buffer.WriteToWAL(*wal, commit_state.get());
-		if (commit_state->HasRowGroupData()) {
-			// if we have optimistically written any data AND we are writing to the WAL, we have written references to
-			// optimistically written blocks
-			// hence we need to ensure those optimistically written blocks are persisted
-			storage_manager.GetBlockManager().FileSync();
-		}
 		wal_timer.EndTimer();
+
+		// no FileSync is required here: any optimistically written blocks that the WAL references
+		// have already been synced by FlushBulkAppendBlocksAndSync, before the commit locks were taken
+		D_ASSERT(!commit_state->HasRowGroupData() || storage->SyncedFlushedBlocks());
 
 	} catch (std::exception &ex) {
 		// Call RevertCommit() outside this try-catch as it itself may throw
@@ -285,7 +304,7 @@ ErrorData DuckTransaction::Commit(AttachedDatabase &db, CommitInfo &commit_info,
 	}
 
 	try {
-		undo_buffer.RevertCommit(iterator_state, this->transaction_id);
+		undo_buffer.RevertCommit(iterator_state, GetTransactionId());
 		if (!db.IsSystem() && !db.IsTemporary() &&
 		    Settings::Get<DebugForceCommitRevertFailureSetting>(db.GetDatabase())) {
 			throw IOException("Forced RevertCommit failure (debug_force_commit_revert_failure)");
@@ -321,8 +340,8 @@ ErrorData DuckTransaction::Rollback() {
 	}
 }
 
-void DuckTransaction::Cleanup(transaction_t lowest_active_transaction) {
-	undo_buffer.Cleanup(lowest_active_transaction);
+void DuckTransaction::Cleanup(VisibilityBound lowest_visibility_bound) {
+	undo_buffer.Cleanup(lowest_visibility_bound);
 }
 
 void DuckTransaction::SetModifications(DatabaseModificationType type) {

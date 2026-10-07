@@ -1,0 +1,45 @@
+# name: test/sql/storage/partial_delete_checkpoint_mask.test
+# description: Partial-delete bitmasks survive a restart without re-materializing per-row arrays
+# group: [storage]
+
+# the BASE_TABLE byte thresholds below are calibrated for the default 256KB block size
+require block_size 262144
+
+load {TEST_DIR}/partial_delete_checkpoint_mask.db
+
+statement ok
+CREATE TABLE tbl AS SELECT i FROM range(1228800) t(i)
+
+statement ok
+CHECKPOINT
+
+query I
+DELETE FROM tbl WHERE i % 2 = 0
+----
+614400
+
+statement ok
+CHECKPOINT
+
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+614400	1	1228799
+
+restart
+
+# after reopening, deleted vectors must load straight into bitmasks - memory must not rebound to arrays
+query III
+SELECT COUNT(*), MIN(i), MAX(i) FROM tbl
+----
+614400	1	1228799
+
+query I
+SELECT COUNT(*) FILTER (WHERE i % 2 = 0) FROM tbl
+----
+0
+
+query I
+SELECT COALESCE(SUM(memory_usage_bytes), 0) < 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true

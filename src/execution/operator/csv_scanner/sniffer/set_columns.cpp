@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-SetColumns::SetColumns(const vector<LogicalType> *types_p, const vector<string> *names_p)
+SetColumns::SetColumns(const vector<LogicalType> *types_p, const vector<Identifier> *names_p)
     : types(types_p), names(names_p) {
 	if (!types) {
 		D_ASSERT(!types && !names);

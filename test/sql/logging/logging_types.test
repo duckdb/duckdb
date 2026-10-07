@@ -13,14 +13,24 @@ statement ok
 FROM '{TEST_DIR}/par.csv'
 
 query IIIIIIII
-SELECT type, log_level, scope, fs, parse_filename(path), op, bytes, pos FROM duckdb_logs_parsed('FileSystem') ORDER BY timestamp
+SELECT type, log_level, scope, fs, parse_filename(path), op, bytes, pos
+FROM duckdb_logs_parsed('FileSystem')
+WHERE op != 'WRITE'
+ORDER BY timestamp
 ----
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	OPEN	NULL	NULL
-FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	WRITE	4	0
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	CLOSE	NULL	NULL
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	OPEN	NULL	NULL
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	READ	4	0
 FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	CLOSE	NULL	NULL
+
+query IIIIIIIII
+SELECT type, log_level, scope, fs, parse_filename(path), op, sum(bytes), min(pos), max(pos + bytes)
+FROM duckdb_logs_parsed('FileSystem')
+WHERE op = 'WRITE'
+GROUP BY ALL
+----
+FileSystem	TRACE	CONNECTION	LocalFileSystem	par.csv	WRITE	4	0	4
 
 statement ok
 CALL truncate_duckdb_logs()
@@ -38,4 +48,3 @@ QueryLog	INFO	CONNECTION	SELECT 'hallo' as value;
 
 statement ok
 SELECT type, log_level, scope, message FROM duckdb_logs WHERE type='QueryLog';
-

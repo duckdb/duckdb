@@ -82,3 +82,28 @@ select * from test2 where date_trunc('hour', d) >= '2025-11-02T02:30:00+00'::TIM
 ----
 2025-11-02 00:30:00-02:30
 2025-11-02 01:30:00-03:30
+
+#
+# check comparisons with infinity
+#
+
+statement ok
+create table infinity_tz_test(d TIMESTAMPTZ);
+
+statement ok
+insert into infinity_tz_test values ('-infinity'), ('2025-01-01'), ('infinity'), (NULL);
+
+query IIIIII
+select date_trunc('day', d) = 'infinity'::TIMESTAMPTZ,
+       date_trunc('day', d) != 'infinity'::TIMESTAMPTZ,
+       date_trunc('day', d) < 'infinity'::TIMESTAMPTZ,
+       date_trunc('day', d) <= 'infinity'::TIMESTAMPTZ,
+       date_trunc('day', d) > 'infinity'::TIMESTAMPTZ,
+       date_trunc('day', d) >= 'infinity'::TIMESTAMPTZ
+from infinity_tz_test
+order by d;
+----
+false	true	true	true	false	false
+false	true	true	true	false	false
+true	false	false	true	false	true
+NULL	NULL	NULL	NULL	NULL	NULL

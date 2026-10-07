@@ -1,0 +1,142 @@
+# name: test/sql/json/table/read_geojson_pseudo_columns.test
+# description: Read the Feature-level "id" and "bbox" pseudo-columns alongside conflicting properties
+# group: [table]
+
+require json
+
+# The Feature's own members come first and claim their names, so a property that is also called "id" is the one
+# that gets deduplicated
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/pseudo_columns.geojsonl'));
+----
+geometry	GEOMETRY
+id	VARCHAR
+bbox	DOUBLE[]
+id_1	VARCHAR
+name	VARCHAR
+
+query IIIII
+SELECT ST_AsText(geometry), id, bbox, id_1, name
+FROM read_json('data/json/geojson/pseudo_columns.geojsonl') ORDER BY id;
+----
+POINT (1 2)	FEATURE-1	[0.0, 0.0, 1.0, 1.0]	PROP-1	a
+POINT (3 4)	FEATURE-2	[2.0, 2.0, 3.0, 3.0]	PROP-2	b
+
+# The two are resolved by position, not by name, so neither shadows the other
+query II
+SELECT id, id_1 FROM read_json('data/json/geojson/pseudo_columns.geojsonl') ORDER BY id;
+----
+FEATURE-1	PROP-1
+FEATURE-2	PROP-2
+
+# Projection pushdown of just the property, and just the pseudo-column
+query I
+SELECT id_1 FROM read_json('data/json/geojson/pseudo_columns.geojsonl') ORDER BY id_1;
+----
+PROP-1
+PROP-2
+
+query I
+SELECT id FROM read_json('data/json/geojson/pseudo_columns.geojsonl') ORDER BY id;
+----
+FEATURE-1
+FEATURE-2
+
+query I
+SELECT bbox[1] FROM read_json('data/json/geojson/pseudo_columns.geojsonl') ORDER BY 1;
+----
+0.0
+2.0
+
+# Properties that collide are deduplicated with a suffix, and because the suffixed name can itself collide, the
+# deduplication is applied repeatedly until the name is unique
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/pseudo_columns_nasty.geojsonl'));
+----
+geometry	GEOMETRY
+id	VARCHAR
+bbox	DOUBLE[]
+id_1	VARCHAR
+id_1_1	VARCHAR
+name	VARCHAR
+geometry_1	VARCHAR
+
+# Every column still reads from the right place despite the renaming
+query IIIIII
+SELECT ST_AsText(geometry), id, id_1, id_1_1, name, geometry_1
+FROM read_json('data/json/geojson/pseudo_columns_nasty.geojsonl');
+----
+POINT (1 2)	FEATURE	P-collides	P-collides-again	P-plain	P-geom
+
+# A FeatureCollection without any id/bbox members gets no pseudo-columns
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/features.geojson'));
+----
+geometry	GEOMETRY
+name	VARCHAR
+pop	BIGINT
+area	DOUBLE
+
+# COPY ... FROM resolves the pseudo-columns by the same names. A target column called "id" reads the Feature's
+# own id, matching what read_json infers.
+statement ok
+CREATE TABLE features (geometry GEOMETRY, id VARCHAR, name VARCHAR);
+
+statement ok
+COPY features FROM 'data/json/geojson/pseudo_columns.geojsonl' (FORMAT GEOJSON);
+
+query III
+SELECT ST_AsText(geometry), id, name FROM features ORDER BY id;
+----
+POINT (1 2)	FEATURE-1	a
+POINT (3 4)	FEATURE-2	b
+
+statement ok
+CREATE TABLE boxes (geometry GEOMETRY, bbox DOUBLE[]);
+
+statement ok
+COPY boxes FROM 'data/json/geojson/pseudo_columns.geojsonl' (FORMAT GEOJSON);
+
+query II
+SELECT ST_AsText(geometry), bbox FROM boxes ORDER BY bbox;
+----
+POINT (1 2)	[0.0, 0.0, 1.0, 1.0]
+POINT (3 4)	[2.0, 2.0, 3.0, 3.0]
+
+# When the Features have no id of their own, a column named "id" reads the "id" property instead - which is
+# where auto-detection finds it too
+query II
+SELECT column_name, column_type
+FROM (DESCRIBE SELECT * FROM read_json('data/json/geojson/property_id.geojsonl'));
+----
+geometry	GEOMETRY
+id	VARCHAR
+name	VARCHAR
+
+statement ok
+CREATE TABLE property_ids (geometry GEOMETRY, id VARCHAR, name VARCHAR);
+
+statement ok
+COPY property_ids FROM 'data/json/geojson/property_id.geojsonl' (FORMAT GEOJSON);
+
+query III
+SELECT ST_AsText(geometry), id, name FROM property_ids ORDER BY id;
+----
+POINT (1 2)	PROP-1	a
+POINT (3 4)	PROP-2	b
+
+# The same target table against a file that does have Feature-level ids reads those instead
+statement ok
+CREATE TABLE feature_ids (geometry GEOMETRY, id VARCHAR, name VARCHAR);
+
+statement ok
+COPY feature_ids FROM 'data/json/geojson/pseudo_columns.geojsonl' (FORMAT GEOJSON);
+
+query III
+SELECT ST_AsText(geometry), id, name FROM feature_ids ORDER BY id;
+----
+POINT (1 2)	FEATURE-1	a
+POINT (3 4)	FEATURE-2	b

@@ -11,7 +11,6 @@ if(${_index} GREATER -1)
   add_subdirectory(tpch)
 endif()
 
-add_extension_definitions()
 set(BENCHMARK_ROOT_DIRECTORY
     ""
     CACHE
@@ -25,8 +24,14 @@ else()
   add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 endif()
 
-add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp
-                                ${BENCHMARK_OBJECT_FILES})
+add_executable(
+  benchmark_runner
+  benchmark_runner.cpp interpreted_benchmark.cpp
+  $<TARGET_OBJECTS:test_debug_fs_extension> ${BENCHMARK_OBJECT_FILES})
+
+target_include_directories(
+  benchmark_runner
+  PRIVATE ${PROJECT_SOURCE_DIR}/test/extension/debug_fs/include)
 
 target_link_libraries(benchmark_runner duckdb_static imdb test_helpers)
 link_extension_libraries(benchmark_runner "")

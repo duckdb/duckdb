@@ -1,6 +1,5 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
-#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
@@ -209,8 +208,7 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 					const auto aggr_offset = layout.GetOffsets()[layout.ColumnCount() + aggr_idx];
 					auto &aggr_fun = layout.GetAggregates()[aggr_idx];
 					for (idx_t i = 0; i < next; i++) {
-						duckdb::FastMemset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0',
-						                   aggr_fun.payload_size);
+						memset(base_row_ptr + i * layout.GetRowWidth() + aggr_offset, '\0', aggr_fun.payload_size);
 					}
 				}
 			}
@@ -382,22 +380,13 @@ void TemplatedSortKeySetPayload(const data_ptr_t row_locations[], const idx_t of
 void SortKeySetPayload(const data_ptr_t row_locations[], const idx_t offset, const idx_t count,
                        const SortKeyPayloadState &sort_key_payload_state) {
 	switch (sort_key_payload_state.sort_key_type) {
-	case SortKeyType::PAYLOAD_FIXED_16:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_16>(row_locations, offset, count,
-		                                                          sort_key_payload_state.sort_key_chunk_state);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		TemplatedSortKeySetPayload<SortKeyType::SORT_KEY_TYPE>(row_locations, offset, count,                           \
+		                                                       sort_key_payload_state.sort_key_chunk_state);           \
 		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_24>(row_locations, offset, count,
-		                                                          sort_key_payload_state.sort_key_chunk_state);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_FIXED_32>(row_locations, offset, count,
-		                                                          sort_key_payload_state.sort_key_chunk_state);
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		TemplatedSortKeySetPayload<SortKeyType::PAYLOAD_VARIABLE_32>(row_locations, offset, count,
-		                                                             sort_key_payload_state.sort_key_chunk_state);
-		break;
+		DUCKDB_FOR_EACH_PAYLOAD_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SortKeySetPayload for %s",
 		                              EnumUtil::ToString(sort_key_payload_state.sort_key_type));

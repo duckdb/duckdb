@@ -1,0 +1,335 @@
+module: expression
+#
+# Read-only inspection of bound expressions: the expression trees the engine builds once a query has been bound,
+# with every column and function resolved. The engine hands them to callbacks that may want to look inside a
+# predicate, e.g. a table function offered a filter to push down (see `[[table_function_set_filter_pushdown_callback]]`).
+#
+# A bound expression is a tree. Every node has a type (`[[expression_get_type]]`), a return type
+# (`[[expression_get_return_type]]`) and zero or more children (`[[expression_get_child]]`); a few node types carry
+# one extra piece of information reachable through a type-specific accessor: the value of a constant, the column a
+# column reference points at, the name of a function or the mode of a cast.
+#
+# The surface deliberately covers only the node types a filter predicate can be made of. A node of any other type
+# reports `EXPRESSION_TYPE_INVALID`: its children can still be walked, but nothing else about it is exposed, and a
+# callback that meets one should leave the predicate to the engine.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Enums
+#-----------------------------------------------------------------------------------------------------------------------
+enums:
+  EXPRESSION_TYPE:
+    description: |
+      The type of a bound expression node. The values mirror the engine's own expression types, restricted to the
+      node types a filter predicate can contain; every other node type is reported as `EXPRESSION_TYPE_INVALID`.
+
+      Comparisons, `BETWEEN` and casts are regular scalar function calls once bound: they have the function's
+      children and name, and only their type tells them apart from any other function. A `CAST` therefore has one
+      child, the value being cast, and its target type is the node's return type.
+    values:
+      EXPRESSION_TYPE_INVALID:
+        value: 0
+        description: A node type this API does not model. Its children can still be walked.
+      EXPRESSION_TYPE_OPERATOR_CAST:
+        value: 12
+        description: A cast. One child; the target type is the node's return type and `[[expression_cast_get_mode]]` tells a `TRY_CAST` apart.
+      EXPRESSION_TYPE_OPERATOR_NOT:
+        value: 13
+        description: Logical `NOT`. One child.
+      EXPRESSION_TYPE_OPERATOR_IS_NULL:
+        value: 14
+        description: '`IS NULL`. One child.'
+      EXPRESSION_TYPE_OPERATOR_IS_NOT_NULL:
+        value: 15
+        description: '`IS NOT NULL`. One child.'
+      EXPRESSION_TYPE_COMPARE_EQUAL:
+        value: 25
+        description: '`=`. Two children.'
+      EXPRESSION_TYPE_COMPARE_NOTEQUAL:
+        value: 26
+        description: '`<>`. Two children.'
+      EXPRESSION_TYPE_COMPARE_LESSTHAN:
+        value: 27
+        description: '`<`. Two children.'
+      EXPRESSION_TYPE_COMPARE_GREATERTHAN:
+        value: 28
+        description: '`>`. Two children.'
+      EXPRESSION_TYPE_COMPARE_LESSTHANOREQUALTO:
+        value: 29
+        description: '`<=`. Two children.'
+      EXPRESSION_TYPE_COMPARE_GREATERTHANOREQUALTO:
+        value: 30
+        description: '`>=`. Two children.'
+      EXPRESSION_TYPE_COMPARE_IN:
+        value: 35
+        description: '`IN`. The first child is the value tested, the remaining children are the candidates.'
+      EXPRESSION_TYPE_COMPARE_NOT_IN:
+        value: 36
+        description: '`NOT IN`. The first child is the value tested, the remaining children are the candidates.'
+      EXPRESSION_TYPE_COMPARE_DISTINCT_FROM:
+        value: 37
+        description: '`IS DISTINCT FROM`. Two children.'
+      EXPRESSION_TYPE_COMPARE_BETWEEN:
+        value: 38
+        description: '`BETWEEN`. Three children: the value tested, the lower bound and the upper bound.'
+      EXPRESSION_TYPE_COMPARE_NOT_DISTINCT_FROM:
+        value: 40
+        description: '`IS NOT DISTINCT FROM`. Two children.'
+      EXPRESSION_TYPE_CONJUNCTION_AND:
+        value: 50
+        description: Logical `AND`. Two or more children.
+      EXPRESSION_TYPE_CONJUNCTION_OR:
+        value: 51
+        description: Logical `OR`. Two or more children.
+      EXPRESSION_TYPE_VALUE_CONSTANT:
+        value: 75
+        description: A constant. No children; read it with `[[expression_constant_get_value]]`.
+      EXPRESSION_TYPE_VALUE_PARAMETER:
+        value: 76
+        description: A prepared statement parameter whose value is not known yet. No children.
+      EXPRESSION_TYPE_BOUND_FUNCTION:
+        value: 141
+        description: A call to a scalar function other than the ones listed above. The children are its arguments; read the name with `[[expression_function_get_name]]`.
+      EXPRESSION_TYPE_CASE_EXPR:
+        value: 150
+        description: A `CASE` expression. The children are each `WHEN` condition followed by its `THEN` result, then the `ELSE` result.
+      EXPRESSION_TYPE_OPERATOR_COALESCE:
+        value: 152
+        description: '`COALESCE`. One or more children.'
+      EXPRESSION_TYPE_BOUND_COLUMN_REF:
+        value: 228
+        description: A reference to a column. No children; read it with `[[expression_column_ref_get_index]]`.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  expression:
+    description: |
+      A borrowed opaque handle to a node of a bound expression tree. Read-only and owned by the engine: valid only
+      for the duration of the callback that handed it out, and never destroyed by the caller. Child nodes borrowed
+      via `[[expression_get_child]]` share their parent's lifetime.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Every Node
+  #---------------------------------------------------------------------------------------------------------------------
+  expression_get_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the type of an expression node.
+
+      The type decides which of the type-specific accessors apply, and what the node's children mean; see
+      `EXPRESSION_TYPE`. A node of a type this API does not model reports `EXPRESSION_TYPE_INVALID`.
+    parameters:
+      expression:
+        type: expression
+        description: The expression node.
+      type:
+        type: EXPRESSION_TYPE
+        indirection: 1
+        kind: OUT
+        description: Receives the node type.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  expression_get_return_type:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the logical type the expression node evaluates to.
+
+      For a cast this is the target type. The returned type is owned by the caller and must be destroyed via
+      `[[logical_type_destroy]]`.
+    parameters:
+      expression:
+        type: expression
+        description: The expression node.
+      type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the owned logical type.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  expression_get_child_count:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the number of child nodes of an expression node.
+
+      Works for every node type, including `EXPRESSION_TYPE_INVALID`. Constants, parameters and column references
+      have no children.
+    parameters:
+      expression:
+        type: expression
+        description: The expression node.
+      count:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the number of children.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  expression_get_child:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Retrieves a child node of an expression node by index.
+
+      Fails if the index is out of bounds. Children are ordered as the node type describes (see
+      `EXPRESSION_TYPE`). The child is borrowed and shares the lifetime of its parent.
+    parameters:
+      expression:
+        type: expression
+        description: The expression node.
+      index:
+        type: idx
+        description: The index of the child to retrieve.
+      child:
+        type: expression
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives the borrowed child node.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Type-Specific Accessors
+  #---------------------------------------------------------------------------------------------------------------------
+  expression_constant_get_value:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the value of a constant node.
+
+      Fails if the node is not of type `EXPRESSION_TYPE_VALUE_CONSTANT`. The returned value is owned by the caller
+      and must be destroyed via `[[value_destroy]]`.
+    parameters:
+      expression:
+        type: expression
+        description: The constant node.
+      value:
+        type: value
+        indirection: 1
+        kind: OUT
+        description: Receives the owned constant value.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  expression_column_ref_get_index:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the column a column reference node points at.
+
+      Fails if the node is not of type `EXPRESSION_TYPE_BOUND_COLUMN_REF`. The index counts the columns of the
+      operator the predicate is evaluated against, which is not necessarily the full set of columns that operator
+      can produce: a callback resolves it through whatever handed it the expression, e.g.
+      `[[table_function_filter_pushdown_get_column_index]]` for a filter offered to a table function.
+    parameters:
+      expression:
+        type: expression
+        description: The column reference node.
+      index:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Receives the column index.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  expression_function_get_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the name of the scalar function a function node calls.
+
+      Applies to `EXPRESSION_TYPE_BOUND_FUNCTION` and to the node types that are function calls underneath: the
+      comparisons, `EXPRESSION_TYPE_COMPARE_BETWEEN` and `EXPRESSION_TYPE_OPERATOR_CAST`. Fails for any other node
+      type. For a comparison the name is its operator, e.g. `<`; for `BETWEEN` and casts it is an internal name, so
+      dispatch on the type rather than the name for those. The name is borrowed and shares the lifetime of the node.
+    parameters:
+      expression:
+        type: expression
+        description: The function node.
+      name:
+        type: identifier
+        indirection: 1
+        kind: OUT_BORROW
+        description: Receives a borrowed view of the function name.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  expression_function_get_qname:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns the qualified name of the scalar function a function node calls.
+
+      Applies to the same node types as `[[expression_function_get_name]]`, and fails for any other. The name is
+      qualified with the catalog and schema the function was resolved in, where known. The returned name is owned
+      by the caller and must be destroyed via `[[qname_destroy]]`.
+    parameters:
+      expression:
+        type: expression
+        description: The function node.
+      name:
+        type: qname
+        indirection: 1
+        kind: OUT
+        description: Receives the owned qualified name.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  expression_cast_get_mode:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Returns whether a cast node is a regular `CAST` or a `TRY_CAST`.
+
+      Fails if the node is not of type `EXPRESSION_TYPE_OPERATOR_CAST`. A `TRY_CAST` yields NULL for a value it
+      cannot convert where a regular `CAST` would fail the query.
+    parameters:
+      expression:
+        type: expression
+        description: The cast node.
+      mode:
+        type: CAST_MODE
+        indirection: 1
+        kind: OUT
+        description: Receives the cast mode.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR

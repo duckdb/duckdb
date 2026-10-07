@@ -69,12 +69,26 @@ bool LogicalDependency::operator==(const LogicalDependency &other) const {
 }
 
 void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
+	AddDependency(entry, DependencyDependentFlags().SetBlocking());
+}
+
+void LogicalDependencyList::AddDependency(CatalogEntry &entry, DependencyDependentFlags flags) {
 	LogicalDependency dependency(entry);
-	set.insert(dependency);
+	dependency.flags = std::move(flags);
+	AddDependency(dependency);
 }
 
 void LogicalDependencyList::AddDependency(const LogicalDependency &entry) {
-	set.insert(entry);
+	auto it = set.find(entry);
+	if (it == set.end()) {
+		set.insert(entry);
+		return;
+	}
+	// Merge flags instead of discarding the new ones - the same subject can be depended on for multiple reasons
+	auto merged = *it;
+	merged.flags.Apply(entry.flags);
+	set.erase(it);
+	set.insert(std::move(merged));
 }
 
 bool LogicalDependencyList::Contains(CatalogEntry &entry_p) {

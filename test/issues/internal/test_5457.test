@@ -21,4 +21,4 @@ SELECT 42;
 statement error
 EXPLAIN SELECT 42;
 ----
-failed to allocate
+<REGEX>:.*Out of Memory Error.*

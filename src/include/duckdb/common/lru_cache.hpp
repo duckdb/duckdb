@@ -65,14 +65,14 @@ public:
 		}
 
 		// Add new entry
-		lru_list.emplace_front(key);
+		lru_list.emplace_front(std::move(key));
 		Entry new_entry;
 		new_entry.value = std::move(value);
 		new_entry.lru_iterator = lru_list.begin();
 		new_entry.payload = std::move(payload);
 		new_entry.payload_weight = payload_weight;
 
-		entry_map[std::move(key)] = std::move(new_entry);
+		entry_map.emplace(std::cref(lru_list.front()), std::move(new_entry));
 		current_total_weight += payload_weight;
 	}
 
@@ -143,12 +143,27 @@ private:
 		idx_t payload_weight;
 	};
 
-	using EntryMap = unordered_map<Key, Entry, KeyHash, KeyEqual>;
+	using KeyConstReference = std::reference_wrapper<const Key>;
+
+	struct KeyReferenceHash {
+		size_t operator()(KeyConstReference key) const {
+			return KeyHash()(key.get());
+		}
+	};
+
+	struct KeyReferenceEqual {
+		bool operator()(KeyConstReference lhs, KeyConstReference rhs) const {
+			return KeyEqual()(lhs.get(), rhs.get());
+		}
+	};
+
+	using EntryMap = unordered_map<KeyConstReference, Entry, KeyReferenceHash, KeyReferenceEqual>;
 
 	void DeleteImpl(typename EntryMap::iterator iter) {
+		auto lru_iterator = iter->second.lru_iterator;
 		current_total_weight -= iter->second.payload_weight;
-		lru_list.erase(iter->second.lru_iterator);
 		entry_map.erase(iter);
+		lru_list.erase(lru_iterator);
 	}
 
 	void EvictIfNeeded(idx_t required_weight) {

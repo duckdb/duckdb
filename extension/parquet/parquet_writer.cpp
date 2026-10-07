@@ -7,6 +7,7 @@
 #include "parquet_crypto.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_shredding.hpp"
+#include "parquet_timestamp.hpp"
 #include "resizable_buffer.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/common/serializer/async_file_writer.hpp"
@@ -16,6 +17,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "writer/variant_column_writer.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -40,6 +42,7 @@
 #include "duckdb/storage/statistics/geometry_stats.hpp"
 #include "parquet_column_schema.hpp"
 #include "parquet_geometry.hpp"
+#include "parquet_statistics.hpp"
 #include "thrift/TBase.h"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/protocol/TProtocol.h"
@@ -458,9 +461,12 @@ struct ColumnStatsUnifier {
 	bool all_nulls_set = true;
 	bool min_is_set = false;
 	bool max_is_set = false;
+	bool min_is_exact = true;
+	bool max_is_exact = true;
 	idx_t column_size_bytes = 0;
 	bool can_have_nan = false;
 	bool has_nan = false;
+	idx_t nan_count = 0;
 
 	unique_ptr<GeometryStatsData> geo_stats;
 
@@ -478,7 +484,7 @@ public:
 
 ParquetWriteTransformData::ParquetWriteTransformData(ClientContext &context, const vector<LogicalType> &types,
                                                      vector<unique_ptr<Expression>> expressions_p)
-    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(std::move(types)),
+    : buffer(context, types, ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR), types(types),
       expressions(std::move(expressions_p)), executor(context, expressions) {
 	chunk.Initialize(buffer.GetAllocator(), this->types);
 }
@@ -504,8 +510,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
                              const vector<pair<string, string>> &kv_metadata)
     : context(context), options(std::move(options_p)) {
 	// initialize the file writer
-	writer = make_uniq<AsyncFileWriter>(context, fs, options.file_name.c_str(),
-	                                    FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	writer = make_uniq<AsyncFileWriter>(context, fs, options.file_name.c_str(), options.open_flags);
 
 	if (options.encryption_config) {
 		// Get the encryption util
@@ -535,6 +540,21 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, ParquetWrit
 		kv.__set_value(kv_pair.second);
 		file_meta_data.key_value_metadata.push_back(kv);
 		file_meta_data.__isset.key_value_metadata = true;
+	}
+
+	if (options.enable_bloom_filters) {
+		for (const auto &type : options.sql_types) {
+			if (!TypeVisitor::Contains(type, LogicalTypeId::INTERVAL)) {
+				continue;
+			}
+			duckdb_parquet::KeyValue kv;
+			kv.__set_key(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_KEY);
+			kv.__set_value(ParquetStatisticsUtils::INTERVAL_BLOOM_FILTER_VALUE);
+			// Readers require this capability before probing the additional normalized hashes.
+			file_meta_data.key_value_metadata.push_back(std::move(kv));
+			file_meta_data.__isset.key_value_metadata = true;
+			break;
+		}
 	}
 
 	InitializeColumnWriters();
@@ -779,9 +799,11 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &raw_buffer, PreparedRo
 static void ValidateOffsetInFile(const string &filename, idx_t col_idx, idx_t file_length, idx_t offset,
                                  const string &offset_name) {
 	if (offset >= file_length) {
+		// LCOV_EXCL_START
 		throw IOException("File '%s': metadata is corrupt. Column %d has invalid "
 		                  "%s (offset=%llu file_size=%llu).",
 		                  filename, col_idx, offset_name, offset, file_length);
+		// LCOV_EXCL_STOP
 	}
 }
 
@@ -795,18 +817,22 @@ static void ValidateColumnOffsets(const string &filename, idx_t file_length, con
 			ValidateOffsetInFile(filename, i, file_length, col_chunk.meta_data.dictionary_page_offset,
 			                     "dictionary page offset");
 			if (NumericCast<idx_t>(col_chunk.meta_data.dictionary_page_offset) >= col_start) {
+				// LCOV_EXCL_START
 				throw IOException("Parquet file '%s': metadata is corrupt. Dictionary "
 				                  "page (offset=%llu) must come before any data pages (offset=%llu).",
 				                  filename, col_chunk.meta_data.dictionary_page_offset, col_start);
+				// LCOV_EXCL_STOP
 			}
 			col_start = col_chunk.meta_data.dictionary_page_offset;
 		}
 		auto col_len = NumericCast<idx_t>(col_chunk.meta_data.total_compressed_size);
 		auto col_end = col_start + col_len;
 		if (col_end <= 0 || col_end > file_length) {
+			// LCOV_EXCL_START
 			throw IOException("Parquet file '%s': metadata is corrupt. Column %llu has "
 			                  "invalid column offsets (offset=%llu, size=%llu, file_size=%llu).",
 			                  filename, i, col_start, col_len, file_length);
+			// LCOV_EXCL_STOP
 		}
 	}
 }
@@ -901,6 +927,15 @@ struct NumericStatsUnifier : public BaseNumericStatsUnifier<T> {
 	}
 };
 
+struct TimeTZStatsUnifier : public BaseNumericStatsUnifier<int64_t> {
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		return Value::TIMETZ(ParquetIntToTimeTZ(Load<int64_t>(const_data_ptr_cast(stats.data())))).ToString();
+	}
+};
+
 template <class T>
 struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 	DecimalStatsUnifier(uint8_t width, uint8_t scale) : width(width), scale(scale) {
@@ -913,16 +948,43 @@ struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
 		if (stats.empty()) {
 			return string();
 		}
-
 		auto stats_data = const_data_ptr_cast(stats.data());
-
 		if (sizeof(T) == sizeof(hugeint_t)) {
-			auto _schema = ParquetColumnSchema();
-			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), _schema);
+			auto schema = ParquetColumnSchema(); // schema unused for FLBA/hugeint_t
+			auto numeric_val = ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema);
 			return Value::DECIMAL(numeric_val, width, scale).ToString();
 		} else {
-			auto numeric_val = Load<T>(stats_data);
-			return Value::DECIMAL(numeric_val, width, scale).ToString();
+			return Value::DECIMAL(Load<T>(stats_data), width, scale).ToString();
+		}
+	}
+
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		if (sizeof(T) != sizeof(hugeint_t)) {
+			// INT32/INT64-backed decimals are little-endian; the base compare is correct.
+			BaseNumericStatsUnifier<T>::UnifyMinMax(new_min, new_max);
+		} else {
+			// FLBA decimal stats are big-endian two's complement (most significant byte
+			// first), so a native little-endian Load would compare the wrong value; decode
+			// the bytes into a hugeint_t before comparing.
+			auto decode = [](const string &stats) {
+				auto schema = ParquetColumnSchema(); // schema unused for FLBA/hugeint_t
+				return ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(const_data_ptr_cast(stats.data()), stats.size(),
+				                                                        schema);
+			};
+
+			if (!this->min_is_set) {
+				this->global_min = new_min;
+				this->min_is_set = true;
+			} else if (LessThan::Operation(decode(new_min), decode(this->global_min))) {
+				this->global_min = new_min;
+			}
+
+			if (!this->max_is_set) {
+				this->global_max = new_max;
+				this->max_is_set = true;
+			} else if (GreaterThan::Operation(decode(new_max), decode(this->global_max))) {
+				this->global_max = new_max;
+			}
 		}
 	}
 };
@@ -1072,7 +1134,7 @@ static unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &typ
 	case LogicalTypeId::TIMESTAMP_NS:
 		return make_uniq<NumericStatsUnifier<timestamp_ns_t>>();
 	case LogicalTypeId::TIME_TZ:
-		return make_uniq<NumericStatsUnifier<dtime_tz_t>>();
+		return make_uniq<TimeTZStatsUnifier>();
 	case LogicalTypeId::UINTEGER:
 		return make_uniq<NumericStatsUnifier<uint32_t>>();
 	case LogicalTypeId::UBIGINT:
@@ -1167,15 +1229,25 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 	if (writer_stats) {
 		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
 		has_nan = writer_stats->HasNaN();
-		stats_unifier->has_nan = has_nan;
+		// this is called once per row group: accumulate, so NaNs in earlier row groups are not lost
+		stats_unifier->has_nan = stats_unifier->has_nan || has_nan;
+		stats_unifier->nan_count += writer_stats->GetNaNCount();
 	}
 	if (column.meta_data.__isset.statistics) {
 		if (has_nan && writer_stats->HasStats()) {
 			// if we have NaN values we have not written the min/max to the Parquet file
 			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
 			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
+			stats_unifier->min_is_exact = stats_unifier->min_is_exact && writer_stats->MinIsExact();
+			stats_unifier->max_is_exact = stats_unifier->max_is_exact && writer_stats->MaxIsExact();
 		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
 			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
+			stats_unifier->min_is_exact = stats_unifier->min_is_exact &&
+			                              column.meta_data.statistics.__isset.is_min_value_exact &&
+			                              column.meta_data.statistics.is_min_value_exact;
+			stats_unifier->max_is_exact = stats_unifier->max_is_exact &&
+			                              column.meta_data.statistics.__isset.is_max_value_exact &&
+			                              column.meta_data.statistics.is_max_value_exact;
 		} else {
 			stats_unifier->all_min_max_set = false;
 		}
@@ -1206,9 +1278,11 @@ void ParquetWriter::GatherWrittenStatistics() {
 			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
 			if (stats_unifier->min_is_set) {
 				column_stats["min"] = min_value;
+				column_stats["min_is_exact"] = Value::BOOLEAN(stats_unifier->min_is_exact);
 			}
 			if (stats_unifier->max_is_set) {
 				column_stats["max"] = max_value;
+				column_stats["max_is_exact"] = Value::BOOLEAN(stats_unifier->max_is_exact);
 			}
 		}
 		if (!stats_unifier->variant_type.empty()) {
@@ -1219,6 +1293,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 		}
 		if (stats_unifier->can_have_nan) {
 			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
+			column_stats["nan_count"] = Value::UBIGINT(stats_unifier->nan_count);
 		}
 		if (stats_unifier->geo_stats) {
 			const auto &bbox = stats_unifier->geo_stats->extent;
@@ -1372,7 +1447,7 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	uint32_t footer_size = writer->GetTotalWritten() - metadata_start_offset;
+	auto footer_size = NumericCast<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
 	writer->Write<uint32_t>(footer_size);
 
 	if (options.encryption_config) {

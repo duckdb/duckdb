@@ -8,7 +8,7 @@ namespace duckdb {
 // Platform-specific MemoryMappedFile subclasses and the LocalFileSystem::MemoryMapFile
 // factory live in src/common/local_file_system.cpp.
 MemoryMappedFile::MemoryMappedFile(string path_p, FileOpenFlags flags_p, data_ptr_t data_p, idx_t size_p)
-    : path(std::move(path_p)), flags(flags_p), data(data_p), size(size_p) {
+    : path(std::move(path_p)), flags(std::move(flags_p)), data(data_p), size(size_p) {
 }
 
 MemoryMappedFile::~MemoryMappedFile() {
@@ -32,7 +32,8 @@ data_ptr_t MemoryMappedFile::GetDataMutable(idx_t location, idx_t nr_bytes) {
 	return data + location;
 }
 
-unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path, FileOpenFlags flags,
+unique_ptr<MemoryMappedFile> FileSystem::MemoryMapFile(const OpenFileInfo &path,
+                                                       FileOpenFlags flags, // NOLINT: signature fixed by virtual API
                                                        const MMapOptions &options, optional_ptr<FileOpener> opener) {
 	throw NotImplementedException("Memory-mapped file access is not supported by this file system (%s) for path \"%s\"",
 	                              GetName(), path.path);

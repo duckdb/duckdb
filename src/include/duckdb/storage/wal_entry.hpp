@@ -88,8 +88,20 @@ struct WALCreateView {
 };
 
 struct WALDropView {
-	Identifier schema;
-	Identifier name;
+	// the entry as a QualifiedName (the containing schema path + the entry name)
+	QualifiedName qualified_name;
+
+	WALDropView() = default;
+	explicit WALDropView(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropView Deserialize(Deserializer &deserializer);
@@ -103,21 +115,48 @@ struct WALCreateSequence {
 };
 
 struct WALDropSequence {
-	Identifier schema;
-	Identifier name;
+	// the entry as a QualifiedName (the containing schema path + the entry name)
+	QualifiedName qualified_name;
+
+	WALDropSequence() = default;
+	explicit WALDropSequence(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropSequence Deserialize(Deserializer &deserializer);
 };
 
 struct WALSequenceValue {
-	Identifier schema;
-	Identifier name;
+	// the sequence as a QualifiedName (the containing schema path + the sequence name)
+	QualifiedName qualified_name;
 	uint64_t usage_count;
 	int64_t counter;
 	// the last value produced by the sequence; only serialized from storage version v2.0.0 onwards, and omitted when
 	// unset (so older readers can still replay sequence values that do not carry a last_value)
 	optional<int64_t> last_value;
+
+	WALSequenceValue() = default;
+	WALSequenceValue(QualifiedName qualified_name_p, uint64_t usage_count, int64_t counter,
+	                 optional<int64_t> last_value)
+	    : qualified_name(std::move(qualified_name_p)), usage_count(usage_count), counter(counter),
+	      last_value(last_value) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALSequenceValue Deserialize(Deserializer &deserializer);
@@ -131,8 +170,20 @@ struct WALCreateMacro {
 };
 
 struct WALDropMacro {
-	Identifier schema;
-	Identifier name;
+	// the entry as a QualifiedName (the containing schema path + the entry name)
+	QualifiedName qualified_name;
+
+	WALDropMacro() = default;
+	explicit WALDropMacro(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropMacro Deserialize(Deserializer &deserializer);
@@ -146,8 +197,20 @@ struct WALCreateTableMacro {
 };
 
 struct WALDropTableMacro {
-	Identifier schema;
-	Identifier name;
+	// the entry as a QualifiedName (the containing schema path + the entry name)
+	QualifiedName qualified_name;
+
+	WALDropTableMacro() = default;
+	explicit WALDropTableMacro(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropTableMacro Deserialize(Deserializer &deserializer);
@@ -161,8 +224,20 @@ struct WALCreateType {
 };
 
 struct WALDropType {
-	Identifier schema;
-	Identifier name;
+	// the entry as a QualifiedName (the containing schema path + the entry name)
+	QualifiedName qualified_name;
+
+	WALDropType() = default;
+	explicit WALDropType(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropType Deserialize(Deserializer &deserializer);
@@ -176,17 +251,42 @@ struct WALCreateTrigger {
 };
 
 struct WALDropTrigger {
-	Identifier schema;
-	Identifier name;
+	// the entry as a QualifiedName (the containing schema path + the entry name)
+	QualifiedName qualified_name;
 	Identifier table;
+
+	WALDropTrigger() = default;
+	WALDropTrigger(QualifiedName qualified_name_p, Identifier table_p)
+	    : qualified_name(std::move(qualified_name_p)), table(std::move(table_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropTrigger Deserialize(Deserializer &deserializer);
 };
 
 struct WALDropIndex {
-	Identifier schema;
-	Identifier name;
+	// the entry as a QualifiedName (the containing schema path + the entry name)
+	QualifiedName qualified_name;
+
+	WALDropIndex() = default;
+	explicit WALDropIndex(QualifiedName qualified_name_p) : qualified_name(std::move(qualified_name_p)) {
+	}
+
+	// legacy fields serialized for storage versions older than v2.0.0 (derived from the qualified name)
+	Identifier LegacySchema() const {
+		return qualified_name.Schema();
+	}
+	Identifier LegacyName() const {
+		return qualified_name.Name();
+	}
 
 	void Serialize(Serializer &serializer) const;
 	static WALDropIndex Deserialize(Deserializer &deserializer);

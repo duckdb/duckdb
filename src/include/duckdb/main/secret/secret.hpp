@@ -62,6 +62,9 @@ public:
 class CreateSecretFunctionSet {
 public:
 	explicit CreateSecretFunctionSet(string &name) : name(name) {};
+	identifier_map_t<CreateSecretFunction> &GetFunctions() {
+		return functions;
+	}
 
 public:
 	bool ProviderExists(const Identifier &provider_name);
@@ -159,6 +162,18 @@ protected:
 	Identifier name;
 	//! Whether the secret can be serialized/deserialized
 	bool serializable;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The KeyValueSecret is a class that implements a Secret as a set of key -> values. This class can be used
@@ -198,7 +213,9 @@ public:
 
 	// FIXME: use serialization scripts
 	template <class TYPE>
-	static unique_ptr<BaseSecret> Deserialize(Deserializer &deserializer, BaseSecret base_secret) {
+	static unique_ptr<BaseSecret>
+	Deserialize(Deserializer &deserializer,
+	            BaseSecret base_secret) { // NOLINT(performance-unnecessary-value-param): callback signature.
 		auto result = make_uniq<TYPE>(base_secret);
 		Value secret_map_value;
 		deserializer.ReadProperty(201, "secret_map", secret_map_value);
@@ -273,17 +290,18 @@ public:
 	~KeyValueSecretReader();
 
 	//! Lookup a KeyValueSecret value
-	SettingLookupResult TryGetSecretKey(const string &secret_key, Value &result);
+	SettingLookupResult TryGetSecretKey(const Identifier &secret_key, Value &result);
 	//! Lookup a KeyValueSecret value or a setting
-	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name, Value &result);
+	SettingLookupResult TryGetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name,
+	                                             Value &result);
 	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
-	Value GetSecretKey(const string &secret_key);
+	Value GetSecretKey(const Identifier &secret_key);
 	//! Lookup a KeyValueSecret value or a setting, throws InvalidInputException on not found
-	Value GetSecretKeyOrSetting(const string &secret_key, const string &setting_name);
+	Value GetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name);
 
 	//! Templating around TryGetSecretKey
 	template <class TYPE>
-	SettingLookupResult TryGetSecretKey(const string &secret_key, TYPE &value_out) {
+	SettingLookupResult TryGetSecretKey(const Identifier &secret_key, TYPE &value_out) {
 		Value result;
 		auto lookup_result = TryGetSecretKey(secret_key, result);
 		if (lookup_result) {
@@ -294,7 +312,7 @@ public:
 
 	//! Templating around TryGetSecretOrSetting
 	template <class TYPE>
-	SettingLookupResult TryGetSecretKeyOrSetting(const string &secret_key, const string &setting_name,
+	SettingLookupResult TryGetSecretKeyOrSetting(const Identifier &secret_key, const Identifier &setting_name,
 	                                             TYPE &value_out) {
 		Value result;
 		auto lookup_result = TryGetSecretKeyOrSetting(secret_key, setting_name, result);
@@ -308,7 +326,8 @@ public:
 
 	// Like a templated GetSecretOrSetting but instead of throwing on not found, return the default value
 	template <class TYPE>
-	TYPE GetSecretKeyOrSettingOrDefault(const string &secret_key, const string &setting_name, TYPE default_value) {
+	TYPE GetSecretKeyOrSettingOrDefault(const Identifier &secret_key, const Identifier &setting_name,
+	                                    TYPE default_value) {
 		TYPE result;
 		if (TryGetSecretKeyOrSetting(secret_key, setting_name, result)) {
 			return result;
@@ -319,8 +338,8 @@ public:
 protected:
 	void Initialize(const char **secret_types, idx_t secret_types_len);
 
-	[[noreturn]] void ThrowNotFoundError(const string &secret_key);
-	[[noreturn]] void ThrowNotFoundError(const string &secret_key, const string &setting_name);
+	[[noreturn]] void ThrowNotFoundError(const Identifier &secret_key);
+	[[noreturn]] void ThrowNotFoundError(const Identifier &secret_key, const Identifier &setting_name);
 
 	//! Fetching the secret
 	optional_ptr<const KeyValueSecret> secret;

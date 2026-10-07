@@ -25,21 +25,31 @@
       ]
     },
     {
+      "reason": "Statement verification temporarily disables profiling for its internal EXPLAIN",
+      "paths": [
+        "test/sql/pragma/profiling/test_custom_profiling_using_groups.test"
+      ]
+    },
+    {
       "reason": "Random errors",
       "paths": [
-        "test/sql/binder/column_ref_as_alias.test",
-        "test/sql/cast/cast_error_location.test",
         "test/sql/pragma/test_pragma_sanitized_inputs.test",
         "test/sql/storage/wal/wal_autocheckpoint_entries.test",
         "test/sql/transactions/statement-preprocessor/multistatement_is_transactional.test",
         "test/sql/transactions/statement-preprocessor/multistatement_is_transactional_chained_PRAGMA.test",
         "test/sql/copy/csv/glob/read_csv_glob.test",
         "test/sql/copy/parquet/parquet_list.test",
-        "test/sql/error/lineitem_errors.test",
-        "test/sql/error/qualified_column_error.test",
         "test/sql/copy_database/copy_table_with_sequence.test",
         "test/sql/copy_database/copy_database_simple.test",
         "test/sql/copy_database/copy_database_errors.test"
+      ]
+    },
+    {
+      "reason": "Recipe callbacks run on an internal connection; under statement verification the statement is already inside a transaction, so that connection cannot start one.",
+      "paths": [
+        "test/sql/attach/external_resource_lifecycle.test",
+        "test/sql/attach/attach_to_external_resource.test",
+        "test/sql/attach/external_resource_logging.test"
       ]
     }
   ]

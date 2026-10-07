@@ -312,6 +312,58 @@ SELECT ROUND('-1049578239572094512.32415'::DECIMAL(30,10), 0)::VARCHAR,
 0
 0
 
+# negative precision rounding promotes when it can add a leading digit
+query IIIIIIII
+SELECT typeof(ROUND(9999::DECIMAL(4,0), -1)),
+       ROUND(9999::DECIMAL(4,0), -1),
+       typeof(ROUND(999999999::DECIMAL(9,0), -1)),
+       ROUND(999999999::DECIMAL(9,0), -1),
+       typeof(ROUND(999999999999999999::DECIMAL(18,0), -1)),
+       ROUND(999999999999999999::DECIMAL(18,0), -1),
+       typeof(ROUND(9999999999999999999999999999999999999::DECIMAL(37,0), -1)),
+       ROUND(9999999999999999999999999999999999999::DECIMAL(37,0), -1)
+----
+DECIMAL(5,0)	10000	DECIMAL(10,0)	1000000000	DECIMAL(19,0)	1000000000000000000	DECIMAL(38,0)	10000000000000000000000000000000000000
+
+# rounding at the most-significant digit can produce zero or a promoted value
+query IIII
+SELECT ROUND(4999::DECIMAL(4,0), -4),
+       ROUND(5000::DECIMAL(4,0), -4),
+       ROUND(-5000::DECIMAL(4,0), -4),
+       ROUND(9999::DECIMAL(4,0), -5)
+----
+0	10000	-10000	0
+
+# scaled decimals already have enough width for the carry
+query III
+SELECT typeof(ROUND(999.9::DECIMAL(4,1), -3)),
+       ROUND(999.9::DECIMAL(4,1), -3),
+       ROUND(499.9::DECIMAL(4,1), -3)
+----
+DECIMAL(4,0)	1000	0
+
+# values that stay within DECIMAL(38) can still be rounded
+query II
+SELECT typeof(ROUND(123::DECIMAL(38,0), -1)),
+       ROUND(123::DECIMAL(38,0), -1)
+----
+DECIMAL(38,0)	120
+
+query I
+SELECT ROUND(99999999999999999999999999999999999999::DECIMAL(38,0), -39)
+----
+0
+
+statement error
+SELECT ROUND(99999999999999999999999999999999999999::DECIMAL(38,0), -1)
+----
+<REGEX>:Out of Range Error.*Overflow in ROUND of DECIMAL.*
+
+statement error
+SELECT ROUND(-99999999999999999999999999999999999999::DECIMAL(38,0), -1)
+----
+<REGEX>:Out of Range Error.*Overflow in ROUND of DECIMAL.*
+
 query I
 SELECT ROUND(12::DECIMAL(3,0))
 ----

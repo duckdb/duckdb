@@ -41,27 +41,83 @@ unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalSt
 bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 
-	// only handle constant and flat vectors here for now
 	auto source_data = source.Values<list_entry_t>();
+	auto &source_cc = ListVector::GetChildMutable(source);
+	auto source_size = ListVector::GetListSize(source);
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
+
+	// the entries can reference an arbitrary subset of the child vector (e.g. after list_slice) - casting the whole
+	// child then does needless work and reports errors for elements that are not part of any list
+	// a constant vector repeats the same entry for every row, so only the first entry is inspected
+	const auto is_constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	const idx_t entry_count = is_constant ? MinValue<idx_t>(count, 1) : count;
+	idx_t child_count = 0;
+	bool covers_child = true;
+	for (idx_t r = 0; r < entry_count; r++) {
+		auto source_list = source_data[r];
+		if (!source_list.IsValid()) {
+			continue;
+		}
+		auto entry = source_list.GetValue();
+		covers_child = covers_child && entry.offset == child_count;
+		child_count += entry.length;
+	}
+	covers_child = covers_child && child_count == source_size;
+
+	if (covers_child) {
+		// the lists cover the child vector exactly and in order - cast it as-is and keep the entries
+		auto result_data = FlatVector::Writer<list_entry_t>(result, count);
+		for (idx_t r = 0; r < count; r++) {
+			auto source_list = source_data[r];
+			if (!source_list.IsValid()) {
+				result_data.WriteNull();
+				continue;
+			}
+			result_data.WriteValue(source_list.GetValue());
+		}
+		ListVector::Reserve(result, source_size);
+		auto &append_vector = ListVector::GetChildMutable(result);
+		bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
+		ListVector::SetListSize(result, source_size);
+		D_ASSERT(ListVector::GetListSize(result) == source_size);
+		return all_succeeded;
+	}
+
+	// gather the referenced elements in list order, so only those are cast
+	SelectionVector child_sel(child_count);
+	idx_t child_offset = 0;
+	for (idx_t r = 0; r < entry_count; r++) {
+		auto source_list = source_data[r];
+		if (!source_list.IsValid()) {
+			continue;
+		}
+		auto entry = source_list.GetValue();
+		for (idx_t i = 0; i < entry.length; i++) {
+			child_sel.set_index(child_offset + i, entry.offset + i);
+		}
+		child_offset += entry.length;
+	}
+
 	auto result_data = FlatVector::Writer<list_entry_t>(result, count);
+	child_offset = 0;
 	for (idx_t r = 0; r < count; r++) {
 		auto source_list = source_data[r];
 		if (!source_list.IsValid()) {
 			result_data.WriteNull();
 			continue;
 		}
-		result_data.WriteValue(source_list.GetValue());
+		auto entry = source_list.GetValue();
+		result_data.WriteValue(list_entry_t(child_offset, entry.length));
+		if (!is_constant) {
+			child_offset += entry.length;
+		}
 	}
-	auto &source_cc = ListVector::GetChildMutable(source);
-	auto source_size = ListVector::GetListSize(source);
 
-	ListVector::Reserve(result, source_size);
+	Vector source_slice(source_cc, child_sel, child_count);
+	ListVector::Reserve(result, child_count);
 	auto &append_vector = ListVector::GetChildMutable(result);
-
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.GetCastData(), parameters.local_state);
-	bool all_succeeded = cast_data.child_cast_info.Cast(source_cc, append_vector, source_size, child_parameters);
-	ListVector::SetListSize(result, source_size);
-	D_ASSERT(ListVector::GetListSize(result) == source_size);
+	bool all_succeeded = cast_data.child_cast_info.Cast(source_slice, append_vector, child_count, child_parameters);
+	ListVector::SetListSize(result, child_count);
 	return all_succeeded;
 }
 
@@ -225,16 +281,19 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		// We can just cast the child vector directly
 		// Note: Its worth doing a CheckAllValid here, the slow path is significantly more expensive
 		if (FlatVector::ValidityMutable(result).CheckAllValid(count)) {
+			// Cast the entries the lists actually point at: the source child's size is unrelated to
+			// array_size * count, so casting the first child_count entries can both overrun the child and
+			// touch entries that no list references.
+			Vector source_slice(source_cc, child_sel, child_count);
 			Vector payload_vector(result_cc.GetType(), child_count);
 
-			bool ok = cast_data.child_cast_info.Cast(source_cc, payload_vector, child_count, child_parameters);
+			bool ok = cast_data.child_cast_info.Cast(source_slice, payload_vector, child_count, child_parameters);
 			if (all_ok && !ok) {
 				all_ok = false;
 				HandleCastError::AssignError(*child_parameters.error_message, parameters);
 			}
-			// Now do the actual copy onto the result vector, making sure to slice properly in case the lists are out of
-			// order
-			VectorOperations::Copy(payload_vector, result_cc, child_sel, child_count, 0, 0);
+			// The slice already put the entries in list order, so this is a straight copy
+			VectorOperations::Copy(payload_vector, result_cc, child_count, 0, 0);
 			return all_ok;
 		}
 

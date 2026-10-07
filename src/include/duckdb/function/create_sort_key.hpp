@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class Expression;
+
 struct OrderModifiers {
 	OrderModifiers(OrderType order_type, OrderByNullType null_type) : order_type(order_type), null_type(null_type) {
 	}
@@ -49,6 +51,7 @@ struct CreateSortKeyHelpers {
 	static void CreateSortKey(DataChunk &input, const vector<OrderModifiers> &modifiers, Vector &result);
 	static void CreateSortKey(const Vector &input, OrderModifiers modifiers, Vector &result);
 	static void CreateSortKey(const Vector &input, idx_t count, OrderModifiers modifiers, Vector &result);
+	static bool IsNullSortKey(const_data_ptr_t data, OrderByNullType null_order);
 	static idx_t DecodeSortKey(string_t sort_key, Vector &result, idx_t result_idx, OrderModifiers modifiers);
 	static void DecodeSortKey(string_t sort_key, DataChunk &result, idx_t result_idx,
 	                          const vector<OrderModifiers> &modifiers);
@@ -68,6 +71,9 @@ struct DecodeSortKeyFun {
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
+	//! Binds decode_sort_key from bound column types, bypassing the VARCHAR column definitions the SQL form parses
+	static unique_ptr<Expression> Bind(unique_ptr<Expression> sort_key, child_list_t<LogicalType> columns,
+	                                   vector<OrderModifiers> modifiers);
 };
 
 } // namespace duckdb

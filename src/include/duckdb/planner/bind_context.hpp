@@ -119,6 +119,10 @@ public:
 	void AddGenericBinding(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
 	                       const vector<LogicalType> &types);
 
+	//! Registers an alternative name for a column of the binding with the given index
+	//! The alias can be bound like a regular column, but is not emitted by *
+	void AddColumnAlias(TableIndex index, const Identifier &column_alias, column_t column_index);
+
 	//! Adds a base table with the given alias to the CTE BindContext.
 	//! We need this to correctly bind recursive CTEs with multiple references.
 	void AddCTEBinding(TableIndex index, BindingAlias alias, const vector<Identifier> &names,

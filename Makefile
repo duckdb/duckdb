@@ -5,8 +5,10 @@ opt: release
 unit: unittest
 
 EXTENSION_CONFIG_STEP ?=
+ifndef DUCKDB_NEW_EXTENSION_BUILD
 ifdef USE_MERGED_VCPKG_MANIFEST
 	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
+endif
 endif
 
 GENERATOR ?=
@@ -26,6 +28,9 @@ PYTHON ?= python3
 FORMAT_VENV ?= .cache/format-venv
 FORMAT_PYTHON := $(FORMAT_VENV)/bin/python
 FORMAT_SETUP_DEPS := format_venv
+CAPIGEN_VENV ?= .cache/capigen-venv
+CAPIGEN_PYTHON := $(CAPIGEN_VENV)/bin/python
+CAPIGEN_SETUP_DEPS := capigen_venv
 
 EXE_SUFFIX :=
 ifeq ($(OS),Windows_NT)
@@ -46,7 +51,7 @@ ifndef CMAKE_BUILD_PARALLEL_LEVEL
 CMAKE_BUILD_PARALLEL_LEVEL := $(CI_BUILD_JOBS)
 endif
 export CMAKE_BUILD_PARALLEL_LEVEL
-export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 25 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
+export CI_TIDY_JOBS := $(shell jobs=$$(( $(CI_CPU_COUNT) * 50 / 100 )); [ $$jobs -lt 1 ] && jobs=1; echo $$jobs)
 
 # Assume Ninja is the default generator (if missing), but verify ninja exists.
 # Cache Ninja detection so we only probe `ninja --version` once.
@@ -120,16 +125,18 @@ SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
 CORE_EXTENSIONS ?=
 UNSAFE_NUMERIC_CAST ?=
-ifdef OVERRIDE_GIT_DESCRIBE
-        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE="${OVERRIDE_GIT_DESCRIBE}"
-else
-        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DOVERRIDE_GIT_DESCRIBE=""
-endif
-
-ifdef DUCKDB_EXPLICIT_VERSION
+ifdef DUCKDB_VERSION
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_VERSION}"
+else ifdef OVERRIDE_GIT_DESCRIBE
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${OVERRIDE_GIT_DESCRIBE}"
+else ifdef DUCKDB_EXPLICIT_VERSION
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION="${DUCKDB_EXPLICIT_VERSION}"
 else
         COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DDUCKDB_EXPLICIT_VERSION=""
+endif
+
+ifdef DUCKDB_COMMIT
+        COMMON_CMAKE_VARS:=${COMMON_CMAKE_VARS} -DGIT_COMMIT_HASH="${DUCKDB_COMMIT}"
 endif
 
 ifneq (${CXX_STANDARD}, )
@@ -150,20 +157,12 @@ endif
 ifneq (${EXTENSION_STATIC_BUILD}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_STATIC_BUILD=${EXTENSION_STATIC_BUILD}
 endif
-ifeq (${DISABLE_GCC_FUNCTION_SECTIONS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_GCC_FUNCTION_SECTIONS=1
-endif
 ifeq (${DISABLE_BUILTIN_EXTENSIONS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_EXTENSIONS=1
+$(warning DISABLE_BUILTIN_EXTENSIONS is deprecated, use STATICALLY_LINK_EXTENSIONS=core_functions)
+	STATICALLY_LINK_EXTENSIONS ?= core_functions
 endif
 ifeq (${GENERATE_EXTENSION_ENTRIES}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DGENERATE_EXTENSION_ENTRIES=1
-endif
-ifneq ("${ENABLE_EXTENSION_AUTOLOADING}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOLOADING=${ENABLE_EXTENSION_AUTOLOADING}
-endif
-ifneq ("${ENABLE_EXTENSION_AUTOINSTALL}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_AUTOINSTALL=${ENABLE_EXTENSION_AUTOINSTALL}
 endif
 ifneq (${UNSAFE_NUMERIC_CAST}, )
 	CMAKE_VARS:=${CMAKE_VARS} -DUNSAFE_NUMERIC_CAST=1
@@ -221,6 +220,9 @@ endif
 ifneq ($(TIDY_BINARY),)
 	TIDY_BINARY_PARAMETER := -clang-tidy-binary ${TIDY_BINARY}
 endif
+TIDY_SHARD_COUNT ?= 1
+TIDY_SHARD_INDEX ?= 0
+TIDY_SHARD_PARAMETERS := --shard-count ${TIDY_SHARD_COUNT} --shard-index ${TIDY_SHARD_INDEX}
 CLANGD_TIDY_VERSION := 1.1.1
 CLANGD_TIDY_VENV ?= $(abspath build/clangd-tidy-venv)
 ifeq ($(CLANGD_TIDY_BINARY),)
@@ -251,12 +253,22 @@ endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
 endif
+ifneq ($(EXTENSION_CONFIG_BASE_DIR),)
+	CMAKE_VARS:=${CMAKE_VARS} -DEXTENSION_CONFIG_BASE_DIR="$(EXTENSION_CONFIG_BASE_DIR)"
+endif
 ifeq ($(SHADOW_FORBIDDEN_FUNCTIONS),1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSHADOW_FORBIDDEN_FUNCTIONS=1
 endif
 ifneq ($(SKIP_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DSKIP_EXTENSIONS="$(SKIP_EXTENSIONS)"
 endif
+# LINK_CORE_EXTENSIONS=1 also links the extensions named in BUILD_EXTENSIONS / CORE_EXTENSIONS, which otherwise are only
+# built; always passed, so leaving it out turns it off again
+CMAKE_VARS:=${CMAKE_VARS} -DLINK_CORE_EXTENSIONS=$(if $(filter 1 ON on TRUE true,$(LINK_CORE_EXTENSIONS)),ON,OFF)
+# what the DuckDB targets link (space or semicolon separated, or none); always passed, so leaving them out restores the
+# defaults
+CMAKE_VARS:=${CMAKE_VARS} -DSTATICALLY_LINK_EXTENSIONS="$(STATICALLY_LINK_EXTENSIONS)"
+CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_CAPABILITIES="$(DUCKDB_CAPABILITIES)"
 ifneq ($(EXTENSION_CONFIGS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_EXTENSION_CONFIGS="$(EXTENSION_CONFIGS)"
 endif
@@ -275,14 +287,20 @@ endif
 ifeq (${FORCE_DEBUG}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_DEBUG=1
 endif
-ifeq (${SMALLER_BINARY}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY=1
+ifneq (${SMALLER_BINARY},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY='${SMALLER_BINARY}'
+endif
+ifneq (${SMALLER_BINARY_EXCEPT},)
+	CMAKE_VARS:=${CMAKE_VARS} -DSMALLER_BINARY_EXCEPT='${SMALLER_BINARY_EXCEPT}'
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_STR_INLINE=1
 endif
 ifeq (${DISABLE_MEMORY_SAFETY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_MEMORY_SAFETY=1
+endif
+ifeq (${DISABLE_RTTI}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_RTTI=1
 endif
 ifeq (${DISABLE_ASSERTIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_ASSERTIONS=1
@@ -327,10 +345,10 @@ ifeq (${DISABLE_CORE_FUNCTIONS}, 1)
 	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};core_functions
 endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_EXTENSION_LOAD=0
 endif
 ifeq (${DISABLE_BUILTIN_HTTPLIB}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_BUILTIN_HTTPLIB=1
+	CMAKE_VARS:=${CMAKE_VARS} -DENABLE_BUILTIN_HTTPLIB=0
 endif
 ifeq (${DISABLE_SHELL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_SHELL=0
@@ -354,14 +372,11 @@ endif
 ifeq (${NATIVE_ARCH}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
 endif
+ifneq (${DUCKDB_OPTIMIZATION_PROFILE}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DDUCKDB_OPTIMIZATION_PROFILE=${DUCKDB_OPTIMIZATION_PROFILE}
+endif
 ifeq (${OVERRIDE_NEW_DELETE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOVERRIDE_NEW_DELETE=1
-endif
-ifeq (${MAIN_BRANCH_VERSIONING}, 0)
-	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
-endif
-ifeq (${MAIN_BRANCH_VERSIONING}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
 endif
 ifeq (${STANDALONE_DEBUG}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DSTANDALONE_DEBUG=1
@@ -386,13 +401,15 @@ endif
 ifneq ("${VCPKG_TARGET_TRIPLET}", "")
 	CMAKE_VARS_BUILD:=${CMAKE_VARS_BUILD} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
 endif
+ifndef DUCKDB_NEW_EXTENSION_BUILD
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
+endif
 endif
 sync_extensions_into =
 vcpkg_cmake_flag =
 ifdef DUCKDB_NEW_EXTENSION_BUILD
-sync_extensions_into = $(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '$(1)' &&
+sync_extensions_into = $(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") $(if $(EXTENSION_CONFIG_BASE_DIR),--extension-config-base-dir "$(EXTENSION_CONFIG_BASE_DIR)") --output-dir '$(1)' &&
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
 vcpkg_cmake_flag = -DVCPKG_MANIFEST_DIR='$(1)'
 endif
@@ -400,6 +417,9 @@ endif
 
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
+endif
+ifneq ("${LTO_JOBS}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO_JOBS='${LTO_JOBS}'
 endif
 ifeq (${EXPORT_DYNAMIC_SYMBOLS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DEXPORT_DYNAMIC_SYMBOLS=1
@@ -450,29 +470,37 @@ WINDOWS_GENERATOR_PLATFORM ?= x64
 BUNDLED_EXTENSIONS_CONFIGS ?= $(PWD)/.github/config/bundled_extensions.cmake
 windows_release: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1 -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=$(WINDOWS_GENERATOR_PLATFORM)) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
 
 windows_release_32: ${EXTENSION_CONFIG_STEP}
 	$(call sync_extensions_into,${PROJ_DIR}) \
-	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
+	cmake $(GENERATOR) $(FORCE_COLOR) $(if $(filter ninja,$(GEN)),,-DCMAKE_GENERATOR_PLATFORM=Win32) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} $(call vcpkg_cmake_flag,${PROJ_DIR}) -DCMAKE_BUILD_TYPE=Release -DDUCKDB_CAPABILITIES="httplib;loadable_extensions" -DDUCKDB_EXTENSION_CONFIGS="$(BUNDLED_EXTENSIONS_CONFIGS)" . && \
 	$(NINJA_BUILD_WRAPPER) cmake --build . --config Release
+
+# The wasm targets do not go through CMAKE_VARS, so DISABLE_RTTI is forwarded explicitly.
+# Off by default, like every other target: a wasm build pulls in out-of-tree extensions that
+# carry their own vcpkg dependencies, and whether those are built without RTTI is a decision
+# for the extension, not for duckdb's Makefile.
+ifeq (${DISABLE_RTTI}, 1)
+WASM_RTTI_FLAG:=-DDISABLE_RTTI=1
+endif
 
 wasm_mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_mvp && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_mvp ${WASM_RTTI_FLAG} -DCMAKE_CXX_FLAGS="-DDUCKDB_CUSTOM_PLATFORM=wasm_mvp" -DDUCKDB_EXPLICIT_PLATFORM="wasm_mvp" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
 	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_mvp
 
 wasm_eh: WASM_EH_CMAKE_VARS=-DBUILD_EXTENSIONS_ONLY=1
 wasm_ci: WASM_EH_CMAKE_VARS=
 wasm_eh wasm_ci: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_eh && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 $(WASM_EH_CMAKE_VARS) -Bbuild/wasm_eh -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DDUCKDB_NO_THREADS=1 -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 $(WASM_EH_CMAKE_VARS) -Bbuild/wasm_eh ${WASM_RTTI_FLAG} -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DDUCKDB_NO_THREADS=1 -DWEBDB_FAST_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh" -DDUCKDB_EXPLICIT_PLATFORM="wasm_eh" ${COMMON_CMAKE_VARS} ${TOOLCHAIN_FLAGS} && \
 	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_eh
 
 wasm_threads: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/wasm_threads && \
-	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads -pthread" -DDUCKDB_EXPLICIT_PLATFORM="wasm_threads" ${COMMON_CMAKE_VARS} -DUSE_WASM_THREADS=1 -DCMAKE_C_FLAGS="-pthread" ${TOOLCHAIN_FLAGS} && \
+	emcmake cmake $(GENERATOR) -DWASM_LOADABLE_EXTENSIONS=1 -DBUILD_EXTENSIONS_ONLY=1 -Bbuild/wasm_threads ${WASM_RTTI_FLAG} -DCMAKE_CXX_FLAGS="-fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1 -DWITH_WASM_THREADS=1 -DWITH_WASM_SIMD=1 -DWITH_WASM_BULK_MEMORY=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_threads -pthread" -DDUCKDB_EXPLICIT_PLATFORM="wasm_threads" ${COMMON_CMAKE_VARS} -DUSE_WASM_THREADS=1 -DCMAKE_C_FLAGS="-pthread" ${TOOLCHAIN_FLAGS} && \
 	emmake make -j${CI_BUILD_JOBS} -Cbuild/wasm_threads
 
 cldebug: ${EXTENSION_CONFIG_STEP}
@@ -489,7 +517,7 @@ clreldebug:
 
 SYNC_OUTPUT_DIR ?= build
 sync_out_of_tree_extensions:
-	$(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") --output-dir '${PROJ_DIR}$(SYNC_OUTPUT_DIR)'
+	$(PYTHON) scripts/sync_out_of_tree_extensions.py $(if $(BUILD_EXTENSIONS),--build-extensions "$(BUILD_EXTENSIONS)") $(if $(EXTENSION_CONFIGS),--extension-configs "$(EXTENSION_CONFIGS)") $(if $(EXTENSION_CONFIG_BASE_DIR),--extension-config-base-dir "$(EXTENSION_CONFIG_BASE_DIR)") --output-dir '${PROJ_DIR}$(SYNC_OUTPUT_DIR)'
 
 extension_configuration: build/extension_configuration/vcpkg.json
 
@@ -514,48 +542,74 @@ endif
 unittest_release:
 	build/release/test/run $(T)
 
-TEST_CONFIGS := \
+TEST_CONFIGS_QUERY_VERIFICATION := \
+	test/configs/verify_statement_explain_sql.json \
 	test/configs/verify_statement_copy.json \
 	test/configs/verify_statement_to_string.json \
 	test/configs/verify_statement_explain.json \
 	test/configs/verify_statement_prepare.json \
 	test/configs/verify_serializer.json \
-	test/configs/verify_compression.json \
 	test/configs/verify_stats.json \
 	test/configs/verify_statement_serialization.json \
-	test/configs/force_storage.json \
-	test/configs/force_storage_restart.json \
-	test/configs/latest_storage.json \
-	test/configs/block_verification.json \
-	test/configs/block_verification_latest.json \
 	test/configs/disable_optimizer.json \
+	test/configs/verification_projection.json \
+	test/configs/verify_column_bindings.json
+
+TEST_CONFIGS_EXECUTION := \
 	test/configs/internal_vector_serialization.json \
 	test/configs/internal_vector_verification.json \
 	test/configs/force_external.json \
 	test/configs/verify_fetch_row.json \
 	test/configs/disable_caching_operators.json \
-	test/configs/wal_verification.json \
-	test/configs/vacuum_rebuild_indexes_force_storage.json \
-	test/configs/verification_projection.json \
-	test/configs/verify_column_bindings.json \
-	test/configs/no_local_filesystem.json \
-	test/configs/block_size_16kB.json \
-	test/configs/latest_storage_block_size_16kB.json \
-	test/configs/block_allocator_100mib.json \
 	test/configs/variant_vector.json \
-	test/configs/compressed_in_memory.json \
-	test/configs/prefetch_all_storage.json \
-	test/configs/encryption.json \
-	test/configs/v1_storage.json \
-	test/configs/v1_storage_block_size_16kB.json \
-	test/configs/force_storage_mmap.json \
 	test/configs/verify_aggregate_state_export.json \
 	test/configs/verify_functions.json \
 	test/configs/shredded_vector.json \
-	test/configs/transformer_trampoline_style.json
+	test/configs/verify_progress.json
+
+TEST_CONFIGS_PERSISTENCE := \
+	test/configs/force_storage.json \
+	test/configs/force_storage_restart.json \
+	test/configs/latest_storage.json \
+	test/configs/wal_verification.json \
+	test/configs/vacuum_rebuild_indexes_force_storage.json \
+	test/configs/no_local_filesystem.json \
+	test/configs/encryption.json \
+	test/configs/v1_storage.json \
+	test/configs/v1_storage_block_size_16kB.json
+
+TEST_CONFIGS_STORAGE_ENGINE := \
+	test/configs/verify_compression.json \
+	test/configs/block_verification.json \
+	test/configs/block_verification_latest.json \
+	test/configs/block_size_16kB.json \
+	test/configs/latest_storage_block_size_16kB.json \
+	test/configs/block_allocator_100mib.json \
+	test/configs/compressed_in_memory.json \
+	test/configs/prefetch_all_storage.json \
+	test/configs/force_storage_mmap.json
+
+TEST_CONFIGS := $(TEST_CONFIGS_QUERY_VERIFICATION) $(TEST_CONFIGS_EXECUTION) $(TEST_CONFIGS_PERSISTENCE) \
+	$(TEST_CONFIGS_STORAGE_ENGINE)
+
+.PHONY: test_configs test_configs_query_verification test_configs_execution test_configs_persistence \
+	test_configs_storage_engine
 
 test_configs:
 	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS),--test-config=$(cfg))
+
+test_configs_query_verification:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_QUERY_VERIFICATION),--test-config=$(cfg))
+
+
+test_configs_execution:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_EXECUTION),--test-config=$(cfg))
+
+test_configs_persistence:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_PERSISTENCE),--test-config=$(cfg))
+
+test_configs_storage_engine:
+	./build/release/test/run $(foreach cfg,$(TEST_CONFIGS_STORAGE_ENGINE),--test-config=$(cfg))
 
 test_vector:
 	./build/release/test/run --test-flags="--verify-vector dictionary_expression --skip-compiled"
@@ -625,6 +679,40 @@ relassert-artifact:
 release-artifact:
 	bash scripts/prepare_build_artifact.sh release
 
+.PHONY: cli-release-artifact
+
+cli-release-artifact:
+	bash scripts/package_release_artifact.sh cli "$(ARTIFACT_SUFFIX)" "$(CLI_BINARY)"
+
+.PHONY: shared-libs-release-artifact
+
+shared-libs-release-artifact:
+	bash scripts/package_release_artifact.sh shared-libs "$(ARTIFACT_SUFFIX)" $(SHARED_LIBRARIES)
+
+# Writes a C source defining duckdb_register_static_extensions(), which links statically built extensions and
+# capabilities into a program: compile it next to your own sources, put their archives before libduckdb_static.a, and
+# call the function before opening a database (or compile extension/loader/static_extension_autoregister.cpp too to have
+# it called before main). DUCKDB_CAPABILITIES and STATICALLY_LINK_EXTENSIONS pick them (LINK_EXTENSIONS is
+# the older name for the latter, 'none' picks nothing); each defaults to every archive of its kind in
+# STATIC_EXTENSION_LOADER_BUILD_DIR.
+LOADER_BUILT_CAPABILITIES = $(if $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/src/main/http/libduckdb_httplib.a),httplib) $(if $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/src/main/extension/libduckdb_loadable_extensions.a),loadable_extensions)
+LOADER_BUILT_EXTENSIONS = $(patsubst lib%_extension.a,%,$(notdir $(wildcard $(STATIC_EXTENSION_LOADER_BUILD_DIR)/extension/*/lib*_extension.a)))
+LOADER_CAPABILITIES = $(if $(strip $(DUCKDB_CAPABILITIES)),$(subst ;, ,$(DUCKDB_CAPABILITIES)),$(LOADER_BUILT_CAPABILITIES))
+LOADER_EXTENSIONS = $(or $(strip $(subst ;, ,$(STATICALLY_LINK_EXTENSIONS) $(LINK_EXTENSIONS))),$(LOADER_BUILT_EXTENSIONS))
+STATIC_EXTENSION_LOADER_BUILD_DIR ?= build/release
+STATIC_EXTENSION_LOADER_FILE ?= $(STATIC_EXTENSION_LOADER_BUILD_DIR)/static_extension_loader.c
+
+.PHONY: static_extension_loader
+static_extension_loader:
+	$(PYTHON) scripts/generate_static_extension_loader.py --output "$(STATIC_EXTENSION_LOADER_FILE)" \
+		$(filter-out none,$(LOADER_CAPABILITIES) $(LOADER_EXTENSIONS))
+	@echo "Wrote $(STATIC_EXTENSION_LOADER_FILE)"
+
+.PHONY: static-libs-release-artifact
+
+static-libs-release-artifact:
+	bash scripts/package_release_artifact.sh static-libs "$(ARTIFACT_SUFFIX)" $(STATIC_LIBRARIES)
+
 .PHONY: symbol-checks symbol-leakage-check banned-symbol-check
 
 symbol-checks: symbol-leakage-check banned-symbol-check
@@ -634,6 +722,11 @@ symbol-leakage-check:
 
 banned-symbol-check:
 	$(PYTHON) scripts/banned_symbols_check.py --directory build/release/src
+
+.PHONY: linux-release-link-checks
+
+linux-release-link-checks:
+	bash scripts/ci/linux_release_link_checks.sh
 
 define ensure_apt_commands
 	missing=0; \
@@ -657,7 +750,7 @@ define ensure_apt_packages
 	fi
 endef
 
-APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+APT_TIMEOUT_OPTS=-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o DPkg::Lock::Timeout=30
 
 .PHONY: toolsci
 
@@ -726,6 +819,16 @@ format_venv:
 	@$(FORMAT_PYTHON) -m pip show cmake-format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install cmake-format
 	@$(FORMAT_PYTHON) -m pip show clang_format >/dev/null 2>&1 || $(FORMAT_PYTHON) -m pip install clang_format==11.0.1
 
+# Venv holding capigen (the C API generator) and the formatters it needs, pinned by api_spec/pyproject.toml
+.PHONY: capigen_venv
+capigen_venv:
+	@if [ ! -x "$(CAPIGEN_PYTHON)" ]; then \
+		mkdir -p "$(dir $(CAPIGEN_VENV))" && \
+		$(PYTHON) -m venv "$(CAPIGEN_VENV)" && \
+		$(CAPIGEN_PYTHON) -m pip install -U pip; \
+	fi
+	@$(CAPIGEN_PYTHON) -m pip show capigen >/dev/null 2>&1 || $(CAPIGEN_PYTHON) -m pip install --group api_spec/pyproject.toml:generate
+
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
@@ -741,7 +844,7 @@ tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
 	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_SHELL=0 ../.. && \
-	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_PERFORM_CHECKS}
+	$(PYTHON) ../../scripts/run-clang-tidy.py -quiet -j $(CI_CPU_COUNT) ${TIDY_BINARY_PARAMETER} ${TIDY_SHARD_PARAMETERS} ${TIDY_PERFORM_CHECKS}
 
 install-clangd-tidy:
 	mkdir -p $(dir $(CLANGD_TIDY_VENV)) && \
@@ -782,8 +885,9 @@ format-fix: $(FORMAT_SETUP_DEPS)
 
 format-parser-grammar: $(FORMAT_SETUP_DEPS)
 	$(FORMAT_PYTHON) scripts/format.py src/include/duckdb/parser/peg/transformer/peg_transformer.hpp --fix --noconfirm
-	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/transformer/transform_generated_trampoline.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/compiled_grammar.cpp --fix --noconfirm
+	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher_factory.cpp --fix --noconfirm
 	$(FORMAT_PYTHON) scripts/format.py src/parser/peg/matcher.cpp --fix --noconfirm
 
 .PHONY: parser-grammar-tools parser-grammar
@@ -854,10 +958,12 @@ coverage-check:
 	./scripts/coverage_check.sh
 
 generate-files-deps:
-	pip install cxxheaderparser pcpp
+	$(PYTHON) -m pip install -U pip
+	$(PYTHON) -m pip install --group api_spec/pyproject.toml:generate
+	$(PYTHON) -m pip install cxxheaderparser pcpp
 
-generate-files:
-	$(PYTHON) scripts/generate_c_api.py
+generate-files: $(CAPIGEN_SETUP_DEPS)
+	CAPIGEN_PYTHON="$(abspath $(CAPIGEN_PYTHON))" ./scripts/capi_v1_regen.sh
 	$(PYTHON) scripts/generate_functions.py
 	$(PYTHON) scripts/generate_metrics.py
 	$(PYTHON) scripts/generate_settings.py
@@ -870,49 +976,14 @@ generate-files:
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
-bundle-setup:
-	cd build/release && \
-	rm -rf bundle && \
-	mkdir -p bundle && \
-	cp src/libduckdb_static.a bundle/. && \
-	cp third_party/*/libduckdb_*.a bundle/. && \
-	cp extension/libduckdb_generated_extension_loader.a bundle/. && \
-	cp extension/*/lib*_extension.a bundle/. && \
-	mkdir -p vcpkg_installed && \
-	find vcpkg_installed -name '*.a' -exec cp {} bundle/. \; && \
-	mkdir -p _deps && \
-	if [ -f linked_libs.txt ]; then \
-		while IFS= read -r libline || [ -n "$$libline" ]; do \
-			find _deps -path "*/$$libline" -exec cp {} bundle/. \; 2>/dev/null || true; \
-		done < linked_libs.txt; \
-	fi && \
-	cd bundle && \
-	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
-	find . -name '*.a' -execdir ${AR} -x {} \;
-
-bundle-library-o: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library-obj: bundle-setup
-	cd build/release/bundle && \
-	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
-
-bundle-library: release
-	make bundle-library-o
-
-gather-libs: release
-	cd build/release && \
-	rm -rf libs && \
-	mkdir -p libs && \
-	cp src/libduckdb_static.a libs/. && \
-	cp third_party/*/libduckdb_*.a libs/. && \
-	cp extension/libduckdb_generated_extension_loader.a libs/. && \
-	cp extension/*/lib*_extension.a libs/.
-
-#### Setup VCPKG to correct version 2025.12.12 tag is 84bab45d415d22042bd0b9081aea57f362da3f35
+#### Setup VCPKG to correct version 2026.06.24 tag is cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3
 vcpkg/scripts/buildsystems/vcpkg.cmake:
-	git -C vcpkg fetch || git clone --branch 2025.12.12 https://github.com/microsoft/vcpkg
+	if [ -d vcpkg/.git ]; then \
+		git -C vcpkg fetch --tags && \
+		git -C vcpkg checkout --detach 2026.06.24; \
+	else \
+		git clone --branch 2026.06.24 https://github.com/microsoft/vcpkg; \
+	fi
 	cd vcpkg && ./bootstrap-vcpkg.sh
 
 setup-vcpkg: vcpkg/scripts/buildsystems/vcpkg.cmake
@@ -922,4 +993,4 @@ cleanup-vcpkg:
 	rm -rf vcpkg
 
 test-utils:
-	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'
+	make release EXTENSION_CONFIGS='.github/config/extensions/httpfs.cmake;.github/config/extensions/test-utils.cmake;.github/config/extensions/inet.cmake' STATICALLY_LINK_EXTENSIONS='core_functions;parquet;json;icu;tpcds;tpch;autocomplete;httpfs;inet;test_utils' DUCKDB_EXTENSIONS='tpcds;icu;autocomplete;tpch;json'

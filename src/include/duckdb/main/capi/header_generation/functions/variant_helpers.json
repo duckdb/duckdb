@@ -1,6 +1,0 @@
-{
-    "group": "variant_helpers",
-    "deprecated": false,
-    "description": "Functions to operate on VARIANT types.",
-    "entries": []
-}

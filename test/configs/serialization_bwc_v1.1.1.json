@@ -128,7 +128,6 @@
     {
       "reason": "Unknown failure (empty reason)",
       "paths": [
-        "test/sql/types/enum/test_enum_to_numbers.test",
         "test/sql/copy/csv/test_csv_remote.test",
         "test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test"
       ]

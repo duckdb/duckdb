@@ -31,7 +31,7 @@ Initialization function
 statement error
 LOAD '{BUILD_DIRECTORY}/test/extension/loadable_extension_demo.duckdb_extension' AS demo
 ----
-Alias 'demo' already exists for extension 'loadable_extension_demo'
+Alias "demo" already exists for extension 'loadable_extension_demo'
 
 # unqualified call works
 query I

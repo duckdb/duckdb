@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/main/http/http_util.hpp"
 #include "duckdb/common/local_file_system.hpp"
 
 #include <set>
@@ -55,7 +56,7 @@ TEST_CASE("Test DB config configuration", "[api]") {
 }
 
 TEST_CASE("Test allowed options", "[api]") {
-	case_insensitive_map_t<Value> config_dict;
+	identifier_map_t<Value> config_dict;
 	string option;
 
 	SECTION("allowed_directories") {
@@ -118,7 +119,7 @@ TEST_CASE("Test user_agent", "[api]") {
 		DuckDB db(nullptr);
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
-		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
+		REQUIRE_THAT(res->Collection().GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) cpp"));
 	}
 	{
 		// The latest provided duckdb_api is used
@@ -128,8 +129,28 @@ TEST_CASE("Test user_agent", "[api]") {
 		DuckDB db("", &config);
 		Connection con(db);
 		auto res = con.Query("PRAGMA user_agent");
-		REQUIRE_THAT(res->GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
+		REQUIRE_THAT(res->Collection().GetValue(0, 0).ToString(), Catch::Matchers::Matches("duckdb/.*(.*) go"));
 	}
+	{
+		DuckDB db(nullptr);
+		HTTPHeaders headers(*db.instance);
+		auto user_agent = headers.GetHeaderValue("User-Agent");
+		REQUIRE(!user_agent.empty());
+		REQUIRE(user_agent.back() != ' ');
+		REQUIRE(user_agent.back() != '\t');
+	}
+}
+
+TEST_CASE("HTTPHeaders preserves repeated field values", "[api]") {
+	HTTPHeaders headers;
+	headers.Insert("Cache-Control", "max-age=600");
+	headers.Append("cache-control", "no-store");
+
+	REQUIRE(headers.GetHeaderValue("CACHE-CONTROL") == "max-age=600");
+	const auto values = headers.GetHeaderValues("Cache-Control");
+	REQUIRE(values.size() == 2);
+	REQUIRE(values[0] == "max-age=600");
+	REQUIRE(values[1] == "no-store");
 }
 
 TEST_CASE("Test secret_directory configuration", "[api]") {
@@ -145,10 +166,10 @@ TEST_CASE("Test secret_directory configuration", "[api]") {
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_extension_dir = con.Query("SELECT current_setting('extension_directory') AS extdir;");
-	REQUIRE(select_extension_dir->GetValue(0, 0).ToString() == "my_extension_dir");
+	REQUIRE(select_extension_dir->Collection().GetValue(0, 0).ToString() == "my_extension_dir");
 
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == "my_secret_dir");
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == "my_secret_dir");
 }
 
 TEST_CASE("Test secret creation with a custom secret_directory configuration", "[api]") {
@@ -169,11 +190,11 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration", "
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == my_secret_dir);
 
 	// Ensure that creating a secret works and the secret file is created in the correct directory
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
-	REQUIRE(create_secret->GetValue(0, 0).GetValue<bool>());
+	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
 	REQUIRE(fs.FileExists(my_secret_file));
 }
 
@@ -196,18 +217,18 @@ TEST_CASE("Test secret creation with a custom secret_directory configuration upd
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == my_secret_dir);
 
 	// Do not create a secret here because it will initialize the secret manager and forbid us to update the value.
 
 	// Update the secret directory and ensure that the setting is updated
 	con.Query("SET secret_directory='" + new_secret_dir + "';");
 	auto select_new_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_new_secret_dir->GetValue(0, 0).ToString() == new_secret_dir);
+	REQUIRE(select_new_secret_dir->Collection().GetValue(0, 0).ToString() == new_secret_dir);
 
 	// Create another secret and ensure that it is created in the new directory
 	auto new_create_secret = con.Query("CREATE PERSISTENT SECRET my_other_secret (TYPE http, BEARER_TOKEN 'token')");
-	REQUIRE(new_create_secret->GetValue(0, 0).GetValue<bool>());
+	REQUIRE(new_create_secret->Collection().GetValue(0, 0).GetValue<bool>());
 	REQUIRE(fs.FileExists(my_other_secret_file));
 }
 
@@ -229,11 +250,11 @@ TEST_CASE("Test secret_directory configuration update after secret creation", "[
 
 	// Ensure that the extension directory is set correctly (according to the inital config)
 	auto select_secret_dir = con.Query("SELECT current_setting('secret_directory') AS secretdir;");
-	REQUIRE(select_secret_dir->GetValue(0, 0).ToString() == my_secret_dir);
+	REQUIRE(select_secret_dir->Collection().GetValue(0, 0).ToString() == my_secret_dir);
 
 	// Create a secret here to initialize the secret manager
 	auto create_secret = con.Query("CREATE PERSISTENT SECRET my_secret (TYPE http, BEARER_TOKEN 'token')");
-	REQUIRE(create_secret->GetValue(0, 0).GetValue<bool>());
+	REQUIRE(create_secret->Collection().GetValue(0, 0).GetValue<bool>());
 	REQUIRE(fs.FileExists(my_secret_file));
 
 	// Try to update the secret directory and expect failure as the secret manager is already initialized

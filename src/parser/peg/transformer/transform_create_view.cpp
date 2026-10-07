@@ -1,4 +1,5 @@
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
+#include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
@@ -88,7 +89,8 @@ void PEGTransformerFactory::ConvertToRecursiveView(unique_ptr<CreateViewInfo> &i
 }
 
 unique_ptr<CreateStatement>
-PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_recursive,
+PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, const optional<bool> &create_secure,
+                                               const optional<bool> &create_recursive,
                                                const optional<bool> &if_not_exists, const QualifiedName &qualified_name,
                                                const optional<vector<string>> &insert_column_list,
                                                optional<case_insensitive_map_t<unique_ptr<ParsedExpression>>> with_list,
@@ -97,6 +99,9 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 	auto info = make_uniq<CreateViewInfo>();
 	info->on_conflict = if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	info->SetQualifiedName(qualified_name);
+	if (create_secure) {
+		info->security_type = ViewSecurityType::SECURE_VIEW;
+	}
 	if (insert_column_list) {
 		info->aliases = StringsToIdentifiers(*insert_column_list);
 	}
@@ -108,12 +113,12 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 			if (option_entry.second->GetExpressionClass() != ExpressionClass::CONSTANT) {
 				throw InvalidInputException("Defer binding option must be a constant value");
 			}
-			auto &val = option_entry.second->Cast<ConstantExpression>().GetValue();
-			if (val.IsNull()) {
+			auto &literal = option_entry.second->Cast<ConstantExpression>().GetLiteral();
+			if (literal.IsNull()) {
 				info->binding_mode = CreateViewBindingMode::SKIP_BINDING;
-			} else if (val.type().id() != LogicalTypeId::BOOLEAN) {
+			} else if (literal.kind != LiteralKind::BOOLEAN) {
 				throw InvalidInputException("Defer binding option must be a boolean");
-			} else if (BooleanValue::Get(val)) {
+			} else if (BooleanValue::Get(literal.ToValue())) {
 				info->binding_mode = CreateViewBindingMode::SKIP_BINDING;
 			}
 		}
@@ -129,6 +134,10 @@ PEGTransformerFactory::TransformCreateViewStmt(PEGTransformer &transformer, cons
 }
 
 bool PEGTransformerFactory::TransformCreateRecursive(PEGTransformer &transformer) {
+	return true;
+}
+
+bool PEGTransformerFactory::TransformCreateSecure(PEGTransformer &transformer) {
 	return true;
 }
 

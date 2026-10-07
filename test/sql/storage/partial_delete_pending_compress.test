@@ -1,0 +1,67 @@
+# name: test/sql/storage/partial_delete_pending_compress.test
+# description: Single-transaction partial deletes mask even under an older snapshot, which still sees the rows
+# group: [storage]
+
+# the BASE_TABLE byte thresholds below are calibrated for the default 256KB block size
+require block_size 262144
+
+statement ok
+SET immediate_transaction_mode=true
+
+# force every CHECKPOINT to run even with an empty WAL
+statement ok
+PRAGMA force_checkpoint
+
+# 10 full row groups so the array-vs-mask memory gap is observable
+statement ok
+CREATE TABLE p AS SELECT i FROM range(1228800) t(i)
+
+statement ok
+CHECKPOINT
+
+statement ok con1
+BEGIN
+
+query I con2
+DELETE FROM p WHERE i % 2 = 0
+----
+614400
+
+statement ok con2
+CHECKPOINT
+
+# every deleted row in a vector shares con2's single commit id, so the checkpoint folds the per-row
+# arrays into ~256 byte masks carrying that id - the arrays are freed even though con1 is still open
+query I
+SELECT COALESCE(SUM(memory_usage_bytes), 0) < 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true
+
+# con1 started before the delete committed - the masked id is >= con1's start, so con1 still sees all rows
+query I con1
+SELECT COUNT(*) FROM p
+----
+1228800
+
+# a transaction that starts after the delete committed sees the deletes
+query II
+SELECT COUNT(*), MIN(i) FROM p
+----
+614400	1
+
+statement ok con1
+COMMIT
+
+# the delete is now visible to all transactions - a further checkpoint keeps the masks and stays small
+statement ok
+CHECKPOINT
+
+query II
+SELECT COUNT(*), MIN(i) FROM p
+----
+614400	1
+
+query I
+SELECT COALESCE(SUM(memory_usage_bytes), 0) < 2000000 FROM duckdb_memory() WHERE tag='BASE_TABLE'
+----
+true

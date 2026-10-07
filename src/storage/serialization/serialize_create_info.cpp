@@ -150,10 +150,12 @@ unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) 
 
 void CreateSchemaInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(200, "options", options);
 }
 
 unique_ptr<CreateInfo> CreateSchemaInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateSchemaInfo>(new CreateSchemaInfo());
+	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(200, "options", result->options);
 	return std::move(result);
 }
 
@@ -265,6 +267,9 @@ void CreateViewInfo::Serialize(Serializer &serializer) const {
 	if (serializer.ShouldSerialize(StorageVersion::V1_5_0)) {
 		serializer.WritePropertyWithDefault<identifier_map_t<Value>>(206, "column_comments_map", column_comments_map, identifier_map_t<Value>());
 	}
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+		serializer.WritePropertyWithDefault<ViewSecurityType>(207, "security_type", security_type, ViewSecurityType::REGULAR_VIEW);
+	}
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
@@ -279,6 +284,7 @@ unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	result->aliases = std::move(aliases);
 	result->types = std::move(types);
 	result->query = std::move(query);
+	deserializer.ReadPropertyWithExplicitDefault<ViewSecurityType>(207, "security_type", result->security_type, ViewSecurityType::REGULAR_VIEW);
 	result->SetName(std::move(view_name));
 	return std::move(result);
 }

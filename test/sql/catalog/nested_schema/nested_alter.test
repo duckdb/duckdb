@@ -1,0 +1,197 @@
+# name: test/sql/catalog/nested_schema/nested_alter.test
+# description: Test ALTER and COMMENT ON for entries in nested schemas
+# group: [nested_schema]
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE SCHEMA s1.s2;
+
+statement ok
+CREATE TABLE s1.s2.t(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO s1.s2.t VALUES (1, 10);
+
+# RENAME TABLE
+
+statement ok
+ALTER TABLE s1.s2.t RENAME TO t2;
+
+query II
+SELECT * FROM s1.s2.t2;
+----
+1	10
+
+statement error
+SELECT * FROM s1.s2.t;
+----
+<REGEX>:.*does not exist.*
+
+statement ok
+ALTER TABLE s1.s2.t2 RENAME TO t;
+
+# RENAME COLUMN
+
+statement ok
+ALTER TABLE s1.s2.t RENAME COLUMN j TO k;
+
+query I
+SELECT k FROM s1.s2.t;
+----
+10
+
+# ADD/DROP COLUMN
+
+statement ok
+ALTER TABLE s1.s2.t ADD COLUMN l INTEGER DEFAULT 42;
+
+query III
+SELECT i, k, l FROM s1.s2.t;
+----
+1	10	42
+
+statement ok
+ALTER TABLE s1.s2.t DROP COLUMN l;
+
+query II
+SELECT * FROM s1.s2.t;
+----
+1	10
+
+# ALTER COLUMN TYPE
+
+statement ok
+ALTER TABLE s1.s2.t ALTER COLUMN k TYPE VARCHAR;
+
+query II
+SELECT name, type FROM pragma_table_info('s1.s2.t');
+----
+i	INTEGER
+k	VARCHAR
+
+statement ok
+ALTER TABLE s1.s2.t ALTER COLUMN k TYPE INTEGER;
+
+# SET/DROP DEFAULT and NOT NULL
+
+statement ok
+ALTER TABLE s1.s2.t ALTER COLUMN k SET DEFAULT 7;
+
+statement ok
+ALTER TABLE s1.s2.t ALTER COLUMN i SET NOT NULL;
+
+statement error
+INSERT INTO s1.s2.t (k) VALUES (1);
+----
+<REGEX>:.*NOT NULL constraint failed.*
+
+statement ok
+ALTER TABLE s1.s2.t ALTER COLUMN i DROP NOT NULL;
+
+statement ok
+ALTER TABLE s1.s2.t ALTER COLUMN k DROP DEFAULT;
+
+# ADD PRIMARY KEY
+
+statement ok
+ALTER TABLE s1.s2.t ADD PRIMARY KEY (i);
+
+statement error
+INSERT INTO s1.s2.t VALUES (1, 99);
+----
+<REGEX>:.*primary key.*
+
+# ALTER VIEW
+
+statement ok
+CREATE VIEW s1.s2.v AS SELECT * FROM s1.s2.t;
+
+statement ok
+ALTER VIEW s1.s2.v RENAME TO v2;
+
+query II
+SELECT * FROM s1.s2.v2;
+----
+1	10
+
+# COMMENT ON
+
+statement ok
+COMMENT ON TABLE s1.s2.t IS 'nested table';
+
+query I
+SELECT comment FROM duckdb_tables() WHERE table_name = 't';
+----
+nested table
+
+statement ok
+COMMENT ON COLUMN s1.s2.t.i IS 'nested column';
+
+query I
+SELECT comment FROM duckdb_columns() WHERE table_name = 't' AND column_name = 'i';
+----
+nested column
+
+statement ok
+COMMENT ON VIEW s1.s2.v2 IS 'nested view';
+
+query I
+SELECT comment FROM duckdb_views() WHERE view_name = 'v2';
+----
+nested view
+
+statement ok
+CREATE SEQUENCE s1.s2.seq;
+
+statement ok
+COMMENT ON SEQUENCE s1.s2.seq IS 'nested sequence';
+
+query I
+SELECT comment FROM duckdb_sequences() WHERE sequence_name = 'seq';
+----
+nested sequence
+
+# altering an entry in a nested schema that does not exist
+
+statement error
+ALTER TABLE s1.nope.t RENAME TO t3;
+----
+<REGEX>:.*does not exist.*
+
+statement ok
+ALTER TABLE IF EXISTS s1.nope.t RENAME TO t3;
+
+statement error
+COMMENT ON TABLE s1.nope.t IS 'x';
+----
+<REGEX>:.*does not exist.*
+
+# nested schemas in an attached catalog
+
+statement ok
+USE db2;
+
+statement ok
+CREATE SCHEMA a;
+
+statement ok
+CREATE SCHEMA a.b;
+
+statement ok
+CREATE TABLE a.b.tt(x INTEGER);
+
+statement ok
+ALTER TABLE a.b.tt RENAME TO tt2;
+
+query III
+SELECT database_name, schema_name, table_name FROM duckdb_tables() WHERE table_name = 'tt2';
+----
+db2	b	tt2
+
+statement ok
+USE memory;

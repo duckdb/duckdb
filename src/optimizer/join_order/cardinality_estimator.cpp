@@ -6,7 +6,7 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -952,14 +952,12 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 	D_ASSERT(set->count == 1);
 	auto relation_id = set->relations[0];
 	//! Initialize the distinct count for all columns used in joins with the current relation.
-	//	D_ASSERT(stats.column_distinct_count.size() >= 1);
-
-	for (idx_t i = 0; i < stats.column_distinct_count.size(); i++) {
+	for (idx_t i = 0; i < stats.columns.size(); i++) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
 		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
 		auto key = ColumnBinding(TableIndex(relation_id.index), ProjectionIndex(i));
-		auto distinct_count = stats.column_distinct_count.at(i);
+		auto distinct_count = stats.columns[i].distinct_count;
 		for (auto &relation_to_tdom : state->relation_set_stats) {
 			const auto &i_set = relation_to_tdom.equivalent_relations;
 			if (i_set.find(key) == i_set.end()) {
@@ -978,8 +976,8 @@ void CardinalityEstimator::AddRelationNamesToRelationStats(vector<RelationStats>
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index.index < stats.size());
 			string column_name;
-			if (binding.column_index < stats[binding.table_index.index].column_names.size()) {
-				column_name = stats[binding.table_index.index].column_names[binding.column_index].GetIdentifierName();
+			if (binding.column_index < stats[binding.table_index.index].columns.size()) {
+				column_name = stats[binding.table_index.index].columns[binding.column_index].name.GetIdentifierName();
 			} else {
 				column_name = "[unknown]";
 			}

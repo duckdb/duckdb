@@ -28,6 +28,33 @@ CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE numerics(i NUMERIC(), j NUME
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE bla AS ENUM ();$TEST_PEG_PARSER$);
 
+statement ok
+set allow_parser_override_extension=strict;
+
+query I
+SELECT typeof(NULL::INTEGER ARRAY[3]);
+----
+INTEGER[3]
+
+query I
+SELECT typeof(NULL::INTEGER ARRAY[3][2]);
+----
+INTEGER[3][2]
+
+query I
+SELECT typeof(NULL::INTEGER ARRAY ARRAY[3]);
+----
+INTEGER[][3]
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT typeof(NULL::INTEGER ARRAY[3]);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT typeof(NULL::INTEGER ARRAY[3][2]);$TEST_PEG_PARSER$);
+
+statement ok
+CALL check_peg_parser($TEST_PEG_PARSER$SELECT typeof(NULL::INTEGER ARRAY ARRAY[3]);$TEST_PEG_PARSER$);
+
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE type_int AS ENUM ('a','b');$TEST_PEG_PARSER$);
@@ -46,4 +73,3 @@ CALL check_peg_parser($TEST_PEG_PARSER$CREATE TABLE numerics(i NUMERIC(), j NUME
 
 statement ok
 CALL check_peg_parser($TEST_PEG_PARSER$CREATE TYPE bla AS ENUM ();$TEST_PEG_PARSER$);
-

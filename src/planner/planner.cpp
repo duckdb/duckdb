@@ -11,21 +11,70 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/joinside.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/planner/subquery/flatten_dependent_join.hpp"
+#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_trigger.hpp"
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/planner/planner_extension.hpp"
+#include "duckdb/planner/logical_plan_verifier.hpp"
+#include "duckdb/planner/operator/logical_explain.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 
 namespace duckdb {
 
 Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
+}
+
+static void RenderSQLExplain(unique_ptr<LogicalOperator> &op, ClientContext &context, Binder &binder) {
+	if (op->type == LogicalOperatorType::LOGICAL_PREPARE || op->type == LogicalOperatorType::LOGICAL_EXECUTE) {
+		for (auto &child : op->children) {
+			RenderSQLExplain(child, context, binder);
+		}
+	} else if (op->type == LogicalOperatorType::LOGICAL_EXPLAIN) {
+		auto &explain = op->Cast<LogicalExplain>();
+		if (explain.explain_type == ExplainType::EXPLAIN_SQL) {
+			op = explain.CreateSQLResult(context, binder.GenerateTableIndex());
+		}
+	}
+}
+
+void Planner::Optimize() {
+	auto &profiler = QueryProfiler::Get(context);
+#ifdef DEBUG
+	plan->Verify(context);
+#endif
+	bool optimize = Settings::Get<EnableOptimizerSetting>(context);
+	if (Settings::Get<DebugDisableOptimizerSetting>(context)) {
+		// verify disable optimizer - disable EXCEPT for explain, otherwise every single EXPLAIN query breaks
+		if (plan->type != LogicalOperatorType::LOGICAL_EXPLAIN) {
+			optimize = false;
+		}
+	}
+	if (plan->RequireOptimizer()) {
+		{
+			auto optimizer_timer = profiler.StartTimer<MetricOptimizerTotalTime>();
+			Optimizer optimizer(*binder, context);
+			if (optimize) {
+				plan = optimizer.Optimize(std::move(plan));
+			} else {
+				plan = optimizer.LowerMandatoryAggregateRewrites(std::move(plan));
+			}
+			D_ASSERT(plan);
+		}
+#ifdef DEBUG
+		plan->Verify(context);
+#endif
+	}
+	RenderSQLExplain(plan, context, *binder);
 }
 
 // Pre-decorrelation pass: replace LogicalTrigger with LogicalDependentJoin so the standard
@@ -65,6 +114,70 @@ static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t dep
 		CheckTreeDepth(*child, max_depth, depth + 1);
 	}
 }
+
+#ifdef D_ASSERT_IS_ENABLED
+static bool ContainsDependentJoin(const LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsDependentJoin(*child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool VerifyCanonicalComparisonJoins(const LogicalOperator &plan) {
+	if (plan.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	    plan.type == LogicalOperatorType::LOGICAL_DELIM_JOIN || plan.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		auto &join = plan.Cast<LogicalComparisonJoin>();
+		unordered_set<TableIndex> left_bindings;
+		unordered_set<TableIndex> right_bindings;
+		LogicalJoin::GetTableReferences(*join.children[0], left_bindings);
+		LogicalJoin::GetTableReferences(*join.children[1], right_bindings);
+		for (auto &condition : join.conditions) {
+			if (!condition.IsComparison()) {
+				continue;
+			}
+			auto left_side = JoinSide::GetCurrentJoinSide(condition.GetLHS(), left_bindings, right_bindings);
+			auto right_side = JoinSide::GetCurrentJoinSide(condition.GetRHS(), left_bindings, right_bindings);
+			// A condition side can be independent of both children, for example a constant or an outer reference.
+			// It is non-canonical only when it requires the opposite child or both children.
+			if (left_side == JoinSide::RIGHT || left_side == JoinSide::BOTH || right_side == JoinSide::LEFT ||
+			    right_side == JoinSide::BOTH) {
+				return false;
+			}
+		}
+	}
+	for (auto &child : plan.children) {
+		if (!VerifyCanonicalComparisonJoins(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
+	bool valid = true;
+	LogicalOperatorVisitor::EnumerateExpressions(plan, [&](const unique_ptr<Expression> *expression) {
+		if ((*expression)->HasSubquery()) {
+			valid = false;
+		}
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    **expression, [&](const BoundColumnRefExpression &column_ref) { valid &= column_ref.Depth() == 0; });
+	});
+	if (!valid) {
+		return false;
+	}
+	for (auto &child : plan.children) {
+		if (!VerifyPlannedExpressions(*child)) {
+			return false;
+		}
+	}
+	return true;
+}
+#endif
 
 static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
 	for (auto &planner_extension : PlannerExtension::Iterate(context)) {
@@ -128,7 +241,11 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		CheckTreeDepth(*plan, max_tree_depth);
 
 		RewriteTriggersToDependent(*this->binder, *this->plan);
+		RecursiveDependentJoinPlanner::Plan(*this->binder, this->plan);
 		this->plan = FlattenDependentJoins::DecorrelateIndependent(*this->binder, std::move(this->plan));
+		D_ASSERT(!ContainsDependentJoin(*this->plan));
+		D_ASSERT(VerifyPlannedExpressions(*this->plan));
+		D_ASSERT(VerifyCanonicalComparisonJoins(*this->plan));
 	}
 	this->properties = binder->GetStatementProperties();
 	this->properties.parameter_count = parameter_count;
@@ -201,6 +318,7 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::MERGE_INTO_STATEMENT:
 	case StatementType::CONNECT_STATEMENT:
 	case StatementType::DISCONNECT_STATEMENT:
+	case StatementType::EXTERNAL_RESOURCE_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -223,7 +341,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 		return;
 	}
 	// verify the column bindings of the plan
-	ColumnBindingResolver::Verify(context, *op);
+	LogicalPlanVerifier::Verify(context, *op);
 	if (!Settings::Get<DebugVerifySerializerSetting>(context)) {
 		return;
 	}

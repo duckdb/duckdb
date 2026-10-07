@@ -35,7 +35,7 @@ endloop
 foreach agg count(*) count_star()
 
 query I
-SELECT {agg} OVER (ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING) AS actual
+SELECT {agg} OVER (ROWS BETWEEN 1 PRECEDING AND 2 PRECEDING) AS actual
 FROM range(1);
 ----
 0
@@ -55,7 +55,7 @@ foreach agg count(*) count_star()
 
 # Check aggregates
 query I
-SELECT {agg} OVER (ROWS BETWEEN 1 FOLLOWING AND 1 PRECEDING EXCLUDE TIES) AS actual
+SELECT {agg} OVER (ROWS BETWEEN 1 PRECEDING AND 2 PRECEDING EXCLUDE TIES) AS actual
 FROM range(1);
 ----
 0
@@ -81,6 +81,70 @@ ORDER BY 1;
 1	1
 2	2
 NULL	3
+
+# Reversed frames
+foreach func cume_dist percent_rank
+
+query II
+SELECT id, {func}(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	0.0
+2	0.0
+NULL	0.0
+
+endloop
+
+query II
+SELECT id, ntile(2 ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+query II
+SELECT id, rank(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 3 FOLLOWING AND 1 FOLLOWING)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	1
+NULL	1
+
+# Empty frames
+foreach func cume_dist percent_rank
+
+query II
+SELECT id, {func}(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 PRECEDING AND 2 PRECEDING)
+FROM t1
+ORDER BY 1;
+----
+1	0.0
+2	0.0
+NULL	0.0
+
+endloop
+
+query II
+SELECT id, ntile(2 ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 PRECEDING AND 2 PRECEDING)
+FROM t1
+ORDER BY 1;
+----
+1	NULL
+2	NULL
+NULL	NULL
+
+query II
+SELECT id, rank(ORDER BY id) OVER (ORDER BY ch ROWS BETWEEN 1 PRECEDING AND 2 PRECEDING)
+FROM t1
+ORDER BY 1;
+----
+1	1
+2	1
+NULL	1
 
 # All zeroes
 #

@@ -77,3 +77,43 @@ statement error
 SELECT str ILIKE pat ESCAPE str FROM tbl
 ----
 <REGEX>:.*Syntax Error: Invalid escape string.*
+
+# An embedded NUL is a valid escape character and must not be confused with
+# the empty escape string, which disables escaping.
+query IIII
+SELECT '%' ILIKE (chr(0) || '%') ESCAPE chr(0),
+       '%' NOT ILIKE (chr(0) || '%') ESCAPE chr(0),
+       '%' ILIKE (chr(0) || '%') ESCAPE '',
+       (chr(0) || '%') ILIKE (chr(0) || '%') ESCAPE ''
+----
+true	false	false	true
+
+# Exercise the non-constant ternary path as well as case folding around a NUL escape.
+statement ok
+CREATE TABLE nul_escapes(str VARCHAR, pat VARCHAR, esc VARCHAR);
+
+statement ok
+INSERT INTO nul_escapes VALUES
+	('A%', 'a' || chr(0) || '%', chr(0)),
+	('A%', 'a' || chr(0) || '%', '');
+
+query I
+SELECT str ILIKE pat ESCAPE esc FROM nul_escapes ORDER BY esc
+----
+false
+true
+
+# Constant pattern/escape over a vector takes the specialised fast path.
+query II
+SELECT str ILIKE ('a' || chr(0) || '%') ESCAPE chr(0),
+       str ILIKE ('a' || chr(0) || '%') ESCAPE ''
+FROM (VALUES ('A%'), ('🦆')) t(str)
+ORDER BY str
+----
+true	false
+false	false
+
+statement error
+SELECT 'ab' ILIKE ('a' || chr(0)) ESCAPE chr(0)
+----
+<REGEX>:.*Syntax Error: Like pattern must not end with escape character.*

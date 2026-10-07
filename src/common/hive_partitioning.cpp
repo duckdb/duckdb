@@ -2,6 +2,7 @@
 
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -86,12 +87,30 @@ string HivePartitioning::Escape(const string &input) {
 	return StringUtil::URLEncode(input);
 }
 
+string HivePartitioning::EscapeValue(const string &input) {
+	auto result = Escape(input);
+	// the comparison is case-insensitive because on a case-insensitive file system a value that differs only in
+	// case still lands in the directory that is reserved for NULL values
+	if (!StringUtil::CIEquals(result, DEFAULT_PARTITION_NAME)) {
+		return result;
+	}
+	// percent-encode the first character so the value gets its own directory while still unescaping back to the
+	// original value
+	static constexpr const char *HEX_DIGIT = "0123456789ABCDEF";
+	const auto first = static_cast<unsigned char>(result[0]);
+	string escaped = "%";
+	escaped += HEX_DIGIT[first >> 4];
+	escaped += HEX_DIGIT[first & 15];
+	escaped += result.substr(1);
+	return escaped;
+}
+
 string HivePartitioning::Unescape(const string &input) {
 	return StringUtil::URLDecode(input);
 }
 
 bool HivePartitioning::IsNull(const string &input) {
-	return StringUtil::CIEquals(input, "NULL") || input == "__HIVE_DEFAULT_PARTITION__";
+	return StringUtil::CIEquals(input, "NULL") || input == DEFAULT_PARTITION_NAME;
 }
 
 // matches hive partitions in file name. For example:
@@ -131,13 +150,17 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 
 Value HivePartitioning::GetValue(ClientContext &context, const string &key, const string &str_val,
                                  const LogicalType &type) {
-	// Handle nulls
-	if (IsNull(str_val)) {
+	// On SQLNULL, DuckDB writes "__HIVE_DEFAULT_PARTITION__", instead of string version "NULL".
+	if (str_val == DEFAULT_PARTITION_NAME) {
 		return Value(type);
 	}
 	if (type.id() == LogicalTypeId::VARCHAR) {
 		// for string values we can directly return the type
 		return Value(Unescape(str_val));
+	}
+	// Handle Hive NULL markers for non-string partition types
+	if (StringUtil::CIEquals(str_val, "NULL")) {
+		return Value(type);
 	}
 	if (str_val.empty()) {
 		// empty strings are NULL for non-string types
@@ -146,11 +169,12 @@ Value HivePartitioning::GetValue(ClientContext &context, const string &key, cons
 
 	// cast to the target type
 	Value value(Unescape(str_val));
-	if (!value.TryCastAs(context, type)) {
+	auto cast = value.TryCastAs(context, type);
+	if (!cast) {
 		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
 		                            StringUtil::Upper(key), type.ToString());
 	}
-	return value;
+	return std::move(*cast);
 }
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
@@ -167,6 +191,10 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 
 	if ((!filter_info.filename_enabled && !filter_info.hive_enabled) || filters.empty()) {
 		return;
+	}
+
+	if (!info.extra_info.total_files.IsValid()) {
+		info.extra_info.file_filter_expressions = vector<unique_ptr<Expression>>();
 	}
 
 	for (idx_t i = 0; i < files.size(); i++) {
@@ -206,6 +234,35 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<Ope
 
 	D_ASSERT(filters.size() >= pruned_filters.size());
 
+	for (idx_t i = 0; i < filters.size() && info.extra_info.file_filter_expressions; i++) {
+		if (have_preserved_filter[i]) {
+			continue;
+		}
+		auto retained = filters[i]->Copy();
+		bool representable = true;
+		ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+		    retained, [&](auto &column, unique_ptr<Expression> &) {
+			    auto binding = column.Binding();
+			    if (column.Depth() != 0 || binding.table_index != table_index ||
+			        binding.column_index.GetIndex() >= info.column_indexes.size()) {
+				    representable = false;
+				    return;
+			    }
+			    auto &index = info.column_indexes[binding.column_index.GetIndex()];
+			    if (index.IsVirtualColumn() || index.IsPushdownExtract() || index.HasType()) {
+				    representable = false;
+				    return;
+			    }
+			    column.BindingMutable() = ColumnBinding(TableIndex(ExtraOperatorInfo::FILE_FILTER_TABLE_INDEX),
+			                                            ProjectionIndex(index.GetPrimaryIndex()));
+		    });
+		if (!representable) {
+			info.extra_info.file_filter_expressions.reset();
+			break;
+		}
+		info.extra_info.file_filter_expressions->push_back(std::move(retained));
+	}
+
 	info.extra_info.total_files = files.size();
 	info.extra_info.filtered_files = pruned_files.size();
 
@@ -227,15 +284,11 @@ static inline Value GetHiveKeyValue(const T &val) {
 
 template <class T>
 static inline Value GetHiveKeyValue(const T &val, const LogicalType &type) {
-	auto result = GetHiveKeyValue(val);
-	result.Reinterpret(type);
-	return result;
+	return GetHiveKeyValue(val).WithType(type);
 }
 
 static inline Value GetHiveKeyNullValue(const LogicalType &type) {
-	Value result;
-	result.Reinterpret(type);
-	return result;
+	return Value().WithType(type);
 }
 
 template <class T>

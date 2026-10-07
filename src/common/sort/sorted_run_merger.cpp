@@ -151,6 +151,8 @@ private:
 	//! Variables for scanning
 	idx_t merged_partition_count;
 	idx_t merged_partition_index;
+	//! Rows of the current partition that were added to the global progress
+	idx_t progress_scanned;
 
 	//! For scanning
 	Vector sort_key_pointers;
@@ -168,7 +170,7 @@ public:
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
 	      iterator_state_type(GetBlockIteratorStateType(merger.external)),
 	      sort_key_type(merger.sort.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0),
-	      destroy_partition_idx(0) {
+	      progress_scanned(0), destroy_partition_idx(0) {
 		// Initialize partitions
 		partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -277,6 +279,8 @@ public:
 	idx_t next_partition_idx;
 	vector<unique_ptr<SortedRunMergePartition>> partitions;
 	atomic<idx_t> total_scanned;
+	//! Rows scanned so far, updated per chunk (for progress)
+	atomic<idx_t> progress_scanned;
 
 	mutex destroy_lock;
 	idx_t destroy_partition_idx;
@@ -292,7 +296,8 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
     : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
       task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs),
       merged_partition_count(DConstants::INVALID_INDEX), merged_partition_index(DConstants::INVALID_INDEX),
-      sort_key_pointers(LogicalType::POINTER), sorted_run_scan_state(gstate.context, gstate.merger.sort) {
+      progress_scanned(0), sort_key_pointers(LogicalType::POINTER),
+      sorted_run_scan_state(gstate.context, gstate.merger.sort) {
 	for (const auto &run : gstate.merger.sorted_runs) {
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
@@ -351,10 +356,14 @@ SourceResultType SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalSta
 	case SortedRunMergerTask::SCAN_PARTITION:
 		if (chunk) {
 			ScanPartition(gstate, *chunk);
+			gstate.progress_scanned.fetch_add(chunk->size(), std::memory_order_relaxed);
+			progress_scanned += chunk->size();
 		} else {
 			MaterializePartition(gstate);
 		}
 		if (!chunk || chunk->size() == 0) {
+			gstate.progress_scanned.fetch_add(merged_partition_count - progress_scanned, std::memory_order_relaxed);
+			progress_scanned = 0;
 			gstate.DestroyScannedData();
 			gstate.partitions[partition_idx.GetIndex()]->scanned = true;
 			//	fetch_add returns the _previous_ value!
@@ -453,24 +462,11 @@ void SortedRunMergerLocalState::ComputePartitionBoundariesSwitch(SortedRunMerger
                                                                  const optional_idx &p_idx,
                                                                  unsafe_vector<STATE> &states) {
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, p_idx, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, p_idx, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, p_idx, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, p_idx, states);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, p_idx, states);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, p_idx, states);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_24>(gstate, p_idx, states);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, p_idx, states);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_VARIABLE_32>(gstate, p_idx, states);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::SORT_KEY_TYPE>(gstate, p_idx, states);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::ComputePartitionBoundariesSwitch for %s",
 		                              EnumUtil::ToString(sort_key_type));
@@ -608,24 +604,11 @@ void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstat
 template <class STATE>
 void SortedRunMergerLocalState::MergePartitionSwitch(SortedRunMergerGlobalState &gstate, unsafe_vector<STATE> &states) {
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, states);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, states);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, states);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_24>(gstate, states);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, states);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_VARIABLE_32>(gstate, states);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedMergePartition<STATE, SortKeyType::SORT_KEY_TYPE>(gstate, states);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::MergePartitionSwitch for %s",
 		                              EnumUtil::ToString(sort_key_type));
@@ -678,24 +661,11 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 
 void SortedRunMergerLocalState::ScanPartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, chunk);
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, chunk);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, chunk);
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, chunk);
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		return TemplatedScanPartition<SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, chunk);
-	case SortKeyType::PAYLOAD_FIXED_16:
-		return TemplatedScanPartition<SortKeyType::PAYLOAD_FIXED_16>(gstate, chunk);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedScanPartition<SortKeyType::PAYLOAD_FIXED_24>(gstate, chunk);
-	case SortKeyType::PAYLOAD_FIXED_32:
-		return TemplatedScanPartition<SortKeyType::PAYLOAD_FIXED_32>(gstate, chunk);
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		return TemplatedScanPartition<SortKeyType::PAYLOAD_VARIABLE_32>(gstate, chunk);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		return TemplatedScanPartition<SortKeyType::SORT_KEY_TYPE>(gstate, chunk);
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::ScanPartition for %s",
 		                              EnumUtil::ToString(sort_key_type));
@@ -724,33 +694,12 @@ void SortedRunMergerLocalState::TemplatedScanPartition(SortedRunMergerGlobalStat
 void SortedRunMergerLocalState::MaterializePartition(SortedRunMergerGlobalState &gstate) {
 	unique_ptr<SortedRun> sorted_run;
 	switch (sort_key_type) {
-	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_8>(gstate);
+#define DUCKDB_SORT_KEY_CASE(SORT_KEY_TYPE)                                                                            \
+	case SortKeyType::SORT_KEY_TYPE:                                                                                   \
+		sorted_run = TemplatedMaterializePartition<SortKeyType::SORT_KEY_TYPE>(gstate);                                \
 		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_16>(gstate);
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_24>(gstate);
-		break;
-	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_FIXED_32>(gstate);
-		break;
-	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_16:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_FIXED_16>(gstate);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_24:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_FIXED_24>(gstate);
-		break;
-	case SortKeyType::PAYLOAD_FIXED_32:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_FIXED_32>(gstate);
-		break;
-	case SortKeyType::PAYLOAD_VARIABLE_32:
-		sorted_run = TemplatedMaterializePartition<SortKeyType::PAYLOAD_VARIABLE_32>(gstate);
-		break;
+		DUCKDB_FOR_EACH_SORT_KEY_TYPE(DUCKDB_SORT_KEY_CASE)
+#undef DUCKDB_SORT_KEY_CASE
 	default:
 		throw NotImplementedException("SortedRunMergerLocalState::MaterializePartition for %s",
 		                              EnumUtil::ToString(sort_key_type));
@@ -884,10 +833,15 @@ OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, Data
 ProgressData SortedRunMerger::GetProgress(ClientContext &, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
 	ProgressData res;
-	res.done = static_cast<double>(gstate.total_scanned);
+	res.done = static_cast<double>(MinValue<idx_t>(gstate.progress_scanned, total_count));
 	res.total = static_cast<double>(total_count);
 	res.invalid = false;
 	return res;
+}
+
+bool SortedRunMerger::IsFinished(GlobalSourceState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
+	return gstate.total_scanned == total_count;
 }
 
 //===--------------------------------------------------------------------===//

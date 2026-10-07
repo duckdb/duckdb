@@ -171,6 +171,12 @@
         "id": 201,
         "name": "offset_val",
         "type": "BoundLimitNode"
+      },
+      {
+        "id": 202,
+        "name": "unpruned_offset",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "constructor": [
@@ -218,6 +224,12 @@
         "id": 202,
         "name": "offset",
         "type": "idx_t"
+      },
+      {
+        "id": 203,
+        "name": "unpruned_offset",
+        "type": "optional_idx",
+        "default": "optional_idx()"
       }
     ],
     "constructor": [
@@ -265,6 +277,70 @@
     ]
   },
   {
+    "class": "LogicalSecureView",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_SECURE_VIEW",
+    "members": [
+      {
+        "id": 200,
+        "name": "view_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "pushed_filters",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "has_source",
+        "type": "bool"
+      },
+      {
+        "id": 203,
+        "name": "source_name",
+        "type": "QualifiedName",
+        "default": "QualifiedName()"
+      },
+      {
+        "id": 204,
+        "name": "source_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 205,
+        "name": "has_at_clause",
+        "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "at_unit",
+        "type": "Identifier"
+      },
+      {
+        "id": 207,
+        "name": "at_value",
+        "type": "Value",
+        "default": "Value()"
+      },
+      {
+        "id": 208,
+        "name": "output_bindings",
+        "type": "vector<ColumnBinding>"
+      },
+      {
+        "id": 209,
+        "name": "output_expressions",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 210,
+        "name": "source_filters",
+        "type": "vector<Expression*>"
+      }
+    ]
+  },
+  {
     "class": "LogicalColumnDataGet",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CHUNK_GET",
@@ -283,13 +359,19 @@
         "id": 202,
         "name": "collection",
         "type": "optionally_owned_ptr<ColumnDataCollection>"
+      },
+      {
+        "id": 203,
+        "name": "column_ids",
+        "type": "vector<column_t>"
       }
     ],
     "constructor": [
       "table_index",
       "chunk_types",
       "collection"
-    ]
+    ],
+    "custom_implementation": true
   },
   {
     "class": "LogicalDelimGet",
@@ -516,15 +598,13 @@
     "class": "LogicalCrossProduct",
     "base": "LogicalOperator",
     "enum": "LOGICAL_CROSS_PRODUCT",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "LogicalPositionalJoin",
     "base": "LogicalOperator",
     "enum": "LOGICAL_POSITIONAL_JOIN",
-    "members": [
-    ]
+    "members": []
   },
   {
     "class": "LogicalSetOperation",
@@ -855,6 +935,12 @@
         "id": 208,
         "name": "old_row_columns",
         "type": "vector<idx_t>"
+      },
+      {
+        "id": 209,
+        "name": "row_id_handling",
+        "type": "RowIdHandling",
+        "default": "RowIdHandling::ASSUME_UNIQUE"
       }
     ],
     "constructor": [
@@ -909,7 +995,10 @@
         "type": "vector<idx_t>"
       }
     ],
-    "constructor": ["$ClientContext", "table_info&"]
+    "constructor": [
+      "$ClientContext",
+      "table_info&"
+    ]
   },
   {
     "class": "BoundMergeIntoAction",
@@ -1013,6 +1102,12 @@
         "id": 203,
         "name": "logical_plan_opt",
         "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "sql_output_names",
+        "type": "vector<Identifier>",
+        "default": "vector<Identifier>()"
       }
     ],
     "constructor": [
@@ -1177,6 +1272,24 @@
     ],
     "constructor": [
       "info"
+    ]
+  },
+  {
+    "class": "LogicalExternalResource",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXTERNAL_RESOURCE",
+    "includes": [
+      "duckdb/planner/operator/logical_external_resource.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "data",
+        "type": "BoundExternalResource"
+      }
+    ],
+    "constructor": [
+      "data"
     ]
   },
   {

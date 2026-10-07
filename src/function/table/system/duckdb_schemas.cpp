@@ -17,7 +17,7 @@ struct DuckDBSchemasData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, TableFunctionBindInput &input,
-                                                  vector<LogicalType> &return_types, vector<string> &names) {
+                                                  vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 

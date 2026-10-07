@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/projection_index.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/runtime_filter_cast.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -31,17 +32,6 @@ enum class JoinFilterPushdownMode : uint8_t {
 	RECONSTRUCT_EXPRESSION,
 	//! Only storage-domain filters are safe; BF/PRF reconstruction on raw scan values is not
 	STORAGE_ONLY
-};
-
-enum class RuntimeFilterCastMode : uint8_t { DEFAULT_CAST, TRY_CAST };
-
-struct RuntimeFilterCastStep {
-	RuntimeFilterCastStep(LogicalType target_type_p, RuntimeFilterCastMode mode_p)
-	    : target_type(std::move(target_type_p)), mode(mode_p) {
-	}
-
-	LogicalType target_type;
-	RuntimeFilterCastMode mode;
 };
 
 struct JoinFilterPushdownColumn {

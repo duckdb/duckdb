@@ -1,0 +1,47 @@
+# name: test/sql/storage/compression/fsst/fsst_small_symbol_table.test
+# description: Read an FSST segment whose serialized symbol table is smaller than sizeof(duckdb_fsst_decoder_t)
+# group: [fsst]
+
+# small blocks so a single row group fills a block through the length index buffer
+statement ok
+ATTACH '{TEST_DIR}/fsst_small_symbol_table.db' AS db1 (BLOCK_SIZE 16384, STORAGE_VERSION 'v1.0.0')
+
+statement ok
+USE db1
+
+statement ok
+PRAGMA force_compression='fsst'
+
+# Mostly-empty rows keep the dictionary tiny while the length index buffer fills the block,
+# pushing the FSST symbol table to the very end of the segment. The serialized symbol table is
+# much smaller than sizeof(duckdb_fsst_decoder_t), and the reader must not reject such a segment.
+statement ok
+CREATE TABLE t AS
+SELECT CASE WHEN i % 997 = 0 THEN concat('BEEPBOOP-', (i % 3)::VARCHAR) ELSE '' END AS c0
+FROM range(200000) tab(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT DISTINCT compression FROM pragma_storage_info('t') WHERE segment_type ILIKE 'VARCHAR'
+----
+FSST
+
+# scans below read the persisted FSST segment (with its small symbol table) from disk
+query I
+SELECT count(*) FROM t
+----
+200000
+
+query I
+SELECT count(*) FILTER (WHERE c0 <> '') FROM t
+----
+201
+
+query II
+SELECT c0, count(*) FROM t WHERE c0 <> '' GROUP BY c0 ORDER BY c0
+----
+BEEPBOOP-0	67
+BEEPBOOP-1	67
+BEEPBOOP-2	67

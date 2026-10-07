@@ -12,6 +12,10 @@ static void ParseFormattedBytesFunction(DataChunk &args, ExpressionState &state,
 }
 
 ScalarFunction ParseFormattedBytesFun::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::UBIGINT, ParseFormattedBytesFunction);
+	ScalarFunction function({}, LogicalType::UBIGINT, ParseFormattedBytesFunction);
+	function.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	// throws if the input is not a valid formatted byte string
+	function.SetFallible();
+	return function;
 }
 } // namespace duckdb

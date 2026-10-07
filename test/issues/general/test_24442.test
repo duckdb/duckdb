@@ -1,0 +1,89 @@
+# name: test/issues/general/test_24442.test
+# description: MAD window filtering respects frame exclusion
+# group: [general]
+
+statement ok
+CREATE TABLE src(id INTEGER, x INTEGER, keep BOOLEAN)
+
+statement ok
+INSERT INTO src VALUES (1, 0, true), (2, 100, true), (3, 10, true), (4, 20, false), (5, 30, true)
+
+statement ok
+CREATE TABLE peers(rid INTEGER, k INTEGER, x INTEGER, keep BOOLEAN)
+
+statement ok
+INSERT INTO peers VALUES
+	(1, 1, 0, true),
+	(2, 2, 100, true),
+	(3, 2, 10, false),
+	(4, 2, 20, true),
+	(5, 3, 30, true)
+
+foreach windowmode "window" "combine" "separate"
+
+statement ok
+PRAGMA debug_window_mode={windowmode}
+
+# Reported FILTER and EXCLUDE CURRENT ROW interaction
+query IRR
+WITH win AS (
+	SELECT id, MAD(x) FILTER (WHERE keep) OVER (
+		ORDER BY id
+		ROWS BETWEEN 3 PRECEDING AND 1 FOLLOWING
+		EXCLUDE CURRENT ROW
+	) AS actual
+	FROM src
+), expected AS (
+	SELECT o.id, (
+		SELECT MAD(i.x)
+		FROM src i
+		WHERE i.id BETWEEN o.id - 3 AND o.id + 1
+			AND i.id <> o.id
+			AND i.keep
+	) AS expected
+	FROM src o
+)
+SELECT id, actual, expected
+FROM win
+JOIN expected USING (id)
+ORDER BY id
+----
+1	0.000000	0.000000
+2	5.000000	5.000000
+3	50.000000	50.000000
+4	15.000000	15.000000
+5	45.000000	45.000000
+
+# NULL argument validity follows the same path as FILTER validity
+query IR
+WITH win AS (
+	SELECT id, MAD(CASE WHEN keep THEN x END) OVER (
+		ORDER BY id
+		ROWS BETWEEN 3 PRECEDING AND 1 FOLLOWING
+		EXCLUDE CURRENT ROW
+	) AS actual
+	FROM src
+)
+SELECT id, actual
+FROM win
+WHERE id = 4
+----
+4	15.000000
+
+# Peer exclusion can create a wider gap than EXCLUDE CURRENT ROW
+query IR
+WITH win AS (
+	SELECT rid, MAD(x) FILTER (WHERE keep) OVER (
+		ORDER BY k
+		ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+		EXCLUDE GROUP
+	) AS actual
+	FROM peers
+)
+SELECT rid, actual
+FROM win
+WHERE rid = 1
+----
+1	10.000000
+
+endloop

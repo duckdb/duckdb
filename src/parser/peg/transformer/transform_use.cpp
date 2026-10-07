@@ -8,12 +8,12 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformUseStatement(PEGTransfo
                                                                       const QualifiedName &use_target) {
 	string value_str;
 	if (IsInvalidSchema(use_target.Schema())) {
-		value_str = SQLIdentifier::ToString(use_target.Name().GetIdentifierName());
+		value_str = SQLIdentifier::ToString(use_target.Name());
 	} else {
 		value_str = SQLIdentifier(use_target.Schema()) + "." + SQLIdentifier(use_target.Name());
 	}
 
-	auto value_expr = make_uniq<ConstantExpression>(Value(value_str));
+	auto value_expr = ConstantExpression::String(value_str);
 	return make_uniq<SetVariableStatement>("schema", std::move(value_expr), SetScope::AUTOMATIC);
 }
 

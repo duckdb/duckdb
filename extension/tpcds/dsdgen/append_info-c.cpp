@@ -156,7 +156,7 @@ void tpcds_append_information::FinalizeOptimisticAppend() {
 		return;
 	}
 	FlushChunk();
-	duckdb::TransactionData transaction_data(0, 0);
+	auto transaction_data = duckdb::TransactionData::Unversioned();
 	auto &row_collection = *optimistic_collection->collection;
 	row_collection.FinalizeAppend(transaction_data, append_state);
 	finalized = true;

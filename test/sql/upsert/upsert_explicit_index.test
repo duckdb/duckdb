@@ -2,6 +2,10 @@
 # description: Test index UPSERTs.
 # group: [upsert]
 
+# Keep rowid assertions stable under automatic checkpoints.
+statement ok
+SET max_vacuum_tasks = 0;
+
 statement ok
 CREATE TABLE tbl (i INT, j INT);
 

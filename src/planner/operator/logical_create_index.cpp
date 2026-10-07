@@ -37,10 +37,8 @@ void LogicalCreateIndex::ResolveTypes() {
 }
 
 TableCatalogEntry &LogicalCreateIndex::BindTable(ClientContext &context, CreateIndexInfo &info_p) {
-	auto &catalog = info_p.GetQualifiedName().Catalog();
-	auto &schema = info_p.GetQualifiedName().Schema();
-	auto &table_name = info_p.table;
-	return Catalog::GetEntry<TableCatalogEntry>(context, QualifiedName(catalog, schema, table_name));
+	// the table lives in the same (possibly nested) schema as the index
+	return Catalog::GetEntry<TableCatalogEntry>(context, info_p.GetQualifiedName().WithName(info_p.table));
 }
 
 } // namespace duckdb

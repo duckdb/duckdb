@@ -27,7 +27,7 @@ static bool StringEnumCastLoop(const VectorIterator<string_t> &source_data, Vect
 		auto &source_val = source_entry.GetValue();
 		auto pos = EnumType::GetPos(result_type, source_val);
 		if (pos == -1) {
-			result_data[i] = HandleVectorCastError::Operation<T>(CastExceptionText<string_t, T>(source_val),
+			result_data[i] = HandleVectorCastError::Operation<T>(CastExceptionText<string_t>(source_val, result_type),
 			                                                     result_data, i, vector_cast_data);
 		} else {
 			result_data[i] = UnsafeNumericCast<T>(pos);
@@ -161,6 +161,9 @@ bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data,
 		auto varchar_vector_validity = varchar_vector.Validity();
 		// Something went wrong in the conversion, we need to nullify the parent
 		for (idx_t i = 0; i < count; i++) {
+			if (!result_mask.RowIsValid(i)) {
+				continue;
+			}
 			for (idx_t j = list_data[i].offset; j < list_data[i].offset + list_data[i].length; j++) {
 				if (!result_child_validity.IsValid(j) && varchar_vector_validity.IsValid(j)) {
 					result_mask.SetInvalid(i);
@@ -302,7 +305,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 		}
 		list_data[i].length = total - list_data[i].offset;
 	}
-	D_ASSERT(total_elements == total);
+	D_ASSERT(total <= total_elements);
 
 	auto &result_key_child = MapVector::GetKeys(result);
 	auto &result_val_child = MapVector::GetValues(result);
@@ -310,15 +313,15 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, 
 	auto &lstate = parameters.local_state->Cast<MapCastLocalState>();
 
 	CastParameters key_params(parameters, cast_data.key_cast.GetCastData(), lstate.key_state);
-	if (!cast_data.key_cast.Cast(varchar_key_vector, result_key_child, total_elements, key_params)) {
+	if (!cast_data.key_cast.Cast(varchar_key_vector, result_key_child, total, key_params)) {
 		vector_cast_data.all_converted = false;
 	}
 	CastParameters val_params(parameters, cast_data.value_cast.GetCastData(), lstate.value_state);
-	if (!cast_data.value_cast.Cast(varchar_val_vector, result_val_child, total_elements, val_params)) {
+	if (!cast_data.value_cast.Cast(varchar_val_vector, result_val_child, total, val_params)) {
 		vector_cast_data.all_converted = false;
 	}
 	// set the list size after the child casts, since the casts may have replaced the child buffers
-	ListVector::SetListSize(result, total_elements);
+	ListVector::SetListSize(result, total);
 
 	if (!vector_cast_data.all_converted) {
 		auto &key_validity = FlatVector::ValidityMutable(result_key_child);
@@ -423,7 +426,9 @@ static bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, 
 		auto &source_mask = ConstantVector::Validity(source);
 		auto &result_mask = FlatVector::ValidityMutable(result);
 		auto ret = T::StringToNestedTypeCastLoop(source_data, source_mask, result, result_mask, 1, parameters, nullptr);
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		// a child may be neither flat nor constant - a VARIANT child is shredded - and setting the type
+		// directly would propagate into a buffer that cannot represent it
+		result.FlattenAndSetConstant();
 		return ret;
 	}
 	default: {

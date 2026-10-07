@@ -34,6 +34,51 @@ SELECT json_serialize_plan('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_
 ----
 <REGEX>:.*LOGICAL_PROJECTION.*LOGICAL_GET.*
 
+# Optimized IN clauses use LogicalColumnDataGet internally
+query II
+SELECT plan::VARCHAR LIKE '%LOGICAL_CHUNK_GET%', plan::VARCHAR NOT LIKE '%"column_ids"%'
+FROM (
+	SELECT json_serialize_plan(
+		'SELECT i FROM range(20) t(i) WHERE i IN (1, 3, 5, 7, 9, 11)',
+		skip_default := true, optimize := true
+	) plan
+);
+----
+true	true
+
+# Projected LogicalColumnDataGet plans serialize their underlying column ids
+query I
+SELECT column_name FROM (DESCRIBE SELECT 42 AS a, 84 AS b);
+----
+a
+b
+
+query II
+SELECT plan::VARCHAR LIKE '%LOGICAL_CHUNK_GET%', plan::VARCHAR LIKE '%"column_ids"%'
+FROM (
+	SELECT json_serialize_plan(
+		'SELECT column_name FROM (DESCRIBE SELECT 42 AS a, 84 AS b)',
+		skip_default := true, optimize := true
+	) plan
+);
+----
+true	true
+
+# Bound constants exercise the serializer's physical primitive representations.
+query T
+SELECT json_extract(
+	json_serialize_plan(
+		'SELECT 1::TINYINT, 2::UTINYINT, 3::SMALLINT, 4::USMALLINT, '
+		'170141183460469231731687303715884105727::HUGEINT, '
+		'340282366920938463463374607431768211455::UHUGEINT, '
+		'1.25::FLOAT, 2.5::DOUBLE, ''NaN''::DOUBLE',
+		optimize := true
+	),
+	'$.plans[0].expressions[*].value.type.id'
+);
+----
+["TINYINT", "UTINYINT", "SMALLINT", "USMALLINT", "HUGEINT", "UHUGEINT", "FLOAT", "DOUBLE", "DOUBLE"]
+
 # Example with syntax error
 query I
 SELECT json_serialize_plan('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');

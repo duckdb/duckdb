@@ -1,6 +1,7 @@
 #include "duckdb/common/json_document.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/helper.hpp"
 #include "yyjson.hpp"
 
 using namespace duckdb_yyjson; // NOLINT
@@ -106,6 +107,10 @@ bool JSONValue::IsInteger() const {
 	return val && yyjson_is_int(val);
 }
 
+bool JSONValue::IsNumber() const {
+	return val && yyjson_is_num(val);
+}
+
 string JSONValue::GetString() const {
 	const auto str = yyjson_get_str(val);
 	const auto len = yyjson_get_len(val);
@@ -126,6 +131,10 @@ int64_t JSONValue::GetSignedInteger() const {
 
 double JSONValue::GetDouble() const {
 	return unsafe_yyjson_get_real(val);
+}
+
+double JSONValue::GetNumber() const {
+	return unsafe_yyjson_get_num(val);
 }
 
 void JSONValue::IterateArray(const std::function<void(JSONValue)> &callback) const {

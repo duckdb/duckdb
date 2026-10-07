@@ -1,6 +1,7 @@
 #include "duckdb/common/error_data.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/query_location.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types.hpp"
@@ -141,7 +142,22 @@ void ErrorData::AddErrorLocation(const string &query) {
 	if (!query.empty()) {
 		auto entry = extra_info.find("position");
 		if (entry != extra_info.end()) {
-			raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second));
+			// the query location (if present) carries the length so we can underline the full source range
+			idx_t error_length = 0;
+			auto location_entry = extra_info.find("location");
+			if (location_entry != extra_info.end()) {
+				auto comma = location_entry->second.find(',');
+				if (comma != string::npos) {
+					// value is formatted as "[start,length]"
+					auto length_str = location_entry->second.substr(comma + 1);
+					if (!length_str.empty() && length_str.back() == ']') {
+						length_str.pop_back();
+					}
+					error_length = std::stoull(length_str);
+				}
+				extra_info.erase(location_entry);
+			}
+			raw_message = QueryErrorContext::Format(query, raw_message, std::stoull(entry->second), error_length);
 			extra_info.erase(entry);
 		}
 	}
@@ -155,7 +171,7 @@ void ErrorData::AddErrorLocation(const string &query) {
 	final_message = ConstructFinalMessage();
 }
 
-void ErrorData::AddQueryLocation(optional_idx query_location) {
+void ErrorData::AddQueryLocation(QueryLocation query_location) {
 	Exception::SetQueryLocation(query_location, extra_info);
 }
 

@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/partial_probe_five_epochs.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/recursive_cte.benchmark.in
+TIER=performance
+QUERY=partial_probe_five_epochs
+BENCHMARK_NAME=Recursive CTE five-epoch partial-key probes
+DESCRIPTION=Measure partial-key probes when index startup is amortized over five recursive epochs

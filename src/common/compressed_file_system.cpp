@@ -8,16 +8,41 @@ namespace duckdb {
 StreamWrapper::~StreamWrapper() {
 }
 
-CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
+void StreamWrapper::FinalizeRead(StreamData &) {
+}
+
+void StreamWrapper::AbortWrite() {
+	Close();
+}
+
+bool CompressedFileSystem::CanHandleFile(const string &fpath) {
+	return false;
+}
+
+CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path) try
     : FileHandle(fs, path, child_handle_p->GetFlags()), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
 	// The real on-disk I/O happens on the (compressed) child handle; attribute the bytes there instead of
 	// double-counting the uncompressed bytes that pass through this wrapper handle.
 	track_io = false;
+
+} catch (...) {
+	auto error = std::current_exception();
+	if (child_handle_p) {
+		try {
+			child_handle_p->AbortWrite();
+		} catch (...) { // NOLINT
+		}
+	}
+	std::rethrow_exception(error);
 }
 
 CompressedFile::~CompressedFile() {
 	try {
-		Close();
+		if (write && !initialized) {
+			AbortCompressedWrite();
+		} else {
+			Close();
+		}
 	} catch (std::exception &ex) {
 		if (child_handle) {
 			// FIXME: Make any log context available here.
@@ -36,6 +61,7 @@ CompressedFile::~CompressedFile() {
 
 void CompressedFile::Initialize(QueryContext context, bool write) {
 	Clear();
+	initialized = false;
 
 	this->context = context;
 	this->write = write;
@@ -48,14 +74,16 @@ void CompressedFile::Initialize(QueryContext context, bool write) {
 	stream_data.out_buff_start = stream_data.out_buff.get();
 	stream_data.out_buff_end = stream_data.out_buff.get();
 
-	current_position = 0;
+	compressed_bytes_read = 0;
+	compressed_bytes_consumed.store(0, std::memory_order_relaxed);
 
 	stream_wrapper = compressed_fs.CreateStream();
 	stream_wrapper->Initialize(context, *this, write);
+	initialized = true;
 }
 
 idx_t CompressedFile::GetProgress() {
-	return current_position;
+	return compressed_bytes_consumed.load(std::memory_order_relaxed);
 }
 
 int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
@@ -81,28 +109,11 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		if (!stream_wrapper) {
 			return UnsafeNumericCast<int64_t>(total_read);
 		}
-		current_position += static_cast<idx_t>(stream_data.in_buff_end - stream_data.in_buff_start);
 		// ran out of buffer: read more data from the child stream
 		stream_data.out_buff_start = stream_data.out_buff.get();
 		stream_data.out_buff_end = stream_data.out_buff.get();
 		D_ASSERT(stream_data.in_buff_start <= stream_data.in_buff_end);
 		D_ASSERT(stream_data.in_buff_end <= stream_data.in_buff_start + stream_data.in_buf_size);
-
-		// read more input when requested and still data in the input stream
-		if (stream_data.refresh && (stream_data.in_buff_end == stream_data.in_buff.get() + stream_data.in_buf_size)) {
-			auto bufrem = stream_data.in_buff_end - stream_data.in_buff_start;
-			// buffer not empty, move remaining bytes to the beginning
-			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, UnsafeNumericCast<size_t>(bufrem));
-			stream_data.in_buff_start = stream_data.in_buff.get();
-			// refill the rest of input buffer
-			auto sz = child_handle->Read(context, stream_data.in_buff_start + bufrem,
-			                             stream_data.in_buf_size - UnsafeNumericCast<idx_t>(bufrem));
-			stream_data.in_buff_end = stream_data.in_buff_start + bufrem + sz;
-			if (sz <= 0) {
-				stream_wrapper.reset();
-				break;
-			}
-		}
 
 		// read more input if none available
 		if (stream_data.in_buff_start == stream_data.in_buff_end) {
@@ -111,13 +122,21 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			stream_data.in_buff_end = stream_data.in_buff_start;
 			auto sz = child_handle->Read(context, stream_data.in_buff.get(), stream_data.in_buf_size);
 			if (sz <= 0) {
+				stream_wrapper->FinalizeRead(stream_data);
 				stream_wrapper.reset();
+				compressed_bytes_consumed.store(compressed_bytes_read, std::memory_order_relaxed);
 				break;
+			} else {
+				stream_data.in_buff_end = stream_data.in_buff_start + sz;
+				compressed_bytes_read += UnsafeNumericCast<idx_t>(sz);
 			}
-			stream_data.in_buff_end = stream_data.in_buff_start + sz;
 		}
 
 		auto finished = stream_wrapper->Read(stream_data);
+		// the input that remains in the buffer has not been consumed by the decompressor yet
+		auto unconsumed = static_cast<idx_t>(stream_data.in_buff_end - stream_data.in_buff_start);
+		compressed_bytes_consumed.store(compressed_bytes_read - MinValue(unconsumed, compressed_bytes_read),
+		                                std::memory_order_relaxed);
 		if (finished) {
 			stream_wrapper.reset();
 		}
@@ -138,7 +157,10 @@ void CompressedFile::Clear() {
 		stream_wrapper->Close();
 		stream_wrapper.reset();
 	}
+	ResetStreamData();
+}
 
+void CompressedFile::ResetStreamData() {
 	stream_data.in_buff.reset();
 	stream_data.out_buff.reset();
 	stream_data.out_buff_start = nullptr;
@@ -151,14 +173,47 @@ void CompressedFile::Clear() {
 }
 
 void CompressedFile::Close() {
-	// This can throw and halt close leaving child_handle dangling until destruction. Given the alternative of writing
-	// corrupted data that seems better than flushing data in an unknown state.
-	Clear();
+	try {
+		Clear();
+	} catch (...) {
+		auto error = std::current_exception();
+		try {
+			AbortCompressedWrite();
+		} catch (...) { // NOLINT
+		}
+		std::rethrow_exception(error);
+	}
 
-	// Then close out child_handle itself.
-	if (child_handle) {
-		child_handle->Close();
-		child_handle.reset();
+	auto child = std::move(child_handle);
+	if (child) {
+		child->Close();
+	}
+}
+
+void CompressedFile::AbortCompressedWrite() {
+	initialized = false;
+	std::exception_ptr error;
+	auto wrapper = std::move(stream_wrapper);
+	if (wrapper) {
+		try {
+			wrapper->AbortWrite();
+		} catch (...) {
+			error = std::current_exception();
+		}
+	}
+	ResetStreamData();
+	auto child = std::move(child_handle);
+	if (child) {
+		try {
+			child->AbortWrite();
+		} catch (...) {
+			if (!error) {
+				error = std::current_exception();
+			}
+		}
+	}
+	if (error) {
+		std::rethrow_exception(error);
 	}
 }
 
@@ -191,6 +246,10 @@ bool CompressedFileSystem::OnDiskFile(FileHandle &handle) {
 
 bool CompressedFileSystem::CanSeek() {
 	return false;
+}
+
+void CompressedFileSystem::AbortFileWrite(FileHandle &handle) {
+	handle.Cast<CompressedFile>().AbortCompressedWrite();
 }
 
 } // namespace duckdb

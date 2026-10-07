@@ -39,19 +39,13 @@ struct ParserExtensionInfo {
 
 	template <class TARGET>
 	TARGET &Cast() {
-		auto result = dynamic_cast<TARGET *>(this);
-		if (!result) {
-			throw InternalException("Failed to cast ParserExtensionInfo to type");
-		}
-		return *result;
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
-		auto result = dynamic_cast<const TARGET *>(this);
-		if (!result) {
-			throw InternalException("Failed to cast ParserExtensionInfo to type");
-		}
-		return *result;
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -68,6 +62,17 @@ struct ParserExtensionParseData {
 
 	virtual unique_ptr<ParserExtensionParseData> Copy() const = 0;
 	virtual string ToString() const = 0;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct ParserExtensionParseResult {

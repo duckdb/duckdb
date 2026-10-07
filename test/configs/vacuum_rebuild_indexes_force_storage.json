@@ -20,7 +20,7 @@
         "test/sql/index/art/constraints/test_art_tx_deletes_list.test",
         "test/sql/storage/rowid_gaps/append_after_gap_checkpoint.test",
         "test/sql/storage/rowid_gaps/bulk_append_after_gap_checkpoint.test",
-        "test/sql/storage/rowid_gaps/indexed_no_merge_across_gap.test"
+        "test/sql/storage/rowid_gaps/indexed_remap_merges_across_gap.test"
       ]
     },
     {

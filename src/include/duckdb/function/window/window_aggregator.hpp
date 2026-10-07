@@ -133,6 +133,9 @@ public:
 	//! The aggregator data
 	const WindowAggregator &aggregator;
 
+	//! Partition starts
+	vector<idx_t> partition_offsets;
+
 	//! The aggregate function
 	const AggregateObject aggr;
 
@@ -147,6 +150,9 @@ public:
 
 	//! Number of finalised states
 	std::atomic<idx_t> finalized;
+
+protected:
+	void BuildPartitionOffsets(const idx_t group_count, const ValidityMask &partition_mask);
 };
 
 class WindowAggregatorLocalState : public LocalSinkState {

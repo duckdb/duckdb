@@ -12,7 +12,7 @@ struct PragmaUserAgentData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaUserAgentBind(ClientContext &context, TableFunctionBindInput &input,
-                                                    vector<LogicalType> &return_types, vector<string> &names) {
+                                                    vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("user_agent");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -41,8 +41,9 @@ void PragmaUserAgentFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 void PragmaUserAgent::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(
-	    TableFunction("pragma_user_agent", {}, PragmaUserAgentFunction, PragmaUserAgentBind, PragmaUserAgentInit));
+	TableFunction pragma_user_agent("pragma_user_agent", {}, PragmaUserAgentFunction, PragmaUserAgentBind,
+	                                PragmaUserAgentInit);
+	set.AddFunction(pragma_user_agent);
 }
 
 } // namespace duckdb

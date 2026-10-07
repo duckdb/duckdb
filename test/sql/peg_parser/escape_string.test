@@ -3,6 +3,31 @@
 # group: [peg_parser]
 
 query I
+SELECT E'it\'s a test' = 'it''s a test';
+----
+true
+
+query I
+SELECT e'it\'s a test' = 'it''s a test';
+----
+true
+
+query I
+SELECT E'a\'b\'c' = 'a''b''c';
+----
+true
+
+query I
+SELECT E'\\' = '\';
+----
+true
+
+query I
+SELECT E'\\\\' = '\\';
+----
+true
+
+query I
 SELECT e'\033' = chr(27);
 ----
 true
@@ -61,4 +86,3 @@ statement error
 SELECT e'\000';
 ----
 Parser Error: Null character not permitted in escape string literal
-

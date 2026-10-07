@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/query_context.hpp"
@@ -35,9 +36,11 @@ struct StreamWrapper {
 
 	DUCKDB_API virtual void Initialize(QueryContext context, CompressedFile &file, bool write) = 0;
 	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
+	DUCKDB_API virtual void FinalizeRead(StreamData &stream_data);
 	DUCKDB_API virtual void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer,
 	                              int64_t nr_bytes) = 0;
 	DUCKDB_API virtual void Close() = 0;
+	DUCKDB_API virtual void AbortWrite();
 };
 
 class CompressedFileSystem : public FileSystem {
@@ -51,6 +54,13 @@ public:
 
 	DUCKDB_API bool OnDiskFile(FileHandle &handle) override;
 	DUCKDB_API bool CanSeek() override;
+	DUCKDB_API void AbortFileWrite(FileHandle &handle) override;
+
+	//! The compression scheme provided by this filesystem, e.g. "gzip"
+	DUCKDB_API virtual FileCompressionType GetCompressionType() = 0;
+	//! Whether this filesystem can decompress the given file - used to auto-detect compression from the file name.
+	//! Filesystems that do not override this do not participate in compression auto-detection.
+	DUCKDB_API bool CanHandleFile(const string &fpath) override;
 
 	DUCKDB_API virtual unique_ptr<StreamWrapper> CreateStream() = 0;
 	DUCKDB_API virtual idx_t InBufferSize() = 0;
@@ -77,11 +87,17 @@ public:
 	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
 	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
 	DUCKDB_API void Close() override;
+	DUCKDB_API void AbortCompressedWrite();
 
 private:
 	void Clear(); // for Initialize re-use to support FS.Reset()
+	void ResetStreamData();
 
-	idx_t current_position = 0;
+	//! The number of compressed bytes read from the child handle
+	idx_t compressed_bytes_read = 0;
+	//! The number of compressed bytes consumed by the decompressor (for progress)
+	atomic<idx_t> compressed_bytes_consumed {0};
+	bool initialized = false;
 	unique_ptr<StreamWrapper> stream_wrapper;
 };
 

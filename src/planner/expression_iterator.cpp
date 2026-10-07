@@ -101,6 +101,10 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		break;
 	}
 	case ExpressionClass::BOUND_COLUMN_REF:
+	// TODO: enumerate the lambda body here. That would give volatility, CanThrow and Hash for free,
+	// but the body's BoundReferenceExpressions index the lambda's own input chunk rather than the
+	// outer one, so every pass that rewrites references must first be shown to leave them alone.
+	case ExpressionClass::BOUND_LAMBDA:
 	case ExpressionClass::BOUND_LAMBDA_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_DEFAULT:
@@ -152,6 +156,23 @@ void ExpressionIterator::VisitExpressionClassMutable(
 	}
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<Expression> &child) { VisitExpressionClassMutable(child, expr_class, callback); });
+}
+
+static void ReplaceExpressionInPlace(unique_ptr<Expression> &expr, const Expression &target,
+                                     const Expression &replacement) {
+	if (expr->Equals(target)) {
+		expr = replacement.Copy();
+		return;
+	}
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionInPlace(child, target, replacement); });
+}
+
+unique_ptr<Expression> ExpressionIterator::ReplaceExpression(const Expression &expr, const Expression &target,
+                                                             const Expression &replacement) {
+	auto result = expr.Copy();
+	ReplaceExpressionInPlace(result, target, replacement);
+	return result;
 }
 
 } // namespace duckdb

@@ -37,13 +37,17 @@ static void ChrFunction(DataChunk &args, ExpressionState &state, Vector &result)
 #endif
 
 ScalarFunction ChrFun::GetFunction() {
-	return ScalarFunction("chr", {LogicalType::INTEGER}, LogicalType::VARCHAR,
+	ScalarFunction function("chr", {}, LogicalType::VARCHAR,
 #ifdef DUCKDB_DEBUG_NO_INLINE
-	                      ChrFunction
+	                        ChrFunction
 #else
-	                      ScalarFunction::UnaryFunction<int32_t, string_t, ChrOperator>
+	                        ScalarFunction::UnaryFunction<int32_t, string_t, ChrOperator>
 #endif
 	);
+	function.GetSignature().AddParameter("code_point", LogicalType::INTEGER);
+	// throws if the codepoint is not a valid UTF8 codepoint
+	function.SetFallible();
+	return function;
 }
 
 } // namespace duckdb

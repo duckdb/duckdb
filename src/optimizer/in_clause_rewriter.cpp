@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -11,6 +12,33 @@
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
+
+bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
+	    (expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
+	     expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN)) {
+		auto &op = expr.Cast<BoundOperatorExpression>();
+		if (op.GetChildren().size() >= InClauseRewriter::IN_CLAUSE_REWRITE_THRESHOLD) {
+			bool all_foldable = true;
+			for (idx_t child_idx = 1; child_idx < op.GetChildren().size(); child_idx++) {
+				if (!op.GetChildren()[child_idx]->IsFoldable()) {
+					all_foldable = false;
+					break;
+				}
+			}
+			if (all_foldable) {
+				return true;
+			}
+		}
+	}
+	bool result = false;
+	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
+		if (!result && HasRewritableInClause(child)) {
+			result = true;
+		}
+	});
+	return result;
+}
 
 unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator> op) {
 	switch (op->type) {
@@ -49,6 +77,10 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 			all_scalar = false;
 		}
 	}
+	const bool rewrite_to_join = expr.GetChildrenMutable().size() >= IN_CLAUSE_REWRITE_THRESHOLD && all_scalar;
+	if (!rewrite_to_join) {
+		VisitExpressionChildren(expr);
+	}
 	if (expr.GetChildrenMutable().size() == 2) {
 		// only one child
 		// IN: turn into X = 1
@@ -57,7 +89,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
 		    std::move(expr.GetChildrenMutable()[0]), std::move(expr.GetChildrenMutable()[1]));
 	}
-	if (expr.GetChildrenMutable().size() < IN_CLAUSE_REWRITE_THRESHOLD || !all_scalar) {
+	if (!rewrite_to_join) {
 		// low amount of children or not all scalar
 		// IN: turn into (X = 1 OR X = 2 OR X = 3...)
 		// NOT IN: turn into (X <> 1 AND X <> 2 AND X <> 3 ...)

@@ -5,13 +5,14 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
 #include "duckdb/common/types/variant_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
-#include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/function/cast/cast_statistics.hpp"
 
 namespace duckdb {
 
@@ -257,6 +258,12 @@ LogicalType ToStructuredType(const LogicalType &shredding) {
 LogicalType VariantStats::GetShreddedStructuredType(const BaseStatistics &stats) {
 	D_ASSERT(IsShredded(stats));
 	return ToStructuredType(GetShreddedStats(stats).GetType());
+}
+
+LogicalType VariantStats::GetShreddingType(const LogicalType &structured_type) {
+	return TypeVisitor::VisitReplace(structured_type, [](const LogicalType &type) {
+		return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
+	});
 }
 
 void VariantStats::CreateShreddedStats(BaseStatistics &stats, const LogicalType &shredded_type) {
@@ -525,7 +532,7 @@ static unique_ptr<BaseStatistics> TryBuildShreddingStats(const LogicalType &type
 		return WrapTypedValue(typed_value, nullptr).ToUnique();
 	}
 	default:
-		if (type.IsNested() || type.id() == LogicalTypeId::ENUM) {
+		if (type.IsNested() || type.id() == LogicalTypeId::ENUM || type.IsJSONType()) {
 			// MAP / UNION / ENUM etc. are not stored in their source representation in the variant
 			return nullptr;
 		}
@@ -558,6 +565,20 @@ unique_ptr<BaseStatistics> VariantStats::WrapExtractedFieldAsVariant(const BaseS
 	copy.Copy(base_variant);
 	copy.child_stats[1] = BaseStatistics::CreateUnknown(extracted_field.GetType());
 	copy.child_stats[1].Copy(extracted_field);
+	// The extraction can produce NULL when the field's typed value is NULL, even if the input
+	// variant is not - descend through the shredding STRUCTs to the typed value.
+	const BaseStatistics *effective = &extracted_field;
+	bool can_have_null = false;
+	while (true) {
+		can_have_null |= effective->CanHaveNull();
+		if (effective->GetType().id() != LogicalTypeId::STRUCT) {
+			break;
+		}
+		effective = &VariantStats::GetTypedStats(*effective);
+	}
+	if (can_have_null) {
+		copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	}
 	return copy.ToUnique();
 }
 
@@ -609,10 +630,10 @@ bool VariantStats::MergeShredding(const BaseStatistics &stats, const BaseStatist
 		auto &other_object_children = StructType::GetChildTypes(other_typed_value_type);
 
 		//! Map field name to index, for 'other'
-		case_insensitive_map_t<idx_t> key_to_index;
+		unordered_map<string, idx_t> key_to_index;
 		for (idx_t i = 0; i < other_object_children.size(); i++) {
 			auto &other_object_child = other_object_children[i];
-			key_to_index.emplace(other_object_child.first, i);
+			key_to_index.emplace(other_object_child.first.GetIdentifierName(), i);
 		}
 
 		//! Attempt to merge all overlapping fields, only keep the fields that were able to be merged
@@ -836,7 +857,7 @@ unique_ptr<BaseStatistics> VariantStats::PushdownExtract(const BaseStatistics &s
 	auto &cast_type = last_index.GetType();
 	if (child_type != cast_type) {
 		//! FIXME: support try_cast
-		return StatisticsPropagator::TryPropagateCast(typed_value_stats, child_type, cast_type);
+		return CastStatistics::TryPropagate(typed_value_stats, child_type, cast_type);
 	}
 	auto result = typed_value_stats.ToUnique();
 	return result;

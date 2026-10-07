@@ -1,0 +1,155 @@
+# name: test/sql/aggregate/aggregates/aggregate_state_spilling.test_slow
+# description: Arena-backed aggregate states export to spillable storage instead of failing under a memory limit
+# group: [aggregates]
+
+require skip_reload
+
+statement ok
+SET threads=4;
+
+statement ok
+SET memory_limit='256MB';
+
+statement ok
+SET temp_directory='{TEST_DIR}/aggregate_state_spilling';
+
+statement ok
+SET preserve_insertion_order=false;
+
+# 1M groups x 800 byte payloads is roughly 800MB of state, far above the limit
+query I
+SELECT count(*) FROM (
+    SELECT k, first(wide) AS w
+    FROM (SELECT i % 1000000 AS k, repeat(md5((i % 1000000)::VARCHAR), 25) AS wide FROM range(2000000) t(i)) s1
+    GROUP BY k
+) s2
+WHERE w != repeat(md5(k::VARCHAR), 25);
+----
+0
+
+# last is covered by the same mechanism
+query I
+SELECT count(*) FROM (
+    SELECT k, last(wide) AS w
+    FROM (SELECT i % 1000000 AS k, repeat(md5((i % 1000000)::VARCHAR), 25) AS wide FROM range(2000000) t(i)) s1
+    GROUP BY k
+) s2
+WHERE w != repeat(md5(k::VARCHAR), 25);
+----
+0
+
+# min compares payloads per row and must reassemble them exactly
+query I
+SELECT count(*) FROM (
+    SELECT k, min(wide) AS w
+    FROM (SELECT i % 1000000 AS k, repeat(md5((i % 1000000)::VARCHAR), 25) AS wide FROM range(2000000) t(i)) s1
+    GROUP BY k
+) s2
+WHERE w != repeat(md5(k::VARCHAR), 25);
+----
+0
+
+# string_agg grows its state per row
+query I
+SELECT count(*) FROM (
+    SELECT k, string_agg(wide, ',') AS w
+    FROM (SELECT i % 500000 AS k, repeat(md5((i % 500000)::VARCHAR), 25) AS wide FROM range(1000000) t(i)) s1
+    GROUP BY k
+) s2
+WHERE w != repeat(md5(k::VARCHAR), 25) || ',' || repeat(md5(k::VARCHAR), 25);
+----
+0
+
+statement ok
+SET memory_limit='64MB';
+
+# exported states must survive parallel combines under the memory limit
+statement ok
+PRAGMA verify_parallelism;
+
+query I
+SELECT count(*) FROM (
+    SELECT g, first(s) AS f
+    FROM (SELECT i % 300000 AS g, repeat(md5((i % 300000)::VARCHAR), 10) AS s FROM range(600000) t(i)) input
+    GROUP BY g
+) grouped
+WHERE f <> repeat(md5(g::VARCHAR), 10);
+----
+0
+
+# state export of the same aggregates keeps working alongside the spilling
+query I
+SELECT count(*) FROM (
+    SELECT g, finalize(first(s) EXPORT_STATE) AS f
+    FROM (SELECT i % 300000 AS g, repeat(md5((i % 300000)::VARCHAR), 10) AS s FROM range(600000) t(i)) input
+    GROUP BY g
+) grouped
+WHERE f <> repeat(md5(g::VARCHAR), 10);
+----
+0
+
+# reusable external aggregation must reset the exported collections and the spill phase
+# between iterations, with states that actually spill
+statement ok
+SET memory_limit='64MB';
+
+query III
+WITH RECURSIVE r(iter, k, s) AS (
+  SELECT 0::INTEGER, i, repeat(md5(i::VARCHAR), 25)
+  FROM range(300000) t(i)
+  UNION ALL
+  SELECT iter + 1, k, first(s)
+  FROM r
+  WHERE iter < 2
+  GROUP BY iter, k
+)
+SELECT iter, count(*), sum(CASE WHEN s = repeat(md5(k::VARCHAR), 25) THEN 1 ELSE 0 END)
+FROM r
+GROUP BY iter
+ORDER BY iter;
+----
+0	300000	300000
+1	300000	300000
+2	300000	300000
+
+# few groups with very large states: the arena pressure check must trigger the export before
+# the hash table ever fills, and the exported partitions grow until finalize fits in memory
+query II
+SELECT count(*), sum(length(w)) FROM (
+  SELECT k, first(wide) AS w
+  FROM (SELECT i % 100000 AS k, repeat(md5((i % 100000)::VARCHAR), 64) AS wide FROM range(200000) t(i))
+  GROUP BY k);
+----
+100000	204800000
+
+# an aggregate that cannot spill (histogram owns a map) keeps the whole layout on the arena,
+# and the query must still be correct alongside a spillable-looking aggregate
+statement ok
+SET memory_limit='512MB';
+
+query I
+SELECT count(*) FROM (
+  SELECT k, first(wide) AS w, histogram(i % 4) AS h
+  FROM (SELECT i, i % 50000 AS k, repeat(md5((i % 50000)::VARCHAR), 4) AS wide FROM range(100000) t(i))
+  GROUP BY k
+) s
+WHERE w != repeat(md5(k::VARCHAR), 4) OR cardinality(h) != 1 OR h[k % 4] != 2;
+----
+0
+
+# inline-only string states: external aggregation with an empty arena must not export anything
+statement ok
+SET debug_force_external=true;
+
+query I
+SELECT count(*) FROM (
+  SELECT k, first(s) AS f
+  FROM (SELECT i % 100000 AS k, substr(md5((i % 100000)::VARCHAR), 1, 8) AS s FROM range(200000) t(i))
+  GROUP BY k
+) q
+WHERE f != substr(md5(k::VARCHAR), 1, 8);
+----
+0
+
+statement ok
+SET debug_force_external=false;

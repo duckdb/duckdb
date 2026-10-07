@@ -157,8 +157,10 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		result.error.Throw();
 	}
 
-	return BindResult(make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
-	                                                   std::move(result.expression), column_names.size()));
+	auto bound_lambda = make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
+	                                                     std::move(result.expression), column_names.size());
+	bound_lambda->SetParameterNames(std::move(column_names));
+	return BindResult(std::move(bound_lambda));
 }
 
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
@@ -222,8 +224,11 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 		throw BinderException("subqueries in lambda expressions are not supported");
 	}
 
-	// these are bound depth-first
-	D_ASSERT(expr->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA);
+	// lambdas are bound depth-first, so an inner lambda has already had its own columns captured by the
+	// time we get here - its captures are children of the function it belongs to, which we do visit
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA) {
+		return;
+	}
 
 	// we do not need to replace anything, as these will be constant in the lambda expression
 	// when executed by the expression executor

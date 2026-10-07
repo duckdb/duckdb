@@ -18,6 +18,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
     const optional<vector<GenericCopyOption>> &explain_option_list, unique_ptr<SQLStatement> explainable_statements) {
 	auto explain_type = analyze_keyword ? ExplainType::EXPLAIN_ANALYZE : ExplainType::EXPLAIN_STANDARD;
 	bool format_is_set = false;
+	bool sql_is_set = false;
 	auto format = ProfilerPrintFormat::Default();
 	if (explain_option_list) {
 		for (auto option : *explain_option_list) {
@@ -26,14 +27,36 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformExplainStatement(
 				if (format_is_set) {
 					throw InvalidInputException("FORMAT can not be provided more than once");
 				}
-				format = ParseProfilerPrintFormat(option.children[0]);
+				if (option.children.empty()) {
+					// no constant/identifier argument: either FORMAT was given nothing at all, or its argument is an
+					// expression the parser kept whole. A bare DEFAULT keyword parses as a DefaultExpression.
+					if (option.expression && option.expression->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
+						format = ProfilerPrintFormat::Default();
+					} else {
+						throw InvalidInputException("FORMAT requires a single format name, e.g. FORMAT json");
+					}
+				} else {
+					format = ParseProfilerPrintFormat(option.children[0]);
+				}
 				format_is_set = true;
+			} else if (option_name == "sql") {
+				if (sql_is_set || !option.children.empty() || option.expression) {
+					throw InvalidInputException("SQL must be provided once without arguments");
+				}
+				sql_is_set = true;
 			} else if (option_name == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;
 			} else {
 				throw NotImplementedException("Unimplemented explain type: %s", option_name);
 			}
 		}
+	}
+	if (sql_is_set) {
+		if (format_is_set || explain_type == ExplainType::EXPLAIN_ANALYZE) {
+			throw InvalidInputException("EXPLAIN (SQL) cannot be combined with ANALYZE or FORMAT");
+		}
+		transformer.PivotEntryCheck("EXPLAIN (SQL) statement");
+		explain_type = ExplainType::EXPLAIN_SQL;
 	}
 	auto statement = std::move(explainable_statements);
 	return make_uniq<ExplainStatement>(std::move(statement), explain_type, format);
@@ -65,7 +88,7 @@ GenericCopyOption PEGTransformerFactory::TransformExplainOption(PEGTransformer &
 	}
 	auto &expr = *expression;
 	if (expr->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-		copy_option.children.push_back(Value(expr->Cast<ConstantExpression>().GetValue()));
+		copy_option.children.push_back(expr->Cast<ConstantExpression>().GetLiteral().ToValue());
 	} else if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		copy_option.children.push_back(Value(expr->Cast<ColumnRefExpression>().GetColumnName()));
 	} else {

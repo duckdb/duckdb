@@ -342,15 +342,15 @@ NULL	NULL
 query III
 SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part 
 FROM timestamps
-WHERE part NOT IN ('epoch', 'julian')
 ----
-0	0	era
-2020	2020	year
-2	2	month
-13123456	13123456	microsecond
-2	2	hour
-30	30	minute
-24	24	day
+0.0	0.0	era
+-234185951.876544	-234211151.876544	epoch
+2020.0	2020.0	year
+2.0	2.0	month
+13123456.0	13123456.0	microsecond
+2.0	2.0	hour
+30.0	30.0	minute
+24.0	24.0	day
 NULL	NULL	second
 NULL	NULL	decade
 NULL	NULL	century

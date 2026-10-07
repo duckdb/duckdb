@@ -29,6 +29,9 @@ public:
 
 	//! Emits an optionally quoted identifier including required escapes (i.e. ident -> ident, table -> "table")
 	static string ToString(const string &identifier);
+	static string ToString(const Identifier &identifier);
+	//! Needed to disambiguate between the string and Identifier overloads, as string literals convert to both
+	static string ToString(const char *identifier);
 
 public:
 	string raw_string;
@@ -59,9 +62,15 @@ class SQLQuotedIdentifier {
 public:
 	explicit SQLQuotedIdentifier(const string &raw_string) : raw_string(raw_string) {
 	}
+	explicit SQLQuotedIdentifier(const char *raw_string) : raw_string(raw_string) {
+	}
+	explicit SQLQuotedIdentifier(const Identifier &id);
 
 	//! Emits an optionally quoted identifier including required escapes (i.e. ident -> ident, table -> "table")
 	static string ToString(const string &identifier);
+	static string ToString(const Identifier &identifier);
+	//! Needed to disambiguate between the string and Identifier overloads, as string literals convert to both
+	static string ToString(const char *identifier);
 
 public:
 	string raw_string;

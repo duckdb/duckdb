@@ -17,8 +17,7 @@ struct DelimCandidate;
 //! The Deliminator optimizer traverses the logical operator tree and removes any redundant DelimGets/DelimJoins
 class Deliminator {
 public:
-	Deliminator() {
-	}
+	explicit Deliminator(ClientContext &context);
 	//! Perform DelimJoin elimination
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> op);
 
@@ -37,6 +36,7 @@ private:
 	void TrySwitchSingleToLeft(LogicalComparisonJoin &delim_join);
 
 private:
+	ClientContext &context;
 	optional_ptr<LogicalOperator> root;
 };
 

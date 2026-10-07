@@ -1,0 +1,52 @@
+# name: test/logging/offset_order_warning.test
+# description: Test warning for OFFSET over non-deterministic row order
+# group: [logging]
+
+statement ok
+SET enable_logging=true;
+
+statement ok
+SET warnings_as_errors=true;
+
+statement ok
+SET preserve_insertion_order=true;
+
+statement ok
+CREATE TABLE t AS SELECT range i FROM range(100);
+
+# plain scan with preserve_insertion_order=true: deterministic, no warning
+statement ok
+SELECT i FROM t OFFSET 5;
+
+# LIMIT without OFFSET does not warn, even if the order is not guaranteed
+statement ok
+SELECT i % 3, COUNT(*) FROM t GROUP BY 1 LIMIT 2;
+
+# OFFSET over an aggregate: order is not guaranteed, warns
+statement error
+SELECT i % 3, COUNT(*) FROM t GROUP BY 1 OFFSET 1;
+----
+<REGEX>:.*row order is not guaranteed.*
+
+# same for LIMIT combined with OFFSET
+statement error
+SELECT i % 3, COUNT(*) FROM t GROUP BY 1 LIMIT 2 OFFSET 1;
+----
+<REGEX>:.*row order is not guaranteed.*
+
+# ORDER BY makes it deterministic again
+statement ok
+SELECT i % 3, COUNT(*) FROM t GROUP BY 1 ORDER BY 1 OFFSET 1;
+
+statement ok
+SET preserve_insertion_order=false;
+
+# without insertion order preservation even a plain scan warns
+statement error
+SELECT i FROM t OFFSET 5;
+----
+<REGEX>:.*row order is not guaranteed.*
+
+# but not with LIMIT only
+statement ok
+SELECT i FROM t LIMIT 5;

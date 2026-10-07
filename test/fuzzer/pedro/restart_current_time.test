@@ -7,4 +7,4 @@ load {TEST_DIR}/restart_current_time.db
 statement error
 CREATE TABLE t0 (c1 INT, CHECK (CURRENT_TIME >= TIME '00:00:00'));
 ----
-Table does not contain column CURRENT_TIME
+Table does not contain column "CURRENT_TIME"

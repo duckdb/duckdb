@@ -1,0 +1,10 @@
+{
+  "type": "FeatureCollection",
+  "name": "sample",
+  "features": [
+    {"type":"Feature","geometry":{"type":"Point","coordinates":[1.0,2.0]},"properties":{"name":"alpha","pop":100,"area":1.5}},
+    {"type":"Feature","geometry":{"type":"LineString","coordinates":[[0.0,0.0],[1.0,1.0]]},"properties":{"name":"beta","pop":200,"area":2.5}},
+    {"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0.0,0.0],[1.0,0.0],[1.0,1.0],[0.0,0.0]]]},"properties":{"name":"gamma","pop":300}},
+    {"type":"Feature","geometry":null,"properties":{"name":"delta"}}
+  ]
+}

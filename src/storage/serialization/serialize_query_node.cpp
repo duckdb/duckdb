@@ -13,6 +13,8 @@
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
+#include "duckdb/parser/query_node/copy_query_node.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 
 namespace duckdb {
 
@@ -28,6 +30,9 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &deserializer) {
 	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>(102, "cte_map");
 	unique_ptr<QueryNode> result;
 	switch (type) {
+	case QueryNodeType::COPY_QUERY_NODE:
+		result = CopyQueryNode::Deserialize(deserializer);
+		break;
 	case QueryNodeType::CTE_NODE:
 		result = CTENode::Deserialize(deserializer);
 		break;
@@ -82,6 +87,17 @@ unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
+void CopyQueryNode::Serialize(Serializer &serializer) const {
+	QueryNode::Serialize(serializer);
+	serializer.WritePropertyWithDefault<unique_ptr<CopyInfo>>(200, "info", info);
+}
+
+unique_ptr<QueryNode> CopyQueryNode::Deserialize(Deserializer &deserializer) {
+	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<ParseInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<CopyQueryNode>(new CopyQueryNode(std::move(info)));
+	return std::move(result);
+}
+
 void DeleteQueryNode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "condition", condition);
@@ -111,6 +127,9 @@ void InsertQueryNode::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", table_ref);
 	serializer.WritePropertyWithDefault<bool>(208, "default_values", default_values, false);
 	serializer.WritePropertyWithDefault<InsertColumnOrder>(209, "column_order", column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	if (serializer.ShouldSerialize(StorageVersion::V2_0_0) || (qualified_name.Path().size() > 3)) {
+		serializer.WriteProperty<QualifiedName>(210, "qualified_name", qualified_name);
+	}
 }
 
 unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
@@ -125,7 +144,11 @@ unique_ptr<QueryNode> InsertQueryNode::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<unique_ptr<TableRef>>(207, "table_ref", result->table_ref);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(208, "default_values", result->default_values, false);
 	deserializer.ReadPropertyWithExplicitDefault<InsertColumnOrder>(209, "column_order", result->column_order, InsertColumnOrder::INSERT_BY_POSITION);
+	auto qualified_name = deserializer.ReadPropertyWithExplicitDefault<QualifiedName>(210, "qualified_name", QualifiedName());
 	result->SetQualifiedName(std::move(catalog), std::move(schema), std::move(table));
+	if (!qualified_name.Path().empty()) {
+		result->qualified_name = std::move(qualified_name);
+	}
 	return std::move(result);
 }
 

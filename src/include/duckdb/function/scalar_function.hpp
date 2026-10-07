@@ -21,6 +21,7 @@
 
 namespace duckdb {
 class BaseStatistics;
+class FunctionBinder;
 struct ScalarFunctionInfo {
 	DUCKDB_API virtual ~ScalarFunctionInfo();
 
@@ -55,6 +56,7 @@ struct BindLambdaContext {
 class Binder;
 class BoundFunctionExpression;
 class BoundScalarFunction;
+class ParsedExpression;
 class ScalarFunctionCatalogEntry;
 
 struct StatementProperties;
@@ -111,6 +113,14 @@ struct FunctionBindExpressionInput {
 	vector<unique_ptr<Expression>> &children;
 };
 
+struct FunctionUnbindInput {
+	FunctionUnbindInput(const BoundFunctionExpression &expression_p, vector<unique_ptr<ParsedExpression>> children_p);
+	~FunctionUnbindInput();
+
+	const BoundFunctionExpression &expression;
+	vector<unique_ptr<ParsedExpression>> children;
+};
+
 struct FunctionToStringInput {
 	FunctionToStringInput(const BoundScalarFunction &bound_function, optional_ptr<FunctionData> bind_data_p,
 	                      const vector<unique_ptr<Expression>> &children_p)
@@ -164,6 +174,9 @@ typedef unique_ptr<Expression> (*function_bind_expression_t)(FunctionBindExpress
 //! Convert a scalar function to string
 typedef string (*function_to_string_t)(FunctionToStringInput &input);
 
+//! Reconstruct an invocation from children exported in the current binding scope
+typedef unique_ptr<ParsedExpression> (*scalar_function_unbind_t)(FunctionUnbindInput &input);
+
 //! Get the expression type of a function
 typedef ExpressionType (*function_get_expression_type_t)(FunctionToStringInput &input);
 
@@ -190,6 +203,8 @@ public:
 	get_modified_databases_t get_modified_databases = nullptr;
 	//! Convert a scalar function to string
 	function_to_string_t to_string = nullptr;
+	//! Reconstruct the bound SQL invocation
+	scalar_function_unbind_t unbind = nullptr;
 	//! Get the expression type
 	function_get_expression_type_t get_expression_type = nullptr;
 
@@ -204,6 +219,11 @@ public:
 	bool operator==(const ScalarFunctionCallbacks &rhs) const;
 	bool operator!=(const ScalarFunctionCallbacks &rhs) const;
 };
+
+//! Functions that can throw runtime errors must be marked as fallible using SetFallible(), since many parts of the
+//! system rely on this (e.g. dictionary expression caching, filter pushdown, TRY)
+//! Rethrows an execution error thrown by a function that is not marked as fallible as an internal error
+[[noreturn]] DUCKDB_API void ThrowNonFallibleFunctionError(const Identifier &name, std::exception &ex);
 
 template <class IMPL>
 class BaseScalarFunction {
@@ -236,6 +256,9 @@ public: // Properties
 
 	auto GetCaptureArgumentAliases() const -> bool { return properties.capture_argument_aliases; }
 	auto SetCaptureArgumentAliases(bool value) -> void { properties.capture_argument_aliases = value; }
+
+	auto RequiresOrderedExecution() const -> bool { return properties.requires_ordered_execution; }
+	auto SetRequiresOrderedExecution(bool value) -> void { properties.requires_ordered_execution = value; }
 
 	//! Set this functions error-mode as fallible (can throw runtime errors)
 	void SetFallible() { properties.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR; }
@@ -290,6 +313,10 @@ public: // Callbacks
 	auto SetToStringCallback(function_to_string_t callback) -> void { callbacks.to_string = callback; }
 	auto FunctionToString(FunctionToStringInput &input) const -> string { return callbacks.to_string(input); }
 
+	auto HasUnbindCallback() const -> bool { return callbacks.unbind != nullptr; }
+	auto SetUnbindCallback(scalar_function_unbind_t callback) -> void { callbacks.unbind = callback; }
+	auto GetUnbindCallback() const -> scalar_function_unbind_t { return callbacks.unbind; }
+
 	auto HasLegacySerializeCallback() const -> bool { return callbacks.legacy_serialize != nullptr; }
 	auto SetLegacySerializeCallback(function_legacy_serialize_t callback) -> void { callbacks.legacy_serialize = callback; }
 	auto GetLegacySerializeCallback() const -> function_legacy_serialize_t { return callbacks.legacy_serialize; }
@@ -302,6 +329,33 @@ public: // Callbacks
 		return ExpressionType::BOUND_FUNCTION;
 	}
 	// clang-format on
+
+public: // Execution
+	//! Execute the function, verifying that functions that are not marked as fallible do not throw execution errors
+	void Execute(DataChunk &args, ExpressionState &state, Vector &result) const {
+		if (properties.errors != FunctionErrors::CANNOT_ERROR) {
+			callbacks.function(args, state, result);
+			return;
+		}
+		try {
+			callbacks.function(args, state, result);
+		} catch (std::exception &ex) {
+			ThrowNonFallibleFunctionError(Name(), ex);
+		}
+	}
+
+	//! Execute the select callback of the function, verifying that non-fallible functions do not throw
+	idx_t Select(DataChunk &args, ExpressionState &state, const SelectionVector *sel, SelectionVector *true_sel,
+	             SelectionVector *false_sel) const {
+		if (properties.errors != FunctionErrors::CANNOT_ERROR) {
+			return callbacks.select_function(args, state, sel, true_sel, false_sel);
+		}
+		try {
+			return callbacks.select_function(args, state, sel, true_sel, false_sel);
+		} catch (std::exception &ex) {
+			ThrowNonFallibleFunctionError(Name(), ex);
+		}
+	}
 
 public:
 	bool HasExtraFunctionInfo() const {
@@ -322,9 +376,18 @@ public:
 		return function_info;
 	}
 
+private:
+	const Identifier &Name() const {
+		return static_cast<const IMPL &>(*this).GetName();
+	}
+
 protected:
 	FunctionProperties properties;
+
+private:
 	ScalarFunctionCallbacks callbacks;
+
+protected:
 	shared_ptr<ScalarFunctionInfo> function_info;
 
 	//! Per-argument declarative properties (monotonicity). Empty = no claims made.
@@ -396,8 +459,6 @@ public:
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
-
-	DUCKDB_API bool Equal(const ScalarFunction &rhs) const;
 
 public:
 	unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments,
@@ -521,9 +582,68 @@ public:
 class BoundScalarFunction : public BaseScalarFunction<BoundScalarFunction>, public BoundSimpleFunction {
 public:
 	explicit BoundScalarFunction(const ScalarFunction &function);
+	explicit BoundScalarFunction(shared_ptr<const ScalarFunction> function);
 
 	bool operator==(const BoundScalarFunction &rhs) const;
 	bool operator!=(const BoundScalarFunction &rhs) const;
+
+public:
+	//! The function this was bound from. Unaffected by later mutation of the bound function, e.g. statistics
+	//! propagation swapping in a specialized implementation. For a function bound from a ScalarFunctionSet this is
+	//! the set's own overload, so it compares equal by pointer across binds. Functions bound outside of a set are
+	//! copied into a definition of their own.
+	//! Only null in a moved-from bound function.
+	const shared_ptr<const ScalarFunction> &GetDefinition() const {
+		return definition;
+	}
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
+	void SetDefinition(shared_ptr<const ScalarFunction> definition_p) {
+		definition = std::move(definition_p);
+		if (definition) {
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
+		}
+	}
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
+
+private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
+	shared_ptr<const ScalarFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionSerializer;
+	friend class FunctionBinder;
 };
 
 class BindScalarFunctionInput : public BindFunctionInput {

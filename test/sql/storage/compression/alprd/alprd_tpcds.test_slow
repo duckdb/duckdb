@@ -4,7 +4,7 @@
 require tpcds
 
 # load the DB from disk
-load {TEST_DIR}/test_alprd.db
+load {TEST_DIR}/test_alprd.db readwrite v1.5.0
 
 #statement ok
 #pragma threads=1

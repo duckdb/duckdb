@@ -11,13 +11,15 @@
 
 namespace duckdb {
 
-struct NeighborInfo;
+class JoinPredicate;
+struct JoinOrderOperator;
 
 class DPJoinNode {
 public:
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	DPJoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinRelationSet &left, JoinRelationSet &right,
-	           double cost);
+	DPJoinNode(JoinRelationSet &set, optional_ptr<JoinOrderOperator> join_operator,
+	           vector<reference<JoinPredicate>> predicates, bool generated_cross_product, JoinRelationSet &left,
+	           JoinRelationSet &right, double cost);
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
@@ -26,8 +28,11 @@ public:
 public:
 	//! Represents a node in the join plan
 	JoinRelationSet &set;
-	//! information on how left and right are connected
-	optional_ptr<NeighborInfo> info;
+	//! The original operator occurrence selected for this node, if any.
+	optional_ptr<JoinOrderOperator> join_operator;
+	//! Independently movable predicates selected for this node.
+	vector<reference<JoinPredicate>> predicates;
+	bool generated_cross_product;
 	bool is_leaf;
 	//! left and right plans
 	JoinRelationSet &left_set;

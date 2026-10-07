@@ -137,6 +137,16 @@ SELECT list_unique([NULL::{type}])
 
 endloop
 
+# NaN values compare equal for distinctness
+foreach type float double
+
+query I
+SELECT list_unique([1::{type}, 'nan'::{type}, 'nan'::{type}]);
+----
+2
+
+endloop
+
 # TEMPORAL types
 
 # date

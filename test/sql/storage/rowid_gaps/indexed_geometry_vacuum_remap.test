@@ -1,0 +1,74 @@
+# name: test/sql/storage/rowid_gaps/indexed_geometry_vacuum_remap.test
+# description: vacuum remap works for a GEOMETRY-keyed ART created on current storage
+# group: [rowid_gaps]
+
+statement ok
+ATTACH '{TEST_DIR}/rowid_gap_remap_geom.db' AS remap_geom (STORAGE_VERSION 'latest', ROW_GROUP_SIZE 2048);
+
+statement ok
+SET max_vacuum_tasks = 99;
+
+statement ok
+CREATE TABLE remap_geom.t(i INTEGER, geom GEOMETRY);
+
+statement ok
+INSERT INTO remap_geom.t
+SELECT i, ('POINT (' || i || ' ' || i || ')')::GEOMETRY FROM range(2048) tbl(i);
+
+statement ok
+CHECKPOINT remap_geom;
+
+statement ok
+INSERT INTO remap_geom.t
+SELECT i, ('POINT (' || i || ' ' || i || ')')::GEOMETRY FROM range(2048, 3048) tbl(i);
+
+statement ok
+CHECKPOINT remap_geom;
+
+statement ok
+CREATE UNIQUE INDEX t_i_idx ON remap_geom.t(i);
+
+statement ok
+CREATE INDEX t_geom_idx ON remap_geom.t(geom);
+
+# Before vacuum
+query II
+SELECT rowid, i FROM remap_geom.t WHERE geom = 'POINT (1500 1500)'::GEOMETRY;
+----
+1500	1500
+
+query II
+SELECT rowid, i FROM remap_geom.t WHERE i = 2048;
+----
+2048	2048
+
+statement ok
+DELETE FROM remap_geom.t WHERE i < 1000;
+
+statement ok
+FORCE CHECKPOINT remap_geom;
+
+query I
+SELECT COUNT(DISTINCT row_group_id) FROM pragma_storage_info('remap_geom.t');
+----
+1
+
+query III
+SELECT min(rowid), max(rowid), count(*) FROM remap_geom.t;
+----
+0	2047	2048
+
+query II
+SELECT rowid, i FROM remap_geom.t WHERE geom = 'POINT (1500 1500)'::GEOMETRY;
+----
+500	1500
+
+query II
+EXPLAIN ANALYZE SELECT rowid, i FROM remap_geom.t WHERE geom = 'POINT (1500 1500)'::GEOMETRY;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query II
+SELECT rowid, i FROM remap_geom.t WHERE i = 2048;
+----
+1048	2048

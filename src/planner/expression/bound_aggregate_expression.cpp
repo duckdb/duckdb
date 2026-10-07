@@ -19,6 +19,10 @@ BoundAggregateExpression::BoundAggregateExpression(BoundAggregateFunction functi
 	D_ASSERT(!this->function.GetName().empty());
 }
 
+bool BoundAggregateExpression::IsVolatile() const {
+	return function.GetStability() == FunctionStability::VOLATILE || Expression::IsVolatile();
+}
+
 string BoundAggregateExpression::ToString() const {
 	auto distinct = IsDistinct();
 	auto &function_name = function.GetName();
@@ -150,13 +154,13 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deser
 		if (!return_type.IsAggregateState()) {
 			throw SerializationException("Aggregate State export should return an aggregate state type");
 		}
-		ExportAggregateFunction::SetStateExport(*result, std::move(return_type));
+		ExportAggregateFunction::SetStateExport(*result, return_type);
 	} else if (result->return_type != return_type) {
 		// return type mismatch - push a cast
 		auto &context = deserializer.Get<ClientContext &>();
 		return BoundCastExpression::AddCastToType(context, std::move(result), return_type);
 	}
-	return std::move(result);
+	return Expression::PreserveReturnType(return_type, std::move(result));
 }
 
 } // namespace duckdb

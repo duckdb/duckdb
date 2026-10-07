@@ -9,7 +9,7 @@
 
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/optimizer/join_order/join_relation_set.hpp"
-#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/optimizer/relation_statistics/relation_statistics_helper.hpp"
 
 namespace duckdb {
 

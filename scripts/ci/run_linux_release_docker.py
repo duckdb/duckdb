@@ -32,7 +32,7 @@ def build_docker_command(libc: str, shell_command: str, docker_run_args: list[st
 
     docker_run_command = ["docker", "run", "--rm", *docker_run_args]
     workspace_args = ["-v", f"{pwd}:{pwd}", "-w", pwd]
-    env_args = ["-e", "OVERRIDE_GIT_DESCRIBE", "-e", f"CCACHE_DIR={pwd}/.ccache"]
+    env_args = ["-e", "DUCKDB_COMMIT", "-e", "DUCKDB_VERSION", "-e", f"CCACHE_DIR={pwd}/.ccache"]
     container_command = [docker_image, "sh", "-lc", shell_command]
 
     return docker_run_command + workspace_args + env_args + container_command

@@ -1,0 +1,24 @@
+name: Forward issue events to community-issue-tracker
+
+# Thin caller. All forwarding logic lives in the shared composite action
+# (duckdb/duckdb-ci/community-issue-tracker/forward), so changes there reach every
+# tracked repo with no per-repo edit.
+
+on:
+  issues:
+    types: [opened, reopened, closed]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  forward:
+    # issue_comment fires for PRs too — skip those
+    if: ${{ github.event_name == 'issues' || github.event.issue.pull_request == null }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: duckdb/duckdb-ci/community-issue-tracker/forward@main
+        with:
+          token: ${{ secrets.COMMUNITY_ISSUE_DISPATCH_TOKEN }}

@@ -6,6 +6,8 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/storage/statistics/string_stats.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -136,17 +138,54 @@ static unique_ptr<BaseStatistics> CaseConvertPropagateStats(ClientContext &conte
 	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.FunctionMutable().SetFunctionCallback(CaseConvertFunctionASCII<IS_UPPER>);
 	}
-	return nullptr;
+	// case conversion is not order- or length-preserving, but it never turns a valid string into NULL
+	auto result = StringStats::CreateUnknown(expr.GetReturnType());
+	result.CopyValidity(child_stats[0]);
+	if (!StringStats::HasMinMax(child_stats[0])) {
+		return result.ToUnique();
+	}
+	// All values share the common prefix of min and max; case conversion preserves this property.
+	auto min = StringStats::Min(child_stats[0]);
+	auto max = StringStats::Max(child_stats[0]);
+	const bool is_exact = min == max && StringStats::GetMinType(child_stats[0]) == StringStatsType::EXACT_STATS &&
+	                      StringStats::GetMaxType(child_stats[0]) == StringStatsType::EXACT_STATS;
+	if (!is_exact) {
+		min.resize(StringUtil::GetCommonPrefixSize(min, max));
+		// truncated stats can end in the middle of a character - only complete ones can be converted
+		size_t invalid_pos = 0;
+		if (Utf8Proc::Analyze(min.c_str(), min.size(), nullptr, &invalid_pos) == UnicodeType::INVALID) {
+			min.resize(invalid_pos);
+		}
+		if (min.empty()) {
+			return result.ToUnique();
+		}
+	}
+	string converted;
+	converted.resize(GetResultLength<IS_UPPER>(min.c_str(), min.size()));
+	CaseConvert<IS_UPPER>(min.c_str(), min.size(), &converted[0]);
+	auto stats_type = is_exact ? StringStatsType::EXACT_STATS : StringStatsType::TRUNCATED_STATS;
+	// case conversion can lengthen a string beyond what the stats can store
+	if (converted.size() > StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE) {
+		converted.resize(StringStatsData::CURRENT_MAX_STRING_MINMAX_SIZE);
+		stats_type = StringStatsType::TRUNCATED_STATS;
+	}
+	StringStats::SetMin(result, string_t(converted), stats_type);
+	StringStats::SetMax(result, string_t(converted), stats_type);
+	return result.ToUnique();
 }
 
 ScalarFunction LowerFun::GetFunction() {
-	return ScalarFunction("lower", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<false>, nullptr,
-	                      CaseConvertPropagateStats<false>);
+	ScalarFunction fun("lower", {}, LogicalType::VARCHAR, CaseConvertFunction<false>, nullptr,
+	                   CaseConvertPropagateStats<false>);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 ScalarFunction UpperFun::GetFunction() {
-	return ScalarFunction("upper", {LogicalType::VARCHAR}, LogicalType::VARCHAR, CaseConvertFunction<true>, nullptr,
-	                      CaseConvertPropagateStats<true>);
+	ScalarFunction fun("upper", {}, LogicalType::VARCHAR, CaseConvertFunction<true>, nullptr,
+	                   CaseConvertPropagateStats<true>);
+	fun.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	return fun;
 }
 
 } // namespace duckdb

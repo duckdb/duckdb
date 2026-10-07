@@ -166,9 +166,9 @@ class DuckDBCLI:
         # Read output until marker is seen
         output_lines = []
         found_marker = False
-        start_time = time.time()
+        start_time = time.monotonic()
         timeout = 10
-        while time.time() - start_time < timeout:
+        while time.monotonic() - start_time < timeout:
             with self.output_lock:
                 while self.output_buffer:
                     line = self.output_buffer.pop(0)
@@ -185,19 +185,19 @@ class DuckDBCLI:
             time.sleep(0.01)
 
         # Wait for the whole output to be processed
-        last_output_time = time.time()
+        last_output_time = time.monotonic()
         last_stdout_count = len(self.output_buffer)
         last_stderr_count = len(self.error_buffer)
         while True:
             with self.output_lock:
                 if last_stdout_count < len(self.output_buffer):
                     last_stdout_count = len(self.output_buffer)
-                    last_output_time = time.time()
+                    last_output_time = time.monotonic()
             with self.error_lock:
                 if last_stderr_count < len(self.error_buffer):
                     last_stderr_count = len(self.error_buffer)
-                    last_output_time = time.time()
-            if time.time() - last_output_time > 0.05:  # TODO review that
+                    last_output_time = time.monotonic()
+            if time.monotonic() - last_output_time > 0.05:  # TODO review that
                 break
 
         # Collect any errors

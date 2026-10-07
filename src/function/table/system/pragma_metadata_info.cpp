@@ -21,7 +21,7 @@ struct PragmaMetadataOperatorData : public GlobalTableFunctionState {
 };
 
 static unique_ptr<FunctionData> PragmaMetadataInfoBind(ClientContext &context, TableFunctionBindInput &input,
-                                                       vector<LogicalType> &return_types, vector<string> &names) {
+                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	names.emplace_back("block_id");
 	return_types.emplace_back(LogicalType::BIGINT);
 
@@ -86,7 +86,8 @@ void PragmaMetadataInfo::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet metadata_info("pragma_metadata_info");
 	metadata_info.AddFunction(
 	    TableFunction({}, PragmaMetadataInfoFunction, PragmaMetadataInfoBind, PragmaMetadataInfoInit));
-	metadata_info.AddFunction(TableFunction({LogicalType::VARCHAR}, PragmaMetadataInfoFunction, PragmaMetadataInfoBind,
+	metadata_info.AddFunction(TableFunction(FunctionSignature().AddPositionalOnly("database", LogicalType::VARCHAR),
+	                                        PragmaMetadataInfoFunction, PragmaMetadataInfoBind,
 	                                        PragmaMetadataInfoInit));
 	set.AddFunction(metadata_info);
 }

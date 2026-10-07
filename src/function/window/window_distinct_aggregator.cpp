@@ -22,7 +22,8 @@ bool WindowDistinctAggregator::CanAggregate(const BoundWindowExpression &wexpr) 
 		return false;
 	}
 
-	if (!wexpr.AggregateFunction()->CanAggregate()) {
+	auto &aggr = *wexpr.AggregateFunction();
+	if (!aggr.CanAggregate() || aggr.CanWindow() || aggr.IsHolistic()) {
 		return false;
 	}
 

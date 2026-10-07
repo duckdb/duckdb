@@ -108,3 +108,15 @@ statement ok
 DROP TABLE five
 
 endloop
+
+# a list of only NULLs binds successfully but has a SQLNULL return type - the bind data must still
+# survive plan serialization (run under test/configs/verify_serializer.json)
+query III
+SELECT list_aggregate([NULL], 'min'), list_aggregate([NULL, NULL], 'min'), list_aggregate([NULL::INT], 'min');
+----
+NULL	NULL	NULL
+
+query I
+SELECT list_aggregate([NULL], 'first');
+----
+NULL

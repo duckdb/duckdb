@@ -1,0 +1,8 @@
+# name: benchmark/recursive_cte/asql_cyk_using_key.benchmark
+# group: [recursive_cte]
+
+template benchmark/recursive_cte/asql_ws2526/recursive_cte_asql.benchmark.in
+LOAD=cyk
+QUERY=asql_cyk_using_key
+BENCHMARK_NAME=Advanced SQL CYK parser using key
+DESCRIPTION=Parse with semi-naive frontier-to-recurring joins and one retained row per parse fact

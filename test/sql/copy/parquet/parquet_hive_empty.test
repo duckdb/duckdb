@@ -13,11 +13,11 @@ a	a
 b	(empty)
 c	NULL
 
-# filter on hive partitioning with NULL values
+# filter on hive partitioning with literal 'NULL' values
 query II
 select *
 from parquet_scan('{DATA_DIR}/parquet-testing/hive-partitioning/empty_string/*/*.parquet')
-WHERE key IS NULL
+WHERE key='NULL'
 ----
 c	NULL
 
