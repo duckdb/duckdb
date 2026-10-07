@@ -50,6 +50,11 @@ EXTENSION_DEPENDENCIES = {
     'ducklake': [
         'parquet',
     ],
+    'glue': [
+        'avro',
+        'json',
+        'parquet',
+    ],
     'iceberg': [
         'avro',
         'parquet',
