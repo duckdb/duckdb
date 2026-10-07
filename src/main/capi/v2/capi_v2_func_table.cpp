@@ -2,6 +2,7 @@
 #include "duckdb/main/capi_v2/capi_v2_function_internal.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/execution/partition_info.hpp"
 #include "duckdb/function/partition_stats.hpp"
@@ -1719,8 +1720,8 @@ duckdb_v2_table_function_get_bind_info_set_column_identifier(duckdb_v2_table_fun
 		}
 		duckdb::vector<duckdb::idx_t> path(child_path, child_path + child_path_length);
 		// verify the path addresses a nested field of the column, so a mistake is reported where it is made
-		auto definition = MultiFileColumnDefinition::CreateNested(bind_data.column_names[column_index],
-		                                                          bind_data.column_types[column_index]);
+		auto definition = duckdb::MultiFileColumnDefinition::CreateNested(bind_data.column_names[column_index],
+		                                                                  bind_data.column_types[column_index]);
 		definition.ResolveChildPath(path);
 
 		auto &identifiers = args.out_bind_info.column_identifiers;
