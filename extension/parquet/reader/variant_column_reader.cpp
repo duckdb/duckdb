@@ -73,6 +73,11 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 		}
 	}
 
+	if (child_readers.size() < 2 || !child_readers[0] || !child_readers[1]) {
+		throw InvalidInputException("Failed to read file \"%s\": the Variant column must have 'metadata' and 'value' "
+		                            "as the first two columns",
+		                            reader.GetFileName());
+	}
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
 		value_reader_idx = 1;
@@ -80,7 +85,9 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 		metadata_reader_idx = 1;
 		value_reader_idx = 0;
 	} else {
-		throw InternalException("The Variant column must have 'metadata' and 'value' as the first two columns");
+		throw InvalidInputException("Failed to read file \"%s\": the Variant column must have 'metadata' and 'value' "
+		                            "as the first two columns",
+		                            reader.GetFileName());
 	}
 }
 
