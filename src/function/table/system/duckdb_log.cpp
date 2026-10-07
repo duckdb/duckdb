@@ -15,8 +15,6 @@ struct DuckDBLogData : public GlobalTableFunctionState {
 		log_storage->InitializeScan(*scan_state);
 		total_rows = log_storage->GetScanRowCount(LoggingTargetTable::LOG_ENTRIES);
 	}
-	DuckDBLogData() : log_storage(nullptr) {
-	}
 
 	//! The log storage we are scanning
 	shared_ptr<LogStorage> log_storage;
@@ -47,18 +45,20 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
-	if (LogManager::Get(context).CanScan(LoggingTargetTable::LOG_ENTRIES)) {
-		return make_uniq<DuckDBLogData>(LogManager::Get(context).GetLogStorage());
+	auto &log_manager = LogManager::Get(context);
+	if (!log_manager.CanScan(LoggingTargetTable::LOG_ENTRIES)) {
+		throw InvalidConfigurationException(
+		    "Log storage '%s' does not support this query. Select a queryable storage, such as 'memory' or 'file', "
+		    "before generating logs.",
+		    log_manager.GetConfig().storage);
 	}
-	return make_uniq<DuckDBLogData>();
+	return make_uniq<DuckDBLogData>(log_manager.GetLogStorage());
 }
 
 void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
-	if (data.log_storage) {
-		data.log_storage->Scan(*data.scan_state, output);
-		data.scanned_rows.fetch_add(output.size(), std::memory_order_relaxed);
-	}
+	data.log_storage->Scan(*data.scan_state, output);
+	data.scanned_rows.fetch_add(output.size(), std::memory_order_relaxed);
 }
 
 static double DuckDBLogProgress(ClientContext &context, const FunctionData *bind_data,
