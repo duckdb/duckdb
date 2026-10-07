@@ -49,3 +49,14 @@ query I
 SELECT variant_bytes_to_variant('\x01\x00\x00\x44\x00\x00\x00\x00\x00\x00\x00\x00'::BLOB);
 ----
 00:00:00
+
+# DECIMAL scales above the maximum decimal width are corrupted input
+statement error
+SELECT variant_bytes_to_variant('\x01\x00\x00\x20\x27\x01\x00\x00\x00'::BLOB);
+----
+IO Error: Corrupted VARIANT 'value' buffer, DECIMAL scale (39) is out of range
+
+statement error
+SELECT variant_bytes_to_variant('\x01\x00\x00\x28\xFF\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'::BLOB);
+----
+IO Error: Corrupted VARIANT 'value' buffer, DECIMAL scale (255) is out of range
