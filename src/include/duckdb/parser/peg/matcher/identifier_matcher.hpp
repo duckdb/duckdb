@@ -147,6 +147,10 @@ public:
 		}
 	}
 
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		first_set.class_mask = MatcherTokenClass::WORD;
+	}
+
 private:
 	bool IsAllowedKeyword(TokenIterator &tokens) const {
 		auto info = tokens.CurrentLiteralInfo(literal_table);
