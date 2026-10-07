@@ -8138,6 +8138,130 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create_type_with_alias(duckdb_
 /* --- Struct definitions for logical_type --- */
 
 /* ============================================================================
+ * MODULE: remote_catalog
+ * ============================================================================ */
+
+/* --- Enums for remote_catalog --- */
+
+/* --- Struct forward declarations for remote_catalog --- */
+
+/* --- Types for remote_catalog --- */
+
+/*!
+ * An owned opaque handle to a passthrough catalog type being described. Created with
+ * `duckdb_v2_remote_catalog_type_create_with_extension()`, configured with `duckdb_v2_remote_catalog_type_set_name()`
+ * and `duckdb_v2_remote_catalog_type_set_query_function()`, made available with
+ * `duckdb_v2_remote_catalog_type_register()`, and destroyed with `duckdb_v2_remote_catalog_type_destroy()`.
+ */
+typedef struct _duckdb_v2_remote_catalog_type {
+	void *internal_ptr;
+} * duckdb_v2_remote_catalog_type_handle;
+
+/* --- Constants for remote_catalog --- */
+
+/* --- Function pointer typedefs for remote_catalog --- */
+
+/* --- Functions for remote_catalog --- */
+
+/*!
+ * Creates a new passthrough catalog type that will be registered on the loading extension's database.
+ *
+ * Use this from an extension load callback, where an extension handle is available. The type starts out empty: give it
+ * a name with `duckdb_v2_remote_catalog_type_set_name()` and the table function that executes forwarded SQL with
+ * `duckdb_v2_remote_catalog_type_set_query_function()`, then make it available with
+ * `duckdb_v2_remote_catalog_type_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_remote_catalog_type_destroy()`, also after registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The extension to create the catalog type on.
+ * @param type On success, receives the newly created catalog type. Owned by the caller.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_remote_catalog_type_create_with_extension(
+    duckdb_v2_extension_handle extension, duckdb_v2_remote_catalog_type_handle *type, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the name of the catalog type: what `ATTACH ... (TYPE name)` selects and the prefix `CONNECT 'name:...'` and
+ * `ATTACH 'name:...'` strip from the path.
+ *
+ * The name is borrowed and copied, and matched case-insensitively. Calling this again replaces the previous name. A
+ * name must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The catalog type to set the name of.
+ * @param name The name to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_remote_catalog_type_set_name(duckdb_v2_remote_catalog_type_handle type,
+                                                                    const duckdb_v2_identifier_t *name,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the table function that executes the SQL forwarded to a catalog of this type.
+ *
+ * The function is called as `query_function(path, sql, option := value, ...)`: the attach path without the type prefix,
+ * the statement text as the user wrote it, and the options of the ATTACH or CONNECT statement as named arguments. Its
+ * result is the statement's result. The name is borrowed and copied; it is not resolved here, so an unknown function
+ * fails when a statement is forwarded. A function must be set before registration.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The catalog type to set the query function of.
+ * @param name The possibly qualified name of the table function. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_remote_catalog_type_set_query_function(duckdb_v2_remote_catalog_type_handle type,
+                                                                              duckdb_v2_qname_handle name,
+                                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the catalog type with the loading extension's database.
+ *
+ * From then on `ATTACH 'name:path' AS alias`, `ATTACH 'path' AS alias (TYPE name)` and `CONNECT 'name:path'` create
+ * passthrough catalogs of this type, and `CONNECT alias` on such a catalog forwards every statement to its query
+ * function. Registration requires a name and a query function; a name that is already registered as a storage type is
+ * rejected. A type cannot be registered twice. The caller still owns the handle after registration and must destroy it
+ * with `duckdb_v2_remote_catalog_type_destroy()`, which does not affect the registered type.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The catalog type to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_remote_catalog_type_register(duckdb_v2_remote_catalog_type_handle type,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the catalog type handle, releasing its resources.
+ *
+ * Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+ * double-destruction. Destroying the handle after registration does not affect the registered type.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param type The catalog type to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_remote_catalog_type_destroy(duckdb_v2_remote_catalog_type_handle *type);
+
+/* --- Struct definitions for remote_catalog --- */
+
+/* ============================================================================
  * MODULE: replacement scan
  * ============================================================================ */
 

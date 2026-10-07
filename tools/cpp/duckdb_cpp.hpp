@@ -88,6 +88,7 @@ class TypeBuilder;
 class CustomType;
 class CastFunction;
 class ReplacementScan;
+class RemoteCatalogType;
 class QualifiedName;
 class TableDescription;
 class ColumnDescription;
@@ -5827,6 +5828,44 @@ public:
 
 		void *GetUserDataInternal() const;
 	};
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Remote Catalog Type
+//----------------------------------------------------------------------------------------------------------------------
+
+/// A passthrough catalog type: the smallest catalog an extension can attach, and the way it becomes a `CONNECT`
+/// target. A catalog of this type holds no schemas or tables; `ATTACH 'name:path' AS alias` and `CONNECT 'name:path'`
+/// create one, and every statement forwarded to it while `CONNECT`-ed becomes a call of the configured table function:
+/// `query_function(path, sql, option := value, ...)`, with the ATTACH options as named arguments. Create one against
+/// the `Extension` being loaded, give it a name and a query function, then call `Register`.
+class RemoteCatalogType final : public detail::Handle<RemoteCatalogType> {
+	friend detail::Factory;
+
+public:
+	RemoteCatalogType(RemoteCatalogType &&) noexcept = default;
+	RemoteCatalogType &operator=(RemoteCatalogType &&) noexcept = default;
+
+	~RemoteCatalogType() override;
+
+	/// Creates a type that `Register` adds through the loading extension.
+	static auto Create(const Extension &extension) -> RemoteCatalogType;
+
+	/// Sets the type's name: what `ATTACH ... (TYPE name)` selects and the prefix `CONNECT 'name:...'` strips.
+	auto SetName(const std::string &name) & -> RemoteCatalogType &;
+
+	/// Sets the table function that executes forwarded SQL, called as `function(path, sql, option := value, ...)`.
+	auto SetQueryFunction(const QualifiedName &name) & -> RemoteCatalogType &;
+
+	/// `SetQueryFunction` for an unqualified function name.
+	auto SetQueryFunction(std::string_view name) & -> RemoteCatalogType &;
+
+	/// Registers the type with the extension's database.
+	/// @throws InvalidInputException When the name or query function is missing, or the name is already a storage type.
+	auto Register() -> void;
+
+private:
+	explicit RemoteCatalogType(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------

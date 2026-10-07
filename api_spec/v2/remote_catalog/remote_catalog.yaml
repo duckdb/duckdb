@@ -1,0 +1,156 @@
+module: remote_catalog
+#
+# Passthrough catalogs: the smallest catalog an extension can attach, and the
+# way a C extension becomes a CONNECT target.
+#
+# A passthrough catalog holds no schemas or tables. It exists so that
+# `ATTACH 'type:...' AS name` and `CONNECT 'type:...'` resolve to the extension,
+# and so that every statement forwarded to it while CONNECT-ed (or any
+# `RemoteExecute` the engine issues against it) is turned into a call of a table
+# function the extension registered:
+#
+#   query_function(path, sql, option1 := value1, ...)
+#
+# `path` is the attach path with the `type:` prefix removed, `sql` the forwarded
+# statement text, and the named arguments are the options of the ATTACH (or
+# CONNECT) statement, minus the ones the engine consumes itself (TYPE, READ_ONLY,
+# ...). The function decides what the statement means and produces its result.
+#
+# Register one type per extension load, from the extension entrypoint.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Handles
+#-----------------------------------------------------------------------------------------------------------------------
+handles:
+  remote_catalog_type:
+    description: |
+      An owned opaque handle to a passthrough catalog type being described. Created with
+      `[[remote_catalog_type_create_with_extension]]`, configured with `[[remote_catalog_type_set_name]]` and
+      `[[remote_catalog_type_set_query_function]]`, made available with `[[remote_catalog_type_register]]`, and
+      destroyed with `[[remote_catalog_type_destroy]]`.
+
+#-----------------------------------------------------------------------------------------------------------------------
+# Functions
+#-----------------------------------------------------------------------------------------------------------------------
+functions:
+  #---------------------------------------------------------------------------------------------------------------------
+  # Constructors
+  #---------------------------------------------------------------------------------------------------------------------
+  remote_catalog_type_create_with_extension:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-06" ]
+    description: |
+      Creates a new passthrough catalog type that will be registered on the loading extension's database.
+
+      Use this from an extension load callback, where an extension handle is available. The type starts out empty:
+      give it a name with `[[remote_catalog_type_set_name]]` and the table function that executes forwarded SQL with
+      `[[remote_catalog_type_set_query_function]]`, then make it available with `[[remote_catalog_type_register]]`.
+      The caller owns the returned handle and must destroy it with `[[remote_catalog_type_destroy]]`, also after
+      registration.
+    parameters:
+      extension:
+        type: extension
+        description: The extension to create the catalog type on.
+      type:
+        type: remote_catalog_type
+        indirection: 1
+        kind: OUT
+        description: On success, receives the newly created catalog type. Owned by the caller.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Properties
+  #---------------------------------------------------------------------------------------------------------------------
+  remote_catalog_type_set_name:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-06" ]
+    description: |
+      Sets the name of the catalog type: what `ATTACH ... (TYPE name)` selects and the prefix `CONNECT 'name:...'` and
+      `ATTACH 'name:...'` strip from the path.
+
+      The name is borrowed and copied, and matched case-insensitively. Calling this again replaces the previous name. A
+      name must be set before registration.
+    parameters:
+      type:
+        type: remote_catalog_type
+        description: The catalog type to set the name of.
+      name:
+        type: identifier
+        indirection: 1
+        const: true
+        kind: IN
+        description: The name to set. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  remote_catalog_type_set_query_function:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-06" ]
+    description: |
+      Sets the table function that executes the SQL forwarded to a catalog of this type.
+
+      The function is called as `query_function(path, sql, option := value, ...)`: the attach path without the type
+      prefix, the statement text as the user wrote it, and the options of the ATTACH or CONNECT statement as named
+      arguments. Its result is the statement's result. The name is borrowed and copied; it is not resolved here, so an
+      unknown function fails when a statement is forwarded. A function must be set before registration.
+    parameters:
+      type:
+        type: remote_catalog_type
+        description: The catalog type to set the query function of.
+      name:
+        type: qname
+        description: The possibly qualified name of the table function. Borrowed and copied.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Registration
+  #---------------------------------------------------------------------------------------------------------------------
+  remote_catalog_type_register:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-06" ]
+    description: |
+      Registers the catalog type with the loading extension's database.
+
+      From then on `ATTACH 'name:path' AS alias`, `ATTACH 'path' AS alias (TYPE name)` and `CONNECT 'name:path'`
+      create passthrough catalogs of this type, and `CONNECT alias` on such a catalog forwards every statement to its
+      query function. Registration requires a name and a query function; a name that is already registered as a
+      storage type is rejected. A type cannot be registered twice. The caller still owns the handle after registration
+      and must destroy it with `[[remote_catalog_type_destroy]]`, which does not affect the registered type.
+    parameters:
+      type:
+        type: remote_catalog_type
+        description: The catalog type to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Destructor
+  #---------------------------------------------------------------------------------------------------------------------
+  remote_catalog_type_destroy:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-06" ]
+    description: |
+      Destroys the catalog type handle, releasing its resources.
+
+      Null-safe: passing a null pointer or null handle is a no-op. The handle is set to null on return to prevent
+      double-destruction. Destroying the handle after registration does not affect the registered type.
+    parameters:
+      type:
+        type: remote_catalog_type
+        description: The catalog type to destroy.
+        indirection: 1
+    return_type: ERROR

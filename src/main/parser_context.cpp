@@ -18,11 +18,16 @@ Parser::Parser(ClientContext &context, IdentifierCaseMode identifier_case_mode) 
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
 	auto &client_config = ClientConfig::GetConfig(context);
-	auto &callback_manager = ExtensionCallbackManager::Get(context);
 	if (client_config.connected_grammar) {
 		// while CONNECT-ed, the database being talked to decides how its statements are parsed
 		return client_config.connected_grammar;
 	}
+	return GetLocal(context);
+}
+
+shared_ptr<CompiledGrammar> CompiledGrammar::GetLocal(ClientContext &context) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	auto &callback_manager = ExtensionCallbackManager::Get(context);
 	if (client_config.current_dialect) {
 		auto dialect_extension = callback_manager.GetDialectExtension(*client_config.current_dialect);
 		if (!dialect_extension) {

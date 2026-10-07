@@ -102,6 +102,9 @@ public:
 	//! Parses a VALUES list (i.e. the list of expressions after a VALUES clause)
 	vector<vector<unique_ptr<ParsedExpression>>> ParseValuesList(const string &value_list);
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
+	//! Parse with the client's own grammar even while CONNECT-ed to a database whose statements are not parsed
+	//! locally: for text that is always DuckDB syntax, such as type names
+	void UseLocalGrammar(ClientContext &context);
 	ColumnList ParseColumnList(const string &column_list);
 	ColumnDefinition ParseColumnDefinition(const string &column_definition);
 

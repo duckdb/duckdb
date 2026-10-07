@@ -37,6 +37,9 @@ public:
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
+	//! The grammar DuckDB itself parses with on this client: the dialect or default grammar, ignoring the grammar of a
+	//! CONNECT-ed database. For text that is always DuckDB syntax, such as type names.
+	static shared_ptr<CompiledGrammar> GetLocal(ClientContext &context);
 	//! Get the shared, lazily compiled base DuckDB grammar.
 	static shared_ptr<CompiledGrammar> DefaultGrammar();
 	//! Compile the base DuckDB grammar.

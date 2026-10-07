@@ -1,6 +1,7 @@
 #include "duckdb/common/types/type_manager.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/peg/compiled_grammar.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -22,7 +23,10 @@ static LogicalType TransformStringToUnboundType(const string &str, ClientContext
 	}
 	ColumnList column_list;
 	try {
-		column_list = Parser(context).ParseColumnList("dummy " + str);
+		// type text is DuckDB syntax even while CONNECT-ed to a database whose statements are not parsed locally
+		Parser parser(context);
+		parser.UseLocalGrammar(context);
+		column_list = parser.ParseColumnList("dummy " + str);
 	} catch (const std::runtime_error &e) {
 		const vector<string> suggested_types {"BIGINT",
 		                                      "INT8",

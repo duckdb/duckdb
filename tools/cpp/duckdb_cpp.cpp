@@ -168,6 +168,10 @@ struct HandleTraits<ReplacementScan> {
 	using handle = duckdb_v2_replacement_scan_handle;
 };
 template <>
+struct HandleTraits<RemoteCatalogType> {
+	using handle = duckdb_v2_remote_catalog_type_handle;
+};
+template <>
 struct HandleTraits<QualifiedName> {
 	using handle = duckdb_v2_qname_handle;
 };
@@ -5878,6 +5882,43 @@ void *RequireReplacementUserData(const detail::UserData &user_data) {
 }
 
 } // namespace
+
+//----------------------------------------------------------------------------------------------------------------------
+// Remote Catalog Type
+//----------------------------------------------------------------------------------------------------------------------
+
+RemoteCatalogType::RemoteCatalogType(void *impl) : detail::Handle<RemoteCatalogType>(impl) {
+}
+
+RemoteCatalogType::~RemoteCatalogType() {
+	auto _h = handle();
+	duckdb_v2_remote_catalog_type_destroy(&_h);
+}
+
+auto RemoteCatalogType::Create(const Extension &extension) -> RemoteCatalogType {
+	duckdb_v2_remote_catalog_type_handle _h = nullptr;
+	CheckedAPICall(duckdb_v2_remote_catalog_type_create_with_extension, extension.handle(), &_h);
+	return detail::Factory::Make<RemoteCatalogType>(_h);
+}
+
+auto RemoteCatalogType::SetName(const std::string &name) & -> RemoteCatalogType & {
+	auto name_str = ToStr(name);
+	CheckedAPICall(duckdb_v2_remote_catalog_type_set_name, handle(), &name_str);
+	return *this;
+}
+
+auto RemoteCatalogType::SetQueryFunction(const QualifiedName &name) & -> RemoteCatalogType & {
+	CheckedAPICall(duckdb_v2_remote_catalog_type_set_query_function, handle(), name.handle());
+	return *this;
+}
+
+auto RemoteCatalogType::SetQueryFunction(std::string_view name) & -> RemoteCatalogType & {
+	return SetQueryFunction(QualifiedName::Create({std::string(name)}));
+}
+
+auto RemoteCatalogType::Register() -> void {
+	CheckedAPICall(duckdb_v2_remote_catalog_type_register, handle());
+}
 
 ReplacementScan::ReplacementScan(void *impl) : detail::Handle<ReplacementScan>(impl) {
 }

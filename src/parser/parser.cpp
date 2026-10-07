@@ -694,6 +694,10 @@ vector<vector<unique_ptr<ParsedExpression>>> Parser::ParseValuesList(const strin
 	return std::move(values_list.values);
 }
 
+void Parser::UseLocalGrammar(ClientContext &context) {
+	options.compiled_grammar = CompiledGrammar::GetLocal(context);
+}
+
 ColumnList Parser::ParseColumnList(const string &column_list) {
 	string mock_query = "CREATE TABLE tbl (" + column_list + ")";
 	Parser parser(options);

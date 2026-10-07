@@ -1329,6 +1329,16 @@ typedef struct {
 	 const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
 	 idx_t parameter_count, idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_create_with_extension)
+	(duckdb_v2_extension_handle extension, duckdb_v2_remote_catalog_type_handle *type,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_remote_catalog_type_destroy)(duckdb_v2_remote_catalog_type_handle *type);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_register)
+	(duckdb_v2_remote_catalog_type_handle type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_set_name)
+	(duckdb_v2_remote_catalog_type_handle type, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_set_query_function)
+	(duckdb_v2_remote_catalog_type_handle type, duckdb_v2_qname_handle name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_to_statistics_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -1977,6 +1987,11 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_arrow_result_wait = duckdb_v2_arrow_result_wait;
 	result.duckdb_v2_prepared_statement_execute_arrow = duckdb_v2_prepared_statement_execute_arrow;
 	result.duckdb_v2_statement_execute_arrow = duckdb_v2_statement_execute_arrow;
+	result.duckdb_v2_remote_catalog_type_create_with_extension = duckdb_v2_remote_catalog_type_create_with_extension;
+	result.duckdb_v2_remote_catalog_type_destroy = duckdb_v2_remote_catalog_type_destroy;
+	result.duckdb_v2_remote_catalog_type_register = duckdb_v2_remote_catalog_type_register;
+	result.duckdb_v2_remote_catalog_type_set_name = duckdb_v2_remote_catalog_type_set_name;
+	result.duckdb_v2_remote_catalog_type_set_query_function = duckdb_v2_remote_catalog_type_set_query_function;
 	result.duckdb_v2_copy_to_set_statistics_callback = duckdb_v2_copy_to_set_statistics_callback;
 	result.duckdb_v2_copy_to_statistics_get_bind_data = duckdb_v2_copy_to_statistics_get_bind_data;
 	result.duckdb_v2_copy_to_statistics_get_init_data = duckdb_v2_copy_to_statistics_get_init_data;

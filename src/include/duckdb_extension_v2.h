@@ -1394,6 +1394,16 @@ typedef struct {
 	 const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
 	 idx_t parameter_count, idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_create_with_extension)
+	(duckdb_v2_extension_handle extension, duckdb_v2_remote_catalog_type_handle *type,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR (*duckdb_v2_remote_catalog_type_destroy)(duckdb_v2_remote_catalog_type_handle *type);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_register)
+	(duckdb_v2_remote_catalog_type_handle type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_set_name)
+	(duckdb_v2_remote_catalog_type_handle type, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_remote_catalog_type_set_query_function)
+	(duckdb_v2_remote_catalog_type_handle type, duckdb_v2_qname_handle name, duckdb_v2_error_info_handle *err);
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_to_statistics_callback_fn callback,
@@ -2092,6 +2102,12 @@ typedef struct {
 #define duckdb_v2_arrow_result_wait                duckdb_ext_api.duckdb_v2_arrow_result_wait
 #define duckdb_v2_prepared_statement_execute_arrow duckdb_ext_api.duckdb_v2_prepared_statement_execute_arrow
 #define duckdb_v2_statement_execute_arrow          duckdb_ext_api.duckdb_v2_statement_execute_arrow
+#define duckdb_v2_remote_catalog_type_create_with_extension                                                            \
+	duckdb_ext_api.duckdb_v2_remote_catalog_type_create_with_extension
+#define duckdb_v2_remote_catalog_type_destroy            duckdb_ext_api.duckdb_v2_remote_catalog_type_destroy
+#define duckdb_v2_remote_catalog_type_register           duckdb_ext_api.duckdb_v2_remote_catalog_type_register
+#define duckdb_v2_remote_catalog_type_set_name           duckdb_ext_api.duckdb_v2_remote_catalog_type_set_name
+#define duckdb_v2_remote_catalog_type_set_query_function duckdb_ext_api.duckdb_v2_remote_catalog_type_set_query_function
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_copy_to_set_statistics_callback duckdb_ext_api.duckdb_v2_copy_to_set_statistics_callback
 #endif
