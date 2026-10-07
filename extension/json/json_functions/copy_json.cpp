@@ -18,6 +18,7 @@
 #include "json_transform.hpp"
 #include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/main/query_result.hpp"
 
 namespace duckdb {
 
@@ -152,6 +153,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 
 	auto &copy_info = *stmt.info;
 
+	bool return_column_types = false;
 	// Parse the options, creating options for the CSV writer while doing so
 	string date_format;
 	string timestamp_format;
@@ -234,6 +236,9 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 			// Handled below by keeping the partition columns inside the JSON object. We do not forward this to the
 			// CSV writer, as that would write the (separate) partition columns as their own JSON lines.
 			write_partition_columns = GetJSONCopyBoolean(binder, format, option_name, option_values);
+		} else if (option_name == "return_column_types") {
+			return_column_types = GetJSONCopyBoolean(binder, format, option_name, option_values);
+			csv_copy_options.insert(kv);
 		} else if (SUPPORTED_BASE_OPTIONS.find(option_name) != SUPPORTED_BASE_OPTIONS.end()) {
 			if (!option_values.empty() && option_values.back().IsNull()) {
 				ThrowJSONCopyNullException(format, option_name);
@@ -258,6 +263,18 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 
 	// Run the following query to convert everything into a single JSON column, then invoke the CSV writer
 	// SELECT TO_JSON(STRUCT_PACK(*COLUMNS(*))) FROM <source>
+
+	// RETURN_COLUMN_TYPES describes the query being copied, not the to_json column the rewrite below writes
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
+	if (return_column_types) {
+		auto query_binder = Binder::CreateBinder(binder.context, &binder);
+		auto query_node = copy_info.select_statement->Copy();
+		auto bound_query = query_binder->Bind(*query_node);
+		query_names = std::move(bound_query.names);
+		QueryResult::DeduplicateColumns(query_names);
+		query_types = std::move(bound_query.types);
+	}
 
 	auto inner_select_stmt = make_uniq<SelectStatement>();
 	inner_select_stmt->node = std::move(copy_info.select_statement);
@@ -320,6 +337,11 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	copy_info.options["header"] = {{0}};
 
 	auto result = binder.Bind(stmt);
+	if (return_column_types) {
+		auto &copy = result.plan->Cast<LogicalCopyToFile>();
+		copy.query_names = std::move(query_names);
+		copy.query_types = std::move(query_types);
+	}
 	if (!is_geojson) {
 		BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
 	}

@@ -78,6 +78,9 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(225, "table_index", table_index, TableIndex(0));
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(226, "partition_path_expression",
 	                                                            partition_path_expression);
+	serializer.WritePropertyWithDefault(227, "return_column_types", return_column_types, false);
+	serializer.WritePropertyWithDefault(228, "query_names", query_names);
+	serializer.WritePropertyWithDefault(229, "query_types", query_types);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -135,6 +138,9 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	unique_ptr<Expression> partition_path_expression;
 	deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(226, "partition_path_expression",
 	                                                             partition_path_expression);
+	auto return_column_types = deserializer.ReadPropertyWithExplicitDefault(227, "return_column_types", false);
+	auto query_names = deserializer.ReadPropertyWithDefault<vector<Identifier>>(228, "query_names");
+	auto query_types = deserializer.ReadPropertyWithDefault<vector<LogicalType>>(229, "query_types");
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -171,12 +177,15 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->batches_per_file = batches_per_file;
 	result->order_columns = std::move(order_columns);
 	result->partition_path_expression = std::move(partition_path_expression);
+	result->return_column_types = return_column_types;
+	result->query_names = std::move(query_names);
+	result->query_types = std::move(query_types);
 
 	return std::move(result);
 }
 
 vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
-	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size();
+	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type, return_column_types).size();
 	vector<ColumnBinding> result;
 	for (auto return_col_idx : ProjectionIndex::GetIndexes(return_column_count)) {
 		result.emplace_back(table_index, return_col_idx);
