@@ -60,6 +60,130 @@ LogicalType FileSystemLogType::GetLogType() {
 //===--------------------------------------------------------------------===//
 // HTTPLogType
 //===--------------------------------------------------------------------===//
+static const case_insensitive_set_t &HTTPRequestHeaderAllowList() {
+	//! For extra info, the advise from OpenTelemetry:
+	//! https://opentelemetry.io/docs/specs/semconv/registry/attributes/http/#http-request-header
+	static const case_insensitive_set_t allow_list = {
+	    // HTTP semantics (https://www.rfc-editor.org/rfc/rfc9110.html).
+	    "accept",              // Accepted media types and parameters.
+	    "accept-charset",      // Accepted character sets.
+	    "accept-encoding",     // Accepted content codings.
+	    "accept-language",     // Preferred response languages.
+	    "connection",          // Connection handling options.
+	    "content-encoding",    // Applied content codings.
+	    "content-language",    // Languages of the intended audience.
+	    "content-length",      // Content size in bytes.
+	    "content-type",        // Content media type and parameters.
+	    "date",                // Message timestamp.
+	    "expect",              // Expected server behavior before sending content.
+	    "if-modified-since",   // Modification timestamp used for conditional requests.
+	    "if-unmodified-since", // Modification timestamp used for conditional requests.
+	    "max-forwards",        // Remaining forwarding limit.
+	    "range",               // Requested ranges.
+	    "te",                  // Accepted transfer codings and trailer support.
+	    "trailer",             // Names of fields sent in trailers.
+	    "upgrade",             // Proposed or selected protocols.
+	    "user-agent",          // Client product and version information.
+	    // "via",                 // Intermediary protocols, hosts and software comments.
+	    // "authorization", // Contains credentials and signatures.
+	    // "content-location", // URI can contain sensitive paths or query parameters.
+	    // "from", // Contains the user's email address.
+	    // "host", // Identifies the endpoint, including bucket or tenant names.
+	    // "if-match", // Contains opaque resource validators.
+	    // "if-none-match", // Contains opaque resource validators.
+	    // "if-range", // Can contain an opaque resource validator instead of a date.
+	    // "proxy-authorization", // Contains proxy credentials.
+	    // "referer", // URI can contain sensitive paths or query parameters.
+
+	    // Headers defined outside RFC 9110.
+	    "cache-control",     // Caching directives.
+	    "transfer-encoding", // Applied transfer codings.
+	    // "cookie", // Can contain session credentials and user data.
+
+	    // S3 common headers (https://docs.aws.amazon.com/AmazonS3/latest/developerguide/RESTCommonRequestHeaders.html).
+	    "x-amz-date", // Request signing timestamp.
+	    // "content-md5", // Fingerprints the request content.
+	    // "x-amz-content-sha256", // Can fingerprint the payload, not just contain a fixed signing marker.
+	    // "x-amz-security-token", // Contains session credentials.
+
+	    // S3 PutObject (https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html).
+	    "x-amz-request-payer",          // Requester-pays billing mode.
+	    "x-amz-server-side-encryption", // Server-side encryption algorithm.
+	    // "x-amz-expected-bucket-owner", // Identifies an AWS account.
+	    // "x-amz-server-side-encryption-aws-kms-key-id", // Identifies an encryption key and possibly its account.
+	    // "x-amz-server-side-encryption-context", // Contains caller-provided encryption context.
+	    // "x-amz-server-side-encryption-customer-key", // Contains the customer encryption key.
+	    // "x-amz-server-side-encryption-customer-key-md5", // Fingerprints the customer encryption key.
+	    // "x-amz-tagging", // Contains caller-provided object tags.
+	    // "x-amz-website-redirect-location", // URI can contain sensitive paths or query parameters.
+
+	    // S3 CopyObject (https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html).
+	    // "x-amz-copy-source", // Contains a bucket, object path and possibly a version ID.
+	    // "x-amz-copy-source-if-match", // Contains opaque resource validators.
+	    // "x-amz-copy-source-if-none-match", // Contains opaque resource validators.
+	    // "x-amz-copy-source-server-side-encryption-customer-key", // Contains the source encryption key.
+	    // "x-amz-copy-source-server-side-encryption-customer-key-md5", // Fingerprints the source encryption key.
+	    // "x-amz-source-expected-bucket-owner", // Identifies an AWS account.
+
+	    // S3 session authorization (https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateSession.html).
+	    // "x-amz-s3session-token", // Contains S3 Express session credentials.
+	};
+	return allow_list;
+}
+
+static const case_insensitive_set_t &HTTPResponseHeaderAllowList() {
+	static const case_insensitive_set_t allow_list = {
+	    // HTTP semantics (https://www.rfc-editor.org/rfc/rfc9110.html).
+	    "accept",           // Accepted media types and parameters.
+	    "accept-encoding",  // Accepted content codings.
+	    "accept-ranges",    // Supported range units.
+	    "allow",            // Supported HTTP methods.
+	    "connection",       // Connection handling options.
+	    "content-encoding", // Applied content codings.
+	    "content-language", // Languages of the intended audience.
+	    "content-length",   // Content size in bytes.
+	    "content-range",    // Transferred range and total size.
+	    "content-type",     // Content media type and parameters.
+	    "date",             // Message timestamp.
+	    "last-modified",    // Resource modification timestamp.
+	    "retry-after",      // Retry delay or timestamp.
+	    "server",           // Server product and version information.
+	    "trailer",          // Names of fields sent in trailers.
+	    "upgrade",          // Proposed or selected protocols.
+	    "vary",             // Request field names used for response selection.
+	    // "via",              // Intermediary protocols, hosts and software comments.
+	    // "authentication-info", // Can contain authentication tokens and parameters.
+	    // "content-location", // URI can contain sensitive paths or query parameters.
+	    // "etag", // Contains an opaque resource validator.
+	    // "location", // Redirect URI can contain credentials or signed query parameters.
+	    // "proxy-authenticate", // Authentication challenges can contain tokens and realm information.
+	    // "proxy-authentication-info", // Can contain authentication tokens and parameters.
+	    // "www-authenticate", // Authentication challenges can contain tokens and realm information.
+
+	    // HTTP caching (https://www.rfc-editor.org/rfc/rfc9111.html).
+	    "age",           // Time spent in caches.
+	    "cache-control", // Caching directives.
+	    "expires",       // Cache expiration timestamp.
+
+	    // Other HTTP headers.
+	    "transfer-encoding", // Applied transfer codings.
+	    // "set-cookie", // Can contain session credentials and user data.
+
+	    // S3 (https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html).
+	    "x-amz-bucket-region",          // Bucket region.
+	    "x-amz-server-side-encryption", // Server-side encryption algorithm.
+	    // "x-amz-abort-rule-id", // Identifies a lifecycle rule.
+	    // "x-amz-copy-source-version-id", // Identifies a source object version.
+	    // "x-amz-expiration", // Includes a lifecycle rule ID as well as a date.
+	    // "x-amz-id-2", // Request correlation ID, enabling it exposes request identity.
+	    // "x-amz-request-id", // Request correlation ID, enabling it exposes request identity.
+	    // "x-amz-server-side-encryption-aws-kms-key-id", // Identifies an encryption key and possibly its account.
+	    // "x-amz-server-side-encryption-customer-key-md5", // Fingerprints the customer encryption key.
+	    // "x-amz-version-id", // Identifies an object version.
+	};
+	return allow_list;
+}
+
 HTTPLogType::HTTPLogType() : LogType(NAME, LEVEL, GetLogType()) {
 }
 
@@ -111,7 +235,7 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 	child_list_t<Value> request_child_list = {
 	    {"type", Value(EnumUtil::ToString(request.type))},
 	    {"url", Value(request.url)},
-	    {"headers", CreateHTTPHeadersValue(request.headers, RequestHeaderAllowList(), redact_http_logs)},
+	    {"headers", CreateHTTPHeadersValue(request.headers, HTTPRequestHeaderAllowList(), redact_http_logs)},
 	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_system_start) : Value()},
 	    {"duration_ms",
 	     request.have_request_timing
@@ -124,7 +248,7 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
 		child_list_t<Value> response_child_list = {
 		    {"status", Value(HTTPStatusToLogString(response->status))},
 		    {"reason", Value(response->reason.empty() ? response->GetRequestError() : response->reason)},
-		    {"headers", CreateHTTPHeadersValue(response->headers, ResponseHeaderAllowList(), redact_http_logs)},
+		    {"headers", CreateHTTPHeadersValue(response->headers, HTTPResponseHeaderAllowList(), redact_http_logs)},
 		};
 		response_value = Value::STRUCT(response_child_list);
 	}
