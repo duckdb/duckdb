@@ -40,6 +40,8 @@ public:
 	// Always-tracked byte counters (used by progress bar even when profiling is disabled)
 	atomic<idx_t> bytes_read;
 	atomic<idx_t> bytes_written;
+	// Always tracked as well: the compressed size of the column data scanned, not the bytes read to scan it
+	atomic<idx_t> bytes_scanned;
 	// Thread-safe memory allocation counter (updated from allocator callbacks on any thread)
 	atomic<idx_t> total_memory_allocated;
 
@@ -62,6 +64,9 @@ public:
 
 	void UpdateBytesWritten(idx_t n) {
 		bytes_written += n;
+	}
+	void UpdateBytesScanned(idx_t n) {
+		bytes_scanned += n;
 	}
 
 	void UpdateTotalMemoryAllocated(idx_t n) {
@@ -91,6 +96,9 @@ public:
 	idx_t GetBytesWritten() const {
 		return bytes_written.load();
 	}
+	idx_t GetBytesScanned() const {
+		return bytes_scanned.load();
+	}
 
 	idx_t GetTotalMemoryAllocated() const {
 		return total_memory_allocated.load();
@@ -108,6 +116,7 @@ public:
 	void ResetLiveMetrics() {
 		bytes_read = 0;
 		bytes_written = 0;
+		bytes_scanned = 0;
 		total_memory_allocated = 0;
 	}
 
@@ -137,6 +146,7 @@ public:
 		}
 		bytes_read += other.bytes_read.load();
 		bytes_written += other.bytes_written.load();
+		bytes_scanned += other.bytes_scanned.load();
 		total_memory_allocated += other.total_memory_allocated.load();
 	}
 

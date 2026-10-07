@@ -291,6 +291,10 @@ void QueryProfiler::TrackBytesWritten(const idx_t amount) {
 	query_metrics.UpdateBytesWritten(amount);
 }
 
+void QueryProfiler::TrackBytesScanned(const idx_t amount) {
+	query_metrics.UpdateBytesScanned(amount);
+}
+
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
 	query_metrics.UpdateTotalMemoryAllocated(amount);
 }
@@ -321,6 +325,10 @@ idx_t QueryProfiler::GetBytesRead() const {
 
 idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
+}
+
+idx_t QueryProfiler::GetBytesScanned() const {
+	return query_metrics.GetBytesScanned();
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
