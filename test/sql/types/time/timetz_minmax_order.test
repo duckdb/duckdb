@@ -38,3 +38,18 @@ query I
 SELECT max(x, 3)::VARCHAR FROM (VALUES ('00:00:00+15:59:59'::TIMETZ), ('24:00:00-15:59:59'::TIMETZ), ('12:34:56.789-07:30'::TIMETZ)) v(x)
 ----
 ['24:00:00-15:59:59', '12:34:56.789-07:30', '00:00:00+15:59:59']
+
+# list aggregates follow the same order, including for other types that are compared through a collation
+query IIII
+SELECT list_max(list(x)), list_min(list(x)), list_max(['1'::BIT, '01'::BIT, '0'::BIT]), list_min([2::VARIANT, 1::VARIANT])
+FROM z
+----
+09:00:00+00	10:00:00+05	1	1
+
+statement ok
+SET default_collation=nocase
+
+query II
+SELECT list_max(['a', 'B']), list_aggr(['a', 'b'], 'string_agg', '-')
+----
+B	a-b
