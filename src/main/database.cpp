@@ -19,6 +19,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/main/database_file_opener.hpp"
 #include "duckdb/main/database_file_path_manager.hpp"
@@ -694,6 +695,11 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	D_ASSERT(create_api_v1);
 	return create_api_v1();
+}
+
+unique_ptr<QueryResult> DatabaseInstance::CreateAConnectionAndQuery(const string &sql) {
+	Connection con(*this);
+	return con.Query(sql);
 }
 
 void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &init_result, const string &extension_name,
