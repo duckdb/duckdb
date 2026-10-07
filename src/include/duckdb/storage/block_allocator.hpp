@@ -16,6 +16,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,7 @@ struct BlockAllocatorLifetimeState;
 class BlockAllocator {
 	friend class BlockAllocatorThreadLocalState;
 	friend class BlockAllocatorFlushTask;
+	friend class BlockAllocatorTestHelper;
 
 public:
 	BlockAllocator(Allocator &allocator, idx_t block_size, idx_t virtual_memory_size, idx_t physical_memory_size);
@@ -51,7 +53,7 @@ public:
 	bool SupportsFlush() const;
 	optional_idx DecayDelay() const;
 	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
-	//! Pass the owning database's scheduler to defer pool reclamation.
+	//! Pass the owning database's scheduler to reclaim eligible blocks at idle opportunities.
 	void ThreadIdle(optional_ptr<TaskScheduler> scheduler = nullptr) const DUCKDB_EXCLUDES(flush_lock);
 	//! Best-effort reclamation of free pool blocks and fallback allocations.
 	void FlushAll(optional_idx extra_memory = optional_idx()) const noexcept DUCKDB_EXCLUDES(flush_lock);
@@ -62,6 +64,7 @@ public:
 
 private:
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
+	enum class ReclaimMode : uint8_t { FORCE, DECAY };
 
 	bool IsActive() const;
 	bool IsEnabled() const;
@@ -75,11 +78,19 @@ private:
 
 	void VerifyBlockID(uint32_t block_id) const;
 
+	void AdvanceRetention(idx_t now_ms) const DUCKDB_REQUIRES(flush_lock);
+	void AddRetention(idx_t count, idx_t now_ms) const DUCKDB_REQUIRES(flush_lock);
+	void ReuseRetention(idx_t count) const DUCKDB_REQUIRES(flush_lock);
+	idx_t RetentionTarget(idx_t now_ms) const DUCKDB_REQUIRES(flush_lock);
+
 	bool TryScheduleFlush(TaskScheduler &scheduler) const DUCKDB_EXCLUDES(flush_lock);
+	idx_t GetFreeBlockCount() const DUCKDB_REQUIRES(flush_lock);
+	idx_t GetReclaimableBlockCount(ReclaimMode mode) const DUCKDB_REQUIRES(flush_lock);
 	//! Return the unprocessed portion of the initial free-block budget.
-	idx_t FlushPool(optional_idx block_limit = optional_idx(), optional_idx task_limit = optional_idx()) const noexcept
+	idx_t FlushPool(optional_idx block_limit = optional_idx(), optional_idx task_limit = optional_idx(),
+	                ReclaimMode mode = ReclaimMode::FORCE) const noexcept DUCKDB_EXCLUDES(flush_lock);
+	idx_t FreeInternal(optional_idx block_limit, optional_idx task_limit, ReclaimMode mode) const
 	    DUCKDB_EXCLUDES(flush_lock);
-	idx_t FreeInternal(optional_idx block_limit, optional_idx task_limit) const;
 	void FreeContiguousBlocks(uint32_t block_id_start, uint32_t block_id_end_including) const;
 
 private:
@@ -113,8 +124,10 @@ private:
 	//! Synchronizes returning cached blocks with allocator destruction.
 	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
 
-	//! Coalesce requests into one task, including follow-up passes while it runs.
+	//! Protect touched transfers, retention and background scheduling.
 	mutable annotated_mutex flush_lock;
+	mutable vector<idx_t> retention_buckets DUCKDB_GUARDED_BY(flush_lock);
+	mutable idx_t retention_epoch DUCKDB_GUARDED_BY(flush_lock) = 0;
 	//! Scheduler queue destruction invalidates this token before allocator destruction.
 	mutable unique_ptr<ProducerToken> flush_producer DUCKDB_GUARDED_BY(flush_lock);
 	mutable FlushState flush_state DUCKDB_GUARDED_BY(flush_lock) = FlushState::IDLE;

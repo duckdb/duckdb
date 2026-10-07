@@ -18,7 +18,134 @@
 
 using namespace duckdb;
 
+namespace duckdb {
+class BlockAllocatorTestHelper {
+public:
+	explicit BlockAllocatorTestHelper(const BlockAllocator &allocator) : allocator(allocator) {
+	}
+	void Add(idx_t count, idx_t now_ms) {
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		allocator.AddRetention(count, now_ms);
+	}
+	void Reuse(idx_t count) {
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		allocator.ReuseRetention(count);
+	}
+	idx_t Target(idx_t now_ms) {
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		return allocator.RetentionTarget(now_ms);
+	}
+	static void Expire(const BlockAllocator &allocator) {
+		allocator.ThreadFlush(false, 0, 1);
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		std::fill(allocator.retention_buckets.begin(), allocator.retention_buckets.end(), 0);
+	}
+	static idx_t FreeBlocks(const BlockAllocator &allocator) {
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		return allocator.GetFreeBlockCount();
+	}
+	static idx_t RetainedBlocks(const BlockAllocator &allocator) {
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		const auto now =
+		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+		        .count();
+		return allocator.RetentionTarget(NumericCast<idx_t>(now));
+	}
+	static bool Drained(const BlockAllocator &allocator) {
+		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
+		return allocator.GetFreeBlockCount() == 0 && allocator.flush_state == BlockAllocator::FlushState::IDLE;
+	}
+
+private:
+	const BlockAllocator &allocator;
+};
+} // namespace duckdb
+
 #if INTPTR_MAX == INT64_MAX
+TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 4096;
+	constexpr idx_t CAPACITY = 4096;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY, BLOCK_SIZE * CAPACITY);
+	BlockAllocatorTestHelper retention(allocator);
+	CHECK(allocator.DecayDelay().GetIndex() == 1);
+	retention.Add(1024, 1);
+
+	SECTION("One-second linear decay starts at the bucket ending boundary") {
+		CHECK(retention.Target(200) == 1024);
+		CHECK(retention.Target(499) == 1024);
+		CHECK(retention.Target(500) == 1024);
+		CHECK(retention.Target(501) == 1022);
+		CHECK(retention.Target(750) == 768);
+		CHECK(retention.Target(1000) == 512);
+		CHECK(retention.Target(1250) == 256);
+		CHECK(retention.Target(1500) == 0);
+	}
+	SECTION("A return just before a boundary gets the full decay interval") {
+		retention.Add(1024, 499);
+		CHECK(retention.Target(500) == 2048);
+		CHECK(retention.Target(501) == 2045);
+		CHECK(retention.Target(1499) == 2);
+		CHECK(retention.Target(1500) == 0);
+	}
+	SECTION("A full-pool burst decays without a percentage cutoff") {
+		retention.Add(CAPACITY, 200);
+		CHECK(retention.Target(500) == CAPACITY);
+		CHECK(retention.Target(501) == 4091);
+		CHECK(retention.Target(750) == 3072);
+		CHECK(retention.Target(1000) == 2048);
+		CHECK(retention.Target(1375) == 512);
+		CHECK(retention.Target(1500) == 0);
+	}
+	SECTION("Large bursts decay without a byte cutoff") {
+		constexpr idx_t LARGE_BLOCK_SIZE = idx_t(1) << 20;
+		constexpr idx_t LARGE_POOL_SIZE = 8192 * LARGE_BLOCK_SIZE;
+		BlockAllocator large_allocator(fallback, LARGE_BLOCK_SIZE, LARGE_POOL_SIZE, LARGE_POOL_SIZE);
+		BlockAllocatorTestHelper large_retention(large_allocator);
+		large_retention.Add(4096, 1);
+		CHECK(large_retention.Target(1000) == 2048);
+		CHECK(large_retention.Target(1500) == 0);
+	}
+	SECTION("A small new burst does not refresh the old allowance") {
+		retention.Add(16, 500);
+		CHECK(retention.Target(750) == 768 + 16);
+		CHECK(retention.Target(1500) == 8);
+		CHECK(retention.Target(2000) == 0);
+	}
+	SECTION("Reuse consumes the youngest allowance first") {
+		retention.Add(16, 500);
+		retention.Reuse(16);
+		CHECK(retention.Target(750) == 768);
+		CHECK(retention.Target(1500) == 0);
+	}
+	SECTION("Repeated small reuse cannot accumulate allowance") {
+		retention.Add(16, 500);
+		for (idx_t now = 600; now <= 3000; now += 100) {
+			retention.Reuse(16);
+			retention.Add(16, now);
+		}
+		CHECK(retention.Target(3000) == 16);
+		CHECK(retention.Target(4500) == 0);
+	}
+	SECTION("A complete refill consumes the allowance including unused TLS blocks") {
+		retention.Reuse(CAPACITY);
+		CHECK(retention.Target(200) == 0);
+	}
+	SECTION("Long gaps expire the whole ring without repeated advancement") {
+		CHECK(retention.Target(1000000000) == 0);
+		retention.Add(16, 1000000001);
+		CHECK(retention.Target(1000000001) == 16);
+		CHECK(retention.Target(1000001500) == 0);
+	}
+	SECTION("Historical purged volume cannot reject a new burst") {
+		retention.Add(CAPACITY, 500);
+		retention.Add(CAPACITY, 501);
+		CHECK(retention.Target(501) == 1022 + CAPACITY);
+		retention.Reuse(CAPACITY);
+		CHECK(retention.Target(750) == 768);
+	}
+}
+
 namespace {
 struct BlockAllocatorFallbackData : public PrivateAllocatorData {
 	atomic<idx_t> allocation_count {0};
@@ -348,6 +475,7 @@ TEST_CASE("BlockAllocator idle reclamation uses the async task queue", "[api][bl
 	auto freed = live.back();
 	live.pop_back();
 	allocator.FreeData(freed, BLOCK_SIZE);
+	BlockAllocatorTestHelper::Expire(allocator);
 	for (idx_t i = 0; i < 32; i++) {
 		allocator.ThreadIdle(scheduler);
 	}
@@ -361,6 +489,7 @@ TEST_CASE("BlockAllocator idle reclamation uses the async task queue", "[api][bl
 	CHECK(reused[0] == 42);
 	CHECK(reused[BLOCK_SIZE - 1] == 42);
 	allocator.FreeData(reused, BLOCK_SIZE);
+	BlockAllocatorTestHelper::Expire(allocator);
 	allocator.ThreadIdle(scheduler);
 	SECTION("Async worker executes the queued pass") {
 		gate.Release();
@@ -371,18 +500,18 @@ TEST_CASE("BlockAllocator idle reclamation uses the async task queue", "[api][bl
 		gate.Release();
 	}
 
-#if defined(__linux__) || defined(_WIN32)
-	bool reclaimed = false;
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-	while (!reclaimed && std::chrono::steady_clock::now() < deadline) {
+	while (!BlockAllocatorTestHelper::Drained(allocator) && std::chrono::steady_clock::now() < deadline) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
-		reused = allocator.AllocateData(BLOCK_SIZE);
-		reclaimed = reused == freed && reused[0] == 0 && reused[BLOCK_SIZE - 1] == 0;
-		allocator.FreeData(reused, BLOCK_SIZE);
-		allocator.ThreadFlush(true, 0, 1);
 	}
-	CHECK(reclaimed);
+	CHECK(BlockAllocatorTestHelper::Drained(allocator));
+	reused = allocator.AllocateData(BLOCK_SIZE);
+	CHECK(reused == freed);
+#if defined(__linux__) || defined(_WIN32)
+	CHECK(reused[0] == 0);
+	CHECK(reused[BLOCK_SIZE - 1] == 0);
 #endif
+	allocator.FreeData(reused, BLOCK_SIZE);
 	for (auto block : live) {
 		CHECK(block[0] == 42);
 		CHECK(block[BLOCK_SIZE - 1] == 42);
@@ -401,6 +530,9 @@ TEST_CASE("BlockAllocator idle reclamation uses the async task queue", "[api][bl
 	for (auto block : live) {
 		allocator.FreeData(block, BLOCK_SIZE);
 	}
+	allocator.ThreadFlush(false, 0, 1);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT);
+	BlockAllocatorTestHelper::Expire(allocator);
 	allocator.ThreadIdle(scheduler);
 	live.clear();
 	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
@@ -427,6 +559,13 @@ TEST_CASE("BlockAllocator async reclamation survives worker relaunch and shutdow
 		auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
 		vector<data_ptr_t> live;
 		for (idx_t round = 0; round < 8; round++) {
+			vector<unique_ptr<BlockAllocatorAsyncGate>> gates;
+			const auto workers = scheduler.NumberOfThreads() - 1 + scheduler.NumberOfAsyncThreads();
+			for (idx_t worker = 0; worker < workers; worker++) {
+				auto gate = make_uniq<BlockAllocatorAsyncGate>(scheduler);
+				REQUIRE(gate->WaitUntilBlocked());
+				gates.push_back(std::move(gate));
+			}
 			for (idx_t i = 0; i < 64; i++) {
 				auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
 				block[0] = 42;
@@ -437,7 +576,12 @@ TEST_CASE("BlockAllocator async reclamation survives worker relaunch and shutdow
 				allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
 			}
 			live.clear();
+			BlockAllocatorTestHelper::Expire(allocator);
 			allocator.ThreadIdle(scheduler);
+			CHECK(scheduler.GetNumberOfTasks() == 1);
+			for (auto &gate : gates) {
+				gate->Release();
+			}
 			scheduler.SetThreads(1 + round % 2, 1);
 			scheduler.RelaunchThreads();
 			if (round % 3 == 0) {
@@ -479,6 +623,7 @@ TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", 
 	}
 	blocks.clear();
 	auto other_producer = scheduler.CreateProducer();
+	BlockAllocatorTestHelper::Expire(allocator);
 	allocator.ThreadIdle(scheduler);
 	atomic<bool> execute {true};
 	REQUIRE(scheduler.ExecuteTasks(&execute, 1) == 1);
@@ -518,6 +663,30 @@ TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", 
 			blocks.push_back(block);
 		}
 	}
+	SECTION("A fresh burst limits the stale continuation budget") {
+		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+			auto block = allocator.AllocateData(BLOCK_SIZE);
+			block[0] = 84;
+			blocks.push_back(block);
+		}
+		for (auto block : blocks) {
+			allocator.FreeData(block, BLOCK_SIZE);
+		}
+		blocks.clear();
+		allocator.ThreadFlush(false, 0, 1);
+		CHECK(scheduler.ExecuteTasks(&execute, BLOCK_COUNT) > 0);
+		CHECK(scheduler.GetNumberOfTasks() == 0);
+		const auto retained = BlockAllocatorTestHelper::RetainedBlocks(allocator);
+		REQUIRE(retained > 0);
+		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) >= retained);
+		idx_t warm_blocks = 0;
+		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+			auto block = allocator.AllocateData(BLOCK_SIZE);
+			warm_blocks += block[0] == 84;
+			blocks.push_back(block);
+		}
+		CHECK(warm_blocks >= retained);
+	}
 	SECTION("Pending work stops the continuation chain") {
 		class OtherTask : public Task {
 		public:
@@ -544,6 +713,65 @@ TEST_CASE("BlockAllocator background reclamation yields between bounded tasks", 
 	for (auto block : blocks) {
 		allocator.FreeData(block, BLOCK_SIZE);
 	}
+}
+
+TEST_CASE("BlockAllocator idle workers reclaim eligible blocks", "[api][block_allocator]") {
+	DBConfig config;
+	config.options.maximum_threads = 2;
+	config.options.async_threads = 0;
+	config.options.block_allocator_size = 128 * DEFAULT_BLOCK_ALLOC_SIZE;
+	SECTION("A regular worker performs synchronous idle maintenance") {
+	}
+	SECTION("An async worker performs bounded idle maintenance") {
+		config.options.maximum_threads = 1;
+		config.options.async_threads = 1;
+	}
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
+	BlockAllocatorAsyncGate gate(scheduler);
+	REQUIRE(gate.WaitUntilBlocked());
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < 128; i++) {
+		auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
+		block[0] = 42;
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
+	}
+	BlockAllocatorTestHelper::Expire(allocator);
+	CHECK(scheduler.GetNumberOfTasks() == 0);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 128);
+	gate.Release();
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+	while (!BlockAllocatorTestHelper::Drained(allocator) && std::chrono::steady_clock::now() < deadline) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	CHECK(BlockAllocatorTestHelper::Drained(allocator));
+	allocator.ThreadIdle(scheduler);
+	CHECK(scheduler.GetNumberOfTasks() == 0);
+}
+
+TEST_CASE("BlockAllocator cooling without workers needs another maintenance opportunity", "[api][block_allocator]") {
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	config.options.block_allocator_size = 64 * DEFAULT_BLOCK_ALLOC_SIZE;
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+	auto &scheduler = TaskScheduler::GetScheduler(*db.instance);
+	allocator.ThreadIdle(scheduler);
+	auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
+	block[0] = 42;
+	allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
+	allocator.ThreadFlush(false, 0, 1);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
+	CHECK(scheduler.GetNumberOfTasks() == 0);
+	std::this_thread::sleep_for(std::chrono::milliseconds(1600));
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == 1);
+	allocator.ThreadIdle(scheduler);
+	CHECK(BlockAllocatorTestHelper::Drained(allocator));
 }
 #endif
 

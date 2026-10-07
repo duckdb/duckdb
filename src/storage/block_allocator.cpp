@@ -7,6 +7,7 @@
 #include "duckdb/parallel/concurrentqueue.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/bit_utils.hpp"
+#include "duckdb/common/chrono.hpp"
 
 #if defined(_WIN32)
 #include "duckdb/common/windows.hpp"
@@ -30,7 +31,62 @@ struct BlockAllocatorConfig {
 	static constexpr idx_t RECLAIM_BATCH_SIZE = 1024;
 	//! Maximum blocks reclaimed by one background task.
 	static constexpr idx_t MAX_FLUSH_BLOCKS = 64;
+	//! Width of each retention bucket, rounding return times up to the bucket end.
+	static constexpr idx_t RETENTION_INTERVAL_MS = 500;
+	//! Linear decay on the same one-second timescale as bundled jemalloc, without extra grace.
+	static constexpr idx_t RETENTION_DECAY_MS = DEFAULT_DECAY_DELAY * 1000;
+	//! Current bucket plus the complete decay history.
+	static constexpr idx_t RETENTION_BUCKETS = RETENTION_DECAY_MS / RETENTION_INTERVAL_MS + 1;
 };
+
+static idx_t RetentionTimeMillis() {
+	return NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
+}
+
+void BlockAllocator::AdvanceRetention(const idx_t now_ms) const {
+	const auto next_epoch = now_ms / BlockAllocatorConfig::RETENTION_INTERVAL_MS;
+	D_ASSERT(next_epoch >= retention_epoch);
+	if (next_epoch - retention_epoch >= retention_buckets.size()) {
+		std::fill(retention_buckets.begin(), retention_buckets.end(), 0);
+	} else {
+		for (auto i = retention_epoch; i < next_epoch; i++) {
+			retention_buckets[(i + 1) % retention_buckets.size()] = 0;
+		}
+	}
+	retention_epoch = next_epoch;
+}
+
+void BlockAllocator::AddRetention(const idx_t count, const idx_t now_ms) const {
+	AdvanceRetention(now_ms);
+	const auto capacity = DivBlockSize(physical_memory_size.load());
+	auto &bucket = retention_buckets[retention_epoch % retention_buckets.size()];
+	bucket += MinValue(count, capacity - bucket);
+}
+
+void BlockAllocator::ReuseRetention(idx_t count) const {
+	for (idx_t age = 0; age < retention_buckets.size() && count > 0; age++) {
+		auto &bucket = retention_buckets[(retention_epoch % retention_buckets.size() + retention_buckets.size() - age) %
+		                                 retention_buckets.size()];
+		const auto reused = MinValue(count, bucket);
+		bucket -= reused;
+		count -= reused;
+	}
+}
+
+idx_t BlockAllocator::RetentionTarget(const idx_t now_ms) const {
+	AdvanceRetention(now_ms);
+	idx_t weighted = 0;
+	const auto offset = now_ms % BlockAllocatorConfig::RETENTION_INTERVAL_MS;
+	for (idx_t i = 0; i < retention_buckets.size(); i++) {
+		const auto count =
+		    retention_buckets[(retention_epoch % retention_buckets.size() + retention_buckets.size() - i) %
+		                      retention_buckets.size()];
+		const auto age_ms = i == 0 ? 0 : (i - 1) * BlockAllocatorConfig::RETENTION_INTERVAL_MS + offset;
+		const auto remaining_ms = BlockAllocatorConfig::RETENTION_DECAY_MS - age_ms;
+		weighted += count * remaining_ms;
+	}
+	return weighted / BlockAllocatorConfig::RETENTION_DECAY_MS;
+}
 
 //===--------------------------------------------------------------------===//
 // Memory Helpers
@@ -144,9 +200,7 @@ public:
 
 		// Upon reaching the threshold, we return a local batch to global
 		std::sort(touched.begin(), touched.end());
-		block_allocator->touched->q.enqueue_bulk(touched.end() - BlockAllocatorConfig::BATCH_SIZE,
-		                                         BlockAllocatorConfig::BATCH_SIZE);
-		touched.resize(touched.size() - BlockAllocatorConfig::BATCH_SIZE);
+		ReturnTouched(BlockAllocatorConfig::BATCH_SIZE);
 	}
 
 	void Clear() DUCKDB_EXCLUDES(lifetime_state->lock) {
@@ -154,7 +208,7 @@ public:
 			annotated_lock_guard<annotated_mutex> guard(lifetime_state->lock);
 			if (lifetime_state->alive) {
 				if (!touched.empty()) {
-					block_allocator->touched->q.enqueue_bulk(touched.begin(), touched.size());
+					ReturnTouched(touched.size());
 				}
 				if (!untouched.empty()) {
 					block_allocator->untouched->q.enqueue_bulk(untouched.begin(), untouched.size());
@@ -166,6 +220,13 @@ public:
 	}
 
 private:
+	void ReturnTouched(const idx_t count) DUCKDB_EXCLUDES(block_allocator->flush_lock) {
+		annotated_lock_guard<annotated_mutex> guard(block_allocator->flush_lock);
+		block_allocator->touched->q.enqueue_bulk(touched.end() - count, count);
+		block_allocator->AddRetention(count, RetentionTimeMillis());
+		touched.resize(touched.size() - count);
+	}
+
 	void Initialize(const BlockAllocator &block_allocator_p) {
 		Clear();
 		cached_uuid = block_allocator_p.uuid;
@@ -190,10 +251,17 @@ private:
 		return nullptr;
 	}
 
-	static bool TryGetBatch(vector<uint32_t> &local, BlockQueue &global) {
+	bool TryGetBatch(vector<uint32_t> &local, BlockQueue &global) DUCKDB_EXCLUDES(block_allocator->flush_lock) {
 		D_ASSERT(local.empty());
 		local.resize(BlockAllocatorConfig::BATCH_SIZE);
-		const auto size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
+		idx_t size;
+		if (RefersToSameObject(global, *block_allocator->touched)) {
+			annotated_lock_guard<annotated_mutex> guard(block_allocator->flush_lock);
+			size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
+			block_allocator->ReuseRetention(size);
+		} else {
+			size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
+		}
 		local.resize(size);
 		std::sort(local.begin(), local.end());
 		return !local.empty();
@@ -231,7 +299,8 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)), virtual_memory_space(nullptr),
       physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
-      lifetime_state(make_shared_ptr<BlockAllocatorLifetimeState>()) {
+      lifetime_state(make_shared_ptr<BlockAllocatorLifetimeState>()),
+      retention_buckets(BlockAllocatorConfig::RETENTION_BUCKETS, 0) {
 	D_ASSERT(IsPowerOfTwo(block_size));
 	Resize(physical_memory_size_p);
 }
@@ -405,13 +474,15 @@ public:
 				allocator.flush_state = FlushState::SCHEDULED;
 			}
 		}
-		const auto remaining = allocator.FlushPool(remaining_blocks, BlockAllocatorConfig::MAX_FLUSH_BLOCKS);
+		const auto remaining = allocator.FlushPool(remaining_blocks, BlockAllocatorConfig::MAX_FLUSH_BLOCKS,
+		                                           BlockAllocator::ReclaimMode::DECAY);
 		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
 		const bool reschedule = allocator.flush_state == FlushState::RESCHEDULE_REQUESTED;
 		allocator.flush_state = FlushState::IDLE;
 		// Defer to the next idle interval when other work is waiting.
 		if ((remaining > 0 || reschedule) && scheduler.GetNumberOfTasks() == 0 &&
-		    scheduler.NumberOfAsyncThreads() > 0) {
+		    scheduler.NumberOfAsyncThreads() > 0 &&
+		    allocator.GetReclaimableBlockCount(BlockAllocator::ReclaimMode::DECAY) > 0) {
 			try {
 				scheduler.ScheduleTask(
 				    *allocator.flush_producer,
@@ -442,6 +513,9 @@ bool BlockAllocator::TryScheduleFlush(TaskScheduler &scheduler) const {
 		flush_state = FlushState::RESCHEDULE_REQUESTED;
 		return true;
 	}
+	if (GetReclaimableBlockCount(ReclaimMode::DECAY) == 0) {
+		return true;
+	}
 	try {
 		if (!flush_producer) {
 			flush_producer = scheduler.CreateProducer();
@@ -459,8 +533,8 @@ void BlockAllocator::ThreadIdle(optional_ptr<TaskScheduler> scheduler) const {
 	try {
 		if (IsActive() && IsEnabled()) {
 			GetBlockAllocatorThreadLocalState(*this).Clear();
-			if (touched->q.size_approx() > 0 && (!scheduler || !TryScheduleFlush(*scheduler))) {
-				FlushPool();
+			if (!scheduler || !TryScheduleFlush(*scheduler)) {
+				FlushPool(optional_idx(), optional_idx(), scheduler ? ReclaimMode::DECAY : ReclaimMode::FORCE);
 			}
 		}
 	} catch (...) {
@@ -469,9 +543,22 @@ void BlockAllocator::ThreadIdle(optional_ptr<TaskScheduler> scheduler) const {
 	Allocator::ThreadIdle();
 }
 
-idx_t BlockAllocator::FlushPool(const optional_idx block_limit, const optional_idx task_limit) const noexcept {
+idx_t BlockAllocator::GetFreeBlockCount() const {
+	return touched->q.size_approx();
+}
+
+idx_t BlockAllocator::GetReclaimableBlockCount(const ReclaimMode mode) const {
+	const auto available = GetFreeBlockCount();
+	if (mode == ReclaimMode::FORCE) {
+		return available;
+	}
+	return available - MinValue(available, RetentionTarget(RetentionTimeMillis()));
+}
+
+idx_t BlockAllocator::FlushPool(const optional_idx block_limit, const optional_idx task_limit,
+                                const ReclaimMode mode) const noexcept {
 	try {
-		return FreeInternal(block_limit, task_limit);
+		return FreeInternal(block_limit, task_limit, mode);
 	} catch (...) {
 		// Failed reclamation leaves blocks available for reuse.
 		return 0;
@@ -510,22 +597,33 @@ bool BlockAllocator::TryFlushDeallocated(const idx_t threshold) const {
 	return true;
 }
 
-idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optional_idx task_limit) const {
+idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optional_idx task_limit,
+                                   const ReclaimMode mode) const {
 	if (!IsActive() || !IsEnabled()) {
 		return 0;
 	}
 	GetBlockAllocatorThreadLocalState(*this).Clear();
 	// Bound this flush even when other threads keep freeing blocks.
-	idx_t remaining = touched->q.size_approx();
+	idx_t remaining;
+	{
+		annotated_lock_guard<annotated_mutex> guard(flush_lock);
+		remaining = GetReclaimableBlockCount(mode);
+	}
 	if (block_limit.IsValid()) {
 		remaining = MinValue(remaining, block_limit.GetIndex());
 	}
 	auto task_remaining = task_limit.IsValid() ? MinValue(remaining, task_limit.GetIndex()) : remaining;
+	const auto batch_size =
+	    mode == ReclaimMode::DECAY ? BlockAllocatorConfig::MAX_FLUSH_BLOCKS : BlockAllocatorConfig::RECLAIM_BATCH_SIZE;
 	unsafe_vector<uint32_t> to_free_buffer;
-	to_free_buffer.resize(MinValue(task_remaining, BlockAllocatorConfig::RECLAIM_BATCH_SIZE));
+	to_free_buffer.resize(MinValue(task_remaining, batch_size));
 	while (task_remaining > 0) {
-		const auto count = touched->q.try_dequeue_bulk(
-		    to_free_buffer.begin(), MinValue(task_remaining, BlockAllocatorConfig::RECLAIM_BATCH_SIZE));
+		idx_t count;
+		{
+			annotated_lock_guard<annotated_mutex> guard(flush_lock);
+			const auto eligible = MinValue(task_remaining, GetReclaimableBlockCount(mode));
+			count = touched->q.try_dequeue_bulk(to_free_buffer.begin(), MinValue(eligible, batch_size));
+		}
 		if (count == 0) {
 			return 0;
 		}
@@ -542,6 +640,7 @@ idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optiona
 			try {
 				FreeContiguousBlocks(to_free_buffer[start], to_free_buffer[end - 1]);
 			} catch (...) {
+				annotated_lock_guard<annotated_mutex> guard(flush_lock);
 				touched->q.enqueue_bulk(to_free_buffer.begin() + start, count - start);
 				throw;
 			}
