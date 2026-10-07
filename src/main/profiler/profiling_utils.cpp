@@ -38,11 +38,6 @@ uint64_t ReadLiveMetric<MetricIOTotalBytesWritten>(const QueryMetrics &metrics) 
 }
 
 template <>
-uint64_t ReadLiveMetric<MetricQueryTotalBytesScanned>(const QueryMetrics &metrics) {
-	return metrics.GetBytesScanned();
-}
-
-template <>
 uint64_t ReadLiveMetric<MetricSystemTotalMemoryAllocated>(const QueryMetrics &metrics) {
 	return metrics.GetTotalMemoryAllocated();
 }

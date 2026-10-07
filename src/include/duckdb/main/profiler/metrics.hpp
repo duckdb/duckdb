@@ -191,6 +191,13 @@ struct MetricStorageWriteToWALLatency {
 };
 
 // Operator metrics
+struct MetricOperatorBytesScanned {
+	using METRIC_TYPE = uint64_t;
+	static constexpr const char *Name = "operator.bytes_scanned";
+	static constexpr const char *Description = "Compressed size of the Parquet column chunks scanned by the operator";
+	static constexpr const char *Unit = "bytes";
+	static constexpr const char *TypeStr = "uint64";
+};
 struct MetricOperatorCPUTime {
 	using METRIC_TYPE = double;
 	static constexpr const char *Name = "operator.cpu_time";
@@ -330,7 +337,6 @@ template <class... METRICS>
 struct MetricList {};
 
 // The metrics marked "live": they can be read while the query runs
-using LiveMetrics = MetricList<MetricQueryTotalBytesScanned, MetricSystemTotalMemoryAllocated, MetricIOTotalBytesRead,
-                               MetricIOTotalBytesWritten>;
+using LiveMetrics = MetricList<MetricSystemTotalMemoryAllocated, MetricIOTotalBytesRead, MetricIOTotalBytesWritten>;
 
 } // namespace duckdb

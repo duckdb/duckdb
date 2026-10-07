@@ -37,8 +37,7 @@
 		"total_bytes_scanned": {
 			"metric_type": "uint64",
 			"description": "Cumulative compressed size of the Parquet column chunks scanned by the query, however many bytes were read from storage to scan them",
-			"unit": "bytes",
-			"live": true
+			"unit": "bytes"
 		},
 		"total_intermediate_size_bytes": {
 			"metric_type": "uint64",
@@ -153,6 +152,11 @@
 		"name": {
 			"metric_type": "string",
 			"description": "Name of the operator"
+		},
+		"bytes_scanned": {
+			"metric_type": "uint64",
+			"description": "Compressed size of the Parquet column chunks scanned by the operator",
+			"unit": "bytes"
 		},
 		"row_groups_scanned": {
 			"metric_type": "uint64",
