@@ -187,6 +187,18 @@ public:
 	void SetSwizzling(const char *unswizzler) {
 		unswizzled = unswizzler;
 	}
+	//! Disables loading this block's data from disk. Called when the block id is handed over to a
+	//! replacement block: the disk block may be rewritten in place and can no longer be read through
+	//! this handle. Requires the block lock.
+	void DisableDiskLoad(BlockLock &l) {
+		VerifyMutex(l);
+		disk_load_disabled = true;
+	}
+	//! Returns true, if the block data can no longer be loaded from disk.
+	//! Like Load, this must be called while holding the block lock.
+	bool DiskLoadDisabled() const {
+		return disk_load_disabled;
+	}
 	//! Sets the eviction queue index.
 	void SetEvictionQueueIndex(const idx_t index) {
 		// The index can only be set once.
@@ -235,6 +247,9 @@ private:
 	//! number matches eviction_seq_num and which has not been counted as a dead node.
 	//! Guarded by the block lock (read without it only by the destructor, which has exclusive ownership).
 	bool has_queue_entry;
+	//! Whether the block data may no longer be loaded from disk because the block id was handed
+	//! over to a replacement block. Guarded by the block lock.
+	bool disk_load_disabled = false;
 	//! The LRU timestamp for age-based eviction.
 	atomic<int64_t> lru_timestamp_msec;
 	//! When to destroy the data buffer.

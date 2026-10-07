@@ -1197,8 +1197,13 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 
 void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	D_ASSERT(block.id >= 0);
-	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
+	D_ASSERT(!BlockIsFreeListed(block.id));
 	ReadAndChecksum(context, block, GetBlockLocation(block.id));
+}
+
+bool SingleFileBlockManager::BlockIsFreeListed(block_id_t block_id) {
+	lock_guard<mutex> lock(single_file_block_lock);
+	return free_list.find(block_id) != free_list.end();
 }
 
 void SingleFileBlockManager::ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block,
@@ -1435,10 +1440,8 @@ void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
-	// perform the actual unregistration
-	BlockManager::UnregisterBlock(id);
-	// check if it is part of the newly free list
+void SingleFileBlockManager::ReleaseFreeBlockInUse(block_id_t id) {
+	// check if the block is part of the newly free list
 	lock_guard<mutex> lock(single_file_block_lock);
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
@@ -1446,6 +1449,21 @@ void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
 		free_list.insert(id);
 		free_blocks_in_use.erase(entry);
 	}
+}
+
+void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+	ReleaseFreeBlockInUse(id);
+}
+
+bool SingleFileBlockManager::UnregisterExpiredBlock(block_id_t id) {
+	if (!BlockManager::UnregisterExpiredBlock(id)) {
+		// a newer handle is registered for this block id - the block id is still in use
+		return false;
+	}
+	ReleaseFreeBlockInUse(id);
+	return true;
 }
 
 void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {

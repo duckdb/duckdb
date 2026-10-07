@@ -225,6 +225,11 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 	}
 
 	if (BlockId() < MAXIMUM_BLOCK) {
+		if (memory.DiskLoadDisabled()) {
+			// the block id was handed over to a replacement block and the disk block may be
+			// rewritten in place - the caller must re-resolve the current handle for this block id
+			return BufferHandle();
+		}
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 		block_manager.Read(context, *block);
 		memory.GetBuffer() = std::move(block);
