@@ -985,10 +985,19 @@ struct WKBAnalysis {
 WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 	WKBAnalysis result;
 	// Collection children are complete WKB objects embedded in the root object.
-	uint64_t geometries_remaining = 1;
+	// Track the number of remaining geometries for each nesting level.
+	uint32_t geometries_remaining[Geometry::MAX_RECURSION_DEPTH];
+	idx_t depth = 0;
+	geometries_remaining[0] = 1;
 
-	while (geometries_remaining > 0) {
-		geometries_remaining--;
+	while (true) {
+		while (depth > 0 && geometries_remaining[depth] == 0) {
+			depth--;
+		}
+		if (geometries_remaining[depth] == 0) {
+			break;
+		}
+		geometries_remaining[depth]--;
 		const auto le = reader.Read<uint8_t>() == 1;
 
 		const auto meta = reader.Read<uint32_t>(le);
@@ -1046,8 +1055,15 @@ WKBAnalysis AnalyzeWKB(BlobReader &reader) {
 		case 6:   // MULTIPOLYGON
 		case 7: { // GEOMETRYCOLLECTION
 			const auto part_count = reader.Read<uint32_t>(le);
-			geometries_remaining += part_count;
 			result.size += sizeof(uint32_t); // part count
+			if (part_count == 0) {
+				break;
+			}
+			if (depth + 1 == Geometry::MAX_RECURSION_DEPTH) {
+				throw InvalidInputException("Geometry exceeds maximum recursion depth of %d",
+				                            Geometry::MAX_RECURSION_DEPTH);
+			}
+			geometries_remaining[++depth] = part_count;
 		} break;
 		default: {
 			result.any_unknown = true;
