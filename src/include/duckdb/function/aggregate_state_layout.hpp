@@ -490,6 +490,9 @@ AggregateStateField BuildStateField() {
 //!   field.children=[{kind=STRUCT, field_offset=0, children=[struct fields]}].
 //! - Non-optional struct: field.kind=STRUCT, field.field_offset=0, field.children=[struct fields].
 //! total_state_size is the aligned stride between consecutive states in a packed buffer.
+//! Checks `count` imported states, `stride` bytes apart - throws if a state is invalid
+typedef void (*aggregate_validate_state_t)(const_data_ptr_t states, idx_t count, idx_t stride);
+
 struct AggregateStateLayout {
 	AggregateStateLayout() = default;
 	AggregateStateLayout(LogicalType type_p, idx_t total_state_size_p, bool is_optional = false)
@@ -520,6 +523,8 @@ struct AggregateStateLayout {
 	idx_t total_state_size = 0;
 	//! Constant values for arguments that must be re-bound with a specific constant rather than only the type
 	unordered_map<idx_t, Value> constant_parameters;
+	//! Checks the imported states for invariants the fields cannot express (e.g. between fields)
+	aggregate_validate_state_t validate_state = nullptr;
 };
 
 } // namespace duckdb
