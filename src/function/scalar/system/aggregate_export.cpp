@@ -757,14 +757,9 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			throw BinderException("to_aggregate_state: an ordered aggregate state value must be a LIST of STRUCTs (the "
 			                      "buffer of values), e.g. [{'v0': ...}, ...]");
 		}
-		auto buffer_children = StructType::GetChildTypes(ListType::GetChildType(state_type));
-		const idx_t column_count = buffer_children.size();
-		vector<SortedAggregateStateOrder> orders;
-		auto order_value = input.GetConstant(4);
-		ParseOrderBys(order_value, column_count, orders);
-		if (orders.empty()) {
-			throw BinderException("to_aggregate_state: an ordered aggregate state must have at least one ORDER BY key");
-		}
+		auto buffer_columns = StructType::GetChildTypes(ListType::GetChildType(state_type));
+		const idx_t column_count = buffer_columns.size();
+		// the leading buffered columns are the aggregate's arguments - cast them to the argument types
 		auto &aggr_arguments = aggr.GetArguments();
 		if (aggr_arguments.empty()) {
 			throw BinderException("to_aggregate_state: aggregate \"%s\" has no arguments and cannot have an ordered "
@@ -775,13 +770,18 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
 			                      (uint64_t)aggr_arguments.size(), (uint64_t)column_count);
 		}
-		// the leading buffered columns are the arguments of the aggregate - cast them to the argument types
-		for (idx_t arg_idx = 0; arg_idx < aggr_arguments.size(); arg_idx++) {
-			if (aggr_arguments[arg_idx].id() != LogicalTypeId::ANY) {
-				buffer_children[arg_idx].second = aggr_arguments[arg_idx];
+		for (idx_t i = 0; i < aggr_arguments.size(); i++) {
+			if (aggr_arguments[i].IsComplete()) {
+				buffer_columns[i].second = aggr_arguments[i];
 			}
 		}
-		const auto buffer_struct = LogicalType::STRUCT(std::move(buffer_children));
+		const auto buffer_struct = LogicalType::STRUCT(std::move(buffer_columns));
+		vector<SortedAggregateStateOrder> orders;
+		auto order_value = input.GetConstant(4);
+		ParseOrderBys(order_value, column_count, orders);
+		if (orders.empty()) {
+			throw BinderException("to_aggregate_state: an ordered aggregate state must have at least one ORDER BY key");
+		}
 		bound_function.GetArguments()[0] = LogicalType::LIST(buffer_struct);
 		bound_function.SetReturnType(
 		    CreateSortedAggregateStateType(aggr, bind_data->bind_data.get(), buffer_struct, orders));
