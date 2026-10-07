@@ -22,14 +22,12 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/constants.hpp"
@@ -413,7 +411,7 @@ static void ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 		ConvertShreddedStatsItem(ListStats::GetChildStats(result), ListStats::GetChildStats(input));
 		return;
 	}
-	if (type_id == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type_id)) {
 		auto field_count = StructType::GetChildCount(result.GetType());
 		for (idx_t i = 0; i < field_count; i++) {
 			ConvertShreddedStatsItem(StructStats::GetChildStats(result, i), StructStats::GetChildStats(input, i));
@@ -600,7 +598,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		return row_group_stats;
 	}
 	// Structs are handled differently (they dont have stats)
-	if (type.id() == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type)) {
 		auto struct_stats = StructStats::CreateUnknown(type);
 		// Recurse into child readers
 		for (idx_t i = 0; i < schema.children.size(); i++) {
@@ -623,10 +621,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			//! field is missing)
 			return nullptr;
 		}
-		auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-			return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
-		});
-		auto variant_stats = VariantStats::CreateShredded(shredding_type);
+		auto variant_stats = VariantStats::CreateShredded(VariantStats::GetShreddingType(logical_type));
 
 		//! Take the root stats
 		auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
@@ -670,24 +665,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 	}
 	return row_group_stats;
-}
-
-// Optional filters store the expression used for pruning in their bind data.
-static optional_ptr<const Expression> GetOptionalFilterChild(const Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return nullptr;
-	}
-	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (!func.BindInfo()) {
-		return nullptr;
-	}
-	if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-		return func.BindInfo()->Cast<OptionalFilterFunctionData>().child_filter_expr.get();
-	}
-	if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-		return func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>().child_filter_expr.get();
-	}
-	return nullptr;
 }
 
 static bool UsesNormalizedIntervalHash(ParquetBloomFilterHashStrategy hash_strategy) {
@@ -772,7 +749,7 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (GetBloomFilterInExpression(expr, hash_strategy)) {
 		return true;
 	}
-	auto optional_filter_child = GetOptionalFilterChild(expr);
+	auto optional_filter_child = ExpressionFilter::GetOptionalFilterChild(expr);
 	if (optional_filter_child) {
 		return HasFilterConstants(*optional_filter_child, hash_strategy);
 	}
@@ -1008,7 +985,7 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 		}
 		return true;
 	}
-	auto optional_filter_child = GetOptionalFilterChild(expr);
+	auto optional_filter_child = ExpressionFilter::GetOptionalFilterChild(expr);
 	if (optional_filter_child) {
 		return ApplyBloomFilter(*optional_filter_child, bloom_filter, schema, hash_strategy);
 	}

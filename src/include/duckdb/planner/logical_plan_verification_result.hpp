@@ -164,13 +164,17 @@ public:
 	}
 
 	T &GetValue() {
-		D_ASSERT(IsSuccess());
-		return value.value();
+		if (!value) {
+			throw InternalException("Cannot get the value of a failed logical plan verification result");
+		}
+		return *value;
 	}
 
 	const T &GetValue() const {
-		D_ASSERT(IsSuccess());
-		return value.value();
+		if (!value) {
+			throw InternalException("Cannot get the value of a failed logical plan verification result");
+		}
+		return *value;
 	}
 
 	const vector<LogicalPlanVerificationIssue> &GetIssues() const {

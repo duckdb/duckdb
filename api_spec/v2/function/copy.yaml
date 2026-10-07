@@ -47,6 +47,12 @@ handles:
       `COPY ... TO` statement. The "finalize" callback receives this handle and can use it to e.g. close the file
       after every batch has been flushed to it.
 
+  copy_to_statistics_info:
+    description: |
+      A borrowed opaque handle to the arguments supplied to a copy function when a `COPY ... TO` statement reports
+      statistics about the files it wrote (e.g. with `RETURN_STATS`). The "statistics" callback receives this
+      handle and uses it to report the statistics of one written file.
+
   copy_from_bind_info:
     description: |
       A borrowed opaque handle to the arguments supplied to a copy function during the query preparation "bind" phase
@@ -157,6 +163,20 @@ callbacks:
     parameters:
       info:
         type: copy_to_finalize_info
+        description: Borrowed opaque handle providing access to the information available to the callback.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
+  copy_to_statistics_callback:
+    parameters:
+      info:
+        type: copy_to_statistics_info
         description: Borrowed opaque handle providing access to the information available to the callback.
       context:
         type: context
@@ -1873,4 +1893,121 @@ functions:
         type: copy_function
         description: The function to destroy.
         indirection: 1
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # COPY TO Statistics
+  #---------------------------------------------------------------------------------------------------------------------
+  copy_to_set_statistics_callback:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: |
+      Sets the optional statistics callback of the `COPY ... TO` side.
+
+      The statistics callback reports statistics about a written file, such as the number of rows and bytes it
+      holds, which `COPY ... TO` returns when the statement asks for them with `RETURN_STATS`. It is invoked once
+      per output file, after the finalize callback of that file, and only when the statement asks for the
+      statistics. Without a statistics callback, `RETURN_STATS` is rejected for the function.
+    parameters:
+      function:
+        type: copy_function
+        description: The function to set the callback of.
+      callback:
+        type: copy_to_statistics_callback
+        description: The callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_get_user_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the user data set on the copy function via `[[copy_function_set_user_data]]`.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the user data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_get_bind_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the bind data set by the function's `COPY ... TO` bind callback.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the bind data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_get_init_data:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Retrieves the init data set by the function's `COPY ... TO` init callback for the file being reported.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      data:
+        type: void
+        indirection: 2
+        kind: OUT
+        description: Receives the init data pointer, or null if none was set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_set_row_count:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Reports how many rows were written to the file. Reported as 0 when the callback does not set it.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      row_count:
+        type: idx
+        description: The number of rows written to the file.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  copy_to_statistics_set_file_size:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-09-18" ]
+    description: Reports the size of the written file in bytes. Reported as 0 when the callback does not set it.
+    parameters:
+      info:
+        type: copy_to_statistics_info
+        description: The statistics info handle.
+      file_size_bytes:
+        type: idx
+        description: The size of the file in bytes.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR

@@ -573,6 +573,19 @@ struct CustomUserAgentSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DebugAbortOnWalFailureSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "debug_abort_on_wal_failure";
+	static constexpr const char *Description =
+	    "Whether or not to abort if a serialization exception is thrown during WAL playback.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static constexpr bool IsDebug = true;
+	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DebugAsofIejoinSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "debug_asof_iejoin";
@@ -1935,7 +1948,8 @@ struct MaxStreamingBufferSizeSetting {
 	static constexpr const char *Name = "max_streaming_buffer_size";
 	static constexpr const char *Description =
 	    "The maximum number of bytes a streaming query result buffers (e.g. 1GB). Queued output stays under this cap, "
-	    "and each engine thread may hold one more unit, in construction or finished and waiting.";
+	    "and each engine thread may hold, beyond the queue, the units it is still building or handing over from its "
+	    "current chunk.";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;

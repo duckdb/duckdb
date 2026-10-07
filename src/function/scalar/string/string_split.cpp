@@ -14,6 +14,8 @@ namespace duckdb {
 namespace {
 
 struct RegularStringSplit {
+	static constexpr bool VERIFY_UTF8 = false;
+
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		match_size = delim_size;
@@ -25,6 +27,9 @@ struct RegularStringSplit {
 };
 
 struct ConstantRegexpStringSplit {
+	//! \C can split a multi-byte character
+	static constexpr bool VERIFY_UTF8 = true;
+
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		D_ASSERT(data);
@@ -39,6 +44,8 @@ struct ConstantRegexpStringSplit {
 };
 
 struct RegexpStringSplit {
+	static constexpr bool VERIFY_UTF8 = true;
+
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		duckdb_re2::RE2 regex(duckdb_re2::StringPiece(delim_data, delim_size));
@@ -111,6 +118,9 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 		}
 		StringSplitter::Split<OP>(
 		    input_entry.GetValue(), delim_entry.GetValue(), data, [&](const char *split_data, idx_t split_size) {
+			    if (OP::VERIFY_UTF8) {
+				    regexp_util::VerifyUTF8Result(split_data, split_size);
+			    }
 			    list.WriteElement().WriteStringRef(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
 		    });
 	}

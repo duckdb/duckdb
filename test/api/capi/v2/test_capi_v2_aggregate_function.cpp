@@ -430,6 +430,11 @@ TEST_CASE("V2 aggregate: register on connection and execute", "[capi_v2][aggrega
 	// exercised by finalizing many groups.
 	REQUIRE(AggQueryI64(fx.conn, "SELECT sum(s)::BIGINT FROM (SELECT my_sum(r::INTEGER) AS s "
 	                             "FROM range(5000) t(r) GROUP BY r % 3000)") == 5000LL * 4999 / 2);
+	// Window and ordered aggregates update a single constant state with many rows.
+	REQUIRE(AggQueryI64(fx.conn, "SELECT my_sum(r::INTEGER) OVER () FROM range(5000) t(r) LIMIT 1") ==
+	        5000LL * 4999 / 2);
+	REQUIRE(AggQueryI64(fx.conn, "SELECT my_sum(r::INTEGER ORDER BY r DESC) FROM range(5000) t(r)") ==
+	        5000LL * 4999 / 2);
 }
 
 // ===========================================================================
