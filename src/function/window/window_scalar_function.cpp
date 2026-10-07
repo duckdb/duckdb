@@ -230,6 +230,8 @@ unique_ptr<Expression> FunctionBinder::BindScalarWindowFunction(BoundWindowExpre
 	} else {
 		scalar.SetProperties(wexpr.WindowFunction()->GetProperties());
 	}
+	//	NULLs in the input row do not imply a NULL result
+	scalar.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	auto bind_info = make_uniq<ScalarWindowBindData>(context, wexpr);
 	BoundScalarFunction bound(scalar);
 	return make_uniq<BoundFunctionExpression>(bound, std::move(children), std::move(bind_info));
