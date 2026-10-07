@@ -222,7 +222,6 @@
 #include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/planner/expression_binder/table_function_binder.hpp"
 #include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/logical_plan_verification_result.hpp"
@@ -3098,24 +3097,6 @@ const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value) {
 template<>
 IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value) {
 	return static_cast<IdentifierCaseMode>(StringUtil::StringToEnum(GetIdentifierCaseModeValues(), 3, "IdentifierCaseMode", value));
-}
-
-const StringUtil::EnumStringLiteral *GetIdentifierConversionPolicyValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(IdentifierConversionPolicy::FOLLOW_SETTING), "FOLLOW_SETTING" },
-		{ static_cast<uint32_t>(IdentifierConversionPolicy::ALLOW), "ALLOW" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<IdentifierConversionPolicy>(IdentifierConversionPolicy value) {
-	return StringUtil::EnumToString(GetIdentifierConversionPolicyValues(), 2, "IdentifierConversionPolicy", static_cast<uint32_t>(value));
-}
-
-template<>
-IdentifierConversionPolicy EnumUtil::FromString<IdentifierConversionPolicy>(const char *value) {
-	return static_cast<IdentifierConversionPolicy>(StringUtil::StringToEnum(GetIdentifierConversionPolicyValues(), 2, "IdentifierConversionPolicy", value));
 }
 
 const StringUtil::EnumStringLiteral *GetIndexAppendModeValues() {
