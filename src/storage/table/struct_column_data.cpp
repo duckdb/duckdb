@@ -43,6 +43,10 @@ void StructColumnData::SetDataType(ColumnDataType data_type) {
 }
 
 idx_t StructColumnData::GetMaxEntry() {
+	if (sub_columns.empty()) {
+		// an empty TUPLE has no child columns - only the validity
+		return validity->GetMaxEntry();
+	}
 	return sub_columns[0]->GetMaxEntry();
 }
 
