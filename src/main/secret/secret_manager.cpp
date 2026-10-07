@@ -113,8 +113,16 @@ unique_ptr<BaseSecret> SecretManager::DeserializeSecret(Deserializer &deserializ
 
 	switch (serialization_type) {
 	// This allows us to skip looking up the secret type for deserialization altogether
-	case SecretSerializationType::KEY_VALUE_SECRET:
-		return KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, BaseSecret(scope, type, provider, name));
+	case SecretSerializationType::KEY_VALUE_SECRET: {
+		auto result =
+		    KeyValueSecret::Deserialize<KeyValueSecret>(deserializer, BaseSecret(scope, type, provider, name));
+		if (type == "http") {
+			// http secrets persisted by older versions did not redact the extra HTTP headers, which can contain
+			// credentials
+			result->Cast<KeyValueSecret>().redact_keys.insert(Identifier("extra_http_headers"));
+		}
+		return result;
+	}
 	// Continues below: we need to do a type lookup to find the secret deserialize method
 	case SecretSerializationType::CUSTOM:
 		break;
