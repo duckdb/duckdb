@@ -44,12 +44,11 @@ bool ExtractAll(duckdb_re2::StringPiece &input, duckdb_re2::RE2 &pattern, idx_t 
 	if (!pattern.Match(input, *startpos, input.size(), pattern.UNANCHORED, groups, ngroups + 1)) {
 		return false;
 	}
-	idx_t consumed = static_cast<size_t>(groups[0].end() - (input.begin() + *startpos));
-	if (!consumed) {
-		// Empty match: advance exactly one UTF-8 codepoint
-		consumed = regexp_util::AdvanceOneUTF8Basic(input, *startpos);
+	*startpos = static_cast<idx_t>(groups[0].end() - input.begin());
+	if (groups[0].empty()) {
+		// Empty match: advance exactly one UTF-8 codepoint past it
+		*startpos += regexp_util::AdvanceOneUTF8Basic(input, *startpos);
 	}
-	*startpos += consumed;
 	return true;
 }
 
@@ -189,11 +188,10 @@ static inline bool ExtractAllStruct(duckdb_re2::StringPiece &input, duckdb_re2::
 	if (!re.Match(input, startpos, input.size(), re.UNANCHORED, groups, provided_groups + 1)) {
 		return false;
 	}
-	idx_t consumed = static_cast<idx_t>(groups[0].end() - (input.begin() + startpos));
-	if (!consumed) {
-		consumed = regexp_util::AdvanceOneUTF8Basic(input, startpos);
+	startpos = static_cast<idx_t>(groups[0].end() - input.begin());
+	if (groups[0].empty()) {
+		startpos += regexp_util::AdvanceOneUTF8Basic(input, startpos);
 	}
-	startpos += consumed;
 	return true;
 }
 
