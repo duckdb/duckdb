@@ -47,8 +47,7 @@ static void MapLegacyTableFilterKeys(LogicalGet &get) {
 		optional_idx projection_index;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			auto &column_index = column_ids[i];
-			if (column_index.HasPrimaryIndex() && !column_index.IsPushdownExtract() &&
-			    column_index.GetPrimaryIndex() == table_column) {
+			if (column_index.HasPrimaryIndex() && column_index.GetPrimaryIndex() == table_column) {
 				projection_index = i;
 				break;
 			}
