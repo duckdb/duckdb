@@ -248,6 +248,8 @@ struct AggregateStateField {
 	//! The segment functions used to read/write the linked list - only set when kind is LIST
 	//! (populated by PopulateListFunctions, which requires the resolved logical type)
 	ListSegmentFunctions list_functions;
+	//! For LIST: whether the linked list cannot contain NULL elements - importing a NULL element is an error
+	bool reject_null_elements = false;
 
 	//! The alignment of this field when placed as a struct member, mirroring the C++ struct layout rules.
 	//! For OPTIONAL_VALUE the alignment is that of the wrapped value - the trailing is_set bool does not affect it.

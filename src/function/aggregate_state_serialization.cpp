@@ -270,10 +270,20 @@ static void DeserializeField(const LogicalType &type, const AggregateStateField 
 
 		RecursiveUnifiedVectorFormat child_data;
 		Vector::RecursiveToUnifiedFormat(*physical_child, child_data);
+		const auto child_validity = logical_child.Validity();
 		for (idx_t i = 0; i < count; i++) {
 			LinkedList linked_list;
 			const auto entry = values[i];
 			if (entry.IsValid()) {
+				if (field.reject_null_elements) {
+					const auto &list_entry = entry.GetValue();
+					for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
+						if (!child_validity.IsValid(list_entry.offset + child_idx)) {
+							throw InvalidInputException(
+							    "Invalid aggregate state - the list cannot contain NULL values");
+						}
+					}
+				}
 				// NULL inputs keep an empty linked list
 				field.list_functions.AppendListEntry(allocator, linked_list, child_data, entry.GetValue());
 			}
