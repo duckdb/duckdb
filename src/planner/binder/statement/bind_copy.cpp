@@ -105,6 +105,10 @@ identifier_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &
 }
 
 static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
+	if (arg.IsNull()) {
+		throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
+		                      StringUtil::Upper(name.GetIdentifierName()));
+	}
 	idx_t result;
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
 		result = DBConfig::ParseMemoryLimit(arg.ToString());
