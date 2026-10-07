@@ -78,7 +78,7 @@ static DatabaseInstance &GetDB(DatabaseInstance *db) {
 template <class BASE>
 static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) {
 	if (input.empty() || input.back() != '%') {
-		return DBConfig::ParseMemoryLimit(input);
+		return DBConfig::ParseMemoryLimitOrMaximum(input);
 	}
 	double percentage;
 	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
@@ -126,7 +126,7 @@ void AllocatorBackgroundThreadsSetting::OnSet(SettingCallbackInfo &info, Value &
 //===----------------------------------------------------------------------===//
 void AllocatorBulkDeallocationFlushThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
                                                                const Value &input) {
-	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
+	config.options.allocator_bulk_deallocation_flush_threshold = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 	if (db) {
 		BufferManager::GetBufferManager(*db).GetBufferPool().SetAllocatorBulkDeallocationFlushThreshold(
 		    config.options.allocator_bulk_deallocation_flush_threshold);
@@ -392,7 +392,7 @@ Value BlockAllocatorMemorySetting::GetSetting(const ClientContext &context) {
 // Checkpoint Threshold
 //===----------------------------------------------------------------------===//
 void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	idx_t new_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	idx_t new_limit = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 	config.options.checkpoint_wal_size = new_limit;
 }
 
@@ -1187,7 +1187,7 @@ void MaxTempDirectorySizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &conf
 		ResetGlobal(db, config);
 		return;
 	}
-	auto maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
+	auto maximum_swap_space = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 	if (maximum_swap_space == DConstants::INVALID_INDEX) {
 		// We use INVALID_INDEX to indicate that the value is not set by the user
 		// use one lower to indicate 'unlimited'
@@ -1236,13 +1236,8 @@ void OperatorMemoryLimitSetting::SetLocal(ClientContext &context, const Value &i
 	if (input.IsNull()) {
 		config.operator_memory_limit.SetInvalid();
 	} else {
-		auto limit = DBConfig::ParseMemoryLimit(input.ToString());
-		if (limit == DConstants::INVALID_INDEX) {
-			// unlimited
-			config.operator_memory_limit.SetInvalid();
-		} else {
-			config.operator_memory_limit = limit;
-		}
+		// an unlimited size is the same as no operator memory limit
+		config.operator_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
 	}
 }
 
@@ -1573,7 +1568,7 @@ Value StandardVectorSizeSetting::GetSetting(const ClientContext &) {
 //===----------------------------------------------------------------------===//
 void MaxStreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.max_streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+	config.max_streaming_buffer_size = DBConfig::ParseMemoryLimitOrMaximum(input.ToString());
 }
 
 void MaxStreamingBufferSizeSetting::ResetLocal(ClientContext &context) {
@@ -1780,10 +1775,8 @@ void WriteBufferRowGroupMemoryLimitSetting::SetGlobal(DatabaseInstance *db, DBCo
 	if (input.IsNull() || input.ToString().empty()) {
 		config.options.write_buffer_row_group_memory_limit = optional_idx();
 	} else {
-		auto limit = DBConfig::ParseMemoryLimit(input.ToString());
-		// unlimited (INVALID_INDEX) means that there is no limit
-		config.options.write_buffer_row_group_memory_limit =
-		    limit == DConstants::INVALID_INDEX ? optional_idx() : optional_idx(limit);
+		// an unlimited size means that there is no limit
+		config.options.write_buffer_row_group_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
 	}
 }
 

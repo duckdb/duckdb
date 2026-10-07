@@ -508,7 +508,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require ram requires a parameter");
 		}
 		// require a minimum amount of ram
-		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto required_limit = DBConfig::ParseMemoryLimitOrMaximum(params[1]);
 		auto limit = FileSystem::GetAvailableMemory();
 		if (!limit.IsValid()) {
 			return RequireResult::MISSING;
@@ -524,7 +524,7 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			parser.Fail("require disk_space requires a parameter");
 		}
 		// require a minimum amount of disk space
-		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto required_limit = DBConfig::ParseMemoryLimitOrMaximum(params[1]);
 		auto available_space = FileSystem::GetAvailableDiskSpace(".");
 		if (!available_space.IsValid()) {
 			return RequireResult::MISSING;

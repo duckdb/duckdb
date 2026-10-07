@@ -109,7 +109,7 @@ static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
 		throw BinderException("NULL is not supported as a valid option for COPY option \"%s\"",
 		                      StringUtil::Upper(name.GetIdentifierName()));
 	}
-	idx_t result;
+	optional_idx result;
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
 		result = DBConfig::ParseMemoryLimit(arg.ToString());
 	} else {
@@ -118,14 +118,17 @@ static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
 			throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
 			                      StringUtil::Upper(name.GetIdentifierName()));
 		}
-		result = cast_arg->GetValue<idx_t>();
+		auto bytes = cast_arg->GetValue<idx_t>();
+		if (bytes != DConstants::INVALID_INDEX) {
+			result = bytes;
+		}
 	}
-	if (result == DConstants::INVALID_INDEX) {
+	if (!result.IsValid()) {
 		// e.g. '-1' or 'none', which ParseMemoryLimit parses as unlimited
 		throw BinderException("Copy option \"%s\" must be a valid size, not \"%s\"",
 		                      StringUtil::Upper(name.GetIdentifierName()), arg.ToString());
 	}
-	return result;
+	return result.GetIndex();
 }
 
 struct CopyToParsedOptions {
