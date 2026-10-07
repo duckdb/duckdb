@@ -338,8 +338,9 @@ unique_ptr<DecimalArithmeticBindData> BindDecimalArithmetic(BindScalarFunctionIn
 		uint8_t width, scale;
 		auto can_convert = arguments[i]->GetReturnType().GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal.",
-			                        arguments[i]->GetReturnType().ToString());
+			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
+			                      "explicit cast",
+			                      arguments[i]->GetReturnType().ToString());
 		}
 		if (width > max_width) {
 			max_width = width;
@@ -1032,8 +1033,9 @@ unique_ptr<FunctionData> BindDecimalMultiply(BindScalarFunctionInput &input) {
 		uint8_t width, scale;
 		auto can_convert = arguments[i]->GetReturnType().GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal?",
-			                        arguments[i]->GetReturnType().ToString());
+			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
+			                      "explicit cast",
+			                      arguments[i]->GetReturnType().ToString());
 		}
 		max_width = MaxValue<uint8_t>(width, max_width);
 		result_width += width;
