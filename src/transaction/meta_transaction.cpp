@@ -73,9 +73,10 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 			break;
 		}
 		if (starting->second == ThreadUtil::GetThreadId()) {
-			throw TransactionException("Transaction for database \"%s\" requested while this thread is already starting "
-			    					   "it. A transaction manager cannot request its own transaction while starting it",
-			                           db.GetName());
+			throw TransactionException(
+			    "Transaction for database \"%s\" requested while this thread is already starting "
+			    "it. A transaction manager cannot request its own transaction while starting it",
+			    db.GetName());
 		}
 		// another thread is starting the transaction for this database - wait for it to finish
 		transaction_started.wait(guard);
