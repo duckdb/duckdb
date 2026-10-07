@@ -6,6 +6,9 @@ require parquet
 
 require vector_size 2048
 
+# requires notwindows because this COPY exceeds the memory limit on Windows CI
+require notwindows
+
 statement ok
 SET threads=4;
 
