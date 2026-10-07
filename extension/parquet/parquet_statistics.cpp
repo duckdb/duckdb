@@ -411,7 +411,7 @@ static void ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 		ConvertShreddedStatsItem(ListStats::GetChildStats(result), ListStats::GetChildStats(input));
 		return;
 	}
-	if (type_id == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type_id)) {
 		auto field_count = StructType::GetChildCount(result.GetType());
 		for (idx_t i = 0; i < field_count; i++) {
 			ConvertShreddedStatsItem(StructStats::GetChildStats(result, i), StructStats::GetChildStats(input, i));
@@ -598,7 +598,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		return row_group_stats;
 	}
 	// Structs are handled differently (they dont have stats)
-	if (type.id() == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type)) {
 		auto struct_stats = StructStats::CreateUnknown(type);
 		// Recurse into child readers
 		for (idx_t i = 0; i < schema.children.size(); i++) {
