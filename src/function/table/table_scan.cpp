@@ -340,7 +340,8 @@ public:
 	DuckTableScanState(ClientContext &context, const FunctionData *bind_data_p)
 	    : TableScanGlobalState(context, bind_data_p), bind_data(bind_data_p->Cast<TableScanBindData>()),
 	      duck_table(bind_data.table.Cast<DuckTableEntry>()), tx(DuckTransaction::Get(context, duck_table.catalog)),
-	      storage(duck_table.GetStorage()), total_rows(storage.GetTotalRows()) {
+	      storage(duck_table.GetStorage()),
+	      total_rows(bind_data.scan_snapshot ? bind_data.scan_snapshot->GetTotalRows() : storage.GetTotalRows()) {
 	}
 
 public:

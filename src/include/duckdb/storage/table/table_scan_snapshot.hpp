@@ -24,6 +24,7 @@ public:
 	~TableScanSnapshot();
 
 public:
+	idx_t GetTotalRows() const;
 	vector<PartitionStatistics> GetPartitionStats(TransactionData transaction) const;
 	void InitializeParallelScan(ParallelTableScanState &state) const;
 	optional_idx NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,

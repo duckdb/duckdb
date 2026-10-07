@@ -15,6 +15,10 @@ TableScanSnapshot::TableScanSnapshot(unique_ptr<const RowGroupCollection> table_
 
 TableScanSnapshot::~TableScanSnapshot() = default;
 
+idx_t TableScanSnapshot::GetTotalRows() const {
+	return table->GetTotalRows() + (local ? local->GetTotalRows() : 0);
+}
+
 vector<PartitionStatistics> TableScanSnapshot::GetPartitionStats(TransactionData transaction) const {
 	auto result = table->GetPartitionStats(transaction);
 	if (local) {
