@@ -48,8 +48,8 @@ DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_connection_handle 
 	DUCKDB_CHECK_ARG(statement);
 	return WithErrorHandler(err, [&]() {
 		auto *connection = Convert(conn);
-		// Preparing runs the engine's query cleanup, which would cancel a live stream, so
-		// refuse first. Unlike execute this only checks the slot is free: preparing
+		// The engine refuses a prepare while a result is live; refuse first with the v2
+		// message. Unlike execute this only checks the slot is free: preparing
 		// produces no result, so it never claims it.
 		if (GetBusySlot(*connection->context)->owner.load() != nullptr) {
 			throw duckdb::ResourceInUseException(

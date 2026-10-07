@@ -361,6 +361,9 @@ private:
 
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
+	//! The refusal of a statement submitted while a result that no call ended holds the connection, or null
+	template <class T>
+	unique_ptr<T> OpenResultRefusal(ClientContextLock &lock);
 
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock,
 	                                                                  unique_ptr<SQLStatement> statement,

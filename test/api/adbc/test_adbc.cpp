@@ -90,6 +90,8 @@ public:
 
 	unique_ptr<QueryResult> Query(const string &query) {
 		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		// As the driver does before each statement, since the connection refuses one while a stream is open
+		conn_wrapper->MaterializeStreams();
 		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 		return cconn->Query(query);
 	}
@@ -4688,6 +4690,44 @@ TEST_CASE("ADBC - ConnectionSetOption non-existent catalog and schema", "[adbc]"
 		                                        &length, &db.adbc_error)));
 		REQUIRE(std::string(buf) == "main");
 	}
+}
+
+TEST_CASE("ADBC - Ending a transaction while a stream is open on the connection", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(db.adbc_connection.private_data);
+	Connection observer(*reinterpret_cast<Connection *>(conn_wrapper->connection)->context->db);
+	db.Query("CREATE TABLE t (i INTEGER)");
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	db.Query("INSERT INTO t VALUES (1)");
+	auto &stream = db.QueryArrow("SELECT * FROM range(100000)");
+
+	int64_t expected = 1;
+	SECTION("commit") {
+		REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+	}
+	SECTION("rollback") {
+		REQUIRE(SUCCESS(AdbcConnectionRollback(&db.adbc_connection, &db.adbc_error)));
+		expected = 0;
+	}
+	SECTION("enabling autocommit") {
+		REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+		                                        ADBC_OPTION_VALUE_ENABLED, &db.adbc_error)));
+	}
+	auto count = observer.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(count, 0, {expected}));
+
+	// The stream was read into memory first, so it still reads to the end
+	int64_t rows = 0;
+	ArrowArray batch;
+	while (stream.get_next(&stream, &batch) == 0 && batch.release) {
+		rows += batch.length;
+		batch.release(&batch);
+	}
+	REQUIRE(rows == 100000);
 }
 
 TEST_CASE("ADBC - Concurrent statements on same connection", "[adbc]") {

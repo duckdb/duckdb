@@ -406,7 +406,7 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
     -> unique_ptr<ResultWrapperV2> {
 	auto wrapper = make_uniq<ResultWrapperV2>();
 	// One live result per connection, claimed the way statement_execute claims it and
-	// before the submission runs, which would otherwise cancel the live stream.
+	// before the submission runs, which the engine would refuse.
 	auto busy_slot = GetBusySlot(*context);
 	void *expected = nullptr;
 	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
@@ -440,7 +440,7 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
 	// shared with this result. The busy check is a manual return path: no
 	// ExceptionType maps to RESOURCE_IN_USE, so routing it through
 	// WithErrorHandler would degrade the code. It must run before PendingQuery,
-	// which would otherwise silently cancel the live stream.
+	// which the engine would refuse.
 	auto busy_slot = GetBusySlot(*context);
 	void *expected = nullptr;
 	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {

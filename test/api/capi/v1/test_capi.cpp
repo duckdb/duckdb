@@ -759,3 +759,10 @@ TEST_CASE("Test creating DUCKDB_ERROR_DATA_CORRUPTION error data", "[capi]") {
 	REQUIRE(duckdb_error_data_error_type(error_data) == DUCKDB_ERROR_DATA_CORRUPTION);
 	duckdb_destroy_error_data(&error_data);
 }
+
+TEST_CASE("Test creating DUCKDB_ERROR_RESOURCE_IN_USE error data", "[capi]") {
+	auto error_data = duckdb_create_error_data(DUCKDB_ERROR_RESOURCE_IN_USE, "in use");
+	REQUIRE(error_data);
+	REQUIRE(duckdb_error_data_error_type(error_data) == DUCKDB_ERROR_RESOURCE_IN_USE);
+	duckdb_destroy_error_data(&error_data);
+}

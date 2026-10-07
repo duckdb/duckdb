@@ -404,6 +404,7 @@ typedef enum duckdb_error_type {
 	DUCKDB_ERROR_SEQUENCE = 41,
 	DUCKDB_ERROR_DATA_CORRUPTION = 43,
 	DUCKDB_INVALID_CONFIGURATION = 42,
+	DUCKDB_ERROR_RESOURCE_IN_USE = 44,
 } duckdb_error_type;
 
 /*!
@@ -5630,12 +5631,11 @@ DUCKDB_C_API duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prep
  *
  * Destroying a pending result whose statement has not completed aborts the statement. On autocommit, its writes are
  * rolled back. Inside a transaction, a statement that may write invalidates the transaction, and a read-only statement
- * just stops. Preparing or running another statement on the connection aborts a statement that has not completed the
- * same way, so a COMMIT issued before a statement that may write completed rolls the transaction back.
- * `duckdb_pending_execution_is_finished` reporting true does not mean that the statement completed. To make sure a
- * statement takes effect, complete it before destroying the pending result: call `duckdb_execute_pending`, and fetch a
- * streaming result until `duckdb_fetch_chunk` returns NULL. A NULL chunk is also returned on an error, so check
- * `duckdb_result_error` afterwards.
+ * just stops. Until the statement has completed, preparing or running another statement on the connection fails with
+ * `DUCKDB_ERROR_RESOURCE_IN_USE` and leaves it untouched. `duckdb_pending_execution_is_finished` reporting true does
+ * not mean that the statement completed. To make sure a statement takes effect, complete it before destroying the
+ * pending result: call `duckdb_execute_pending`, and fetch a streaming result until `duckdb_fetch_chunk` returns NULL.
+ * A NULL chunk is also returned on an error, so check `duckdb_result_error` afterwards.
  *
  * history:
  * - stable: v0.5.0
@@ -6513,10 +6513,10 @@ DUCKDB_C_API duckdb_state duckdb_query(duckdb_connection connection, const char 
  *
  * Destroying a streaming result whose statement has not completed aborts the statement. On autocommit, its writes are
  * rolled back. Inside a transaction, a statement that may write invalidates the transaction, and a read-only statement
- * just stops. Preparing or running another statement on the connection aborts a statement that has not completed the
- * same way, so a COMMIT issued before a statement that may write completed rolls the transaction back. To make sure the
- * statement takes effect, complete it by fetching until `duckdb_fetch_chunk` returns NULL before destroying the result.
- * A NULL chunk is also returned on an error, so check `duckdb_result_error` afterwards.
+ * just stops. Until the statement has completed, preparing or running another statement on the connection fails with
+ * `DUCKDB_ERROR_RESOURCE_IN_USE` and leaves it untouched. To make sure the statement takes effect, complete it by
+ * fetching until `duckdb_fetch_chunk` returns NULL before destroying the result. A NULL chunk is also returned on an
+ * error, so check `duckdb_result_error` afterwards.
  *
  * history:
  * - stable: v0.1.0

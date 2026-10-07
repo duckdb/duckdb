@@ -303,6 +303,7 @@ unique_ptr<QueryResult> ClientContext::CompleteDelegatedInternal(ClientContextLo
 	auto produced = executor.GetResult();
 	if (executor.HasStreamingResultCollector()) {
 		active_query->SetOpenResult(*produced);
+		active_query->collector_built_result = true;
 	} else {
 		CleanupInternal(lock, produced.get(), false);
 	}
