@@ -250,9 +250,15 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		}
 		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
+			if (!ParquetTimeIsValid(val, Interval::MSECS_PER_SEC * Interval::SECS_PER_DAY)) {
+				return Value();
+			}
 			return Value::TIME(Time::FromTimeMs(val));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 		default:
+			if (!ParquetTimeIsValid(val, Interval::MICROS_PER_DAY)) {
+				return Value();
+			}
 			return Value::TIME(dtime_t(val));
 		}
 	}
@@ -263,7 +269,11 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		if (schema_ele.type_info != ParquetExtraTypeInfo::UNIT_NS) {
 			throw InternalException("TIME_NS requires nanosecond type info");
 		}
-		return Value::TIME_NS(ParquetIntToTimeNs(Load<int64_t>(stats_data)));
+		const auto nanos = Load<int64_t>(stats_data);
+		if (!ParquetTimeIsValid(nanos, Interval::NANOS_PER_DAY)) {
+			return Value();
+		}
+		return Value::TIME_NS(ParquetIntToTimeNs(nanos));
 	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
