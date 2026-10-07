@@ -1179,9 +1179,42 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 	return bitpacking;
 }
 
+//===--------------------------------------------------------------------===//
+// BOOL
+//===--------------------------------------------------------------------===//
+// BOOL is bitpacked as int8_t - the decoded bytes of a corrupt segment can be other than 0 or 1, normalize them
+static void NormalizeBooleans(Vector &result, idx_t offset, idx_t count) {
+	auto data = FlatVector::GetDataMutable<int8_t>(result);
+	for (idx_t i = offset; i < offset + count; i++) {
+		data[i] = data[i] != 0;
+	}
+}
+
+void BitpackingScanPartialBool(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                               idx_t result_offset) {
+	BitpackingScanPartial<int8_t>(segment, state, scan_count, result, result_offset);
+	NormalizeBooleans(result, result_offset, scan_count);
+}
+
+void BitpackingScanBool(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	BitpackingScanPartialBool(segment, state, scan_count, result, 0);
+}
+
+void BitpackingFetchRowBool(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                            idx_t result_idx) {
+	BitpackingFetchRow<int8_t>(segment, state, row_id, result, result_idx);
+	NormalizeBooleans(result, result_idx, 1);
+}
+
 CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	switch (type) {
-	case PhysicalType::BOOL:
+	case PhysicalType::BOOL: {
+		auto bitpacking = GetBitpackingFunction<int8_t>(type);
+		bitpacking.scan_vector = BitpackingScanBool;
+		bitpacking.scan_partial = BitpackingScanPartialBool;
+		bitpacking.fetch_row = BitpackingFetchRowBool;
+		return bitpacking;
+	}
 	case PhysicalType::INT8:
 		return GetBitpackingFunction<int8_t>(type);
 	case PhysicalType::INT16:
