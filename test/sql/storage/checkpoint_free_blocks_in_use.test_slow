@@ -62,3 +62,14 @@ INSERT INTO other VALUES (2)
 
 statement ok
 CHECKPOINT
+
+query III
+SELECT count(*), count(*) FILTER (WHERE s LIKE '%y'), sum(i) FROM big
+----
+200000	100000	19999900000
+
+query I
+SELECT i FROM other ORDER BY i
+----
+1
+2
