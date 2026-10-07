@@ -2,6 +2,8 @@
 # description: Unlimited memory sizes for settings and COPY options stored as an optional size
 # group: [settings]
 
+require parquet
+
 statement ok
 SET operator_memory_limit = '-1';
 
