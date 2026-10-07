@@ -222,6 +222,44 @@ static Value CreateHTTPHeadersValue(const HTTPHeaders &headers, const case_insen
 	return Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, keys, values);
 }
 
+static string BuildLogURL(const BaseRequest &request, bool redact_http_logs) {
+	string url;
+	url.reserve(request.proto_host_port.size() + request.path.size());
+
+	if (!redact_http_logs) {
+		url.append(request.proto_host_port);
+		url.append(request.path);
+		return url;
+	}
+
+	// Redact user info, e.g. https://user:pass@duckdb.org -> https://redacted@duckdb.org
+	const auto pos_at = request.proto_host_port.rfind('@');
+	if (pos_at != string::npos) {
+		auto pos_proto_end = request.proto_host_port.find("://");
+		if (pos_proto_end == string::npos) {
+			// Without a scheme separator, redact from the start.
+			pos_proto_end = 0;
+		} else {
+			pos_proto_end += 3;
+		}
+		url.append(request.proto_host_port, 0, pos_proto_end);
+		url.append(HTTPLogType::REDACTED_VALUE);
+		url.append(request.proto_host_port, pos_at, string::npos);
+	} else {
+		url += request.proto_host_port;
+	}
+
+	// Redact the query parameters or fragment
+	const auto pos_end_of_path = request.path.find_first_of("?#");
+	if (pos_end_of_path == string::npos) {
+		url += request.path;
+	} else {
+		url.append(request.path, 0, pos_end_of_path + 1);
+		url.append(HTTPLogType::REDACTED_VALUE);
+	}
+	return url;
+}
+
 static string HTTPStatusToLogString(HTTPStatusCode status) {
 	try {
 		return EnumUtil::ToString(status);
@@ -234,7 +272,7 @@ string HTTPLogType::ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPR
                                         bool redact_http_logs) {
 	child_list_t<Value> request_child_list = {
 	    {"type", Value(EnumUtil::ToString(request.type))},
-	    {"url", Value(request.url)},
+	    {"url", Value(BuildLogURL(request, redact_http_logs))},
 	    {"headers", CreateHTTPHeadersValue(request.headers, HTTPRequestHeaderAllowList(), redact_http_logs)},
 	    {"start_time", request.have_request_timing ? Value::TIMESTAMP(request.request_system_start) : Value()},
 	    {"duration_ms",
