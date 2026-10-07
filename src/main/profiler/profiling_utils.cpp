@@ -13,6 +13,7 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	}
 	info.SetMetric<MetricIOTotalBytesRead>(GetBytesRead());
 	info.SetMetric<MetricIOTotalBytesWritten>(GetBytesWritten());
+	info.SetMetric<MetricQueryTotalBytesScanned>(GetBytesScanned());
 	info.SetMetric<MetricSystemBlockedThreadTime>(blocked_thread_time);
 	info.SetMetric<MetricSystemPeakBufferMemory>(system_peak_buffer_memory);
 	info.SetMetric<MetricSystemPeakStreamingBufferSize>(system_peak_streaming_buffer_size);
@@ -20,7 +21,7 @@ void QueryMetrics::FinalizeMetrics(GatheredMetrics &info) {
 	info.SetMetric<MetricSystemTotalMemoryAllocated>(GetTotalMemoryAllocated());
 }
 
-QueryMetrics::QueryMetrics() : bytes_read(0), bytes_written(0), total_memory_allocated(0) {
+QueryMetrics::QueryMetrics() : bytes_read(0), bytes_written(0), bytes_scanned(0), total_memory_allocated(0) {
 	Reset();
 }
 

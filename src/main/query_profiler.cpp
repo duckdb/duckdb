@@ -140,6 +140,7 @@ void QueryProfiler::StartQuery(const string &query, bool is_explain_analyze_p, b
 	// Always reset byte counters at the start of each query so the progress bar shows per-query values
 	query_metrics.bytes_read = 0;
 	query_metrics.bytes_written = 0;
+	query_metrics.bytes_scanned = 0;
 	if (is_explain_analyze_p) {
 		StartExplainAnalyze();
 	}
@@ -275,6 +276,10 @@ void QueryProfiler::TrackBytesWritten(const idx_t amount) {
 	query_metrics.UpdateBytesWritten(amount);
 }
 
+void QueryProfiler::TrackBytesScanned(const idx_t amount) {
+	query_metrics.UpdateBytesScanned(amount);
+}
+
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
 	query_metrics.UpdateTotalMemoryAllocated(amount);
 }
@@ -305,6 +310,10 @@ idx_t QueryProfiler::GetBytesRead() const {
 
 idx_t QueryProfiler::GetBytesWritten() const {
 	return query_metrics.GetBytesWritten();
+}
+
+idx_t QueryProfiler::GetBytesScanned() const {
+	return query_metrics.GetBytesScanned();
 }
 
 MetricsTimer QueryProfiler::StartTimerInternal(const string &key) {
