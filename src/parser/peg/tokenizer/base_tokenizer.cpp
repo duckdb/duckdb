@@ -1,8 +1,30 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/matcher/operator_matcher.hpp"
 
 namespace duckdb {
+
+uint8_t ComputeMatcherTokenClass(TokenType type, const string &text) {
+	switch (type) {
+	case TokenType::KEYWORD:
+	case TokenType::IDENTIFIER:
+		return MatcherTokenClass::WORD;
+	case TokenType::STRING_LITERAL:
+		// string literals are also accepted in identifier positions (e.g. table and file names)
+		return MatcherTokenClass::STRING | MatcherTokenClass::WORD;
+	case TokenType::NUMBER_LITERAL:
+		return MatcherTokenClass::NUMBER;
+	case TokenType::OPERATOR:
+		if (OperatorMatcher::HasSpecialPrecedence(text)) {
+			return MatcherTokenClass::OPERATOR;
+		}
+		return MatcherTokenClass::OPERATOR | MatcherTokenClass::GENERIC_OPERATOR;
+	default:
+		// terminators and end-of-input are only matched as literals or by matchers without a FIRST set
+		return 0;
+	}
+}
 
 TokenizerBehavior::TokenizerBehavior(const string &sql, vector<MatcherToken> &tokens) : sql(sql), tokens(tokens) {
 }
