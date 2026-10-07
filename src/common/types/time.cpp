@@ -110,10 +110,20 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 			// do we expect nanoseconds?
 			mult *= Interval::NANOS_PER_MICRO;
 		}
+		int32_t first_discarded = -1;
+		bool discarded_tail_nonzero = false;
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
 				micros += (buf[pos] - '0') * mult;
+			} else if (first_discarded < 0) {
+				first_discarded = buf[pos] - '0';
+			} else if (buf[pos] != '0') {
+				discarded_tail_nonzero = true;
 			}
+		}
+		// Round the discarded decimal digits to the nearest microsecond or nanosecond, ties to even.
+		if (first_discarded > 5 || (first_discarded == 5 && (discarded_tail_nonzero || (micros & 1)))) {
+			micros++;
 		}
 		if (nanos) {
 			*nanos = UnsafeNumericCast<int32_t>(micros % Interval::NANOS_PER_MICRO);
