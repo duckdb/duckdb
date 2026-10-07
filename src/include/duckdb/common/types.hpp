@@ -638,7 +638,10 @@ struct StructType {
 	DUCKDB_API static const Identifier &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildIndexUnsafe(const LogicalType &type, const string &name);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
+	//! Whether the type is an unnamed struct, i.e. a TUPLE
 	DUCKDB_API static bool IsUnnamed(const LogicalType &type);
+	//! Whether all (and at least one) of the children are unnamed - LogicalType::STRUCT turns these into a TUPLE
+	DUCKDB_API static bool AllUnnamed(const child_list_t<LogicalType> &children);
 	//! Whether the type is backed by StructTypeInfo and laid out as a struct (STRUCT or TUPLE)
 	DUCKDB_API static bool IsStruct(const LogicalType &type);
 	DUCKDB_API static bool IsStruct(LogicalTypeId id);
