@@ -21,13 +21,14 @@ unique_ptr<LogicalOperator> LogicalExplain::CreateSQLResult(ClientContext &conte
 	if (exported.HasError()) {
 		auto &issue = exported.GetIssues()[0];
 		auto message = "EXPLAIN (SQL) cannot render this query: " + issue.message;
-		const bool is_source_function =
-		    issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION;
-		const bool has_source_name =
-		    is_source_function && issue.construct->function && issue.construct->function->name != "logical_source";
-		if (has_source_name) {
-			message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".",
-			                             issue.construct->function->name);
+		if (issue.construct && issue.construct->type == LogicalPlanVerificationConstructType::SOURCE_FUNCTION) {
+			auto &construct = *issue.construct;
+			if (construct.function) {
+				auto &function = *construct.function;
+				if (function.name != "logical_source") {
+					message = StringUtil::Format("EXPLAIN (SQL) cannot render table function \"%s\".", function.name);
+				}
+			}
 		}
 		for (auto &entry : exported.GetIssues()) {
 			switch (entry.code) {

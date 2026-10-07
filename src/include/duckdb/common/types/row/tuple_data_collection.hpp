@@ -147,7 +147,7 @@ public:
 	static void GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]);
 	//! Resets the cached cache vectors (used for ARRAY/LIST casts)
 	static void ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids);
-	//! Computes the heap sizes for the new DataChunk that will be appended
+	//! Computes heap sizes for the columns selected in chunk_state
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
 	//! Computes the heap sizes for a SortKey layout

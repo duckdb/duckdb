@@ -11,6 +11,13 @@ namespace duckdb {
 vector<GenericCopyOption>
 PEGTransformerFactory::TransformGenericCopyOptionList(PEGTransformer &transformer,
                                                       const vector<GenericCopyOption> &generic_copy_option) {
+	identifier_set_t option_names;
+	for (const auto &option : generic_copy_option) {
+		if (option_names.find(option.name) != option_names.end()) {
+			throw ParserException("Unexpected duplicate option %s", option.name);
+		}
+		option_names.insert(option.name);
+	}
 	return generic_copy_option;
 }
 

@@ -20,6 +20,9 @@ public:
 
 public:
 	bool IsDuckCatalog() override;
+	bool SupportsNestedSchemas() const override {
+		return true;
+	}
 	void Initialize(bool load_builtin) override;
 
 	string GetCatalogType() override {

@@ -63,13 +63,9 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	optional_ptr<const Expression> order_input = children[0].get();
 	optional_ptr<const Expression> offset_input = children[1].get();
 
-	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto function = function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name),
-	                                                   std::move(children), error, true);
-	if (!function) {
-		error.Throw();
-	}
+	auto function =
+	    function_binder.BindScalarFunction(Identifier::DefaultSchema(), Identifier(name), std::move(children), true);
 	// +/- can be applied to non-scalar types,
 	// so we can't rely on function binding to catch all problems.
 	if (!IsRangeType(function->GetReturnType())) {

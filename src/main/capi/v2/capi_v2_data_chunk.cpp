@@ -15,7 +15,8 @@ static void CreateDataChunk(Allocator &allocator, const duckdb_v2_logical_type_h
 		if (!types[i]) {
 			throw InvalidInputException("null logical type at index %llu", i);
 		}
-		const auto &ltype = *Convert(types[i]);
+		auto ltype_ref = Convert(types[i]);
+		const auto &ltype = *ltype_ref;
 		// ANY is a signature wildcard with no physical layout; a chunk allocates
 		// storage, so reject it (an ANY vector throws InternalException).
 		if (TypeVisitor::Contains(ltype, LogicalTypeId::ANY)) {
@@ -113,6 +114,13 @@ DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_size(duckdb_v2_data_chunk_handle chunk,
 	DUCKDB_CHECK_ARG(chunk);
 	DUCKDB_CHECK_ARG(out_size);
 	return WithErrorHandler(err, [&]() { *out_size = Convert(chunk)->size(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_capacity(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(chunk);
+	DUCKDB_CHECK_ARG(out_capacity);
+	return WithErrorHandler(err, [&]() { *out_capacity = Convert(chunk)->GetCapacity(); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_data_chunk_get_vector_count(duckdb_v2_data_chunk_handle chunk, idx_t *out_count,

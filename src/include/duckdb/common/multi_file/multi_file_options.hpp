@@ -11,6 +11,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 
 namespace duckdb {
 struct BindInfo;
@@ -33,6 +34,12 @@ struct MultiFileOptions {
 	//! sampled files are combined unless the reader combines them itself
 	bool sampled_schema_is_union = true;
 	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
+	//! (Optional) The schema of the scan, given by the "schema" option. Every file is mapped onto it - by field id
+	//! when its columns are identified by INTEGER, by name otherwise - instead of the schema being read from the files
+	vector<MultiFileColumnDefinition> schema;
+	//! Whether to add a "file_row_number" column with the row number of each row within its file - it is read from the
+	//! row number virtual column of the reader
+	bool file_row_number = false;
 
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 

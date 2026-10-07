@@ -1408,16 +1408,6 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 	if (count == 0) {
 		return;
 	}
-	if (statistics_update_function == UpdateStringStatistics) {
-		// for strings - we need to push all strings we are going to place here into the string heap of the segment
-		update_p.Flatten();
-		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = sel.get_index(i);
-			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
-		}
-		update_p.ToUnifiedFormat(update_format);
-	}
 
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
 	// this is usually the case for "standard" queries (e.g. UPDATE tbl SET x=bla WHERE cond)
@@ -1441,6 +1431,16 @@ void UpdateSegment::Update(TransactionData transaction, DuckTableEntry &table_en
 		if (count == 0) {
 			return;
 		}
+	}
+	if (statistics_update_function == UpdateStringStatistics) {
+		// for strings - we need to push all strings we are going to place here into the string heap of the segment
+		update_p.Flatten();
+		auto update_data = FlatVector::GetDataMutable<string_t>(update_p);
+		for (idx_t i = 0; i < count; i++) {
+			auto idx = sel.get_index(i);
+			update_data[idx] = GetStringHeap().AddBlob(update_data[idx]);
+		}
+		update_p.ToUnifiedFormat(update_format);
 	}
 
 	InitializeUpdateInfo(vector_index);
