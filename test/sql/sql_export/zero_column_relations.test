@@ -3,7 +3,8 @@
 # group: [sql_export]
 
 statement ok
-CREATE TABLE wide_description AS PIVOT range(2050) ON range USING count(*);
+CREATE TABLE wide_description AS FROM query(
+	'SELECT ' || array_to_string(['NULL::BIGINT AS c' || i FOR i IN range(2050)], ', '));
 
 foreach optimizer '' 'unused_columns'
 
