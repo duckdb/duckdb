@@ -329,35 +329,177 @@ string Bignum::FromByteArray(uint8_t *data, idx_t size, bool is_negative) {
 	return result;
 }
 
-// typos:ignore-next-line
-// Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
+//! Below this number of limbs, numbers are multiplied with the schoolbook algorithm
+static constexpr idx_t KARATSUBA_THRESHOLD = 48;
+//! Below this number of binary limbs, numbers are converted to decimal with the schoolbook algorithm
+static constexpr idx_t CONVERSION_THRESHOLD = 64;
+
+static void TrimLimbs(vector<digit_t> &limbs) {
+	while (!limbs.empty() && limbs.back() == 0) {
+		limbs.pop_back();
+	}
+}
+
+// Adds the decimal limbs of b, shifted by "shift" limbs, to a
+static void AddDecimalLimbs(vector<digit_t> &a, const digit_t *b, idx_t b_size, idx_t shift) {
+	while (b_size > 0 && b[b_size - 1] == 0) {
+		b_size--;
+	}
+	if (a.size() < shift + b_size) {
+		a.resize(shift + b_size, 0);
+	}
+	digit_t carry = 0;
+	idx_t i = 0;
+	for (; i < b_size; i++) {
+		digit_t sum = a[shift + i] + b[i] + carry;
+		carry = sum >= Bignum::DECIMAL_BASE;
+		a[shift + i] = carry ? sum - Bignum::DECIMAL_BASE : sum;
+	}
+	for (idx_t idx = shift + i; carry; idx++) {
+		if (idx == a.size()) {
+			a.push_back(0);
+		}
+		digit_t sum = a[idx] + carry;
+		carry = sum >= Bignum::DECIMAL_BASE;
+		a[idx] = carry ? sum - Bignum::DECIMAL_BASE : sum;
+	}
+}
+
+// Subtracts the decimal limbs of b from a, where a >= b
+static void SubtractDecimalLimbs(vector<digit_t> &a, const vector<digit_t> &b) {
+	digit_t borrow = 0;
+	idx_t i = 0;
+	for (; i < b.size(); i++) {
+		if (i >= a.size()) {
+			D_ASSERT(b[i] == 0);
+			continue;
+		}
+		digit_t subtrahend = b[i] + borrow;
+		borrow = a[i] < subtrahend;
+		a[i] = borrow ? a[i] + Bignum::DECIMAL_BASE - subtrahend : a[i] - subtrahend;
+	}
+	for (; borrow; i++) {
+		D_ASSERT(i < a.size());
+		borrow = a[i] == 0;
+		a[i] = borrow ? Bignum::DECIMAL_BASE - 1 : a[i] - 1;
+	}
+}
+
+// Multiplies two numbers in decimal limbs using Karatsuba multiplication
+static vector<digit_t> MultiplyDecimalLimbs(const digit_t *a, idx_t a_size, const digit_t *b, idx_t b_size) {
+	if (a_size < b_size) {
+		std::swap(a, b);
+		std::swap(a_size, b_size);
+	}
+	vector<digit_t> result;
+	if (b_size == 0) {
+		return result;
+	}
+	result.resize(a_size + b_size, 0);
+	if (b_size < KARATSUBA_THRESHOLD) {
+		for (idx_t i = 0; i < b_size; i++) {
+			twodigit_t carry = 0;
+			for (idx_t j = 0; j < a_size; j++) {
+				twodigit_t current = UnsafeNumericCast<twodigit_t>(b[i]) * a[j] + result[i + j] + carry;
+				carry = current / Bignum::DECIMAL_BASE;
+				result[i + j] = static_cast<digit_t>(current - carry * Bignum::DECIMAL_BASE);
+			}
+			result[i + a_size] = static_cast<digit_t>(carry);
+		}
+		TrimLimbs(result);
+		return result;
+	}
+	if (2 * b_size <= a_size) {
+		// unbalanced: multiply b with chunks of a
+		for (idx_t offset = 0; offset < a_size; offset += b_size) {
+			auto part = MultiplyDecimalLimbs(a + offset, MinValue<idx_t>(b_size, a_size - offset), b, b_size);
+			AddDecimalLimbs(result, part.data(), part.size(), offset);
+		}
+		TrimLimbs(result);
+		return result;
+	}
+	// a = a1 * BASE^m + a0, b = b1 * BASE^m + b0
+	idx_t m = a_size / 2;
+	auto z0 = MultiplyDecimalLimbs(a, m, b, m);
+	auto z2 = MultiplyDecimalLimbs(a + m, a_size - m, b + m, b_size - m);
+	vector<digit_t> a_sum(a, a + m);
+	AddDecimalLimbs(a_sum, a + m, a_size - m, 0);
+	vector<digit_t> b_sum(b, b + m);
+	AddDecimalLimbs(b_sum, b + m, b_size - m, 0);
+	// z1 = (a0 + a1) * (b0 + b1) - z0 - z2
+	auto z1 = MultiplyDecimalLimbs(a_sum.data(), a_sum.size(), b_sum.data(), b_sum.size());
+	SubtractDecimalLimbs(z1, z0);
+	SubtractDecimalLimbs(z1, z2);
+	AddDecimalLimbs(result, z0.data(), z0.size(), 0);
+	AddDecimalLimbs(result, z1.data(), z1.size(), m);
+	AddDecimalLimbs(result, z2.data(), z2.size(), 2 * m);
+	TrimLimbs(result);
+	return result;
+}
+
+// Converts binary limbs (base 2^32) to decimal limbs (base 10^9), both little-endian
+// powers[k] holds 2^(32 * 2^k) in decimal limbs
+static vector<digit_t> BinaryToDecimalLimbs(const digit_t *binary, idx_t size, vector<vector<digit_t>> &powers) {
+	vector<digit_t> digits;
+	if (size <= CONVERSION_THRESHOLD) {
+		// typos:ignore-next-line
+		// Following CPython and Knuth (TAOCP, Volume 2 (3rd edn), section 4.4, Method 1b).
+		for (idx_t i = size; i > 0; i--) {
+			digit_t hi = binary[i - 1];
+			for (idx_t j = 0; j < digits.size(); j++) {
+				twodigit_t tmp = UnsafeNumericCast<twodigit_t>(digits[j]) << Bignum::DIGIT_BITS | hi;
+				hi = static_cast<digit_t>(tmp / UnsafeNumericCast<twodigit_t>(Bignum::DECIMAL_BASE));
+				digits[j] = static_cast<digit_t>(tmp - UnsafeNumericCast<twodigit_t>(Bignum::DECIMAL_BASE * hi));
+			}
+			while (hi) {
+				digits.push_back(hi % Bignum::DECIMAL_BASE);
+				hi /= Bignum::DECIMAL_BASE;
+			}
+		}
+		return digits;
+	}
+	// split the number into high * 2^(32 * m) + low, where m is a power of two
+	idx_t k = 0;
+	idx_t m = 1;
+	while (2 * m < size) {
+		m *= 2;
+		k++;
+	}
+	auto low = BinaryToDecimalLimbs(binary, m, powers);
+	auto high = BinaryToDecimalLimbs(binary + m, size - m, powers);
+	while (powers.size() <= k) {
+		auto &last = powers.back();
+		powers.push_back(MultiplyDecimalLimbs(last.data(), last.size(), last.data(), last.size()));
+	}
+	auto &power = powers[k];
+	digits = MultiplyDecimalLimbs(high.data(), high.size(), power.data(), power.size());
+	AddDecimalLimbs(digits, low.data(), low.size(), 0);
+	TrimLimbs(digits);
+	return digits;
+}
+
 string Bignum::BignumToVarchar(const bignum_t &blob) {
 	string decimal_string;
 	vector<uint8_t> byte_array;
 	bool is_negative;
 	GetByteArray(byte_array, is_negative, blob.data);
-	vector<digit_t> digits;
 	// Rounding byte_array to digit_bytes multiple size, so that we can process every digit_bytes bytes
 	// at a time without if check in the for loop
 	idx_t padding_size = (-byte_array.size()) & (DIGIT_BYTES - 1);
 	byte_array.insert(byte_array.begin(), padding_size, 0);
-	for (idx_t i = 0; i < byte_array.size(); i += DIGIT_BYTES) {
-		digit_t hi = 0;
+	idx_t limb_count = byte_array.size() / DIGIT_BYTES;
+	vector<digit_t> binary(limb_count);
+	for (idx_t i = 0; i < limb_count; i++) {
+		digit_t limb = 0;
 		for (idx_t j = 0; j < DIGIT_BYTES; j++) {
-			hi |= UnsafeNumericCast<digit_t>(byte_array[i + j]) << (8 * (DIGIT_BYTES - j - 1));
+			limb |= UnsafeNumericCast<digit_t>(byte_array[i * DIGIT_BYTES + j]) << (8 * (DIGIT_BYTES - j - 1));
 		}
-
-		for (idx_t j = 0; j < digits.size(); j++) {
-			twodigit_t tmp = UnsafeNumericCast<twodigit_t>(digits[j]) << DIGIT_BITS | hi;
-			hi = static_cast<digit_t>(tmp / UnsafeNumericCast<twodigit_t>(DECIMAL_BASE));
-			digits[j] = static_cast<digit_t>(tmp - UnsafeNumericCast<twodigit_t>(DECIMAL_BASE * hi));
-		}
-
-		while (hi) {
-			digits.push_back(hi % DECIMAL_BASE);
-			hi /= DECIMAL_BASE;
-		}
+		binary[limb_count - i - 1] = limb;
 	}
+	TrimLimbs(binary);
+	// 2^32 in decimal limbs
+	vector<vector<digit_t>> powers {{294967296, 4}};
+	auto digits = BinaryToDecimalLimbs(binary.data(), binary.size(), powers);
 
 	if (digits.empty()) {
 		digits.push_back(0);
