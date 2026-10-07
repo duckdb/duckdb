@@ -196,12 +196,13 @@ void IntegerResolveTypes(duckdb_v2_function_bind_info_handle,
 	duckdb_v2_logical_type_destroy(&integer);
 }
 
-void FlowBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
+void FlowBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle result,
+              duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	if (duckdb_v2_function_bind_get_user_data(info, &flow.user_data_in_bind, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_opaque bind_data = {&bind_marker, FlowDestroyBindData, nullptr};
-	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
+	duckdb_v2_scalar_function_bind_set_bind_data(result, &bind_data, err);
 }
 
 void FlowInit(duckdb_v2_scalar_function_init_info_handle info, duckdb_v2_context_handle,
@@ -258,8 +259,8 @@ struct {
 	bool oob_value_cleared = false;
 } arg_probe;
 
-void ArgProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_context_handle,
-                  duckdb_v2_error_info_handle *err) {
+void ArgProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle,
+                  duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	// Without "*args" the fixed part is the whole list, so the variadic part is not asked for.
 	if (duckdb_v2_function_bind_get_arg_count(info, &arg_probe.arg_count, nullptr, nullptr, nullptr, err) !=
 	    DUCKDB_V2_ERROR_NONE) {
@@ -302,6 +303,7 @@ struct {
 	DUCKDB_V2_LOGICAL_TYPE_ID resolve_arg_type = DUCKDB_V2_LOGICAL_TYPE_ID_INVALID;
 	DUCKDB_V2_LOGICAL_TYPE_ID bind_arg_type = DUCKDB_V2_LOGICAL_TYPE_ID_INVALID;
 	DUCKDB_V2_ERROR resolve_set_bind_data_rc = DUCKDB_V2_ERROR_NONE;
+	DUCKDB_V2_ERROR bind_shared_set_bind_data_rc = DUCKDB_V2_ERROR_NONE;
 } phase_probe;
 
 DUCKDB_V2_LOGICAL_TYPE_ID GetArgTypeId(duckdb_v2_function_bind_info_handle info, duckdb_v2_error_info_handle *err) {
@@ -322,9 +324,11 @@ void PhaseProbeResolveTypes(duckdb_v2_function_bind_info_handle info,
 	phase_probe.resolve_set_bind_data_rc = duckdb_v2_function_bind_set_bind_data(info, &bind_data, nullptr);
 }
 
-void PhaseProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_context_handle,
-                    duckdb_v2_error_info_handle *err) {
+void PhaseProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle,
+                    duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	phase_probe.bind_arg_type = GetArgTypeId(info, err);
+	duckdb_v2_opaque bind_data = {&bind_marker, nullptr, nullptr};
+	phase_probe.bind_shared_set_bind_data_rc = duckdb_v2_function_bind_set_bind_data(info, &bind_data, nullptr);
 }
 
 // out[i] = the constant the bind callback folded out of the second argument.
@@ -573,8 +577,9 @@ TEST_CASE("V2 scalar: resolve types sees the uncast argument types, bind the cas
 	REQUIRE(QueryI32(fx.conn, "SELECT phase_probe(1::SMALLINT)") == 0);
 	REQUIRE(phase_probe.resolve_arg_type == DUCKDB_V2_LOGICAL_TYPE_ID_SMALLINT);
 	REQUIRE(phase_probe.bind_arg_type == DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	// The bind data can only be set from the bind callback.
+	// Scalar functions set the bind data through their own bind info, in the bind callback only.
 	REQUIRE(phase_probe.resolve_set_bind_data_rc != DUCKDB_V2_ERROR_NONE);
+	REQUIRE(phase_probe.bind_shared_set_bind_data_rc != DUCKDB_V2_ERROR_NONE);
 }
 
 // ===========================================================================
@@ -835,7 +840,8 @@ void DeleteKindBind(void *ptr) {
 	delete static_cast<KindBind *>(ptr);
 }
 
-void KindBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
+void KindBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle result,
+                duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	kind_probe = KindProbe {};
 	if (duckdb_v2_function_bind_get_arg_count(info, &kind_probe.positional_fixed, &kind_probe.positional_variadic,
 	                                          &kind_probe.named_fixed, &kind_probe.named_variadic,
@@ -904,7 +910,7 @@ void KindBindCb(duckdb_v2_function_bind_info_handle info, duckdb_v2_context_hand
 	kind_probe.oob_value_rc = duckdb_v2_function_bind_get_arg_value(info, arg_count, &oob_value, nullptr);
 
 	duckdb_v2_opaque bind_data = {new KindBind {kind_probe.scale_index}, DeleteKindBind, nullptr};
-	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
+	duckdb_v2_scalar_function_bind_set_bind_data(result, &bind_data, err);
 }
 
 // Adds the rows of an INTEGER vector into out, or multiplies out by them.
@@ -1106,6 +1112,7 @@ TEST_CASE("V2 function bind: null arguments", "[capi_v2][scalar_function]") {
 	void *data = nullptr;
 	REQUIRE(duckdb_v2_function_bind_get_user_data(nullptr, &data, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_function_bind_set_bind_data(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_bind_set_bind_data(nullptr, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_function_bind_get_arg_count(nullptr, &count, &count, &count, &count, nullptr) ==
 	        DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_function_bind_get_arg_type(nullptr, 0, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);

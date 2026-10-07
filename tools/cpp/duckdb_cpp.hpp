@@ -3190,6 +3190,15 @@ public:
 		friend detail::Factory;
 
 	public:
+		/// Constructs bind data of type `T`, owned by the bound function call and readable from the init and exec
+		/// callbacks via `GetBindData<T>`. The engine compares bind data when it compares expressions: by
+		/// `operator==` when `T` has one, by identity otherwise.
+		template <class T, class... ARGS>
+		void SetBindData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+		}
+
 		/// The user data set via `ScalarFunction::SetUserData`.
 		/// @throws InvalidInputException When none was set.
 		template <class T>
@@ -3198,9 +3207,12 @@ public:
 		}
 
 	private:
-		BindInput(void *args, void *context) : FunctionBindInput(args, context) {
+		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
+		void *result;
+
+		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 

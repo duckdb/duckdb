@@ -130,8 +130,8 @@ void ArrowRtResolveTypes(duckdb_v2_function_bind_info_handle info,
 	duckdb_v2_logical_type_destroy(&arg_type);
 }
 
-void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_context_handle context,
-                 duckdb_v2_error_info_handle *err) {
+void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle result,
+                 duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_logical_type_handle arg_type = nullptr;
 	if (duckdb_v2_function_bind_get_arg_type(info, 0, &arg_type, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -143,7 +143,7 @@ void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_context_han
 		return;
 	}
 	duckdb_v2_opaque bind_data = {rt, ArrowRoundtripDestroy, nullptr};
-	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
+	duckdb_v2_scalar_function_bind_set_bind_data(result, &bind_data, err);
 }
 
 void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,

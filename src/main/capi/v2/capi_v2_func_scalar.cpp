@@ -49,6 +49,19 @@ private:
 	const ResolveScalarFunctionTypesInput &input;
 };
 
+class CV2BindInfo {
+public:
+	//! The bind data the callback set, or nullptr
+	shared_ptr<CV2UserData> out_bind_data;
+};
+
+static auto Convert(duckdb_v2_scalar_function_bind_info_handle info) -> CV2BindInfo * {
+	return reinterpret_cast<CV2BindInfo *>(info);
+}
+static auto Convert(CV2BindInfo *info) -> duckdb_v2_scalar_function_bind_info_handle {
+	return reinterpret_cast<duckdb_v2_scalar_function_bind_info_handle>(info);
+}
+
 class CV2ResolveTypesInfo {
 public:
 	explicit CV2ResolveTypesInfo(BoundScalarFunction &bound_function) : bound_function(bound_function) {
@@ -128,15 +141,17 @@ static auto CV2ScalarBind(BindScalarFunctionInput &input) -> unique_ptr<Function
 
 	auto &bound_function = input.GetBoundFunction();
 	CV2ExpressionBindInfo bind_info(bound_function, info.user_data ? info.user_data->GetData() : nullptr, input);
+	bind_info.can_set_bind_data = false;
+	CV2BindInfo result_info;
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.bind_cb(Convert(&bind_info), Convert(&input.GetClientContext()), &err_ptr);
+	info.bind_cb(Convert(&bind_info), Convert(&result_info), Convert(&input.GetClientContext()), &err_ptr);
 
 	unique_ptr<FunctionData> result = nullptr;
-	if (bind_info.out_bind_data) {
+	if (result_info.out_bind_data) {
 		auto set_result = make_uniq<CV2FunctionData>();
-		set_result->handle = std::move(bind_info.out_bind_data);
+		set_result->handle = std::move(result_info.out_bind_data);
 		result = std::move(set_result);
 	}
 
@@ -419,6 +434,16 @@ duckdb_v2_scalar_function_resolve_types_set_return_type(duckdb_v2_scalar_functio
 	return WithErrorHandler(err, [&]() {
 		auto type = Convert(return_type);
 		Convert(info)->bound_function.SetReturnType(*type);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(duckdb_v2_scalar_function_bind_info_handle info,
+                                                             duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() {
+		Convert(info)->out_bind_data =
+		    data->ptr ? duckdb::make_shared_ptr<CV2UserData>(data->ptr, data->destroy, data->equals) : nullptr;
 	});
 }
 

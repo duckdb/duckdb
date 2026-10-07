@@ -17,6 +17,12 @@ handles:
       callback receives this handle next to a `[[function_bind_info]]`, which gives access to the arguments and the
       user data, and can use it to set the return type of the call site being bound.
 
+  scalar_function_bind_info:
+    description: |
+      A borrowed opaque handle to the result of a scalar function's "bind" phase. The "bind" callback receives this
+      handle next to a `[[function_bind_info]]`, which gives access to the arguments and the user data, and can use
+      it to set the bind data of the call site being bound.
+
   scalar_function_init_info:
     description: |
       A borrowed opaque handle to the arguments supplied to a scalar function during the local state initialization 
@@ -39,7 +45,6 @@ callbacks:
         type: function_bind_info
         description: |
           Borrowed opaque handle providing access to the arguments of the call site being bound and the user data.
-          The bind data cannot be set from this callback.
       result:
         type: scalar_function_resolve_types_info
         description: Borrowed opaque handle to set the return type of the call site being bound through.
@@ -57,8 +62,10 @@ callbacks:
       info:
         type: function_bind_info
         description: |
-          Borrowed opaque handle providing access to the arguments of the call site being bound, the user data and
-          the bind data.
+          Borrowed opaque handle providing access to the arguments of the call site being bound and the user data.
+      result:
+        type: scalar_function_bind_info
+        description: Borrowed opaque handle to set the bind data of the call site being bound through.
       context:
         type: context
         description: Borrowed handle to the context of the query currently executing the callback.
@@ -291,9 +298,9 @@ functions:
 
       The bind callback is invoked during query planning for each call site of the function, after the resolve
       types callback and after the arguments have been cast to the parameter types of the signature. Through its
-      `[[function_bind_info]]` it can inspect the argument types and constant argument values and set "bind data"
-      that is shared with the init and exec callbacks. It cannot change the types of the call site, use the
-      resolve types callback for that.
+      `[[function_bind_info]]` it can inspect the argument types and constant argument values. Through its
+      `[[scalar_function_bind_info]]` it can set "bind data" that is shared with the init and exec callbacks. It
+      cannot change the types of the call site, use the resolve types callback for that.
     parameters:
       function:
         type: scalar_function
@@ -369,6 +376,34 @@ functions:
       return_type:
         type: logical_type
         description: The return type to set. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-07" ]
+    description: |
+      Sets the function's "bind data" from the bind callback.
+
+      The bind data is stored with the bound call site and retrievable from the init and exec callbacks. The opaque
+      handle bundles the pointer with an optional destructor, invoked when the bind data is no longer needed,
+      and an optional equality callback used when comparing two bound call sites; without one, pointer equality
+      is used. Scalar functions set their bind data through this function, `[[function_bind_set_bind_data]]` is not
+      available to them.
+    parameters:
+      info:
+        type: scalar_function_bind_info
+        description: The bind info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
       err:
         type: error_info
         indirection: 1

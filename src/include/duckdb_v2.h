@@ -2806,7 +2806,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_user_data(duckdb_v2_fun
  *
  * The bind data is stored with the bound call site and retrievable from every later callback. The opaque handle bundles
  * the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional equality
- * callback used when comparing two bound call sites; without one, pointer equality is used.
+ * callback used when comparing two bound call sites; without one, pointer equality is used. Scalar functions set their
+ * bind data through `duckdb_v2_scalar_function_bind_set_bind_data()` instead.
  *
  * history:
  * - stable: v2.0.0
@@ -8545,6 +8546,15 @@ typedef struct _duckdb_v2_scalar_function_resolve_types_info {
 } * duckdb_v2_scalar_function_resolve_types_info_handle;
 
 /*!
+ * A borrowed opaque handle to the result of a scalar function's "bind" phase. The "bind" callback receives this handle
+ * next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments and the user data, and can use
+ * it to set the bind data of the call site being bound.
+ */
+typedef struct _duckdb_v2_scalar_function_bind_info {
+	void *internal_ptr;
+} * duckdb_v2_scalar_function_bind_info_handle;
+
+/*!
  * A borrowed opaque handle to the arguments supplied to a scalar function during the local state initialization "init"
  * phase. The "init" callback receives this handle and can use it to e.g. set up local state reusable across invocations
  * of the "exec" execution callback.
@@ -8571,6 +8581,7 @@ typedef void (*duckdb_v2_scalar_function_resolve_types_callback_fn)(
     duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err);
 
 typedef void (*duckdb_v2_scalar_function_bind_callback_fn)(duckdb_v2_function_bind_info_handle info,
+                                                           duckdb_v2_scalar_function_bind_info_handle result,
                                                            duckdb_v2_context_handle context,
                                                            duckdb_v2_error_info_handle *err);
 
@@ -8739,9 +8750,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_resolve_types_callbac
  *
  * The bind callback is invoked during query planning for each call site of the function, after the resolve types
  * callback and after the arguments have been cast to the parameter types of the signature. Through its
- * `duckdb_v2_function_bind_info_handle` it can inspect the argument types and constant argument values and set "bind
- * data" that is shared with the init and exec callbacks. It cannot change the types of the call site, use the resolve
- * types callback for that.
+ * `duckdb_v2_function_bind_info_handle` it can inspect the argument types and constant argument values. Through its
+ * `duckdb_v2_scalar_function_bind_info_handle` it can set "bind data" that is shared with the init and exec callbacks.
+ * It cannot change the types of the call site, use the resolve types callback for that.
  *
  * history:
  * - stable: v2.0.0
@@ -8814,6 +8825,26 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_resolve_types_set_return_type(
     duckdb_v2_scalar_function_resolve_types_info_handle info, duckdb_v2_logical_type_handle return_type,
     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the function's "bind data" from the bind callback.
+ *
+ * The bind data is stored with the bound call site and retrievable from the init and exec callbacks. The opaque handle
+ * bundles the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional
+ * equality callback used when comparing two bound call sites; without one, pointer equality is used. Scalar functions
+ * set their bind data through this function, `duckdb_v2_function_bind_set_bind_data()` is not available to them.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(
+    duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 
 /*!
  * Retrieves the user data set via `duckdb_v2_scalar_function_set_user_data()`.
