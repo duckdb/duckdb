@@ -140,6 +140,7 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<Gramm
 
 	auto &program_matcher = factory.CreateRootMatcher("Program");
 	auto &top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
+	ComputeFirstSets(program_matcher, keyword_helper->GetLiteralTable());
 
 	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(std::move(allocator), std::move(keyword_helper),
 	                                                                   std::move(tokenizer), std::move(rules),
