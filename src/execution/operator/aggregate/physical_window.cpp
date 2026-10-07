@@ -381,6 +381,8 @@ public:
 	}
 	//! Get the next task given the current state
 	bool TryNextTask(TaskPtr &task, Task &task_local);
+	//! Same, with the lock already held, so that a caller can block on failure without missing an unblock
+	bool TryNextTask(const unique_lock<mutex> &guard, TaskPtr &task, Task &task_local);
 
 	//! Context for executing computations
 	ClientContext &client;
@@ -891,6 +893,10 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	auto guard = Lock();
+	return TryNextTask(guard, task, task_local);
+}
+
+bool WindowGlobalSourceState::TryNextTask(const unique_lock<mutex> &guard, TaskPtr &task, Task &task_local) {
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1134,11 +1140,15 @@ SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, Data
 				// no more tasks - exit
 				gsource.UnblockTasks(guard);
 				break;
-			} else {
-				// there are more tasks available, but we can't execute them yet
-				// block the source
-				return gsource.BlockSource(guard, source.interrupt_state);
 			}
+			// TryAssignTask released the lock: another thread may have prepared the next stage and unblocked the
+			// blocked tasks in between, so look again before blocking, or no one would ever unblock this task.
+			if (gsource.TryNextTask(guard, lsource.task, lsource.task_local)) {
+				continue;
+			}
+			// there are more tasks available, but we can't execute them yet
+			// block the source
+			return gsource.BlockSource(guard, source.interrupt_state);
 		}
 	}
 
