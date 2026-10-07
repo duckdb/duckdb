@@ -4,10 +4,12 @@
       "reason": "Statistics are not set without optimizers.",
       "paths": [
         "test/optimizer/statistics/statistics_numeric.test",
+        "test/optimizer/joins/always_true_scan_filter_estimate.test",
         "test/sql/optimizer/power_zonemap_pruning.test",
         "test/fuzzer/pedro/vacuum_table_with_generated_column.test",
         "test/fuzzer/duckfuzz/bitstring_agg_uhugeint.test",
         "test/parquet/parquet_stats_function.test",
+        "test/sql/copy/parquet/read_single_parquet_file.test",
         "test/parquet/issue_22144.test",
         "test/sql/types/struct/struct_stats.test",
         "test/sql/types/list/list_stats.test",

@@ -48,6 +48,14 @@ idx_t ArrowAppender::RowCount() const {
 	return row_count;
 }
 
+idx_t ArrowAppender::ByteSize() const {
+	idx_t bytes = 0;
+	for (auto &data : root_data) {
+		bytes += data->ByteSize();
+	}
+	return bytes;
+}
+
 void ArrowAppender::ReleaseArray(ArrowArray *array) {
 	if (!array || !array->release) {
 		return;

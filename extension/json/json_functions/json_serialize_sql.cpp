@@ -92,7 +92,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 		yyjson_mut_doc_set_root(doc, result_obj);
 
 		try {
-			auto parser = Parser();
+			Parser parser(state.GetContext());
 			parser.ParseQuery(input.GetString());
 
 			auto statements_arr = yyjson_mut_arr(doc);
@@ -310,7 +310,7 @@ struct ExecuteSqlTableFunction {
 	}
 
 	static void Function(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &data = (BindData &)*data_p.bind_data;
+		auto &data = data_p.bind_data->CastNoConst<BindData>();
 		if (!data.result) {
 			data.result = data.plan->Execute();
 		}

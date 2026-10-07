@@ -72,7 +72,8 @@ void NoopAggregateCombine(duckdb_v2_aggregate_function_combine_info_handle, duck
 }
 void NoopAggregateFinalize(duckdb_v2_aggregate_function_finalize_info_handle, duckdb_v2_error_info_handle *) {
 }
-void NoopTableBind(duckdb_v2_table_function_bind_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *) {
+void NoopTableBind(duckdb_v2_function_bind_info_handle, duckdb_v2_table_function_bind_info_handle,
+                   duckdb_v2_context_handle, duckdb_v2_error_info_handle *) {
 }
 void NoopTableExec(duckdb_v2_table_function_exec_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *) {
 }

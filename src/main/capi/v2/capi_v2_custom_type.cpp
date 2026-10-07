@@ -133,7 +133,10 @@ DUCKDB_V2_ERROR duckdb_v2_custom_type_set_base_type(duckdb_v2_custom_type_handle
                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(type);
 	DUCKDB_CHECK_ARG(base_type);
-	return WithErrorHandler(err, [&]() { Convert(type)->base_type = *Convert(base_type); });
+	return WithErrorHandler(err, [&]() {
+		auto base = Convert(base_type);
+		Convert(type)->base_type = *base;
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_custom_type_register(duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err) {

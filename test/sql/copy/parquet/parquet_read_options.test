@@ -50,15 +50,14 @@ SELECT * FROM with_row_number
 ----
 42	0
 
-statement error
+# a bare boolean option means "true"
+statement ok
 COPY target FROM '{TEST_DIR}/read_options.parquet' (FORMAT parquet, CAN_HAVE_NAN)
-----
-Binder Error: Parquet can_have_nan cannot be empty!
 
 statement error
 COPY target FROM '{TEST_DIR}/read_options.parquet' (FORMAT parquet, ENCRYPTION_CONFIG)
 ----
-Binder Error: Parquet encryption_config cannot be empty!
+Binder Error: Parquet encryption_config must be of type STRUCT
 
 # explicit_cardinality supplies the optimizer estimate without changing the result
 query I

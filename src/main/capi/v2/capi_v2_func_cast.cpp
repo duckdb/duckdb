@@ -201,7 +201,10 @@ DUCKDB_V2_ERROR duckdb_v2_cast_function_set_source_type(duckdb_v2_cast_function_
                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(source_type);
-	return WithErrorHandler(err, [&]() { Convert(function)->source_type = *Convert(source_type); });
+	return WithErrorHandler(err, [&]() {
+		auto type = Convert(source_type);
+		Convert(function)->source_type = *type;
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_cast_function_set_target_type(duckdb_v2_cast_function_handle function,
@@ -209,7 +212,10 @@ DUCKDB_V2_ERROR duckdb_v2_cast_function_set_target_type(duckdb_v2_cast_function_
                                                         duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(target_type);
-	return WithErrorHandler(err, [&]() { Convert(function)->target_type = *Convert(target_type); });
+	return WithErrorHandler(err, [&]() {
+		auto type = Convert(target_type);
+		Convert(function)->target_type = *type;
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_cast_function_set_implicit_cast_cost(duckdb_v2_cast_function_handle function, int64_t cost,

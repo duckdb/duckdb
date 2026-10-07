@@ -129,10 +129,11 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 		    "external resource discovery for type \"%s\": the list callback \"%s\" did not return a \"handle\" column",
 		    type.name, type.list_function);
 	}
+	auto res_rows = res->Collection().GetRows();
 	for (idx_t r = 0; r < res->RowCount(); r++) {
 		// The handle is a MAP (opaque to us), the same contract create/status enforce - reject anything else
 		// with a clear message rather than a cast failure deep in the output append.
-		auto handle = RequireResourceMap(res->GetValue(handle_idx, r), type.list_function, "handle");
+		auto handle = RequireResourceMap(res_rows.GetValue(handle_idx, r), type.list_function, "handle");
 		if (managed_handles.count(HandleKey(handle)) > 0) {
 			continue; // already shown as a locally managed resource of this type
 		}
@@ -141,11 +142,11 @@ static void DiscoverExternalResources(ClientContext &context, const ExternalReso
 		row.handle = std::move(handle);
 		row.managed = false;
 		if (reference_idx != DConstants::INVALID_INDEX) {
-			auto ref = res->GetValue(reference_idx, r);
+			auto ref = res_rows.GetValue(reference_idx, r);
 			row.reference = ref.IsNull() ? string() : ref.ToString();
 		}
 		if (state_idx != DConstants::INVALID_INDEX) {
-			auto st = res->GetValue(state_idx, r);
+			auto st = res_rows.GetValue(state_idx, r);
 			row.state = st.IsNull() ? string() : st.ToString();
 		}
 		rows.push_back(std::move(row));

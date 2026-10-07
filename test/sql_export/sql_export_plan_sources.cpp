@@ -28,7 +28,7 @@ namespace logical_plan_sql_export_test {
 
 static unique_ptr<LogicalOperator> OptimizeLogicalPlanExportQueryWithRepeatedPruning(Connection &connection,
                                                                                      const string &query) {
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*connection.context);
@@ -167,9 +167,12 @@ TEST_CASE("Source SQL callbacks preserve centrally applied scan modifiers",
 		REQUIRE_NO_FAIL(*generated);
 		REQUIRE(generated->GetTypes() == native->GetTypes());
 		REQUIRE(generated->RowCount() == native->RowCount());
-		for (idx_t row = 0; row < native->RowCount(); row++) {
+		auto generated_rows = generated->Collection().GetRows();
+		auto native_rows = native->Collection().GetRows();
+		for (idx_t row = 0; row < native_rows.size(); row++) {
 			for (idx_t column = 0; column < native->ColumnCount(); column++) {
-				REQUIRE(Value::NotDistinctFrom(generated->GetValue(column, row), native->GetValue(column, row)));
+				REQUIRE(
+				    Value::NotDistinctFrom(generated_rows.GetValue(column, row), native_rows.GetValue(column, row)));
 			}
 		}
 	}
@@ -323,9 +326,9 @@ TEST_CASE("Table row number SQL export retains stream effects",
 					statement->node = std::move(exported.GetValue().query);
 					result = SubmitSQLExportResult(*connection.context, std::move(statement), parameters);
 				}
-				unique_ptr<QueryResultStream> stream;
+				unique_ptr<QueryResultStream<>> stream;
 				if (!result->HasError()) {
-					stream = make_uniq<QueryResultStream>(std::move(result));
+					stream = make_uniq<QueryResultStream<>>(std::move(result));
 				}
 				vector<string> rows;
 				while (stream && !stream->HasError()) {
@@ -356,12 +359,12 @@ TEST_CASE("Table row number SQL export retains stream effects",
 				REQUIRE_NO_FAIL(*sequence);
 				if (route == 0) {
 					expected_rows = std::move(rows);
-					expected_sequence = sequence->GetValue(0, 0);
+					expected_sequence = sequence->Collection().GetValue(0, 0);
 					expected_error = has_error;
 				} else {
 					REQUIRE(rows == expected_rows);
 					REQUIRE(has_error == expected_error);
-					REQUIRE(Value::NotDistinctFrom(sequence->GetValue(0, 0), expected_sequence));
+					REQUIRE(Value::NotDistinctFrom(sequence->Collection().GetValue(0, 0), expected_sequence));
 				}
 			}
 		}
@@ -396,8 +399,8 @@ TEST_CASE("Table row number SQL export guards filtered numbering",
 		auto native = connection.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
 		REQUIRE_NO_FAIL(*native);
 		REQUIRE(native->RowCount() == 49);
-		REQUIRE(native->GetValue(0, 0) == Value::BIGINT(51));
-		REQUIRE(native->GetValue(1, 0) == Value::BIGINT(1));
+		REQUIRE(native->Collection().GetValue(0, 0) == Value::BIGINT(51));
+		REQUIRE(native->Collection().GetValue(1, 0) == Value::BIGINT(1));
 		REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
 	}
 	auto plan = OptimizeLogicalPlanExportQuery(connection, "SELECT i,row_number() OVER () FROM filtered_numbers");
@@ -441,9 +444,9 @@ TEST_CASE("Table SQL export distinguishes pruning hints from row filters",
 			auto native = connection.Query(make_uniq<LogicalPlanStatement>(std::move(plan)));
 			REQUIRE_NO_FAIL(*native);
 			REQUIRE(native->RowCount() == 100);
-			REQUIRE(native->GetValue(0, 0) == Value::BIGINT(0));
+			REQUIRE(native->Collection().GetValue(0, 0) == Value::BIGINT(0));
 			if (numbered) {
-				REQUIRE(native->GetValue(2, 0) == Value::BIGINT(1));
+				REQUIRE(native->Collection().GetValue(2, 0) == Value::BIGINT(1));
 			}
 			REQUIRE_NO_FAIL(connection.Query("SET debug_disable_optimizer=false"));
 			if (!numbered) {

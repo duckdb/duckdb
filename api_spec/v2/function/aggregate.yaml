@@ -13,9 +13,9 @@ handles:
 
   aggregate_function_bind_info:
     description: |
-      A borrowed opaque handle to the arguments supplied to an aggregate function during the query preparation
-      "bind" phase. The "bind" callback receives this handle and can use it to e.g. inspect the arguments given
-      to the function, initialize some constant state and set the return type.
+      A borrowed opaque handle to the result of an aggregate function's "bind" phase. The "bind" callback receives
+      this handle next to a `[[function_bind_info]]`, which gives access to the arguments, the user data and the
+      bind data, and can use it to set the return type of the call site being bound.
 
   aggregate_function_size_info:
     description: |
@@ -59,8 +59,13 @@ callbacks:
   aggregate_function_bind_callback:
     parameters:
       info:
+        type: function_bind_info
+        description: |
+          Borrowed opaque handle providing access to the arguments of the call site being bound, the user data and
+          the bind data.
+      result:
         type: aggregate_function_bind_info
-        description: Borrowed opaque handle providing access to the information available to the callback.
+        description: Borrowed opaque handle to set the return type of the call site being bound through.
       context:
         type: context
         description: Borrowed handle to the context of the query currently executing the callback.
@@ -228,8 +233,8 @@ functions:
     description: |
       Returns the function's signature so it can be configured.
 
-      Add parameters with `[[function_signature_add_parameter]]`, set a variadic tail with
-      `[[function_signature_set_varargs]]` and set the return type with `[[function_signature_set_return_type]]`.
+      Add parameters with `[[function_signature_add_parameter]]` and set the return type with
+      `[[function_signature_set_return_type]]`.
       The signature is modified in place; the function must be given a signature with a return type before
       registration.
     parameters:
@@ -256,7 +261,7 @@ functions:
       Sets arbitrary user data on the aggregate function.
 
       Associates an opaque pointer with the function, retrievable from each callback via its user data accessor
-      (e.g. `[[aggregate_function_bind_get_user_data]]`, `[[aggregate_function_update_get_user_data]]`, etc.).
+      (e.g. `[[function_bind_get_user_data]]`, `[[aggregate_function_update_get_user_data]]`, etc.).
       The opaque handle bundles the pointer with an optional destructor, invoked when the data is no longer
       needed.
     parameters:
@@ -305,9 +310,10 @@ functions:
     description: |
       Sets the optional bind callback of the aggregate function.
 
-      The bind callback is invoked during query planning for each call site of the function. It can inspect the
-      argument types and constant argument values, set a concrete return type, and set "bind data" that is
-      shared with the other callbacks.
+      The bind callback is invoked during query planning for each call site of the function. Through its
+      `[[function_bind_info]]` it can inspect the argument types and constant argument values and set "bind data"
+      that is shared with the other callbacks. Through its `[[aggregate_function_bind_info]]` it can set a concrete
+      return type.
     parameters:
       function:
         type: aggregate_function
@@ -452,125 +458,6 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Bind Callback Functions
   #---------------------------------------------------------------------------------------------------------------------
-  aggregate_function_bind_get_user_data:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
-    description: Retrieves the user data set via `[[aggregate_function_set_user_data]]`.
-    parameters:
-      info:
-        type: aggregate_function_bind_info
-        description: The bind info handle.
-      data:
-        type: void
-        indirection: 2
-        kind: OUT
-        description: Receives the user data pointer, or null if none was set.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  aggregate_function_bind_set_bind_data:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-28" ]
-    description: |
-      Sets the function's "bind data" from the bind callback.
-
-      The bind data is stored with the bound call site and retrievable from the other callbacks.
-      The opaque handle bundles the pointer with an optional destructor, invoked when the bind data is no
-      longer needed, and an optional equality callback used when comparing two bound call sites; without one,
-      pointer equality is used.
-    parameters:
-      info:
-        type: aggregate_function_bind_info
-        description: The bind info handle.
-      data:
-        type: opaque
-        indirection: 1
-        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  aggregate_function_bind_get_arg_count:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: |
-      Returns the number of arguments of the call site being bound.
-
-      Variadic tail arguments are included. Valid indices for `[[aggregate_function_bind_get_arg_type]]` and
-      `[[aggregate_function_bind_get_arg_value]]` are [0, count).
-    parameters:
-      info:
-        type: aggregate_function_bind_info
-        description: The bind info handle.
-      count:
-        type: idx
-        indirection: 1
-        kind: OUT
-        description: Receives the number of arguments.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  aggregate_function_bind_get_arg_type:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: |
-      Retrieves the type of the argument at the given index.
-
-      Fails if the index is out of bounds. The returned type is owned by the caller and must be destroyed
-      via `[[logical_type_destroy]]`.
-    parameters:
-      info:
-        type: aggregate_function_bind_info
-        description: The bind info handle.
-      index:
-        type: idx
-        description: The index of the argument to get the type of.
-      type:
-        type: logical_type
-        indirection: 1
-        kind: OUT
-        description: Receives the argument type. Owned by the caller; destroy via `[[logical_type_destroy]]`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  aggregate_function_bind_get_arg_value:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: |
-      Folds the argument at the given index to a constant value.
-
-      The argument must be foldable to a constant (e.g. a literal or a constant expression); otherwise the call
-      fails with an error, as it does when the index is out of bounds. The resulting value may be NULL.
-      The returned value is owned by the caller and must be destroyed via `[[value_destroy]]`.
-    parameters:
-      info:
-        type: aggregate_function_bind_info
-        description: The bind info handle.
-      index:
-        type: idx
-        description: The index of the argument to extract a constant value from.
-      value:
-        type: value
-        indirection: 1
-        kind: OUT
-        description: Receives the constant value. Owned by the caller; destroy via `[[value_destroy]]`.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
   aggregate_function_bind_set_return_type:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-28" ]
@@ -806,18 +693,35 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-28" ]
     description: |
-      Returns how many argument vectors this invocation carries: one per
-      argument of the call, variadic tail arguments included. Valid indices
-      for `[[aggregate_function_update_get_arg]]` are [0, count).
+      Returns how many argument vectors this invocation carries, split into the four parts of the argument list.
+
+      The parts and their order are those the bind callback saw through `[[function_bind_get_arg_count]]`, and the
+      vectors are at the same indices. Valid indices for `[[aggregate_function_update_get_arg]]` are [0, the sum of the four
+      counts). Every out-parameter may be NULL, in which case nothing is written to it.
     parameters:
       info:
         type: aggregate_function_update_info
         description: The update info handle.
-      count:
-        type: u32
+      positional_fixed:
+        type: idx
         indirection: 1
         kind: OUT
-        description: Receives the number of argument vectors.
+        description: Optional. Receives the number of positional-only and standard parameters.
+      positional_variadic:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Optional. Receives the number of arguments `*args` received, 0 when the signature has none.
+      named_fixed:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Optional. Receives the number of named-only parameters.
+      named_variadic:
+        type: idx
+        indirection: 1
+        kind: OUT
+        description: Optional. Receives the number of arguments `**kwargs` received, 0 when the signature has none.
       err:
         type: error_info
         indirection: 1
@@ -830,16 +734,16 @@ functions:
     description: |
       Retrieves the argument vector at the given index.
 
-      The vector holds the argument's values for the current batch; use
-      `[[aggregate_function_update_get_row_count]]` for the number of rows. Fails if the index is out of
-      bounds. Borrowed; valid only for the duration of the callback.
+      The index is the one the bind callback used for the argument, e.g. the index `[[function_bind_get_arg_index]]`
+      found for a name. The vector holds the argument's values for the current batch; use `[[aggregate_function_update_get_row_count]]` for the
+      number of rows. Fails if the index is out of bounds. Borrowed; valid only for the duration of the callback.
     parameters:
       info:
         type: aggregate_function_update_info
         description: The update info handle.
       index:
-        type: u32
-        description: The index of the argument vector to get.
+        type: idx
+        description: The index of the argument.
       vector:
         type: vector
         indirection: 1
