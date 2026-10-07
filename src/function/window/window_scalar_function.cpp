@@ -104,8 +104,10 @@ void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result
 		if (!input_types.empty()) {
 			inputs.Initialize(allocator, input_types);
 			input_exec.Execute(args, inputs);
+			inputs.CheckCardinality(count);
+		} else {
+			inputs.SetCardinalityUnsafe(count);
 		}
-		inputs.SetCardinality(count);
 
 		//	Rows rejected by the filter leave their state empty
 		auto update = aggr.function.GetCallbacks().GetStateUpdateCallback();
