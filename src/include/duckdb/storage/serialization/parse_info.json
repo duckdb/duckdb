@@ -1096,5 +1096,32 @@
         "required_until": "v2.0.0"
       }
     ]
+  },
+  {
+    "class": "ExtensionAlterTableInfo",
+    "base": "AlterTableInfo",
+    "enum": "EXTENSION_ALTER_STMT",
+    "members": [
+      {
+        "id": 400,
+        "name": "alter_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "payload_expression",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 402,
+        "name": "payload",
+        "type": "Value"
+      },
+      {
+        "id": 403,
+        "name": "action_sql",
+        "type": "string"
+      }
+    ]
   }
 ]

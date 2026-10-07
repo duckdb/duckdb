@@ -163,6 +163,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::DROP_NOT_NULL:
 		result = DropNotNullInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::EXTENSION_ALTER_STMT:
+		result = ExtensionAlterTableInfo::Deserialize(deserializer);
+		break;
 	case AlterTableType::FOREIGN_KEY_CONSTRAINT:
 		result = AlterForeignKeyInfo::Deserialize(deserializer);
 		break;
@@ -532,6 +535,23 @@ unique_ptr<AlterTableInfo> DropNotNullInfo::Deserialize(Deserializer &deserializ
 	if (result->column_path.empty()) {
 		result->column_path.push_back(std::move(column_name));
 	}
+	return std::move(result);
+}
+
+void ExtensionAlterTableInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<string>(400, "alter_name", alter_name);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(401, "payload_expression", payload_expression);
+	serializer.WriteProperty<Value>(402, "payload", payload);
+	serializer.WritePropertyWithDefault<string>(403, "action_sql", action_sql);
+}
+
+unique_ptr<AlterTableInfo> ExtensionAlterTableInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ExtensionAlterTableInfo>(new ExtensionAlterTableInfo());
+	deserializer.ReadPropertyWithDefault<string>(400, "alter_name", result->alter_name);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(401, "payload_expression", result->payload_expression);
+	deserializer.ReadProperty<Value>(402, "payload", result->payload);
+	deserializer.ReadPropertyWithDefault<string>(403, "action_sql", result->action_sql);
 	return std::move(result);
 }
 

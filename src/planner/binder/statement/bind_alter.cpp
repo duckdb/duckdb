@@ -13,7 +13,9 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_alter.hpp"
@@ -100,6 +102,19 @@ static void BindAlterTypes(Binder &binder, AlterStatement &stmt) {
 				alter_column_info.expression = make_uniq<CastExpression>(
 				    alter_column_info.target_type, make_uniq<ColumnRefExpression>(alter_column_info.column_path));
 			}
+		} break;
+		case AlterTableType::EXTENSION_ALTER_STMT: {
+			auto &extension_info = table_info.Cast<ExtensionAlterTableInfo>();
+			if (!extension_info.payload_expression) {
+				break;
+			}
+			ConstantBinder payload_binder(binder, binder.context, "ALTER TABLE payload");
+			auto bound_payload = payload_binder.Bind(extension_info.payload_expression);
+			if (bound_payload->HasParameter()) {
+				throw NotImplementedException("ALTER TABLE \"%s\" cannot have parameters", extension_info.alter_name);
+			}
+			extension_info.payload = ExpressionExecutor::EvaluateScalar(binder.context, *bound_payload, true);
+			extension_info.payload_expression.reset();
 		} break;
 		default:
 			break;

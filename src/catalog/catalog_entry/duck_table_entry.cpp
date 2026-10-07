@@ -384,6 +384,11 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 	case AlterTableType::RESET_TABLE_OPTIONS: {
 		throw NotImplementedException("RESET (<options>) is not supported for DuckDB tables");
 	}
+	case AlterTableType::EXTENSION_ALTER_STMT: {
+		auto &extension_info = table_info.Cast<ExtensionAlterTableInfo>();
+		throw NotImplementedException("ALTER TABLE action \"%s\" is not supported for DuckDB tables",
+		                              extension_info.alter_name);
+	}
 	default:
 		throw InternalException("Unrecognized alter table type!");
 	}

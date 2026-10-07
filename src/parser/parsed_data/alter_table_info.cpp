@@ -789,4 +789,45 @@ string ResetTableOptionsInfo::ToString() const {
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// ExtensionAlterTableInfo
+//===--------------------------------------------------------------------===//
+ExtensionAlterTableInfo::ExtensionAlterTableInfo() : AlterTableInfo(AlterTableType::EXTENSION_ALTER_STMT) {
+}
+
+ExtensionAlterTableInfo::ExtensionAlterTableInfo(const AlterEntryData &data, string alter_name_p,
+                                                 unique_ptr<ParsedExpression> payload_expression_p, string action_sql_p)
+    : AlterTableInfo(AlterTableType::EXTENSION_ALTER_STMT, data), alter_name(std::move(alter_name_p)),
+      payload_expression(std::move(payload_expression_p)), action_sql(std::move(action_sql_p)) {
+}
+
+ExtensionAlterTableInfo::~ExtensionAlterTableInfo() {
+}
+
+const Value &ExtensionAlterTableInfo::GetPayload() const {
+	if (payload_expression) {
+		throw InternalException("The payload of ALTER TABLE action \"%s\" has not been bound", alter_name);
+	}
+	return payload;
+}
+
+unique_ptr<AlterInfo> ExtensionAlterTableInfo::Copy() const {
+	auto result = make_uniq<ExtensionAlterTableInfo>(
+	    GetAlterEntryData(), alter_name, payload_expression ? payload_expression->Copy() : nullptr, action_sql);
+	result->payload = payload;
+	return std::move(result);
+}
+
+string ExtensionAlterTableInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += "IF EXISTS ";
+	}
+	result += GetQualifiedName().ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	result += " ";
+	result += action_sql;
+	result += ";";
+	return result;
+}
+
 } // namespace duckdb
