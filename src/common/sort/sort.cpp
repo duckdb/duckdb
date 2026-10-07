@@ -2,10 +2,10 @@
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/main/settings.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/function/create_sort_key.hpp"
