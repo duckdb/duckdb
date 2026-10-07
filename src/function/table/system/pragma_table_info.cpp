@@ -167,7 +167,7 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 		PragmaShowHelper::GetSchema(return_types, names);
 	}
 
-	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
+	auto qname = QualifiedName::ParseNonEmpty(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
 	CatalogEntryRetriever retriever(context);

@@ -1,23 +1,32 @@
 # name: test/sql/catalog/sequence/sequence_empty_name.test
-# description: Sequence functions with an empty sequence name raise a catalog error
+# description: Functions that parse a qualified name from a string reject empty identifiers
 # group: [sequence]
 
-statement error
-SELECT nextval('');
-----
-Catalog Error
+foreach name '' '.' '.s' 'main..s' '""'
 
 statement error
-SELECT currval('');
+SELECT nextval({name});
 ----
-Catalog Error
+Zero-length
 
 statement error
-SELECT setval('', 1);
+SELECT currval({name});
 ----
-Catalog Error
+Zero-length
 
 statement error
-CREATE TABLE t(i INT DEFAULT nextval(''));
+SELECT setval({name}, 1);
 ----
-Catalog Error
+Zero-length
+
+statement error
+CREATE TABLE t(i INT DEFAULT nextval({name}));
+----
+Zero-length
+
+statement error
+SELECT * FROM pragma_table_info({name});
+----
+Zero-length
+
+endloop

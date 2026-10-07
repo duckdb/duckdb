@@ -140,6 +140,8 @@ struct QualifiedName {
 	//! Parse the (optional) schema and a name from a string in the format of e.g. "schema"."table"; if there is no dot
 	//! the schema will be set to INVALID_SCHEMA
 	static QualifiedName Parse(const string &input);
+	//! Parse a qualified name, throwing if the name or any of its components is empty
+	static QualifiedName ParseNonEmpty(const string &input);
 	static vector<Identifier> ParseComponents(const string &input);
 	string ToString(QualifiedNameToStringMode mode = QualifiedNameToStringMode::DEFAULT) const;
 	//! Render only the qualification (every component before the name), with a trailing "." after each component

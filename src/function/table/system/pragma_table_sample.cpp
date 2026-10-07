@@ -33,7 +33,7 @@ struct DuckDBTableSampleOperatorData : public GlobalTableFunctionState {
 static unique_ptr<FunctionData> DuckDBTableSampleBind(ClientContext &context, TableFunctionBindInput &input,
                                                       vector<LogicalType> &return_types, vector<Identifier> &names) {
 	// look up the table name in the catalog
-	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
+	auto qname = QualifiedName::ParseNonEmpty(input.inputs[0].GetValue<string>());
 	CatalogEntryRetriever retriever(context);
 	qname = Binder::BindTableName(retriever, qname);
 

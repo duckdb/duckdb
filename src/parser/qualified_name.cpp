@@ -111,6 +111,19 @@ QualifiedName QualifiedName::Parse(const string &input) {
 	return FromPath(ParseComponents(input));
 }
 
+QualifiedName QualifiedName::ParseNonEmpty(const string &input) {
+	auto components = ParseComponents(input);
+	if (components.empty()) {
+		throw ParserException("Zero-length identifier in qualified name! (input: %s)", input);
+	}
+	for (auto &component : components) {
+		if (component.empty()) {
+			throw ParserException("Zero-length identifier in qualified name! (input: %s)", input);
+		}
+	}
+	return FromPath(std::move(components));
+}
+
 QualifiedColumnName::QualifiedColumnName() {
 }
 QualifiedColumnName::QualifiedColumnName(Identifier column_p) : column(std::move(column_p)) {

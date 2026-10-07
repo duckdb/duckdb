@@ -248,8 +248,7 @@ QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const Qual
 	auto resolved = ResolveCatalog(retriever, name, false);
 	auto &path = resolved.Path();
 	if (path.size() < 2) {
-		// an empty name - there is no catalog or schema to resolve
-		return QualifiedName(Identifier(), Identifier(), resolved.Name());
+		throw InternalException("Binder::BindTableName called with an empty name");
 	}
 	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
 	if (schema_path.size() <= 1) {

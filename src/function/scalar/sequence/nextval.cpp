@@ -47,7 +47,7 @@ SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, const Qual
 }
 
 SequenceCatalogEntry &BindSequence(Binder &binder, const Identifier &name) {
-	return BindSequence(binder, QualifiedName::Parse(name.GetIdentifierName()));
+	return BindSequence(binder, QualifiedName::ParseNonEmpty(name.GetIdentifierName()));
 }
 
 struct NextValLocalState : public FunctionLocalState {
