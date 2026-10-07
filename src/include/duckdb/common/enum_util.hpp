@@ -292,6 +292,8 @@ enum class HTTPTransportReusePolicy : uint8_t;
 
 enum class IdentifierCaseMode : uint8_t;
 
+enum class IdentifierConversionPolicy : uint8_t;
+
 enum class IndexAppendMode : uint8_t;
 
 enum class IndexBindState : uint8_t;
@@ -1054,6 +1056,9 @@ const char* EnumUtil::ToChars<HTTPTransportReusePolicy>(HTTPTransportReusePolicy
 
 template<>
 const char* EnumUtil::ToChars<IdentifierCaseMode>(IdentifierCaseMode value);
+
+template<>
+const char* EnumUtil::ToChars<IdentifierConversionPolicy>(IdentifierConversionPolicy value);
 
 template<>
 const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
@@ -2003,6 +2008,9 @@ HTTPTransportReusePolicy EnumUtil::FromString<HTTPTransportReusePolicy>(const ch
 
 template<>
 IdentifierCaseMode EnumUtil::FromString<IdentifierCaseMode>(const char *value);
+
+template<>
+IdentifierConversionPolicy EnumUtil::FromString<IdentifierConversionPolicy>(const char *value);
 
 template<>
 IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
