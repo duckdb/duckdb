@@ -30,17 +30,23 @@ static int64_t ImpalaTimestampToMicroseconds(const Int96 &impala_timestamp) {
 }
 
 static int64_t ImpalaTimestampToNanoseconds(const Int96 &impala_timestamp) {
+	int64_t result;
 	int64_t days_since_epoch = ImpalaTimestampToDays(impala_timestamp);
 	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
 	int64_t day_nanoseconds;
-	if (!TryMultiplyOperator::Operation(days_since_epoch, NANOSECONDS_PER_DAY, day_nanoseconds)) {
-		// out of range for TIMESTAMP_NS - saturate to +/- infinity
-		return days_since_epoch < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
+	if (days_since_epoch < 0) {
+		//	Don't saturate the minimum value by going past it
+		if (!TryMultiplyOperator::Operation(days_since_epoch+1, NANOSECONDS_PER_DAY, day_nanoseconds) ||
+			!TryAddOperator::Operation(day_nanoseconds, nanoseconds-NANOSECONDS_PER_DAY, result)) {
+			// out of range for TIMESTAMP_NS - saturate to -infinity
+			return timestamp_ns_t::ninfinity().value;
+		}
+		return result;
 	}
-	int64_t result;
-	if (!TryAddOperator::Operation(day_nanoseconds, nanoseconds, result)) {
-		// out of range for TIMESTAMP_NS - saturate to +/- infinity
-		return day_nanoseconds < 0 ? timestamp_ns_t::ninfinity().value : timestamp_ns_t::infinity().value;
+	if (!TryMultiplyOperator::Operation(days_since_epoch, NANOSECONDS_PER_DAY, day_nanoseconds) ||
+		!TryAddOperator::Operation(day_nanoseconds, nanoseconds, result)) {
+		// out of range for TIMESTAMP_NS - saturate to +infinity
+		return timestamp_ns_t::infinity().value;
 	}
 	return result;
 }

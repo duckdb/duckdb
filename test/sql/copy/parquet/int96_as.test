@@ -189,6 +189,18 @@ SELECT lo::VARCHAR, hi::VARCHAR FROM read_parquet('{TEST_DIR}/int96_full_range.p
 ----
 -infinity	infinity
 
+statement ok
+COPY (
+	SELECT TIMESTAMP '1677-09-21 12:00:00' AS ts
+) TO '{TEST_DIR}/int96_lower_bound.parquet'
+	(FORMAT PARQUET, write_timestamp_as_int96 true);
+
+query I
+SELECT ts
+FROM read_parquet('{TEST_DIR}/int96_lower_bound.parquet', int96_as='timestamp_ns');
+----
+1677-09-21 12:00:00
+
 # the struct mode is the only one that reads the full 0001-9999 range intact
 query IIII
 SELECT lo['date'], lo['time'], hi['date'], hi['time']
