@@ -94,7 +94,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 			continue;
 		}
 		DuckDBSettingValue value;
-		auto scope = option->set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
+		auto scope = DBConfig::GetSetters(*option).set_global ? SettingScope::GLOBAL : SettingScope::LOCAL;
 		value.name = option->name;
 		if (option->get_setting) {
 			value.value = option->get_setting(context);

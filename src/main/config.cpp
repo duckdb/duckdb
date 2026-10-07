@@ -37,26 +37,22 @@ DebugVerificationMode DBConfigOptions::global_verification_mode = DebugVerificat
 #define DUCKDB_SETTING_CALLBACK(_PARAM)                                                                                \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, nullptr,             \
-		    _PARAM::Scope, _PARAM::DefaultValue, _PARAM::OnSet, _PARAM::SettingIndex, _PARAM::IsDebug,                 \
-		    _PARAM::IsDeprecated                                                                                       \
+		    _PARAM::Scope, _PARAM::DefaultValue, nullptr, _PARAM::SettingIndex, _PARAM::IsDebug, _PARAM::IsDeprecated  \
 	}
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
-		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
-		    nullptr, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx(),                \
-		    _PARAM::IsDebug, _PARAM::IsDeprecated                                                                      \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, _PARAM::GetSetting,  \
+		    SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx(), _PARAM::IsDebug, _PARAM::IsDeprecated       \
 	}
 #define DUCKDB_LOCAL(_PARAM)                                                                                           \
 	{                                                                                                                  \
-		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal,  \
-		    _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx(), _PARAM::IsDebug,        \
-		    _PARAM::IsDeprecated                                                                                       \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, _PARAM::GetSetting,  \
+		    SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx(), _PARAM::IsDebug, _PARAM::IsDeprecated       \
 	}
 #define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
 	{                                                                                                                  \
-		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal,                     \
-		    _PARAM::ResetGlobal, _PARAM::ResetLocal, _PARAM::GetSetting, SettingScopeTarget::INVALID, nullptr,         \
-		    nullptr, optional_idx(), _PARAM::IsDebug, _PARAM::IsDeprecated                                             \
+		_PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, nullptr, nullptr, nullptr, _PARAM::GetSetting,  \
+		    SettingScopeTarget::INVALID, nullptr, nullptr, optional_idx(), _PARAM::IsDebug, _PARAM::IsDeprecated       \
 	}
 #define FINAL_SETTING                                                                                                  \
 	{                                                                                                                  \
@@ -264,6 +260,219 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_SETTING(ZstdMinStringLengthSetting),
     FINAL_SETTING};
 
+#define SETTERS_SETTING(_PARAM)                                                                                        \
+	{ nullptr, nullptr, nullptr, nullptr, nullptr }
+#define SETTERS_SETTING_CALLBACK(_PARAM)                                                                               \
+	{ nullptr, nullptr, nullptr, nullptr, _PARAM::OnSet }
+#define SETTERS_GLOBAL(_PARAM)                                                                                         \
+	{ _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal, nullptr, nullptr }
+#define SETTERS_LOCAL(_PARAM)                                                                                          \
+	{ nullptr, _PARAM::SetLocal, nullptr, _PARAM::ResetLocal, nullptr }
+#define SETTERS_GLOBAL_LOCAL(_PARAM)                                                                                   \
+	{ _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::ResetGlobal, _PARAM::ResetLocal, nullptr }
+#define FINAL_SETTERS                                                                                                  \
+	{ nullptr, nullptr, nullptr, nullptr, nullptr }
+
+static const ConfigurationOptionSetters internal_option_setters[] = {
+    SETTERS_GLOBAL(AccessModeSetting),
+    SETTERS_LOCAL(ActiveGrammarExtensionsSetting),
+    SETTERS_SETTING_CALLBACK(AllocatorBackgroundThreadsSetting),
+    SETTERS_GLOBAL(AllocatorBulkDeallocationFlushThresholdSetting),
+    SETTERS_SETTING_CALLBACK(AllocatorFlushThresholdSetting),
+    SETTERS_SETTING_CALLBACK(AllowCommunityExtensionsSetting),
+    SETTERS_SETTING_CALLBACK(AllowExtensionRepositoriesSetting),
+    SETTERS_SETTING(AllowExtensionsMetadataMismatchSetting),
+    SETTERS_SETTING_CALLBACK(AllowParserOverrideExtensionSetting),
+    SETTERS_GLOBAL(AllowPersistentSecretsSetting),
+    SETTERS_SETTING_CALLBACK(AllowUnredactedSecretsSetting),
+    SETTERS_SETTING_CALLBACK(AllowUnsignedExtensionsSetting),
+    SETTERS_GLOBAL(AllowedConfigsSetting),
+    SETTERS_GLOBAL(AllowedDirectoriesSetting),
+    SETTERS_GLOBAL(AllowedPathsSetting),
+    SETTERS_SETTING(ApproximateJoinOrderThresholdSetting),
+    SETTERS_SETTING(ArrowLargeBufferSizeSetting),
+    SETTERS_SETTING(ArrowLosslessConversionSetting),
+    SETTERS_SETTING(ArrowOutputListViewSetting),
+    SETTERS_SETTING_CALLBACK(ArrowOutputVersionSetting),
+    SETTERS_SETTING(AsofLoopJoinThresholdSetting),
+    SETTERS_GLOBAL(AsyncThreadsSetting),
+    SETTERS_SETTING(AutoCheckpointSkipWalThresholdSetting),
+    SETTERS_SETTING(AutoinstallExtensionRepositorySetting),
+    SETTERS_SETTING(AutoinstallKnownExtensionsSetting),
+    SETTERS_SETTING(AutoloadKnownExtensionsSetting),
+    SETTERS_GLOBAL(BlockAllocatorMemorySetting),
+    SETTERS_SETTING(CacheLocalFilesSetting),
+    SETTERS_SETTING(CatalogErrorMaxSchemasSetting),
+    SETTERS_SETTING_CALLBACK(CheckpointOnDetachSetting),
+    SETTERS_GLOBAL(CheckpointThresholdSetting),
+    SETTERS_LOCAL(CurrentDialectSetting),
+    SETTERS_SETTING_CALLBACK(CurrentTransactionInvalidationPolicySetting),
+    SETTERS_SETTING(CustomExtensionRepositorySetting),
+    SETTERS_GLOBAL(CustomUserAgentSetting),
+    SETTERS_GLOBAL(DebugAbortOnWalFailureSetting),
+    SETTERS_SETTING(DebugAsofIejoinSetting),
+    SETTERS_SETTING_CALLBACK(DebugCheckpointAbortSetting),
+    SETTERS_SETTING(DebugCheckpointScanSleepMsSetting),
+    SETTERS_SETTING(DebugCheckpointSleepMsSetting),
+    SETTERS_GLOBAL(DebugDeltaOnlyVariantEncodingEnabledSetting),
+    SETTERS_SETTING(DebugDisableOptimizerSetting),
+    SETTERS_SETTING(EnableCachingOperatorsSetting),
+    SETTERS_SETTING(DebugEvictionQueueSleepMicroSecondsSetting),
+    SETTERS_SETTING_CALLBACK(ForceBitpackingModeSetting),
+    SETTERS_SETTING(DebugForceCommitFailureSetting),
+    SETTERS_SETTING(DebugForceCommitRevertFailureSetting),
+    SETTERS_SETTING(DebugForceExternalSetting),
+    SETTERS_SETTING(DebugForceFetchRowSetting),
+    SETTERS_GLOBAL(ForceMbedtlsUnsafeSetting),
+    SETTERS_SETTING(DebugForceNoCrossProductSetting),
+    SETTERS_SETTING(ForceUpdateToDelAndInsertSetting),
+    SETTERS_GLOBAL(ForceVariantShredding),
+    SETTERS_SETTING(DebugLocalFileSystemDelayMsSetting),
+    SETTERS_GLOBAL(DebugOrderVerificationSetting),
+    SETTERS_SETTING_CALLBACK(DebugPhysicalTableScanExecutionStrategySetting),
+    SETTERS_SETTING(DebugSkipCheckpointOnCommitSetting),
+    SETTERS_GLOBAL(DebugVerificationModeSetting),
+    SETTERS_SETTING(DebugVerificationProjectionSetting),
+    SETTERS_SETTING(DebugVerifyAggregateStateExportSetting),
+    SETTERS_SETTING(DebugVerifyBlocksSetting),
+    SETTERS_SETTING(DebugVerifyColumnBindingsSetting),
+    SETTERS_SETTING_CALLBACK(DebugVerifyProgressSetting),
+    SETTERS_SETTING(DebugVerifyProgressIgnoreSetting),
+    SETTERS_SETTING(DebugVerifySerializerSetting),
+    SETTERS_SETTING_CALLBACK(DebugVerifyStatementSetting),
+    SETTERS_SETTING(DebugVerifyStatsSetting),
+    SETTERS_SETTING_CALLBACK(DebugVerifyVectorSetting),
+    SETTERS_SETTING_CALLBACK(DebugWindowModeSetting),
+    SETTERS_SETTING_CALLBACK(DefaultBlockSizeSetting),
+    SETTERS_SETTING_CALLBACK(DefaultCollationSetting),
+    SETTERS_SETTING_CALLBACK(DefaultNullOrderSetting),
+    SETTERS_SETTING_CALLBACK(DefaultOrderSetting),
+    SETTERS_GLOBAL(DefaultSecretStorageSetting),
+    SETTERS_SETTING_CALLBACK(DefaultTransactionInvalidationPolicySetting),
+    SETTERS_SETTING_CALLBACK(DelimJoinAsCteSetting),
+    SETTERS_SETTING_CALLBACK(DialectCompatibilityModeSetting),
+    SETTERS_SETTING_CALLBACK(DisableDatabaseInvalidationSetting),
+    SETTERS_SETTING(DisableTimestamptzCastsSetting),
+    SETTERS_GLOBAL(DisabledCompressionMethodsSetting),
+    SETTERS_GLOBAL(DisabledFilesystemsSetting),
+    SETTERS_GLOBAL(DisabledLogTypes),
+    SETTERS_GLOBAL(DisabledOptimizersSetting),
+    SETTERS_SETTING_CALLBACK(DuckDBAPISetting),
+    SETTERS_SETTING(DynamicOrFilterThresholdSetting),
+    SETTERS_SETTING_CALLBACK(EnableExternalAccessSetting),
+    SETTERS_SETTING_CALLBACK(EnableExternalFileCacheSetting),
+    SETTERS_SETTING(EnableFSSTVectorsSetting),
+    SETTERS_SETTING(EnableHTTPMetadataCacheSetting),
+    SETTERS_GLOBAL(EnableLogging),
+    SETTERS_SETTING(EnableMacroDependenciesSetting),
+    SETTERS_SETTING_CALLBACK(EnableObjectCacheSetting),
+    SETTERS_SETTING(EnableOptimisticWriteSetting),
+    SETTERS_SETTING(EnableOptimizerSetting),
+    SETTERS_LOCAL(EnableProfilingSetting),
+    SETTERS_LOCAL(EnableProgressBarSetting),
+    SETTERS_LOCAL(EnableProgressBarPrintSetting),
+    SETTERS_SETTING(EnableViewDependenciesSetting),
+    SETTERS_GLOBAL(EnabledLogTypes),
+    SETTERS_SETTING_CALLBACK(ErrorOnDivisionByZeroSetting),
+    SETTERS_SETTING(ErrorsAsJSONSetting),
+    SETTERS_SETTING_CALLBACK(ExperimentalMetadataReuseSetting),
+    SETTERS_SETTING_CALLBACK(ExplainOutputSetting),
+    SETTERS_GLOBAL(ExtensionDirectoriesSetting),
+    SETTERS_SETTING_CALLBACK(ExtensionDirectorySetting),
+    SETTERS_SETTING_CALLBACK(ExtensionRepositoryDirectorySetting),
+    SETTERS_SETTING_CALLBACK(ExternalFileCacheLocalMaxBlockSizeSetting),
+    SETTERS_SETTING_CALLBACK(ExternalFileCacheRemoteMaxBlockSizeSetting),
+    SETTERS_SETTING_CALLBACK(ExternalFileCacheRemoteMinBlockSizeSetting),
+    SETTERS_SETTING(ExternalFileCacheSpillSetting),
+    SETTERS_SETTING_CALLBACK(ExternalThreadsSetting),
+    SETTERS_SETTING(FileSearchPathSetting),
+    SETTERS_SETTING_CALLBACK(ForceColumnMetadataReuseSetting),
+    SETTERS_SETTING_CALLBACK(ForceCompressionSetting),
+    SETTERS_SETTING_CALLBACK(FsyncModeSetting),
+    SETTERS_SETTING(GeometryMinimumShreddingSize),
+    SETTERS_SETTING_CALLBACK(HomeDirectorySetting),
+    SETTERS_GLOBAL(HTTPClientPoolCapacitySetting),
+    SETTERS_GLOBAL(HTTPProxySetting),
+    SETTERS_SETTING(HTTPProxyPasswordSetting),
+    SETTERS_SETTING(HTTPProxyUsernameSetting),
+    SETTERS_SETTING(IeeeFloatingPointOpsSetting),
+    SETTERS_SETTING(IgnoreUnknownCrsSetting),
+    SETTERS_SETTING(ImmediateTransactionModeSetting),
+    SETTERS_SETTING(IndexScanMaxCountSetting),
+    SETTERS_SETTING_CALLBACK(IndexScanPercentageSetting),
+    SETTERS_SETTING_CALLBACK(InitialColumnSegmentSizeSetting),
+    SETTERS_SETTING(IntegerDivisionSetting),
+    SETTERS_SETTING_CALLBACK(LambdaSyntaxSetting),
+    SETTERS_SETTING(LateMaterializationMaxRowsSetting),
+    SETTERS_SETTING_CALLBACK(LegacyDisableNullTypeSetting),
+    SETTERS_SETTING_CALLBACK(LegacyMetricsFormatSetting),
+    SETTERS_SETTING(LockConfigurationSetting),
+    SETTERS_SETTING_CALLBACK(LogQueryPathSetting),
+    SETTERS_GLOBAL(LoggingLevel),
+    SETTERS_GLOBAL(LoggingMode),
+    SETTERS_GLOBAL(LoggingStorage),
+    SETTERS_SETTING(MaxExecutionTimeSetting),
+    SETTERS_SETTING(MaxExpressionDepthSetting),
+    SETTERS_GLOBAL(MaxMemorySetting),
+    SETTERS_LOCAL(MaxStreamingBufferSizeSetting),
+    SETTERS_GLOBAL(MaxTempDirectorySizeSetting),
+    SETTERS_SETTING(MaxVacuumTasksSetting),
+    SETTERS_SETTING(MergeJoinThresholdSetting),
+    SETTERS_SETTING(NestedLoopJoinThresholdSetting),
+    SETTERS_SETTING_CALLBACK(OldImplicitCastingSetting),
+    SETTERS_LOCAL(OperatorMemoryLimitSetting),
+    SETTERS_SETTING(OrderByNonIntegerLiteralSetting),
+    SETTERS_SETTING_CALLBACK(OrderedAggregateThresholdSetting),
+    SETTERS_SETTING(PartitionedWriteFlushThresholdSetting),
+    SETTERS_SETTING(PartitionedWriteMaxOpenFilesSetting),
+    SETTERS_SETTING(PasswordSetting),
+    SETTERS_SETTING_CALLBACK(PerfectHtThresholdSetting),
+    SETTERS_SETTING_CALLBACK(PinThreadsSetting),
+    SETTERS_SETTING(PivotFilterThresholdSetting),
+    SETTERS_SETTING(PivotLimitSetting),
+    SETTERS_SETTING(PreferRangeJoinsSetting),
+    SETTERS_SETTING_CALLBACK(PreserveIdentifierCaseSetting),
+    SETTERS_SETTING(PreserveInsertionOrderSetting),
+    SETTERS_SETTING_CALLBACK(ProduceArrowStringViewSetting),
+    SETTERS_LOCAL(ProfilingCoverageSetting),
+    SETTERS_LOCAL(ProfilingModeSetting),
+    SETTERS_LOCAL(ProfilingOutputSetting),
+    SETTERS_LOCAL(ProfilingRendererSettingsSetting),
+    SETTERS_LOCAL(ProgressBarTimeSetting),
+    SETTERS_SETTING_CALLBACK(ReadAheadDepthSetting),
+    SETTERS_SETTING(RedactHttpLogsSetting),
+    SETTERS_SETTING_CALLBACK(RegexMatchOperatorSemanticsSetting),
+    SETTERS_SETTING(ScalarSubqueryErrorOnMultipleRowsSetting),
+    SETTERS_SETTING(SchedulerProcessPartialSetting),
+    SETTERS_LOCAL(SchemaSetting),
+    SETTERS_LOCAL(SearchPathSetting),
+    SETTERS_GLOBAL(SecretDirectorySetting),
+    SETTERS_SETTING_CALLBACK(ShowBehaviorSetting),
+    SETTERS_GLOBAL(StandardVectorSizeSetting),
+    SETTERS_SETTING_CALLBACK(StorageBlockPrefetchSetting),
+    SETTERS_GLOBAL(StorageCompatibilityVersionSetting),
+    SETTERS_SETTING_CALLBACK(TableFunctionIdentifierConversionSetting),
+    SETTERS_GLOBAL(TempDirectorySetting),
+    SETTERS_SETTING_CALLBACK(TempFileEncryptionSetting),
+    SETTERS_GLOBAL(ThreadsSetting),
+    SETTERS_LOCAL(TrackedMetricsSetting),
+    SETTERS_SETTING(UsernameSetting),
+    SETTERS_SETTING_CALLBACK(VacuumRebuildIndexesSetting),
+    SETTERS_SETTING_CALLBACK(ValidateExternalFileCacheSetting),
+    SETTERS_SETTING(VariantMinimumShreddingSizeSetting),
+    SETTERS_SETTING(WalAutocheckpointEntriesSetting),
+    SETTERS_SETTING_CALLBACK(WarningsAsErrorsSetting),
+    SETTERS_SETTING(WriteBufferRowGroupCountSetting),
+    SETTERS_GLOBAL(WriteBufferRowGroupMemoryLimitSetting),
+    SETTERS_SETTING(ZstdMinStringLengthSetting),
+    FINAL_SETTERS};
+
+const ConfigurationOptionSetters &DBConfig::GetSetters(const ConfigurationOption &option) {
+	auto index = static_cast<idx_t>(&option - internal_options);
+	D_ASSERT(index < GetOptionCount());
+	return internal_option_setters[index];
+}
+
 static const ConfigurationAlias setting_aliases[] = {
     DUCKDB_SETTING_ALIAS("__delta_only_variant_encoding_enabled", DebugDeltaOnlyVariantEncodingEnabledSetting),
     DUCKDB_SETTING_ALIAS("enable_caching_operators", EnableCachingOperatorsSetting),
@@ -395,19 +604,19 @@ void DBConfig::SetOption(optional_ptr<DatabaseInstance> db, const ConfigurationO
 	Value input = value.DefaultCastAs(ParseLogicalType(option.parameter_type));
 	if (option.default_value) {
 		// generic option
-		if (option.set_callback) {
+		if (GetSetters(option).set_callback) {
 			SettingCallbackInfo info(*this, db);
-			option.set_callback(info, input);
+			GetSetters(option).set_callback(info, input);
 		}
 		user_settings.SetUserSetting(option.setting_idx.GetIndex(), std::move(input));
 		return;
 	}
-	if (!option.set_global) {
+	if (!GetSetters(option).set_global) {
 		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	lock_guard<mutex> guard(config_lock);
-	D_ASSERT(option.reset_global);
-	option.set_global(db.get(), *this, input);
+	D_ASSERT(GetSetters(option).reset_global);
+	GetSetters(option).set_global(db.get(), *this, input);
 }
 
 void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const ConfigurationOption &option) {
@@ -416,12 +625,12 @@ void DBConfig::ResetOption(optional_ptr<DatabaseInstance> db, const Configuratio
 		user_settings.ClearSetting(option.setting_idx.GetIndex());
 		return;
 	}
-	if (!option.reset_global) {
+	if (!GetSetters(option).reset_global) {
 		throw InternalException("Could not reset option \"%s\" as a global option", option.name);
 	}
 	lock_guard<mutex> guard(config_lock);
-	D_ASSERT(option.set_global);
-	option.reset_global(db.get(), *this);
+	D_ASSERT(GetSetters(option).set_global);
+	GetSetters(option).reset_global(db.get(), *this);
 }
 
 void DBConfig::SetOption(idx_t setting_index, Value value) {

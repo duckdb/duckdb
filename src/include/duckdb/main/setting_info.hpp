@@ -99,6 +99,16 @@ struct ConfigurationOption {
 	bool is_deprecated = false;
 };
 
+//! The mutating callbacks of a setting, kept apart from ConfigurationOption so that looking a setting up by name does
+//! not reference them
+struct ConfigurationOptionSetters {
+	set_global_function_t set_global;
+	set_local_function_t set_local;
+	reset_global_function_t reset_global;
+	reset_local_function_t reset_local;
+	set_callback_t set_callback;
+};
+
 struct ConfigurationAlias {
 	const char *alias;
 	//! The name of the setting this alias refers to

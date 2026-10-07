@@ -51,12 +51,12 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 	SetScope variable_scope = PhysicalSet::GetSettingScope(*option, scope);
 
 	if (option->default_value) {
-		if (option->set_callback) {
+		if (DBConfig::GetSetters(*option).set_callback) {
 			SettingCallbackInfo info(context.client, variable_scope);
 			info.is_reset = true;
 			auto parameter_type = DBConfig::ParseLogicalType(option->parameter_type);
 			Value reset_val = Value(option->default_value).CastAs(context.client, parameter_type);
-			option->set_callback(info, reset_val);
+			DBConfig::GetSetters(*option).set_callback(info, reset_val);
 		}
 		auto setting_index = option->setting_idx.GetIndex();
 		if (variable_scope == SetScope::SESSION) {
@@ -69,7 +69,7 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 	}
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
-		if (!option->set_global) {
+		if (!DBConfig::GetSetters(*option).set_global) {
 			throw CatalogException("option \"%s\" cannot be reset globally", name.ToStdString());
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
@@ -77,10 +77,10 @@ SourceResultType PhysicalReset::GetDataInternal(ExecutionContext &context, DataC
 		break;
 	}
 	case SetScope::SESSION:
-		if (!option->reset_local) {
+		if (!DBConfig::GetSetters(*option).reset_local) {
 			throw CatalogException("option \"%s\" cannot be reset locally", name.ToStdString());
 		}
-		option->reset_local(context.client);
+		DBConfig::GetSetters(*option).reset_local(context.client);
 		break;
 	default:
 		throw InternalException("Unsupported SetScope for variable");

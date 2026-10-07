@@ -28,10 +28,10 @@ void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &
 
 SetScope PhysicalSet::GetSettingScope(const ConfigurationOption &option, SetScope variable_scope) {
 	if (variable_scope == SetScope::AUTOMATIC) {
-		if (option.set_local) {
+		if (DBConfig::GetSetters(option).set_local) {
 			return SetScope::SESSION;
 		}
-		if (option.set_global) {
+		if (DBConfig::GetSetters(option).set_global) {
 			return SetScope::GLOBAL;
 		}
 		// generic setting
@@ -78,9 +78,9 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 
 	Value input_val = value.CastAs(context, DBConfig::ParseLogicalType(option->parameter_type));
 	if (option->default_value) {
-		if (option->set_callback) {
+		if (DBConfig::GetSetters(*option).set_callback) {
 			SettingCallbackInfo info(context, variable_scope);
-			option->set_callback(info, input_val);
+			DBConfig::GetSetters(*option).set_callback(info, input_val);
 		}
 		auto setting_index = option->setting_idx.GetIndex();
 		SetGenericVariable(context, setting_index, variable_scope, std::move(input_val));
@@ -88,7 +88,7 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 	}
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
-		if (!option->set_global) {
+		if (!DBConfig::GetSetters(*option).set_global) {
 			throw CatalogException("option %s cannot be set globally", name);
 		}
 		auto &db = DatabaseInstance::GetDatabase(context);
@@ -96,10 +96,10 @@ void PhysicalSet::SetVariable(ClientContext &context, const Identifier &name, Se
 		break;
 	}
 	case SetScope::SESSION:
-		if (!option->set_local) {
+		if (!DBConfig::GetSetters(*option).set_local) {
 			throw CatalogException("option %s cannot be set locally", name);
 		}
-		option->set_local(context, input_val);
+		DBConfig::GetSetters(*option).set_local(context, input_val);
 		break;
 	default:
 		throw InternalException("Unsupported SetScope for variable");

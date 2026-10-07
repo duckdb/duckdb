@@ -222,6 +222,7 @@ public:
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
 	DUCKDB_API static vector<ConfigurationAlias> GetAliases();
 	DUCKDB_API static idx_t GetOptionCount();
+	DUCKDB_API static const ConfigurationOptionSetters &GetSetters(const ConfigurationOption &option);
 	DUCKDB_API static idx_t GetAliasCount();
 	DUCKDB_API static vector<Identifier> GetOptionNames();
 	DUCKDB_API static bool IsInMemoryDatabase(const char *database_path);
