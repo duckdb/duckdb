@@ -425,6 +425,7 @@ BoundStatement Binder::Bind(TableFunctionRef &ref) {
 
 		auto binder = Binder::CreateBinder(context, this);
 		binder->SetCanContainNulls(true);
+		binder->AddBoundTableMacro(macro_func);
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
 		BoundStatement query;
