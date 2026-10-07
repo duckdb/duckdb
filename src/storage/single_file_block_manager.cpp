@@ -1338,6 +1338,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.iteration = ++iteration_count;
 
 	set<block_id_t> all_free_blocks = free_list;
+	all_free_blocks.insert(free_blocks_in_use.begin(), free_blocks_in_use.end());
 	auto checkpoint_freed_blocks = modified_blocks;
 	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);
