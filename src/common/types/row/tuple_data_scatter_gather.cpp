@@ -1774,7 +1774,11 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 // Casts the rows at target_sel in cast_vector to the target type - only the rows at target_sel are written
 static void TupleDataCastToArray(Vector &cast_vector, Vector &target, const SelectionVector &target_sel,
                                  const idx_t scan_count) {
-	bool identity = true;
+	if (scan_count == 0) {
+		return;
+	}
+	// the cast overwrites the validity of the whole target, so it can only be used if no NULLs were set
+	bool identity = FlatVector::Validity(target).CannotHaveNull();
 	for (idx_t i = 0; i < scan_count && identity; i++) {
 		identity = target_sel.get_index(i) == i;
 	}
