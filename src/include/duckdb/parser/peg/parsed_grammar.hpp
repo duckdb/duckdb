@@ -54,6 +54,8 @@ public:
 
 	DUCKDB_API static ParsedGrammar Parse(const string &grammar);
 	DUCKDB_API static ParsedGrammar CreateDefault();
+	//! The default grammar without its transform rules, for callers that only read the grammar
+	DUCKDB_API static ParsedGrammar ParseDefault();
 
 	DUCKDB_API optional_ptr<const ParsedGrammarRule> GetRule(const string &rule_name) const;
 	DUCKDB_API void AddRule(const string &rule_definition,

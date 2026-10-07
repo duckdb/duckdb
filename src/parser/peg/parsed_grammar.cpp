@@ -39,6 +39,12 @@ ParsedGrammar ParsedGrammar::Parse(const string &grammar) {
 }
 
 ParsedGrammar ParsedGrammar::CreateDefault() {
+	auto result = ParseDefault();
+	PEGTransformerFactory::RegisterDefaultTransforms(result);
+	return result;
+}
+
+ParsedGrammar ParsedGrammar::ParseDefault() {
 #ifdef PEG_PARSER_SOURCE_FILE
 	std::ifstream t(PEG_PARSER_SOURCE_FILE);
 	std::stringstream buffer;
@@ -49,9 +55,7 @@ ParsedGrammar ParsedGrammar::CreateDefault() {
 #else
 	const char *grammar = const_char_ptr_cast(INLINED_PEG_GRAMMAR);
 #endif
-	auto result = Parse(grammar);
-	PEGTransformerFactory::RegisterDefaultTransforms(result);
-	return result;
+	return Parse(grammar);
 }
 
 optional_ptr<const ParsedGrammarRule> ParsedGrammar::GetRule(const string &rule_name) const {

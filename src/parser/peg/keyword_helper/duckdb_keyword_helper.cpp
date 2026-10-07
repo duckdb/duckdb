@@ -3,9 +3,15 @@
 
 namespace duckdb {
 
-DuckDBKeywordHelper::DuckDBKeywordHelper()
-    : keyword_maps(InitializeKeywordMaps()),
-      literal_table(ParsedGrammar::CreateDefault(), keyword_maps.ToLiteralMap()) {
+DuckDBKeywordHelper::DuckDBKeywordHelper() : keyword_maps(InitializeKeywordMaps()) {
+}
+
+const GrammarLiteralTable &DuckDBKeywordHelper::GetLiteralTable() const {
+	lock_guard<mutex> guard(literal_table_lock);
+	if (!literal_table) {
+		literal_table = make_uniq<GrammarLiteralTable>(ParsedGrammar::ParseDefault(), keyword_maps.ToLiteralMap());
+	}
+	return *literal_table;
 }
 
 const DuckDBKeywordHelper &DuckDBKeywordHelper::Instance() {
