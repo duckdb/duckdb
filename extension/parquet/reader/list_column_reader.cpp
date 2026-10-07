@@ -138,7 +138,7 @@ idx_t ListColumnReader::ReadInternal(ColumnReaderInput &input, optional_ptr<Vect
 			if (child_repeats_ptr[child_idx] == MaxRepeat()) {
 				// value repeats on this level, append
 				if (result_offset == 0) {
-					throw InvalidInputException(
+					throw DataCorruptionException(
 					    "Corrupt Parquet file: a value in list column \"%s\" repeats a list before any list started",
 					    Schema().name);
 				}
