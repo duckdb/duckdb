@@ -1,0 +1,23 @@
+# name: test/sql/function/timestamp/icu_get_time_overflow.test
+# description: ICU date functions on timestamps close to the minimum timestamp
+# group: [timestamp]
+
+require icu
+
+statement ok
+SET TimeZone='UTC';
+
+statement error
+SELECT date_trunc('year', to_timestamp(-9223372036854)::TIMESTAMPTZ)
+----
+out of range
+
+statement error
+SELECT date_trunc('year', TIMESTAMPTZ '290309-12-22 (BC) 00:00:00+00')
+----
+Unable to get calendar time: timestamp out of range
+
+query I
+SELECT date_trunc('year', TIMESTAMPTZ '2024-05-05 10:00:00+00')
+----
+2024-01-01 00:00:00+00
