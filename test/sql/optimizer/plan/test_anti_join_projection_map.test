@@ -31,3 +31,16 @@ query I
 SELECT count(DISTINCT p.q) FROM p ANTI JOIN x ON p.r = x.w JOIN y2 ON p.s = y2.w2
 ----
 5
+
+statement ok
+SET disabled_optimizers='join_order,build_side_probe_side';
+
+query I
+SELECT count(DISTINCT p.q)
+FROM x JOIN BY (TYPE RIGHT_ANTI) p ON p.r = x.w
+JOIN y2 ON p.s = y2.w2
+----
+5
+
+statement ok
+RESET disabled_optimizers
