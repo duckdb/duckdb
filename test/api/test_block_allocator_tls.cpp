@@ -25,24 +25,33 @@ using namespace duckdb;
 namespace duckdb {
 class BlockAllocatorTestHelper {
 public:
-	explicit BlockAllocatorTestHelper(const BlockAllocator &allocator) : allocator(allocator) {
+	explicit BlockAllocatorTestHelper(const BlockAllocator &allocator, idx_t now_ms = 0) : allocator(allocator) {
+		allocator.InitializeRetention(now_ms);
 	}
 	void Add(idx_t count, idx_t now_ms) {
-		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
 		allocator.AddRetention(count, now_ms);
 	}
-	void Reuse(idx_t count) {
-		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
-		allocator.ReuseRetention(count);
+	void Reuse(idx_t count, idx_t now_ms) {
+		allocator.ReuseRetention(count, now_ms);
 	}
 	idx_t Target(idx_t now_ms) {
-		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
 		return allocator.RetentionTarget(now_ms);
+	}
+	bool IsLockFree() const {
+		for (auto &bucket : allocator.retention_buckets) {
+			if (!bucket.is_lock_free()) {
+				return false;
+			}
+		}
+		return true;
+	}
+	annotated_mutex &MaintenanceLock() {
+		return allocator.flush_lock;
 	}
 	static void Expire(const BlockAllocator &allocator) {
 		allocator.ThreadFlush(false, 0, 1);
 		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
-		std::fill(allocator.retention_buckets.begin(), allocator.retention_buckets.end(), 0);
+		allocator.InitializeRetention(Now());
 	}
 	static idx_t FreeBlocks(const BlockAllocator &allocator) {
 		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
@@ -50,10 +59,7 @@ public:
 	}
 	static idx_t RetainedBlocks(const BlockAllocator &allocator) {
 		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
-		const auto now =
-		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-		        .count();
-		return allocator.RetentionTarget(NumericCast<idx_t>(now));
+		return allocator.RetentionTarget(Now());
 	}
 	static bool Drained(const BlockAllocator &allocator) {
 		annotated_lock_guard<annotated_mutex> guard(allocator.flush_lock);
@@ -61,6 +67,12 @@ public:
 	}
 
 private:
+	static idx_t Now() {
+		return NumericCast<idx_t>(
+		    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+		        .count());
+	}
+
 	const BlockAllocator &allocator;
 };
 } // namespace duckdb
@@ -72,6 +84,7 @@ TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]")
 	Allocator fallback;
 	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY, BLOCK_SIZE * CAPACITY);
 	BlockAllocatorTestHelper retention(allocator);
+	CHECK(retention.IsLockFree());
 	CHECK(allocator.DecayDelay().GetIndex() == 1);
 	retention.Add(1024, 1);
 
@@ -118,21 +131,21 @@ TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]")
 	}
 	SECTION("Reuse consumes the youngest allowance first") {
 		retention.Add(16, 500);
-		retention.Reuse(16);
+		retention.Reuse(16, 500);
 		CHECK(retention.Target(750) == 768);
 		CHECK(retention.Target(1500) == 0);
 	}
 	SECTION("Repeated small reuse cannot accumulate allowance") {
 		retention.Add(16, 500);
 		for (idx_t now = 600; now <= 3000; now += 100) {
-			retention.Reuse(16);
+			retention.Reuse(16, now);
 			retention.Add(16, now);
 		}
 		CHECK(retention.Target(3000) == 16);
 		CHECK(retention.Target(4500) == 0);
 	}
 	SECTION("A complete refill consumes the allowance including unused TLS blocks") {
-		retention.Reuse(CAPACITY);
+		retention.Reuse(CAPACITY, 1);
 		CHECK(retention.Target(200) == 0);
 	}
 	SECTION("Long gaps expire the whole ring without repeated advancement") {
@@ -145,9 +158,81 @@ TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]")
 		retention.Add(CAPACITY, 500);
 		retention.Add(CAPACITY, 501);
 		CHECK(retention.Target(501) == 1022 + CAPACITY);
-		retention.Reuse(CAPACITY);
+		retention.Reuse(CAPACITY, 501);
 		CHECK(retention.Target(750) == 768);
 	}
+}
+
+TEST_CASE("BlockAllocator retention rejects stale generations across rollover", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t CAPACITY = 128;
+	constexpr idx_t ROLLOVER = (idx_t(1) << 32) * 500;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY, BLOCK_SIZE * CAPACITY);
+	BlockAllocatorTestHelper retention(allocator, ROLLOVER - 500);
+	retention.Add(32, ROLLOVER - 499);
+	retention.Add(16, ROLLOVER);
+	CHECK(retention.Target(ROLLOVER) == 48);
+	CHECK(retention.Target(ROLLOVER + 500) == 32);
+	CHECK(retention.Target(ROLLOVER + 1000) == 8);
+	CHECK(retention.Target(ROLLOVER + 1500) == 0);
+
+	SECTION("An older update cannot replace a live generation") {
+		retention.Add(64, ROLLOVER + 1000);
+		retention.Add(CAPACITY, ROLLOVER - 500);
+		CHECK(retention.Target(ROLLOVER + 1000) == 72);
+	}
+	SECTION("An older update cannot revive a consumed generation") {
+		retention.Add(64, ROLLOVER + 1000);
+		retention.Reuse(64, ROLLOVER + 1000);
+		retention.Add(CAPACITY, ROLLOVER - 500);
+		CHECK(retention.Target(ROLLOVER + 1000) == 8);
+		retention.Add(32, ROLLOVER + 1000);
+		CHECK(retention.Target(ROLLOVER + 1000) == 40);
+	}
+	SECTION("Stale reuse leaves a newer generation alone") {
+		retention.Add(64, ROLLOVER + 1000);
+		retention.Reuse(CAPACITY, ROLLOVER - 500);
+		CHECK(retention.Target(ROLLOVER + 1000) == 72);
+	}
+}
+
+TEST_CASE("BlockAllocator retention accounts concurrent batches", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t CAPACITY = 8192;
+	constexpr idx_t WORKERS = 4;
+	constexpr idx_t ITERATIONS = 64;
+	constexpr idx_t BATCH = 16;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * CAPACITY, BLOCK_SIZE * CAPACITY);
+	BlockAllocatorTestHelper retention(allocator);
+	vector<std::thread> workers;
+	for (idx_t i = 0; i < WORKERS; i++) {
+		workers.emplace_back([&]() {
+			for (idx_t batch = 0; batch < ITERATIONS; batch++) {
+				retention.Add(BATCH, 1);
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+	CHECK(retention.Target(1) == WORKERS * ITERATIONS * BATCH);
+	workers.clear();
+	for (idx_t i = 0; i < WORKERS; i++) {
+		workers.emplace_back([&]() {
+			for (idx_t batch = 0; batch < ITERATIONS; batch++) {
+				retention.Reuse(BATCH, 1);
+				retention.Add(BATCH, 1);
+			}
+		});
+	}
+	for (auto &worker : workers) {
+		worker.join();
+	}
+	CHECK(retention.Target(1) == WORKERS * ITERATIONS * BATCH);
+	retention.Reuse(CAPACITY, 1);
+	CHECK(retention.Target(1) == 0);
 }
 
 namespace {
@@ -160,6 +245,100 @@ struct BlockAllocatorFallbackData : public PrivateAllocatorData {
 	}
 };
 } // namespace
+
+TEST_CASE("BlockAllocator reclamation preserves partially decayed retention", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 100;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * BLOCK_COUNT, BLOCK_SIZE * BLOCK_COUNT);
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.ThreadFlush(false, 0, 1);
+	BlockAllocatorTestHelper retention(allocator);
+	retention.Add(BLOCK_COUNT, 1);
+	for (idx_t pass = 0; pass < 3; pass++) {
+		const auto available = BlockAllocatorTestHelper::FreeBlocks(allocator);
+		const auto target = retention.Target(1000);
+		allocator.FlushAll((available - MinValue(available, target)) * BLOCK_SIZE);
+		CHECK(retention.Target(1000) == BLOCK_COUNT / 2);
+		CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT / 2);
+	}
+}
+
+TEST_CASE("BlockAllocator batch transfers do not wait for maintenance", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 128;
+	auto private_data = make_uniq<BlockAllocatorFallbackData>();
+	auto &fallback_data = *private_data;
+	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
+	                   std::move(private_data));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * BLOCK_COUNT, BLOCK_SIZE * BLOCK_COUNT);
+	BlockAllocatorTestHelper helper(allocator);
+	mutex gate;
+	std::condition_variable cv;
+	bool ready = false;
+	bool start = false;
+	bool finished = false;
+	bool preserved = true;
+	std::thread worker([&]() {
+		vector<data_ptr_t> blocks;
+		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+			auto block = allocator.AllocateData(BLOCK_SIZE);
+			block[0] = 42;
+			blocks.push_back(block);
+		}
+		for (auto block : blocks) {
+			allocator.FreeData(block, BLOCK_SIZE);
+		}
+		{
+			unique_lock<mutex> guard(gate);
+			ready = true;
+			cv.notify_all();
+			cv.wait(guard, [&]() { return start; });
+		}
+		for (idx_t round = 0; round < 4; round++) {
+			blocks.clear();
+			for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+				auto block = allocator.AllocateData(BLOCK_SIZE);
+				preserved &= block[0] == 42;
+				blocks.push_back(block);
+			}
+			for (auto block : blocks) {
+				allocator.FreeData(block, BLOCK_SIZE);
+			}
+		}
+		lock_guard<mutex> guard(gate);
+		finished = true;
+		cv.notify_all();
+	});
+	bool initialized;
+	{
+		unique_lock<mutex> guard(gate);
+		initialized = cv.wait_for(guard, std::chrono::seconds(10), [&]() { return ready; });
+	}
+	bool progressed;
+	{
+		annotated_lock_guard<annotated_mutex> maintenance_guard(helper.MaintenanceLock());
+		unique_lock<mutex> guard(gate);
+		start = true;
+		cv.notify_all();
+		progressed = cv.wait_for(guard, std::chrono::seconds(10), [&]() { return finished; });
+	}
+	// Release maintenance before joining, including when a blocked transfer fails the test.
+	worker.join();
+	CHECK(initialized);
+	CHECK(progressed);
+	CHECK(preserved);
+	CHECK(fallback_data.allocation_count == 0);
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) == BLOCK_COUNT);
+}
 
 #if defined(__APPLE__)
 TEST_CASE("BlockAllocator marks reused macOS pages as live", "[api][block_allocator]") {

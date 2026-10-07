@@ -2,6 +2,7 @@
 
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
@@ -43,47 +44,80 @@ static idx_t RetentionTimeMillis() {
 	return NumericCast<idx_t>(duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count());
 }
 
-void BlockAllocator::AdvanceRetention(const idx_t now_ms) const {
-	const auto next_epoch = now_ms / BlockAllocatorConfig::RETENTION_INTERVAL_MS;
-	D_ASSERT(next_epoch >= retention_epoch);
-	if (next_epoch - retention_epoch >= retention_buckets.size()) {
-		std::fill(retention_buckets.begin(), retention_buckets.end(), 0);
-	} else {
-		for (auto i = retention_epoch; i < next_epoch; i++) {
-			retention_buckets[(i + 1) % retention_buckets.size()] = 0;
-		}
+static uint64_t PackRetentionBucket(const uint32_t epoch, const uint32_t count) {
+	return (uint64_t(epoch) << 32) | count;
+}
+
+static uint32_t RetentionBucketEpoch(const uint64_t bucket) {
+	return static_cast<uint32_t>(bucket >> 32);
+}
+
+static uint32_t RetentionBucketCount(const uint64_t bucket) {
+	return static_cast<uint32_t>(bucket);
+}
+
+void BlockAllocator::InitializeRetention(const idx_t now_ms) const {
+	const auto epoch = now_ms / BlockAllocatorConfig::RETENTION_INTERVAL_MS;
+	for (idx_t age = 0; age < retention_buckets.size(); age++) {
+		auto &bucket = retention_buckets[(epoch % retention_buckets.size() + retention_buckets.size() - age) %
+		                                 retention_buckets.size()];
+		bucket.store(PackRetentionBucket(static_cast<uint32_t>(epoch - age), 0), std::memory_order_relaxed);
 	}
-	retention_epoch = next_epoch;
 }
 
 void BlockAllocator::AddRetention(const idx_t count, const idx_t now_ms) const {
-	AdvanceRetention(now_ms);
-	const auto capacity = DivBlockSize(physical_memory_size.load());
-	auto &bucket = retention_buckets[retention_epoch % retention_buckets.size()];
-	bucket += MinValue(count, capacity - bucket);
+	const auto epoch = now_ms / BlockAllocatorConfig::RETENTION_INTERVAL_MS;
+	const auto capacity = DivBlockSize(physical_memory_size.load(std::memory_order_relaxed));
+	auto &bucket = retention_buckets[epoch % retention_buckets.size()];
+	auto current = bucket.load(std::memory_order_relaxed);
+	do {
+		const auto elapsed = static_cast<uint32_t>(epoch - RetentionBucketEpoch(current));
+		// Modular ordering assumes generations are less than half the epoch range apart.
+		if (elapsed >= (uint32_t(1) << 31)) {
+			return;
+		}
+		const idx_t retained = elapsed == 0 ? RetentionBucketCount(current) : 0;
+		const auto updated = PackRetentionBucket(
+		    static_cast<uint32_t>(epoch),
+		    NumericCast<uint32_t>(retained + MinValue(count, capacity - MinValue(capacity, retained))));
+		if (updated == current || bucket.compare_exchange_weak(current, updated, std::memory_order_relaxed)) {
+			return;
+		}
+	} while (true);
 }
 
-void BlockAllocator::ReuseRetention(idx_t count) const {
+void BlockAllocator::ReuseRetention(idx_t count, const idx_t now_ms) const {
+	const auto epoch = now_ms / BlockAllocatorConfig::RETENTION_INTERVAL_MS;
 	for (idx_t age = 0; age < retention_buckets.size() && count > 0; age++) {
-		auto &bucket = retention_buckets[(retention_epoch % retention_buckets.size() + retention_buckets.size() - age) %
+		auto &bucket = retention_buckets[(epoch % retention_buckets.size() + retention_buckets.size() - age) %
 		                                 retention_buckets.size()];
-		const auto reused = MinValue(count, bucket);
-		bucket -= reused;
-		count -= reused;
+		auto current = bucket.load(std::memory_order_relaxed);
+		while (RetentionBucketEpoch(current) == static_cast<uint32_t>(epoch - age) &&
+		       RetentionBucketCount(current) > 0) {
+			const auto reused = MinValue<idx_t>(count, RetentionBucketCount(current));
+			const auto updated = PackRetentionBucket(RetentionBucketEpoch(current),
+			                                         RetentionBucketCount(current) - NumericCast<uint32_t>(reused));
+			if (bucket.compare_exchange_weak(current, updated, std::memory_order_relaxed)) {
+				count -= reused;
+				break;
+			}
+		}
 	}
 }
 
 idx_t BlockAllocator::RetentionTarget(const idx_t now_ms) const {
-	AdvanceRetention(now_ms);
+	const auto epoch = now_ms / BlockAllocatorConfig::RETENTION_INTERVAL_MS;
 	idx_t weighted = 0;
 	const auto offset = now_ms % BlockAllocatorConfig::RETENTION_INTERVAL_MS;
-	for (idx_t i = 0; i < retention_buckets.size(); i++) {
-		const auto count =
-		    retention_buckets[(retention_epoch % retention_buckets.size() + retention_buckets.size() - i) %
-		                      retention_buckets.size()];
-		const auto age_ms = i == 0 ? 0 : (i - 1) * BlockAllocatorConfig::RETENTION_INTERVAL_MS + offset;
+	for (auto &bucket : retention_buckets) {
+		const auto current = bucket.load(std::memory_order_relaxed);
+		const auto age = static_cast<uint32_t>(epoch - RetentionBucketEpoch(current));
+		if (age >= retention_buckets.size()) {
+			continue;
+		}
+		const auto age_ms = age == 0 ? 0 : (age - 1) * BlockAllocatorConfig::RETENTION_INTERVAL_MS + offset;
 		const auto remaining_ms = BlockAllocatorConfig::RETENTION_DECAY_MS - age_ms;
-		weighted += count * remaining_ms;
+		weighted += RetentionBucketCount(current) * remaining_ms;
 	}
 	return weighted / BlockAllocatorConfig::RETENTION_DECAY_MS;
 }
@@ -223,10 +257,9 @@ public:
 	}
 
 private:
-	void ReturnTouched(const idx_t count) DUCKDB_EXCLUDES(block_allocator->flush_lock) {
-		annotated_lock_guard<annotated_mutex> guard(block_allocator->flush_lock);
-		block_allocator->touched->q.enqueue_bulk(touched.end() - count, count);
+	void ReturnTouched(const idx_t count) {
 		block_allocator->AddRetention(count, RetentionTimeMillis());
+		block_allocator->touched->q.enqueue_bulk(touched.end() - count, count);
 		touched.resize(touched.size() - count);
 	}
 
@@ -254,16 +287,12 @@ private:
 		return nullptr;
 	}
 
-	bool TryGetBatch(vector<uint32_t> &local, BlockQueue &global) DUCKDB_EXCLUDES(block_allocator->flush_lock) {
+	bool TryGetBatch(vector<uint32_t> &local, BlockQueue &global) {
 		D_ASSERT(local.empty());
 		local.resize(BlockAllocatorConfig::BATCH_SIZE);
-		idx_t size;
-		if (RefersToSameObject(global, *block_allocator->touched)) {
-			annotated_lock_guard<annotated_mutex> guard(block_allocator->flush_lock);
-			size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
-			block_allocator->ReuseRetention(size);
-		} else {
-			size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
+		const auto size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
+		if (size > 0 && RefersToSameObject(global, *block_allocator->touched)) {
+			block_allocator->ReuseRetention(size, RetentionTimeMillis());
 		}
 		local.resize(size);
 		std::sort(local.begin(), local.end());
@@ -302,9 +331,11 @@ BlockAllocator::BlockAllocator(Allocator &allocator_p, const idx_t block_size_p,
       block_size_div_shift(CountZeros<idx_t>::Trailing(block_size)),
       virtual_memory_size(AlignValue(virtual_memory_size_p, block_size)), virtual_memory_space(nullptr),
       physical_memory_size(0), untouched(make_unsafe_uniq<BlockQueue>()), touched(make_unsafe_uniq<BlockQueue>()),
-      lifetime_state(make_shared_ptr<BlockAllocatorLifetimeState>()),
-      retention_buckets(BlockAllocatorConfig::RETENTION_BUCKETS, 0) {
+      lifetime_state(make_shared_ptr<BlockAllocatorLifetimeState>()) {
+	static_assert(std::tuple_size<decltype(retention_buckets)>::value == BlockAllocatorConfig::RETENTION_BUCKETS,
+	              "Retention bucket storage must match the decay configuration");
 	D_ASSERT(IsPowerOfTwo(block_size));
+	InitializeRetention(RetentionTimeMillis());
 	Resize(physical_memory_size_p);
 }
 

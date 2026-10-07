@@ -209,7 +209,7 @@
     },
     {
         "name": "block_allocator_memory",
-        "description": "Physical memory that the block allocator is allowed to use. This memory is allocated once, never freed, and cannot be reduced.",
+        "description": "Block allocator capacity (cannot be reduced; free physical pages can be reclaimed).",
         "type": "VARCHAR",
         "scope": "global",
         "custom_implementation": [

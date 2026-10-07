@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/array.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -16,7 +17,6 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/unique_ptr.hpp"
-#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -53,7 +53,8 @@ public:
 	bool SupportsFlush() const;
 	optional_idx DecayDelay() const;
 	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
-	//! Reclaim at idle; shutdown only returns cached blocks and notifies the fallback allocator.
+	//! Without a scheduler, force synchronous reclamation; otherwise apply decay using this database's scheduler.
+	//! Shutdown only returns cached blocks and notifies the fallback allocator.
 	void ThreadIdle(optional_ptr<TaskScheduler> scheduler = nullptr, bool shutdown = false) const
 	    DUCKDB_EXCLUDES(flush_lock);
 	//! Best-effort flushing; shutdown leaves pool blocks for unmapping and flushes fallback allocations.
@@ -80,10 +81,10 @@ private:
 
 	void VerifyBlockID(uint32_t block_id) const;
 
-	void AdvanceRetention(idx_t now_ms) const DUCKDB_REQUIRES(flush_lock);
-	void AddRetention(idx_t count, idx_t now_ms) const DUCKDB_REQUIRES(flush_lock);
-	void ReuseRetention(idx_t count) const DUCKDB_REQUIRES(flush_lock);
-	idx_t RetentionTarget(idx_t now_ms) const DUCKDB_REQUIRES(flush_lock);
+	void InitializeRetention(idx_t now_ms) const;
+	void AddRetention(idx_t count, idx_t now_ms) const;
+	void ReuseRetention(idx_t count, idx_t now_ms) const;
+	idx_t RetentionTarget(idx_t now_ms) const;
 
 	bool TryScheduleFlush(TaskScheduler &scheduler) const DUCKDB_EXCLUDES(flush_lock);
 	idx_t GetFreeBlockCount() const DUCKDB_REQUIRES(flush_lock);
@@ -126,10 +127,10 @@ private:
 	//! Synchronizes returning cached blocks with allocator destruction.
 	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
 
-	//! Protect touched transfers, retention and background scheduling.
+	//! Approximate retention volume, with a generation and count packed into each bucket.
+	mutable array<atomic<uint64_t>, 3> retention_buckets;
+	//! Protect maintenance decisions and background scheduling.
 	mutable annotated_mutex flush_lock;
-	mutable vector<idx_t> retention_buckets DUCKDB_GUARDED_BY(flush_lock);
-	mutable idx_t retention_epoch DUCKDB_GUARDED_BY(flush_lock) = 0;
 	//! Scheduler queue destruction invalidates this token before allocator destruction.
 	mutable unique_ptr<ProducerToken> flush_producer DUCKDB_GUARDED_BY(flush_lock);
 	mutable FlushState flush_state DUCKDB_GUARDED_BY(flush_lock) = FlushState::IDLE;
