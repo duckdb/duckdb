@@ -270,6 +270,8 @@ private:
 	OpenFileInfo file;
 	ClientContext &context;
 	JSONReaderOptions options;
+	//! yyjson flags used to parse documents during the scan
+	yyjson_read_flag read_flags;
 
 	//! File handle
 	unique_ptr<JSONFileHandle> file_handle;

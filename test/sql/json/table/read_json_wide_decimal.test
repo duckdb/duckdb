@@ -1,0 +1,54 @@
+# name: test/sql/json/table/read_json_wide_decimal.test
+# description: DECIMAL columns are read from JSON numbers without going through a double
+# group: [table]
+
+require json
+
+statement ok
+COPY (SELECT 9.9999999999999999999999999999999999999::DECIMAL(38,37) c, 123456789012345678.12::DECIMAL(20,2) d, 1.5::DECIMAL(4,1) e, 42 i) TO '__TEST_DIR__/wide_decimal.json';
+
+query IIII
+SELECT * FROM read_json('__TEST_DIR__/wide_decimal.json', columns = {'c': 'DECIMAL(38,37)', 'd': 'DECIMAL(20,2)', 'e': 'DECIMAL(4,1)', 'i': 'INTEGER'});
+----
+9.9999999999999999999999999999999999999	123456789012345678.12	1.5	42
+
+# other columns are unaffected
+query IIII
+SELECT * FROM read_json('__TEST_DIR__/wide_decimal.json', columns = {'c': 'JSON', 'd': 'DECIMAL(20,2)', 'e': 'DOUBLE', 'i': 'VARCHAR'});
+----
+9.9999999999999999999999999999999999999	123456789012345678.12	1.5	42
+
+# round trip through COPY
+statement ok
+CREATE TABLE decimals AS SELECT 9.9999999999999999999999999999999999999::DECIMAL(38,37) c, (range * 1000000000000000000.01)::DECIMAL(38,2) d FROM range(3);
+
+statement ok
+COPY decimals TO '__TEST_DIR__/decimals.json';
+
+statement ok
+CREATE TABLE decimals2 (c DECIMAL(38,37), d DECIMAL(38,2));
+
+statement ok
+COPY decimals2 FROM '__TEST_DIR__/decimals.json';
+
+query I
+SELECT count(*) FROM (SELECT * FROM decimals EXCEPT SELECT * FROM decimals2);
+----
+0
+
+query II
+SELECT * FROM decimals2 ORDER BY d;
+----
+9.9999999999999999999999999999999999999	0.00
+9.9999999999999999999999999999999999999	1000000000000000000.01
+9.9999999999999999999999999999999999999	2000000000000000000.02
+
+# nested decimals, strings and other types next to decimals
+statement ok
+COPY (SELECT 1 a, 2.5 b, [1.25, NULL, 3] c, {'x': 0.1, 'y': true} s, '4.5' t, 18446744073709551616::HUGEINT big UNION ALL SELECT -3, NULL, [], {'x': 12.3, 'y': false}, '7', -1) TO '__TEST_DIR__/mixed_decimal.json';
+
+query IIIIII
+SELECT * FROM read_json('__TEST_DIR__/mixed_decimal.json', columns = {'a': 'INT', 'b': 'DECIMAL(3,1)', 'c': 'DECIMAL(4,2)[]', 's': 'STRUCT(x DECIMAL(3,1), y BOOLEAN)', 't': 'DECIMAL(2,1)', 'big': 'HUGEINT'}) ORDER BY a;
+----
+-3	NULL	[]	{'x': 12.3, 'y': false}	7.0	-1
+1	2.5	[1.25, NULL, 3.00]	{'x': 0.1, 'y': true}	4.5	18446744073709551616

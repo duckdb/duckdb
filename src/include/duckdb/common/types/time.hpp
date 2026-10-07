@@ -28,8 +28,10 @@ public:
 	                                        bool &has_offset, bool strict = false,
 	                                        optional_ptr<int32_t> nanos = nullptr);
 	// No hour limit
+	//! If negative is set, the negated value is returned
 	DUCKDB_API static bool TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result,
-	                                          bool strict = false, optional_ptr<int32_t> nanos = nullptr);
+	                                          bool strict = false, optional_ptr<int32_t> nanos = nullptr,
+	                                          bool negative = false);
 
 	//! Convert a time object to a string in the format "hh:mm:ss"
 	DUCKDB_API static string ToString(dtime_t time);
@@ -56,7 +58,7 @@ public:
 
 private:
 	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
-	                               optional_ptr<int32_t> nanos = nullptr);
+	                               optional_ptr<int32_t> nanos = nullptr, bool negative = false);
 };
 
 } // namespace duckdb

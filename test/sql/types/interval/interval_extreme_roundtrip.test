@@ -1,0 +1,50 @@
+# name: test/sql/types/interval/interval_extreme_roundtrip.test
+# description: Intervals at the limits of the microseconds range can be cast to VARCHAR and back
+# group: [interval]
+
+query II
+SELECT v, v::VARCHAR::INTERVAL = v FROM (VALUES
+	(INTERVAL '9223372036854775807 us'),
+	(INTERVAL '-9223372036854775807 us'),
+	(INTERVAL '-9223372036854775807 us' - INTERVAL '1 us'),
+	(INTERVAL '1 day -2562047788 hours'),
+	(INTERVAL '-1 us')
+) t(v);
+----
+2562047788:00:54.775807	true
+-2562047788:00:54.775807	true
+-2562047788:00:54.775808	true
+1 day -2562047788:00:00	true
+-00:00:00.000001	true
+
+query III
+SELECT '2562047788:00:54.775807'::INTERVAL, '-2562047788:00:54.775808'::INTERVAL, '-9223372036854775808 us'::INTERVAL;
+----
+2562047788:00:54.775807	-2562047788:00:54.775808	-2562047788:00:54.775808
+
+query IIIIII
+SELECT TRY_CAST('2562047788:00:54.775808' AS INTERVAL), TRY_CAST('-2562047788:00:54.775809' AS INTERVAL), TRY_CAST('9999999999:00:00' AS INTERVAL), TRY_CAST('99999999999:00:00' AS INTERVAL), TRY_CAST('9223372036854775808 us' AS INTERVAL), TRY_CAST('-9223372036854775809 us' AS INTERVAL);
+----
+NULL	NULL	NULL	NULL	NULL	NULL
+
+statement error
+SELECT '-9223372036854775808 us ago'::INTERVAL;
+----
+out of range
+
+# text after a time term is parsed as well
+query III
+SELECT '1 day 02:03:04.5 ago'::INTERVAL, '01:00:00 1 day'::INTERVAL, '01:00:00  '::INTERVAL;
+----
+-1 day -02:03:04.5	1 day 01:00:00	01:00:00
+
+statement error
+SELECT '01:00:00 xyz'::INTERVAL;
+----
+Could not convert string
+
+# hours beyond the TIME range are still rejected for TIME
+query II
+SELECT TRY_CAST('25:00:00' AS TIME), TRY_CAST('2562047788:00:00' AS TIME);
+----
+NULL	NULL

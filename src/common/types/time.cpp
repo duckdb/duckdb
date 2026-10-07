@@ -5,7 +5,9 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 
 #include <cctype>
@@ -19,8 +21,9 @@ static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 // ISO 8601
 
 bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
-                              optional_ptr<int32_t> nanos) {
-	int32_t hour = -1, min = -1, sec = -1, micros = -1;
+                              optional_ptr<int32_t> nanos, bool negative) {
+	int64_t hour = -1;
+	int32_t min = -1, sec = -1, micros = -1;
 	pos = 0;
 
 	if (len == 0) {
@@ -42,9 +45,9 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		return false;
 	}
 
-	// Allow up to 9 digit hours to support intervals
+	// Allow up to 10 digit hours to support intervals
 	hour = 0;
-	for (int32_t digits = 9; pos < len && StringUtil::CharacterIsDigit(buf[pos]); ++pos) {
+	for (int32_t digits = 10; pos < len && StringUtil::CharacterIsDigit(buf[pos]); ++pos) {
 		if (digits-- > 0) {
 			hour = hour * 10 + (buf[pos] - '0');
 		} else {
@@ -133,13 +136,27 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		}
 	}
 
-	result = Time::FromTime(hour, min, sec, micros);
+	// compute the (optionally negated) value with overflow checks, as interval hours can exceed the int64 range
+	int64_t hour_micros;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(hour, Interval::MICROS_PER_HOUR, hour_micros)) {
+		return false;
+	}
+	const int64_t remainder_micros = Time::FromTime(0, min, sec, micros).value;
+	int64_t value;
+	if (negative) {
+		if (!TrySubtractOperator::Operation<int64_t, int64_t, int64_t>(-hour_micros, remainder_micros, value)) {
+			return false;
+		}
+	} else if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(hour_micros, remainder_micros, value)) {
+		return false;
+	}
+	result = dtime_t(value);
 	return true;
 }
 
 bool Time::TryConvertInterval(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
-                              optional_ptr<int32_t> nanos) {
-	return Time::TryConvertInternal(buf, len, pos, result, strict, nanos);
+                              optional_ptr<int32_t> nanos, bool negative) {
+	return Time::TryConvertInternal(buf, len, pos, result, strict, nanos, negative);
 }
 
 bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict,
