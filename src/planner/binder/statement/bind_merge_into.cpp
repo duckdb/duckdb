@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/merge_query_node.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/operator/logical_merge_into.hpp"
@@ -338,8 +339,8 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("Expected a join after binding a join operator - but got a %s",
 		                              join_ref.get().type);
 	}
-	// kind of hacky, CreatePlan turns a RIGHT join into a LEFT join so the children get reversed from what we need
-	bool inverted = join.type == JoinType::RIGHT;
+	// CreatePlan can turn a RIGHT join into a LEFT join - in that case the children are reversed
+	bool inverted = join.type == JoinType::RIGHT && join_ref.get().Cast<LogicalJoin>().join_type == JoinType::LEFT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
 
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
