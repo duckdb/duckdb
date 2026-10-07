@@ -111,15 +111,6 @@ struct ArgMinMaxSortKeyState : ArgMinMaxState<string_t, string_t> {
 	                                                     OptionalStateType<StateSortKey<StateInputType<1>, ORDER>>>>;
 };
 
-//! Collates the argument that is compared - string types (e.g. collated VARCHAR or BIT) and nested types that can
-//! contain them are not ordered by their physical representation
-void PushArgMinMaxCollation(ClientContext &context, unique_ptr<Expression> &arg) {
-	auto &type = arg->GetReturnType();
-	if (type.InternalType() == PhysicalType::VARCHAR || type.IsNested()) {
-		ExpressionBinder::PushCollation(context, arg, type);
-	}
-}
-
 template <class COMPARATOR>
 struct ArgMinMaxBase {
 	template <class A_TYPE, class B_TYPE, class STATE>
@@ -219,7 +210,7 @@ struct ArgMinMaxBase {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		PushArgMinMaxCollation(context, arguments[1]);
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -386,7 +377,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		auto &context = input.GetClientContext();
 		auto &function = input.GetBoundFunction();
 		auto &arguments = input.GetArguments();
-		PushArgMinMaxCollation(context, arguments[1]);
+		ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
 		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
@@ -899,7 +890,7 @@ unique_ptr<FunctionData> ArgMinMaxNBind(BindAggregateFunctionInput &input) {
 			throw ParameterNotResolvedException();
 		}
 	}
-	PushArgMinMaxCollation(context, arguments[1]);
+	ExpressionBinder::PushCollation(context, arguments[1], arguments[1]->GetReturnType());
 
 	const auto val_type = arguments[0]->GetReturnType().InternalType();
 	const auto arg_type = arguments[1]->GetReturnType().InternalType();

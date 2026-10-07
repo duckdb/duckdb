@@ -358,15 +358,15 @@ shared_ptr<const AggregateFunction> GetCollatedMinMaxFunction(ClientContext &con
 
 //! Whether min/max over the type are computed through arg_min/arg_max over the collated value
 static bool MinMaxUsesCollation(ClientContext &context, const LogicalType &input_type) {
-	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT and VARIANT use explicit
-	// binary-comparable keys so min/max follows the same logical order as comparisons and ORDER BY.
+	// The generic non-VARCHAR collation path is not ready yet (see internal #8704). BIT, TIMETZ and VARIANT use
+	// explicit binary-comparable keys so min/max follows the same logical order as comparisons and ORDER BY.
 	const auto varchar_collation =
 	    input_type.id() == LogicalTypeId::VARCHAR &&
 	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
 	const auto nested_collation = StructType::IsStruct(input_type) || input_type.id() == LogicalTypeId::LIST ||
 	                              input_type.id() == LogicalTypeId::ARRAY;
-	return input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::VARIANT || varchar_collation ||
-	       nested_collation;
+	return input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::TIME_TZ ||
+	       input_type.id() == LogicalTypeId::VARIANT || varchar_collation || nested_collation;
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>
