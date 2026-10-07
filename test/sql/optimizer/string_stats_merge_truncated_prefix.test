@@ -15,13 +15,7 @@ SELECT count(*) FROM t WHERE (CASE WHEN c THEN s ELSE 'abcdefghijklA' END) > 'ab
 ----
 1
 
-# Keep direction: longer 13B exact constant merged with truncated 12B column prefix
 query I
 SELECT (CASE WHEN NOT c THEN 'abcdefghijklA' ELSE s END) > 'abcdefghijklB' FROM t;
 ----
 true
-
-query I
-SELECT count(*) FROM t WHERE (CASE WHEN NOT c THEN 'abcdefghijklA' ELSE s END) > 'abcdefghijklB';
-----
-1

@@ -629,8 +629,13 @@ void StringStats::MergeStats(BaseStatistics &stats, string_t &target, StringStat
 	// for min: a prefix is always <= its extensions, so the shorter value is already a safe lower bound
 	// for max: a truncated prefix represents unknown larger extensions and must be kept as the upper bound
 	if (!is_min && memcmp(source.GetData(), target.GetData(), MinValue(source.GetSize(), target.GetSize())) == 0) {
-		new_is_more_extreme = comparison < 0 ? source_type == StringStatsType::TRUNCATED_STATS
-		                                     : target_type != StringStatsType::TRUNCATED_STATS;
+		if (comparison < 0) {
+			// source is a prefix of target: source wins if it is truncated
+			new_is_more_extreme = source_type == StringStatsType::TRUNCATED_STATS;
+		} else {
+			// target is a prefix of source: target wins if it is truncated
+			new_is_more_extreme = target_type != StringStatsType::TRUNCATED_STATS;
+		}
 	}
 	if (!new_is_more_extreme) {
 		return;
