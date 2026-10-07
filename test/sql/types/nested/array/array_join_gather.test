@@ -51,3 +51,24 @@ query II
 SELECT count(sub), count(*) FILTER (WHERE i % 3 = 0 AND sub IS DISTINCT FROM x) FROM (SELECT i, x, (SELECT x FROM big_s WHERE big_s.x = big_t.x) sub FROM big_t)
 ----
 33334	0
+
+# only a prefix of the probe rows matches - the unmatched rows must remain NULL
+statement ok
+CREATE TABLE prefix_t AS SELECT i FROM range(10) r(i);
+
+statement ok
+CREATE TABLE prefix_s AS SELECT i, {'a': [i, i + 1]::BIGINT[2], 'b': i} s FROM range(2) r(i);
+
+query II
+SELECT prefix_t.i, prefix_s.s FROM prefix_t LEFT JOIN prefix_s ON prefix_s.i = prefix_t.i ORDER BY prefix_t.i
+----
+0	{'a': [0, 1], 'b': 0}
+1	{'a': [1, 2], 'b': 1}
+2	NULL
+3	NULL
+4	NULL
+5	NULL
+6	NULL
+7	NULL
+8	NULL
+9	NULL
