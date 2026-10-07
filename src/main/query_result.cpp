@@ -344,19 +344,31 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 	}
 	D_ASSERT(buffer);
 	buffer->Decide(ResultLifetime::RETAINED);
-	QueryResultState state;
-	while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
-		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
-			context->WaitForTask(lock, *this);
+	try {
+		QueryResultState state;
+		while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
+			if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
+				context->WaitForTask(lock, *this);
+			}
 		}
-	}
-	if (state == QueryResultState::FINISHED) {
-		auto produced = context->GetExecutor().GetResult();
-		// Cleanup can fail on an autocommit commit; it records the error on this result
-		context->CleanupInternal(lock, this, false);
-		if (!HasError()) {
-			AdoptCollected(*produced);
+		if (state == QueryResultState::FINISHED) {
+			auto produced = context->GetExecutor().GetResult();
+			// Cleanup can fail on an autocommit commit; it records the error on this result
+			context->CleanupInternal(lock, this, false);
+			if (!HasError()) {
+				AdoptCollected(*produced);
+			}
 		}
+	} catch (...) {
+		// the caller holds the context lock - clean up with it here, as closing this result would lock it again
+		try {
+			if (context->IsActiveResult(lock, *this)) {
+				context->CleanupInternal(lock, this, true);
+			}
+		} catch (...) { // NOLINT
+		}
+		context.reset();
+		throw;
 	}
 	context.reset();
 }
