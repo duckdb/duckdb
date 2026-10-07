@@ -40,6 +40,12 @@ typedef GetSQLValueFunctionReturnType (*get_sql_value_function_t)(PlannerExtensi
 
 class PlannerExtension {
 public:
+	//! The pre-subquery-planning function of the planner extension.
+	//! Takes a bound statement as input, which it can modify in place.
+	//! This runs after the binder has bound the statement and before its subqueries are planned: every subquery is
+	//! still a BoundSubqueryExpression with its own bound plan, and nothing has been turned into a join or
+	//! decorrelated. The post-bind function runs after the subqueries are planned.
+	post_bind_function_t pre_subquery_planning_function = nullptr;
 	//! The post-bind function of the planner extension.
 	//! Takes a bound statement as input, which it can modify in place.
 	//! This runs after the binder has successfully bound the statement,

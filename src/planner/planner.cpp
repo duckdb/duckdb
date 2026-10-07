@@ -179,6 +179,15 @@ static bool VerifyPlannedExpressions(const LogicalOperator &plan) {
 }
 #endif
 
+static void RunPreSubqueryPlanningExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
+	for (auto &planner_extension : PlannerExtension::Iterate(context)) {
+		if (planner_extension.pre_subquery_planning_function) {
+			PlannerExtensionInput input {context, binder, planner_extension.planner_info.get()};
+			planner_extension.pre_subquery_planning_function(input, statement);
+		}
+	}
+}
+
 static void RunPostBindExtensions(ClientContext &context, Binder &binder, BoundStatement &statement) {
 	for (auto &planner_extension : PlannerExtension::Iterate(context)) {
 		if (planner_extension.post_bind_function) {
@@ -201,6 +210,13 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		binder->SetParameters(bound_parameters);
 		auto bound_statement = binder->Bind(statement);
 		binding_timer.EndTimer();
+
+		// binding defers subquery planning: the extensions see the statement with every subquery unplanned, then the
+		// subqueries are planned, before the post-bind extensions run
+		RunPreSubqueryPlanningExtensions(context, *binder, bound_statement);
+		if (bound_statement.plan) {
+			binder->PlanDeferredSubqueries(*bound_statement.plan);
+		}
 
 		RunPostBindExtensions(context, *binder, bound_statement);
 
