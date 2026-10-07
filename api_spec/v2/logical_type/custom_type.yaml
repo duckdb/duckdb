@@ -12,7 +12,7 @@ module: custom type
 # Values of a custom type are produced and consumed with the base type's
 # vector accessors. To hand a value back out under the custom type's name --
 # from a scalar function's bind callback, say -- alias the base type with
-# `[[context_create_type_with_alias]]`.
+# `[[factory_create_type_with_alias]]`.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Handles

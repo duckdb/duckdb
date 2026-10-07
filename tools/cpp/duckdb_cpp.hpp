@@ -162,7 +162,7 @@ private:
 /// Grants the .cpp access to the wrappers' private constructors, without making them public. `Handle::release` is not
 /// reachable from here -- only the wrapper type itself befriends its `Handle` base, so calls where the C API takes
 /// ownership release from inside a member of the consuming wrapper.
-struct Factory {
+struct HandleFactory {
 	template <class T, class... ARGS>
 	static auto Make(ARGS &&... args) -> T {
 		return T(std::forward<ARGS>(args)...);
@@ -347,7 +347,7 @@ enum class SettingScope : uint8_t {
 /// metadata DuckDB declares for it. Read-only.
 /// The string accessors return views borrowed from this option, valid until it is destroyed.
 class InstanceOption final : public detail::Handle<InstanceOption> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	InstanceOption(InstanceOption &&) noexcept = default;
@@ -397,28 +397,17 @@ enum class LogLevel : uint32_t {
 	LOG_FATAL = 60,
 };
 
-/// A borrowed handle to a client context: the one a callback is handed, valid only for the duration of that callback,
-/// or the one a `Connection` holds, valid for as long as the connection is.
-class Context final : public detail::Handle<Context> {
-	friend detail::Factory;
+/// A borrowed handle to the scope values, types and data chunks are created in: taken from an `Instance`, a
+/// `Connection` or a `Context`, and valid for as long as its source is. A factory resolves in the scope of its source:
+/// a connection's or a context's factory reaches the catalog and the client's settings, while an instance's factory
+/// knows only the built-in types and casts.
+class Factory final : public detail::Handle<Factory> {
+	friend detail::HandleFactory;
 
 public:
-	~Context() override;
-	Context(Context &&) noexcept = default;
-	Context &operator=(Context &&) noexcept = default;
-
-	/// How many settings this context exposes.
-	auto GetOptionCount() const -> size_t;
-
-	/// One setting with its current value in this context.
-	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> InstanceOption;
-
-	/// One setting with its current value in this context.
-	/// @param name The setting's name or one of its aliases.
-	/// @return The setting.
-	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> InstanceOption;
+	~Factory() override;
+	Factory(Factory &&) noexcept = default;
+	Factory &operator=(Factory &&) noexcept = default;
 
 	/// Parses a SQL type expression into an owned type: primitives, parameterized kinds, and extension types alike.
 	/// @param text A type as SQL spells it, e.g. "DECIMAL(18, 3)" or "STRUCT(a INTEGER, b VARCHAR)".
@@ -440,9 +429,6 @@ public:
 	/// Parameterless overload of the above.
 	auto CreateType(const QualifiedName &name) const -> LogicalType;
 
-	/// The file system this context reads and writes through. Borrowed, and valid only while the context is.
-	auto GetFileSystem() const -> FileSystem;
-
 	/// The id-keyed twin of `CreateType`: the id resolves to its canonical name and binds like it.
 	/// @param id The type's id. Without parameters, only ids that name a complete type on their own are accepted;
 	/// parameterized kinds such as LIST or DECIMAL require parameters.
@@ -452,14 +438,57 @@ public:
 	auto CreateType(LogicalTypeId id) const -> LogicalType;
 
 	/// Starts composing a type step by step.
-	/// @return A `TypeBuilder` over this context, for composing a nested type without assembling the parameter vector
+	/// @return A `TypeBuilder` over this factory, for composing a nested type without assembling the parameter vector
 	/// by hand.
-	auto CreateType() -> TypeBuilder<Context>;
+	auto CreateType() -> TypeBuilder<Factory>;
 
-	/// Creates a `Value` in this context; see `Value::Create` for the accepted C++ types.
+	/// Creates a `Value` with this factory; see `Value::Create` for the accepted C++ types.
 	/// @param value The C++ value to convert.
 	template <class T>
 	auto CreateValue(T &&value) -> Value;
+
+	/// Creates an empty chunk with a column per type; see `DataChunk(Factory &, types)`.
+	/// @param types One type per column. Types containing ANY are rejected.
+	auto CreateDataChunk(const std::vector<LogicalType> &types) -> DataChunk;
+
+	/// Creates an empty collection; see `ColumnDataCollection(Factory &, types)`.
+	/// @param types One type per column, at least one. Types containing ANY are rejected.
+	auto CreateColumnDataCollection(const std::vector<LogicalType> &types) -> ColumnDataCollection;
+
+private:
+	explicit Factory(void *impl);
+};
+
+/// A borrowed handle to a client context: the one a callback is handed, valid only for the duration of that callback,
+/// or the one a `Connection` holds, valid for as long as the connection is.
+class Context final : public detail::Handle<Context> {
+	friend detail::HandleFactory;
+
+public:
+	~Context() override;
+	Context(Context &&) noexcept = default;
+	Context &operator=(Context &&) noexcept = default;
+
+	/// How many settings this context exposes.
+	auto GetOptionCount() const -> size_t;
+
+	/// One setting with its current value in this context.
+	/// @param index Setting index in [0, GetOptionCount()).
+	auto GetOptionByIndex(size_t index) const -> InstanceOption;
+
+	/// One setting with its current value in this context.
+	/// @param name The setting's name or one of its aliases.
+	/// @return The setting.
+	/// @throws InvalidInputException When no setting goes by that name.
+	auto GetOption(std::string_view name) const -> InstanceOption;
+
+	/// The file system this context reads and writes through. Borrowed, and valid only while the context is.
+	auto GetFileSystem() const -> FileSystem;
+
+	/// The factory values, types and data chunks are created through in this context.
+	auto GetFactory() -> Factory & {
+		return factory;
+	}
 
 	/// Writes a message to DuckDB's log, readable through `SELECT * FROM duckdb_logs`.
 	/// Whether the entry is recorded is up to the database's log configuration; a message it filters out is dropped
@@ -471,6 +500,8 @@ public:
 
 private:
 	explicit Context(void *impl);
+
+	Factory factory;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -521,7 +552,7 @@ enum class StatementType : uint8_t {
 /// An owned, parsed SQL statement, produced by `StatementIterator::Next` and executed by `Connection::Execute`.
 /// Executing borrows the statement, so the same one can be executed any number of times.
 class SqlStatement final : public detail::Handle<SqlStatement> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	SqlStatement(SqlStatement &&) noexcept = default;
@@ -551,7 +582,7 @@ private:
 /// An owned iterator over the statements in a SQL string, produced by `Connection::ParseSQL`.
 /// Statements it has already yielded are independent of it and stay valid after the iterator is destroyed.
 class StatementIterator final : public detail::Handle<StatementIterator> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	StatementIterator(StatementIterator &&) noexcept = default;
@@ -614,7 +645,7 @@ struct TokenList {
 /// `ReusesPlan` which one you got. Execution returns the same `QueryResult`, with identical behaviour.
 /// It keeps its connection's session alive, so it stays usable even after the `Connection` is gone.
 class PreparedStatement final : public detail::Handle<PreparedStatement> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	PreparedStatement(PreparedStatement &&) noexcept = default;
@@ -661,10 +692,10 @@ private:
 /// A connection to a database.
 /// It must not outlive the `Instance` it was opened on, and only one result may be live on it at a time.
 class Connection final : public detail::Handle<Connection> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
-	Connection(Connection &&other) noexcept : context(std::move(other.context)) {
+	Connection(Connection &&other) noexcept : context(std::move(other.context)), factory(std::move(other.factory)) {
 		std::swap(impl, other.impl);
 		std::swap(owned, other.owned);
 	}
@@ -672,6 +703,7 @@ public:
 	Connection &operator=(Connection &&other) noexcept {
 		std::swap(impl, other.impl);
 		std::swap(context, other.context);
+		std::swap(factory, other.factory);
 		std::swap(owned, other.owned);
 		return *this;
 	}
@@ -693,6 +725,11 @@ public:
 	/// reaches the file system. Valid for as long as this connection is.
 	auto GetContext() -> Context & {
 		return context;
+	}
+
+	/// The factory values, types and data chunks are created through on this connection.
+	auto GetFactory() -> Factory & {
+		return factory;
 	}
 
 	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
@@ -789,6 +826,7 @@ public:
 private:
 	explicit Connection(void *impl, bool owned);
 	Context context;
+	Factory factory;
 	bool owned = false; // TODO: This should be fixed C++ side
 };
 
@@ -799,7 +837,7 @@ private:
 // opened through an `Environment` and worked with through the `Connection`s they hand out.
 
 class Instance final : public detail::Handle<Instance> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	~Instance() override;
@@ -863,8 +901,16 @@ public:
 	/// @return An owning `Connection`, which disconnects when destroyed. Open one per thread.
 	auto Connect() -> Connection;
 
+	/// The factory for the built-in types, their values and casts, and data chunks on this instance. Anything that
+	/// needs a catalog throws; use a connection's or a context's factory for that.
+	auto GetFactory() -> Factory & {
+		return factory;
+	}
+
 private:
 	explicit Instance(void *impl);
+
+	Factory factory;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -877,7 +923,7 @@ private:
 /// The extension being loaded, handed to its load entry point.
 /// Borrowed for the duration of the load: never store or outlive one.
 class Extension final : public detail::Handle<Extension> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	~Extension() override;
@@ -904,7 +950,7 @@ auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, vo
 /// The environment instances are created in. It must outlive every `Instance` created through it; destroying it
 /// while instances are still alive leaks them.
 class Environment final : public detail::Handle<Environment> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	Environment();
@@ -994,7 +1040,7 @@ enum class LogicalTypeId : uint32_t {
 /// An owned SQL type: a kind plus its parameters, e.g. DECIMAL(18, 3) or STRUCT(a INTEGER, b VARCHAR), and in the case
 /// of extension-defined types, its "alias"
 class LogicalType final : public detail::Handle<LogicalType> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	LogicalType(LogicalType &&) noexcept = default;
@@ -1005,9 +1051,9 @@ public:
 	/// A copy of this type carrying `alias` as its name: the same representation under a distinct identity.
 	/// The alias is by default not registered anywhere; parsing or creating a type with this name does not resolve to
 	/// this type, unless it is explicitly registered in the catalog separately.
-	/// @param ctx The context to create the copy in.
+	/// @param factory The factory to create the copy with.
 	/// @param alias The name the copy carries. Must not be empty.
-	auto WithAlias(Context &ctx, std::string_view alias) const -> LogicalType;
+	auto WithAlias(Factory &factory, std::string_view alias) const -> LogicalType;
 
 	/// An owned copy of this type.
 	auto Copy() const -> LogicalType;
@@ -1122,7 +1168,7 @@ private:
 
 /// An ordered list of (name, type) fields. Names may repeat, and a schema may have no fields at all.
 class Schema final : public detail::Handle<Schema> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	Schema(Schema &&) noexcept = default;
@@ -1499,7 +1545,7 @@ struct uuid_t {
 
 /// An owned SQL value.
 class Value final : public detail::Handle<Value> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	~Value() override;
@@ -1517,10 +1563,10 @@ public:
 	auto ToText() const -> std::string;
 
 	/// Casts the value to another type, following the same rules as a SQL cast.
-	/// @param ctx The context to cast in.
+	/// @param factory The factory supplying the casts.
 	/// @param target The type to cast to.
 	/// @return The converted value. Throws when the cast is not allowed or the value does not fit.
-	auto Cast(Context &ctx, const LogicalType &target) const -> Value;
+	auto Cast(Factory &factory, const LogicalType &target) const -> Value;
 
 	/// Reads the value as `T`, where `T` is one of the primitive types above, or `LogicalType` for a TYPE value.
 	/// Numeric, temporal and boolean values of another type are converted, following cast rules; the remaining `T`s
@@ -1547,55 +1593,55 @@ public:
 	}
 
 	/// A NULL of the given type.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param type The type the NULL carries.
-	static auto CreateNull(Context &ctx, const LogicalType &type) -> Value;
+	static auto CreateNull(Factory &factory, const LogicalType &type) -> Value;
 
 	/// Creates a value from a C++ value. The overload picked decides the SQL type, so `dtime_t` yields TIME and
 	/// `dtime_ns_t` yields TIME_NS; a `LogicalType` yields a TYPE value. Types with no overload here do not compile --
 	/// cast or build them through the composite constructors instead. Byte strings are copied in, so the value does not
 	/// borrow from the `varchar_t` / `blob_t` handed to it.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param value The C++ value to convert.
 
-	static auto Create(Context &ctx, bool value) -> Value;
-	static auto Create(Context &ctx, uint8_t value) -> Value;
-	static auto Create(Context &ctx, uint16_t value) -> Value;
-	static auto Create(Context &ctx, uint32_t value) -> Value;
-	static auto Create(Context &ctx, uint64_t value) -> Value;
-	static auto Create(Context &ctx, uint128_t value) -> Value;
-	static auto Create(Context &ctx, int8_t value) -> Value;
-	static auto Create(Context &ctx, int16_t value) -> Value;
-	static auto Create(Context &ctx, int32_t value) -> Value;
-	static auto Create(Context &ctx, int64_t value) -> Value;
-	static auto Create(Context &ctx, int128_t value) -> Value;
-	static auto Create(Context &ctx, float value) -> Value;
-	static auto Create(Context &ctx, double value) -> Value;
-	static auto Create(Context &ctx, varchar_t value) -> Value;
-	static auto Create(Context &ctx, blob_t value) -> Value;
-	static auto Create(Context &ctx, const LogicalType &type) -> Value;
-	static auto Create(Context &ctx, date_t value) -> Value;
-	static auto Create(Context &ctx, dtime_t value) -> Value;
-	static auto Create(Context &ctx, dtime_ns_t value) -> Value;
-	static auto Create(Context &ctx, dtime_tz_t value) -> Value;
-	static auto Create(Context &ctx, timestamp_t value) -> Value;
-	static auto Create(Context &ctx, timestamp_s_t value) -> Value;
-	static auto Create(Context &ctx, timestamp_ms_t value) -> Value;
-	static auto Create(Context &ctx, timestamp_ns_t value) -> Value;
-	static auto Create(Context &ctx, timestamp_tz_t value) -> Value;
-	static auto Create(Context &ctx, timestamp_tz_ns_t value) -> Value;
-	static auto Create(Context &ctx, interval_t value) -> Value;
+	static auto Create(Factory &factory, bool value) -> Value;
+	static auto Create(Factory &factory, uint8_t value) -> Value;
+	static auto Create(Factory &factory, uint16_t value) -> Value;
+	static auto Create(Factory &factory, uint32_t value) -> Value;
+	static auto Create(Factory &factory, uint64_t value) -> Value;
+	static auto Create(Factory &factory, uint128_t value) -> Value;
+	static auto Create(Factory &factory, int8_t value) -> Value;
+	static auto Create(Factory &factory, int16_t value) -> Value;
+	static auto Create(Factory &factory, int32_t value) -> Value;
+	static auto Create(Factory &factory, int64_t value) -> Value;
+	static auto Create(Factory &factory, int128_t value) -> Value;
+	static auto Create(Factory &factory, float value) -> Value;
+	static auto Create(Factory &factory, double value) -> Value;
+	static auto Create(Factory &factory, varchar_t value) -> Value;
+	static auto Create(Factory &factory, blob_t value) -> Value;
+	static auto Create(Factory &factory, const LogicalType &type) -> Value;
+	static auto Create(Factory &factory, date_t value) -> Value;
+	static auto Create(Factory &factory, dtime_t value) -> Value;
+	static auto Create(Factory &factory, dtime_ns_t value) -> Value;
+	static auto Create(Factory &factory, dtime_tz_t value) -> Value;
+	static auto Create(Factory &factory, timestamp_t value) -> Value;
+	static auto Create(Factory &factory, timestamp_s_t value) -> Value;
+	static auto Create(Factory &factory, timestamp_ms_t value) -> Value;
+	static auto Create(Factory &factory, timestamp_ns_t value) -> Value;
+	static auto Create(Factory &factory, timestamp_tz_t value) -> Value;
+	static auto Create(Factory &factory, timestamp_tz_ns_t value) -> Value;
+	static auto Create(Factory &factory, interval_t value) -> Value;
 
 	template <int8_t WIDTH, uint8_t SCALE>
-	static auto Create(Context &ctx, decimal_t<WIDTH, SCALE> value) -> Value {
-		return CreateDecimal(ctx, WidenDecimal(value.value), WIDTH, SCALE);
+	static auto Create(Factory &factory, decimal_t<WIDTH, SCALE> value) -> Value {
+		return CreateDecimal(factory, WidenDecimal(value.value), WIDTH, SCALE);
 	}
 
-	static auto Create(Context &ctx, bit_t value) -> Value;
-	static auto Create(Context &ctx, bignum_t value) -> Value;
-	static auto Create(Context &ctx, uuid_t value) -> Value;
+	static auto Create(Factory &factory, bit_t value) -> Value;
+	static auto Create(Factory &factory, bignum_t value) -> Value;
+	static auto Create(Factory &factory, uuid_t value) -> Value;
 	template <class T>
-	static auto Create(Context &ctx, T value) -> Value = delete;
+	static auto Create(Factory &factory, T value) -> Value = delete;
 
 	// Composite construction. Each constructor infers the composite's type from the children it is given, which is why
 	// only the built-in composites are reachable this way: build an aliased or extension-registered composite by
@@ -1608,46 +1654,46 @@ public:
 	using KeyValueList = const std::vector<std::pair<Value, Value>> &;
 
 	/// A LIST of the given elements.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param values The elements. The element type is the common type of all of them and each is cast to it, so
 	/// mixing INTEGER and VARCHAR yields VARCHAR elements. Must not be empty: with no element there is no type to
 	/// infer, so use the child-type overload for an empty LIST.
 	/// @throws Exception When the elements have no common type.
-	static auto CreateList(Context &ctx, ValueList values) -> Value;
+	static auto CreateList(Factory &factory, ValueList values) -> Value;
 
 	/// An empty LIST.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param child_type The element type, not the LIST type.
-	static auto CreateList(Context &ctx, const LogicalType &child_type) -> Value;
+	static auto CreateList(Factory &factory, const LogicalType &child_type) -> Value;
 
 	/// An ARRAY of the given elements, its size being how many there are.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param values The elements, typed as in `CreateList`. Must not be empty: the smallest ARRAY holds one element.
-	static auto CreateArray(Context &ctx, ValueList values) -> Value;
+	static auto CreateArray(Factory &factory, ValueList values) -> Value;
 
 	/// A TUPLE, i.e. a struct whose fields have no names.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param values The fields, in order. May be empty: the empty tuple is a type of its own.
-	static auto CreateTuple(Context &ctx, ValueList values = {}) -> Value;
+	static auto CreateTuple(Factory &factory, ValueList values = {}) -> Value;
 
 	/// A STRUCT of the given fields.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param values The (name, value) fields, in order. Names should be unique and either all set or all empty; this
 	/// is not validated. May be empty: the empty struct is a type of its own.
-	static auto CreateStruct(Context &ctx, NamedValueList values = {}) -> Value;
+	static auto CreateStruct(Factory &factory, NamedValueList values = {}) -> Value;
 
 	/// A MAP of the given entries.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param values The (key, value) entries. The key and value types are the common types over all entries, and each
 	/// entry is cast to them, as in `CreateList`. Keys must be unique and not NULL. Must not be empty: with no entry
 	/// there are no types to infer, so use the key/value-type overload for an empty MAP.
-	static auto CreateMap(Context &ctx, KeyValueList values) -> Value;
+	static auto CreateMap(Factory &factory, KeyValueList values) -> Value;
 
 	/// An empty MAP.
-	/// @param ctx The context to create the value in.
+	/// @param factory The factory to create the value with.
 	/// @param key_type The key type, not the MAP type.
 	/// @param value_type The value type, not the MAP type.
-	static auto CreateMap(Context &ctx, const LogicalType &key_type, const LogicalType &value_type) -> Value;
+	static auto CreateMap(Factory &factory, const LogicalType &key_type, const LogicalType &value_type) -> Value;
 
 	/// How many children a composite value has: elements for LIST and ARRAY, fields for STRUCT and TUPLE, two per
 	/// entry for MAP, 2 for UNION, and 0 for anything else. A NULL value has no children.
@@ -1669,7 +1715,7 @@ private:
 
 	/// @internal The runtime forwarder behind the templated DECIMAL constructors, so those can be defined in the header
 	/// without naming a C type.
-	static auto CreateDecimal(Context &ctx, int128_t value, uint8_t width, uint8_t scale) -> Value;
+	static auto CreateDecimal(Factory &factory, int128_t value, uint8_t width, uint8_t scale) -> Value;
 
 	/// @internal Sign-extends a DECIMAL's backing integer to the widest storage tier, so one entry point can carry
 	/// every tier.
@@ -1745,7 +1791,7 @@ template <>
 auto Value::Get() const -> LogicalType;
 
 template <class T>
-auto Context::CreateValue(T &&value) -> Value {
+auto Factory::CreateValue(T &&value) -> Value {
 	return Value::Create(*this, std::forward<T>(value));
 }
 
@@ -1784,7 +1830,7 @@ private:
 };
 
 /// Builds a type a piece at a time, without assembling a parameter vector by hand. Start one from
-/// `Context::CreateType()`, chain the setters, and call `Build`.
+/// `Factory::CreateType()`, chain the setters, and call `Build`.
 /// Nested types are added by passing a callback that fills in a builder of its own.
 template <class CTX>
 class TypeBuilder {
@@ -1901,7 +1947,7 @@ struct NamedParam {
 
 /// A borrowed handle to a vector's string heap, valid until that vector is destroyed or reshaped, e.g. by a `Flatten`.
 class Arena final : public detail::Handle<Arena> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	Arena(Arena &&) noexcept = default;
@@ -2097,7 +2143,7 @@ struct ValidityMask {
 /// A borrowed handle to one column of a chunk, or to one child of another vector. Valid for as long as the chunk or
 /// parent vector it belongs to is valid.
 class Vector final : public detail::Handle<Vector> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	Vector(Vector &&) noexcept = default;
@@ -2238,15 +2284,15 @@ private:
 /// A batch of rows, column by column. A chunk owns its vectors, so it must outlive any `Vector`, `VectorView` or
 /// pointer taken from it.
 class DataChunk final : public detail::Handle<DataChunk> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	/// An empty chunk with a column per type, ready to be filled: write the columns' data and give every column its
-	/// row count with `Vector::SetSize`. The chunk's memory is allocated through the context's database, so it is
+	/// row count with `Vector::SetSize`. The chunk's memory is allocated through the factory's database, so it is
 	/// accounted to that database.
-	/// @param ctx The context whose database supplies the chunk's memory.
+	/// @param factory The factory whose database supplies the chunk's memory.
 	/// @param types One type per column. Types containing ANY are rejected.
-	DataChunk(Context &ctx, const std::vector<LogicalType> &types);
+	DataChunk(Factory &factory, const std::vector<LogicalType> &types);
 
 	DataChunk(DataChunk &&other) noexcept {
 		std::swap(impl, other.impl);
@@ -2275,11 +2321,11 @@ public:
 	/// @return A borrowed handle, valid for as long as this chunk is.
 	auto GetVector(idx_t index) const -> Vector;
 
-	/// A deep copy of this chunk, its memory allocated through the context's database. The copy is flattened and
+	/// A deep copy of this chunk, its memory allocated through the factory's database. The copy is flattened and
 	/// owns all its data, so it stays valid after this chunk -- or whatever backs it, such as a
 	/// `ColumnDataCollection` scan -- is gone.
-	/// @param ctx The context whose database supplies the copy's memory.
-	auto Copy(Context &ctx) const -> DataChunk;
+	/// @param factory The factory whose database supplies the copy's memory.
+	auto Copy(Factory &factory) const -> DataChunk;
 
 private:
 	explicit DataChunk(void *impl, bool owned);
@@ -2297,13 +2343,13 @@ private:
 /// An owned collection of rows, all sharing one set of column types fixed at construction.
 /// It must not outlive the `Connection` or `Context` it was created from.
 class ColumnDataCollection final : public detail::Handle<ColumnDataCollection> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	/// Opaque state for appending, from `CreateAppendState`. Only meaningful with the collection that created it, and
 	/// invalidated by `Reset`.
 	class AppendState final : public detail::Handle<AppendState> {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		AppendState(AppendState &&) noexcept = default;
@@ -2318,7 +2364,7 @@ public:
 	/// worker reads and tracks the scan's overall progress. Only meaningful with the collection that created it, and
 	/// invalidated by `Reset`.
 	class SharedScanState final : public detail::Handle<SharedScanState> {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		SharedScanState(SharedScanState &&) noexcept = default;
@@ -2333,7 +2379,7 @@ public:
 	/// its thread most recently scanned alive: scans are zero-copy, so a scanned chunk's data is only valid until this
 	/// state's next `Scan` or its destruction.
 	class WorkerScanState final : public detail::Handle<WorkerScanState> {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		WorkerScanState(WorkerScanState &&) noexcept = default;
@@ -2344,11 +2390,11 @@ public:
 		explicit WorkerScanState(void *impl);
 	};
 
-	/// An empty collection, its memory managed by the context's database.
-	/// @param ctx The context whose database supplies the collection's memory.
+	/// An empty collection, its memory managed by the factory's database.
+	/// @param factory The factory whose database supplies the collection's memory.
 	/// @param types One type per column, at least one; every chunk appended must match them exactly. Types containing
 	/// ANY are rejected.
-	ColumnDataCollection(Context &ctx, const std::vector<LogicalType> &types);
+	ColumnDataCollection(Factory &factory, const std::vector<LogicalType> &types);
 
 	ColumnDataCollection(ColumnDataCollection &&) noexcept = default;
 	ColumnDataCollection &operator=(ColumnDataCollection &&) noexcept = default;
@@ -2527,7 +2573,7 @@ private:
 /// The importer borrows the context it was created with and must not outlive it. One array is in flight at a time,
 /// and an importer must not be used from two threads at once.
 class ArrowImporter final : public detail::Handle<ArrowImporter> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	/// Resolves `schema` against `context`, extension types included.
@@ -2575,7 +2621,7 @@ private:
 /// then call `NextArray` until it returns false. Pass `flush` on the last chunk, or call `Flush`.
 /// An exporter must not be used from two threads at once.
 class ArrowExporter final : public detail::Handle<ArrowExporter> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	/// @param context A context with an active transaction, whose Arrow settings are captured.
@@ -2629,7 +2675,7 @@ private:
 
 /// A streaming query result.
 class QueryResult final : public detail::Handle<QueryResult> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	/// The status of one `Step`.
@@ -2742,7 +2788,7 @@ enum class FunctionParameterKind : uint8_t {
 /// Valid for as long as the owning function is.
 /// Setters mutate the function's signature in place.
 class FunctionSignature final : public detail::Handle<FunctionSignature> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	FunctionSignature(FunctionSignature &&) noexcept = default;
@@ -2867,7 +2913,7 @@ public:
 	auto GetContext() -> Context &;
 
 protected:
-	FunctionBindInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+	FunctionBindInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 	}
 
 	/// The user data slot of the function, which carries the function's info table
@@ -2948,7 +2994,7 @@ enum class OrderPreservation : uint8_t {
 /// callback, the bind callback may plant bind data for init and exec, and the init callback may plant init data for
 /// exec. A callback reports failure by throwing; the exception surfaces as the query's error.
 class ScalarFunction final : public detail::Handle<ScalarFunction> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	class BindInput;
@@ -3029,7 +3075,7 @@ private:
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
 	class BindInput final : public FunctionBindInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The user data set via `ScalarFunction::SetUserData`.
@@ -3054,7 +3100,7 @@ public:
 
 	/// What the init callback works with. Borrowed, valid only for the callback duration.
 	class InitInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs init data of type `T`, owned by this execution thread's function state and readable from the
@@ -3083,7 +3129,7 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		InitInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		InitInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -3096,7 +3142,7 @@ public:
 
 	/// What the exec callback works with. Borrowed, valid only for the callback duration.
 	class ExecInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -3143,7 +3189,7 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		ExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		ExecInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -3174,7 +3220,7 @@ public:
 /// by throwing; the exception surfaces as the query's error -- except in the destroy callback, whose errors are
 /// dropped, as it runs on a path that must not fail.
 class AggregateFunction final : public detail::Handle<AggregateFunction> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	/// Whether the aggregate's result depends on the order in which rows are aggregated.
@@ -3295,7 +3341,7 @@ private:
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
 	class BindInput final : public FunctionBindInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The user data set via `AggregateFunction::SetUserData`.
@@ -3320,7 +3366,7 @@ public:
 
 	/// What the size callback works with. Borrowed, valid only for the callback duration.
 	class SizeInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -3353,7 +3399,7 @@ public:
 
 	/// What the init callback works with. Borrowed, valid only for the callback duration.
 	class InitInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -3389,7 +3435,7 @@ public:
 
 	/// What the update callback works with. Borrowed, valid only for the callback duration.
 	class UpdateInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -3436,7 +3482,7 @@ public:
 
 	/// What the combine callback works with. Borrowed, valid only for the callback duration.
 	class CombineInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -3476,7 +3522,7 @@ public:
 
 	/// What the finalize callback works with. Borrowed, valid only for the callback duration.
 	class FinalizeInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -3519,7 +3565,7 @@ public:
 
 	/// What the destroy callback works with. Borrowed, valid only for the callback duration.
 	class DestroyInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -3621,7 +3667,7 @@ enum class ExpressionType : uint8_t {
 /// read-only: valid only for the duration of the callback that handed it out, and the children obtained via
 /// `GetChild` share their parent's lifetime.
 class Expression final : public detail::Handle<Expression> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	Expression(Expression &&) noexcept = default;
@@ -3680,7 +3726,7 @@ private:
 /// callback, and the bind callback may plant bind data readable from every later callback. A callback reports failure
 /// by throwing; the exception surfaces as the query's error.
 class TableFunction final : public detail::Handle<TableFunction> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	class BindInput;
@@ -3809,7 +3855,7 @@ private:
 public:
 	/// What the bind callback works with. Borrowed, valid only for the callback duration.
 	class BindInput final : public FunctionBindInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Declares one of the columns the function returns. Call it once per column, in order: the exec callback's
@@ -3870,7 +3916,7 @@ public:
 
 	/// What the global init callback works with. Borrowed, valid only for the callback duration.
 	class InitGlobalInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs global state of type `T`, shared by every thread scanning the function and readable from the
@@ -3913,7 +3959,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		InitGlobalInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		InitGlobalInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -3926,7 +3973,7 @@ public:
 
 	/// What the local init callback works with. Borrowed, valid only for the callback duration.
 	class InitLocalInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs local state of type `T`, owned by this scanning thread and readable from the exec callback via
@@ -3969,7 +4016,7 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		InitLocalInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		InitLocalInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -3983,7 +4030,7 @@ public:
 
 	/// What the exec callback works with. Borrowed, valid only for the callback duration.
 	class ExecInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -4032,7 +4079,7 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		ExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		ExecInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4046,7 +4093,7 @@ public:
 
 	/// What the progress callback works with. Borrowed, valid only for the callback duration.
 	class ProgressInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -4080,7 +4127,7 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		ProgressInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		ProgressInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4100,7 +4147,7 @@ public:
 	/// callback more than once for the same query, each time with the predicates not yet accepted, and never with
 	/// none.
 	class FilterPushdownInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`, mutable: the same object the init and exec callbacks later
@@ -4140,7 +4187,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		FilterPushdownInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		FilterPushdownInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4158,7 +4206,7 @@ public:
 	/// `GetPartitionColumnCount`. The engine reads the partition values only when the batch index changes: within one
 	/// thread the index must not decrease, and the values may only change together with it.
 	class PartitionDataInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -4213,7 +4261,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		PartitionDataInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		PartitionDataInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4232,7 +4281,7 @@ public:
 	/// `PartitionInfo::SINGLE_VALUE_PARTITIONS` unlocks the optimization; a callback that returns without calling
 	/// `SetPartitionInfo` reports `PartitionInfo::NOT_PARTITIONED`.
 	class PartitioningInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -4263,7 +4312,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		PartitioningInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		PartitioningInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4279,7 +4329,7 @@ public:
 	/// which is shared with the other scanning threads - and reports whether it claimed one with `SetClaimed`. A
 	/// callback that returns without claiming a batch ends the scan for the thread.
 	class ClaimBatchInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `BindInput::SetBindData`.
@@ -4318,7 +4368,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		ClaimBatchInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		ClaimBatchInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4348,7 +4399,7 @@ public:
 /// the metadata of the file. With a claim batch callback, the rows of a file keep their order also when several
 /// threads scan it.
 class MultiFileFunction final : public detail::Handle<MultiFileFunction> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	MultiFileFunction(MultiFileFunction &&) noexcept = default;
@@ -4396,7 +4447,7 @@ private:
 /// produced and read with the base type's vector accessors; to hand one back out under the custom name, alias the
 /// base type with `LogicalType::WithAlias`.
 class CustomType final : public detail::Handle<CustomType> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	CustomType(CustomType &&) noexcept = default;
@@ -4445,7 +4496,7 @@ private:
 /// callback of either side, and each side's bind callback may plant bind data readable from that side's later
 /// callbacks. A callback reports failure by throwing; the exception surfaces as the query's error.
 class CopyFunction final : public detail::Handle<CopyFunction> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	class CopyToBindInput;
@@ -4555,7 +4606,7 @@ private:
 public:
 	/// What the `COPY ... TO` bind callback works with. Borrowed, valid only for the callback duration.
 	class CopyToBindInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs bind data of type `T`, owned by the bound statement and readable from every later `COPY ... TO`
@@ -4611,7 +4662,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyToBindInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyToBindInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4623,7 +4675,7 @@ public:
 
 	/// What the `COPY ... TO` batch size callback works with. Borrowed, valid only for the callback duration.
 	class CopyToBatchSizeInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `CopyToBindInput::SetBindData`.
@@ -4650,7 +4702,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyToBatchSizeInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyToBatchSizeInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4662,7 +4715,7 @@ public:
 
 	/// What the `COPY ... TO` init callback works with. Borrowed, valid only for the callback duration.
 	class CopyToInitInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs init data of type `T`, owned by the file being written and readable from the batch, flush and
@@ -4696,7 +4749,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyToInitInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyToInitInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4709,7 +4763,7 @@ public:
 
 	/// What the `COPY ... TO` batch callback works with. Borrowed, valid only for the callback duration.
 	class CopyToBatchInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs batch data of type `T`: the prepared form of the batch, handed to the flush callback via
@@ -4752,7 +4806,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyToBatchInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyToBatchInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4766,7 +4821,7 @@ public:
 
 	/// What the `COPY ... TO` flush callback works with. Borrowed, valid only for the callback duration.
 	class CopyToFlushInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `CopyToBindInput::SetBindData`.
@@ -4801,7 +4856,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyToFlushInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyToFlushInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4815,7 +4871,7 @@ public:
 
 	/// What the `COPY ... TO` finalize callback works with. Borrowed, valid only for the callback duration.
 	class CopyToFinalizeInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `CopyToBindInput::SetBindData`.
@@ -4843,7 +4899,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyToFinalizeInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyToFinalizeInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4857,7 +4914,7 @@ public:
 	/// What the `COPY ... TO` statistics callback works with. Borrowed, valid only for the callback duration. Unstable
 	/// API.
 	class CopyToStatisticsInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `CopyToBindInput::SetBindData`.
@@ -4892,7 +4949,7 @@ public:
 
 	private:
 		CopyToStatisticsInput(void *args, void *context)
-		    : args(args), context(detail::Factory::Make<Context>(context)) {
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4905,7 +4962,7 @@ public:
 
 	/// What the `COPY ... FROM` bind callback works with. Borrowed, valid only for the callback duration.
 	class CopyFromBindInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs bind data of type `T`, owned by the bound statement and readable from every later
@@ -4967,7 +5024,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyFromBindInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyFromBindInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -4979,7 +5037,7 @@ public:
 
 	/// What the `COPY ... FROM` global init callback works with. Borrowed, valid only for the callback duration.
 	class CopyFromInitGlobalInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs global state of type `T`, shared by every thread reading the file and readable from the local
@@ -5015,7 +5073,7 @@ public:
 
 	private:
 		CopyFromInitGlobalInput(void *args, void *context)
-		    : args(args), context(detail::Factory::Make<Context>(context)) {
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -5028,7 +5086,7 @@ public:
 
 	/// What the `COPY ... FROM` local init callback works with. Borrowed, valid only for the callback duration.
 	class CopyFromInitLocalInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// Constructs local state of type `T`, owned by this reading thread and readable from the exec callback via
@@ -5066,7 +5124,7 @@ public:
 
 	private:
 		CopyFromInitLocalInput(void *args, void *context)
-		    : args(args), context(detail::Factory::Make<Context>(context)) {
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -5080,7 +5138,7 @@ public:
 
 	/// What the `COPY ... FROM` exec callback works with. Borrowed, valid only for the callback duration.
 	class CopyFromExecInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `CopyFromBindInput::SetBindData`.
@@ -5123,7 +5181,8 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		CopyFromExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		CopyFromExecInput(void *args, void *context)
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -5137,7 +5196,7 @@ public:
 
 	/// What the `COPY ... FROM` progress callback works with. Borrowed, valid only for the callback duration.
 	class CopyFromProgressInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The bind data set via `CopyFromBindInput::SetBindData`.
@@ -5172,7 +5231,7 @@ public:
 
 	private:
 		CopyFromProgressInput(void *args, void *context)
-		    : args(args), context(detail::Factory::Make<Context>(context)) {
+		    : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -5207,7 +5266,7 @@ enum class CastMode : uint8_t {
 /// on its own. The exec callback converts a whole batch at a time; whether a per-row failure aborts the query or
 /// becomes a NULL follows from `ExecInput::GetMode`.
 class CastFunction final : public detail::Handle<CastFunction> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	class ExecInput;
@@ -5267,7 +5326,7 @@ private:
 public:
 	/// What the exec callback works with. Borrowed, valid only for the callback duration.
 	class ExecInput {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The user data set via `CastFunction::SetUserData`.
@@ -5296,7 +5355,7 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		ExecInput(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		ExecInput(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -5342,7 +5401,7 @@ enum class FileFlags : uint8_t {
 /// An open file, obtained from `FileSystem::OpenFile`. Closes on destruction.
 /// Only usable while the `FileSystem` it came from is still valid.
 class FileHandle final : public detail::Handle<FileHandle> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	FileHandle(FileHandle &&) noexcept = default;
@@ -5395,7 +5454,7 @@ private:
 /// How a file is opened: the flags, plus any values the file system handling the path cares about.
 /// Created from the `FileSystem` it will be used with, and reusable across any number of opens.
 class FileOpenOptions final : public detail::Handle<FileOpenOptions> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	FileOpenOptions(FileOpenOptions &&) noexcept = default;
@@ -5423,7 +5482,7 @@ private:
 /// including through virtual and remote file systems registered by other extensions.
 /// Borrowed from a `Context` or `Connection`, and valid only for as long as that is.
 class FileSystem final : public detail::Handle<FileSystem> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	FileSystem(FileSystem &&) noexcept = default;
@@ -5460,7 +5519,7 @@ private:
 /// Owned, so a name obtained from somewhere transient -- a replacement scan callback, say -- can be kept for as long
 /// as you like.
 class QualifiedName final : public detail::Handle<QualifiedName> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	QualifiedName(QualifiedName &&) noexcept = default;
@@ -5517,7 +5576,7 @@ inline bool operator!=(const QualifiedName &lhs, const QualifiedName &rhs) {
 /// An owned snapshot of one base table, taken by `Connection::DescribeTable`: where the name resolved, the table's
 /// columns in declared order (generated columns included), and per-column catalog facts. Later DDL does not update it.
 class TableDescription final : public detail::Handle<TableDescription> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	TableDescription(TableDescription &&) noexcept = default;
@@ -5547,7 +5606,7 @@ private:
 /// An owned snapshot of one column of a described table, from `TableDescription::GetColumn`: its name, type and
 /// catalog facts. Independent of the table description it came from.
 class ColumnDescription final : public detail::Handle<ColumnDescription> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	ColumnDescription(ColumnDescription &&) noexcept = default;
@@ -5593,7 +5652,7 @@ private:
 /// it closes; registering one is not thread-safe against queries binding on other connections, so do it during
 /// extension load or before issuing queries. A registered scan cannot be unregistered.
 class ReplacementScan final : public detail::Handle<ReplacementScan> {
-	friend detail::Factory;
+	friend detail::HandleFactory;
 
 public:
 	class Input;
@@ -5642,7 +5701,7 @@ public:
 	/// What the callback works with. Borrowed, valid only for the callback duration, as are the name views it hands
 	/// out.
 	class Input {
-		friend detail::Factory;
+		friend detail::HandleFactory;
 
 	public:
 		/// The user data set via `ReplacementScan::SetUserData`.
@@ -5704,7 +5763,7 @@ public:
 		auto GetContext() -> Context &;
 
 	private:
-		Input(void *args, void *context) : args(args), context(detail::Factory::Make<Context>(context)) {
+		Input(void *args, void *context) : args(args), context(detail::HandleFactory::Make<Context>(context)) {
 		}
 
 		void *args;
@@ -6022,7 +6081,7 @@ private:
 	}
 };
 
-inline auto Context::CreateType() -> TypeBuilder<Context> {
+inline auto Factory::CreateType() -> TypeBuilder<Factory> {
 	return TypeBuilder(*this);
 }
 

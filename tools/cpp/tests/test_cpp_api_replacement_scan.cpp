@@ -54,9 +54,9 @@ void ClaimRange(ReplacementScan::Input &input) {
 	}
 	scan_observed.rendered = name.Render();
 
-	auto &ctx = input.GetContext();
+	auto &factory = input.GetContext().GetFactory();
 	input.SetFunctionName("range");
-	input.AddArgument(Value::Create(ctx, int64_t {2}));
+	input.AddArgument(Value::Create(factory, int64_t {2}));
 	input.SetAlias("claimed");
 }
 
@@ -86,12 +86,12 @@ void DeclineEverything(ReplacementScan::Input &input) {
 
 // Builds a single-column BIGINT collection holding the given values.
 auto MakeScanCollection(Connection &conn, const std::vector<int64_t> &values) -> ColumnDataCollection {
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 	std::vector<LogicalType> types;
-	types.push_back(ctx.ParseType("BIGINT"));
-	ColumnDataCollection collection(ctx, types);
+	types.push_back(factory.ParseType("BIGINT"));
+	ColumnDataCollection collection(factory, types);
 
-	DataChunk chunk(ctx, types);
+	DataChunk chunk(factory, types);
 	auto vec = chunk.GetVector(0);
 	auto *data = vec.GetDataMutable<int64_t>();
 	for (size_t i = 0; i < values.size(); i++) {

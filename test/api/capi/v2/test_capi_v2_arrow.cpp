@@ -33,8 +33,10 @@ duckdb_v2_identifier_t ArrowIdent(const char *s) {
 // Builds a type inside a callback. Returns null after populating the error slot.
 duckdb_v2_logical_type_handle ArrowTypeInCallback(duckdb_v2_context_handle context, DUCKDB_V2_LOGICAL_TYPE_ID id,
                                                   duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	duckdb_v2_logical_type_handle type = nullptr;
-	if (duckdb_v2_context_create_type_from_id(context, id, nullptr, nullptr, 0, &type, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_factory_create_type_from_id(factory, id, nullptr, nullptr, 0, &type, err) != DUCKDB_V2_ERROR_NONE) {
 		return nullptr;
 	}
 	return type;
@@ -141,6 +143,8 @@ void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_func
 
 void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
                  duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	void *bind_data = nullptr;
 	duckdb_v2_vector_handle arg = nullptr;
 	duckdb_v2_vector_handle result = nullptr;
@@ -159,7 +163,7 @@ void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_cont
 		return;
 	}
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(context, &arg_type, 1, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(factory, &arg_type, 1, &input, err);
 	duckdb_v2_logical_type_destroy(&arg_type);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -192,7 +196,7 @@ void RegisterArrowRoundtrip(EnvFixture &fx) {
 	auto name = Convert("arrow_roundtrip");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("x");
@@ -278,6 +282,8 @@ void ArrowRangeInitCb(duckdb_v2_table_function_init_global_info_handle info, duc
 
 void ArrowRangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_context_handle context,
                       duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	void *raw_bind = nullptr;
 	void *raw_global = nullptr;
 	duckdb_v2_data_chunk_handle output = nullptr;
@@ -311,7 +317,7 @@ void ArrowRangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_
 	}
 	duckdb_v2_logical_type_handle types[2] = {bigint, varchar};
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(context, types, 2, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(factory, types, 2, &input, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	duckdb_v2_logical_type_destroy(&varchar);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
@@ -361,7 +367,7 @@ void RegisterArrowRoundtripRange(EnvFixture &fx) {
 	auto name = Convert("arrow_roundtrip_range");
 	REQUIRE(duckdb_v2_table_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_table_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("n");
@@ -421,6 +427,8 @@ idx_t arrow_split_dict_size = 0;
 // configured batch sizes, and records the shapes that came out.
 void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
                     duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	duckdb_v2_vector_handle result = nullptr;
 	if (duckdb_v2_scalar_function_exec_get_result(info, &result, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -428,7 +436,7 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 	duckdb_v2_logical_type_handle column_type = nullptr;
 	if (arrow_split_dict_size) {
 		auto text_str = Convert("arrow_split_enum");
-		if (duckdb_v2_context_create_type_from_text(context, &text_str, &column_type, err) != DUCKDB_V2_ERROR_NONE) {
+		if (duckdb_v2_factory_create_type_from_text(factory, &text_str, &column_type, err) != DUCKDB_V2_ERROR_NONE) {
 			return;
 		}
 	} else {
@@ -446,7 +454,7 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 	}
 
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(context, &column_type, 1, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(factory, &column_type, 1, &input, err);
 	duckdb_v2_logical_type_destroy(&column_type);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		ArrowRoundtripDestroy(rt);
@@ -537,7 +545,7 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 	auto varchar = ArrowTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR, nullptr);
 	if (varchar) {
 		duckdb_v2_data_chunk_handle wrong = nullptr;
-		if (duckdb_v2_data_chunk_create(context, &varchar, 1, &wrong, nullptr) == DUCKDB_V2_ERROR_NONE) {
+		if (duckdb_v2_data_chunk_create(factory, &varchar, 1, &wrong, nullptr) == DUCKDB_V2_ERROR_NONE) {
 			arrow_split_observed.type_mismatch_rc =
 			    duckdb_v2_arrow_exporter_append(rt->exporter, &wrong, false, false, nullptr);
 			duckdb_v2_data_chunk_destroy(&wrong);
@@ -560,7 +568,7 @@ void RegisterArrowProbe(EnvFixture &fx, const char *name, duckdb_v2_scalar_funct
 	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto fname = Convert(name);
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &fname, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("x");
@@ -601,6 +609,8 @@ void ArrowTopLevelValidityReleaseArray(ArrowArray *array) {
 // Interface spec allows a producer of the top-level struct array to do so.
 void ArrowTopLevelValidityExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
                                duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	arrow_toplevel_validity_observed = {};
 	duckdb_v2_vector_handle result = nullptr;
 	if (duckdb_v2_scalar_function_exec_get_result(info, &result, err) != DUCKDB_V2_ERROR_NONE) {
@@ -609,7 +619,7 @@ void ArrowTopLevelValidityExec(duckdb_v2_scalar_function_exec_info_handle info, 
 	auto bigint = ArrowTypeInCallback(context, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT, err);
 	duckdb_v2_logical_type_handle mood = nullptr;
 	auto text_str = Convert("mood");
-	if (!bigint || duckdb_v2_context_create_type_from_text(context, &text_str, &mood, err) != DUCKDB_V2_ERROR_NONE) {
+	if (!bigint || duckdb_v2_factory_create_type_from_text(factory, &text_str, &mood, err) != DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_logical_type_destroy(&bigint);
 		return;
 	}
@@ -624,7 +634,7 @@ void ArrowTopLevelValidityExec(duckdb_v2_scalar_function_exec_info_handle info, 
 
 	constexpr idx_t rows = 16;
 	duckdb_v2_data_chunk_handle input = nullptr;
-	auto rc = duckdb_v2_data_chunk_create(context, types, 2, &input, err);
+	auto rc = duckdb_v2_data_chunk_create(factory, types, 2, &input, err);
 	duckdb_v2_logical_type_destroy(&bigint);
 	duckdb_v2_logical_type_destroy(&mood);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
@@ -796,13 +806,15 @@ std::string enum_probe_type;
 
 void EnumProbeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
                    duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	duckdb_v2_vector_handle result = nullptr;
 	if (duckdb_v2_scalar_function_exec_get_result(info, &result, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_logical_type_handle mood = nullptr;
 	auto text_str = Convert("mood");
-	if (duckdb_v2_context_create_type_from_text(context, &text_str, &mood, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_factory_create_type_from_text(factory, &text_str, &mood, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto col = Convert("v");
@@ -845,7 +857,7 @@ TEST_CASE("V2 arrow: a dictionary column resolves to VARCHAR by default", "[capi
 	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto fname = Convert("enum_probe");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &fname, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(function, &sig, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name_str = ArrowIdent("x");
@@ -1409,7 +1421,7 @@ TEST_CASE("V2 arrow result: the schema describes the arrays before, during and a
 
 TEST_CASE("V2 arrow result: parameters bind by position and by name", "[capi_v2][arrow]") {
 	EnvFixture fx;
-	auto value = MakeInt64Value(fx.ctx, 10);
+	auto value = MakeInt64Value(fx.factory, 10);
 
 	ArrowResult positional;
 	REQUIRE(QueryArrow(fx.conn, "SELECT $1::BIGINT + i FROM range(3) t(i)", 0, &positional, nullptr, nullptr, &value,
@@ -1441,7 +1453,7 @@ TEST_CASE("V2 arrow result: a prepared statement executes as an Arrow result, re
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, statement, false, &prepared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_destroy(&statement);
 	for (int64_t base : {0, 100}) {
-		auto value = MakeInt64Value(fx.ctx, base);
+		auto value = MakeInt64Value(fx.factory, base);
 		ArrowResult r;
 		REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, &value, 1, 0, &r, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
@@ -1459,7 +1471,7 @@ TEST_CASE("V2 arrow result: a prepared statement executes as an Arrow result, re
 	statement = ParseOne(fx.conn, "INSERT INTO t SELECT * FROM range($1::BIGINT)");
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, statement, false, &prepared, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_sql_statement_destroy(&statement);
-	auto value = MakeInt64Value(fx.ctx, 17);
+	auto value = MakeInt64Value(fx.factory, 17);
 	ArrowResult r;
 	REQUIRE(duckdb_v2_prepared_statement_execute_arrow(prepared, nullptr, &value, 1, 0, &r, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);

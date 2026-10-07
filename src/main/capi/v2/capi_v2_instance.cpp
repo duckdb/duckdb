@@ -12,7 +12,16 @@
 namespace duckdb {
 namespace capiv2 {
 
-CV2Instance::CV2Instance(CV2Environment &env) : env(env), config(make_uniq<DBConfig>()) {
+CV2Instance::CV2Instance(CV2Environment &env) : env(env), factory(*this), config(make_uniq<DBConfig>()) {
+}
+
+DatabaseInstance &CV2InstanceFactory::GetDatabase() {
+	lock_guard<mutex> guard(instance.lock);
+	return *instance.GetDatabase().instance;
+}
+
+void CV2InstanceFactory::WithTransaction(const std::function<void(ClientContext &)> &fn) {
+	throw InvalidInputException("this requires a catalog: use the factory of a connection or a context");
 }
 
 void CV2Instance::Start() {

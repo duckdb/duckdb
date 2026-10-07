@@ -159,14 +159,15 @@ TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
 	auto &ctx = conn.GetContext();
+	auto &factory = ctx.GetFactory();
 	auto fs = ctx.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_options.bin");
 
 	auto options = fs.CreateOpenOptions();
 	options.SetFlag(FileFlags::WRITE)
 	    .SetFlag(FileFlags::FILE_CREATE_NEW)
-	    .SetValue("file_size", Value::Create(ctx, int64_t {4}))
-	    .SetValue("made_up_option", Value::Create(ctx, varchar_t("nobody-reads-this")));
+	    .SetValue("file_size", Value::Create(factory, int64_t {4}))
+	    .SetValue("made_up_option", Value::Create(factory, varchar_t("nobody-reads-this")));
 
 	{
 		auto file = fs.OpenFile(path, options);

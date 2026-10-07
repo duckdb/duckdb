@@ -173,7 +173,7 @@ void FlowFinalize(AggregateFunction::FinalizeInput &input) {
 // Resolves an ANY return type to INTEGER through the binding context. The
 // aggregate keeps the last int32 it saw and finalizes to double that value.
 void AnyReturnBind(AggregateFunction::BindInput &input) {
-	input.SetReturnType(input.GetContext().ParseType("INTEGER"));
+	input.SetReturnType(input.GetContext().GetFactory().ParseType("INTEGER"));
 }
 
 void LastSize(AggregateFunction::SizeInput &input) {
@@ -272,14 +272,14 @@ TEST_CASE("Stable C++API: aggregate function registers and executes", "[cpp_api]
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	destroy_runs = 0;
 
 	auto function = AggregateFunction::Create(conn);
 	function.SetName("cpp_sum")
 	    .WithSignature([&](FunctionSignature &sig) {
-		    sig.AddParameter("a", ctx.ParseType("INTEGER")).SetReturnType(ctx.ParseType("BIGINT"));
+		    sig.AddParameter("a", factory.ParseType("INTEGER")).SetReturnType(factory.ParseType("BIGINT"));
 	    })
 	    .SetSizeCallback(SumSize)
 	    .SetInitCallback(SumInit)
@@ -307,7 +307,7 @@ TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", 
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	bind_runs = 0;
 	size_runs = 0;
@@ -318,7 +318,7 @@ TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", 
 
 	auto function = AggregateFunction::Create(conn);
 	function.SetName("cpp_flow_sum").SetUserData<Factor>(Factor {3});
-	function.GetSignature().AddParameter("a", ctx.ParseType("INTEGER")).SetReturnType(ctx.ParseType("BIGINT"));
+	function.GetSignature().AddParameter("a", factory.ParseType("INTEGER")).SetReturnType(factory.ParseType("BIGINT"));
 	function.SetBindCallback(FlowBind)
 	    .SetSizeCallback(FlowSize)
 	    .SetInitCallback(FlowInit)
@@ -348,7 +348,7 @@ TEST_CASE("Stable C++API: aggregate function bind resolves an ANY return type", 
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	auto function = AggregateFunction::Create(conn);
 	function.SetName("cpp_double_last")
@@ -359,8 +359,8 @@ TEST_CASE("Stable C++API: aggregate function bind resolves an ANY return type", 
 	    .SetCombineCallback(LastCombine)
 	    .SetFinalizeCallback(DoubleLastFinalize);
 	function.GetSignature()
-	    .AddParameter("a", ctx.ParseType("INTEGER"))
-	    .SetReturnType(ctx.CreateType(LogicalTypeId::ANY));
+	    .AddParameter("a", factory.ParseType("INTEGER"))
+	    .SetReturnType(factory.CreateType(LogicalTypeId::ANY));
 	function.Register();
 
 	auto result = conn.Execute("SELECT cpp_double_last(21)");
@@ -372,7 +372,7 @@ TEST_CASE("Stable C++API: aggregate function bind reads argument types and const
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	auto function = AggregateFunction::Create(conn);
 	function.SetName("cpp_agg_arg_probe")
@@ -383,9 +383,9 @@ TEST_CASE("Stable C++API: aggregate function bind reads argument types and const
 	    .SetCombineCallback(ArgProbeCombine)
 	    .SetFinalizeCallback(ArgProbeFinalize);
 	function.GetSignature()
-	    .AddParameter("a", ctx.CreateType(LogicalTypeId::ANY))
-	    .AddParameter("b", ctx.ParseType("INTEGER"))
-	    .SetReturnType(ctx.CreateType(LogicalTypeId::ANY));
+	    .AddParameter("a", factory.CreateType(LogicalTypeId::ANY))
+	    .AddParameter("b", factory.ParseType("INTEGER"))
+	    .SetReturnType(factory.CreateType(LogicalTypeId::ANY));
 	function.Register();
 
 	agg_arg_probe = {};
@@ -413,8 +413,8 @@ TEST_CASE("Stable C++API: aggregate function callback errors fail the query", "[
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
-	const auto integer = ctx.ParseType("INTEGER");
+	auto &factory = conn.GetFactory();
+	const auto integer = factory.ParseType("INTEGER");
 
 	auto failing = AggregateFunction::Create(conn);
 	failing.SetName("cpp_agg_fail")
@@ -448,8 +448,8 @@ TEST_CASE("Stable C++API: aggregate function registration validation", "[cpp_api
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
-	const auto integer = ctx.ParseType("INTEGER");
+	auto &factory = conn.GetFactory();
+	const auto integer = factory.ParseType("INTEGER");
 
 	// No name.
 	{
@@ -484,7 +484,7 @@ TEST_CASE("Stable C++API: aggregate function registration validation", "[cpp_api
 		    .SetUpdateCallback(SumUpdate)
 		    .SetCombineCallback(SumCombine)
 		    .SetFinalizeCallback(SumFinalize);
-		function.GetSignature().AddParameter("a", integer).SetReturnType(ctx.CreateType(LogicalTypeId::ANY));
+		function.GetSignature().AddParameter("a", integer).SetReturnType(factory.CreateType(LogicalTypeId::ANY));
 		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 }
@@ -497,14 +497,14 @@ TEST_CASE("Stable C++API: aggregate function properties", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	// Setting common and aggregate-specific properties leaves the function
 	// registrable and correct.
 	auto function = AggregateFunction::Create(conn);
 	function.SetName("prop_sum")
 	    .WithSignature([&](FunctionSignature &sig) {
-		    sig.AddParameter("a", ctx.ParseType("INTEGER")).SetReturnType(ctx.ParseType("BIGINT"));
+		    sig.AddParameter("a", factory.ParseType("INTEGER")).SetReturnType(factory.ParseType("BIGINT"));
 	    })
 	    .SetSizeCallback(SumSize)
 	    .SetInitCallback(SumInit)

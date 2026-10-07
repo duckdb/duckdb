@@ -23,21 +23,19 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Creates an empty data chunk with the given column types, drawing its allocator from a context.
+      Creates an empty data chunk with the given column types, drawing its allocator from a factory.
 
-      Like data_chunk_create, but the chunk's vectors are allocated through the
-      given context instead of the default allocator, so the memory is accounted
-      to that database. Use this from inside a callback or extension where a
-      context is already in hand. Allocates one FLAT vector per element of the
+      The chunk's vectors are allocated through the factory's database, so the
+      memory is accounted to that database. Allocates one FLAT vector per element of the
       types array, each at default capacity. Every vector starts at size 0; set
       it with vector_set_size once the vector is populated. The chunk is
       caller-owned and must be destroyed via data_chunk_destroy.
     role: constructor
     belongs_to: data_chunk
     parameters:
-      context:
-        type: context
-        description: The context whose allocator will be used for the chunk.
+      factory:
+        type: factory
+        description: The factory to create with.
       types:
         type: logical_type
         indirection: 1
@@ -62,15 +60,15 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Creates a deep copy of a data chunk, drawing its allocator from a context.
+      Creates a deep copy of a data chunk, drawing its allocator from a factory.
 
-      Allocates a new chunk with the source chunk's column types and copies all rows into it. Use this from inside a callback or extension where a context is already in hand. The copy is flattened and owns all its data, so it stays valid after the source chunk or whatever backs it (such as a column data collection scan state) is destroyed. The returned chunk is caller-owned and must be destroyed via data_chunk_destroy.
+      Allocates a new chunk with the source chunk's column types and copies all rows into it, through the factory's database. The copy is flattened and owns all its data, so it stays valid after the source chunk or whatever backs it (such as a column data collection scan state) is destroyed. The returned chunk is caller-owned and must be destroyed via data_chunk_destroy.
     role: constructor
     belongs_to: data_chunk
     parameters:
-      context:
-        type: context
-        description: The context whose allocator will be used for the copy.
+      factory:
+        type: factory
+        description: The factory to create with.
       chunk:
         type: data_chunk
         description: The chunk to copy. Left unchanged.

@@ -131,12 +131,22 @@ handles:
       valid only for the duration of that scope, or taken from a connection
       with `[[connection_get_context]]` and valid for as long as the
       connection is; the caller never destroys it. A context is the scope for
-      reading (settings, the file system) and for constructing values and
-      types, not for registration: catalog entries and instance-level hooks
-      are installed through an extension or a connection. Within a callback
-      scope a transaction is already active; through a connection's context,
-      calls that need one run in the connection's transaction or open their
-      own.
+      reading settings and the file system; values, types and data chunks are
+      created through its factory (`[[context_get_factory]]`). Within a
+      callback scope a transaction is already active; through a connection's
+      context, calls that need one run in the connection's transaction or
+      open their own.
+  factory:
+    description: |
+      A borrowed handle to the scope values, types, data chunks and column
+      data collections are created in. Taken from an instance
+      (`[[instance_get_factory]]`), a connection
+      (`[[connection_get_factory]]`) or a context (`[[context_get_factory]]`),
+      and valid for as long as its source is; the caller never destroys it.
+      A factory resolves in the scope of its source: a connection's or a
+      context's factory reaches the catalog and the client's settings, while an
+      instance's factory knows only the built-in types and casts, with
+      default settings, and refuses anything that needs a catalog.
 structs:
   str:
     description: |

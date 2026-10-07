@@ -212,6 +212,43 @@ inline auto Convert(duckdb_v2_environment_handle env) -> CV2Environment * {
 class CV2Option;
 class CV2Instance;
 
+//! A factory handle: the scope values, types and data chunks are created in.
+class CV2Factory {
+public:
+	virtual ~CV2Factory() = default;
+
+	//! The database whose allocator and buffer manager back what is created.
+	virtual DatabaseInstance &GetDatabase() = 0;
+	//! The client whose catalog and settings apply, or nullptr when only the built-ins do.
+	virtual optional_ptr<ClientContext> TryGetClientContext() = 0;
+	//! Runs `fn` with a transaction active on the client, for catalog lookups.
+	virtual void WithTransaction(const std::function<void(ClientContext &)> &fn) = 0;
+};
+
+inline auto Convert(duckdb_v2_factory_handle factory) -> CV2Factory * {
+	return reinterpret_cast<CV2Factory *>(factory);
+}
+
+inline auto Convert(CV2Factory *factory) -> duckdb_v2_factory_handle {
+	return reinterpret_cast<duckdb_v2_factory_handle>(factory);
+}
+
+//! An instance's factory: built-in types and casts only, no catalog.
+class CV2InstanceFactory final : public CV2Factory {
+public:
+	explicit CV2InstanceFactory(CV2Instance &instance) : instance(instance) {
+	}
+
+	DatabaseInstance &GetDatabase() override;
+	optional_ptr<ClientContext> TryGetClientContext() override {
+		return nullptr;
+	}
+	void WithTransaction(const std::function<void(ClientContext &)> &fn) override;
+
+private:
+	CV2Instance &instance;
+};
+
 //! The SQL ATTACH `(KEY value)` options of one attach, as the text values a quoted literal produces. Bound to the
 //! instance handle it was created from, which is what future per-instance resources (an allocator, say) would be
 //! taken from.
@@ -262,6 +299,7 @@ public:
 
 	CV2Environment &env;
 	mutex lock;
+	CV2InstanceFactory factory;
 
 private:
 	//! Staged until Start consumes it.
@@ -280,10 +318,26 @@ inline auto Convert(CV2Instance *instance) -> duckdb_v2_instance_handle {
 	return reinterpret_cast<duckdb_v2_instance_handle>(instance);
 }
 
+class CV2Context;
+
+//! A context's factory: the context's catalog and settings.
+class CV2ContextFactory final : public CV2Factory {
+public:
+	explicit CV2ContextFactory(CV2Context &context) : context(context) {
+	}
+
+	DatabaseInstance &GetDatabase() override;
+	optional_ptr<ClientContext> TryGetClientContext() override;
+	void WithTransaction(const std::function<void(ClientContext &)> &fn) override;
+
+private:
+	CV2Context &context;
+};
+
 //! A context handle: the client context plus how a call through it obtains a transaction.
 class CV2Context {
 public:
-	explicit CV2Context(ClientContext &context) : context(context) {
+	explicit CV2Context(ClientContext &context) : context(context), factory(*this) {
 	}
 	virtual ~CV2Context() = default;
 
@@ -291,7 +345,20 @@ public:
 	virtual void WithContext(const std::function<void(ClientContext &)> &fn) = 0;
 
 	ClientContext &context;
+	CV2ContextFactory factory;
 };
+
+inline DatabaseInstance &CV2ContextFactory::GetDatabase() {
+	return DatabaseInstance::GetDatabase(context.context);
+}
+
+inline optional_ptr<ClientContext> CV2ContextFactory::TryGetClientContext() {
+	return &context.context;
+}
+
+inline void CV2ContextFactory::WithTransaction(const std::function<void(ClientContext &)> &fn) {
+	context.WithContext(fn);
+}
 
 //! A context handed to a callback: the context lock is held and a transaction is already active.
 class CV2CallbackContext final : public CV2Context {

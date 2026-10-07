@@ -359,12 +359,12 @@ TEST_CASE("V2 file system: open options carry flags and values", "[capi_v2][file
 	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_WRITE, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	// Values a file system does not recognise are carried and ignored rather than rejected.
-	auto size = MakeInt64Value(fx.ctx, 4);
+	auto size = MakeInt64Value(fx.factory, 4);
 	auto name_str = Convert("file_size");
 	REQUIRE(duckdb_v2_file_open_options_set_value(options, &name_str, size, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// Copied at the call, so the value can go immediately.
 	duckdb_v2_value_destroy(&size);
-	auto unknown = MakeVarcharValue(fx.ctx, "nobody-reads-this");
+	auto unknown = MakeVarcharValue(fx.factory, "nobody-reads-this");
 	auto name_str2 = Convert("made_up_option");
 	REQUIRE(duckdb_v2_file_open_options_set_value(options, &name_str2, unknown, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_value_destroy(&unknown);
@@ -376,7 +376,7 @@ TEST_CASE("V2 file system: open options carry flags and values", "[capi_v2][file
 	duckdb_v2_file_destroy(&handle);
 
 	// One options object opens as many files as you like, and setting a name again replaces it.
-	auto again = MakeInt64Value(fx.ctx, 8);
+	auto again = MakeInt64Value(fx.factory, 8);
 	REQUIRE(duckdb_v2_file_open_options_set_value(options, &name_str, again, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_value_destroy(&again);
 	auto second = duckdb::TestCreatePath("v2_fs_options_second.bin");
@@ -400,7 +400,7 @@ TEST_CASE("V2 file system: open options null arguments", "[capi_v2][file_system]
 	auto fs = FsOf(fx.ctx);
 	duckdb_v2_file_open_options_handle options = nullptr;
 	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
-	auto value = MakeInt64Value(fx.ctx, 1);
+	auto value = MakeInt64Value(fx.factory, 1);
 
 	REQUIRE(duckdb_v2_file_open_options_create(nullptr, &options, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_file_open_options_create(fs, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);

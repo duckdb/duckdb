@@ -70,7 +70,7 @@ void OptionProbeExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_
 }
 
 void RegisterOptionProbe(EnvFixture &fx) {
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 	duckdb_v2_scalar_function_handle function = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name = Convert("probe_option");

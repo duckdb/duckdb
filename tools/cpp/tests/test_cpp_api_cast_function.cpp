@@ -117,17 +117,17 @@ void NoopCast(CastFunction::ExecInput &) {
 
 // Registers the TEMPERATURE type and hands back a logical type handle for it.
 auto RegisterTemperature(Connection &conn) -> LogicalType {
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 	auto type = CustomType::Create(conn);
-	type.SetName("TEMPERATURE_CELSIUS").SetBaseType(ctx.ParseType("INTEGER"));
+	type.SetName("TEMPERATURE_CELSIUS").SetBaseType(factory.ParseType("INTEGER"));
 	type.Register();
-	return ctx.ParseType("INTEGER").WithAlias(ctx, "TEMPERATURE_CELSIUS");
+	return factory.ParseType("INTEGER").WithAlias(factory, "TEMPERATURE_CELSIUS");
 }
 
 // Registers both casts, with `cost` as the VARCHAR -> TEMPERATURE implicit cast cost.
 void RegisterTemperatureCasts(Connection &conn, const LogicalType &temperature, int64_t cost) {
-	auto &ctx = conn.GetContext();
-	const auto varchar = ctx.ParseType("VARCHAR");
+	auto &factory = conn.GetFactory();
+	const auto varchar = factory.ParseType("VARCHAR");
 
 	auto to_text = CastFunction::Create(conn);
 	to_text.SetSourceType(temperature).SetTargetType(varchar).SetExecCallback(TempToText);
@@ -149,12 +149,12 @@ void ReadingExec(ScalarFunction::ExecInput &input) {
 }
 
 void RegisterReading(Connection &conn, const LogicalType &temperature) {
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 	auto function = ScalarFunction::Create(conn);
 	function.SetName("reading");
 	function.WithSignature([&](FunctionSignature &sig) {
 		sig.AddParameter("t", temperature);
-		sig.SetReturnType(ctx.ParseType("INTEGER"));
+		sig.SetReturnType(factory.ParseType("INTEGER"));
 	});
 	function.SetExecCallback(ReadingExec);
 	function.Register();
@@ -166,10 +166,10 @@ TEST_CASE("Stable C++API: custom type registers and resolves in SQL", "[cpp_api]
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	auto type = CustomType::Create(conn);
-	type.SetName("TEMPERATURE_CELSIUS").SetBaseType(ctx.ParseType("INTEGER"));
+	type.SetName("TEMPERATURE_CELSIUS").SetBaseType(factory.ParseType("INTEGER"));
 	type.Register();
 
 	// The name resolves case-insensitively, and a value of it reports the custom name rather than the base type's.
@@ -184,12 +184,12 @@ TEST_CASE("Stable C++API: custom type registration errors", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	// No name.
 	{
 		auto type = CustomType::Create(conn);
-		type.SetBaseType(ctx.ParseType("INTEGER"));
+		type.SetBaseType(factory.ParseType("INTEGER"));
 		REQUIRE_THROWS_MATCHES(type.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// No base type.
@@ -290,9 +290,9 @@ TEST_CASE("Stable C++API: cast function registration errors", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
-	const auto integer = ctx.ParseType("INTEGER");
-	const auto varchar = ctx.ParseType("VARCHAR");
+	auto &factory = conn.GetFactory();
+	const auto integer = factory.ParseType("INTEGER");
+	const auto varchar = factory.ParseType("VARCHAR");
 
 	// Nothing configured, then each missing piece in turn.
 	auto function = CastFunction::Create(conn);

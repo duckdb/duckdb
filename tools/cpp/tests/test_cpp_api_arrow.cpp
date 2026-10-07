@@ -22,7 +22,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	// Both handles need a Context, which only a callback has, so the round-trip runs inside a scalar function. A
 	// callback must not use Catch assertions, so what it observes is latched and checked after the query.
@@ -43,7 +43,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 		auto &context = input.GetContext();
 
 		std::vector<LogicalType> types;
-		types.push_back(context.ParseType("BIGINT"));
+		types.push_back(context.GetFactory().ParseType("BIGINT"));
 		ArrowExporter exporter(context, types, {"a"});
 
 		// The exporter's schema is what an importer resolves, so the two agree by construction.
@@ -62,7 +62,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 		}
 
 		// Build a one-row chunk, push it out to Arrow and read it straight back.
-		DataChunk chunk(context, types);
+		DataChunk chunk(context.GetFactory(), types);
 		auto column = chunk.GetVector(0);
 		column.GetDataMutable<int64_t>()[0] = 4242;
 		column.SetSize(1);
@@ -84,7 +84,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 			out[i] = 1;
 		}
 	});
-	const auto integer = ctx.ParseType("INTEGER");
+	const auto integer = factory.ParseType("INTEGER");
 	function.GetSignature().AddParameter("x", integer).SetReturnType(integer);
 	function.Register();
 

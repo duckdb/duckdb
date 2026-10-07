@@ -70,7 +70,7 @@ bool TypeQueryFails(duckdb_v2_connection_handle conn, const char *sql) {
 
 TEST_CASE("V2 custom type: register on connection and use in SQL", "[capi_v2][custom_type]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	auto type = MakeCustomType(fx.conn, "TEMPERATURE", integer);
 	REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -93,7 +93,8 @@ TEST_CASE("V2 custom type: base type keeps its parameters", "[capi_v2][custom_ty
 	EnvFixture fx;
 
 	// A parameterised base type carries its parameters into the custom type.
-	auto decimal = MakeType(fx.ctx, "decimal", nullptr, {MakeInt32Value(fx.ctx, 5), MakeInt32Value(fx.ctx, 2)});
+	auto decimal =
+	    MakeType(fx.factory, "decimal", nullptr, {MakeInt32Value(fx.factory, 5), MakeInt32Value(fx.factory, 2)});
 	auto type = MakeCustomType(fx.conn, "MONEY", decimal);
 	REQUIRE(duckdb_v2_custom_type_register(type, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_custom_type_destroy(&type);
@@ -107,8 +108,8 @@ TEST_CASE("V2 custom type: base type keeps its parameters", "[capi_v2][custom_ty
 
 TEST_CASE("V2 custom type: registration refusals", "[capi_v2][custom_type]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// No name.
 	{
@@ -142,7 +143,7 @@ TEST_CASE("V2 custom type: registration refusals", "[capi_v2][custom_type]") {
 
 TEST_CASE("V2 custom type: null arguments and destroy null-safety", "[capi_v2][custom_type]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	duckdb_v2_custom_type_handle type = nullptr;
 	REQUIRE(duckdb_v2_custom_type_create_with_connection(nullptr, &type, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);

@@ -151,8 +151,8 @@ void SumFinalize(duckdb_v2_aggregate_function_finalize_info_handle info, duckdb_
 
 // Registers my_sum on the connection and destroys the builder handle.
 void RegisterMySum(EnvFixture &fx) {
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 
 	auto function = MakeAggregate(fx.conn, "my_sum");
 	auto sig = AggSigOf(function);
@@ -216,6 +216,8 @@ void AggFlowDestroyBindData(void *) {
 
 void AggFlowBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_function_bind_info_handle result,
                  duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	if (duckdb_v2_function_bind_get_user_data(info, &agg_flow.user_data_in_bind, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -225,7 +227,7 @@ void AggFlowBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_f
 	}
 	// Resolve the declared ANY return type to a concrete INTEGER.
 	duckdb_v2_logical_type_handle integer = nullptr;
-	if (duckdb_v2_context_create_type_from_id(context, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
+	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -345,6 +347,8 @@ struct {
 
 void AggArgProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggregate_function_bind_info_handle result,
                      duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	if (duckdb_v2_function_bind_get_arg_count(info, &agg_arg_probe.arg_count, nullptr, nullptr, nullptr, err) !=
 	    DUCKDB_V2_ERROR_NONE) {
 		return;
@@ -378,7 +382,7 @@ void AggArgProbeBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_aggrega
 	}
 
 	duckdb_v2_logical_type_handle integer = nullptr;
-	if (duckdb_v2_context_create_type_from_id(context, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
+	if (duckdb_v2_factory_create_type_from_id(factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER, nullptr, nullptr, 0, &integer,
 	                                          err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
@@ -443,8 +447,8 @@ TEST_CASE("V2 aggregate: register on connection and execute", "[capi_v2][aggrega
 
 TEST_CASE("V2 aggregate: bind callback resolves ANY return and bind data flows", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	auto function = MakeAggregate(fx.conn, "any_double");
 	auto sig = AggSigOf(function);
@@ -496,8 +500,8 @@ TEST_CASE("V2 aggregate: bind callback resolves ANY return and bind data flows",
 
 TEST_CASE("V2 aggregate: bind reads argument count, types and constants", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// agg_arg_probe(x ANY, y INTEGER) -> ANY
 	auto function = MakeAggregate(fx.conn, "agg_arg_probe");
@@ -555,7 +559,7 @@ TEST_CASE("V2 aggregate: bind reads argument count, types and constants", "[capi
 // An error set in the update callback's slot fails the query with its code.
 TEST_CASE("V2 aggregate: update error propagates to the result", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	auto function = MakeAggregate(fx.conn, "agg_always_fails");
 	auto sig = AggSigOf(function);
@@ -594,8 +598,8 @@ TEST_CASE("V2 aggregate: update error propagates to the result", "[capi_v2][aggr
 
 TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// Sets every required callback except one, controlled by the arguments.
 	auto configure = [&](duckdb_v2_aggregate_function_handle function, bool with_size, bool with_init, bool with_update,
@@ -690,8 +694,8 @@ TEST_CASE("V2 aggregate: null arguments and destroy null-safety", "[capi_v2][agg
 
 TEST_CASE("V2 aggregate: function properties", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 
 	// Both COMMON and AGGREGATE group keys are accepted.
 	auto function = MakeAggregate(fx.conn, "prop_sum");
@@ -785,9 +789,9 @@ void WeightedUpdate(duckdb_v2_aggregate_function_update_info_handle info, duckdb
 
 TEST_CASE("V2 aggregate: named-only arguments reach update", "[capi_v2][aggregate_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto bigint = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
-	auto one = MakeInt32Value(fx.ctx, 1);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto one = MakeInt32Value(fx.factory, 1);
 
 	auto function = MakeAggregate(fx.conn, "weighted_sum");
 	auto sig = AggSigOf(function);

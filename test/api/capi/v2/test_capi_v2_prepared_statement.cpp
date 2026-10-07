@@ -77,11 +77,11 @@ int64_t PsScalarI64(duckdb_v2_result_handle r) {
 }
 
 // Executes a prepared statement with positional BIGINT parameters and returns its rows.
-std::vector<int64_t> PsExecuteWith(duckdb_v2_context_handle ctx, duckdb_v2_prepared_statement_handle prepared,
+std::vector<int64_t> PsExecuteWith(duckdb_v2_factory_handle factory, duckdb_v2_prepared_statement_handle prepared,
                                    const std::vector<int64_t> &params) {
 	std::vector<duckdb_v2_value_handle> values;
 	for (auto param : params) {
-		values.push_back(MakeInt64Value(ctx, param));
+		values.push_back(MakeInt64Value(factory, param));
 	}
 	duckdb_v2_result_handle r = nullptr;
 	auto rc = duckdb_v2_prepared_statement_execute(prepared, nullptr, values.empty() ? nullptr : values.data(),
@@ -117,11 +117,11 @@ TEST_CASE("V2: a prepared statement executes repeatedly", "[capi_v2][prepared_st
 	REQUIRE(prepared != nullptr);
 
 	// Three executions from one handle, each with its own values; nothing carries over.
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {0}) == std::vector<int64_t> {1, 2, 3, 4});
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {2}) == std::vector<int64_t> {3, 4});
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {9}).empty());
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {0}) == std::vector<int64_t> {1, 2, 3, 4});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {2}) == std::vector<int64_t> {3, 4});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {9}).empty());
 	// And again with the first value, to pin that no state accumulated.
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {0}) == std::vector<int64_t> {1, 2, 3, 4});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {0}) == std::vector<int64_t> {1, 2, 3, 4});
 
 	duckdb_v2_prepared_statement_destroy(&prepared);
 	REQUIRE(prepared == nullptr);
@@ -141,8 +141,8 @@ TEST_CASE("V2: prepared_statement_create borrows the statement", "[capi_v2][prep
 	REQUIRE(second != nullptr);
 	REQUIRE(first != second);
 
-	REQUIRE(PsExecuteWith(fx.ctx, first, {}) == std::vector<int64_t> {42});
-	REQUIRE(PsExecuteWith(fx.ctx, second, {}) == std::vector<int64_t> {42});
+	REQUIRE(PsExecuteWith(fx.factory, first, {}) == std::vector<int64_t> {42});
+	REQUIRE(PsExecuteWith(fx.factory, second, {}) == std::vector<int64_t> {42});
 
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, nullptr, nullptr, 0, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -182,7 +182,7 @@ TEST_CASE("V2: require_cacheable accepts a reused plan", "[capi_v2][prepared_sta
 	bool reuses = false;
 	REQUIRE(duckdb_v2_prepared_statement_reuses_plan(prepared, &reuses, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(reuses);
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {41}) == std::vector<int64_t> {42});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {41}) == std::vector<int64_t> {42});
 
 	duckdb_v2_prepared_statement_destroy(&prepared);
 }
@@ -210,8 +210,8 @@ TEST_CASE("V2: prepared_statement_execute binds positional parameters", "[capi_v
 	REQUIRE(prepared != nullptr);
 
 	// Positional binding is order-sensitive: $1 is element 0.
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {10, 4}) == std::vector<int64_t> {6});
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {4, 10}) == std::vector<int64_t> {-6});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {10, 4}) == std::vector<int64_t> {6});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {4, 10}) == std::vector<int64_t> {-6});
 
 	duckdb_v2_prepared_statement_destroy(&prepared);
 }
@@ -221,8 +221,8 @@ TEST_CASE("V2: prepared_statement_execute binds named parameters", "[capi_v2][pr
 	auto prepared = PsPrepare(fx.conn, "SELECT $a - $b");
 	REQUIRE(prepared != nullptr);
 
-	duckdb_v2_value_handle va = MakeInt64Value(fx.ctx, 10);
-	duckdb_v2_value_handle vb = MakeInt64Value(fx.ctx, 4);
+	duckdb_v2_value_handle va = MakeInt64Value(fx.factory, 10);
+	duckdb_v2_value_handle vb = MakeInt64Value(fx.factory, 4);
 
 	// Keyed by name, so the array order is irrelevant: the same pairing both ways.
 	duckdb_v2_str names[2] = {Convert("a"), Convert("b")};
@@ -262,7 +262,7 @@ TEST_CASE("V2: prepared_statement_execute copies its parameter values", "[capi_v
 
 	// Destroy the value before a single row is read: it was copied in, so the still-lazy
 	// result is unaffected.
-	duckdb_v2_value_handle v = MakeInt64Value(fx.ctx, 7);
+	duckdb_v2_value_handle v = MakeInt64Value(fx.factory, 7);
 	duckdb_v2_value_handle values[1] = {v};
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -323,7 +323,7 @@ TEST_CASE("V2: a prepared DML reports its changed-row count", "[capi_v2][prepare
 	REQUIRE(prepared != nullptr);
 
 	for (int64_t value : {10, 20, 30}) {
-		duckdb_v2_value_handle v = MakeInt64Value(fx.ctx, value);
+		duckdb_v2_value_handle v = MakeInt64Value(fx.factory, value);
 		duckdb_v2_value_handle values[1] = {v};
 		duckdb_v2_result_handle r = nullptr;
 		REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, values, 1, &r, nullptr) ==
@@ -401,7 +401,7 @@ TEST_CASE("V2: a prepared statement outlives its connection", "[capi_v2][prepare
 	// The handle keeps the session alive, the same guarantee an undrained result carries.
 	duckdb_v2_connection_destroy(&other);
 	REQUIRE(other == nullptr);
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {}) == std::vector<int64_t> {1, 2, 3, 4});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {}) == std::vector<int64_t> {1, 2, 3, 4});
 
 	duckdb_v2_prepared_statement_destroy(&prepared);
 }
@@ -465,7 +465,7 @@ TEST_CASE("V2: prepared_statement_execute refuses while a result is live", "[cap
 
 	REQUIRE(DrainRowCount(live) == 100000);
 	duckdb_v2_result_destroy(&live);
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {}) == std::vector<int64_t> {1});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {}) == std::vector<int64_t> {1});
 
 	duckdb_v2_prepared_statement_destroy(&prepared);
 }
@@ -503,7 +503,7 @@ TEST_CASE("V2: a failed prepared execution frees the connection", "[capi_v2][pre
 
 	// Positional values for a named parameter: a bind error, raised after the slot was
 	// claimed, so this pins that the failure path releases it.
-	duckdb_v2_value_handle v = MakeInt64Value(fx.ctx, 1);
+	duckdb_v2_value_handle v = MakeInt64Value(fx.factory, 1);
 	duckdb_v2_value_handle values[1] = {v};
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, nullptr, values, 1, &r, nullptr) != DUCKDB_V2_ERROR_NONE);
@@ -516,7 +516,7 @@ TEST_CASE("V2: a failed prepared execution frees the connection", "[capi_v2][pre
 	duckdb_v2_result_destroy(&r);
 
 	// And so is the prepared statement: a failed execution does not consume it.
-	duckdb_v2_value_handle named = MakeInt64Value(fx.ctx, 7);
+	duckdb_v2_value_handle named = MakeInt64Value(fx.factory, 7);
 	duckdb_v2_value_handle named_values[1] = {named};
 	duckdb_v2_str names[1] = {Convert("a")};
 	REQUIRE(duckdb_v2_prepared_statement_execute(prepared, names, named_values, 1, &r, nullptr) ==
@@ -593,7 +593,7 @@ TEST_CASE("V2: prepared_statement functions guard null arguments", "[capi_v2][pr
 	REQUIRE(duckdb_v2_prepared_statement_reuses_plan(prepared, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// Every rejection above left the prepared statement usable.
-	REQUIRE(PsExecuteWith(fx.ctx, prepared, {}) == std::vector<int64_t> {1});
+	REQUIRE(PsExecuteWith(fx.factory, prepared, {}) == std::vector<int64_t> {1});
 	duckdb_v2_prepared_statement_destroy(&prepared);
 }
 

@@ -86,12 +86,14 @@ DUCKDB_V2_ERROR ReplClaimFunction(duckdb_v2_replacement_scan_info_handle info, c
 // Claims every name with range(2).
 void ReplClaimRange(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle context,
                     duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	ReplRecordName(info, err);
 	if (ReplClaimFunction(info, "range", err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint(context, 2, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(factory, 2, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto rc = duckdb_v2_replacement_scan_add_argument(info, value, err);
@@ -143,10 +145,12 @@ void ReplClaimUnknown(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_con
 // Exercises the claim-form rules, then claims by function.
 void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_context_handle context,
                     duckdb_v2_error_info_handle *err) {
+	duckdb_v2_factory_handle factory = nullptr;
+	duckdb_v2_context_get_factory(context, &factory, nullptr);
 	// An argument before a function name is refused. The error slot is not touched by a failing call, so these
 	// probes pass nullptr and read the return code instead.
 	duckdb_v2_value_handle value = nullptr;
-	if (duckdb_v2_value_create_bigint(context, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(factory, 1, &value, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	repl_observed.bare_argument_rc = duckdb_v2_replacement_scan_add_argument(info, value, nullptr);
@@ -161,7 +165,7 @@ void ReplClaimRules(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_conte
 	repl_observed.mixed_form_rc = duckdb_v2_replacement_scan_set_subquery(info, &sql_str, nullptr);
 
 	duckdb_v2_value_handle two = nullptr;
-	if (duckdb_v2_value_create_bigint(context, 2, &two, err) != DUCKDB_V2_ERROR_NONE) {
+	if (duckdb_v2_value_create_bigint(factory, 2, &two, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	duckdb_v2_replacement_scan_add_argument(info, two, err);
@@ -282,16 +286,16 @@ DUCKDB_V2_ERROR ReplQueryError(duckdb_v2_connection_handle conn, const char *sql
 // ---------------------------------------------------------------------------
 
 // A single-column BIGINT collection holding the given values.
-duckdb_v2_column_data_collection_handle ReplMakeCollection(duckdb_v2_context_handle ctx,
+duckdb_v2_column_data_collection_handle ReplMakeCollection(duckdb_v2_factory_handle factory,
                                                            const std::vector<int64_t> &values) {
-	auto bigint = MakeType(ctx, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	auto bigint = MakeType(factory, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
 	duckdb_v2_logical_type_handle types[1] = {bigint};
 
 	duckdb_v2_column_data_collection_handle cdc = nullptr;
-	REQUIRE(duckdb_v2_column_data_collection_create(ctx, types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_column_data_collection_create(factory, types, 1, &cdc, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	duckdb_v2_data_chunk_handle chunk = nullptr;
-	auto chunk_rc = duckdb_v2_data_chunk_create(ctx, types, 1, &chunk, nullptr);
+	auto chunk_rc = duckdb_v2_data_chunk_create(factory, types, 1, &chunk, nullptr);
 	duckdb_v2_logical_type_destroy(&bigint);
 	REQUIRE(chunk_rc == DUCKDB_V2_ERROR_NONE);
 
@@ -608,7 +612,7 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 
 TEST_CASE("V2 replacement scan: claims a column data collection", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.ctx, {10, 20});
+	auto cdc = ReplMakeCollection(fx.factory, {10, 20});
 
 	ReplRegistry registry;
 	registry.name = "my_batch";
@@ -635,7 +639,7 @@ TEST_CASE("V2 replacement scan: claims a column data collection", "[capi_v2][rep
 
 TEST_CASE("V2 replacement scan: collection column names", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.ctx, {5, 6});
+	auto cdc = ReplMakeCollection(fx.factory, {5, 6});
 
 	ReplRegistry registry;
 	registry.name = "named_batch";
@@ -656,7 +660,7 @@ TEST_CASE("V2 replacement scan: collection column names", "[capi_v2][replacement
 
 TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.ctx, {10, 20});
+	auto cdc = ReplMakeCollection(fx.factory, {10, 20});
 
 	ReplRegistry registry;
 	registry.name = "cached_batch";
@@ -692,7 +696,7 @@ TEST_CASE("V2 replacement scan: a prepared collection claim caches its borrow", 
 
 TEST_CASE("V2 replacement scan: empty collection binds and yields no rows", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.ctx, {});
+	auto cdc = ReplMakeCollection(fx.factory, {});
 
 	ReplRegistry registry;
 	registry.name = "empty_batch";
@@ -707,7 +711,7 @@ TEST_CASE("V2 replacement scan: empty collection binds and yields no rows", "[ca
 
 TEST_CASE("V2 replacement scan: collection column name validation", "[capi_v2][replacement_scan]") {
 	EnvFixture fx;
-	auto cdc = ReplMakeCollection(fx.ctx, {1, 2});
+	auto cdc = ReplMakeCollection(fx.factory, {1, 2});
 
 	ReplRegistry registry;
 	registry.name = "probe_batch";

@@ -210,7 +210,7 @@ TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE t(a INTEGER, b VARCHAR)").Drain();
 
 	auto iter = conn.ParseSQL("SELECT a, b FROM t WHERE a = $1");
@@ -220,12 +220,12 @@ TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 	auto sig = conn.Bind(stmt);
 	REQUIRE(sig.output.GetFieldCount() == 2);
 	REQUIRE(sig.output.GetFieldName(0) == "a");
-	REQUIRE(sig.output.GetFieldType(0) == ctx.ParseType("INTEGER"));
+	REQUIRE(sig.output.GetFieldType(0) == factory.ParseType("INTEGER"));
 	REQUIRE(sig.output.GetFieldName(1) == "b");
-	REQUIRE(sig.output.GetFieldType(1) == ctx.ParseType("VARCHAR"));
+	REQUIRE(sig.output.GetFieldType(1) == factory.ParseType("VARCHAR"));
 	REQUIRE(sig.parameters.GetFieldCount() == 1);
 	REQUIRE(sig.parameters.GetFieldName(0) == "1");
-	REQUIRE(sig.parameters.GetFieldType(0) == ctx.ParseType("INTEGER"));
+	REQUIRE(sig.parameters.GetFieldType(0) == factory.ParseType("INTEGER"));
 
 	// Non-consuming: the statement is still alive and re-bindable.
 	REQUIRE(static_cast<bool>(stmt));
@@ -244,14 +244,14 @@ TEST_CASE("Stable C++API: QueryResult GetSchema", "[cpp_api][query_result]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 
 	auto result = conn.Execute("SELECT 1 AS a, 'x' AS b");
 	auto schema = result.GetSchema();
 	REQUIRE(schema.GetFieldCount() == 2);
 	REQUIRE(schema.GetFieldName(0) == "a");
 	REQUIRE(schema.GetFieldName(1) == "b");
-	REQUIRE(schema.GetFieldType(0) == ctx.ParseType("INTEGER"));
+	REQUIRE(schema.GetFieldType(0) == factory.ParseType("INTEGER"));
 }
 TEST_CASE("Stable C++API: QueryResult result and statement types", "[cpp_api][query_result]") {
 	using namespace duckdb::cxx;
@@ -298,15 +298,15 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE scores(id INTEGER, score INTEGER)").Drain();
 	conn.Execute("INSERT INTO scores VALUES (1, 40), (2, 55), (3, 70), (4, 90)").Drain();
 
 	// Value is move-only, so a parameter list is built by move, not brace-init.
-	auto Params = [&ctx](std::initializer_list<int64_t> values) {
+	auto Params = [&factory](std::initializer_list<int64_t> values) {
 		std::vector<Value> params;
 		for (auto value : values) {
-			params.push_back(Value::Create(ctx, int64_t(value)));
+			params.push_back(Value::Create(factory, int64_t(value)));
 		}
 		return params;
 	};
@@ -320,11 +320,11 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 		auto sig = conn.Bind(stmt);
 		REQUIRE(sig.output.GetFieldCount() == 2);
 		REQUIRE(sig.output.GetFieldName(0) == "id");
-		REQUIRE(sig.output.GetFieldType(0) == ctx.ParseType("INTEGER"));
+		REQUIRE(sig.output.GetFieldType(0) == factory.ParseType("INTEGER"));
 		REQUIRE(sig.output.GetFieldName(1) == "score");
 		REQUIRE(sig.parameters.GetFieldCount() == 1);
-		REQUIRE(sig.parameters.GetFieldName(0) == "1");                      // $1 -> "1"
-		REQUIRE(sig.parameters.GetFieldType(0) == ctx.ParseType("INTEGER")); // inferred from score >= $1
+		REQUIRE(sig.parameters.GetFieldName(0) == "1");                          // $1 -> "1"
+		REQUIRE(sig.parameters.GetFieldType(0) == factory.ParseType("INTEGER")); // inferred from score >= $1
 
 		// Execute with one value, then another: different results, same statement, no
 		// re-parse and no re-bind.
@@ -384,12 +384,12 @@ TEST_CASE("Stable C++API: Connection Execute binds named parameters", "[cpp_api]
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	auto &ctx = conn.GetContext();
+	auto &factory = conn.GetFactory();
 	auto statement = conn.ParseSQL("SELECT $left::BIGINT - $right::BIGINT").Next();
 
 	std::vector<NamedParam> params;
-	params.push_back({"right", Value::Create(ctx, int64_t(4))});
-	params.push_back({"left", Value::Create(ctx, int64_t(10))});
+	params.push_back({"right", Value::Create(factory, int64_t(4))});
+	params.push_back({"left", Value::Create(factory, int64_t(10))});
 	auto result = conn.Execute(statement, params);
 	REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 6);
 }

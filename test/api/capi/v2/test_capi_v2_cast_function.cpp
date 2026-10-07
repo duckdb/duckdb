@@ -167,7 +167,7 @@ duckdb_v2_logical_type_handle RegisterTemperatureType(EnvFixture &fx, duckdb_v2_
 	duckdb_v2_custom_type_destroy(&custom);
 
 	duckdb_v2_logical_type_handle temperature = nullptr;
-	REQUIRE(duckdb_v2_context_create_type_with_alias(fx.ctx, integer, &name_str, &temperature, nullptr) ==
+	REQUIRE(duckdb_v2_factory_create_type_with_alias(fx.factory, integer, &name_str, &temperature, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	return temperature;
 }
@@ -295,8 +295,8 @@ void RegisterReading(duckdb_v2_connection_handle conn, duckdb_v2_logical_type_ha
 
 TEST_CASE("V2 cast: round-trip between a custom type and VARCHAR", "[capi_v2][cast_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto varchar = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	auto temperature = RegisterTemperatureType(fx, integer);
 	RegisterTemperatureCasts(fx.conn, temperature, varchar, -1);
 	duckdb_v2_logical_type_destroy(&temperature);
@@ -323,8 +323,8 @@ TEST_CASE("V2 cast: round-trip between a custom type and VARCHAR", "[capi_v2][ca
 
 TEST_CASE("V2 cast: normal casts abort, try casts yield NULL", "[capi_v2][cast_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto varchar = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 	auto temperature = RegisterTemperatureType(fx, integer);
 	RegisterTemperatureCasts(fx.conn, temperature, varchar, -1);
 	duckdb_v2_logical_type_destroy(&temperature);
@@ -351,8 +351,8 @@ TEST_CASE("V2 cast: implicit cast cost governs argument conversion", "[capi_v2][
 	// bound loosely and reaches any parameter type regardless of the cast's cost.
 	{
 		EnvFixture fx;
-		auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-		auto varchar = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+		auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+		auto varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 		auto temperature = RegisterTemperatureType(fx, integer);
 		RegisterTemperatureCasts(fx.conn, temperature, varchar, -1);
 		RegisterReading(fx.conn, temperature, integer);
@@ -367,8 +367,8 @@ TEST_CASE("V2 cast: implicit cast cost governs argument conversion", "[capi_v2][
 	// A non-negative cost makes the same cast available to the binder.
 	{
 		EnvFixture fx;
-		auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-		auto varchar = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+		auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+		auto varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
 		auto temperature = RegisterTemperatureType(fx, integer);
 		RegisterTemperatureCasts(fx.conn, temperature, varchar, 0);
 		RegisterReading(fx.conn, temperature, integer);
@@ -382,9 +382,9 @@ TEST_CASE("V2 cast: implicit cast cost governs argument conversion", "[capi_v2][
 
 TEST_CASE("V2 cast: registration refusals", "[capi_v2][cast_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
-	auto varchar = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
-	auto any = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto varchar = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_VARCHAR);
+	auto any = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_ANY);
 
 	// Nothing configured at all, then each missing piece in turn.
 	{
@@ -422,7 +422,7 @@ TEST_CASE("V2 cast: registration refusals", "[capi_v2][cast_function]") {
 
 TEST_CASE("V2 cast: null arguments and destroy null-safety", "[capi_v2][cast_function]") {
 	EnvFixture fx;
-	auto integer = MakeType(fx.ctx, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
 
 	duckdb_v2_cast_function_handle function = nullptr;
 	REQUIRE(duckdb_v2_cast_function_create_with_connection(nullptr, &function, nullptr) ==

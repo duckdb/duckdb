@@ -15,8 +15,9 @@ module: value
 #
 # Leaf payloads cross the boundary through the per-kind typed pairs:
 # value_create_<kind> builds one, and value_get_<kind> reads one back. The
-# constructors take a context because a value's construction is scoped to a
-# catalog; outside DuckDB, take one from a connection via connection_get_context.
+# constructors take a factory, from an instance, a connection or a callback's
+# context; an instance's factory infers types and casts with the built-in rules
+# only, without the connection's settings.
 # The getters need no scope. A getter reads its own type id directly and converts anything
 # else through the default cast set, on a copy, so a read never alters the
 # value it reads. Three do not convert: value_get_varchar and value_get_blob
@@ -903,7 +904,7 @@ functions:
     return_type: ERROR
 
   # --------------------------------------------------------------------------------------------------------------------
-  # Constructors (Context)
+  # Constructors
   # --------------------------------------------------------------------------------------------------------------------
   value_create_null:
     lifecycle:
@@ -916,9 +917,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       type:
         type: logical_type
         description: The borrowed logical type to attach to the NULL value.
@@ -945,9 +946,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: bool
         description: The bool to wrap.
@@ -974,9 +975,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: u8
         description: The uint8_t to wrap.
@@ -1003,9 +1004,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: u16
         description: The uint16_t to wrap.
@@ -1032,9 +1033,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: u32
         description: The uint32_t to wrap.
@@ -1061,9 +1062,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: u64
         description: The uint64_t to wrap.
@@ -1090,9 +1091,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: uhugeint_t
         indirection: 1
@@ -1121,9 +1122,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i8
         description: The int8_t to wrap.
@@ -1150,9 +1151,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i16
         description: The int16_t to wrap.
@@ -1179,9 +1180,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i32
         description: The int32_t to wrap.
@@ -1208,9 +1209,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The int64_t to wrap.
@@ -1237,9 +1238,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: hugeint_t
         indirection: 1
@@ -1268,9 +1269,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: str
         indirection: 1
@@ -1300,9 +1301,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: str
         indirection: 1
@@ -1332,9 +1333,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: f32
         description: The float to wrap.
@@ -1361,9 +1362,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: f64
         description: The double to wrap.
@@ -1390,9 +1391,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_type:
         type: logical_type
         description: The borrowed logical type to wrap.
@@ -1408,9 +1409,6 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
     return_type: ERROR
 
-  # --------------------------------------------------------------------------------------------------------------------
-  # Constructors (Connection)
-  # --------------------------------------------------------------------------------------------------------------------
   # -----------------------------------------------------------------------
   # Composite construction + descent + cast
   # -----------------------------------------------------------------------
@@ -1426,9 +1424,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i32
         description: The payload to wrap.
@@ -1456,9 +1454,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1486,9 +1484,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1518,9 +1516,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: u64
         description: The payload to wrap.
@@ -1548,9 +1546,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1578,9 +1576,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1608,9 +1606,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1638,9 +1636,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1669,9 +1667,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1700,9 +1698,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: i64
         description: The payload to wrap.
@@ -1730,9 +1728,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: interval_t
         indirection: 1
@@ -1765,9 +1763,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: hugeint_t
         indirection: 1
@@ -1804,9 +1802,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: hugeint_t
         indirection: 1
@@ -1837,9 +1835,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: str
         indirection: 1
@@ -1872,9 +1870,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       in_value:
         type: str
         indirection: 1
@@ -1915,9 +1913,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       child_type:
         type: logical_type
         description: Optional. The element type. Pass NULL to resolve it from the elements.
@@ -1956,9 +1954,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       child_type:
         type: logical_type
         description: Optional. The element type. Pass NULL to resolve it from the elements.
@@ -1997,9 +1995,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       names:
         type: identifier
         indirection: 1
@@ -2041,9 +2039,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       children:
         type: value
         indirection: 1
@@ -2080,9 +2078,9 @@ functions:
     role: constructor
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context to use for the construction.
+      factory:
+        type: factory
+        description: The factory to create with.
       key_type:
         type: logical_type
         description: Optional. The key type. Pass NULL to resolve it from the keys.
@@ -2184,7 +2182,7 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Casts a value to a target type, using a context.
+      Casts a value to a target type, using a factory.
 
       The conversion is the SQL-faithful, non-strict one, registered custom
       casts included, and a cast failure surfaces from the call. Together with
@@ -2192,19 +2190,18 @@ functions:
       included; casting a member value to a union type, or a VARCHAR to an enum
       type, is the sanctioned way to build UNION and ENUM values.
 
-      Runs in the caller's context scope, as create_type_from_text does: reach
-      it from a bind-phase callback or another context-holding scope, not from
-      an exec-phase worker callback. From outside DuckDB, pass the context of a
-      connection via connection_get_context.
+      A connection's or callback's factory casts with that client's cast
+      functions and settings (e.g. TimeZone). An instance's factory supports
+      only the built-in casts, with default settings.
 
       The input value and target type are borrowed. The returned value is
       caller-owned; destroy it via value_destroy.
     role: method
     belongs_to: value
     parameters:
-      ctx:
-        type: context
-        description: The context supplying the cast function set.
+      factory:
+        type: factory
+        description: The factory supplying the cast functions.
       value:
         type: value
         description: The borrowed value to cast.
