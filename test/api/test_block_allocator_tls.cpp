@@ -15,6 +15,9 @@
 
 #if defined(__linux__)
 #include <sys/mman.h>
+#elif defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/mach_vm.h>
 #endif
 
 using namespace duckdb;
@@ -157,6 +160,42 @@ struct BlockAllocatorFallbackData : public PrivateAllocatorData {
 	}
 };
 } // namespace
+
+#if defined(__APPLE__)
+TEST_CASE("BlockAllocator marks reused macOS pages as live", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 33;
+	constexpr idx_t POOL_SIZE = BLOCK_SIZE * BLOCK_COUNT;
+	auto private_data = make_uniq<BlockAllocatorFallbackData>();
+	auto &fallback_data = *private_data;
+	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
+	                   std::move(private_data));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, POOL_SIZE, POOL_SIZE);
+	vector<data_ptr_t> blocks;
+	for (idx_t iteration = 0; iteration < 3; iteration++) {
+		const auto value = uint8_t(iteration + 1);
+		for (idx_t i = 0; i < BLOCK_COUNT; i++) {
+			auto block = allocator.AllocateData(BLOCK_SIZE);
+			memset(block, value, BLOCK_SIZE);
+			blocks.push_back(block);
+		}
+		for (auto block : blocks) {
+			for (idx_t offset = 0; offset < BLOCK_SIZE; offset += vm_page_size) {
+				int32_t disposition;
+				int32_t reference_count;
+				REQUIRE(mach_vm_page_query(mach_task_self(), reinterpret_cast<mach_vm_address_t>(block + offset),
+				                           &disposition, &reference_count) == KERN_SUCCESS);
+				CHECK((disposition & VM_PAGE_QUERY_PAGE_REUSABLE) == 0);
+				CHECK(block[offset] == value);
+			}
+			allocator.FreeData(block, BLOCK_SIZE);
+		}
+		blocks.clear();
+		allocator.FlushAll();
+		CHECK(fallback_data.allocation_count == 0);
+	}
+}
+#endif
 
 TEST_CASE("BlockAllocator preserves cached blocks across allocator switches", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 4096;

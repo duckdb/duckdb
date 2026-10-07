@@ -122,6 +122,9 @@ static void OnFirstAllocation(const data_ptr_t pointer, const idx_t size) {
 	bool success = true;
 #if defined(_WIN32)
 	success = VirtualAlloc(pointer, size, MEM_COMMIT, PAGE_READWRITE);
+#elif defined(__APPLE__)
+	// Reclaimed pages remain reusable until explicitly claimed again.
+	success = madvise(pointer, size, MADV_FREE_REUSE) == 0;
 #endif
 	if (!success) {
 		throw InternalException("OnFirstAllocation failed");
@@ -244,8 +247,8 @@ private:
 		}
 		if (!untouched.empty()) {
 			const auto pointer = block_allocator->GetPointer(untouched.back());
-			untouched.pop_back();
 			OnFirstAllocation(pointer, block_allocator->block_size);
+			untouched.pop_back();
 			return pointer;
 		}
 		return nullptr;
