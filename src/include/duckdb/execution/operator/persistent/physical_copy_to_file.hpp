@@ -49,6 +49,11 @@ public:
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 	static void ReturnStatistics(DataChunk &chunk, CopyToFileInfo &written_file_info);
+	//! Adds the RETURN_STATS row of a COPY that wrote no file, so that RETURN_COLUMN_TYPES can still return the types
+	static void ReturnNoFileStatistics(DataChunk &chunk);
+	//! Sets the last column of every row in the chunk to the RETURN_COLUMN_TYPES value
+	static void ReturnColumnTypes(DataChunk &chunk, const vector<Identifier> &query_names,
+	                              const vector<LogicalType> &query_types);
 
 	bool Rotate() const;
 
@@ -135,6 +140,10 @@ public:
 	CopyOverwriteMode overwrite_mode;
 	//! What to return, e.g., number of written rows
 	CopyFunctionReturnType return_type;
+	//! Whether to also return the names and types of the copied query (RETURN_COLUMN_TYPES)
+	bool return_column_types = false;
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
 	//! Whether to write an empty file if there was no data
 	bool write_empty_file;
 
