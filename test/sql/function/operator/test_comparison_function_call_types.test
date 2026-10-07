@@ -46,3 +46,12 @@ query I
 SELECT count(*) FROM range(10) t(i) WHERE ">"(i, 4.5)
 ----
 5
+
+# the default collation is applied to comparisons called as functions as well
+statement ok
+SET default_collation=nocase
+
+query II
+SELECT 'a' = 'A', "="('a', 'A')
+----
+true	true
