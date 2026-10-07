@@ -755,7 +755,12 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 				                                             gstate.minimum_reservation);
 				auto remaining_size =
 				    MaxValue<idx_t>(gstate.number_of_threads * total_size, temporary_memory_state.GetRemainingSize());
-				temporary_memory_state.SetRemainingSizeAndUpdateReservation(context, 2 * remaining_size);
+				// the request is doubled every time we are over the limit, which can happen repeatedly if the
+				// reservation is capped (e.g., by operator_memory_limit) - never request more than the memory limit
+				const auto max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+				const auto requested_size = remaining_size > max_memory / 2 ? max_memory : 2 * remaining_size;
+				temporary_memory_state.SetRemainingSizeAndUpdateReservation(context,
+				                                                            MaxValue<idx_t>(requested_size, 1));
 			}
 		}
 	}

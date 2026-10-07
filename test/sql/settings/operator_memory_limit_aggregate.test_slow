@@ -1,0 +1,25 @@
+# name: test/sql/settings/operator_memory_limit_aggregate.test_slow
+# description: Hash aggregate under a small operator_memory_limit
+# group: [settings]
+
+statement ok
+SET threads=4;
+
+statement ok
+SET operator_memory_limit='1MB';
+
+query I
+SELECT count(*) FROM (SELECT DISTINCT i FROM range(10000000) t(i));
+----
+10000000
+
+statement ok
+SET threads=8;
+
+statement ok
+SET operator_memory_limit='4MB';
+
+query II
+SELECT count(*), sum(c) FROM (SELECT i % 1000000 g, count(*) c FROM range(10000000) t(i) GROUP BY g);
+----
+1000000	10000000
