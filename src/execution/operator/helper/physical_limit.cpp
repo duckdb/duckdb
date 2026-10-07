@@ -257,9 +257,7 @@ Value PhysicalLimit::GetDelimiter(ExecutionContext &context, DataChunk &input, c
 	// only evaluate the expression on the first row of the input
 	DataChunk single_row_input;
 	single_row_input.InitializeEmpty(input.GetTypes());
-	for (idx_t c = 0; c < input.ColumnCount(); c++) {
-		ConstantVector::Reference(single_row_input.data[c], count_t(1), input.data[c], 0, input.size());
-	}
+	single_row_input.Slice(input, 0, MinValue<idx_t>(input.size(), 1));
 	limit_executor.Execute(single_row_input, limit_chunk);
 	auto limit_value = limit_chunk.GetValue(0, 0);
 	return limit_value;
