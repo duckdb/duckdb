@@ -297,7 +297,7 @@ void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vector &res
 		inputs.emplace_back(child_vector, sel_vector, update_count);
 		if (local_state.derived_executor) {
 			derived_input.data[0].Slice(child_vector, sel_vector, update_count);
-			derived_input.SetCardinality(update_count);
+			derived_input.SetChildCardinality(update_count);
 			derived_result.Reset();
 			local_state.derived_executor->Execute(derived_input, derived_result);
 		}
