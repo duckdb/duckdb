@@ -273,6 +273,9 @@ public:
 	//! Get legacy geometry type (pre v1.5)
 	static LogicalType GetSpatialGeometryType();
 
+	//! Convert from WKT, returns false and sets error_message if the text is not valid WKT
+	DUCKDB_API static bool TryFromString(const string_t &wkt_text, string_t &result, StringHeap &heap,
+	                                     string &error_message);
 	//! Convert from WKT
 	DUCKDB_API static bool FromString(const string_t &wkt_text, string_t &result, StringHeap &heap, bool strict,
 	                                  QueryLocation query_location);
