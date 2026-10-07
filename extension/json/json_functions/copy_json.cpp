@@ -7,9 +7,11 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_copy_to_file.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/helper.hpp"
@@ -144,6 +146,40 @@ static void BindJSONCopyToJSONFunction(Binder &binder, BoundStatement &bound, co
 	projection.ResolveOperatorTypes();
 }
 
+//! RETURN_COLUMN_TYPES describes the query being copied, not the to_json column the rewrite writes. Every column of the
+//! query is referenced in the rewrite's projection, by struct_pack or as a partition column, so its name and type are
+//! taken from there rather than from binding the query again, which would repeat the side effects of binding it.
+static void SetJSONCopyQueryColumns(BoundStatement &bound) {
+	auto &copy = bound.plan->Cast<LogicalCopyToFile>();
+	if (copy.children.empty() || copy.children[0]->type != LogicalOperatorType::LOGICAL_PROJECTION) {
+		throw InternalException("Expected JSON COPY rewrite to bind a top-level projection");
+	}
+	auto &projection = copy.children[0]->Cast<LogicalProjection>();
+	vector<optional_ptr<const BoundColumnRefExpression>> query_columns;
+	for (auto &expression : projection.expressions) {
+		ExpressionIterator::VisitExpression<BoundColumnRefExpression>(
+		    *expression, [&](const BoundColumnRefExpression &column_ref) {
+			    auto column_index = column_ref.Binding().column_index.GetIndex();
+			    if (column_index >= query_columns.size()) {
+				    query_columns.resize(column_index + 1);
+			    }
+			    query_columns[column_index] = &column_ref;
+		    });
+	}
+	vector<Identifier> query_names;
+	vector<LogicalType> query_types;
+	for (auto &column : query_columns) {
+		if (!column) {
+			throw InternalException("Expected JSON COPY rewrite to reference every column of the query");
+		}
+		query_names.push_back(column->GetAlias());
+		query_types.push_back(column->GetReturnType());
+	}
+	QueryResult::DeduplicateColumns(query_names);
+	copy.query_names = std::move(query_names);
+	copy.query_types = std::move(query_types);
+}
+
 static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt, const JSONCopyToFormat format) {
 	static const identifier_set_t SUPPORTED_BASE_OPTIONS {
 	    "compression",      "encoding",         "use_tmp_file",   "overwrite_or_ignore", "overwrite",
@@ -264,18 +300,6 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 	// Run the following query to convert everything into a single JSON column, then invoke the CSV writer
 	// SELECT TO_JSON(STRUCT_PACK(*COLUMNS(*))) FROM <source>
 
-	// RETURN_COLUMN_TYPES describes the query being copied, not the to_json column the rewrite below writes
-	vector<Identifier> query_names;
-	vector<LogicalType> query_types;
-	if (return_column_types) {
-		auto query_binder = Binder::CreateBinder(binder.context, &binder);
-		auto query_node = copy_info.select_statement->Copy();
-		auto bound_query = query_binder->Bind(*query_node);
-		query_names = std::move(bound_query.names);
-		QueryResult::DeduplicateColumns(query_names);
-		query_types = std::move(bound_query.types);
-	}
-
 	auto inner_select_stmt = make_uniq<SelectStatement>();
 	inner_select_stmt->node = std::move(copy_info.select_statement);
 
@@ -338,9 +362,7 @@ static BoundStatement CopyToJSONPlanInternal(Binder &binder, CopyStatement &stmt
 
 	auto result = binder.Bind(stmt);
 	if (return_column_types) {
-		auto &copy = result.plan->Cast<LogicalCopyToFile>();
-		copy.query_names = std::move(query_names);
-		copy.query_types = std::move(query_types);
+		SetJSONCopyQueryColumns(result);
 	}
 	if (!is_geojson) {
 		BindJSONCopyToJSONFunction(binder, result, date_format, timestamp_format);
