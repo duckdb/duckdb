@@ -310,18 +310,24 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(dsdgen_func);
 
 	// create the TPCDS pragma that allows us to run the query
-	auto tpcds_func = PragmaFunction::PragmaCall(
-	    "tpcds", PragmaTpcdsQuery, FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
-	tpcds_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	FunctionSignature tpcds_signature;
+	tpcds_signature.AddPositionalOnly("query_nr", LogicalType::BIGINT)
+	    .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
+	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, std::move(tpcds_signature));
 	loader.RegisterFunction(tpcds_func);
 
 	// create the TPCDS_QUERIES function that returns the queries, optionally parameterized for a scale factor
 	TableFunctionSet tpcds_queries_set("tpcds_queries");
-	TableFunction tpcds_query_func({}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
-	tpcds_query_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	tpcds_queries_set.AddFunction(tpcds_query_func);
-	tpcds_query_func.GetArguments() = {LogicalType::DOUBLE};
-	tpcds_queries_set.AddFunction(tpcds_query_func);
+	FunctionSignature tpcds_query_signature;
+	tpcds_query_signature.WithTypedKwargs("options",
+	                                      [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
+	tpcds_queries_set.AddFunction(
+	    TableFunction(std::move(tpcds_query_signature), TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit));
+	FunctionSignature tpcds_query_positional_signature;
+	tpcds_query_positional_signature.AddPositionalOnly("sf", LogicalType::DOUBLE)
+	    .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
+	tpcds_queries_set.AddFunction(
+	    TableFunction(std::move(tpcds_query_positional_signature), TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit));
 	loader.RegisterFunction(tpcds_queries_set);
 
 	// create the TPCDS_ANSWERS that returns the query result

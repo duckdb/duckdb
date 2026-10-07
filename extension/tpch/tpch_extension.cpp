@@ -308,18 +308,24 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(dbgen_func);
 
 	// create the TPCH pragma that allows us to run the query
-	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery,
-	                                            FunctionSignature().AddPositionalOnly("query_nr", LogicalType::BIGINT));
-	tpch_func.named_parameters["sf"] = LogicalType::DOUBLE;
+	FunctionSignature tpch_signature;
+	tpch_signature.AddPositionalOnly("query_nr", LogicalType::BIGINT)
+	    .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
+	auto tpch_func = PragmaFunction::PragmaCall("tpch", PragmaTpchQuery, std::move(tpch_signature));
 	loader.RegisterFunction(tpch_func);
 
 	// create the TPCH_QUERIES function that returns the queries, optionally parameterized for a scale factor
 	TableFunctionSet tpch_queries_set("tpch_queries");
-	TableFunction tpch_query_func({}, TPCHQueryFunction, TPCHQueryBind, TPCHInit);
-	tpch_query_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	tpch_queries_set.AddFunction(tpch_query_func);
-	tpch_query_func.GetArguments() = {LogicalType::DOUBLE};
-	tpch_queries_set.AddFunction(tpch_query_func);
+	FunctionSignature tpch_query_signature;
+	tpch_query_signature.WithTypedKwargs("options",
+	                                     [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
+	tpch_queries_set.AddFunction(
+	    TableFunction(std::move(tpch_query_signature), TPCHQueryFunction, TPCHQueryBind, TPCHInit));
+	FunctionSignature tpch_query_positional_signature;
+	tpch_query_positional_signature.AddPositionalOnly("sf", LogicalType::DOUBLE)
+	    .WithTypedKwargs("options", [](TypedKwargs &options) { options.Add("sf", LogicalType::DOUBLE); });
+	tpch_queries_set.AddFunction(
+	    TableFunction(std::move(tpch_query_positional_signature), TPCHQueryFunction, TPCHQueryBind, TPCHInit));
 	loader.RegisterFunction(tpch_queries_set);
 
 	// create the TPCH_ANSWERS that returns the query result
