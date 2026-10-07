@@ -105,15 +105,23 @@ identifier_map_t<CopyOption> Binder::GetFullCopyOptionsList(const CopyFunction &
 }
 
 static idx_t ParseBytesArg(const Identifier &name, Value &arg) {
+	idx_t result;
 	if (arg.type().id() == LogicalTypeId::VARCHAR) {
-		return DBConfig::ParseMemoryLimit(arg.ToString());
+		result = DBConfig::ParseMemoryLimit(arg.ToString());
+	} else {
+		auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
+		if (!cast_arg) {
+			throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
+			                      StringUtil::Upper(name.GetIdentifierName()));
+		}
+		result = cast_arg->GetValue<idx_t>();
 	}
-	auto cast_arg = arg.DefaultTryCastAs(LogicalType::UBIGINT);
-	if (!cast_arg) {
-		throw BinderException("Unable to parse bytes from \"%s\" for copy option \"%s\" ", arg.ToString(),
-		                      StringUtil::Upper(name.GetIdentifierName()));
+	if (result == DConstants::INVALID_INDEX) {
+		// e.g. '-1' or 'none', which ParseMemoryLimit parses as unlimited
+		throw BinderException("Copy option \"%s\" must be a valid size, not \"%s\"",
+		                      StringUtil::Upper(name.GetIdentifierName()), arg.ToString());
 	}
-	return cast_arg->GetValue<idx_t>();
+	return result;
 }
 
 struct CopyToParsedOptions {

@@ -1236,7 +1236,13 @@ void OperatorMemoryLimitSetting::SetLocal(ClientContext &context, const Value &i
 	if (input.IsNull()) {
 		config.operator_memory_limit.SetInvalid();
 	} else {
-		config.operator_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+		auto limit = DBConfig::ParseMemoryLimit(input.ToString());
+		if (limit == DConstants::INVALID_INDEX) {
+			// unlimited
+			config.operator_memory_limit.SetInvalid();
+		} else {
+			config.operator_memory_limit = limit;
+		}
 	}
 }
 
@@ -1774,7 +1780,10 @@ void WriteBufferRowGroupMemoryLimitSetting::SetGlobal(DatabaseInstance *db, DBCo
 	if (input.IsNull() || input.ToString().empty()) {
 		config.options.write_buffer_row_group_memory_limit = optional_idx();
 	} else {
-		config.options.write_buffer_row_group_memory_limit = DBConfig::ParseMemoryLimit(input.ToString());
+		auto limit = DBConfig::ParseMemoryLimit(input.ToString());
+		// unlimited (INVALID_INDEX) means that there is no limit
+		config.options.write_buffer_row_group_memory_limit =
+		    limit == DConstants::INVALID_INDEX ? optional_idx() : optional_idx(limit);
 	}
 }
 
