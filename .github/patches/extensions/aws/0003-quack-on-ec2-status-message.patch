@@ -1,0 +1,34 @@
+diff --git a/src/quack_on_ec2_resource.cpp b/src/quack_on_ec2_resource.cpp
+index 39d09eb..235deb2 100644
+--- a/src/quack_on_ec2_resource.cpp
++++ b/src/quack_on_ec2_resource.cpp
+@@ -121,6 +121,10 @@ static unique_ptr<FunctionData> QuackStatusBind(ClientContext &, TableFunctionBi
+ 	return_types.emplace_back(LogicalType::VARCHAR);
+ 	names.emplace_back("result");
+ 	return_types.emplace_back(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR));
++	// shown while DuckDB awaits readiness ({check} is replaced by the number of the status check): the stack status
++	// as CloudFormation reports it, with its reason when there is one - so the progression of the stack is visible
++	names.emplace_back("message");
++	return_types.emplace_back(LogicalType::VARCHAR);
+ 	return std::move(result);
+ }
+ 
+@@ -135,7 +139,9 @@ static void QuackStatusFun(ClientContext &context, TableFunctionInput &data_p, D
+ 	           "            WHEN status LIKE '%ROLLBACK%' OR status LIKE '%FAILED%' THEN 'failed' "
+ 	           "            ELSE 'pending' END AS state, "
+ 	           "       MAP {'uri': outputs['QuackURI'], 'attached_db_type': 'quack', "
+-	           "            'token': split_part(split_part(outputs['Token'], '{\"1\":\"', 2), '\"}', 1)} AS result "
++	           "            'token': split_part(split_part(outputs['Token'], '{\"1\":\"', 2), '\"}', 1)} AS result, "
++	           "       'CloudFormation describe #{check}, status: ' || "
++	           "       CASE WHEN status_reason IS NULL THEN status ELSE status || ': ' || status_reason END AS message "
+ 	           "FROM cloudformation_describe_stack(" +
+ 	           bind.input.ToSQLString() + ")";
+ 	auto res = con.Query(sql);
+@@ -145,6 +151,7 @@ static void QuackStatusFun(ClientContext &context, TableFunctionInput &data_p, D
+ 	auto rows = res->Collection().GetRows();
+ 	output.data[0].Append(rows.GetValue(0, 0));
+ 	output.data[1].Append(rows.GetValue(1, 0));
++	output.data[2].Append(rows.GetValue(2, 0));
+ 	state.done = true;
+ }
+ 

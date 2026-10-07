@@ -136,8 +136,61 @@ void TerminalProgressBarDisplay::PrintProgressInternal(int32_t percentage, doubl
 	result += FormatProgressBar(display_info, percentage);
 	result += " ";
 	result += FormatETA(seconds, finished);
+	// the status message (if any) after the progress - padded to clear what is left of a longer previous one
+	idx_t status_length = 0;
+	if (!finished && !status_message.empty()) {
+		result += " " + status_message;
+		status_length = status_message.size() + 1;
+	}
+	if (status_length < previous_status_length) {
+		result += string(previous_status_length - status_length, ' ');
+	}
+	previous_status_length = status_length;
 
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
+}
+
+void TerminalProgressBarDisplay::PrintStatusInternal(const string &message, double elapsed_seconds) {
+	string line;
+	if (!message.empty()) {
+		line = string(SpinnerFrame(spinner_frame++)) + " " + message + " \xC2\xB7 " + FormatElapsed(elapsed_seconds);
+	}
+	auto line_length = line.size();
+	if (line_length < previous_status_length) {
+		line += string(previous_status_length - line_length, ' ');
+	}
+	previous_status_length = line_length;
+	string result = "\r" + line;
+	if (message.empty()) {
+		// leave the cursor at the start of the cleared line
+		result += "\r";
+	}
+	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
+}
+
+void TerminalProgressBarDisplay::UpdateStatus(const string &message) {
+	status_message = message;
+	if (has_percentage) {
+		PrintProgressInternal(displayed_percentage, displayed_remaining_seconds);
+	} else {
+		PrintStatusInternal(message, GetElapsedDuration());
+	}
+	Printer::Flush(OutputStream::STREAM_STDOUT);
+}
+
+string TerminalProgressBarDisplay::FormatElapsed(double seconds) {
+	auto total_seconds = static_cast<uint64_t>(seconds < 0 ? 0 : seconds);
+	if (total_seconds < 60) {
+		return to_string(total_seconds) + "s";
+	}
+	auto minutes = total_seconds / 60;
+	auto secs = total_seconds % 60;
+	return to_string(minutes) + "m " + (secs < 10 ? "0" : "") + to_string(secs) + "s";
+}
+
+const char *TerminalProgressBarDisplay::SpinnerFrame(idx_t frame) {
+	static const char *const FRAMES[] = {"|", "/", "-", "\\"};
+	return FRAMES[frame % 4];
 }
 
 void TerminalProgressBarDisplay::Update(double percentage) {
@@ -149,7 +202,11 @@ void TerminalProgressBarDisplay::Update(double percentage) {
 
 	TerminalProgressBarDisplayedProgressInfo updated_progress_info = {(idx_t)percentage_int,
 	                                                                  (idx_t)estimated_seconds_remaining};
-	if (displayed_progress_info != updated_progress_info) {
+	has_percentage = true;
+	displayed_percentage = percentage_int;
+	displayed_remaining_seconds = estimated_seconds_remaining;
+	if (displayed_progress_info != updated_progress_info || status_changed) {
+		status_changed = false;
 		PrintProgressInternal(percentage_int, estimated_seconds_remaining);
 		Printer::Flush(OutputStream::STREAM_STDOUT);
 		displayed_progress_info = updated_progress_info;

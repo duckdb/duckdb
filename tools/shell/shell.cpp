@@ -101,6 +101,7 @@
 #include "shell_state.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_status.hpp"
 
 using namespace duckdb_shell;
 
@@ -961,6 +962,16 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
 	unique_ptr<duckdb::QueryResultStream<>> stream;
+	auto status_state = duckdb::ClientStatusState::Get(*con.context);
+	status_state->ClearFailureContext();
+	// an error is preceded by what the statement was doing when it failed, if it said (see duckdb::ClientStatus)
+	auto print_error = [&](const string &error) {
+		auto failure_context = status_state->GetFailureContext();
+		if (!failure_context.empty()) {
+			PrintF(PrintOutput::STDERR, "while: %s\n", failure_context);
+		}
+		PrintDatabaseError(error);
+	};
 	const bool render_materialized = renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
@@ -970,7 +981,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	}
 	auto &res = *result;
 	if (res.HasError()) {
-		PrintDatabaseError(res.GetError());
+		print_error(res.GetError());
 		return SuccessState::FAILURE;
 	}
 	auto &properties = res.GetStatementProperties();
@@ -982,7 +993,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		// the statement is not rendered row by row, but its side effects must still happen
 		res.Complete();
 		if (res.HasError()) {
-			PrintDatabaseError(res.GetError());
+			print_error(res.GetError());
 			return SuccessState::FAILURE;
 		}
 	}
@@ -1020,7 +1031,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto render_state = stream ? RenderQueryResult(*renderer, *stream) : RenderQueryResult(*renderer, res);
 	if (stream && stream->HasError()) {
 		// the query failed after it started streaming rows (e.g. a division by zero, or max_execution_time)
-		PrintDatabaseError(stream->GetError());
+		print_error(stream->GetError());
 		return SuccessState::FAILURE;
 	}
 	return render_state;
@@ -3463,6 +3474,7 @@ void ShellState::Initialize() {
 	main_prompt->ParsePrompt(default_prompt);
 	vector<string> default_components;
 	default_components.push_back("{setting:progress_bar_percentage} {setting:progress_bar}{setting:eta}");
+	default_components.push_back("{setting:status}");
 	default_components.push_back(
 	    "{align:right}{min_size:18}{hide_if_contains:0 bytes}Written: {setting:bytes_written}");
 	default_components.push_back("{align:right}{min_size:15}{hide_if_contains:0 bytes}Read: {setting:bytes_read}");

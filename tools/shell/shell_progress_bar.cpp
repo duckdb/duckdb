@@ -68,6 +68,7 @@ protected:
 		supported.push_back("progress_bar_percentage");
 		supported.push_back("progress_bar");
 		supported.push_back("eta");
+		supported.push_back("status");
 		return supported;
 	}
 
@@ -124,6 +125,9 @@ protected:
 		}
 		if (component.literal == "eta") {
 			return duckdb::TerminalProgressBarDisplay::FormatETA(status_bar.estimated_remaining_seconds);
+		}
+		if (component.literal == "status") {
+			return status_bar.status_message.empty() ? string() : " " + status_bar.status_message;
 		}
 		// bytes_read/bytes_written must be read from the main connection's profiler,
 		// not the progress bar's separate connection
@@ -228,6 +232,7 @@ void ShellProgressBarDisplay::PrintProgressInternal(int32_t percentage, double e
 		try {
 			state.progress_bar->percentage = percentage;
 			state.progress_bar->estimated_remaining_seconds = estimated_remaining_seconds;
+			state.progress_bar->status_message = status_message;
 			result += state.progress_bar->GenerateProgressBar(state, terminal_width);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -238,7 +243,40 @@ void ShellProgressBarDisplay::PrintProgressInternal(int32_t percentage, double e
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
 }
 
+void ShellProgressBarDisplay::UpdateStatus(const string &message) {
+	if (has_percentage) {
+		status_message = message;
+		status_changed = true;
+		return;
+	}
+	TerminalProgressBarDisplay::UpdateStatus(message);
+}
+
+void ShellProgressBarDisplay::PrintStatusInternal(const string &message, double elapsed_seconds) {
+	// clear the line, then show the message (if any) with a spinner - there is no progress (yet) to show it next to
+	string result = "\r\x1b[0K";
+	if (!message.empty()) {
+		result += string(SpinnerFrame(spinner_frame++)) + " " + message + " \xC2\xB7 " + FormatElapsed(elapsed_seconds);
+	}
+	Printer::RawPrint(OutputStream::STREAM_STDOUT, result);
+}
+
 AgentProgressBarDisplay::AgentProgressBarDisplay() {
+}
+
+void AgentProgressBarDisplay::UpdateStatus(const string &message) {
+	if (message.empty()) {
+		return;
+	}
+	auto elapsed = GetElapsedDuration();
+	if (message == last_status && elapsed - last_status_time < PRINT_INTERVAL_SECONDS) {
+		return;
+	}
+	last_status = message;
+	last_status_time = elapsed;
+	Printer::RawPrint(OutputStream::STREAM_STDERR,
+	                  StringUtil::Format("status: %s (elapsed %.1fs)\n", message, elapsed));
+	Printer::Flush(OutputStream::STREAM_STDERR);
 }
 
 void AgentProgressBarDisplay::Finish() {
