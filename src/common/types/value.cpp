@@ -2349,6 +2349,11 @@ void Value::Serialize(Serializer &serializer) const {
 }
 
 //! Whether the value (excluding its children) is within the domain of its type
+//! Whether a child value has the type its parent expects - ANY accepts values of any type (e.g. in secrets)
+static bool ChildTypeMatches(const Value &child, const LogicalType &expected_type) {
+	return expected_type.id() == LogicalTypeId::ANY || child.type() == expected_type;
+}
+
 static bool ValueIsValidShallow(const Value &value) {
 	if (value.IsNull()) {
 		return true;
@@ -2435,7 +2440,7 @@ static bool ValueIsValidShallow(const Value &value) {
 			return false;
 		}
 		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
-			if (children[member_idx + 1].type() != UnionType::GetMemberType(type, member_idx)) {
+			if (!ChildTypeMatches(children[member_idx + 1], UnionType::GetMemberType(type, member_idx))) {
 				return false;
 			}
 		}
@@ -2447,7 +2452,7 @@ static bool ValueIsValidShallow(const Value &value) {
 			return false;
 		}
 		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-			if (children[child_idx].type() != StructType::GetChildType(type, child_idx)) {
+			if (!ChildTypeMatches(children[child_idx], StructType::GetChildType(type, child_idx))) {
 				return false;
 			}
 		}
@@ -2457,7 +2462,7 @@ static bool ValueIsValidShallow(const Value &value) {
 	case LogicalTypeId::MAP: {
 		auto &child_type = ListType::GetChildType(type);
 		for (auto &child : ListValue::GetChildren(value)) {
-			if (child.type() != child_type) {
+			if (!ChildTypeMatches(child, child_type)) {
 				return false;
 			}
 		}
@@ -2470,7 +2475,7 @@ static bool ValueIsValidShallow(const Value &value) {
 		}
 		auto &child_type = ArrayType::GetChildType(type);
 		for (auto &child : children) {
-			if (child.type() != child_type) {
+			if (!ChildTypeMatches(child, child_type)) {
 				return false;
 			}
 		}
