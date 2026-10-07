@@ -242,49 +242,48 @@ string Bignum::EncodeBignum(const string_t &value, idx_t start_pos, idx_t end_po
 	auto int_value_char = value.GetData();
 	idx_t actual_size = end_pos - start_pos;
 
-	// we initialize result with space for our header
-	string result(BIGNUM_HEADER_SIZE, '0');
-	unsafe_vector<uint64_t> digits;
-
-	// The max number a uint64_t can represent is 18.446.744.073.709.551.615
-	// That has 20 digits
-	// In the worst case a remainder of a division will be 255, which is 3 digits
-	// Since the max value is 184, we need to take one more digit out
-	// Hence we end up with a max of 16 digits supported.
-	constexpr uint8_t max_digits = 16;
-	const idx_t number_of_digits = static_cast<idx_t>(std::ceil(static_cast<double>(actual_size) / max_digits));
-
-	// lets convert the string to a uint64_t vector
-	idx_t cur_end = end_pos;
-	for (idx_t i = 0; i < number_of_digits; i++) {
-		idx_t cur_start = static_cast<int64_t>(start_pos) > static_cast<int64_t>(cur_end - max_digits)
-		                      ? start_pos
-		                      : cur_end - max_digits;
-		std::string current_number(int_value_char + cur_start, cur_end - cur_start);
-		digits.push_back(std::stoull(current_number));
-		// move cur_end to more digits down the road
-		cur_end = cur_end - max_digits;
+	// convert the decimal digits to base 2**32 digits (least significant first), DECIMAL_SHIFT digits at a time
+	vector<digit_t> digits;
+	digits.reserve(actual_size / DECIMAL_SHIFT + 1);
+	idx_t chunk_size = actual_size % DECIMAL_SHIFT;
+	if (chunk_size == 0) {
+		chunk_size = DECIMAL_SHIFT;
+	}
+	digit_t chunk_base = 1;
+	for (idx_t i = 0; i < chunk_size; i++) {
+		chunk_base *= 10;
+	}
+	for (idx_t pos = start_pos; pos < end_pos; pos += chunk_size, chunk_size = DECIMAL_SHIFT) {
+		digit_t carry = 0;
+		for (idx_t i = pos; i < pos + chunk_size; i++) {
+			carry = carry * 10 + static_cast<digit_t>(int_value_char[i] - '0');
+		}
+		// digits = digits * 10**chunk_size + chunk
+		for (auto &digit : digits) {
+			twodigit_t tmp = static_cast<twodigit_t>(digit) * chunk_base + carry;
+			digit = static_cast<digit_t>(tmp);
+			carry = static_cast<digit_t>(tmp >> DIGIT_BITS);
+		}
+		if (carry) {
+			digits.push_back(carry);
+		}
+		chunk_base = DECIMAL_BASE;
 	}
 
-	// Now that we have our uint64_t vector, lets start our division process to figure out the new number and remainder
-	while (!digits.empty()) {
-		idx_t digit_idx = digits.size() - 1;
-		uint8_t remainder = 0;
-		idx_t digits_size = digits.size();
-		for (idx_t i = 0; i < digits_size; i++) {
-			digits[digit_idx] += static_cast<uint64_t>(remainder * pow(10, max_digits));
-			remainder = static_cast<uint8_t>(digits[digit_idx] % 256);
-			digits[digit_idx] /= 256;
-			if (digits[digit_idx] == 0 && digit_idx == digits.size() - 1) {
-				// we can cap this
-				digits.pop_back();
+	// we initialize result with space for our header
+	string result(BIGNUM_HEADER_SIZE, '0');
+	result.reserve(BIGNUM_HEADER_SIZE + digits.size() * DIGIT_BYTES);
+	// write the bytes least significant first, these are reversed afterwards
+	for (idx_t digit_idx = 0; digit_idx < digits.size(); digit_idx++) {
+		auto digit = digits[digit_idx];
+		for (idx_t byte_idx = 0; byte_idx < DIGIT_BYTES; byte_idx++) {
+			if (digit_idx + 1 == digits.size() && digit == 0) {
+				// skip leading zero bytes of the most significant digit
+				break;
 			}
-			digit_idx--;
-		}
-		if (is_negative) {
-			result.push_back(static_cast<char>(~remainder));
-		} else {
-			result.push_back(static_cast<char>(remainder));
+			auto byte = static_cast<uint8_t>(digit & 0xFF);
+			result.push_back(static_cast<char>(is_negative ? ~byte : byte));
+			digit >>= 8;
 		}
 	}
 	std::reverse(result.begin() + BIGNUM_HEADER_SIZE, result.end());
