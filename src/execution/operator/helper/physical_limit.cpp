@@ -81,30 +81,27 @@ void PhysicalLimit::SetInitialLimits(const BoundLimitNode &limit_val, const Boun
 	}
 }
 
+idx_t PhysicalLimit::GetLimitValue(const Value &val, idx_t null_value) {
+	if (val.IsNull()) {
+		return null_value;
+	}
+	auto value = val.GetValue<idx_t>();
+	if (value > MAX_LIMIT_VALUE) {
+		throw BinderException("Max value %llu for LIMIT/OFFSET is %llu", value, MAX_LIMIT_VALUE);
+	}
+	return value;
+}
+
 bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, optional_idx &limit,
                                   optional_idx &offset, idx_t current_offset, idx_t &max_element,
                                   const BoundLimitNode &limit_val, const BoundLimitNode &offset_val) {
 	if (!limit.IsValid()) {
 		Value val = GetDelimiter(context, input, limit_val.GetValueExpression());
-		if (!val.IsNull()) {
-			limit = val.GetValue<idx_t>();
-		} else {
-			limit = MAX_LIMIT_VALUE;
-		}
-		if (limit.GetIndex() > MAX_LIMIT_VALUE) {
-			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", limit.GetIndex(), MAX_LIMIT_VALUE);
-		}
+		limit = GetLimitValue(val, MAX_LIMIT_VALUE);
 	}
 	if (!offset.IsValid()) {
 		Value val = GetDelimiter(context, input, offset_val.GetValueExpression());
-		if (!val.IsNull()) {
-			offset = val.GetValue<idx_t>();
-		} else {
-			offset = 0;
-		}
-		if (offset.GetIndex() > MAX_LIMIT_VALUE) {
-			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", offset.GetIndex(), MAX_LIMIT_VALUE);
-		}
+		offset = GetLimitValue(val, 0);
 	}
 	max_element = limit.GetIndex() + offset.GetIndex();
 	if (limit == 0 || current_offset >= max_element) {
