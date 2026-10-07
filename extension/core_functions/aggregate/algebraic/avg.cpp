@@ -299,7 +299,7 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalAvg(BindAggregateFunctionInput &input) {
 	auto &function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
-	auto decimal_type = arguments[0]->GetReturnType();
+	auto decimal_type = BindDecimalArgument(input.GetClientContext(), arguments[0], "avg");
 	function.ReplaceImplementation(GetAverageAggregate(decimal_type.InternalType()));
 	function.SetName("avg");
 	function.GetArguments()[0] = decimal_type;
