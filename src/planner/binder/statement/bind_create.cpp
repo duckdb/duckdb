@@ -247,6 +247,10 @@ QualifiedName Binder::ResolveCatalog(CatalogEntryRetriever &retriever, const Qua
 QualifiedName Binder::BindTableName(CatalogEntryRetriever &retriever, const QualifiedName &name) {
 	auto resolved = ResolveCatalog(retriever, name, false);
 	auto &path = resolved.Path();
+	if (path.size() < 2) {
+		// an empty name - there is no catalog or schema to resolve
+		return QualifiedName(Identifier(), Identifier(), resolved.Name());
+	}
 	vector<Identifier> schema_path(path.begin() + 1, path.end() - 1);
 	if (schema_path.size() <= 1) {
 		// unqualified, or qualified with a single schema level: keep the (catalog, schema, name) shape so that the

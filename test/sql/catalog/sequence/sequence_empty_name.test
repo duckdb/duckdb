@@ -1,0 +1,23 @@
+# name: test/sql/catalog/sequence/sequence_empty_name.test
+# description: Sequence functions with an empty sequence name raise a catalog error
+# group: [sequence]
+
+statement error
+SELECT nextval('');
+----
+Catalog Error
+
+statement error
+SELECT currval('');
+----
+Catalog Error
+
+statement error
+SELECT setval('', 1);
+----
+Catalog Error
+
+statement error
+CREATE TABLE t(i INT DEFAULT nextval(''));
+----
+Catalog Error
