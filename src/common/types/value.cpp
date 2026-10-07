@@ -2414,15 +2414,68 @@ static bool ValueIsValidShallow(const Value &value) {
 			throw InternalException("Invalid physical type for DECIMAL");
 		}
 	}
+	case LogicalTypeId::BIT: {
+		// a padding byte followed by at least one data byte, with the padding bits set
+		auto &bits = StringValue::Get(value);
+		if (bits.size() < 2) {
+			return false;
+		}
+		const auto padding = static_cast<uint8_t>(bits[0]);
+		if (padding >= 8) {
+			return false;
+		}
+		const auto padding_mask = static_cast<uint8_t>(0xFF << (8 - padding));
+		return padding == 0 || (static_cast<uint8_t>(bits[1]) & padding_mask) == padding_mask;
+	}
 	case LogicalTypeId::UNION: {
 		auto &children = StructValue::GetChildren(value);
-		return children.size() == UnionType::GetMemberCount(type) + 1 &&
-		       children[0].GetValueUnsafe<union_tag_t>() < UnionType::GetMemberCount(type);
+		if (children.size() != UnionType::GetMemberCount(type) + 1 ||
+		    children[0].type().id() != LogicalTypeId::UTINYINT || children[0].IsNull() ||
+		    children[0].GetValueUnsafe<union_tag_t>() >= UnionType::GetMemberCount(type)) {
+			return false;
+		}
+		for (idx_t member_idx = 0; member_idx < UnionType::GetMemberCount(type); member_idx++) {
+			if (children[member_idx + 1].type() != UnionType::GetMemberType(type, member_idx)) {
+				return false;
+			}
+		}
+		return true;
 	}
-	case LogicalTypeId::STRUCT:
-		return StructValue::GetChildren(value).size() == StructType::GetChildCount(type);
-	case LogicalTypeId::ARRAY:
-		return ArrayValue::GetChildren(value).size() == ArrayType::GetSize(type);
+	case LogicalTypeId::STRUCT: {
+		auto &children = StructValue::GetChildren(value);
+		if (children.size() != StructType::GetChildCount(type)) {
+			return false;
+		}
+		for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
+			if (children[child_idx].type() != StructType::GetChildType(type, child_idx)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP: {
+		auto &child_type = ListType::GetChildType(type);
+		for (auto &child : ListValue::GetChildren(value)) {
+			if (child.type() != child_type) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case LogicalTypeId::ARRAY: {
+		auto &children = ArrayValue::GetChildren(value);
+		if (children.size() != ArrayType::GetSize(type)) {
+			return false;
+		}
+		auto &child_type = ArrayType::GetChildType(type);
+		for (auto &child : children) {
+			if (child.type() != child_type) {
+				return false;
+			}
+		}
+		return true;
+	}
 	default:
 		return true;
 	}
@@ -2553,6 +2606,10 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			vector<Value> children;
 			obj.ReadList(100, "children", [&](Deserializer::List &list, idx_t i) {
+				if (i >= StructType::GetChildCount(type)) {
+					throw SerializationException("Failed to deserialize value: too many children for type %s",
+					                             type.ToString());
+				}
 				deserializer.Set<const LogicalType &>(StructType::GetChildType(type, i));
 				auto child = list.ReadElement<Value>();
 				deserializer.Unset<LogicalType>();
