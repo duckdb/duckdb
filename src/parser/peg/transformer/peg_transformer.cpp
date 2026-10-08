@@ -136,14 +136,18 @@ TransformStack::~TransformStack() {
 
 void TransformStack::PushFrame(TransformInput input) {
 	frames.emplace(input);
-	if (transformer.IsExpressionRule(frames.top().rule)) {
-		transformer.EnterExpression();
+	auto &frame = frames.top();
+	auto weight = transformer.ExpressionDepthWeight(frame.rule, frame.parse_result);
+	if (weight) {
+		// recorded first: the frame is released (and the weight subtracted) when entering throws
+		frame.expression_depth_weight = weight;
+		transformer.EnterExpression(weight);
 	}
 }
 
 void TransformStack::PopFrame() {
-	if (transformer.IsExpressionRule(frames.top().rule)) {
-		transformer.ExitExpression();
+	if (frames.top().expression_depth_weight) {
+		transformer.ExitExpression(frames.top().expression_depth_weight);
 	}
 	frames.pop();
 }
@@ -220,18 +224,47 @@ arena_ptr<TransformResultValue> PEGTransformer::TransformInternal(ParseResult &p
 	return stack.Execute(input);
 }
 
-bool PEGTransformer::IsExpressionRule(optional_ptr<const CompiledGrammarRule> rule) {
-	if (!expression_rule_initialized) {
-		expression_rule = grammar.GetRule("SingleExpression");
-		expression_rule_initialized = true;
+//! The number of repeated elements directly in a rule's match: the links of an operator chain
+static idx_t CountChainLinks(ParseResult &parse_result) {
+	switch (parse_result.type) {
+	case ParseResultType::REPEAT:
+		return parse_result.Cast<RepeatParseResult>().GetChildren().size();
+	case ParseResultType::OPTIONAL: {
+		auto &optional = parse_result.Cast<OptionalParseResult>();
+		return optional.HasResult() ? CountChainLinks(optional.GetResultUnsafe()) : 0;
 	}
-	return rule && rule == expression_rule;
+	case ParseResultType::LIST: {
+		idx_t links = 0;
+		for (auto &child : parse_result.Cast<ListParseResult>().GetChildren()) {
+			auto type = child.get().type;
+			if (type == ParseResultType::REPEAT || type == ParseResultType::OPTIONAL) {
+				links += CountChainLinks(child.get());
+			}
+		}
+		return links;
+	}
+	default:
+		return 0;
+	}
 }
 
-void PEGTransformer::EnterExpression() {
+idx_t PEGTransformer::ExpressionDepthWeight(optional_ptr<const CompiledGrammarRule> rule, ParseResult &parse_result) {
+	if (!rule) {
+		return 0;
+	}
+	switch (rule->expression_depth) {
+	case ExpressionDepthKind::NESTING:
+		return 1;
+	case ExpressionDepthKind::CHAIN:
+		return CountChainLinks(parse_result);
+	default:
+		return 0;
+	}
+}
+
+void PEGTransformer::EnterExpression(idx_t weight) {
 	// the transformer does not recurse, but binding the resulting expressions does - reject them early
-	// the depth is incremented first, as the frame is released (and the depth decremented) when throwing
-	expression_depth++;
+	expression_depth += weight;
 	if (expression_depth > options.max_expression_depth) {
 		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
@@ -239,9 +272,9 @@ void PEGTransformer::EnterExpression() {
 	}
 }
 
-void PEGTransformer::ExitExpression() {
-	D_ASSERT(expression_depth > 0);
-	expression_depth--;
+void PEGTransformer::ExitExpression(idx_t weight) {
+	D_ASSERT(expression_depth >= weight);
+	expression_depth -= weight;
 }
 
 const CompiledGrammarRule &PEGTransformer::GetRule(const string &rule_name) const {
