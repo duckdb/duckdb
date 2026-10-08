@@ -43,7 +43,8 @@ void StructColumnData::SetDataType(ColumnDataType data_type) {
 }
 
 idx_t StructColumnData::GetMaxEntry() {
-	return sub_columns[0]->GetMaxEntry();
+	// every struct has a validity column, while an empty TUPLE has no child columns
+	return validity->GetMaxEntry();
 }
 
 FilterPropagateResult StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter,
