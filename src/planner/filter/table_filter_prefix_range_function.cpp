@@ -619,10 +619,10 @@ static idx_t PrefixRangeSelect(DataChunk &args, ExpressionState &state, optional
 		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
 
-	SelectionVector temp_true(count);
-	auto result_true_sel = (!true_sel || (sel && true_sel.get() == sel.get())) ? &temp_true : true_sel.get();
-	auto approved_count = SelectPrefixRange(args.data[0], func_data, *result_true_sel, count);
-	approved_count = TranslateSelection(count, sel, *result_true_sel, approved_count, true_sel, false_sel);
+	SelectionVector temp_true;
+	auto &result_true_sel = GetFilterResultSelection(count, sel, true_sel, temp_true);
+	auto approved_count = SelectPrefixRange(args.data[0], func_data, result_true_sel, count);
+	approved_count = TranslateSelection(count, sel, result_true_sel, approved_count, true_sel, false_sel);
 	if (tracking_state) {
 		tracking_state->Update(approved_count, count);
 	}
