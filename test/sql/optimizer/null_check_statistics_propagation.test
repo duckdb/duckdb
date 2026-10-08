@@ -49,7 +49,7 @@ SELECT i IS NULL FROM t;
 ----
 false
 
-# Empty statistics are not "NULL for every row": a throwing child must stay in the plan
+# Throwing children must stay in the plan even for empty inputs
 statement ok
 CREATE TABLE empty(i INTEGER);
 
@@ -62,7 +62,7 @@ query I
 SELECT (i * i * i * i * i) IS NOT NULL FROM empty;
 ----
 
-# All-NULL children that propagate NULLs can still be folded (e.g. list_extract row-group pruning)
+# Non-throwing list extraction can still be folded for all-NULL inputs
 statement ok
 CREATE TABLE all_null_list AS SELECT NULL::INTEGER[] AS l;
 
@@ -85,3 +85,32 @@ query I
 SELECT list_extract(l, 1) IS NOT NULL FROM all_null_list;
 ----
 false
+
+# A NULL result does not make evaluation of a throwing index safe
+statement ok
+CREATE TABLE null_elements AS SELECT [NULL]::INTEGER[] l, 'bad'::VARCHAR s;
+
+foreach extract list_extract array_extract
+
+statement error
+SELECT {extract}(l, s::BIGINT) IS NULL FROM null_elements;
+----
+Could not convert string 'bad' to INT64
+
+statement error
+SELECT {extract}(l, s::BIGINT) IS NOT NULL FROM null_elements;
+----
+Could not convert string 'bad' to INT64
+
+endloop
+
+# NULL result statistics must not discard evaluation of a volatile index either
+query I
+SELECT list_extract(l, nextval('s')) IS NULL FROM null_elements;
+----
+true
+
+query I
+SELECT currval('s');
+----
+2

@@ -4,18 +4,10 @@
 
 namespace duckdb {
 
-//! Replacing a NULL check with a constant means its child is never evaluated, so folding must not be done for
-//! children that are volatile or that can throw. A child that is NULL for every row is the exception: it propagates
-//! those NULLs without ever computing a value, so skipping it changes nothing.
-static bool CanFoldNullCheck(const BoundOperatorExpression &expr, const BaseStatistics &child_stats) {
+//! Folding a NULL check must preserve errors and side effects from its child.
+static bool CanFoldNullCheck(const BoundOperatorExpression &expr) {
 	auto &child = *expr.GetChildren()[0];
-	if (child.IsVolatile()) {
-		return false;
-	}
-	if (!child.CanThrow()) {
-		return true;
-	}
-	return child_stats.CanHaveNull() && !child_stats.CanHaveNoNull() && child.PropagatesNullValues();
+	return !child.IsVolatile() && !child.CanThrow();
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperatorExpression &expr,
@@ -74,7 +66,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		}
 		return std::move(child_stats[0]);
 	case ExpressionType::OPERATOR_IS_NULL:
-		if (!CanFoldNullCheck(expr, *child_stats[0])) {
+		if (!CanFoldNullCheck(expr)) {
 			return nullptr;
 		}
 		if (!child_stats[0]->CanHaveNull()) {
@@ -89,7 +81,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		}
 		return nullptr;
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
-		if (!CanFoldNullCheck(expr, *child_stats[0])) {
+		if (!CanFoldNullCheck(expr)) {
 			return nullptr;
 		}
 		if (!child_stats[0]->CanHaveNull()) {
