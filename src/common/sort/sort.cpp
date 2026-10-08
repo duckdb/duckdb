@@ -5,6 +5,7 @@
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
 #include "duckdb/common/sorting/sorted_run_merger.hpp"
+#include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/function/create_sort_key.hpp"
@@ -14,6 +15,13 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
+
+//! FLOAT/DOUBLE sort keys lose the sign of zero and the NaN payload, so these cannot be decoded from the key
+static bool CanDecodeFromSortKey(const LogicalType &type) {
+	return !TypeVisitor::Contains(type, [](const LogicalType &child) {
+		return child.id() == LogicalTypeId::FLOAT || child.id() == LogicalTypeId::DOUBLE;
+	});
+}
 
 Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orders,
            const vector<LogicalType> &input_types, vector<idx_t> projection_map, bool is_index_sort_p)
@@ -64,7 +72,8 @@ Sort::Sort(ClientContext &client_context_p, const vector<BoundOrderByNode> &orde
 	unordered_map<idx_t, idx_t> input_column_to_key;
 	for (idx_t key_idx = 0; key_idx < orders.size(); key_idx++) {
 		const auto &key_order_expr = *orders[key_idx].expression;
-		if (key_order_expr.GetExpressionClass() == ExpressionClass::BOUND_REF) {
+		if (key_order_expr.GetExpressionClass() == ExpressionClass::BOUND_REF &&
+		    CanDecodeFromSortKey(key_order_expr.GetReturnType())) {
 			input_column_to_key.emplace(key_order_expr.Cast<BoundReferenceExpression>().Index(), key_idx);
 		}
 	}

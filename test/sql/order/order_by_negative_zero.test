@@ -1,0 +1,38 @@
+# name: test/sql/order/order_by_negative_zero.test
+# description: Sorting on floating point columns keeps the sign of zero
+# group: [order]
+
+statement ok
+CREATE TABLE doubles AS SELECT '-0.0'::DOUBLE x UNION ALL SELECT 1.0 UNION ALL SELECT '0.0'::DOUBLE;
+
+query I
+SELECT 1/x FROM (SELECT x FROM doubles ORDER BY x, 1/x);
+----
+-inf
+inf
+1.0
+
+query I
+SELECT 1/x FROM (SELECT x FROM doubles ORDER BY x DESC, 1/x);
+----
+1.0
+-inf
+inf
+
+statement ok
+CREATE TABLE floats AS SELECT '-0.0'::FLOAT x FROM range(5000);
+
+query I
+SELECT count(*) FILTER (WHERE 1/x < 0) FROM (SELECT x FROM floats ORDER BY x);
+----
+5000
+
+query I
+SELECT list_transform(l, lambda v: 1/v) FROM (SELECT ['-0.0'::DOUBLE, 0.0] l ORDER BY l);
+----
+[-inf, inf]
+
+query I
+SELECT 1/s.a FROM (SELECT {'a': '-0.0'::FLOAT} s ORDER BY s);
+----
+-inf
