@@ -152,6 +152,13 @@ public:
 	bool MustWriteToTemporaryFile() const {
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
+	//! Returns true, if the buffer can be loaded again after it was destroyed, i.e., it is backed
+	//! by its disk block or kept alive in a temporary file. False for buffers that are destroyed
+	//! upon eviction/unpin - including replaced persistent handles whose disk block may be
+	//! rewritten in place and must not be read through them again.
+	bool CanReload() const {
+		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
+	}
 	//! Returns the memory usage.
 	idx_t GetMemoryUsage() const {
 		return memory_usage;
@@ -186,18 +193,6 @@ public:
 	//! Sets the swizzled memory pointer.
 	void SetSwizzling(const char *unswizzler) {
 		unswizzled = unswizzler;
-	}
-	//! Disables loading this block's data from disk. Called when the block id is handed over to a
-	//! replacement block: the disk block may be rewritten in place and can no longer be read through
-	//! this handle. Requires the block lock.
-	void DisableDiskLoad(BlockLock &l) {
-		VerifyMutex(l);
-		disk_load_disabled = true;
-	}
-	//! Returns true, if the block data can no longer be loaded from disk.
-	//! Like Load, this must be called while holding the block lock.
-	bool DiskLoadDisabled() const {
-		return disk_load_disabled;
 	}
 	//! Sets the eviction queue index.
 	void SetEvictionQueueIndex(const idx_t index) {
@@ -247,9 +242,6 @@ private:
 	//! number matches eviction_seq_num and which has not been counted as a dead node.
 	//! Guarded by the block lock (read without it only by the destructor, which has exclusive ownership).
 	bool has_queue_entry;
-	//! Whether the block data may no longer be loaded from disk because the block id was handed
-	//! over to a replacement block. Guarded by the block lock.
-	bool disk_load_disabled = false;
 	//! The LRU timestamp for age-based eviction.
 	atomic<int64_t> lru_timestamp_msec;
 	//! When to destroy the data buffer.

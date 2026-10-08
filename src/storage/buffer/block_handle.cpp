@@ -224,20 +224,17 @@ BufferHandle BlockHandle::Load(QueryContext context, unique_ptr<FileBuffer> reus
 		return BufferHandle(shared_from_this(), memory.GetBuffer());
 	}
 
+	if (!memory.CanReload()) {
+		// the buffer was destroyed upon unpin/evict, or the handle was replaced and its disk block
+		// may be rewritten in place - the caller must re-resolve the block id
+		return BufferHandle();
+	}
+
 	if (BlockId() < MAXIMUM_BLOCK) {
-		if (memory.DiskLoadDisabled()) {
-			// the block id was handed over to a replacement block and the disk block may be
-			// rewritten in place - the caller must re-resolve the current handle for this block id
-			return BufferHandle();
-		}
 		auto block = AllocateBlock(block_manager, std::move(reusable_buffer), block_id);
 		block_manager.Read(context, *block);
 		memory.GetBuffer() = std::move(block);
 	} else {
-		if (!memory.MustWriteToTemporaryFile()) {
-			// The buffer was destroyed upon unpin/evict, so there is no temporary buffer to read.
-			return BufferHandle();
-		}
 		auto &buffer_manager = memory.GetBufferManager();
 		auto &buffer = memory.GetBuffer();
 		buffer = buffer_manager.ReadTemporaryBuffer(context, memory.GetMemoryTag(), *this, std::move(reusable_buffer));

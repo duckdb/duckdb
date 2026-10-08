@@ -150,10 +150,10 @@ void MetadataManager::ConvertToTransient(unique_lock<mutex> &block_lock, Metadat
 	memcpy(new_buffer.GetDataMutable(), old_buffer.Ptr(), block_manager.GetBlockSize());
 
 	// the disk block now belongs to the transient block and is rewritten in place by a later
-	// checkpoint - reading it from disk through the old handle could race that rewrite
+	// checkpoint - the old handle must not reload it from disk after its buffer is evicted
 	{
 		auto old_block_lock = old_block->GetMemory().GetLock();
-		old_block->GetMemory().DisableDiskLoad(old_block_lock);
+		old_block->GetMemory().SetDestroyBufferUpon(DestroyBufferUpon::EVICTION);
 	}
 
 	// unregister the old block

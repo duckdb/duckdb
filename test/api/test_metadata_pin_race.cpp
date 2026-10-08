@@ -78,10 +78,7 @@ TEST_CASE("Pinning a replaced metadata block handle does not read from disk", "[
 				}
 			}
 		}
-		if (!stale) {
-			// no metadata block was converted in place in this run - nothing to verify
-			return;
-		}
+		REQUIRE(stale);
 
 		// unload the stale handle so that pinning it would have to read from disk
 		{
@@ -112,17 +109,30 @@ TEST_CASE("A dying stale block handle does not unregister a newer handle", "[sto
 		auto refs = GetBlockManagerRefs(db, con);
 		auto &block_manager = *refs.block_manager;
 
-		const block_id_t test_id = 1000000;
+		// take a fresh block id so that retiring it goes through the newly-used path
+		auto test_id = block_manager.GetFreeBlockId();
 		auto stale = block_manager.RegisterBlock(test_id);
 		// orphan the handle, like MetadataManager::ConvertToTransient does
 		block_manager.UnregisterBlock(test_id);
 		// register a new handle for the same block id, like the next checkpoint does
 		auto current = block_manager.RegisterBlock(test_id);
 		REQUIRE(current.get() != stale.get());
-		// destroying the stale handle must leave the newer handle registered
+		// retire the block id - the live handle moves it to free_blocks_in_use instead of the
+		// free list, so the block cannot be reused while the handle exists
+		block_manager.MarkBlockAsModified(test_id);
+		auto free_blocks_before = block_manager.FreeBlocks();
+
+		// destroying the stale handle must leave the newer handle registered and must not
+		// release the block id to the free list
 		stale.reset();
+		REQUIRE(block_manager.FreeBlocks() == free_blocks_before);
 		auto resolved = block_manager.RegisterBlock(test_id);
 		REQUIRE(resolved.get() == current.get());
+
+		// once the last handle dies, the block id must become available again
+		resolved.reset();
+		current.reset();
+		REQUIRE(block_manager.FreeBlocks() == free_blocks_before + 1);
 	}
 	DeleteDatabase(path);
 }
@@ -227,7 +237,10 @@ TEST_CASE("Stress stale metadata block handle pin against checkpoint rewrite", "
 					lock_guard<mutex> guard(stale_lock);
 					for (auto &entry : previous) {
 						auto it = current.find(entry.first);
-						if (it != current.end() && it->second.get() != entry.second.get()) {
+						// the handle is stale if its block id now maps to a different handle, or if
+						// the id is gone from the snapshot (converted to a transient block - whose
+						// disk block the next flush rewrites in place - or fully freed)
+						if (it == current.end() || it->second.get() != entry.second.get()) {
 							stale_detected++;
 							recent_stale.push_back(entry.second);
 						}
