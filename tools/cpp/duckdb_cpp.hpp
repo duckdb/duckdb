@@ -4014,6 +4014,7 @@ public:
 	class PartitionDataInput;
 	class PartitioningInput;
 	class ClaimBatchInput;
+	class GetBindInfoInput;
 
 	/// Whether, and how, the scan is partitioned by a set of columns. Reported from the partitioning callback.
 	enum class PartitionInfo : uint8_t {
@@ -4051,6 +4052,12 @@ public:
 	/// the claimed batch only. The callback may run while the other scanning threads wait for it, so it should only
 	/// claim the work (e.g. reserve a block number) and leave reading it to the exec callback. Optional; unstable API.
 	using ClaimBatchCallback = void (*)(ClaimBatchInput &input);
+	/// Called with the bind data of a bound call when the engine needs to know more about the call than its columns:
+	/// identifiers of its columns (e.g. field ids), and options - key-value facts about what the call reads. A
+	/// `MultiFileFunction` wrapping the function asks for every file it binds, maps the columns of the files by the
+	/// identifiers, and exposes the options as the metadata of the reader of the file. May be called more than once
+	/// for the same bind data: only report what the bind already determined. Optional; unstable API.
+	using GetBindInfoCallback = void (*)(GetBindInfoInput &input);
 
 	TableFunction(TableFunction &&) noexcept = default;
 	TableFunction &operator=(TableFunction &&) noexcept = default;
@@ -4099,6 +4106,8 @@ public:
 	/// that scans several of them in parallel put their rows back in order - e.g. a `MultiFileFunction` wrapping this
 	/// function keeps the rows of a file in order also when several threads scan it. Unstable API.
 	auto SetClaimBatchCallback(ClaimBatchCallback callback) & -> TableFunction &;
+	/// Lets the function describe what a bound call reads: see `GetBindInfoCallback`. Unstable API.
+	auto SetGetBindInfoCallback(GetBindInfoCallback callback) & -> TableFunction &;
 
 	/// Declares whether the function supports projection pushdown. Defaults to false. With it, the engine asks for
 	/// only the columns a query uses: the exec callback's output chunk holds one vector per requested column, and
@@ -4126,6 +4135,7 @@ private:
 	PartitionDataCallback partition_data_callback = nullptr;
 	PartitioningCallback partitioning_callback = nullptr;
 	ClaimBatchCallback claim_batch_callback = nullptr;
+	GetBindInfoCallback get_bind_info_callback = nullptr;
 	detail::UserData user_data;
 
 public:
@@ -4159,27 +4169,6 @@ public:
 		/// @param order The order guarantee of the produced rows.
 		/// @throws InvalidInputException When order is not a declared enum value.
 		auto SetOrderPreservation(OrderPreservation order) -> void;
-
-		/// Attaches an identifier to a declared result column: an INTEGER field id, or a VARCHAR name. Only consulted
-		/// when the function reads a file for a `MultiFileFunction`, whose reader can then map the columns of every
-		/// file by identifier rather than by name. Unstable API.
-		/// @param column_index The column, in `AddResultColumn` order.
-		/// @param identifier The identifier.
-		/// @throws InvalidInputException When the column was not declared, or the identifier is not an INTEGER or
-		/// VARCHAR.
-		auto SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void;
-
-		/// Attaches an identifier to a field nested inside a declared result column, addressed by a path of child
-		/// indexes: a STRUCT field by its index, the elements of a LIST or ARRAY by 0, the keys of a MAP by 0 and its
-		/// values by 1, and a UNION member by its index. See `SetColumnIdentifier`. Unstable API.
-		/// @throws InvalidInputException When the column was not declared, or the path does not address a nested
-		/// field of it.
-		auto SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path, const Value &identifier)
-		    -> void;
-
-		/// Adds an entry to the key-value metadata of the file the function reads. Only consulted when the function
-		/// reads a file for a `MultiFileFunction`, as the metadata its reader exposes. Unstable API.
-		auto AddFileMetadata(const std::string &key, const Value &value) -> void;
 
 	private:
 		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
@@ -4651,6 +4640,58 @@ public:
 		void *GetLocalStateInternal() const;
 		void *GetUserDataInternal() const;
 	};
+
+	/// What the get bind info callback works with. Borrowed, valid only for the callback duration. Unstable API.
+	class GetBindInfoInput {
+		friend detail::Factory;
+
+	public:
+		/// The bind data set via `BindInput::SetBindData` for the bound call being described.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetBindData() const -> const T & {
+			return *static_cast<const T *>(GetBindDataInternal());
+		}
+
+		/// The user data set via `TableFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+		/// Attaches an identifier to a result column of the bound call: an INTEGER field id, or a VARCHAR name, by
+		/// which a `MultiFileFunction` maps the columns of every file rather than by name.
+		/// @param column_index The column, in `BindInput::AddResultColumn` order.
+		/// @throws InvalidInputException When the column was not declared, or the identifier is not an INTEGER or
+		/// VARCHAR.
+		auto SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void;
+
+		/// Attaches an identifier to a field nested inside a result column, addressed by a path of child indexes: a
+		/// STRUCT field by its index, the elements of a LIST or ARRAY by 0, the keys of a MAP by 0 and its values by
+		/// 1, and a UNION member by its index. See `SetColumnIdentifier`.
+		/// @throws InvalidInputException When the column was not declared, or the path does not address a nested
+		/// field of it.
+		auto SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path, const Value &identifier)
+		    -> void;
+
+		/// Sets an option describing the bound call: a key-value fact about what the call reads. A `MultiFileFunction`
+		/// exposes the options as the metadata of the reader of the file. Setting a key again replaces its value.
+		auto SetOption(const std::string &key, const Value &value) -> void;
+
+		/// The context of the query the bound call is part of. Borrowed, valid only for the callback duration.
+		auto GetContext() const -> Context;
+
+	private:
+		GetBindInfoInput(void *args, void *context) : args(args), context(context) {
+		}
+
+		void *args;
+		void *context;
+
+		void *GetBindDataInternal() const;
+		void *GetUserDataInternal() const;
+	};
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4660,15 +4701,19 @@ public:
 /// A table function that reads many files, built on top of a registered `TableFunction` that reads a single one.
 /// Unstable API.
 ///
-/// The single-file function takes the path of the file to read as its only positional VARCHAR parameter, and is bound
-/// and scanned once for every file that is read. The multi-file function adds everything that involves several files:
-/// globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Every named
-/// parameter of the single-file function is also a named parameter of the multi-file function, forwarded as given.
+/// The single-file function takes the file to read as its only positional parameter, of type ANY, and is bound and
+/// scanned once for every file that is read. It receives the file as a VARCHAR path, or as a file struct that also
+/// carries the options to open the file with: what a file system reported about it while globbing, or the options a
+/// caller passed along with it. Open the file with `GetFilePath` and `FileOpenOptions::SetValues` to make use of
+/// them. A single-file function that takes a VARCHAR parameter instead only receives the path. The multi-file function
+/// adds everything that involves several files: globbing, lists of files, hive partitioning, the `filename` column,
+/// `union_by_name` and the like. Every named parameter of the single-file function is also a named parameter of the
+/// multi-file function, forwarded as given.
 ///
-/// When the single-file function reads a file for a multi-file function, it can describe the file in more detail than
-/// its columns: `BindInput::SetColumnIdentifier` attaches field ids to the columns, and `BindInput::AddFileMetadata`
-/// the metadata of the file. With a claim batch callback, the rows of a file keep their order also when several
-/// threads scan it.
+/// The single-file function can describe the file it reads in more detail than its columns with a get bind info
+/// callback (`TableFunction::SetGetBindInfoCallback`): the field ids of its columns, which the files of the scan are
+/// mapped onto one another by, and options, which become the metadata of the reader of the file. With a claim batch
+/// callback, the rows of a file keep their order also when several threads scan it.
 class MultiFileFunction final : public detail::Handle<MultiFileFunction> {
 	friend detail::Factory;
 
@@ -4698,7 +4743,7 @@ public:
 
 	/// Registers the function in the catalog it was created against. The function object remains valid.
 	/// @throws InvalidInputException When the name or the single-file function is missing, or the single-file
-	/// function does not exist or does not take the path of a file as its only positional VARCHAR parameter.
+	/// function does not exist or does not take the file to read as its only positional parameter.
 	auto Register() -> void;
 
 private:
@@ -5733,9 +5778,23 @@ public:
 	/// file system's business, and one it does not recognize is ignored. Setting the same name again replaces it.
 	auto SetValue(std::string_view name, const Value &value) & -> FileOpenOptions &;
 
+	/// Attaches the options a file is specified with, as table functions that read files take it: a STRUCT holding
+	/// the path of the file in its `filename` field, and an option to open the file with in every other field - e.g.
+	/// `{'filename': 'f.parquet', 'file_size': 42}`. A field set to NULL is an option that was not specified. A
+	/// VARCHAR path carries no options, and attaches nothing. See `GetFilePath`.
+	/// @param file The file, a VARCHAR path or a file struct.
+	/// @throws InvalidInputException When the file is neither, or a file struct has no VARCHAR `filename` field.
+	auto SetValues(const Value &file) & -> FileOpenOptions &;
+
 private:
 	explicit FileOpenOptions(void *impl);
 };
+
+/// The path of a file, as table functions that read files take it: a VARCHAR path, or a STRUCT holding the path in
+/// its `filename` field and the options to open the file with in its other fields. See `FileOpenOptions::SetValues`.
+/// @param file The file, a VARCHAR path or a file struct.
+/// @throws InvalidInputException When the file is neither, or a file struct has no VARCHAR `filename` field.
+auto GetFilePath(const Value &file) -> std::string;
 
 /// The file system DuckDB itself reads and writes through, so files open the way the engine would open them --
 /// including through virtual and remote file systems registered by other extensions.

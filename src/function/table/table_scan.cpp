@@ -1107,9 +1107,9 @@ vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, G
 	return storage.GetPartitionStats(context);
 }
 
-BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+optional_ptr<TableCatalogEntry> TableScanGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	return BindInfo(bind_data.table);
+	return &bind_data.table;
 }
 
 void TableScanDependency(LogicalDependencyList &entries, const FunctionData *bind_data_p) {
@@ -1278,7 +1278,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_partition_data = TableScanGetPartitionData;
 	scan_function.get_partition_stats = TableScanGetPartitionStats;
-	scan_function.get_bind_info = TableScanGetBindInfo;
+	scan_function.get_table_entry = TableScanGetTableEntry;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
