@@ -451,6 +451,8 @@ public:
 	}
 
 	const CompiledGrammarRule &GetRule(const string &rule_name) const;
+	//! A rule pushed by generated code, by its index in PEGTransformerFactory::TrampolineRuleNames()
+	const CompiledGrammarRule &GetRule(idx_t trampoline_rule) const;
 
 public:
 	template <typename T>
@@ -646,6 +648,8 @@ TryBridgeTransformResultValue<vector<Identifier>>(TransformResultValue &base_res
 class PEGTransformerFactory {
 public:
 	static void RegisterDefaultTransforms(ParsedGrammar &grammar);
+	//! Names of the rules pushed by generated code, indexed by TrampolineRule
+	static vector<string> TrampolineRuleNames();
 
 	//! Match a single TopLevelStatement from `tokens` starting at `token_cursor` and transform it
 	//! into a SQLStatement. Returns nullptr if the matched TLS was separator-only (no statement).

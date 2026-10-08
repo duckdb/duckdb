@@ -12,6 +12,9 @@ CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGK
     : allocator(std::move(allocator_p)), keyword_helper(std::move(keyword_helper_p)), tokenizer(std::move(tokenizer_p)),
       rules(std::move(rules_p)), program_matcher(program_matcher),
       top_level_statement_matcher(top_level_statement_matcher) {
+	for (auto &rule_name : PEGTransformerFactory::TrampolineRuleNames()) {
+		trampoline_rules.push_back(GetRule(rule_name));
+	}
 }
 
 static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {

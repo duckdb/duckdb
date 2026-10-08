@@ -285,6 +285,15 @@ const CompiledGrammarRule &PEGTransformer::GetRule(const string &rule_name) cons
 	return *rule;
 }
 
+const CompiledGrammarRule &PEGTransformer::GetRule(idx_t trampoline_rule) const {
+	auto rule = grammar.GetTrampolineRule(trampoline_rule);
+	if (!rule) {
+		throw InternalException("No registered data exists for rule '%s'",
+		                        PEGTransformerFactory::TrampolineRuleNames()[trampoline_rule]);
+	}
+	return *rule;
+}
+
 void PEGTransformer::SetResultLocation(ParseResult &parse_result, TransformResultValue &result) {
 	if (!parse_result.offset.IsValid()) {
 		return;
