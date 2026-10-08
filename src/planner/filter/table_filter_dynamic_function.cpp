@@ -50,9 +50,6 @@ FilterPropagateResult DynamicFilterData::CheckStatistics(const BaseStatistics &s
 		return comparison_type == ExpressionType::COMPARE_DISTINCT_FROM ? FilterPropagateResult::FILTER_ALWAYS_TRUE
 		                                                                : FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	}
-	if (stats.CanHaveNull()) {
-		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-	}
 
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
