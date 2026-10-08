@@ -524,7 +524,7 @@ bool StringUtil::CIEndsWith(const string &str, const string &suffix) {
 }
 
 bool StringUtil::CILessThan(const string &s1, const string &s2) {
-	const auto charmap = ASCII_TO_LOWER_MAP;
+	const auto charmap = ASCII_TO_UPPER_MAP;
 
 	// compare the common prefix byte-by-byte (treating an embedded NUL as a regular byte)
 	const idx_t length = MinValue<idx_t>(s1.length(), s2.length());
