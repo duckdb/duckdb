@@ -104,10 +104,11 @@ public:
 	                                          const QueryParameters &query_parameters = {});
 
 	//! Blocking. Runs the prepared statement with the given values to completion
-	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values);
+	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, const QueryParameters &query_parameters = {});
 
 	//! Blocking. Runs the prepared statement with the given named and unnamed values to completion
-	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values);
+	DUCKDB_API unique_ptr<QueryResult> Execute(identifier_map_t<BoundParameterData> &named_values,
+	                                           const QueryParameters &query_parameters = {});
 
 	//! Blocking. Runs the prepared statement with the given arguments to completion
 	template <typename... ARGS>

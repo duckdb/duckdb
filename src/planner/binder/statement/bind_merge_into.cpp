@@ -231,30 +231,26 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		throw NotImplementedException("MERGE INTO is not supported on tables with triggers");
 	}
 
-	if (!table.temporary) {
-		// update of persistent table: not read only!
-		auto &properties = GetStatementProperties();
-		// modification type depends on actions
-		DatabaseModificationType modification;
-		for (auto &action_condition : node.actions) {
-			for (auto &action : action_condition.second) {
-				switch (action->action_type) {
-				case MergeActionType::MERGE_UPDATE:
-					modification |= DatabaseModificationType::UPDATE_DATA;
-					break;
-				case MergeActionType::MERGE_DELETE:
-					modification |= DatabaseModificationType::DELETE_DATA;
-					break;
-				case MergeActionType::MERGE_INSERT:
-					modification |= DatabaseModificationType::INSERT_DATA;
-					break;
-				default:
-					break;
-				}
+	// modification type depends on actions
+	DatabaseModificationType modification;
+	for (auto &action_condition : node.actions) {
+		for (auto &action : action_condition.second) {
+			switch (action->action_type) {
+			case MergeActionType::MERGE_UPDATE:
+				modification |= DatabaseModificationType::UPDATE_DATA;
+				break;
+			case MergeActionType::MERGE_DELETE:
+				modification |= DatabaseModificationType::DELETE_DATA;
+				break;
+			case MergeActionType::MERGE_INSERT:
+				modification |= DatabaseModificationType::INSERT_DATA;
+				break;
+			default:
+				break;
 			}
 		}
-		properties.RegisterDBModify(table.catalog, context, modification);
 	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, modification);
 
 	// bind the source
 	auto source_binder = Binder::CreateBinder(context, this);
@@ -274,6 +270,7 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	// bind the WHEN NOT MATCHED BY SOURCE / TARGET merge actions
 	auto &get = bound_table.plan->Cast<LogicalGet>();
 	auto merge_into = make_uniq<LogicalMergeInto>(table);
+	merge_into->return_chunk = !node.returning_list.empty();
 	merge_into->table_index = GenerateTableIndex();
 	auto proj_index = GenerateTableIndex();
 	vector<unique_ptr<Expression>> projection_expressions;
@@ -341,10 +338,6 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 	bool inverted = join.type == JoinType::RIGHT;
 	auto &source = join_ref.get().children[inverted ? 1 : 0];
 
-	if (!node.returning_list.empty()) {
-		merge_into->return_chunk = true;
-	}
-
 	// bind WHEN_MATCHED merge actions (can contain references to both source and target)
 	for (auto &entry : node.actions) {
 		if (entry.first != MergeActionCondition::WHEN_MATCHED) {
@@ -368,24 +361,15 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 		// if we have "has_not_matched_by_source" we need to push an extra marker into the source
 		// this marker tells us if we have found a source match or not
 		auto new_proj_index = GenerateTableIndex();
-
-		source->ResolveOperatorTypes();
 		auto source_bindings = source->GetColumnBindings();
-		vector<unique_ptr<Expression>> select_list;
-		for (idx_t c = 0; c < source_bindings.size(); c++) {
-			select_list.push_back(make_uniq<BoundColumnRefExpression>(source->types[c], source_bindings[c]));
-		}
+		auto proj = LogicalProjection::CreateIdentity(new_proj_index, std::move(source));
 
 		// insert the source marker
 		auto marker = make_uniq<BoundConstantExpression>(Value::INTEGER(42));
 		marker->SetAlias("source_marker");
 		ColumnBinding source_marker;
-		auto source_marker_idx = ColumnBinding::PushExpression(select_list, std::move(marker));
+		auto source_marker_idx = ColumnBinding::PushExpression(proj->expressions, std::move(marker));
 		source_marker = ColumnBinding(new_proj_index, source_marker_idx);
-
-		// construct the new projection
-		auto proj = make_uniq<LogicalProjection>(new_proj_index, std::move(select_list));
-		proj->children.push_back(std::move(source));
 		source = std::move(proj);
 
 		// rewrite "column_bindings" in the join to refer to the new projection we have just pushed

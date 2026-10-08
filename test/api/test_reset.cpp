@@ -76,16 +76,8 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"allow_parser_override_extension", {EnumUtil::ToString(AllowParserOverride::FALLBACK_OVERRIDE)}},
 	    {"profiling_coverage", {EnumUtil::ToString(ProfilingCoverage::ALL)}},
 	    {"show_behavior", {EnumUtil::ToString(ShowBehaviorType::TABLE)}},
-#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
-	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
-#else
-	    {"autoload_known_extensions", {true}},
-#endif
-#ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
-	    {"autoinstall_known_extensions", {!DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT}},
-#else
-	    {"autoinstall_known_extensions", {true}},
-#endif
+	    {"autoload_known_extensions", {false}},
+	    {"autoinstall_known_extensions", {false}},
 	    {"enable_profiling", {"json"}},
 	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
 	    {"file_search_path", {"test"}},
@@ -123,6 +115,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"logging_mode", {"ENABLE_SELECTED"}},
 	    {"logging_level", {"FATAL"}},
 	    {"logging_storage", {"stdout"}},
+	    {"redact_http_logs", {false}},
 	    {"enable_progress_bar_print", {false}},
 	    {"scalar_subquery_error_on_multiple_rows", {false}},
 	    {"ieee_floating_point_ops", {false}},

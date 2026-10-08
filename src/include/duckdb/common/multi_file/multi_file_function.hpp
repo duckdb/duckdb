@@ -137,7 +137,9 @@ public:
 			return std::move(result);
 		}
 
-		if (result->file_list->IsEmpty() && !return_types.empty()) {
+		// NOTE: the types are checked first on purpose - asking a file list whether it is empty expands it, and a
+		// list that is built lazily (e.g. Iceberg's) is not ready to be expanded before its reader has bound
+		if (!return_types.empty() && result->file_list->IsEmpty()) {
 			// restoring a serialized plan whose files were all pruned away by filter pushdown - there is no file
 			// left to bind the readers on, but the schema is already known so we can use it as-is
 			result->types = return_types;
@@ -161,6 +163,16 @@ public:
 			interface.BindReader(context, result->types, result->names, *result);
 		}
 		interface.FinalizeBindData(*result);
+		if (result->file_options.file_row_number) {
+			// the column is read from the row number virtual column, which not every reader provides
+			virtual_column_map_t virtual_columns;
+			interface.GetVirtualColumns(context, *result, virtual_columns);
+			auto entry = virtual_columns.find(MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+			if (entry == virtual_columns.end()) {
+				throw BinderException("The file_row_number option is not supported by this reader");
+			}
+			result->virtual_columns.insert(*entry);
+		}
 
 		if (return_types.empty()) {
 			// no expected types - just copy the types
@@ -208,6 +220,7 @@ public:
 			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+		result->file_options.VerifyColumnStatistics(result->names, result->types);
 		return std::move(result);
 	}
 
@@ -280,6 +293,9 @@ public:
 		file_options.auto_detect_hive_partitioning = false;
 
 		for (auto &[option_name, option_values] : input.info.options) {
+			if (multi_file_reader->ParseCopyOption(option_name, option_values, file_options)) {
+				continue;
+			}
 			if (interface->ParseCopyOption(context, option_name, option_values, *options, expected_names,
 			                               expected_types)) {
 				continue;
@@ -1083,6 +1099,23 @@ public:
 
 	static unique_ptr<BaseStatistics> MultiFileScanStatsExtended(ClientContext &context,
 	                                                             TableFunctionGetStatisticsInput &input) {
+		auto result = MultiFileScanStatsInternal(context, input);
+		if (!result) {
+			return nullptr;
+		}
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		auto &column_index = input.column_index;
+		if (!column_index.IsVirtualColumn() && !column_index.IsPushdownExtract() &&
+		    result->GetType() != bind_data.types[column_index.GetPrimaryIndex()]) {
+			// the column is read as a type other than the one the file stores it as - the statistics of the file
+			// describe the stored type, so they say nothing about the column the scan produces
+			return nullptr;
+		}
+		return result;
+	}
+
+	static unique_ptr<BaseStatistics> MultiFileScanStatsInternal(ClientContext &context,
+	                                                             TableFunctionGetStatisticsInput &input) {
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &column_index = input.column_index;
 
@@ -1097,6 +1130,15 @@ public:
 
 		auto primary_index = column_index.GetPrimaryIndex();
 		const auto &col_name = bind_data.names[primary_index];
+		auto &file_row_number_idx = bind_data.reader_bind.file_row_number_idx;
+		if (file_row_number_idx.IsValid() && file_row_number_idx.GetIndex() == primary_index) {
+			// the column is read from the row number virtual column of the reader
+			if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+				return nullptr;
+			}
+			return bind_data.initial_reader->GetVirtualColumnStatistics(
+			    context, MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER);
+		}
 
 		// a hive partitioning column overrides any file column of the same name - the statistics stored in the
 		// file describe the overridden column and can even have a different type, so they cannot be used here
@@ -1106,29 +1148,36 @@ public:
 			}
 		}
 
+		// statistics the caller gave for the column (the "column_statistics" option) stand in for the files' -
+		// they describe the scan as a whole, which is what the optimizer asks about, where a file's describe one file
+		if (!bind_data.file_options.column_statistics.IsNull()) {
+			auto explicit_stats = bind_data.file_options.GetColumnStatistics(col_name, bind_data.types[primary_index]);
+			if (explicit_stats) {
+				if (!column_index.IsPushdownExtract()) {
+					return explicit_stats;
+				}
+				auto storage_index = StorageIndex::FromColumnIndex(column_index);
+				return explicit_stats->PushdownExtract(storage_index.GetChildIndexes()[0]);
+			}
+		}
+
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			if (!bind_data.file_options.union_by_name) {
-				// multiple files, but no union_by_name: no luck!
-				return nullptr;
-			}
-
-			auto merged_stats = bind_data.initial_reader->GetStatistics(context, col_name);
-			if (!merged_stats) {
-				return nullptr;
-			}
-
+		const bool multiple_files = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
+		if (multiple_files && !bind_data.file_options.union_by_name) {
+			// multiple files, but no union_by_name: no luck!
+			return nullptr;
+		}
+		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (result && multiple_files) {
 			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
 				auto &union_reader = *bind_data.union_readers[i];
 				auto stats = union_reader.GetStatistics(context, col_name);
-				if (!stats || merged_stats->GetType() != stats->GetType()) {
+				if (!stats || result->GetType() != stats->GetType()) {
 					return nullptr;
 				}
-				merged_stats->Merge(*stats);
+				result->Merge(*stats);
 			}
-			return merged_stats;
 		}
-		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
 		if (!result || !column_index.IsPushdownExtract()) {
 			return result;
 		}

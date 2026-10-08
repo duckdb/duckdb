@@ -323,7 +323,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	}
 
 	if (type.id() == LogicalTypeId::VARIANT) {
-		const bool is_shredded = shredding_type != nullptr;
+		const bool is_shredded = shredding_type && shredding_type->type.id() != LogicalTypeId::SQLNULL &&
+		                         shredding_type->type.id() != LogicalTypeId::ANY;
 
 		//! Build the child types for the Parquet VARIANT
 		child_list_t<LogicalType> child_types;
@@ -331,10 +332,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		child_types.emplace_back("value", LogicalType::BLOB);
 		if (is_shredded) {
 			auto &typed_value_type = shredding_type->type;
-			if (typed_value_type.id() != LogicalTypeId::SQLNULL) {
-				child_types.emplace_back("typed_value",
-				                         VariantColumnWriter::TransformTypedValueRecursive(typed_value_type));
-			}
+			child_types.emplace_back("typed_value",
+			                         VariantColumnWriter::TransformTypedValueRecursive(typed_value_type));
 		}
 
 		//! Construct the column schema
@@ -374,7 +373,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 			                                              max_define + 1, is_optional));
 		}
 		return make_uniq<VariantColumnWriter>(writer, std::move(variant_column), path_in_schema,
-		                                      std::move(child_writers));
+		                                      std::move(child_writers), !shredding_type);
 	}
 
 	if (StructType::IsStruct(type.id()) || type.id() == LogicalTypeId::UNION) {
@@ -430,10 +429,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 		path_in_schema.push_back("key_value");
 
 		// construct the child types recursively
-		child_list_t<LogicalType> key_value;
-		key_value.reserve(2);
-		key_value.emplace_back("key", MapType::KeyType(type));
-		key_value.emplace_back("value", MapType::ValueType(type));
+		auto key_value = LogicalType::GetNamedChildTypes(type);
 		auto key_value_type = LogicalType::STRUCT(key_value);
 
 		auto map_column =

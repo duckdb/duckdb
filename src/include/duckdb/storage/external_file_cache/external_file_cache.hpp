@@ -74,6 +74,8 @@ public:
 		mutable annotated_mutex map_lock;
 		//! Non-overlapping cached blocks, keyed by file offset.
 		map<idx_t, shared_ptr<CacheBlock>> blocks DUCKDB_GUARDED_BY(map_lock);
+		//! Incremented whenever the blocks of the file are dropped.
+		idx_t content_generation DUCKDB_GUARDED_BY(map_lock) = 0;
 
 		mutable annotated_mutex meta_lock;
 		//! Metadata for validating the cached blocks against the current file.
@@ -99,9 +101,9 @@ public:
 	//! Get the blocks covering [location, location + nr_bytes), creating empty blocks for the missing bytes.
 	vector<shared_ptr<CacheBlock>> AcquireBlocks(CachedFile &cached_file, idx_t location, idx_t nr_bytes,
 	                                             idx_t max_block_size);
-	//! Remove acquired blocks from the cache without mutating blocks that may still be used by readers.
-	//! A block is only removed when it is still the current entry for its location.
-	void RetireBlocks(CachedFile &cached_file, const vector<shared_ptr<CacheBlock>> &blocks);
+	//! Drop all blocks of a file, e.g. because the file changed. Readers keep the blocks they hold.
+	void DropBlocks(CachedFile &cached_file);
+	idx_t GetContentGeneration(CachedFile &cached_file);
 
 	BufferManager &GetBufferManager() const;
 	//! Gets the shared cached file for the given path, creating it if not yet present.

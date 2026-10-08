@@ -1,14 +1,7 @@
 #include "duckdb/parser/peg/compiled_grammar.hpp"
-
-#include "duckdb/parser/peg/passthrough_dialect.hpp"
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
-#include "duckdb/parser/peg/dialect_extension.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
 namespace duckdb {
@@ -19,27 +12,6 @@ CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGK
     : allocator(std::move(allocator_p)), keyword_helper(std::move(keyword_helper_p)), tokenizer(std::move(tokenizer_p)),
       rules(std::move(rules_p)), program_matcher(program_matcher),
       top_level_statement_matcher(top_level_statement_matcher) {
-}
-
-shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
-	auto &client_config = ClientConfig::GetConfig(context);
-	auto &callback_manager = ExtensionCallbackManager::Get(context);
-	if (client_config.connected_grammar) {
-		// while CONNECT-ed, the database being talked to decides how its statements are parsed
-		return client_config.connected_grammar;
-	}
-	if (client_config.current_dialect) {
-		auto dialect_extension = callback_manager.GetDialectExtension(*client_config.current_dialect);
-		if (!dialect_extension) {
-			throw InternalException("Dialect extension set to '%s' but couldn't be located in the registry",
-			                        *client_config.current_dialect);
-		}
-		return dialect_extension->GetCompiledGrammar(context);
-	}
-	if (client_config.cached_grammar) {
-		return client_config.cached_grammar;
-	}
-	return DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
 }
 
 static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
@@ -168,6 +140,7 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<Gramm
 
 	auto &program_matcher = factory.CreateRootMatcher("Program");
 	auto &top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
+	ComputeFirstSets(program_matcher, keyword_helper->GetLiteralTable());
 
 	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(std::move(allocator), std::move(keyword_helper),
 	                                                                   std::move(tokenizer), std::move(rules),
@@ -175,52 +148,13 @@ shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<Gramm
 	return new_matcher;
 }
 
+shared_ptr<CompiledGrammar> CompiledGrammar::DefaultGrammar() {
+	static auto grammar = Create();
+	return grammar;
+}
+
 shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
 	return Create({});
-}
-
-shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
-                                                    const vector<string> &active_extensions) {
-	vector<reference<GrammarExtension>> selected_extensions;
-	auto &callback_manager = ExtensionCallbackManager::Get(context);
-	for (auto &name : active_extensions) {
-		auto grammar_extension = callback_manager.FindGrammarExtension(name);
-		if (grammar_extension) {
-			selected_extensions.emplace_back(*grammar_extension);
-		}
-	}
-	return Create(selected_extensions);
-}
-
-ParserCache::ParserCache() {
-}
-
-ParserCache::~ParserCache() {
-}
-
-shared_ptr<CompiledGrammar> ParserCache::GetPassthroughMatcher(const ClientContext &context) {
-	lock_guard<std::mutex> lock(passthrough_mutex);
-	if (!passthrough_dialect) {
-		passthrough_dialect = make_uniq<PassthroughDialect>();
-	}
-	// the dialect caches the compiled grammar itself
-	return passthrough_dialect->GetCompiledGrammar(context);
-}
-
-shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
-	{
-		std::unique_lock<std::mutex> lock(mutex);
-		if (matcher) {
-			return matcher;
-		}
-	}
-	auto new_matcher = CompiledGrammar::Create();
-
-	std::unique_lock<std::mutex> lock(mutex);
-	if (!matcher) {
-		matcher = std::move(new_matcher);
-	}
-	return matcher;
 }
 
 optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &rule_name) const {

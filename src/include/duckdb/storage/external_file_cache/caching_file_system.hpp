@@ -95,7 +95,7 @@ private:
 	//! Read without caching, splitting large reads of cacheable files into parallel reads of at most a block.
 	void ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location);
 	//! Reconcile cached blocks with validation metadata observed while reading them.
-	void ReconcileCacheAfterRead(CachedFile &cached_file, const vector<shared_ptr<CacheBlock>> &blocks);
+	void ReconcileCacheAfterRead(CachedFile &cached_file);
 	//! Record a timed read of a local file into the throughput estimate
 	void RecordReadThroughput(double total_seconds, idx_t bytes);
 

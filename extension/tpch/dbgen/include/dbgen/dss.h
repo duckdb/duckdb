@@ -155,7 +155,7 @@ int pick_str PROTO((distribution * s, seed_t *seed, char *target));
 void agg_str PROTO((distribution * set, long count, seed_t *seed, char *dest, DBGenContext *ctx));
 void read_dist PROTO((const char *path, const char *name, distribution *target));
 void embed_str PROTO((distribution * d, int min, int max, int stream, char *dest));
-void permute_dist PROTO((distribution * d, seed_t *seed, DBGenContext *ctx));
+void permute_dist PROTO((distribution * d, int needed, seed_t *seed, DBGenContext *ctx));
 #ifndef STDLIB_HAS_GETOPT
 int getopt PROTO((int arg_cnt, char **arg_vect, char *oprions));
 #endif /* STDLIB_HAS_GETOPT */
@@ -172,6 +172,7 @@ void dump_seeds_ds(int t, seed_t *seeds);
 /* text.c */
 #define MAX_GRAMMAR_LEN 12  /* max length of grammar component */
 #define MAX_SENT_LEN    256 /* max length of populated sentence */
+#define TEXT_POOL_SIZE  (300 * 1024 * 1024) /* size of the pseudo-text pool */
 #define RNG_PER_SENT    27  /* max number of RNG calls per sentence */
 
 void init_text_pool PROTO((long bSize, DBGenContext *ctx));

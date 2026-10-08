@@ -1268,10 +1268,10 @@ TEST_CASE("No-metadata file is not cached and always returns fresh content", "[e
 	REQUIRE(CountCachedBlocks(cache) == 0);
 }
 
-TEST_CASE("Retiring cache blocks preserves existing readers and cannot erase replacements", "[external_file_cache]") {
+TEST_CASE("Dropping cache blocks preserves existing readers and starts a new generation", "[external_file_cache]") {
 	DuckDB db = MakeCacheLocalFilesDB();
 	auto &cache = db.instance->GetExternalFileCache();
-	auto cached_file = cache.GetOrCreateCachedFile("retire-blocks-test");
+	auto cached_file = cache.GetOrCreateCachedFile("drop-blocks-test");
 
 	constexpr idx_t BLOCK_SIZE = 4096;
 	constexpr idx_t LOCATION = 7 * BLOCK_SIZE;
@@ -1282,36 +1282,22 @@ TEST_CASE("Retiring cache blocks preserves existing readers and cannot erase rep
 		acquired[0]->state = CacheBlockState::LOADED;
 		acquired[0]->nr_bytes = BLOCK_SIZE;
 	}
-	{
-		const annotated_lock_guard<annotated_mutex> guard(acquired[1]->mtx);
-		acquired[1]->state = CacheBlockState::LOADED;
-		acquired[1]->nr_bytes = 123;
-	}
+	const auto generation = cache.GetContentGeneration(*cached_file);
 
-	cache.RetireBlocks(*cached_file, acquired);
+	cache.DropBlocks(*cached_file);
+	REQUIRE(cache.GetContentGeneration(*cached_file) == generation + 1);
 
-	// Existing readers retain the immutable block metadata needed to finish their reads.
+	// Existing readers retain the blocks they hold
 	{
 		const annotated_lock_guard<annotated_mutex> guard(acquired[0]->mtx);
 		REQUIRE(acquired[0]->state == CacheBlockState::LOADED);
 		REQUIRE(acquired[0]->nr_bytes == BLOCK_SIZE);
 	}
-	{
-		const annotated_lock_guard<annotated_mutex> guard(acquired[1]->mtx);
-		REQUIRE(acquired[1]->state == CacheBlockState::LOADED);
-		REQUIRE(acquired[1]->nr_bytes == 123);
-	}
-
-	// Future readers receive fresh cache blocks.
+	// Future readers receive fresh blocks
 	auto replacements = cache.AcquireBlocks(*cached_file, LOCATION, 2 * BLOCK_SIZE, BLOCK_SIZE);
+	REQUIRE(replacements.size() == 2);
 	REQUIRE(replacements[0] != acquired[0]);
 	REQUIRE(replacements[1] != acquired[1]);
-
-	// A delayed retirement of the old range must not erase its replacements.
-	cache.RetireBlocks(*cached_file, acquired);
-	auto reacquired = cache.AcquireBlocks(*cached_file, LOCATION, 2 * BLOCK_SIZE, BLOCK_SIZE);
-	REQUIRE(reacquired[0] == replacements[0]);
-	REQUIRE(reacquired[1] == replacements[1]);
 }
 
 } // namespace duckdb

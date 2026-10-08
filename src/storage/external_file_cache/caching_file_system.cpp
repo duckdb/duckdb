@@ -262,7 +262,7 @@ bool CachingFileHandle::CanUseCache() {
 	return !current_cached_file->validation_info.IsExpired();
 }
 
-void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file, const vector<shared_ptr<CacheBlock>> &blocks) {
+void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file) {
 	CacheValidationInfo current;
 	{
 		const annotated_lock_guard<annotated_mutex> guard(file_handle_mutex);
@@ -278,7 +278,7 @@ void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file, const v
 
 	cached = current;
 	// Existing readers retain their pinned blocks while future reads fetch replacements.
-	external_file_cache.RetireBlocks(cached_file, blocks);
+	external_file_cache.DropBlocks(cached_file);
 }
 
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
@@ -336,8 +336,7 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 			    !refresh_expired_cache &&
 			    ExternalFileCache::IsValid(Validate(), cached_file->validation_info, validation_info);
 			if (!cache_is_valid) {
-				annotated_lock_guard<annotated_mutex> map_guard(cached_file->map_lock);
-				cached_file->blocks.clear();
+				external_file_cache.DropBlocks(*cached_file);
 			}
 			// A successful validator check refreshes freshness. Without validators, preserve the original deadline.
 			const bool revalidated = cache_is_valid && ExternalFileCache::HasValidationMetadata(validation_info);
@@ -430,7 +429,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 		remaining -= length;
 	}
 
-	ReconcileCacheAfterRead(*current_cached_file, blocks);
+	ReconcileCacheAfterRead(*current_cached_file);
 
 	return FileBufferHandleGroup(std::move(mem_handles));
 }
