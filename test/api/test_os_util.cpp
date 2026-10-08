@@ -20,7 +20,13 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		REQUIRE(value == "quack");
 		REQUIRE(os_util.GetEnv("DUCKDB_TEST_OS_UTIL") == "quack");
 		REQUIRE(!os_util.GetEnv("DUCKDB_TEST_OS_UTIL_UNSET", value));
+		// unrestricted reads are for known configuration variables only, unless the embedder registers them
+		REQUIRE(OSUtil::IsConfigurationEnv("HOME"));
+		REQUIRE(!OSUtil::IsConfigurationEnv("DUCKDB_TEST_OS_UTIL"));
+		REQUIRE_THROWS(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
+		os_util.RegisterConfigurationEnv("DUCKDB_TEST_OS_UTIL");
 		REQUIRE(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
+		REQUIRE(value == "quack");
 		REQUIRE(os_util.GetEnv("DUCKDB_TEST_OS_UTIL_UNSET").empty());
 		REQUIRE(!FileSystem::GetHomeDirectory(*db.instance).empty());
 
@@ -41,7 +47,9 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		string value;
 		REQUIRE_THROWS(os_util.GetEnv("DUCKDB_TEST_OS_UTIL", value));
 		REQUIRE_THROWS(os_util.GetEnv("DUCKDB_TEST_OS_UTIL"));
-		// configuration reads are not restricted
+		// configuration reads are not restricted by the setting
+		REQUIRE_THROWS(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
+		os_util.RegisterConfigurationEnv("DUCKDB_TEST_OS_UTIL");
 		REQUIRE(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
 		REQUIRE(value == "quack");
 		REQUIRE(!FileSystem::GetHomeDirectory(*db.instance).empty());

@@ -1289,6 +1289,7 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
+		RegisterShellEnvironment();
 		if (!agent_mode_detected) {
 			// the environment is read through the database, so the mode is only known once one exists
 			agent_mode_detected = true;
@@ -3540,6 +3541,20 @@ static const AgentEnvironmentMarker AGENT_ENVIRONMENT_MARKERS[] = {{"AI_AGENT", 
                                                                    {"COPILOT_CLI", "github-copilot"},
                                                                    {"COPILOT_AGENT_SESSION_ID", "github-copilot"},
                                                                    {nullptr, nullptr}};
+
+//! The variables the shell reads for its own configuration, besides the agent markers
+static const char *SHELL_ENVIRONMENT[] = {
+    "DUCKDB_AGENT_MODE", "DUCKDB_PAGER", "PAGER", "DUCKDB_HISTORY", "TEMP", "TMP", nullptr};
+
+void ShellState::RegisterShellEnvironment() {
+	auto &os_util = duckdb::OSUtil::Get(*db->instance);
+	for (idx_t i = 0; SHELL_ENVIRONMENT[i]; i++) {
+		os_util.RegisterConfigurationEnv(SHELL_ENVIRONMENT[i]);
+	}
+	for (idx_t i = 0; AGENT_ENVIRONMENT_MARKERS[i].variable; i++) {
+		os_util.RegisterConfigurationEnv(AGENT_ENVIRONMENT_MARKERS[i].variable);
+	}
+}
 
 bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
 	for (idx_t i = 0; AGENT_ENVIRONMENT_MARKERS[i].variable; i++) {

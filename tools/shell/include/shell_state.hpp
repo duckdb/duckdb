@@ -398,6 +398,8 @@ public:
 	void OpenDB(ShellOpenFlags open_flags = ShellOpenFlags::EXIT_ON_FAILURE);
 	//! Progress bar and error rendering for the open database, following the console and agent mode
 	void ApplyDisplaySettings();
+	//! Registers the variables the shell configures itself from, so they can be read through the database
+	void RegisterShellEnvironment();
 
 	void SetOrClearFlag(ShellFlags mFlag, const string &zArg);
 	bool ShellHasFlag(ShellFlags flag) {

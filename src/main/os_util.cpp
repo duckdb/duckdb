@@ -21,7 +21,7 @@ bool OSUtil::GetEnv(const string &name, string &value) {
 		throw PermissionException(
 		    "Cannot read environment variable \"%s\" - environment access is disabled by configuration", name);
 	}
-	return GetEnvUnrestricted(name, value);
+	return ReadEnv(name, value);
 }
 
 string OSUtil::GetEnv(const string &name) {
@@ -30,6 +30,34 @@ string OSUtil::GetEnv(const string &name) {
 		return string();
 	}
 	return value;
+}
+
+bool OSUtil::IsConfigurationEnv(const string &name) {
+	// the home directory, the resource limits of the job the database runs in, its proxy and its time zone
+	static const char *CONFIGURATION_ENV[] = {
+	    "HOME", "USERPROFILE", "SLURM_CPUS_ON_NODE", "SLURM_MEM_PER_NODE", "SLURM_MEM_PER_CPU", "HTTP_PROXY", "TZ"};
+	for (auto known : CONFIGURATION_ENV) {
+		if (name == known) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void OSUtil::RegisterConfigurationEnv(const string &name) {
+	lock_guard<mutex> guard(lock);
+	configuration_env.insert(name);
+}
+
+bool OSUtil::GetEnvUnrestricted(const string &name, string &value) {
+	if (!IsConfigurationEnv(name)) {
+		lock_guard<mutex> guard(lock);
+		if (configuration_env.find(name) == configuration_env.end()) {
+			throw InternalException("Environment variable \"%s\" is not a configuration variable - read it with GetEnv",
+			                        name);
+		}
+	}
+	return ReadEnv(name, value);
 }
 
 string OSUtil::GetEnvUnrestricted(const string &name) {
@@ -42,7 +70,7 @@ string OSUtil::GetEnvUnrestricted(const string &name) {
 
 #ifndef _WIN32
 
-bool OSUtil::GetEnvUnrestricted(const string &name, string &value) {
+bool OSUtil::ReadEnv(const string &name, string &value) {
 	const char *env = std::getenv(name.c_str());
 	if (!env) {
 		return false;
@@ -53,7 +81,7 @@ bool OSUtil::GetEnvUnrestricted(const string &name, string &value) {
 
 #else
 
-bool OSUtil::GetEnvUnrestricted(const string &name, string &value) {
+bool OSUtil::ReadEnv(const string &name, string &value) {
 	auto name_w = WindowsUtil::UTF8ToUnicode(name.c_str());
 	auto value_w = _wgetenv(name_w.c_str());
 	if (!value_w) {
