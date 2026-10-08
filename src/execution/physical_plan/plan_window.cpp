@@ -364,9 +364,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	}
 	// Evaluate the degenerate functions as scalar window functions
 	FunctionBinder binder(context);
+	const vector<LogicalType> input_types(op.types.begin(), op.types.begin() + NumericCast<int64_t>(input_width));
 	for (const auto &expr_idx : degenerate_frames) {
 		auto &wexpr = op.expressions[expr_idx]->Cast<BoundWindowExpression>();
-		select_list[input_width + expr_idx] = binder.BindScalarWindowFunction(wexpr);
+		select_list[input_width + expr_idx] = binder.BindScalarWindowFunction(wexpr, input_types);
 	}
 
 	auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
