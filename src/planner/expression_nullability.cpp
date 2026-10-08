@@ -47,7 +47,7 @@ static bool GetColumnRefBinding(const Expression &expr, ColumnBinding &binding) 
 	return true;
 }
 
-static bool FilterRejectsNull(const Expression &filter, const Expression &expr) {
+bool FilterRejectsNull(const Expression &filter, const Expression &expr) {
 	if (filter.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &conjunction = filter.Cast<BoundConjunctionExpression>();
 		for (auto &child : conjunction.GetChildren()) {
