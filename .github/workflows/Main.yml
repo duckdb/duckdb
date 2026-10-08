@@ -1369,7 +1369,7 @@ jobs:
  summary:
     name: Summary
     if: ${{ always() }}
-    runs-on: ubuntu-slim
+    runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_slim }}
     needs:
       - prepare
       - linux-relassert
