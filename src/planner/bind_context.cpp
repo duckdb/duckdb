@@ -517,12 +517,27 @@ unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnDependency(ColumnRef
 	return binding->Cast<TableBinding>().ExpandGeneratedColumn(colref.GetColumnName());
 }
 
-bool BindContext::HasGeneratedProjection() const {
-	for (auto &binding : bindings_list) {
-		for (auto &source : binding->projection_expressions) {
-			if (source.second.generated) {
-				return true;
+bool BindContext::HasGeneratedColumnReference(ParsedExpression &expression) {
+	vector<reference<ParsedExpression>> pending {expression};
+	while (!pending.empty()) {
+		auto &expr = pending.back().get();
+		pending.pop_back();
+		if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			auto &colref = expr.Cast<ColumnRefExpression>();
+			if (!colref.IsQualified()) {
+				continue;
 			}
+			ErrorData error;
+			auto binding = GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
+			if (binding) {
+				auto entry = binding->projection_expressions.find(colref.GetColumnName());
+				if (entry != binding->projection_expressions.end() && entry->second.generated) {
+					return true;
+				}
+			}
+		}
+		for (auto &child : expr.ChildrenMutable()) {
+			pending.emplace_back(*child);
 		}
 	}
 	return false;

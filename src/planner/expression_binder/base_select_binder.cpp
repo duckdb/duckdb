@@ -111,20 +111,21 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 			return entry->second;
 		}
 	}
-	if (reconstructing_generated_column || binder.bind_context.HasGeneratedProjection()) {
+	if (reconstructing_generated_column) {
 		// Original grouping keys take precedence over equivalent generated definitions.
-		for (bool expand_group : {false, true}) {
-			if (!expand_group && !reconstructing_generated_column) {
-				continue;
+		for (idx_t i = 0; i < node.bind_state.unbound_groups.size(); i++) {
+			auto &group = *node.bind_state.unbound_groups[i];
+			if (binder.bind_context.MatchesGeneratedExpression(expr, group, true, false)) {
+				return ProjectionIndex(i);
 			}
-			for (idx_t index = 0; index < node.bind_state.unbound_groups.size(); index++) {
-				auto i = expand_group ? node.bind_state.unbound_groups.size() - index - 1 : index;
-				auto &group = *node.bind_state.unbound_groups[i];
-				if (binder.bind_context.MatchesGeneratedExpression(expr, group, reconstructing_generated_column,
-				                                                   expand_group)) {
-					return ProjectionIndex(i);
-				}
-			}
+		}
+	}
+	auto &candidates = node.bind_state.generated_group_candidates;
+	for (idx_t index = candidates.size(); index > 0; index--) {
+		auto group_index = candidates[index - 1];
+		auto &group = *node.bind_state.unbound_groups[group_index.GetIndex()];
+		if (binder.bind_context.MatchesGeneratedExpression(expr, group, reconstructing_generated_column, true)) {
+			return group_index;
 		}
 	}
 #ifdef DEBUG

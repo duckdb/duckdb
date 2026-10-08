@@ -65,7 +65,8 @@ public:
 	                                                          bool only_constant_null = false);
 	//! Return one source definition, leaving its dependencies unexpanded.
 	unique_ptr<ParsedExpression> GetGeneratedColumnDependency(ColumnRefExpression &colref);
-	bool HasGeneratedProjection() const;
+	//! Inspect parsed references without binding or expanding generated dependencies.
+	bool HasGeneratedColumnReference(ParsedExpression &expression);
 	//! Compare parsed grouping expressions without materializing dependency trees.
 	bool MatchesGeneratedExpression(ParsedExpression &expression, ParsedExpression &group, bool source_expression,
 	                                bool expand_group);
