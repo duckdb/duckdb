@@ -1,5 +1,5 @@
 # name: test/sql/window/test_frame_analysis.test
-# description: Test IGNORE NULLS window syntax
+# description: Test Frame Analysis Equivalences
 # group: [window]
 
 statement ok
@@ -71,7 +71,7 @@ window ib as (rows between 0 preceding and 0 following exclude current row)
 # any other
 
 # 0 arguments
-foreach func rank dense_rank cume_dist percent_rank
+foreach func rank dense_rank cume_dist
 
 query II
 explain
@@ -86,10 +86,10 @@ select {func}() over ia
 from t
 window ia as (rows between current row and current row exclude current row)
 ----
-NULL
-NULL
-NULL
-NULL
+1
+1
+1
+1
 
 query II
 explain
@@ -104,12 +104,48 @@ select {func}() over ib
 from t
 window ib as (rows between 0 preceding and 0 following exclude current row)
 ----
-NULL
-NULL
-NULL
-NULL
+1
+1
+1
+1
 
 endloop
+
+query II
+explain
+select percent_rank() over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select percent_rank() over ia
+from t
+window ia as (rows between current row and current row exclude current row)
+----
+0.0
+0.0
+0.0
+0.0
+
+query II
+explain
+select percent_rank() over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+physical_plan	<!REGEX>:.*WINDOW.*
+
+query I
+select percent_rank() over ib
+from t
+window ib as (rows between 0 preceding and 0 following exclude current row)
+----
+0.0
+0.0
+0.0
+0.0
 
 # 1 argument
 foreach func first_value last_value min
@@ -649,3 +685,17 @@ ORDER BY id
 3	c	NULL
 4	b	NULL
 5	a	NULL
+
+# Empty computed frame with UCC
+query II
+SELECT id, count(*) OVER (
+    PARTITION BY id ROWS BETWEEN 1 FOLLOWING AND 2 FOLLOWING
+) 
+FROM p
+ORDER BY id;
+----
+1	0
+2	0
+3	0
+4	0
+5	0
