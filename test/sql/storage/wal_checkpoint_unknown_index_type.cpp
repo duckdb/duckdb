@@ -117,6 +117,13 @@ TEST_CASE("Checkpoint buffered replays of an index type that is not loaded", "[s
 		// because the checkpoint it relies on is cancelled.
 		REQUIRE_NO_FAIL(con.Query("UPDATE big SET b = b + 1"));
 
+		// A failed bind leaves the index unbound, so binding it again fails the same way instead of hanging.
+		for (idx_t i = 0; i < 2; i++) {
+			result = con.Query("INSERT INTO ext VALUES (1000)");
+			REQUIRE(result->HasError());
+			REQUIRE(StringUtil::Contains(result->GetError(), TEST_INDEX_TYPE));
+		}
+
 		result = con.Query("SELECT count(*) FROM ext");
 		REQUIRE(CHECK_COLUMN(result, 0, {200}));
 	}

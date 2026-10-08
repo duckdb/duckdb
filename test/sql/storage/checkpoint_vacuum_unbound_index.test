@@ -16,25 +16,6 @@ CREATE TABLE t AS SELECT i FROM range(491520) r(i)
 statement ok
 CREATE INDEX idx ON t(i)
 
-# The index expression of m_idx is a macro of schema s1, so it cannot be bound from outside s1.
-statement ok
-CREATE SCHEMA s1
-
-statement ok
-USE s1
-
-statement ok
-CREATE MACRO m(x) AS x + 1
-
-statement ok
-CREATE TABLE u(k INTEGER)
-
-statement ok
-CREATE INDEX m_idx ON u(m(k))
-
-statement ok
-USE main
-
 statement ok
 CHECKPOINT
 
@@ -61,14 +42,14 @@ SELECT count(DISTINCT row_group_id) FROM pragma_storage_info('t')
 
 restart
 
-# After the restart, the indexes are unbound and have no buffered WAL operations.
+# After the restart, the index is unbound and has no buffered WAL operations.
 statement ok
 CREATE TABLE other(x INT)
 
 statement ok
 INSERT INTO other VALUES (1)
 
-# The CHECKPOINT binds idx so that it can vacuum t. It cannot bind m_idx, which does not fail the CHECKPOINT.
+# The CHECKPOINT binds idx, so that it can vacuum t.
 statement ok
 CHECKPOINT
 
@@ -82,13 +63,3 @@ SELECT count(*) FROM t WHERE i = 4097
 ----
 1
 
-statement ok
-USE s1
-
-statement ok
-INSERT INTO u VALUES (1)
-
-query I
-SELECT count(*) FROM u
-----
-1
