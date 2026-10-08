@@ -164,7 +164,13 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 			if (error.HasError()) {
 				return BindResult(std::move(error));
 			}
+			if (!const_child->IsFoldable()) {
+				throw BinderException(function, "UNNEST parameter %s must be a constant", alias);
+			}
 			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
+			if (value.IsNull()) {
+				throw BinderException(function, "UNNEST parameter %s cannot be NULL", alias);
+			}
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
 				if (recursive) {
