@@ -136,7 +136,7 @@ public:
 	bool HasBufferedReplays() const;
 	//! Destroys the physical index.
 	void Retire();
-	//! Binds the unbound physical index without replacing it.
+	//! Binds the unbound physical index without replacing it. Returns nullptr if the index was retired.
 	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &table_types);
 	//! Replaces the unbound physical index with its bound representation.
 	void CommitBind(unique_ptr<BoundIndex> bound_index);
