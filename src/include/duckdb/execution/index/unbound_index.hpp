@@ -121,6 +121,10 @@ public:
 	bool HasBufferedReplays() const {
 		return buffered_replays.HasBufferedReplays();
 	}
+	//! Whether this index no longer owns its persistent blocks, because they were handed off to a bound index.
+	bool StorageReclaimed() const {
+		return storage_reclaimed;
+	}
 
 	BufferedIndexReplays &GetBufferedReplays() {
 		return buffered_replays;

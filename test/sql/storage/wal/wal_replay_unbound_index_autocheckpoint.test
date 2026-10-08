@@ -38,6 +38,12 @@ SET wal_autocheckpoint='1KB'
 statement ok
 CREATE TABLE other AS SELECT * FROM range(20000) r(x)
 
+# The automatic checkpoint binds the index, so it persists the buffered operations and truncates the WAL.
+query I
+SELECT wal_size FROM pragma_database_size()
+----
+0 bytes
+
 restart
 
 statement ok

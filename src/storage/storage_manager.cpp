@@ -10,6 +10,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
@@ -25,6 +26,7 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/data_table_info.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "duckdb/common/path.hpp"
 
@@ -196,6 +198,14 @@ void StorageManager::AddWALSize(idx_t size) {
 
 void StorageManager::SetWALSize(idx_t size) {
 	wal_size = size;
+}
+
+void StorageManager::SetBufferedIndexReplays() {
+	buffered_index_replays = true;
+}
+
+bool StorageManager::HasBufferedIndexReplays() const {
+	return buffered_index_replays;
 }
 
 idx_t StorageManager::GetWALEntriesCount() const {
@@ -758,6 +768,135 @@ unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(Qu
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options);
 }
 
+//! Returns the tables of the database whose index list matches the predicate.
+static vector<reference<DuckTableEntry>> GetTables(AttachedDatabase &db,
+                                                   const std::function<bool(TableIndexList &)> &predicate) {
+	vector<reference<DuckTableEntry>> result;
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
+	catalog.ScanSchemas([&](SchemaCatalogEntry &schema) {
+		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				return;
+			}
+			auto &table = entry.Cast<DuckTableEntry>();
+			if (predicate(table.GetStorage().GetDataTableInfo()->GetIndexes())) {
+				result.push_back(table);
+			}
+		});
+	});
+	return result;
+}
+
+//! Runs bind in a read-only transaction of a separate connection. We are holding the checkpoint lock, and a read-only
+//! transaction does not take the start_transaction_lock, which a concurrent FORCE CHECKPOINT holds while waiting.
+static void BindInReadOnlyTransaction(AttachedDatabase &db, const std::function<void(ClientContext &)> &bind) {
+	Connection con(db.GetDatabase());
+	auto &context = *con.context;
+	context.transaction.BeginTransaction();
+	context.transaction.SetReadOnly();
+	try {
+		bind(context);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		context.transaction.Rollback(error);
+		throw;
+	}
+	context.transaction.Commit();
+}
+
+//! Returns true for errors that binding an index can run into without the database being broken,
+//! e.g. because the extension providing the index type is not loaded.
+static bool IsExpectedBindError(const ErrorData &error) {
+	switch (error.Type()) {
+	case ExceptionType::MISSING_EXTENSION:
+	case ExceptionType::CATALOG:
+	case ExceptionType::BINDER:
+		return true;
+	default:
+		return false;
+	}
+}
+
+//! Binds the unbound indexes of a loaded index type where possible, so that checkpoint vacuum can rewrite their tables.
+static void TryBindIndexes(AttachedDatabase &db) {
+	auto tables = GetTables(db, [](TableIndexList &indexes) { return indexes.HasUnbound(); });
+	if (tables.empty()) {
+		return;
+	}
+	auto &index_types = DBConfig::GetConfig(db.GetDatabase()).GetIndexTypes();
+	BindInReadOnlyTransaction(db, [&](ClientContext &context) {
+		for (auto &table : tables) {
+			auto &info = table.get().GetStorage().GetDataTableInfo();
+			for (auto &index_type : info->GetIndexes().DistinctIndexTypes()) {
+				if (!index_types.FindByName(index_type)) {
+					continue;
+				}
+				try {
+					info->BindIndexes(context, index_type);
+				} catch (std::exception &ex) {
+					if (!IsExpectedBindError(ErrorData(ex))) {
+						throw;
+					}
+				}
+			}
+		}
+	});
+}
+
+bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options) {
+	if (options.explicit_checkpoint && context.GetClientContext()) {
+		TryBindIndexes(db);
+	}
+	if (!HasBufferedIndexReplays()) {
+		return true;
+	}
+	auto tables = GetTables(db, [](TableIndexList &indexes) { return indexes.HasBufferedReplays(); });
+	if (tables.empty()) {
+		// All buffered replays have been applied by binding the indexes elsewhere.
+		buffered_index_replays = false;
+		return true;
+	}
+
+	string error_message;
+	if (!context.GetClientContext()) {
+		// Without a context we have no binding environment, e.g. on shutdown or during DETACH.
+		error_message = "no client context is available to bind the index";
+	} else {
+		try {
+			BindInReadOnlyTransaction(db, [&](ClientContext &bind_context) {
+				for (auto &table : tables) {
+					auto &info = table.get().GetStorage().GetDataTableInfo();
+					info->GetIndexes().BindBufferedReplays(bind_context, *info);
+				}
+			});
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			if (!IsExpectedBindError(error)) {
+				// Not a missing index type or an index expression we cannot resolve: this is a bug or a failure
+				// that we cannot recover from, so we must not mask it.
+				throw;
+			}
+			error_message = error.RawMessage();
+		}
+	}
+
+	if (error_message.empty()) {
+		buffered_index_replays = false;
+		return true;
+	}
+	if (options.explicit_checkpoint) {
+		throw InvalidInputException("Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be "
+		                            "bound, so these operations cannot be persisted: %s",
+		                            error_message);
+	}
+	// Keep the WAL: it is the only remaining record of the buffered operations.
+	DUCKDB_LOG_WARNING(db.GetDatabase(),
+	                   "Skipped the checkpoint of database \"%s\" and kept its write-ahead log: an index with buffered "
+	                   "write-ahead log operations cannot be bound, so these operations cannot be persisted: %s",
+	                   db.GetName(), error_message);
+	return false;
+}
+
 void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {
 	if (read_only || !load_complete) {
 		return;
@@ -776,14 +915,23 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		}
 	}
 
+	auto &config = DBConfig::Get(db);
+	// We only need to checkpoint if there is anything in the WAL.
+	auto wal_size = GetWALSize();
+	auto should_checkpoint =
+	    wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT;
+
+	// Bind indexes with buffered WAL replays before we write anything: binding can fail, and the checkpoint
+	// invalidates the database on any failure once it has started.
+	if (should_checkpoint && !BindIndexesForCheckpoint(context, options)) {
+		return;
+	}
+
 	if (db.GetStorageExtension()) {
 		db.GetStorageExtension()->OnCheckpointStart(db, options);
 	}
 
-	auto &config = DBConfig::Get(db);
-	// We only need to checkpoint if there is anything in the WAL.
-	auto wal_size = GetWALSize();
-	if (wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT) {
+	if (should_checkpoint) {
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();

@@ -20,11 +20,6 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/checkpoint/checkpoint_options.hpp"
-#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/main/config.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
@@ -137,27 +132,6 @@ bool DuckTransactionManager::HasOtherTransactions(DuckTransaction &transaction) 
 	return false;
 }
 
-//! A checkpoint cannot persist buffered index operations without binding the index, which needs its index type.
-static bool HasUnbindableBufferedIndexReplays(AttachedDatabase &db) {
-	auto &index_types = DBConfig::GetConfig(db.GetDatabase()).GetIndexTypes();
-	bool has_unbindable = false;
-	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &schema) {
-		if (has_unbindable) {
-			return;
-		}
-		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-			if (has_unbindable || entry.type != CatalogType::TABLE_ENTRY) {
-				return;
-			}
-			auto &table = entry.Cast<DuckTableEntry>();
-			auto &indexes = table.GetStorage().GetDataTableInfo()->GetIndexes();
-			has_unbindable = indexes.HasUnbindableBufferedReplays(index_types);
-		});
-	});
-	return has_unbindable;
-}
-
 DuckTransactionManager::CheckpointDecision
 DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &lock,
                                       const UndoBufferProperties &undo_properties) {
@@ -176,9 +150,6 @@ DuckTransactionManager::CanCheckpoint(DuckTransaction &transaction, unique_ptr<S
 	}
 	if (Settings::Get<DebugSkipCheckpointOnCommitSetting>(db.GetDatabase())) {
 		return CheckpointDecision("checkpointing on commit disabled through configuration");
-	}
-	if (HasUnbindableBufferedIndexReplays(db)) {
-		return CheckpointDecision("an index with buffered operations has an index type that is not loaded");
 	}
 	// try to lock the checkpoint lock
 	lock = transaction.TryGetCheckpointLock();
@@ -276,6 +247,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 	}
 	CheckpointOptions options;
+	options.explicit_checkpoint = true;
 	if (GetLastCommit() >= LowestVisibilityBound()) {
 		// we cannot do a full checkpoint if any transaction needs to read old data
 		options.type = CheckpointType::CONCURRENT_CHECKPOINT;
@@ -365,7 +337,10 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
 		// this can cause undefined state, as those commits were made assuming this one was already committed
-		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context)) {
+		// we also have to write to the WAL if the checkpoint might not be able to persist all of its changes:
+		// an index with buffered write-ahead log operations cancels the checkpoint if it cannot be bound
+		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context) &&
+		    !db.GetStorageManager().HasBufferedIndexReplays()) {
 			skip_wal_write_due_to_checkpoint = true;
 		}
 	}

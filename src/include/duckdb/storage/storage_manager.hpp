@@ -78,6 +78,10 @@ public:
 	bool HasWAL() const;
 	void AddWALSize(idx_t size);
 	void SetWALSize(idx_t size);
+	//! Flags that an unbound index of this database buffered a WAL replay.
+	void SetBufferedIndexReplays();
+	//! Returns true if an unbound index of this database may have buffered WAL replays.
+	bool HasBufferedIndexReplays() const;
 	//! Gets the number of WAL entries since last checkpoint
 	idx_t GetWALEntriesCount() const;
 	void ResetWALEntriesCount();
@@ -185,6 +189,9 @@ protected:
 	//! WAL.
 	atomic<idx_t> wal_size;
 	atomic<idx_t> wal_entries_count;
+	//! Set when an unbound index buffers a WAL replay. Only ever cleared by a checkpoint that has verified that no
+	//! buffered replays remain, so it is never false while buffered replays exist.
+	atomic<bool> buffered_index_replays {false};
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
 	//! Header prefetched during file-type detection, consumed by LoadDatabase. Empty unless a DuckDB file via ATTACH.
@@ -229,5 +236,10 @@ protected:
 	void LoadDatabase(QueryContext context) override;
 
 	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options);
+
+private:
+	//! Binds the unbound indexes with buffered WAL replays, so that the checkpoint can persist them.
+	//! Returns false if the checkpoint must be skipped, keeping the WAL as the only record of these operations.
+	bool BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options);
 };
 } // namespace duckdb

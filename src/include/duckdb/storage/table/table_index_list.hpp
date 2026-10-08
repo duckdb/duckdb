@@ -26,7 +26,6 @@ class IndexReadHandle;
 template <class TARGET>
 class IndexWriteHandle;
 class IndexBinder;
-class IndexTypeSet;
 struct IndexStorageInfo;
 struct DataTableInfo;
 template <class T>
@@ -98,8 +97,6 @@ public:
 	}
 	//! Returns true if an unbound index has buffered WAL operations.
 	bool HasBufferedReplays() const;
-	//! Returns true if an unbound index has buffered WAL operations, but its index type is not registered.
-	bool HasUnbindableBufferedReplays(IndexTypeSet &index_types) const;
 	//! Returns true, if there are unique indexes.
 	bool HasUniqueIndexes() const;
 	//! Verifies all unique ART indexes, optionally recording conflicts.

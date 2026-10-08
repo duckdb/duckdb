@@ -327,16 +327,6 @@ bool TableIndexList::HasBufferedReplays() const {
 	return false;
 }
 
-bool TableIndexList::HasUnbindableBufferedReplays(IndexTypeSet &index_types) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->HasBufferedReplays() && !index_types.FindByName(entry->GetIndexType())) {
-			return true;
-		}
-	}
-	return false;
-}
-
 bool TableIndexList::NameIsUnique(const string &name) const {
 	annotated_lock_guard lock(index_entries_lock);
 	// Only covers PK, FK, and UNIQUE indexes.
@@ -471,7 +461,19 @@ void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_i
 			for (auto &col : table.GetColumns().Physical()) {
 				physical_column_types.push_back(col.Type());
 			}
-			bound_idx = index_entry->Bind(idx_binder, physical_column_types);
+			try {
+				bound_idx = index_entry->Bind(idx_binder, physical_column_types);
+			} catch (std::exception &ex) {
+				// Reset the bind state, so that any other thread waiting for this bind can retry it.
+				if (index_entry->AbortBind()) {
+					throw;
+				}
+				// The index handed off its storage to a bound index we failed to construct: it cannot be bound
+				// again, and the buffered replays are lost.
+				ErrorData error(ex);
+				throw FatalException("Failed to bind index %s with buffered write-ahead log operations: %s",
+				                     index_entry->GetName(), error.RawMessage());
+			}
 		}
 
 		// Commit the bound index to the index entry.

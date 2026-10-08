@@ -337,6 +337,15 @@ unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<Logica
 	return owned_index->Cast<UnboundIndex>().Bind(binder, table_types);
 }
 
+bool IndexEntry::AbortBind() {
+	auto entry_lock = lock.GetExclusiveLock();
+	if (!owned_index || owned_index->IsBound() || owned_index->Cast<UnboundIndex>().StorageReclaimed()) {
+		return false;
+	}
+	bind_state = IndexBindState::UNBOUND;
+	return true;
+}
+
 void IndexEntry::CommitBind(unique_ptr<BoundIndex> bound_index) {
 	auto entry_lock = lock.GetExclusiveLock();
 	owned_index = std::move(bound_index);
@@ -482,7 +491,13 @@ IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_in
 	if (owned_index->IsBound()) {
 		return owned_index->Cast<BoundIndex>().SerializeToDisk(context, options);
 	}
-	return owned_index->Cast<UnboundIndex>().CopyStorageInfo();
+	auto &unbound_index = owned_index->Cast<UnboundIndex>();
+	if (unbound_index.HasBufferedReplays()) {
+		// Writing the index as-is loses these operations: the checkpoint must bind the index, or not run at all.
+		throw InternalException("Attempting to checkpoint index %s while it has buffered write-ahead log operations",
+		                        unbound_index.GetIndexName());
+	}
+	return unbound_index.CopyStorageInfo();
 }
 
 IndexStorageInfo IndexEntry::SerializeToWAL(const case_insensitive_map_t<Value> &options) {
