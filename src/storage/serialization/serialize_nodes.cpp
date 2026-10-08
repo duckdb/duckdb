@@ -465,6 +465,7 @@ void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(109, "sampled_schema_is_union", sampled_schema_is_union, true);
 	serializer.WritePropertyWithDefault<vector<MultiFileColumnDefinition>>(110, "schema", schema);
 	serializer.WritePropertyWithDefault<bool>(111, "file_row_number", file_row_number);
+	serializer.WriteProperty<Value>(112, "column_statistics", column_statistics);
 }
 
 MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
@@ -481,6 +482,7 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithExplicitDefault<bool>(109, "sampled_schema_is_union", result.sampled_schema_is_union, true);
 	deserializer.ReadPropertyWithDefault<vector<MultiFileColumnDefinition>>(110, "schema", result.schema);
 	deserializer.ReadPropertyWithDefault<bool>(111, "file_row_number", result.file_row_number);
+	deserializer.ReadProperty<Value>(112, "column_statistics", result.column_statistics);
 	return result;
 }
 
