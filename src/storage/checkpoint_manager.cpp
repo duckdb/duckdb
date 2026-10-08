@@ -722,10 +722,10 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
-	// Explicit checkpoints bind indexes before serialization, so that buffered index operations are replayed
-	// and not lost on a restart. During a commit-time checkpoint the caller has no active transaction.
-	if (context && context->transaction.HasActiveTransaction() && checkpoint_context) {
-		D_ASSERT(checkpoint_context->transaction.HasActiveTransaction());
+	// Bind indexes before serialization so that buffered index operations are replayed into the bound index.
+	// Runs for every checkpoint with a checkpoint transaction, including the automatic checkpoint at commit
+	// time, where the calling context no longer has an active transaction.
+	if (checkpoint_context && checkpoint_context->transaction.HasActiveTransaction()) {
 		// Bind indexes with checkpoint transaction, which is already running and read-only, so any transaction the
 		// binder still starts skips start_transaction_lock.
 		D_ASSERT(MetaTransaction::Get(*checkpoint_context).IsReadOnly());
