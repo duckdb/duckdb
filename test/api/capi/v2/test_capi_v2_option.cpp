@@ -364,7 +364,7 @@ TEST_CASE("V2 db option: startup options are applied when the instance is create
 		REQUIRE(duckdb_v2_instance_create_with_options(env, &name_str, &value_str, 1, &instance, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		auto path_str = Convert(path);
-		REQUIRE(duckdb_v2_instance_attach(instance, &path_str, nullptr, nullptr, true, nullptr) ==
+		REQUIRE(duckdb_v2_instance_attach(instance, nullptr, &path_str, nullptr, true, nullptr) ==
 		        DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_connection_handle conn = nullptr;
 		duckdb_v2_connection_create(instance, &conn, nullptr);

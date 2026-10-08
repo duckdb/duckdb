@@ -522,7 +522,7 @@ Instance::~Instance() {
 
 auto Instance::Attach(const std::string &path, bool make_default) -> void {
 	auto path_str = ToStr(path);
-	CheckedAPICall(duckdb_v2_instance_attach, handle(), &path_str, static_cast<duckdb_v2_identifier_t *>(nullptr),
+	CheckedAPICall(duckdb_v2_instance_attach, handle(), static_cast<duckdb_v2_identifier_t *>(nullptr), &path_str,
 	               static_cast<duckdb_v2_attach_options_handle>(nullptr), make_default);
 }
 
@@ -538,7 +538,7 @@ auto Instance::Attach(const std::string &path, const std::string &name,
 		}
 		auto attach_name = ToStr(name);
 		auto path_str = ToStr(path);
-		CheckedAPICall(duckdb_v2_instance_attach, handle(), &path_str, name.empty() ? nullptr : &attach_name,
+		CheckedAPICall(duckdb_v2_instance_attach, handle(), name.empty() ? nullptr : &attach_name, &path_str,
 		               attach_options, make_default);
 	} catch (...) {
 		duckdb_v2_attach_options_destroy(&attach_options);
@@ -547,14 +547,14 @@ auto Instance::Attach(const std::string &path, const std::string &name,
 	duckdb_v2_attach_options_destroy(&attach_options);
 }
 
-auto Instance::Detach(const std::string &path) -> void {
-	auto path_str = ToStr(path);
-	CheckedAPICall(duckdb_v2_instance_detach, handle(), &path_str);
+auto Instance::Detach(const std::string &name) -> void {
+	auto name_str = ToStr(name);
+	CheckedAPICall(duckdb_v2_instance_detach, handle(), &name_str);
 }
 
-auto Instance::SetDefault(const std::string &path) -> void {
-	auto path_str = ToStr(path);
-	CheckedAPICall(duckdb_v2_instance_set_default, handle(), &path_str);
+auto Instance::SetDefault(const std::string &name) -> void {
+	auto name_str = ToStr(name);
+	CheckedAPICall(duckdb_v2_instance_set_default, handle(), &name_str);
 }
 
 auto Instance::Connect() -> Connection {

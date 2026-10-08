@@ -877,8 +877,8 @@ public:
 	Instance(Instance &&) noexcept = default;
 	Instance &operator=(Instance &&) noexcept = default;
 
-	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, starting the instance if this is its first
-	/// use.
+	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, under the name derived from the path: `memory`
+	/// for an in-memory database, else the file name up to its first `.` (`/data/sales.2024.db` -> `sales`).
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	/// @param make_default Whether to make it the default database for sessions opened afterwards, as `SetDefault`
 	/// would; false leaves the default alone.
@@ -896,18 +896,17 @@ public:
 	auto Attach(const std::string &path, const std::string &name,
 	            const std::unordered_map<std::string, std::string> &options, bool make_default = false) -> void;
 
-	/// Detaches the database attached from `path`, like SQL `DETACH`. Connections still using it keep it alive until
-	/// they let go; if it was the default database, new sessions have no default until `SetDefault` names another.
-	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
-	/// @throws InvalidInputException When neither matches an attached database.
-	auto Detach(const std::string &path) -> void;
+	/// Detaches the database attached under `name`, like SQL `DETACH name`. Connections still using it keep it alive
+	/// until they let go; if it was the default database, new sessions have no default until `SetDefault` names
+	/// another.
+	/// @throws InvalidInputException When no database is attached under `name`.
+	auto Detach(const std::string &name) -> void;
 
-	/// Makes the database attached from `path` the default database for sessions opened from now on: where their
+	/// Makes the database attached under `name` the default database for sessions opened from now on: where their
 	/// unqualified DDL and unqualified table lookups that miss the temporary catalog go, unless they `USE` another.
 	/// Sessions already open keep the default they connected with.
-	/// @param path The path that was passed to `Attach`, or the name the database is attached under.
-	/// @throws InvalidInputException When neither matches an attached database.
-	auto SetDefault(const std::string &path) -> void;
+	/// @throws InvalidInputException When no database is attached under `name`.
+	auto SetDefault(const std::string &name) -> void;
 
 	/// The config of this database: the GLOBAL scope. Settings that can only be chosen at startup are passed to
 	/// `Environment::CreateInstance` instead.

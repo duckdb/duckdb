@@ -4,7 +4,7 @@ module: instance
 # attaching a database, and choosing the default database are separate steps:
 #
 #   instance_create_with_options(env, {"access_mode"}, {"READ_ONLY"}, 1, &instance);  // startup option
-#   instance_attach(instance, "path/to/file.db", NULL, NULL, true);     // like ATTACH, and the default database
+#   instance_attach(instance, NULL, "path/to/file.db", NULL, true);     // like ATTACH, and the default database
 #   instance_get_config(instance, &config);
 #   config_set_option_text(config, "memory_limit", "4GB", DEFAULT);     // SET GLOBAL
 #   connection_create(instance, &conn);
@@ -137,14 +137,20 @@ functions:
       Attaches a database to the instance.
 
       Attaches the database at `path` exactly like `ATTACH 'path'`:
-        - `:memory:` or an empty view attaches a fresh in-memory database
-          named `memory`.
+        - `:memory:` or an empty view attaches a fresh in-memory database.
         - any other path attaches that file, creating it if it does not
-          exist, under the name derived from the file's base name.
-      `name` is the name to attach under, like `ATTACH ... AS name`; null, or
-      an empty view, uses the name derived from the path. Naming is how two
-      files with
-      the same base name, or `:memory:` twice, attach side by side. `options`
+          exist.
+      `name` is the name to attach under, like `ATTACH ... AS name`; it is
+      how `[[instance_detach]]` and `[[instance_set_default]]` refer to the
+      database. Null, or an empty view, derives the name from the path the
+      way SQL `ATTACH` without `AS` does:
+        - `memory` for `:memory:` or an empty view;
+        - otherwise the file name up to its first `.`, without any `?query`
+          parameters (`/data/sales.2024.db` attaches as `sales`), with
+          `_db` appended when that is a reserved name such as `system` or
+          `temp`.
+      Naming is how two files with the same base name, or `:memory:` twice,
+      attach side by side. `options`
       may be null; it carries the `(KEY value)` options of SQL `ATTACH`, for
       per-database options such as READ_ONLY, BLOCK_SIZE or ENCRYPTION_KEY,
       and must have been created from this instance handle. `make_default`
@@ -154,25 +160,25 @@ functions:
       default is left alone. A path that is already attached on this or any
       other instance of the environment returns ERROR_RESOURCE_IN_USE, and a
       name that is already attached fails. Options that only apply at startup
-      must be set before the first attach or connection.
+      are passed to `[[instance_create_with_options]]`.
     role: method
     belongs_to: instance
     parameters:
       instance:
         type: instance
         description: "The instance handle."
-      path:
-        type: str
-        indirection: 1
-        const: true
-        kind: IN
-        description: "Path to the database file, or `:memory:` / an empty view for an in-memory database."
       name:
         type: identifier
         indirection: 1
         const: true
         kind: IN
         description: "Optional. The name to attach under; null or an empty view for the name derived from the path. Borrowed and copied."
+      path:
+        type: str
+        indirection: 1
+        const: true
+        kind: IN
+        description: "Path to the database file, or `:memory:` / an empty view for an in-memory database."
       options:
         type: attach_options
         description: "Optional attach options created from `instance`, or null to attach with defaults under the derived name."
@@ -189,29 +195,28 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Detaches the database that was attached from `path`.
+      Detaches the database attached under `name`.
 
       Detaches it like `DETACH`, checkpointing a file database first. Unlike
       SQL, the default database may be detached too; new connections then
       start without a default until `[[instance_set_default]]` names another, and
       existing connections bound to it keep it alive until their transaction
-      on it ends and fail unqualified DDL afterwards. The path is matched
-      against the attached databases as `[[instance_attach]]` recorded it, so pass
-      the path that was passed to `[[instance_attach]]`. Returns ERROR_INPUT_INVALID
-      when no database attached from that path exists. Connections that still
-      reference the database keep it alive until they release it.
+      on it ends and fail unqualified DDL afterwards. Returns
+      ERROR_INPUT_INVALID when no database is attached under that name.
+      Connections that still reference the database keep it alive until they
+      release it.
     role: method
     belongs_to: instance
     parameters:
       instance:
         type: instance
         description: "The instance handle."
-      path:
-        type: str
+      name:
+        type: identifier
         indirection: 1
         const: true
         kind: IN
-        description: "The path the database was attached from, or the name it is attached under."
+        description: "The name the database is attached under. Borrowed."
       err:
         type: error_info
         indirection: 1
@@ -222,8 +227,8 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-15" ]
     description: |
-      Makes the database that was attached from `path` the default database
-      for connections created from now on.
+      Makes the database attached under `name` the default database for
+      connections created from now on.
 
       A connection binds to the default database when it is created, so this
       does not retarget existing connections: their default stays what it was
@@ -232,22 +237,20 @@ functions:
       catalog go. It stays the default for new connections until another
       `[[instance_set_default]]` call or until it is detached; a connection whose
       default has been detached fails unqualified DDL with a message saying
-      so until it selects another with `USE`. `path` is either the path that
-      was passed to `[[instance_attach]]` or the name the database is attached
-      under; a name match wins. Returns ERROR_INPUT_INVALID when neither
-      matches an attached database.
+      so until it selects another with `USE`. Returns ERROR_INPUT_INVALID when
+      no database is attached under that name.
     role: method
     belongs_to: instance
     parameters:
       instance:
         type: instance
         description: "The instance handle."
-      path:
-        type: str
+      name:
+        type: identifier
         indirection: 1
         const: true
         kind: IN
-        description: "The path the database was attached from, or the name it is attached under."
+        description: "The name the database is attached under. Borrowed."
       err:
         type: error_info
         indirection: 1

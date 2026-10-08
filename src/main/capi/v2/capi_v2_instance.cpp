@@ -77,74 +77,26 @@ void CV2Instance::Attach(const string &path, const Identifier &name,
 	});
 }
 
-//! Finds the database attached under `path` as a name, else the one attached from it as a path, disambiguated by
-//! the name instance_attach derives from the path. Throws when nothing matches.
-static shared_ptr<AttachedDatabase> FindAttachedDatabase(DatabaseInstance &instance, const string &path) {
-	auto &db_manager = DatabaseManager::Get(instance);
-	if (auto by_name = db_manager.GetDatabase(Identifier(path))) {
-		if (!by_name->IsSystem() && !by_name->IsTemporary()) {
-			return by_name;
-		}
+//! Throws unless a user database is attached under `name`.
+static void CheckAttached(DatabaseInstance &instance, const Identifier &name) {
+	auto attached = DatabaseManager::Get(instance).GetDatabase(name);
+	if (!attached || attached->IsSystem()) {
+		throw InvalidInputException("no database is attached under the name '%s'", name.GetIdentifierName());
 	}
-	auto &fs = FileSystem::GetFileSystem(instance);
-	string stripped = path;
-	string db_type;
-	DBPathAndType::ExtractExtensionPrefix(stripped, db_type);
-	const bool in_memory = DBConfig::IsInMemoryDatabase(stripped.c_str());
-	// File-based DuckDB databases are attached under their canonical path; other attaches keep the path verbatim.
-	string canonical = stripped;
-	if (!in_memory && db_type.empty() && !FileSystem::IsRemoteFile(stripped)) {
-		try {
-			canonical = fs.CanonicalizePath(stripped);
-		} catch (...) { // NOLINT(bugprone-empty-catch): an uncanonicalizable path just falls back to verbatim matching
-		}
-	}
-	const auto derived_name = AttachedDatabase::ExtractDatabaseName(stripped, fs);
-
-	shared_ptr<AttachedDatabase> match;
-	idx_t match_count = 0;
-	for (auto &db : db_manager.GetDatabases()) {
-		if (db->IsSystem() || db->IsTemporary()) {
-			continue;
-		}
-		auto &catalog = db->GetCatalog();
-		bool matches;
-		if (in_memory) {
-			matches = catalog.InMemory();
-		} else {
-			const auto db_path = catalog.GetDBPath();
-			matches = db_path == canonical || db_path == stripped;
-		}
-		if (!matches) {
-			continue;
-		}
-		match_count++;
-		if (!match || db->GetName() == derived_name) {
-			match = db;
-		}
-	}
-	if (!match) {
-		throw InvalidInputException("no database is attached from or under '%s'", path);
-	}
-	if (match_count > 1 && match->GetName() != derived_name) {
-		throw InvalidInputException("several databases are attached from '%s'; refer to one by name in SQL", path);
-	}
-	return match;
 }
 
-void CV2Instance::Detach(const string &path) {
+void CV2Instance::Detach(const Identifier &name) {
 	auto &instance = *database->instance;
-	auto attached = FindAttachedDatabase(instance, path);
+	CheckAttached(instance, name);
 	WithTransaction(*database, [&](ClientContext &context) {
-		DatabaseManager::Get(instance).DetachDatabase(context, attached->GetName(), OnEntryNotFound::THROW_EXCEPTION,
-		                                              true);
+		DatabaseManager::Get(instance).DetachDatabase(context, name, OnEntryNotFound::THROW_EXCEPTION, true);
 	});
 }
 
-void CV2Instance::SetDefault(const string &path) {
+void CV2Instance::SetDefault(const Identifier &name) {
 	auto &instance = *database->instance;
-	auto attached = FindAttachedDatabase(instance, path);
-	DatabaseManager::Get(instance).SetDefaultDatabase(attached->GetName());
+	CheckAttached(instance, name);
+	DatabaseManager::Get(instance).SetDefaultDatabase(name);
 }
 
 } // namespace capiv2
@@ -202,8 +154,8 @@ DUCKDB_V2_ERROR duckdb_v2_instance_destroy(duckdb_v2_instance_handle *instance) 
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
-                                          const duckdb_v2_identifier_t *name, duckdb_v2_attach_options_handle options,
+DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
+                                          const duckdb_v2_str *path, duckdb_v2_attach_options_handle options,
                                           bool make_default, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(path);
@@ -253,23 +205,23 @@ DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
+DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
                                           duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(path);
+	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
-		wrapper.Detach(duckdb::string(Convert(path)));
+		wrapper.Detach(duckdb::Identifier(ConvertIdentifierName(name)));
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
+DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
-	DUCKDB_CHECK_ARG(path);
+	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
-		wrapper.SetDefault(duckdb::string(Convert(path)));
+		wrapper.SetDefault(duckdb::Identifier(ConvertIdentifierName(name)));
 	});
 }
 

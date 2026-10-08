@@ -54,7 +54,7 @@ inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, duckdb_v2_
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		return rc;
 	}
-	rc = duckdb_v2_instance_attach(*out_instance, &path, nullptr, nullptr, true, err);
+	rc = duckdb_v2_instance_attach(*out_instance, nullptr, &path, nullptr, true, err);
 	if (rc != DUCKDB_V2_ERROR_NONE) {
 		duckdb_v2_instance_destroy(out_instance);
 	}

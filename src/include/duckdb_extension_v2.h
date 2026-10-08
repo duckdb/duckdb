@@ -171,7 +171,7 @@ typedef struct {
 	 const duckdb_v2_identifier_t *alias_name, duckdb_v2_logical_type_handle *out_type,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_attach)
-	(duckdb_v2_instance_handle instance, const duckdb_v2_str *path, const duckdb_v2_identifier_t *name,
+	(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name, const duckdb_v2_str *path,
 	 duckdb_v2_attach_options_handle options, bool make_default, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_create)
 	(duckdb_v2_environment_handle env, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
@@ -180,7 +180,7 @@ typedef struct {
 	 idx_t option_count, duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_instance_destroy)(duckdb_v2_instance_handle *instance);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_detach)
-	(duckdb_v2_instance_handle instance, const duckdb_v2_str *path, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_library_version)(duckdb_v2_str *out_version, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_logical_type_copy)
 	(duckdb_v2_logical_type_handle type, duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
@@ -1137,7 +1137,7 @@ typedef struct {
 	(duckdb_v2_attach_options_handle options, const duckdb_v2_identifier_t *key, const duckdb_v2_str *setting,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_set_default)
-	(duckdb_v2_instance_handle instance, const duckdb_v2_str *path, duckdb_v2_error_info_handle *err);
+	(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_bind_data)
 	(duckdb_v2_table_function_partition_data_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_partition_data_get_global_state)

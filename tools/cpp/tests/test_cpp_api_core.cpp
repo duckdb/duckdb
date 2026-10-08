@@ -80,12 +80,12 @@ TEST_CASE("Stable C++API: Instance SetDefault selects the database for new conne
 	{
 		auto instance = env.CreateInstance();
 		instance.Attach(first_path, "first", {}, true);
-		instance.Attach(second_path, "second");
-		instance.SetDefault(second_path);
+		instance.Attach(second_path, "second", {});
+		instance.SetDefault("second");
 
 		auto conn = instance.Connect();
 		auto result = conn.Execute("SELECT current_database()");
-		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<varchar_t>().view() == "cpp_api_default_second");
+		REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<varchar_t>().view() == "second");
 	}
 	duckdb::DeleteDatabase(first_path);
 	duckdb::DeleteDatabase(second_path);

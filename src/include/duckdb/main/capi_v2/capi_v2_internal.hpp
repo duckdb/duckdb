@@ -318,10 +318,10 @@ public:
 	//! the default for new connections.
 	void Attach(const string &path, const Identifier &name, optional_ptr<const CV2AttachOptions> options,
 	            bool make_default);
-	//! Detaches the database attached from `path`, or attached under that name.
-	void Detach(const string &path);
-	//! Makes the database attached from `path`, or attached under that name, the default for new connections.
-	void SetDefault(const string &path);
+	//! Detaches the database attached under `name`.
+	void Detach(const Identifier &name);
+	//! Makes the database attached under `name` the default for new connections.
+	void SetDefault(const Identifier &name);
 	DuckDB &GetDatabase() {
 		return *database;
 	}
