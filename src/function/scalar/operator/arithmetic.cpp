@@ -336,7 +336,9 @@ LogicalType DecimalArithmeticResultType(const vector<LogicalType> &input_types, 
 		uint8_t width, scale;
 		auto can_convert = input_type.GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal.", input_type.ToString());
+			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
+			                      "explicit cast",
+			                      input_type.ToString());
 		}
 		if (width > max_width) {
 			max_width = width;
@@ -1017,7 +1019,9 @@ LogicalType DecimalMultiplyResultType(const vector<LogicalType> &input_types, bo
 		uint8_t width, scale;
 		auto can_convert = input_type.GetDecimalProperties(width, scale);
 		if (!can_convert) {
-			throw InternalException("Could not convert type %s to a decimal?", input_type.ToString());
+			throw BinderException("Could not convert type %s to a decimal for the arithmetic operator - add an "
+			                      "explicit cast",
+			                      input_type.ToString());
 		}
 		max_width = MaxValue<uint8_t>(width, max_width);
 		result_width += width;
