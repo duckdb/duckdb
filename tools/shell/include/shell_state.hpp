@@ -394,6 +394,10 @@ public:
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
 	void OpenDB(ShellOpenFlags open_flags = ShellOpenFlags::EXIT_ON_FAILURE);
+	//! Declares the variables the shell configures itself from as readable regardless of external access
+	void RegisterShellEnvironment();
+	//! Progress bar and error rendering for the open database, following the console and agent mode
+	void ApplyDisplaySettings();
 
 	void SetOrClearFlag(ShellFlags mFlag, const string &zArg);
 	bool ShellHasFlag(ShellFlags flag) {
@@ -418,6 +422,10 @@ public:
 	idx_t GetScreenHeight();
 	idx_t GetMaxRenderWidth() const;
 	string GetSystemPager();
+	//! An environment variable, read through the database so its settings apply; empty if unset or not allowed
+	string GetEnv(const string &name);
+	//! The home directory, from the home_directory setting or the environment
+	string GetHomeDirectory();
 	unique_ptr<PagerState> SetupPager();
 	static void StartPagerDisplay();
 	static void FinishPagerDisplay();
@@ -452,7 +460,7 @@ public:
 	//! Decide whether agent mode is active, from the -agent/-no-agent flags or the environment (see agent_mode)
 	void DetectAgentMode();
 	//! Whether the environment marks the shell as being run by an AI coding agent, which one, and by which variable
-	static bool DetectAgentEnvironment(string &agent_name, string &marker);
+	bool DetectAgentEnvironment(string &agent_name, string &marker);
 	//! Print how agent mode renders and the engine features an agent should know about; `startup` is the one-line
 	//! form printed before anything runs
 	void PrintAgentHelp(PrintOutput output, bool startup);

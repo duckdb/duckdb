@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
@@ -33,6 +35,8 @@ public:
 
 	//! Whether a variable can be read even when external access is disabled
 	DUCKDB_API static bool IsSafeEnv(const string &name);
+	//! Marks a variable the embedding application uses to configure itself as readable regardless of external access
+	DUCKDB_API void AddSafeEnv(const string &name);
 
 protected:
 	//! Reads a variable from the process environment, without any policy
@@ -40,6 +44,9 @@ protected:
 
 protected:
 	DatabaseInstance &db;
+	mutex lock;
+	//! Variables declared safe through AddSafeEnv
+	unordered_set<string> safe_env;
 };
 
 } // namespace duckdb

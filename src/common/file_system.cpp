@@ -114,14 +114,6 @@ bool PathMatched(const string &path, const string &sub_path) {
 
 #ifndef _WIN32
 
-string FileSystem::GetEnvVariable(const string &name) {
-	const char *env = getenv(name.c_str());
-	if (!env) {
-		return string();
-	}
-	return env;
-}
-
 bool FileSystem::IsPathAbsolute(const string &path) {
 	auto path_separator = PathSeparator(path);
 	return PathMatched(path, path_separator) || StringUtil::StartsWith(path, "file:/");
@@ -181,18 +173,6 @@ string FileSystem::GetWorkingDirectory() {
 }
 
 #else
-
-string FileSystem::GetEnvVariable(const string &env) {
-	// first convert the environment variable name to the correct encoding
-	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
-	// use _wgetenv to get the value
-	auto res_w = _wgetenv(env_w.c_str());
-	if (!res_w) {
-		// no environment variable of this name found
-		return string();
-	}
-	return WindowsUtil::UnicodeToUTF8(res_w);
-}
 
 static bool StartsWithSingleBackslash(const string &path) {
 	if (path.empty()) {

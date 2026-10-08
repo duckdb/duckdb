@@ -27,9 +27,17 @@ bool OSUtil::IsSafeEnv(const string &name) {
 	return false;
 }
 
+void OSUtil::AddSafeEnv(const string &name) {
+	lock_guard<mutex> guard(lock);
+	safe_env.insert(name);
+}
+
 bool OSUtil::TryGetEnv(const string &name, string &value) {
 	if (!IsSafeEnv(name) && !Settings::Get<EnableExternalAccessSetting>(db)) {
-		return false;
+		lock_guard<mutex> guard(lock);
+		if (safe_env.find(name) == safe_env.end()) {
+			return false;
+		}
 	}
 	return ReadEnv(name, value);
 }

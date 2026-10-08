@@ -321,8 +321,6 @@ public:
 	DUCKDB_API string ExtractName(const string &path);
 
 	//! Returns the value of an environment variable - or the empty string if it is not set
-	//! Reads the process environment directly; code that has a database goes through OSUtil::Get(db) instead
-	DUCKDB_API static string GetEnvVariable(const string &name);
 
 	//! Whether there is a glob in the string
 	DUCKDB_API static bool HasGlob(const string &str);
