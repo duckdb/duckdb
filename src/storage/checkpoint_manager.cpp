@@ -731,7 +731,6 @@ void SingleFileCheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer
 		auto &info = table.GetStorage().GetDataTableInfo();
 		info->GetIndexes().BindBufferedReplays(*checkpoint_context, *info);
 	}
-	// FIXME: If we do not have a context, however, the unbound indexes have to be serialized to disk.
 
 	// Write the table data
 	auto table_lock = table.GetStorage().GetCheckpointLock();
