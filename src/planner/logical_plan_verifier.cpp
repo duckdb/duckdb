@@ -186,12 +186,47 @@ struct LogicalPlanVerificationState {
 		issues.push_back(std::move(issue));
 	}
 
+	void AddNullOperatorChild(LogicalOperator &op, const LogicalPlanVerificationPath &path, idx_t child_index) {
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
+		issue.path = path;
+		issue.construct = GetOperatorConstruct(op);
+		issue.facts.emplace_back("invariant", Value("null_operator_child"));
+		issue.facts.emplace_back("child_index", Value::UBIGINT(child_index));
+		issue.message = StringUtil::Format("Logical operator child %llu is null", child_index);
+		issues.push_back(std::move(issue));
+	}
+
+	void AddNullOperatorExpression(LogicalOperator &op, const LogicalPlanVerificationPath &path,
+	                               idx_t expression_index) {
+		LogicalPlanVerificationIssue issue;
+		issue.code = LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT;
+		issue.path = path;
+		issue.construct = GetOperatorConstruct(op);
+		issue.facts.emplace_back("invariant", Value("null_operator_expression"));
+		issue.facts.emplace_back("expression_index", Value::UBIGINT(expression_index));
+		issue.message = StringUtil::Format("Logical operator expression %llu is null", expression_index);
+		issues.push_back(std::move(issue));
+	}
+
 	bool HasResolvedInputs(LogicalOperator &op) const {
 		return resolved_inputs.find(reference<LogicalOperator>(op)) != resolved_inputs.end();
 	}
 
 	bool HasResolvedOutputs(LogicalOperator &op) const {
 		return resolved_outputs.find(reference<LogicalOperator>(op)) != resolved_outputs.end();
+	}
+
+	bool HasNullSlots(LogicalOperator &op) const {
+		for (auto &child : op.children) {
+			if (!child) {
+				return true;
+			}
+		}
+		bool has_null = false;
+		LogicalOperatorVisitor::EnumerateExpressions(
+		    op, [&](unique_ptr<Expression> *expression) { has_null |= !expression || !*expression; });
+		return has_null;
 	}
 
 private:
@@ -230,11 +265,19 @@ private:
 			auto expression_path = path;
 			expression_path.components.push_back(
 			    {LogicalPlanVerificationPathComponentType::OPERATOR_EXPRESSION, expression_index++});
+			if (!expression || !*expression) {
+				AddNullOperatorExpression(op, expression_path, expression_index - 1);
+				return;
+			}
 			IndexExpression(**expression, expression_path);
 		});
 		for (idx_t child_index = 0; child_index < op.children.size(); child_index++) {
 			auto child_path = path;
 			child_path.components.push_back({LogicalPlanVerificationPathComponentType::OPERATOR_CHILD, child_index});
+			if (!op.children[child_index]) {
+				AddNullOperatorChild(op, child_path, child_index);
+				continue;
+			}
 			IndexOperator(*op.children[child_index], child_path);
 		}
 	}
@@ -286,11 +329,15 @@ bool LogicalPlanVerifier::ResolveOperatorTypes(LogicalOperator &op, LogicalPlanV
 	op.types.clear();
 	bool children_resolved = true;
 	for (auto &child : op.children) {
+		if (!child) {
+			children_resolved = false;
+			continue;
+		}
 		if (!ResolveOperatorTypes(*child, verification_state)) {
 			children_resolved = false;
 		}
 	}
-	if (!children_resolved) {
+	if (!children_resolved || verification_state.HasNullSlots(op)) {
 		return false;
 	}
 	verification_state.resolved_inputs.insert(reference<LogicalOperator>(op));
@@ -357,14 +404,21 @@ void LogicalPlanVerifier::VerifyColumnBindings(LogicalOperator &op, LogicalPlanV
 		return;
 	}
 	for (auto &child : op.children) {
-		VerifyColumnBindings(*child, verification_state);
+		if (child) {
+			VerifyColumnBindings(*child, verification_state);
+		}
 	}
 }
 
 static void VerifyTableIndexes(LogicalOperator &op, LogicalPlanVerificationState &verification_state,
                                unordered_map<TableIndex, LogicalPlanVerificationPath> &seen_indexes) {
 	for (auto &child : op.children) {
-		VerifyTableIndexes(*child, verification_state, seen_indexes);
+		if (child) {
+			VerifyTableIndexes(*child, verification_state, seen_indexes);
+		}
+	}
+	if (verification_state.HasNullSlots(op)) {
+		return;
 	}
 	auto table_indexes = op.GetTableIndex();
 	for (idx_t table_index_ordinal = 0; table_index_ordinal < table_indexes.size(); table_index_ordinal++) {

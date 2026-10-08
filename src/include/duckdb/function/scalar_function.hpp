@@ -460,8 +460,6 @@ public:
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
 
-	DUCKDB_API bool Equal(const ScalarFunction &rhs) const;
-
 public:
 	unique_ptr<BoundFunctionExpression> Bind(ClientContext &context, vector<unique_ptr<Expression>> arguments,
 	                                         optional_ptr<Binder> binder = nullptr) const;
@@ -598,9 +596,17 @@ public:
 	const shared_ptr<const ScalarFunction> &GetDefinition() const {
 		return definition;
 	}
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
 	//! The number of arguments that were received by "*args", they directly follow the standard parameters
 	idx_t GetVarArgsCount() const {
 		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
 	}
 	//! The number of arguments that were received by "**kwargs", they are the last arguments
 	idx_t GetKwargsCount() const {

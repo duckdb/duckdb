@@ -762,7 +762,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			// reader is responsible for converting types - perform a top-level match only
 			auto entry = mapper.Find(global_column);
 			if (!entry.IsValid()) {
-				ThrowColumnNotFoundError(global_column.name.GetIdentifierName());
+				// the file lacks the column - it takes its default value, and is an error when it has none
+				reader_data.expressions.push_back(mapper.GetDefaultExpression(context, global_column, true));
+				continue;
 			}
 			MultiFileLocalColumnId local_id(entry.GetIndex());
 			auto local_index = global_id.RemapRootIndex(local_id.GetId());
@@ -991,30 +993,19 @@ static unique_ptr<Expression> TryCastFilterExpression(const Expression &expr, co
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return CreateOptionalFilterExpression(nullptr, target_type);
-			}
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			auto child_expr = data.child_filter_expr
-			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
-			                      : nullptr;
-			if (data.child_filter_expr && !child_expr) {
+		if (ExpressionFilter::IsRootOptionalExpression(expr)) {
+			auto optional_child = ExpressionFilter::GetOptionalFilterChild(expr);
+			auto child_expr = optional_child ? TryCastFilterExpression(*optional_child, mapping, target_type) : nullptr;
+			if (optional_child && !child_expr) {
 				return nullptr;
 			}
-			return CreateOptionalFilterExpression(std::move(child_expr), target_type);
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
+			if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
+				return CreateOptionalFilterExpression(std::move(child_expr), target_type);
+			}
 			if (!func.BindInfo()) {
-				return CreateSelectivityOptionalFilterExpression(nullptr, target_type, 0.5f, idx_t(6));
+				return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type, 0.5f, idx_t(6));
 			}
 			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			auto child_expr = data.child_filter_expr
-			                      ? TryCastFilterExpression(*data.child_filter_expr, mapping, target_type)
-			                      : nullptr;
-			if (data.child_filter_expr && !child_expr) {
-				return nullptr;
-			}
 			return CreateSelectivityOptionalFilterExpression(std::move(child_expr), target_type,
 			                                                 data.selectivity_threshold, data.n_vectors_to_check);
 		}

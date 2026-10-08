@@ -18,18 +18,9 @@ ICUDateFunc::BindData::BindData(const string &tz_setting_p, const string &cal_se
 	InitCalendar();
 }
 
-ICUDateFunc::BindData::BindData(ClientContext &context) {
-	Value tz_value;
-	if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-		tz_setting = tz_value.ToString();
-	}
-
-	Value cal_value;
-	if (context.TryGetCurrentSetting("Calendar", cal_value)) {
-		cal_setting = cal_value.ToString();
-	} else {
-		cal_setting = "gregorian";
-	}
+ICUDateFunc::BindData::BindData(ClientContext &context) : cal_setting("gregorian") {
+	context.TryGetCurrentSetting("TimeZone", tz_setting);
+	context.TryGetCurrentSetting("Calendar", cal_setting);
 
 	InitCalendar();
 }
@@ -215,6 +206,27 @@ int32_t ICUDateFunc::ExtractField(Calendar *calendar, CalendarField field) {
 		throw ConversionException("Unable to extract calendar part");
 	}
 	return result;
+}
+
+bool ICUDateFunc::TryGetTimeTZOffset(Calendar *calendar, int32_t &offset) {
+	offset = ExtractField(calendar, CAL_ZONE_OFFSET);
+	offset += ExtractField(calendar, CAL_DST_OFFSET);
+	offset /= Interval::MSECS_PER_SEC;
+	return offset >= dtime_tz_t::MIN_OFFSET && offset <= dtime_tz_t::MAX_OFFSET;
+}
+
+int32_t ICUDateFunc::GetTimeTZOffset(Calendar *calendar) {
+	int32_t offset;
+	if (!TryGetTimeTZOffset(calendar, offset)) {
+		throw OutOfRangeException(TimeTZOffsetError(offset));
+	}
+	return offset;
+}
+
+string ICUDateFunc::TimeTZOffsetError(int32_t offset) {
+	interval_t interval {0, 0, offset * Interval::MICROS_PER_SEC};
+	return StringUtil::Format("Time zone offset %s is out of range, expected a value between -15:59:59 and +15:59:59",
+	                          Interval::ToString(interval));
 }
 
 int32_t ICUDateFunc::SubtractField(Calendar *calendar, CalendarField field, timestamp_tz_t end_date) {

@@ -1241,14 +1241,14 @@ void SingleFileBlockManager::Truncate() {
 		blocks_to_truncate++;
 		max_block--;
 	}
-	if (blocks_to_truncate == 0) {
-		// nothing to truncate
-		return;
+	if (blocks_to_truncate > 0) {
+		// truncate the file
+		free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	}
-	// truncate the file
-	free_list.erase(free_list.lower_bound(max_block), free_list.end());
 	auto new_size = NumericCast<idx_t>(BLOCK_START + NumericCast<idx_t>(max_block) * GetBlockAllocSize());
-	handle->Truncate(new_size);
+	if (blocks_to_truncate > 0 || handle->GetFileSize() > new_size) {
+		handle->Truncate(new_size);
+	}
 }
 
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
@@ -1338,6 +1338,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.iteration = ++iteration_count;
 
 	set<block_id_t> all_free_blocks = free_list;
+	all_free_blocks.insert(free_blocks_in_use.begin(), free_blocks_in_use.end());
 	auto checkpoint_freed_blocks = modified_blocks;
 	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);

@@ -92,6 +92,8 @@ struct ClientConfig {
 	vector<string> active_grammar_extensions;
 	//! The compiled grammar active for the connection
 	shared_ptr<CompiledGrammar> cached_grammar;
+	//! The grammar of the database this client is CONNECT-ed to; unset when not connected
+	shared_ptr<CompiledGrammar> connected_grammar;
 
 public:
 	static ClientConfig &GetConfig(ClientContext &context);

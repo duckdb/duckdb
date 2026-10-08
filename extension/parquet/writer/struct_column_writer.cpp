@@ -15,6 +15,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "parquet_column_schema.hpp"
+#include "parquet_writer.hpp"
 #include "parquet_types.h"
 
 namespace duckdb {
@@ -34,6 +35,8 @@ public:
 	duckdb_parquet::RowGroup &row_group;
 	idx_t col_idx;
 	vector<unique_ptr<ColumnWriterState>> child_states;
+	//! Null structs before PrepareWrite adds ancestor nulls to null_count
+	idx_t own_null_count = 0;
 };
 
 unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
@@ -93,6 +96,7 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	}
 	HandleRepeatLevels(state_p, parent, count);
 	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, MaxDefine() - 1);
+	state.own_null_count = state.null_count;
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p, child_vectors[child_idx], count,
@@ -126,6 +130,8 @@ void StructColumnWriter::PrepareWrite(ColumnWriterState &state_p) {
 
 void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
+	auto num_values = state.definition_levels.size() - state.parent_null_count;
+	writer.FlushNestedColumnStats(SchemaIndex(), state.own_null_count, num_values);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
 	}

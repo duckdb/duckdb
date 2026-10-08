@@ -15,12 +15,13 @@
 
 namespace duckdb {
 
-PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types, TableFunction function_p,
-                                     unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
-                                     vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
-                                     vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
-                                     vector<Value> parameters_p, virtual_column_map_t virtual_columns_p)
+PhysicalTableScan::PhysicalTableScan(PhysicalPlan &physical_plan, vector<LogicalType> types,
+                                     BoundTableFunction function_p, unique_ptr<FunctionData> bind_data_p,
+                                     vector<LogicalType> returned_types_p, vector<ColumnIndex> column_ids_p,
+                                     vector<idx_t> projection_ids_p, vector<string> names_p,
+                                     unique_ptr<TableFilterSet> table_filters_p, idx_t estimated_cardinality,
+                                     ExtraOperatorInfo extra_info, vector<Value> parameters_p,
+                                     virtual_column_map_t virtual_columns_p)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
 
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
@@ -267,7 +268,8 @@ OperatorPartitionData PhysicalTableScan::GetPartitionData(ExecutionContext &cont
 }
 
 string PhysicalTableScan::GetName() const {
-	return StringUtil::Upper(function.name + (function.extra_info.empty() ? "" : " " + function.extra_info));
+	auto &extra_info = function.GetExtraInfo();
+	return StringUtil::Upper(function.GetName().GetIdentifierName() + (extra_info.empty() ? "" : " " + extra_info));
 }
 
 void AddProjectionNames(const ColumnIndex &index, const string &name, const LogicalType &type, string &result) {
@@ -340,7 +342,7 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 			result[it.first] = it.second;
 		}
 	} else {
-		result["Function"] = StringUtil::Upper(function.name.GetIdentifierName());
+		result["Function"] = StringUtil::Upper(function.GetName().GetIdentifierName());
 	}
 	if (function.projection_pushdown) {
 		string projections;

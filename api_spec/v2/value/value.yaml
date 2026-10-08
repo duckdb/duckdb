@@ -1121,6 +1121,8 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: uhugeint_t
+        indirection: 1
+        const: true
         description: The uint128_t to wrap.
       out_value:
         type: value
@@ -1266,6 +1268,8 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: hugeint_t
+        indirection: 1
+        const: true
         description: The int128_t to wrap.
       out_value:
         type: value
@@ -1295,6 +1299,9 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The UTF-8 string to wrap. May be null only when len is 0 (empty string).
       out_value:
         type: value
@@ -1324,6 +1331,9 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The byte string to wrap. May be null only when len is 0 (empty string).
       out_value:
         type: value
@@ -1617,6 +1627,8 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: uhugeint_t
+        indirection: 1
+        const: true
         description: The uint128_t to wrap.
       out_value:
         type: value
@@ -1762,6 +1774,8 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: hugeint_t
+        indirection: 1
+        const: true
         description: The int128_t to wrap.
       out_value:
         type: value
@@ -1791,6 +1805,9 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The UTF-8 string to wrap. May be null only when len is 0 (empty string).
       out_value:
         type: value
@@ -1820,6 +1837,9 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The byte string to wrap. May be null only when len is 0 (empty string).
       out_value:
         type: value
@@ -2548,6 +2568,8 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: interval_t
+        indirection: 1
+        const: true
         description: The payload to wrap.
       out_value:
         type: value
@@ -2578,6 +2600,8 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: interval_t
+        indirection: 1
+        const: true
         description: The payload to wrap.
       out_value:
         type: value
@@ -2611,6 +2635,8 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: hugeint_t
+        indirection: 1
+        const: true
         description: The backing integer, scaled by 10^scale.
       width:
         type: u8
@@ -2650,6 +2676,8 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: hugeint_t
+        indirection: 1
+        const: true
         description: The backing integer, scaled by 10^scale.
       width:
         type: u8
@@ -2687,6 +2715,8 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: hugeint_t
+        indirection: 1
+        const: true
         description: The internal 128-bit storage form.
       out_value:
         type: value
@@ -2718,6 +2748,8 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: hugeint_t
+        indirection: 1
+        const: true
         description: The internal 128-bit storage form.
       out_value:
         type: value
@@ -2749,6 +2781,9 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The wire bytes, a padding header byte followed by data. Must be at least 1 byte.
       out_value:
         type: value
@@ -2780,6 +2815,9 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The wire bytes, a padding header byte followed by data. Must be at least 1 byte.
       out_value:
         type: value
@@ -2812,6 +2850,9 @@ functions:
         description: The context to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The opaque storage bytes from bignum_encode. Must exceed 3 bytes.
       out_value:
         type: value
@@ -2844,6 +2885,9 @@ functions:
         description: The connection to use for the construction.
       in_value:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The opaque storage bytes from bignum_encode. Must exceed 3 bytes.
       out_value:
         type: value
@@ -3053,6 +3097,7 @@ functions:
         type: identifier
         indirection: 1
         const: true
+        kind: IN
         description: An array of field_count field names. Pass NULL when field_count is 0.
       children:
         type: value
@@ -3096,6 +3141,7 @@ functions:
         type: identifier
         indirection: 1
         const: true
+        kind: IN
         description: An array of field_count field names. Pass NULL when field_count is 0.
       children:
         type: value

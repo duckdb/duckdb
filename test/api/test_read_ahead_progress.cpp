@@ -1,9 +1,46 @@
 #include "catch.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/parallel/scan_read_ahead.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
+
+TEST_CASE("Parquet read-ahead supports a schema supplied without binding a file", "[api][parquet]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto path = TestCreatePath("read_ahead_schema.parquet");
+	REQUIRE_NO_FAIL(con.Query("COPY (SELECT range AS i FROM range(10000)) TO '" + path +
+	                          "' (FORMAT parquet, ROW_GROUP_SIZE 2048)"));
+
+	string query;
+	bool supplied_schema = false;
+	SECTION("Schema read from the file") {
+		query = "SELECT i FROM read_parquet('" + path + "')";
+	}
+	SECTION("Schema supplied by the caller") {
+		supplied_schema = true;
+		query = "SELECT i FROM read_parquet('" + path +
+		        "', schema=map{'i': {'name': 'i', 'type': 'BIGINT', 'default_value': NULL}})";
+	}
+	auto plan = con.ExtractPlan(query);
+	auto op = plan.get();
+	while (op->type != LogicalOperatorType::LOGICAL_GET) {
+		REQUIRE(op->children.size() == 1);
+		op = op->children[0].get();
+	}
+	auto &bind_data = op->Cast<LogicalGet>().bind_data->Cast<MultiFileBindData>();
+	if (supplied_schema) {
+		auto &data = bind_data.bind_data->Cast<TableFunctionMultiFileData>();
+		REQUIRE_FALSE(data.options.schema_bind_data);
+		REQUIRE(bind_data.union_readers.empty());
+	}
+	REQUIRE(bind_data.interface->SupportsReadAhead(bind_data));
+	auto result = con.Query(query);
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->RowCount() == 10000);
+}
 
 TEST_CASE("Read-ahead progress only counts the assignments a thread is decoding", "[api]") {
 	auto path = TestCreatePath("read_ahead_progress.db");

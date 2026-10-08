@@ -224,11 +224,11 @@ unique_ptr<BaseStatistics> PropagateLeastGreatestStats(ClientContext &context, F
 
 	auto result = NumericStats::CreateEmpty(return_type);
 	if constexpr (IS_LEAST) {
-		NumericStats::SetMin(result, std::move(loose));
-		NumericStats::SetMax(result, std::move(anchored));
+		NumericStats::SetMin(result, loose);
+		NumericStats::SetMax(result, anchored);
 	} else {
-		NumericStats::SetMin(result, std::move(anchored));
-		NumericStats::SetMax(result, std::move(loose));
+		NumericStats::SetMin(result, anchored);
+		NumericStats::SetMax(result, loose);
 	}
 	result.Set(StatsInfo::CAN_HAVE_VALID_VALUES);
 	if (!has_nonnull_input) {

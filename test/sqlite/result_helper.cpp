@@ -501,9 +501,10 @@ void TestResultHelper::DuckDBConvertResult(QueryResult &result, bool original_sq
 	idx_t column_count = result.ColumnCount();
 
 	out_result.resize(row_count * column_count);
+	auto rows = result.Collection().GetRows();
 	for (r = 0; r < row_count; r++) {
 		for (c = 0; c < column_count; c++) {
-			auto value = result.GetValue(c, r);
+			auto value = rows.GetValue(c, r);
 			auto converted_value = SQLLogicTestConvertValue(value, result.GetTypes()[c], original_sqlite_test);
 			out_result[r * column_count + c] = converted_value;
 		}

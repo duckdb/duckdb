@@ -158,13 +158,9 @@ RecursiveCTEState::RecursiveCTEState(ClientContext &context, const PhysicalRecur
 		source_distinct_rows.Initialize(Allocator::DefaultAllocator(), op.hash_key_types);
 		source_aggregate_rows.Initialize(Allocator::DefaultAllocator(), op.aggregate_types);
 	}
-	source_result.Initialize(Allocator::DefaultAllocator(), op.GetTypes());
 	if (op.using_key) {
 		InitializeIntermediateAppend();
 		op.working_table->InitializeAppend(working_append_state);
-	}
-	if (op.recurring_table) {
-		op.recurring_table->InitializeAppend(recurring_append_state);
 	}
 }
 
@@ -1495,16 +1491,8 @@ SourceResultType RecursiveCTEState::GetUnionData(ExecutionContext &context, Data
 			// After an iteration, we reset the recurring table
 			// and fill it up with the new hash table rows for the next iteration.
 			if (op.ref_recurring && current_output.Count() != 0) {
-				// we need to populate the recurring table from the intermediate table
-				// careful: we can not just use Combine here, because this destroys the intermediate table
-				// instead we need to scan and append to create a copy
-				// Note: as we are in the "normal" recursion case here, not the USING KEY case,
-				// we can just scan the intermediate table directly, instead of going through the HT
-				ColumnDataScanState recurring_scan_state;
-				current_output.InitializeScan(recurring_scan_state);
-				while (current_output.Scan(recurring_scan_state, source_result)) {
-					op.recurring_table->Append(recurring_append_state, source_result);
-				}
+				// copy since Combine would destroy the intermediate table
+				op.recurring_table->Append(current_output);
 			}
 
 			AdvanceIterationBuffers();

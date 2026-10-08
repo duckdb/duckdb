@@ -46,6 +46,12 @@ enums:
           The file will be read and written at explicit offsets from several threads at once. Pass it whenever
           `[[file_read_at]]` or `[[file_write_at]]` are used concurrently -- a file system that would otherwise
           assume sequential access, by caching, buffering, or keeping a single cursor, needs to know not to.
+      FILE_FLAG_EXTERNAL_FILE_CACHE:
+        value: 8
+        description: |
+          Read the file through DuckDB's external file cache, which keeps the bytes that were read in memory, so
+          that later reads of the same file - also by later queries - do not have to read them again. Whether a
+          local file is cached is decided by the `cache_local_files` setting. Only meaningful for reading.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Handles
@@ -196,6 +202,9 @@ functions:
         description: The options to set the value on.
       name:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The name of the value. Borrowed and copied.
       value:
         type: value
@@ -246,6 +255,9 @@ functions:
         description: The file system to open the file through.
       file_path:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The path of the file to open. Borrowed for the call only.
       options:
         type: file_open_options

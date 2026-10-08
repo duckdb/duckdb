@@ -36,7 +36,6 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/logical_operator_repeatability.hpp"
 #include "duckdb/planner/subquery/column_binding_layout.hpp"
-#include "duckdb/planner/sql_export_helpers.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include <utility>
 
@@ -468,7 +467,7 @@ void RemoveUnusedColumns::VisitSecureView(LogicalSecureView &view) {
 		unique_ptr<Expression> source_expression;
 		for (idx_t i = 0; i < view.output_bindings.size(); i++) {
 			if (view.output_bindings[i] != new_bindings[output_idx] ||
-			    !SQLExportHelpers::SQLTypesMatch(view.output_expressions[i]->GetReturnType(), new_types[output_idx])) {
+			    !view.output_expressions[i]->GetReturnType().EqualsIncludingCollation(new_types[output_idx])) {
 				continue;
 			}
 			if (source_expression && !source_expression->Equals(*view.output_expressions[i])) {

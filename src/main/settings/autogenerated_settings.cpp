@@ -80,6 +80,22 @@ Value CustomUserAgentSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Debug Abort On Wal Failure
+//===----------------------------------------------------------------------===//
+void DebugAbortOnWalFailureSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.abort_on_wal_failure = input.GetValue<bool>();
+}
+
+void DebugAbortOnWalFailureSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.abort_on_wal_failure = DBConfigOptions().abort_on_wal_failure;
+}
+
+Value DebugAbortOnWalFailureSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.abort_on_wal_failure);
+}
+
+//===----------------------------------------------------------------------===//
 // Debug Checkpoint Abort
 //===----------------------------------------------------------------------===//
 void DebugCheckpointAbortSetting::OnSet(SettingCallbackInfo &info, Value &parameter) {

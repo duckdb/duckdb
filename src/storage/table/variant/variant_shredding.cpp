@@ -829,6 +829,7 @@ void VariantColumnData::DebugShred(Vector &variant, idx_t count) {
 
 	Vector materialized(LogicalType::VARIANT(), count);
 	VectorOperations::Copy(variant, materialized, count, 0, 0);
+	FlatVector::SetSize(materialized, count);
 	variant.Reference(materialized);
 
 	//! Derive the shredding schema from the *first* value only - subsequent values that don't match it

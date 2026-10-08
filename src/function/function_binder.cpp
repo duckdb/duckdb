@@ -88,20 +88,40 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 	// Compute total number of arguments passed
 	const auto received_arg_count = static_cast<idx_t>(arguments.size() + named_arguments.size());
 
-	// And the minimum and maximum number of arguments the function can accept
-	const auto minimum_arg_count = sig.GetRequiredParameterCount();
+	// And the maximum number of arguments the function can accept
 	const auto positional_count = sig.GetPositionalParameterCount();
-	const auto args_param = sig.GetArgsParameter();
-	const auto kwargs_param = sig.GetKwargsParameter();
+	const auto args_param = sig.GetArgs();
+	const auto kwargs_param = sig.GetKwargs();
 
 	idx_t maximum_arg_count = NumericLimits<idx_t>::Maximum();
 	if (!args_param && !kwargs_param) {
 		maximum_arg_count = sig.GetParameterCount();
 	}
 
-	if (received_arg_count < minimum_arg_count) {
-		// We have fewer arguments than the function requires, so this function cannot be a match.
-		return optional_idx();
+	// Every parameter without a default has to be filled by the call, either from its position or by its name.
+	// Counting the arguments instead would let a named argument stand in for a required positional parameter, so
+	// that f(a, *, opt := NULL) matched a call f(opt := 1) that cannot fill "a" just as well as f(*, opt := NULL).
+	for (idx_t i = 0; i < sig.GetParameterCount(); i++) {
+		auto &param = sig.GetParameter(i);
+		if (param.IsVariadic() || param.HasDefaultValue()) {
+			continue;
+		}
+		if (param.AcceptsPosition() && i < arguments.size()) {
+			continue;
+		}
+		bool filled = false;
+		if (param.AcceptsName()) {
+			for (auto &named_arg : named_arguments) {
+				if (named_arg.first == param.GetName()) {
+					filled = true;
+					break;
+				}
+			}
+		}
+		if (!filled) {
+			// This parameter cannot be filled by the call, so this function cannot be a match.
+			return optional_idx();
+		}
 	}
 
 	if (received_arg_count > maximum_arg_count) {
@@ -145,7 +165,7 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 				// no parameter with this name, and no "**kwargs" to receive it
 				return optional_idx();
 			}
-
+			// the options of "**kwargs" do not select the overload - they are checked once it is chosen
 			int64_t cast_cost = ImplicitCastCost(context, named_arg.second, kwargs_param->GetType());
 			if (cast_cost >= 0) {
 				// we can implicitly cast, add the cost to the total cost
@@ -171,71 +191,12 @@ optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const 
 			if (cast_cost >= 0) {
 				cost += idx_t(cast_cost);
 			} else {
+				// A named argument reaches its parameter only by an implicit cast, exactly like a positional one
 				return optional_idx();
 			}
 		}
 	}
 
-	if (has_parameter) {
-		// all arguments are implicitly castable and there is a parameter - return 0 as cost
-		return 0;
-	}
-	return cost;
-}
-
-static optional_idx BindVarArgsFunctionCost(optional_ptr<ClientContext> context,
-                                            const SimpleNamedParameterFunction &func,
-                                            const vector<LogicalType> &arguments) {
-	if (arguments.size() < func.GetArguments().size()) {
-		// not enough arguments to fulfill the non-vararg part of the function
-		return optional_idx();
-	}
-	idx_t cost = 0;
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		LogicalType arg_type = i < func.GetArguments().size() ? func.GetArguments()[i] : func.GetVarArgs();
-		if (arguments[i] == arg_type) {
-			// arguments match: do nothing
-			continue;
-		}
-		int64_t cast_cost = ImplicitCastCost(context, arguments[i], arg_type);
-		if (cast_cost >= 0) {
-			// we can implicitly cast, add the cost to the total cost
-			cost += idx_t(cast_cost);
-		} else {
-			// we can't implicitly cast: throw an error
-			return optional_idx();
-		}
-	}
-	return cost;
-}
-
-optional_idx FunctionOverloads::Cost(optional_ptr<ClientContext> context, const SimpleNamedParameterFunction &func,
-                                     const vector<LogicalType> &arguments,
-                                     const vector<pair<Identifier, LogicalType>> &) {
-	if (func.HasVarArgs()) {
-		// special case varargs function
-		return BindVarArgsFunctionCost(context, func, arguments);
-	}
-	if (func.GetArguments().size() != arguments.size()) {
-		// invalid argument count: check the next function
-		return optional_idx();
-	}
-	idx_t cost = 0;
-	bool has_parameter = false;
-	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (arguments[i].id() == LogicalTypeId::UNKNOWN) {
-			has_parameter = true;
-			continue;
-		}
-		int64_t cast_cost = ImplicitCastCost(context, arguments[i], func.GetArguments()[i]);
-		if (cast_cost >= 0) {
-			// we can implicitly cast, add the cost to the total cost
-			cost += idx_t(cast_cost);
-		} else {
-			// we can't implicitly cast: throw an error
-			return optional_idx();
-		}
-	}
 	if (has_parameter) {
 		// all arguments are implicitly castable and there is a parameter - return 0 as cost
 		return 0;
@@ -460,23 +421,240 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFun
 	return BindFunctionFromArguments(name, functions, regular_args, keyword_args, error);
 }
 
-optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
-                                          vector<Value> &parameters, ErrorData &error) {
-	vector<LogicalType> types;
-	for (auto &value : parameters) {
-		types.push_back(value.type());
+//! Reject a named argument that no overload of the set accepts, naming the options that were available. Overload
+//! selection would otherwise report only that nothing matched the call, which hides which name was wrong
+template <class T>
+static void VerifyNamedArgumentsAccepted(const Identifier &name, const FunctionSet<T> &functions,
+                                         const vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
+	for (auto &named_argument : named_arguments) {
+		bool accepted = false;
+		for (idx_t i = 0; i < functions.functions.size() && !accepted; i++) {
+			auto &signature = functions.functions[i]->GetSignature();
+			// the options of a "**kwargs" are checked once the overload is chosen
+			accepted =
+			    signature.GetParameterIndexByName(named_argument.first).IsValid() || signature.GetKwargs() != nullptr;
+		}
+		if (accepted) {
+			continue;
+		}
+		// list every option any overload accepts, in name order
+		map<string, string> candidates;
+		for (idx_t i = 0; i < functions.functions.size(); i++) {
+			for (auto &param : functions.functions[i]->GetSignature().GetParameters()) {
+				if (!param.IsVariadic() && param.HasDefaultValue()) {
+					candidates[param.GetName().GetIdentifierName()] = param.GetType().ToString();
+				}
+			}
+		}
+		string candidate_list;
+		for (auto &candidate : candidates) {
+			candidate_list += "    " + candidate.first + " " + candidate.second + "\n";
+		}
+		throw BinderException("Invalid named parameter %s for function %s\n%s", named_argument.first,
+		                      name.GetIdentifierName(),
+		                      candidate_list.empty() ? "Function does not accept any named parameters."
+		                                             : "Candidates:\n" + candidate_list);
 	}
-	auto entry = BindFunctionFromArguments(name, functions, types, {}, error);
+}
+
+enum class LogicalTypeComparisonResult : uint8_t { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
+
+static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const LogicalType &target_type) {
+	if (target_type.id() == LogicalTypeId::ANY) {
+		return LogicalTypeComparisonResult::TARGET_IS_ANY;
+	}
+	if (source_type == target_type) {
+		return LogicalTypeComparisonResult::IDENTICAL_TYPE;
+	}
+	if (source_type.id() == LogicalTypeId::LIST && target_type.id() == LogicalTypeId::LIST) {
+		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
+	}
+	if (source_type.id() == LogicalTypeId::ARRAY && target_type.id() == LogicalTypeId::ARRAY) {
+		return RequiresCast(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type));
+	}
+	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
+}
+
+Value FunctionBinder::CastToParameterType(ClientContext &context, Value value, const LogicalType &parameter_type) {
+	if (RequiresCast(value.type(), parameter_type) == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+		return value.CastAs(context, parameter_type);
+	}
+	return value;
+}
+
+//! Fold an argument to the constant it was bound to. A constant expression carries its value directly - evaluating
+//! one is both wasteful and impossible for the types that have no vector representation, such as TABLE
+static Value FoldArgument(ClientContext &context, Expression &expr) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return expr.Cast<BoundConstantExpression>().GetValue();
+	}
+	return ExpressionExecutor::EvaluateScalar(context, expr, true);
+}
+
+//! Fold an argument to a constant and cast it to the type of the parameter it fills
+static Value PlaceArgument(ClientContext &context, Expression &expr, const LogicalType &target_type) {
+	if (target_type.id() == LogicalTypeId::TABLE) {
+		// A TABLE parameter is filled by the subquery itself rather than by a value, so its slot holds a plain
+		// NULL. A NULL of type TABLE would not do: TABLE has no physical type, so such a value cannot be read
+		// back when the plan is deserialized.
+		return Value();
+	}
+	return FunctionBinder::CastToParameterType(context, FoldArgument(context, expr), target_type);
+}
+
+//! Fold an option to a constant and cast it to its type like an explicit cast - overload selection never checked it.
+//! A failed cast names the option, as the cast alone cannot tell which one it was
+static Value PlaceOption(ClientContext &context, Expression &expr, const TypedKwarg &option) {
+	auto value = FoldArgument(context, expr);
+	if (RequiresCast(value.type(), option.type) != LogicalTypeComparisonResult::DIFFERENT_TYPES) {
+		return value;
+	}
+	string error_message;
+	auto result = value.TryCastAs(context, option.type, &error_message);
+	if (!result) {
+		throw InvalidInputException(expr, "Could not cast value %s to named parameter %s of type %s: %s",
+		                            value.ToSQLString(), option.name, option.type.ToString(), error_message);
+	}
+	return std::move(*result);
+}
+
+//! Place the arguments of a call onto the parameters of the chosen overload: fold each to a constant and cast it to
+//! the type that parameter declares. Every parameter that accepts a position gets its slot in "parameters", whether
+//! the caller passed it by position, by name or not at all, so "range(1, col1 := 5)" reaches the callback exactly as
+//! "range(1, 5)" does. Only keyword-only and "**kwargs" arguments are handed back in "named_parameters", keyed by the
+//! name the caller wrote - or, for an option "**kwargs" declares, by the name of the option, cast to its type. A
+//! parameter the call leaves out receives its default; an option the call leaves out is not passed. Overload selection
+//! has already established that every parameter's cast is one the implicit rules allow. An option takes no part in
+//! selection, so it is cast to its type like an explicit cast.
+template <class T>
+static void PlaceArguments(ClientContext &context, const T &function,
+                           vector<unique_ptr<Expression>> &positional_arguments,
+                           vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments, vector<Value> &parameters,
+                           named_argument_map_t &named_parameters) {
+	auto &signature = function.GetSignature();
+	const auto positional_count = signature.GetPositionalParameterCount();
+	const auto passed_count = positional_arguments.size();
+
+	// the positional parameters the caller filled by name, by parameter index
+	vector<optional_ptr<Expression>> named_slots(positional_count);
+	identifier_set_t seen_names;
+	for (auto &named_argument : named_arguments) {
+		auto &argument_name = named_argument.first;
+		if (!seen_names.insert(argument_name).second) {
+			throw BinderException("Duplicate named argument %s for function %s", argument_name,
+			                      function.GetName().GetIdentifierName());
+		}
+		auto param_idx = signature.GetParameterIndexByName(argument_name);
+		if (!param_idx.IsValid()) {
+			auto option_schema = signature.GetTypedKwargs();
+			if (!option_schema) {
+				// received by "**kwargs" - cast to its type, as overload selection checked, unless that is ANY
+				auto &kwargs_type = signature.GetKwargs()->GetType();
+				named_parameters.insert(
+				    make_pair(argument_name, PlaceArgument(context, *named_argument.second, kwargs_type)));
+				continue;
+			}
+			auto &expr = *named_argument.second;
+			auto option_ptr = option_schema->Find(argument_name);
+			if (!option_ptr) {
+				// only the options that resemble the name - listing every option buries the one that was meant
+				const double similarity_threshold = 0.8;
+				auto lower_name = StringUtil::Lower(argument_name.GetIdentifierName());
+				vector<pair<string, double>> scores;
+				for (auto &option_name : option_schema->GetNames()) {
+					auto score = StringUtil::SimilarityRating(option_name.GetIdentifierName(), lower_name);
+					if (score >= similarity_threshold) {
+						scores.emplace_back(option_name.GetIdentifierName(), score);
+					}
+				}
+				auto similar = StringUtil::TopNStrings(scores, 3, similarity_threshold);
+				throw BinderException(expr.GetQueryLocation(), "Invalid named parameter %s for function %s%s",
+				                      argument_name, function.GetName().GetIdentifierName(),
+				                      StringUtil::CandidatesMessage(similar, "Did you mean"));
+			}
+			auto &option = *option_ptr;
+			if (named_parameters.find(option.name) != named_parameters.end()) {
+				throw BinderException(named_argument.second->GetQueryLocation(),
+				                      "Named parameter %s was passed more than once in function call to %s",
+				                      option.name, function.GetName().GetIdentifierName());
+			}
+			named_parameters.insert(make_pair(option.name, PlaceOption(context, *named_argument.second, option)));
+			continue;
+		}
+		auto &param = signature.GetParameter(param_idx.GetIndex());
+		if (!param.AcceptsPosition()) {
+			named_parameters.insert(
+			    make_pair(argument_name, PlaceArgument(context, *named_argument.second, param.GetType())));
+			continue;
+		}
+		if (param_idx.GetIndex() < passed_count) {
+			throw BinderException(named_argument.second->GetQueryLocation(),
+			                      "Named argument '%s' cannot be used for parameter '%s' because it has already "
+			                      "been provided as a positional argument in function call to '%s'",
+			                      named_argument.second->ToString(), argument_name,
+			                      function.GetName().GetIdentifierName());
+		}
+		named_slots[param_idx.GetIndex()] = *named_argument.second;
+	}
+
+	for (idx_t i = 0; i < positional_count; i++) {
+		auto &param = signature.GetParameter(i);
+		if (i < passed_count) {
+			parameters.push_back(PlaceArgument(context, *positional_arguments[i], param.GetType()));
+		} else if (named_slots[i]) {
+			parameters.push_back(PlaceArgument(context, *named_slots[i], param.GetType()));
+		} else if (param.HasDefaultValue()) {
+			parameters.push_back(
+			    FunctionBinder::CastToParameterType(context, *param.GetDefaultValue(), param.GetType()));
+		} else {
+			// overload selection only picks an overload whose required parameters the call fills
+			throw InternalException("Missing value for parameter %s in function call to %s", param.GetName(),
+			                        function.GetName().GetIdentifierName());
+		}
+	}
+	if (passed_count > positional_count) {
+		// overload selection only picks an overload with "*args" for surplus positional arguments
+		auto &args_type = signature.GetArgs()->GetType();
+		for (idx_t i = positional_count; i < passed_count; i++) {
+			parameters.push_back(PlaceArgument(context, *positional_arguments[i], args_type));
+		}
+	}
+	signature.FillNamedDefaults(context, named_parameters);
+}
+
+optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFunctionSet &functions,
+                                          vector<unique_ptr<Expression>> &positional_arguments,
+                                          vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                          vector<Value> &parameters, named_argument_map_t &named_parameters,
+                                          ErrorData &error) {
+	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
+	auto entry = BindFunction(name, functions, positional_arguments, named_arguments, error);
+	if (!entry.IsValid()) {
+		return entry;
+	}
+	PlaceArguments(context, *functions.GetFunctionByOffset(entry.GetIndex()), positional_arguments, named_arguments,
+	               parameters, named_parameters);
+	return entry;
+}
+
+optional_idx FunctionBinder::BindTableInOutFunction(const Identifier &name, const TableFunctionSet &functions,
+                                                    const vector<LogicalType> &input_types, ErrorData &error) {
+	return BindFunctionFromArguments(name, functions, input_types, {}, error);
+}
+
+optional_idx FunctionBinder::BindFunction(const Identifier &name, const PragmaFunctionSet &functions,
+                                          vector<unique_ptr<Expression>> &positional_arguments,
+                                          vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+                                          vector<Value> &parameters, named_argument_map_t &named_parameters,
+                                          ErrorData &error) {
+	VerifyNamedArgumentsAccepted(name, functions, named_arguments);
+	auto [args, kwargs] = GetArgumentsFromExpressions(positional_arguments, named_arguments);
+	auto entry = BindFunctionFromArguments(name, functions, args, kwargs, error);
 	if (!entry.IsValid()) {
 		error.Throw();
 	}
-	const auto &candidate_function = *functions.GetFunctionByOffset(entry.GetIndex());
-	// cast the input parameters
-	for (idx_t i = 0; i < parameters.size(); i++) {
-		auto target_type = i < candidate_function.GetArguments().size() ? candidate_function.GetArguments()[i]
-		                                                                : candidate_function.GetVarArgs();
-		parameters[i] = parameters[i].CastAs(context, target_type);
-	}
+	PlaceArguments(context, *functions.GetFunctionByOffset(entry.GetIndex()), positional_arguments, named_arguments,
+	               parameters, named_parameters);
 	return entry;
 }
 
@@ -517,24 +695,6 @@ optional_idx FunctionBinder::BindFunction(const Identifier &name, const TableFun
                                           ErrorData &error) {
 	auto [args, kwargs] = GetArgumentsFromExpressions(regular_args, keyword_args);
 	return BindFunctionFromArguments(name, functions, args, kwargs, error);
-}
-
-enum class LogicalTypeComparisonResult : uint8_t { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
-
-static LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const LogicalType &target_type) {
-	if (target_type.id() == LogicalTypeId::ANY) {
-		return LogicalTypeComparisonResult::TARGET_IS_ANY;
-	}
-	if (source_type == target_type) {
-		return LogicalTypeComparisonResult::IDENTICAL_TYPE;
-	}
-	if (source_type.id() == LogicalTypeId::LIST && target_type.id() == LogicalTypeId::LIST) {
-		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
-	}
-	if (source_type.id() == LogicalTypeId::ARRAY && target_type.id() == LogicalTypeId::ARRAY) {
-		return RequiresCast(ArrayType::GetChildType(source_type), ArrayType::GetChildType(target_type));
-	}
-	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
 }
 
 static bool TypeRequiresPrepare(const LogicalType &type) {
@@ -606,6 +766,17 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &sche
 	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), schema, name));
 	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
 	return BindScalarFunction(function, std::move(children), error, is_operator, binder);
+}
+
+unique_ptr<Expression> FunctionBinder::BindScalarFunction(const Identifier &schema, const Identifier &name,
+                                                          vector<unique_ptr<Expression>> children, bool is_operator,
+                                                          optional_ptr<Binder> binder) {
+	ErrorData error;
+	auto result = BindScalarFunction(schema, name, std::move(children), error, is_operator, binder);
+	if (!result) {
+		error.Throw();
+	}
+	return result;
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCatalogEntry &func,
@@ -684,30 +855,115 @@ static bool RequiresCollationPropagation(const LogicalType &type) {
 	return type.id() == LogicalTypeId::VARCHAR && !type.HasAlias();
 }
 
+struct FunctionCollations {
+	string collation;
+	identifier_map_t<unique_ptr<FunctionCollations>> fields;
+
+	FunctionCollations &GetField(const Identifier &name) {
+		auto &field = fields[name];
+		if (!field) {
+			field = make_uniq<FunctionCollations>();
+		}
+		return *field;
+	}
+};
+
+static Identifier CollationFieldName(const LogicalType &type, idx_t index) {
+	return StructType::IsUnnamed(type) ? Identifier(to_string(index)) : StructType::GetChildName(type, index);
+}
+
 //! Recursively extracts the collation of a (possibly nested) type, e.g. the element collation of a LIST(VARCHAR).
-static string ExtractCollationFromType(const LogicalType &type) {
-	switch (type.id()) {
-	case LogicalTypeId::VARCHAR:
-		return RequiresCollationPropagation(type) ? StringType::GetCollation(type) : string();
+//! target is the resolved argument type and may include fields from other arguments.
+static void ExtractCollationFromType(const LogicalType &source_type, const LogicalType &target,
+                                     FunctionCollations &collations) {
+	// Leave collation of aliased types to their registered callbacks.
+	if (source_type.HasAlias() || target.HasAlias()) {
+		return;
+	}
+	switch (source_type.id()) {
+	case LogicalTypeId::VARCHAR: {
+		auto collation = StringType::GetCollation(source_type);
+		if (collations.collation.empty()) {
+			collations.collation = std::move(collation);
+		} else if (!collation.empty() && collations.collation != collation) {
+			throw BinderException("Cannot combine types with different collation");
+		}
+		break;
+	}
 	case LogicalTypeId::LIST:
-		return ExtractCollationFromType(ListType::GetChildType(type));
-	case LogicalTypeId::ARRAY:
-		return ExtractCollationFromType(ArrayType::GetChildType(type));
+	case LogicalTypeId::ARRAY: {
+		auto &source_child = source_type.id() == LogicalTypeId::LIST ? ListType::GetChildType(source_type)
+		                                                             : ArrayType::GetChildType(source_type);
+		auto &target_child = target.id() == LogicalTypeId::LIST    ? ListType::GetChildType(target)
+		                     : target.id() == LogicalTypeId::ARRAY ? ArrayType::GetChildType(target)
+		                                                           : source_child;
+		ExtractCollationFromType(source_child, target_child, collations);
+		break;
+	}
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		auto &target_type = StructType::IsStruct(target) && target.HasParameters() ? target : source_type;
+		auto &source_children = StructType::GetChildTypes(source_type);
+		auto &target_children = StructType::GetChildTypes(target_type);
+
+		// If BOTH source and target_type are named, we can use named indexing, else we use positional.
+		if (!StructType::IsUnnamed(source_type) && !StructType::IsUnnamed(target_type)) {
+			// Named indexing, so build a map to map source fields to their position
+			identifier_map_t<idx_t> src_child_indices;
+			for (idx_t i = 0; i < source_children.size(); i++) {
+				src_child_indices.emplace(source_children[i].first, i);
+			}
+
+			for (idx_t i = 0; i < target_children.size(); i++) {
+				// Find index in the source fields, or skip if non existent.
+				auto entry = src_child_indices.find(target_children[i].first);
+				if (entry == src_child_indices.end()) {
+					continue;
+				}
+				const auto child_index = entry->second;
+				auto &field = collations.GetField(CollationFieldName(target_type, i));
+				ExtractCollationFromType(source_children[child_index].second, target_children[i].second, field);
+			}
+		} else {
+			// Use positional indexing, as not both source_type and target_type are named.
+			for (idx_t i = 0; i < MinValue(target_children.size(), source_children.size()); i++) {
+				auto &field = collations.GetField(CollationFieldName(target_type, i));
+				ExtractCollationFromType(source_children[i].second, target_children[i].second, field);
+			}
+		}
+		break;
+	}
 	default:
-		return string();
+		break;
 	}
 }
 
-//! Returns a copy of the type with the collation applied to every (nested) VARCHAR leaf.
-static LogicalType ApplyCollationToType(const LogicalType &type, const LogicalType &collation_type) {
+//! Returns a copy of the type with the collected collations applied to its VARCHAR fields.
+static LogicalType ApplyCollationToType(const LogicalType &type, const FunctionCollations &collations) {
+	// Rebuilding an aliased type would discard its alias and bypass its collation callbacks
+	if (type.HasAlias()) {
+		return type;
+	}
 	switch (type.id()) {
 	case LogicalTypeId::VARCHAR:
-		return RequiresCollationPropagation(type) ? collation_type : type;
+		return collations.collation.empty() ? type : LogicalType::VARCHAR_COLLATION(collations.collation);
 	case LogicalTypeId::LIST:
-		return LogicalType::LIST(ApplyCollationToType(ListType::GetChildType(type), collation_type));
+		return LogicalType::LIST(ApplyCollationToType(ListType::GetChildType(type), collations));
 	case LogicalTypeId::ARRAY:
-		return LogicalType::ARRAY(ApplyCollationToType(ArrayType::GetChildType(type), collation_type),
+		return LogicalType::ARRAY(ApplyCollationToType(ArrayType::GetChildType(type), collations),
 		                          ArrayType::GetSize(type));
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE: {
+		auto children = StructType::GetChildTypes(type);
+		for (idx_t i = 0; i < children.size(); i++) {
+			auto entry = collations.fields.find(CollationFieldName(type, i));
+			if (entry != collations.fields.end()) {
+				children[i].second = ApplyCollationToType(children[i].second, *entry->second);
+			}
+		}
+		return StructType::IsUnnamed(type) ? LogicalType::TUPLE(std::move(children))
+		                                   : LogicalType::STRUCT(std::move(children));
+	}
 	default:
 		return type;
 	}
@@ -721,20 +977,6 @@ static string ExtractCollation(const vector<unique_ptr<Expression>> &children) {
 			continue;
 		}
 		auto child_collation = StringType::GetCollation(arg->GetReturnType());
-		if (collation.empty()) {
-			collation = child_collation;
-		} else if (!child_collation.empty() && collation != child_collation) {
-			throw BinderException("Cannot combine types with different collation!");
-		}
-	}
-	return collation;
-}
-
-//! Like ExtractCollation, but also considers the collation of nested (LIST/ARRAY) VARCHAR elements.
-static string ExtractNestedCollation(const vector<unique_ptr<Expression>> &children) {
-	string collation;
-	for (auto &arg : children) {
-		auto child_collation = ExtractCollationFromType(arg->GetReturnType());
 		if (collation.empty()) {
 			collation = child_collation;
 		} else if (!child_collation.empty() && collation != child_collation) {
@@ -762,26 +1004,38 @@ static void PropagateCollations(ClientContext &, BoundSimpleFunction &bound_func
 
 static void PushCollations(ClientContext &context, BoundSimpleFunction &bound_function,
                            vector<unique_ptr<Expression>> &children, CollationType type) {
-	auto collation = ExtractNestedCollation(children);
-	if (collation.empty()) {
+	FunctionCollations collations;
+	auto &argument_types = bound_function.GetArguments();
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto &source_type = children[i]->GetReturnType();
+		auto &target_type = argument_types[i].IsComplete() ? argument_types[i] : source_type;
+		ExtractCollationFromType(source_type, target_type, collations);
+	}
+	if (collations.collation.empty() && collations.fields.empty()) {
 		// no collation to push
 		return;
 	}
 	// push collation into the return type if required
-	auto collation_type = LogicalType::VARCHAR_COLLATION(std::move(collation));
-	if (RequiresCollationPropagation(bound_function.GetReturnType())) {
-		bound_function.SetReturnType(collation_type);
+	if (!collations.collation.empty() && RequiresCollationPropagation(bound_function.GetReturnType())) {
+		bound_function.SetReturnType(LogicalType::VARCHAR_COLLATION(collations.collation));
 	}
 	// push collations to the children
-	for (auto &arg : children) {
-		// apply the collation to the (possibly nested) varchar leaves of the argument type
-		auto collated_type = ApplyCollationToType(arg->GetReturnType(), collation_type);
+	for (idx_t i = 0; i < children.size(); i++) {
+		auto &arg = children[i];
+		auto &arg_type = argument_types[i];
+		auto &target_type = arg_type.IsComplete() ? arg_type : arg->GetReturnType();
+		// apply the collations to the (possibly nested) varchar leaves of the argument type
+		auto collated_type = ApplyCollationToType(target_type, collations);
+		arg = BoundCastExpression::AddCastToType(context, std::move(arg), collated_type);
 		if (RequiresCollationPropagation(arg->GetReturnType())) {
 			// if this is a varchar type - propagate the collation
-			arg->SetReturnType(collation_type);
+			arg->SetReturnType(collated_type);
 		}
 		// now push the actual collation handling
-		ExpressionBinder::PushCollation(context, arg, collated_type, type);
+		if (ExpressionBinder::PushCollation(context, arg, collated_type, type)) {
+			// Normalization can change field types, so do not cast back to the original argument type.
+			arg_type = arg->GetReturnType();
+		}
 	}
 }
 
@@ -877,7 +1131,7 @@ static void InferTemplateType(ClientContext &context, const LogicalType &source,
 	// Otherwise, recurse downwards into nested types, and try to infer nested type members
 	// This only works if the source and target types are completely defined (excluding templates),
 	// i.e. they have aux info.
-	if (!(source.IsNested() && target.IsNested() && source.AuxInfo() && target.AuxInfo())) {
+	if (!(source.IsNested() && target.IsNested() && source.HasParameters() && target.HasParameters())) {
 		return;
 	}
 
@@ -1011,8 +1265,8 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
                                            vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments) {
 	const auto &sig = function.GetSignature();
 	const auto positional_count = sig.GetPositionalParameterCount();
-	const auto args_param = sig.GetArgsParameter();
-	const auto kwargs_param = sig.GetKwargsParameter();
+	const auto args_param = sig.GetArgs();
+	const auto kwargs_param = sig.GetKwargs();
 
 	// The arguments that were passed by position
 	auto positional_arguments = std::move(arguments);
@@ -1051,7 +1305,7 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 		}
 
 		const auto param_idx = opt_param_idx.GetIndex();
-		if (sig.GetParameter(param_idx).GetKind() == FunctionParameterKind::STANDARD && param_idx < passed_count) {
+		if (sig.GetParameter(param_idx).AcceptsPosition() && param_idx < passed_count) {
 			throw BinderException(location,
 			                      "Named argument '%s' cannot be used for parameter '%s' because it has already "
 			                      "been provided as a positional argument in function call to '%s'",
@@ -1092,7 +1346,7 @@ static vector<Identifier> ResolveArguments(const SimpleFunction &function, Bound
 			break;
 		}
 
-		if (param.GetKind() == FunctionParameterKind::STANDARD && param_idx < passed_count) {
+		if (param.AcceptsPosition() && param_idx < passed_count) {
 			add_argument(std::move(positional_arguments[param_idx]), param.GetName());
 		} else if (keyword_arguments[param_idx]) {
 			add_argument(std::move(keyword_arguments[param_idx]), param.GetName());

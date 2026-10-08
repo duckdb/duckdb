@@ -12,12 +12,19 @@
 #include "duckdb/common/table_index.hpp"
 #include "duckdb/common/vector.hpp"
 
+#include <functional>
+
 namespace duckdb {
 
 class ClientContext;
+class BoundColumnRefExpression;
 class Expression;
 class LogicalCTE;
 class LogicalOperator;
+
+//! Returns whether an expression becomes NULL when the provided column reference becomes NULL.
+bool ExpressionBecomesNull(const Expression &expr,
+                           const std::function<bool(const BoundColumnRefExpression &)> &column_becomes_null);
 
 //! Conservatively proves that an expression cannot be NULL at a logical operator's output.
 class NotNullExpressionAnalyzer {

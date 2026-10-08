@@ -385,16 +385,19 @@ void ToNoopFlush(duckdb_v2_copy_to_flush_info_handle, duckdb_v2_context_handle, 
 // Fail the query through a callback's error slot.
 void FailingToBind(duckdb_v2_copy_to_bind_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy to bind failed on purpose"));
+	auto text_str = Convert("copy to bind failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 void FailingToBatch(duckdb_v2_copy_to_batch_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy to batch failed on purpose"));
+	auto text_str = Convert("copy to batch failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 void FailingToBatchSize(duckdb_v2_copy_to_batch_size_info_handle, duckdb_v2_context_handle,
                         duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy to batch size failed on purpose"));
+	auto text_str = Convert("copy to batch size failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 // Leaves the target unset, which the engine refuses.
 void EmptyToBatchSize(duckdb_v2_copy_to_batch_size_info_handle, duckdb_v2_context_handle,
@@ -670,11 +673,13 @@ void FromNoopExec(duckdb_v2_copy_from_exec_info_handle, duckdb_v2_context_handle
 }
 void FailingFromBind(duckdb_v2_copy_from_bind_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy from bind failed on purpose"));
+	auto text_str = Convert("copy from bind failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 void FailingFromExec(duckdb_v2_copy_from_exec_info_handle, duckdb_v2_context_handle, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("copy from exec failed on purpose"));
+	auto text_str = Convert("copy from exec failed on purpose");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 } // namespace

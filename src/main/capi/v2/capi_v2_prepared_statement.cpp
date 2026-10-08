@@ -95,7 +95,30 @@ DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute(duckdb_v2_prepared_statemen
 		// retained on the handle between calls.
 		duckdb::identifier_map_t<duckdb::BoundParameterData> values;
 		BuildParameterMap(parameter_names, parameter_values, parameter_count, __func__, values);
-		*out_result = ExecutePreparedStatementV2(wrapper->context, *wrapper->prepared, values);
+		*out_result =
+		    Convert(ExecutePreparedStatementV2(wrapper->context, *wrapper->prepared, values, nullptr).release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_prepared_statement_execute_arrow(duckdb_v2_prepared_statement_handle prepared,
+                                                           const duckdb_v2_identifier_t *parameter_names,
+                                                           const duckdb_v2_value_handle *parameter_values,
+                                                           idx_t parameter_count, idx_t batch_size,
+                                                           duckdb_v2_arrow_result_handle *out_result,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(out_result);
+	*out_result = nullptr;
+	DUCKDB_CHECK_ARG(prepared);
+	if (parameter_count > 0 && !parameter_values) {
+		return NullArgumentError(err, __func__, "parameter_values");
+	}
+	return WithErrorHandler(err, [&]() {
+		auto *wrapper = Convert(prepared);
+		duckdb::identifier_map_t<duckdb::BoundParameterData> values;
+		BuildParameterMap(parameter_names, parameter_values, parameter_count, __func__, values);
+		*out_result = ConvertArrowResult(
+		    ExecutePreparedStatementV2(wrapper->context, *wrapper->prepared, values, ArrowResultFormat(batch_size))
+		        .release());
 	});
 }
 

@@ -134,14 +134,18 @@ static unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, child_li
 	return std::move(statement);
 }
 
-unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes) {
+unique_ptr<LogicalOperator> Binder::UnionOperators(vector<unique_ptr<LogicalOperator>> nodes, idx_t column_count,
+                                                   TableIndex table_index) {
 	if (nodes.empty()) {
 		return nullptr;
 	}
 	if (nodes.size() == 1) {
 		return std::move(nodes[0]);
 	}
-	return make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1U, std::move(nodes),
+	if (!table_index.IsValid()) {
+		table_index = GenerateTableIndex();
+	}
+	return make_uniq<LogicalSetOperation>(table_index, column_count, std::move(nodes),
 	                                      LogicalOperatorType::LOGICAL_UNION, true, false);
 }
 

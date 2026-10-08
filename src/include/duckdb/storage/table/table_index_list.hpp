@@ -50,7 +50,7 @@ public:
 	//! Iterates over shared ownership of stable index entries while holding the entry-list lock.
 	TableIndexIterationHelper<shared_ptr<IndexEntry>> IndexEntries() const;
 	//! Adds an index entry to the list of index entries.
-	void AddIndex(unique_ptr<Index> index, optional_idx index_oid);
+	void AddIndex(unique_ptr<Index> index, idx_t index_oid);
 	//! Initializes the transaction-local delete and append indexes.
 	void InitializeLocalIndexes(TableIndexList &delete_indexes, TableIndexList &append_indexes) const;
 	//! Appends a chunk to all index entries.
@@ -68,7 +68,6 @@ public:
 	void RemoveFromIndexes(DataChunk &chunk, Vector &row_ids, IndexRemovalType removal_type,
 	                       optional_idx active_checkpoint = optional_idx());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
-	void RemoveIndex(const Identifier &name);
 	void RemoveIndex(idx_t index_oid);
 	//! Returns true, if the index name does not exist.
 	bool NameIsUnique(const string &name) const;
@@ -76,7 +75,7 @@ public:
 	bool Contains(const Identifier &name) const;
 	//! Returns shared ownership of the stable logical index entry matching the name.
 	shared_ptr<IndexEntry> FindEntry(const Identifier &name) const;
-	//! Matches the catalog OID, or the name when both entries have no catalog OID.
+	//! Returns the entry matching the index OID.
 	shared_ptr<IndexEntry> FindEntry(const IndexEntry &index) const;
 	//! Binds unbound indexes possibly present after loading an extension.
 	void Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type = {});
@@ -146,8 +145,6 @@ public:
 	IndexSerializationResult SerializeToDisk(QueryContext context, const IndexSerializationInfo &info);
 	//! Serializes the index matching the OID for the write-ahead log, if it exists.
 	unique_ptr<IndexStorageInfo> SerializeToWAL(idx_t index_oid, const case_insensitive_map_t<Value> &options);
-	//! Serializes the constraint-backed index matching the name for the write-ahead log, if it exists.
-	unique_ptr<IndexStorageInfo> SerializeToWAL(const Identifier &name, const case_insensitive_map_t<Value> &options);
 
 public:
 	//! Initialize an index_chunk from a table.

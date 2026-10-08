@@ -434,10 +434,12 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	}
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (page_hdr.compressed_page_size != page_hdr.uncompressed_page_size) {
+			// LCOV_EXCL_START
 			const auto &file_name = Reader().GetFileName();
 			throw InvalidInputException(
 			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
 			    page_hdr.uncompressed_page_size, page_hdr.compressed_page_size);
+			// LCOV_EXCL_STOP
 		}
 		uncompressed = true;
 	}
@@ -452,24 +454,30 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	// to uint64_t, and the uint64_t casts in the comparisons below are safe.
 	if (page_hdr.data_page_header_v2.repetition_levels_byte_length < 0 ||
 	    page_hdr.data_page_header_v2.definition_levels_byte_length < 0) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, repetition_levels_byte_length and "
 		    "definition_levels_byte_length must be >= 0",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 	uint64_t uncompressed_bytes = static_cast<uint64_t>(page_hdr.data_page_header_v2.repetition_levels_byte_length) +
 	                              page_hdr.data_page_header_v2.definition_levels_byte_length;
 	if (uncompressed_bytes > static_cast<uint64_t>(page_hdr.uncompressed_page_size)) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, uncompressed_page_size needs to be larger than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 	if (static_cast<uint64_t>(page_hdr.compressed_page_size) < uncompressed_bytes) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is smaller than "
 		    "repetition_levels_byte_length + definition_levels_byte_length",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 
 	ReadData(block->ptr, uncompressed_bytes, page_hdr.type);
@@ -477,10 +485,12 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	if (compressed_bytes == 0 && static_cast<uint64_t>(page_hdr.uncompressed_page_size) > uncompressed_bytes) {
+		// LCOV_EXCL_START
 		throw InvalidInputException(
 		    "Failed to read file \"%s\": header inconsistency, compressed_page_size is too small for the "
 		    "declared value region",
 		    Reader().GetFileName());
+		// LCOV_EXCL_STOP
 	}
 
 	if (compressed_bytes > 0) {
@@ -522,10 +532,12 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
 		if (compressed_page_size != NumericCast<uint32_t>(page_hdr.uncompressed_page_size)) {
+			// LCOV_EXCL_START
 			const auto &file_name = Reader().GetFileName();
 			throw InvalidInputException(
 			    "Parquet file (%s) corrupted: uncompressed page size mismatch (expected %d, actual: %d)", file_name,
 			    page_hdr.uncompressed_page_size, compressed_page_size);
+			// LCOV_EXCL_STOP
 		}
 		ReadData(block->ptr, compressed_page_size, page_hdr.type);
 		return;
@@ -604,13 +616,13 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_p
 		break;
 	}
 
-	default: {
+	default: { // LCOV_EXCL_START
 		duckdb::stringstream codec_name;
 		codec_name << codec;
 		throw InvalidInputException("Failed to read file \"%s\": Unsupported compression codec \"%s\". Supported "
 		                            "options are uncompressed, brotli, gzip, lz4_raw, snappy or zstd",
 		                            Reader().GetFileName(), codec_name.str());
-	}
+	} // LCOV_EXCL_STOP
 	}
 }
 

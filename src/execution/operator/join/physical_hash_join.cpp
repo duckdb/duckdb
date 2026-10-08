@@ -298,12 +298,24 @@ unique_ptr<JoinFilterGlobalState> JoinFilterPushdownInfo::GetGlobalState(ClientC
 	return result;
 }
 
-//! True iff the build subtree funnels multiple producer pipelines into one sink (UNION ALL, recursive CTE),
-//! breaking the "decide layout once on the first chunk" contract. Conservative: may over-exclude, never misses one.
+//! Check for producers that can change a build column's dictionary between chunks.
 static bool BuildSideHasMultipleSources(const PhysicalOperator &op) {
-	if (op.type == PhysicalOperatorType::UNION || op.type == PhysicalOperatorType::RECURSIVE_CTE ||
-	    op.type == PhysicalOperatorType::RECURSIVE_KEY_CTE) {
+	switch (op.type) {
+	case PhysicalOperatorType::UNION:
+	case PhysicalOperatorType::RECURSIVE_CTE:
+	case PhysicalOperatorType::RECURSIVE_KEY_CTE:
 		return true;
+	case PhysicalOperatorType::CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN:
+		// CTE producers are not children of their scans and may forward different dictionaries.
+		return true;
+	default:
+		break;
+	}
+	if (op.IsSink() && op.children.size() == 1) {
+		// Single-input sinks materialize their input and become the source of a new pipeline.
+		return false;
 	}
 	for (const auto &child : op.children) {
 		if (BuildSideHasMultipleSources(child.get())) {
@@ -341,8 +353,7 @@ public:
 		perfect_join_executor = make_uniq<PerfectHashJoinExecutor>(op, *hash_table);
 		auto use_perfect_hash = CanUsePerfectHashJoin(op, *perfect_join_executor);
 		can_use_perfect_hash = use_perfect_hash;
-		// A multi-source build side (UNION ALL / recursive CTE) feeds the sink from several producers,
-		// disqualifying dict-surviving. Computed once from the static plan; cannot change at runtime.
+		// Multiple build producers can change dictionaries after the layout has been published.
 		build_side_multi_source = BuildSideHasMultipleSources(op.children[1].get());
 		// For external hash join
 		external = Settings::Get<DebugForceExternalSetting>(context);

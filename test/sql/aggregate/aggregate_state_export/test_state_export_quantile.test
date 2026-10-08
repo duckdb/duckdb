@@ -58,6 +58,18 @@ query I nosort desc0
 SELECT finalize(quantile_disc(d, -0.25) EXPORT_STATE) FROM dummy;
 ----
 
+# preserve descending parameters across the physical DECIMAL widths and DOUBLE
+query IIIII
+SELECT
+	finalize(quantile_disc(d, (-0.5)::DECIMAL(9, 1)) EXPORT_STATE),
+	finalize(quantile_disc(d, (-0.5)::DECIMAL(18, 1)) EXPORT_STATE),
+	finalize(quantile_disc(d, (-0.5)::DECIMAL(38, 1)) EXPORT_STATE),
+	finalize(quantile_disc(d, (-0.5)::DOUBLE) EXPORT_STATE),
+	finalize(quantile_disc(d, []::DOUBLE[]) EXPORT_STATE)
+FROM dummy;
+----
+50	50	50	50	[]
+
 # grouped
 query II nosort grouped0
 SELECT g, quantile_cont(d, 0.5) FROM dummy GROUP BY g ORDER BY g;

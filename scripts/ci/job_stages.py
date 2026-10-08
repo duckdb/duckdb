@@ -5,7 +5,7 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TextIO
 
 COMMON_JOBS = [
@@ -84,6 +84,7 @@ class JobSelection:
     save_cache: bool
     reduced_ci_mode: str
     optimized_release: bool = False
+    runners: dict[str, str] = field(default_factory=dict)
     linux_release_matrix: list[dict[str, object]] = field(default_factory=list)
     linux_musl_matrix: list[dict[str, object]] = field(default_factory=list)
 
@@ -98,6 +99,7 @@ class JobSelectionInput:
     changed_keys: set[str]
     reduced_ci_mode: str
     runners: dict[str, str] = field(default_factory=dict)
+    runner_provider: str = ""
 
 
 def should_save_cache(selection_input: JobSelectionInput) -> bool:
@@ -121,7 +123,10 @@ def enabled_jobs(selection_input: JobSelectionInput, reduced_ci_mode: str) -> li
 
     extensions_need_osx = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
     osx_changed = selection_input.event_name in {"push", "pull_request"} and "osx" in selection_input.changed_keys
-    if (extensions_need_osx or osx_changed) and "osx" not in selected_jobs:
+    extensions_changed = (
+        selection_input.event_name in {"push", "pull_request"} and "extensions" in selection_input.changed_keys
+    )
+    if (extensions_need_osx or osx_changed or extensions_changed) and "osx" not in selected_jobs:
         selected_jobs.append("osx")
 
     override = parse_job_selection_override(os.getenv("OVERRIDE_JOBS"))
@@ -166,7 +171,7 @@ def compatibility_release_config(*, runner: str, arch: str, optimized_release: b
         "build_artifact": build_artifact,
         "extension_config": "linux_release_extensions.cmake" if is_amd64 else "bundled_extensions.cmake",
         "vcpkg_cache_suffix": "" if is_amd64 else "linux-cli-arm64-glibc",
-        "build_jemalloc": "1" if is_amd64 else "0",
+        "build_jemalloc": "1",
         "use_ccache": True,
         "ccache_key": f"linux-cli-{arch}-glibc",
         "save_vcpkg_cache": True,
@@ -194,7 +199,7 @@ def optimized_release_config(*, runner: str, arch: str) -> dict[str, object]:
         "build_artifact": "linux-release-build" if is_amd64 else "linux-release-arm64-build",
         "extension_config": "linux_release_extensions.cmake" if is_amd64 else "bundled_extensions.cmake",
         "vcpkg_cache_suffix": "" if is_amd64 else "linux-cli-arm64-glibc",
-        "build_jemalloc": "1" if is_amd64 else "0",
+        "build_jemalloc": "1",
         "use_ccache": False,
         "ccache_key": "",
         "save_vcpkg_cache": False,
@@ -249,6 +254,7 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
                 "image": "alpine_amd64_main",
                 "name": "amd64",
                 "artifact_suffix": "linux-amd64-musl",
+                "build_artifact": "linux-release-musl-amd64-build",
                 "cache_suffix": "amd64-musl",
             }
         )
@@ -259,10 +265,17 @@ def linux_musl_matrix(selection_input: JobSelectionInput) -> list[dict[str, obje
             "image": "alpine_arm64_main",
             "name": "arm64",
             "artifact_suffix": "linux-arm64-musl",
+            "build_artifact": "linux-release-musl-arm64-build",
             "cache_suffix": "arm64-musl",
         }
     )
     return result
+
+
+def configure_runners(selection_input: JobSelectionInput) -> dict[str, str]:
+    if selection_input.event_name != "merge_group" or selection_input.runner_provider != "namespace":
+        return selection_input.runners.copy()
+    return {name: f"{runner};job.priority=2" for name, runner in selection_input.runners.items()}
 
 
 def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
@@ -270,13 +283,16 @@ def compute_job_selection(selection_input: JobSelectionInput) -> JobSelection:
     selected_jobs = enabled_jobs(selection_input, reduced_ci_mode)
     optimized_release = selection_input.event_name == "workflow_dispatch" and "linux-release" in selected_jobs
     full_extension_matrix = reduced_ci_mode == "disabled" and "extensions-build" in selected_jobs
+    runners = configure_runners(selection_input)
+    configured_input = replace(selection_input, runners=runners)
     return JobSelection(
         enabled_jobs=selected_jobs,
         save_cache=should_save_cache(selection_input),
         reduced_ci_mode=reduced_ci_mode,
         optimized_release=optimized_release,
-        linux_release_matrix=linux_release_matrix(selection_input, optimized_release, full_extension_matrix),
-        linux_musl_matrix=linux_musl_matrix(selection_input),
+        runners=runners,
+        linux_release_matrix=linux_release_matrix(configured_input, optimized_release, full_extension_matrix),
+        linux_musl_matrix=linux_musl_matrix(configured_input),
     )
 
 
@@ -285,6 +301,7 @@ def write_outputs(selection: JobSelection, out: TextIO, *, include_matrices: boo
     out.write(f"save_cache={'true' if selection.save_cache else 'false'}\n")
     out.write(f"optimized_release={'true' if selection.optimized_release else 'false'}\n")
     out.write(f"reduced_ci_mode={selection.reduced_ci_mode}\n")
+    out.write(f"runners={json.dumps(selection.runners, separators=(',', ':'))}\n")
     if include_matrices:
         out.write(f"linux_release_matrix={json.dumps(selection.linux_release_matrix, separators=(',', ':'))}\n")
         out.write(f"linux_musl_matrix={json.dumps(selection.linux_musl_matrix, separators=(',', ':'))}\n")
@@ -300,6 +317,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--changed-keys", default="")
     parser.add_argument("--reduced-ci-mode", required=True)
     parser.add_argument("--runners", required=True)
+    parser.add_argument("--runner-provider", required=True)
     return parser.parse_args()
 
 
@@ -350,6 +368,7 @@ def main() -> int:
         changed_keys=parse_changed_keys(args.changed_keys),
         reduced_ci_mode=reduced_ci_mode,
         runners=parse_runners(args.runners),
+        runner_provider=args.runner_provider,
     )
     selection = compute_job_selection(selection_input)
 

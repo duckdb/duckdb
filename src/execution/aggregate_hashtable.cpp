@@ -316,7 +316,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT(Count() == 0 || Count() == GetMaterializedCount());
 
 	capacity = size;
-	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(ht_entry_t));
+	hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(capacity * sizeof(ht_entry_t));
 	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
 	ClearPointerTable();
 	bitmask = capacity - 1;

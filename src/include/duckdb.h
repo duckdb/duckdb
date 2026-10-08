@@ -5628,6 +5628,15 @@ DUCKDB_C_API duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prep
 /*!
  * Closes the pending result and de-allocates all memory allocated for the result.
  *
+ * Destroying a pending result whose statement has not completed aborts the statement. On autocommit, its writes are
+ * rolled back. Inside a transaction, a statement that may write invalidates the transaction, and a read-only statement
+ * just stops. Preparing or running another statement on the connection aborts a statement that has not completed the
+ * same way, so a COMMIT issued before a statement that may write completed rolls the transaction back.
+ * `duckdb_pending_execution_is_finished` reporting true does not mean that the statement completed. To make sure a
+ * statement takes effect, complete it before destroying the pending result: call `duckdb_execute_pending`, and fetch a
+ * streaming result until `duckdb_fetch_chunk` returns NULL. A NULL chunk is also returned on an error, so check
+ * `duckdb_result_error` afterwards.
+ *
  * history:
  * - stable: v0.5.0
  *
@@ -6501,6 +6510,13 @@ DUCKDB_C_API duckdb_state duckdb_query(duckdb_connection connection, const char 
 
 /*!
  * Closes the result and de-allocates all memory allocated for that result.
+ *
+ * Destroying a streaming result whose statement has not completed aborts the statement. On autocommit, its writes are
+ * rolled back. Inside a transaction, a statement that may write invalidates the transaction, and a read-only statement
+ * just stops. Preparing or running another statement on the connection aborts a statement that has not completed the
+ * same way, so a COMMIT issued before a statement that may write completed rolls the transaction back. To make sure the
+ * statement takes effect, complete it by fetching until `duckdb_fetch_chunk` returns NULL before destroying the result.
+ * A NULL chunk is also returned on an error, so check `duckdb_result_error` afterwards.
  *
  * history:
  * - stable: v0.1.0

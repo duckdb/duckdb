@@ -1,0 +1,55 @@
+# name: test/sql/aggregate/aggregate_state_export/to_aggregate_state_errors.test
+# description: Validate malformed signatures and ordered aggregate state metadata
+# group: [aggregate_state_export]
+
+statement error
+SELECT to_aggregate_state(0::HUGEINT, 'sum', [NULL]);
+----
+signature cannot contain NULL values
+
+statement error
+SELECT to_aggregate_state(0::HUGEINT, 'sum', [42]);
+----
+signature must be a list of types
+
+statement error
+SELECT to_aggregate_state([{'v0': 1}], 'list', ['INTEGER'], NULL, NULL);
+----
+ordered aggregate state must have at least one ORDER BY key
+
+statement error
+SELECT to_aggregate_state([{'v0': 1}], 'list', ['INTEGER'], NULL, 42);
+----
+ORDER BY argument must be a list
+
+statement error
+SELECT to_aggregate_state(
+    [{'v0': 1}], 'list', ['INTEGER'], NULL,
+    [NULL::STRUCT("column" UINTEGER, "order" VARCHAR)]
+);
+----
+each ORDER BY entry must be a
+
+statement error
+SELECT to_aggregate_state(
+    [{'v0': 1}], 'list', ['INTEGER'], NULL,
+    [{'column': NULL::UINTEGER, 'order': 'ASC NULLS LAST'}]
+);
+----
+each ORDER BY entry must have a non-NULL
+
+statement error
+SELECT to_aggregate_state(
+    [{'v0': 1}], 'list', ['INTEGER'], NULL,
+    [{'column': 0::UINTEGER, 'order': NULL::VARCHAR}]
+);
+----
+each ORDER BY entry must have a non-NULL
+
+statement error
+SELECT to_aggregate_state(
+    [1, 2], 'list', ['INTEGER'], NULL,
+    [{'column': 0::UINTEGER, 'order': 'ASC NULLS LAST'}]
+);
+----
+ordered aggregate state value must be a LIST of STRUCTs

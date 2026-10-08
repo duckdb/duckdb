@@ -225,18 +225,18 @@ DUCKDB_V2_ERROR duckdb_v2_instance_destroy(duckdb_v2_instance_handle *instance) 
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, duckdb_v2_str path,
-                                          duckdb_v2_identifier_t *name, duckdb_v2_attach_options_handle options,
+DUCKDB_V2_ERROR duckdb_v2_instance_attach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
+                                          const duckdb_v2_identifier_t *name, duckdb_v2_attach_options_handle options,
                                           bool make_default, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(path);
 	if (name) {
-		DUCKDB_CHECK_ARG(*name);
+		DUCKDB_CHECK_ARG(name);
 	}
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		duckdb::Identifier attach_name = name ? duckdb::Identifier(ConvertIdentifierName(*name)) : duckdb::Identifier();
+		duckdb::Identifier attach_name = name ? duckdb::Identifier(ConvertIdentifierName(name)) : duckdb::Identifier();
 		wrapper.Attach(duckdb::string(Convert(path)), attach_name, Convert(options), make_default);
 	});
 }
@@ -253,8 +253,8 @@ DUCKDB_V2_ERROR duckdb_v2_attach_options_create(duckdb_v2_instance_handle instan
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options, duckdb_v2_identifier_t key,
-                                             duckdb_v2_str setting, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_options_handle options, const duckdb_v2_identifier_t *key,
+                                             const duckdb_v2_str *setting, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(options);
 	DUCKDB_CHECK_ARG(key);
 	DUCKDB_CHECK_ARG(setting);
@@ -277,7 +277,7 @@ DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, duckdb_v2_str path,
+DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
                                           duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(path);
@@ -288,7 +288,7 @@ DUCKDB_V2_ERROR duckdb_v2_instance_detach(duckdb_v2_instance_handle instance, du
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance, duckdb_v2_str path,
+DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instance, const duckdb_v2_str *path,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(path);
@@ -299,8 +299,8 @@ DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instanc
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance, duckdb_v2_identifier_t name,
-                                              duckdb_v2_str setting, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
+                                              const duckdb_v2_str *setting, duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(setting);
@@ -311,7 +311,8 @@ DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_name(duckdb_v2_instance_handle instance, duckdb_v2_identifier_t name,
+DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_name(duckdb_v2_instance_handle instance,
+                                                      const duckdb_v2_identifier_t *name,
                                                       duckdb_v2_option_handle *out_option,
                                                       duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);

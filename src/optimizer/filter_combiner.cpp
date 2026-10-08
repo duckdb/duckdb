@@ -25,6 +25,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/optimizer/column_lifetime_analyzer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
@@ -114,6 +115,18 @@ FilterResult FilterCombiner::AddFilter(unique_ptr<Expression> expr) {
 	return result;
 }
 
+FilterResult FilterCombiner::AddConjuncts(unique_ptr<Expression> expr) {
+	vector<unique_ptr<Expression>> conjuncts;
+	conjuncts.push_back(std::move(expr));
+	LogicalFilter::SplitPredicates(conjuncts);
+	for (auto &conjunct : conjuncts) {
+		if (AddFilter(std::move(conjunct)) == FilterResult::UNSATISFIABLE) {
+			return FilterResult::UNSATISFIABLE;
+		}
+	}
+	return FilterResult::SUCCESS;
+}
+
 void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
                                                const std::function<void(unique_ptr<Expression> filter)> &callback) {
 	if (filter.IsVolatile()) {
@@ -138,14 +151,7 @@ void FilterCombiner::GenerateEquivalentFilters(const Expression &filter,
 		auto &col = col_ref.get();
 		auto set_id = equivalence_set_map.find(col)->second;
 		for (auto &item : equivalence_map[set_id]) {
-			auto copy = filter.Copy();
-			ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-			    copy, [&](BoundColumnRefExpression &cref, unique_ptr<Expression> &child) {
-				    if (cref.Equals(col)) {
-					    child = item.get().Copy();
-				    }
-			    });
-			callback(std::move(copy));
+			callback(ExpressionIterator::ReplaceExpression(filter, col, item.get()));
 		}
 	}
 }
@@ -562,13 +568,8 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	auto &constant_value_expr = func.GetChildren()[1]->Cast<BoundConstantExpression>();
 	auto proj_index = column_ref.Binding().column_index;
 
-	// constant value expr can sometimes be null. if so, push is not null filter, which will
-	// make the filter unsatisfiable and return no results.
 	if (constant_value_expr.GetValue().IsNull()) {
-		auto is_not_null = ExpressionFilter::CreateNullCheckExpression(
-		    CreateFilterTargetExpression(*func.GetChildren()[0]), ExpressionType::OPERATOR_IS_NOT_NULL);
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(is_not_null)));
-		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &like_string = StringValue::Get(constant_value_expr.GetValue());
 	if (like_string[0] == '%' || like_string[0] == '_') {

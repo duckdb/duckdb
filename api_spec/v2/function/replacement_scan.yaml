@@ -306,6 +306,9 @@ functions:
         description: The info handle.
       name:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: The name of the parameter to bind the value to. Borrowed and copied.
       value:
         type: value
@@ -351,6 +354,7 @@ functions:
         type: identifier
         indirection: 1
         const: true
+        kind: IN
         description: Optional. An array of `column_count` column names, in order. Pass NULL for the default names col1..colN.
       column_count:
         type: idx
@@ -381,6 +385,9 @@ functions:
         description: The info handle.
       sql:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The SELECT statement to read instead. Borrowed for the call only.
       err:
         type: error_info
@@ -403,6 +410,9 @@ functions:
         description: The info handle.
       alias:
         type: identifier
+        indirection: 1
+        const: true
+        kind: IN
         description: The alias to bind the replacement under. Borrowed and copied.
       err:
         type: error_info

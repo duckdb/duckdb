@@ -6,7 +6,7 @@ if (NOT DEFINED DUCKDB_MAIN_EXTENSION_CONFIG_TYPE OR DUCKDB_MAIN_EXTENSION_CONFI
     duckdb_extension_load(tpch)
 
     # Test extension for the upcoming C CAPI extensions
-    duckdb_extension_load(demo_capi DONT_LINK)
+    duckdb_extension_load(demo_capi)
 endif()
 
 if (NOT DEFINED DUCKDB_MAIN_EXTENSION_CONFIG_TYPE OR DUCKDB_MAIN_EXTENSION_CONFIG_TYPE STREQUAL "OUT_OF_TREE")

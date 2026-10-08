@@ -97,10 +97,16 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	ColumnSegmentInfoScanOptions options;
 	auto include_entry = input.named_parameters.find("include_segment_info");
 	if (include_entry != input.named_parameters.end()) {
+		if (include_entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for include_segment_info");
+		}
 		options.include_segment_info = include_entry->second.GetValue<bool>();
 	}
 	auto loaded_only_entry = input.named_parameters.find("loaded_segments_only");
 	if (loaded_only_entry != input.named_parameters.end()) {
+		if (loaded_only_entry->second.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for loaded_segments_only");
+		}
 		options.loaded_segments_only = loaded_only_entry->second.GetValue<bool>();
 	}
 
@@ -259,12 +265,14 @@ static OperatorPartitionData PragmaStorageInfoGetPartitionData(ClientContext &co
 }
 
 void PragmaStorageInfo::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction storage_info("pragma_storage_info", {LogicalType::VARCHAR}, PragmaStorageInfoFunction,
-	                           PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
+	TableFunction storage_info(
+	    "pragma_storage_info", FunctionSignature().AddPositionalOnly("table_name", LogicalType::VARCHAR),
+	    PragmaStorageInfoFunction, PragmaStorageInfoBind, PragmaStorageInfoInitGlobal, PragmaStorageInfoInitLocal);
 	storage_info.get_partition_data = PragmaStorageInfoGetPartitionData;
 	storage_info.table_scan_progress = PragmaStorageInfoProgress;
-	storage_info.named_parameters["include_segment_info"] = LogicalType::BOOLEAN;
-	storage_info.named_parameters["loaded_segments_only"] = LogicalType::BOOLEAN;
+	storage_info.GetSignature().WithTypedKwargs("options", [](TypedKwargs &options) {
+		options.Add("include_segment_info", LogicalType::BOOLEAN).Add("loaded_segments_only", LogicalType::BOOLEAN);
+	});
 	set.AddFunction(std::move(storage_info));
 }
 

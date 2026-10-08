@@ -5,6 +5,7 @@
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
+#include "duckdb/main/extension/linked_extension_registry.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -1228,6 +1229,56 @@ TEST_CASE("Core extension downloads use managed HTTP transports", "[http_transpo
 		CHECK(provider->state->live == 1);
 	}
 
+	TestDeleteDirectory(extension_directory);
+}
+
+TEST_CASE("A linked httplib client is the default HTTP provider", "[http_transport_manager]") {
+	// statically linked extensions, such as httpfs, may replace the provider when they load
+	DBConfig config;
+	config.options.load_extensions = false;
+	DuckDB db(nullptr, &config);
+	Connection connection(db);
+	auto &http_util = HTTPUtil::Get(*db.instance);
+	bool linked = false;
+	for (auto &entry : db.instance->config.linked_extensions) {
+		linked = linked || entry.name == "httplib";
+	}
+	CHECK(http_util.GetName() == (linked ? "Built-In" : "none"));
+	if (!linked) {
+		return;
+	}
+	auto result = connection.Query("SELECT count(*) FROM duckdb_extensions() WHERE extension_name = 'httplib'");
+	REQUIRE_NO_FAIL(*result);
+	CHECK(CHECK_COLUMN(result, 0, {0}));
+}
+
+class NoClientHTTPUtil : public HTTPUtil {
+public:
+	string GetName() const override {
+		return "none";
+	}
+	unique_ptr<HTTPClient> InitializeClient(HTTPParams &, const string &) override {
+		return nullptr;
+	}
+};
+
+TEST_CASE("Extension downloads without an HTTP client", "[http_transport_manager]") {
+	auto extension_directory = TestCreatePath("http_transport_manager_no_client");
+	TestDeleteDirectory(extension_directory);
+	DBConfig config;
+	config.SetOptionByName("extension_directory", extension_directory);
+	DuckDB db(nullptr, &config);
+	Connection connection(db);
+	db.instance->config.SetHTTPUtil(make_shared_ptr<NoClientHTTPUtil>());
+
+	ExtensionInstallOptions options;
+	options.force_install = true;
+	const string extension_url = "http://mock.test/no_client.duckdb_extension";
+	auto error = CaptureExceptionMessage(
+	    [&]() { ExtensionHelper::InstallExtension(*connection.context, extension_url, options); });
+	CHECK(StringUtil::Contains(error, "HTTP provider 'none' has no HTTP client"));
+	CHECK(StringUtil::Contains(error, extension_url));
+	CHECK(StringUtil::Contains(error, "ENABLE_BUILTIN_HTTPLIB=ON"));
 	TestDeleteDirectory(extension_directory);
 }
 

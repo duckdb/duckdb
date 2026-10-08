@@ -794,7 +794,7 @@ data_ptr_t StandardBufferManager::BufferAllocatorAllocate(PrivateAllocatorData *
 	                                                   StringUtil::BytesToHumanReadableString(size));
 	// We rely on manual tracking of this one. :(
 	reservation.size = 0;
-	return Allocator::Get(data.manager.db).AllocateData(size);
+	return BlockAllocator::Get(data.manager.db).AllocateData(size);
 }
 
 void StandardBufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
@@ -802,7 +802,7 @@ void StandardBufferManager::BufferAllocatorFree(PrivateAllocatorData *private_da
 	BufferPoolReservation r(MemoryTag::ALLOCATOR, data.manager.GetBufferPool());
 	r.size = size;
 	r.Resize(0);
-	return Allocator::Get(data.manager.db).FreeData(pointer, size);
+	return BlockAllocator::Get(data.manager.db).FreeData(pointer, size);
 }
 
 data_ptr_t StandardBufferManager::BufferAllocatorRealloc(PrivateAllocatorData *private_data, data_ptr_t pointer,
@@ -815,7 +815,7 @@ data_ptr_t StandardBufferManager::BufferAllocatorRealloc(PrivateAllocatorData *p
 	r.size = old_size;
 	r.Resize(size);
 	r.size = 0;
-	return Allocator::Get(data.manager.db).ReallocateData(pointer, old_size, size);
+	return BlockAllocator::Get(data.manager.db).ReallocateData(pointer, old_size, size);
 }
 
 Allocator &BufferAllocator::Get(ClientContext &context) {

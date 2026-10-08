@@ -541,7 +541,7 @@ static bool TryExtractUnpivotList(ParsedExpression &expr, vector<Identifier> &co
 	}
 	case ExpressionType::FUNCTION: {
 		auto &function = expr.Cast<FunctionExpression>();
-		if (function.FunctionName() != "row") {
+		if (function.FunctionName() != "row" || function.GetArgumentsMutable().empty()) {
 			return false;
 		}
 		for (auto &child : function.GetArgumentsMutable()) {
@@ -617,6 +617,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 			// bind the expressions in the IN list
 			if (!pivot_entry.values.empty()) {
 				continue;
+			}
+			if (!pivot_entry.expr) {
+				throw BinderException("PIVOT IN list - expected an expression or value");
 			}
 
 			BindPivotInList(pivot_entry.expr, pivot_entry.values, *this);

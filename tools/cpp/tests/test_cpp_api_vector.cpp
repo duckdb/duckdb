@@ -767,3 +767,54 @@ TEST_CASE("Stable C++API: Vector Reference aliases the source without copying", 
 	REQUIRE(dst.GetValue(3).Get<int64_t>() == 30);
 }
 #endif
+
+TEST_CASE("Stable C++API: MAP entries are written through its entries child", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	conn.Execute("CREATE TABLE maps (m MAP(INTEGER, VARCHAR))").Drain();
+
+	Appender appender(conn, "maps");
+	DataChunk chunk(appender.ColumnTypes());
+	auto map_vec = chunk.GetVector(0);
+	map_vec.SetSize(1);
+	REQUIRE(map_vec.GetChildCount() == 1);
+	// sizing the entries sizes both the keys and the values
+	auto entries = map_vec.GetChild(0);
+	entries.SetSize(2);
+	REQUIRE(entries.GetChildCount() == 2);
+	auto keys = entries.GetChild(0);
+	auto values = entries.GetChild(1);
+
+	auto *key_data = keys.GetDataMutable<int32_t>();
+	key_data[0] = 1;
+	key_data[1] = 2;
+	// Longer than blob_t::INLINE_LENGTH: an engine built with DUCKDB_DEBUG_NO_INLINE reads the pointer of any string
+	values.AssignString(0, "the first value");
+	values.AssignString(1, "the second value");
+	map_vec.GetDataMutable<duckdb_v2_list_entry>()[0] = {0, 2};
+	appender.AppendChunk(chunk);
+	appender.Flush();
+
+	auto result = conn.Execute("SELECT m::VARCHAR FROM maps");
+	auto out = result.FetchChunk();
+	REQUIRE(out);
+	REQUIRE(out.GetVector(0).GetValue(0).Get<varchar_t>().view() == "{1=the first value, 2=the second value}");
+	REQUIRE_THROWS_MATCHES(map_vec.GetChild(1), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}
+
+TEST_CASE("Stable C++API: DataChunk capacity", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+
+	std::vector<LogicalType> types;
+	types.push_back(conn.ParseType("INTEGER"));
+	DataChunk chunk(types);
+	REQUIRE(chunk.GetCapacity() == STANDARD_VECTOR_SIZE);
+	REQUIRE(chunk.GetRowCount() == 0);
+}

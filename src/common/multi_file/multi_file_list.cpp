@@ -160,6 +160,10 @@ vector<OpenFileInfo> MultiFileList::GetDisplayFileList(optional_idx max_files) c
 	return files;
 }
 
+vector<OpenFileInfo> MultiFileList::GetAllFiles() const {
+	return MultiFileList::GetDisplayFileList();
+}
+
 MultiFileCount MultiFileList::GetFileCount(idx_t min_exact_count) const {
 	return MultiFileCount(GetTotalFileCount());
 }

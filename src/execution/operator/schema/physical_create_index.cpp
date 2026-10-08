@@ -9,6 +9,7 @@
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
@@ -181,9 +182,12 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		}
 	}
 
+	auto &constraint_info = alter_table_info->Cast<AddConstraintInfo>();
+	auto index_oid = DatabaseManager::Get(context).NextOid();
+	constraint_info.constraint->SetBackingIndexOid(index_oid);
 	auto &catalog = Catalog::GetCatalog(context, info->GetQualifiedName().Catalog());
 	catalog.Alter(context, *alter_table_info);
-	storage.AddConstraintIndex(std::move(bound_index));
+	storage.AddIndex(std::move(bound_index), index_oid);
 
 	return SinkFinalizeType::READY;
 }

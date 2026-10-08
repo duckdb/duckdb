@@ -108,6 +108,8 @@ public:
 
 	//! Append a DataChunk directly to this ColumnDataCollection - calls InitializeAppend and Append internally
 	DUCKDB_API void Append(DataChunk &new_chunk);
+	//! Appends a copy of another ColumnDataCollection to this
+	DUCKDB_API void Append(const ColumnDataCollection &other);
 
 	//! Appends the other ColumnDataCollection to this, destroying the other data collection
 	DUCKDB_API void Combine(ColumnDataCollection &other);
@@ -142,6 +144,9 @@ public:
 	//! Note that usage of this is slow - avoid using this unless the amount of rows is small, or if you do not care
 	//! about performance
 	DUCKDB_API ColumnDataRowCollection GetRows() const;
+
+	//! Materializes every row on each call, so read many values through GetRows instead
+	DUCKDB_API Value GetValue(idx_t column, idx_t index) const;
 
 	//! Compare two column data collections to another. If they are equal according to result equality rules,
 	//! return true. That means null values are equal, and approx equality is used for floating point values.

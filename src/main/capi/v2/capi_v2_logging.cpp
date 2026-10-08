@@ -34,8 +34,9 @@ static LogLevel ConvertLogLevel(DUCKDB_V2_LOG_LEVEL level) {
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level, duckdb_v2_str log_type,
-                                      duckdb_v2_str message, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level,
+                                      const duckdb_v2_str *log_type, const duckdb_v2_str *message,
+                                      duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(ctx);
 	return WithErrorHandler(err, [&]() {
 		const auto log_level = ConvertLogLevel(level);

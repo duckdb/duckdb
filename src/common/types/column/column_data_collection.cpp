@@ -1092,6 +1092,14 @@ void ColumnDataCollection::Append(DataChunk &input) {
 	Append(state, input);
 }
 
+void ColumnDataCollection::Append(const ColumnDataCollection &other) {
+	ColumnDataAppendState state;
+	InitializeAppend(state);
+	for (auto &chunk : other.Chunks()) {
+		Append(state, chunk);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
@@ -1281,6 +1289,10 @@ bool ColumnDataCollection::Seek(idx_t seek_idx, ColumnDataScanState &state, Data
 
 ColumnDataRowCollection ColumnDataCollection::GetRows() const {
 	return ColumnDataRowCollection(*this);
+}
+
+Value ColumnDataCollection::GetValue(idx_t column, idx_t index) const {
+	return GetRows().GetValue(column, index);
 }
 
 //===--------------------------------------------------------------------===//

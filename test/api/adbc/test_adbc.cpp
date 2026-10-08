@@ -501,12 +501,12 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table", "[adbc]") {
 	{
 		auto res_temp = db.Query("SELECT * FROM temp.my_table");
 		REQUIRE(!res_temp->HasError());
-		REQUIRE(res_temp->GetValue(0, 0).ToString() == "42");
+		REQUIRE(res_temp->Collection().GetValue(0, 0).ToString() == "42");
 	}
 	{
 		auto res_persistent = db.Query("SELECT * FROM memory.main.my_table");
 		REQUIRE(!res_persistent->HasError());
-		REQUIRE(res_persistent->GetValue(0, 0).ToString() == "84");
+		REQUIRE(res_persistent->Collection().GetValue(0, 0).ToString() == "84");
 	}
 }
 
@@ -541,14 +541,14 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Persistent Without Catalog"
 		auto res = db.Query("SELECT idx FROM temp.my_table ORDER BY idx");
 		REQUIRE(!res->HasError());
 		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString() == "1");
+		REQUIRE(res->Collection().GetValue(0, 0).ToString() == "1");
 	}
 	// Persistent table should contain data2 (idx=2)
 	{
 		auto res = db.Query("SELECT idx FROM memory.main.my_table ORDER BY idx");
 		REQUIRE(!res->HasError());
 		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString() == "2");
+		REQUIRE(res->Collection().GetValue(0, 0).ToString() == "2");
 	}
 }
 
@@ -569,7 +569,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	{
 		auto res = db.Query("SELECT * FROM my_table");
 		REQUIRE(!res->HasError());
-		REQUIRE(res->GetValue(0, 0).ToString() == "42");
+		REQUIRE(res->Collection().GetValue(0, 0).ToString() == "42");
 	}
 	{
 		auto res = db.Query("SELECT * FROM my_schema.my_table");
@@ -645,7 +645,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Catalog Set", "[adbc]") {
 	{
 		auto res = db.Query("SELECT * FROM my_table");
 		REQUIRE(!res->HasError());
-		REQUIRE(res->GetValue(0, 0).ToString() == "42");
+		REQUIRE(res->Collection().GetValue(0, 0).ToString() == "42");
 	}
 	// Release input stream (BindStream may transfer ownership on success).
 	if (input_data.release) {
@@ -703,7 +703,7 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema After Temporary", "[
 		{
 			auto res = db.Query("SELECT * FROM my_table");
 			REQUIRE(!res->HasError());
-			REQUIRE(res->GetValue(0, 0).ToString() == "42");
+			REQUIRE(res->Collection().GetValue(0, 0).ToString() == "42");
 		}
 		{
 			auto res = db.Query("SELECT * FROM my_schema.my_table");
@@ -831,7 +831,7 @@ TEST_CASE("ADBC - Test Ingestion - Funky identifiers", "[adbc]") {
 	auto res = db.Query("select * from " + schema_table);
 	for (size_t i = 0; i < column_names.size(); i++) {
 		REQUIRE((res->ColumnName(i) == column_names.at(i)));
-		REQUIRE((res->GetValue(i, 0) == i));
+		REQUIRE((res->Collection().GetValue(i, 0) == i));
 	}
 }
 
@@ -2252,7 +2252,7 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 
 	auto res = db.Query("Select * from result");
 	REQUIRE((res->ColumnCount() == 1));
-	REQUIRE((res->GetValue(0, 0).ToString() == "BASE TABLE"));
+	REQUIRE((res->Collection().GetValue(0, 0).ToString() == "BASE TABLE"));
 	adbc_error.release(&adbc_error);
 }
 
@@ -2356,12 +2356,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
-		REQUIRE((res->GetValue(0, 1).ToString() == "temp"));
-		REQUIRE((res->GetValue(0, 2).ToString() == "test_catalog_depth"));
-		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == "system"));
+		REQUIRE((res->Collection().GetValue(0, 1).ToString() == "temp"));
+		REQUIRE((res->Collection().GetValue(0, 2).ToString() == "test_catalog_depth"));
+		REQUIRE((res->Collection().GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 
 		// Test Filters
@@ -2391,9 +2391,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		auto res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(0, 0).ToString() == "ADBC_OBJECT_DEPTH_DB_SCHEMAS"));
-		REQUIRE((res->GetValue(0, 1).ToString() == "system"));
-		REQUIRE((res->GetValue(0, 2).ToString() == "temp"));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == "ADBC_OBJECT_DEPTH_DB_SCHEMAS"));
+		REQUIRE((res->Collection().GetValue(0, 1).ToString() == "system"));
+		REQUIRE((res->Collection().GetValue(0, 2).ToString() == "temp"));
 		string expected = R"([
 		    {
 		        'db_schema_name': information_schema,
@@ -2408,10 +2408,10 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		        'db_schema_tables': []
 		    }
 		])";
-		REQUIRE(res->GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "") ==
+		REQUIRE(res->Collection().GetValue(1, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 1).ToString(), " ", "") ==
 		         StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected, "\n", ""), "\t", ""), " ", "")));
-		REQUIRE(res->GetValue(1, 2).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
+		REQUIRE(res->Collection().GetValue(1, 2).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]");
 		db.Query("Drop table result;");
 
 		// Test Filters
@@ -2429,9 +2429,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 	}
 	// 3. Test ADBC_OBJECT_DEPTH_TABLES
@@ -2467,9 +2467,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
-		REQUIRE((res->GetValue(0, 1).ToString() == "temp"));
-		REQUIRE((res->GetValue(0, 2).ToString() == "test_table_depth"));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == "system"));
+		REQUIRE((res->Collection().GetValue(0, 1).ToString() == "temp"));
+		REQUIRE((res->Collection().GetValue(0, 2).ToString() == "test_table_depth"));
 		string expected_result_1 = R"({
                 'db_schema_name': information_schema,
                 'db_schema_tables': []
@@ -2501,9 +2501,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		    StringUtil::Replace(StringUtil::Replace(expected_result_2, "\n", ""), "\t", ""), " ", "");
 		string expected_3_clean = StringUtil::Replace(
 		    StringUtil::Replace(StringUtil::Replace(expected_result_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected_1_clean) != string::npos));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected_2_clean) != string::npos));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_3_clean) != string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 0).ToString(), " ", "").find(expected_1_clean) !=
+		         string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 1).ToString(), " ", "").find(expected_2_clean) !=
+		         string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 2).ToString(), " ", "").find(expected_3_clean) !=
+		         string::npos));
 		db.Query("Drop table result;");
 
 		// Test Filters
@@ -2524,9 +2527,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 
 		// table_name
@@ -2551,7 +2554,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->ColumnCount() == 1));
 		REQUIRE((res->RowCount() == 1));
 		string expected = "[{'db_schema_name': main, 'db_schema_tables': []}]";
-		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
 
 		{
@@ -2563,8 +2566,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
-			REQUIRE(
-			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_3_clean) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected_3_clean) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 
@@ -2577,8 +2580,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
-			REQUIRE(
-			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_3_clean) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected_3_clean) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 
@@ -2604,7 +2607,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
             }])";
 			string expected_clean = StringUtil::Replace(
 			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "") == expected_clean));
 			db.Query("Drop table result;");
 		}
 
@@ -2630,7 +2633,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
             }])";
 			string expected_clean = StringUtil::Replace(
 			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "") == expected_clean));
 			db.Query("Drop table result;");
 		}
 	}
@@ -2667,9 +2670,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		)");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
-		REQUIRE((res->GetValue(0, 1).ToString() == "temp"));
-		REQUIRE((res->GetValue(0, 2).ToString() == "test_column_depth"));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == "system"));
+		REQUIRE((res->Collection().GetValue(0, 1).ToString() == "temp"));
+		REQUIRE((res->Collection().GetValue(0, 2).ToString() == "test_column_depth"));
 		string expected_1 = R"(
             {
                 'db_schema_name': information_schema,
@@ -2749,9 +2752,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_2, "\n", ""), "\t", ""), " ", "");
 		expected[2] =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected[0]) != string::npos));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected[1]) != string::npos));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected[2]) != string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 0).ToString(), " ", "").find(expected[0]) !=
+		         string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 1).ToString(), " ", "").find(expected[1]) !=
+		         string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 2).ToString(), " ", "").find(expected[2]) !=
+		         string::npos));
 		db.Query("Drop table result;");
 
 		// Test Filters
@@ -2772,9 +2778,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 
 		// table_name
@@ -2798,7 +2804,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->ColumnCount() == 1));
 		REQUIRE((res->RowCount() == 1));
-		REQUIRE((res->GetValue(0, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]"));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == "[{'db_schema_name': main, 'db_schema_tables': []}]"));
 		db.Query("Drop table result;");
 
 		// column_name
@@ -2811,7 +2817,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		                      "'table_columns': [], 'table_constraints': []}, "
 		                      "{'table_name': my_view, 'table_type': VIEW, "
 		                      "'table_columns': [], 'table_constraints': []}]}]";
-		REQUIRE((res->GetValue(0, 0).ToString() == expected_value));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == expected_value));
 		db.Query("Drop table result;");
 
 		{
@@ -2823,7 +2829,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected[2]) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 
@@ -2836,7 +2843,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected[2]) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 
@@ -2884,8 +2892,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
             })";
 			string expected_clean = StringUtil::Replace(
 			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
-			REQUIRE(
-			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_clean) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected_clean) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 
@@ -2933,8 +2941,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
             })";
 			string expected_clean = StringUtil::Replace(
 			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
-			REQUIRE(
-			    (StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected_clean) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected_clean) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 	}
@@ -2996,56 +3004,56 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->RowCount() == 13));
 
 		// remarks: only c_bool has a comment
-		REQUIRE((res->GetValue(1, 0).ToString() == "my comment"));
-		REQUIRE((res->GetValue(1, 1).IsNull()));
+		REQUIRE((res->Collection().GetValue(1, 0).ToString() == "my comment"));
+		REQUIRE((res->Collection().GetValue(1, 1).IsNull()));
 
 		// xdbc_column_def: only c_with_default has a default value
-		REQUIRE((res->GetValue(9, 12).ToString() == "42"));
-		REQUIRE((res->GetValue(9, 0).IsNull()));
+		REQUIRE((res->Collection().GetValue(9, 12).ToString() == "42"));
+		REQUIRE((res->Collection().GetValue(9, 0).IsNull()));
 
 		// xdbc_sql_data_type covers every branch in the CASE expression
-		REQUIRE((res->GetValue(6, 0).ToString() == "16"));    // BOOLEAN → 16
-		REQUIRE((res->GetValue(6, 1).ToString() == "-5"));    // BIGINT → -5
-		REQUIRE((res->GetValue(6, 2).ToString() == "3"));     // DECIMAL → 3
-		REQUIRE((res->GetValue(6, 3).ToString() == "12"));    // VARCHAR → 12
-		REQUIRE((res->GetValue(6, 4).ToString() == "2004"));  // BLOB → 2004
-		REQUIRE((res->GetValue(6, 5).ToString() == "91"));    // DATE → 91
-		REQUIRE((res->GetValue(6, 6).ToString() == "92"));    // TIME → 92
-		REQUIRE((res->GetValue(6, 7).ToString() == "2013"));  // TIME WITH TIME ZONE → 2013
-		REQUIRE((res->GetValue(6, 8).ToString() == "92"));    // TIME_NS → 92
-		REQUIRE((res->GetValue(6, 9).ToString() == "93"));    // TIMESTAMP → 93
-		REQUIRE((res->GetValue(6, 10).ToString() == "2014")); // TIMESTAMP WITH TIME ZONE → 2014
-		REQUIRE((res->GetValue(6, 11).ToString() == "2003")); // INTEGER[] → 2003
-		REQUIRE((res->GetValue(6, 12).ToString() == "4"));    // INTEGER → 4
+		REQUIRE((res->Collection().GetValue(6, 0).ToString() == "16"));    // BOOLEAN → 16
+		REQUIRE((res->Collection().GetValue(6, 1).ToString() == "-5"));    // BIGINT → -5
+		REQUIRE((res->Collection().GetValue(6, 2).ToString() == "3"));     // DECIMAL → 3
+		REQUIRE((res->Collection().GetValue(6, 3).ToString() == "12"));    // VARCHAR → 12
+		REQUIRE((res->Collection().GetValue(6, 4).ToString() == "2004"));  // BLOB → 2004
+		REQUIRE((res->Collection().GetValue(6, 5).ToString() == "91"));    // DATE → 91
+		REQUIRE((res->Collection().GetValue(6, 6).ToString() == "92"));    // TIME → 92
+		REQUIRE((res->Collection().GetValue(6, 7).ToString() == "2013"));  // TIME WITH TIME ZONE → 2013
+		REQUIRE((res->Collection().GetValue(6, 8).ToString() == "92"));    // TIME_NS → 92
+		REQUIRE((res->Collection().GetValue(6, 9).ToString() == "93"));    // TIMESTAMP → 93
+		REQUIRE((res->Collection().GetValue(6, 10).ToString() == "2014")); // TIMESTAMP WITH TIME ZONE → 2014
+		REQUIRE((res->Collection().GetValue(6, 11).ToString() == "2003")); // INTEGER[] → 2003
+		REQUIRE((res->Collection().GetValue(6, 12).ToString() == "4"));    // INTEGER → 4
 
 		// xdbc_column_size: DATE=10, TIME variants=15, TIMESTAMP variants=26
-		REQUIRE((res->GetValue(3, 0).IsNull()));            // BOOLEAN: no numeric precision
-		REQUIRE((res->GetValue(3, 1).ToString() == "64"));  // BIGINT: 64
-		REQUIRE((res->GetValue(3, 2).ToString() == "10"));  // DECIMAL(10,3): precision
-		REQUIRE((res->GetValue(3, 5).ToString() == "10"));  // DATE: hardcoded 10
-		REQUIRE((res->GetValue(3, 6).ToString() == "15"));  // TIME: hardcoded 15
-		REQUIRE((res->GetValue(3, 7).ToString() == "15"));  // TIME WITH TIME ZONE: 15
-		REQUIRE((res->GetValue(3, 8).ToString() == "15"));  // TIME_NS: 15
-		REQUIRE((res->GetValue(3, 9).ToString() == "26"));  // TIMESTAMP: hardcoded 26
-		REQUIRE((res->GetValue(3, 10).ToString() == "26")); // TIMESTAMP WITH TIME ZONE: 26
+		REQUIRE((res->Collection().GetValue(3, 0).IsNull()));            // BOOLEAN: no numeric precision
+		REQUIRE((res->Collection().GetValue(3, 1).ToString() == "64"));  // BIGINT: 64
+		REQUIRE((res->Collection().GetValue(3, 2).ToString() == "10"));  // DECIMAL(10,3): precision
+		REQUIRE((res->Collection().GetValue(3, 5).ToString() == "10"));  // DATE: hardcoded 10
+		REQUIRE((res->Collection().GetValue(3, 6).ToString() == "15"));  // TIME: hardcoded 15
+		REQUIRE((res->Collection().GetValue(3, 7).ToString() == "15"));  // TIME WITH TIME ZONE: 15
+		REQUIRE((res->Collection().GetValue(3, 8).ToString() == "15"));  // TIME_NS: 15
+		REQUIRE((res->Collection().GetValue(3, 9).ToString() == "26"));  // TIMESTAMP: hardcoded 26
+		REQUIRE((res->Collection().GetValue(3, 10).ToString() == "26")); // TIMESTAMP WITH TIME ZONE: 26
 
 		// xdbc_datetime_sub: DATE=1, TIME variants=2, TIMESTAMP variants=3
-		REQUIRE((res->GetValue(7, 5).ToString() == "1"));  // DATE → 1
-		REQUIRE((res->GetValue(7, 6).ToString() == "2"));  // TIME → 2
-		REQUIRE((res->GetValue(7, 7).ToString() == "2"));  // TIME WITH TIME ZONE → 2
-		REQUIRE((res->GetValue(7, 8).ToString() == "2"));  // TIME_NS → 2
-		REQUIRE((res->GetValue(7, 9).ToString() == "3"));  // TIMESTAMP → 3
-		REQUIRE((res->GetValue(7, 10).ToString() == "3")); // TIMESTAMP WITH TIME ZONE → 3
-		REQUIRE((res->GetValue(7, 11).IsNull()));          // INTEGER[]: NULL
+		REQUIRE((res->Collection().GetValue(7, 5).ToString() == "1"));  // DATE → 1
+		REQUIRE((res->Collection().GetValue(7, 6).ToString() == "2"));  // TIME → 2
+		REQUIRE((res->Collection().GetValue(7, 7).ToString() == "2"));  // TIME WITH TIME ZONE → 2
+		REQUIRE((res->Collection().GetValue(7, 8).ToString() == "2"));  // TIME_NS → 2
+		REQUIRE((res->Collection().GetValue(7, 9).ToString() == "3"));  // TIMESTAMP → 3
+		REQUIRE((res->Collection().GetValue(7, 10).ToString() == "3")); // TIMESTAMP WITH TIME ZONE → 3
+		REQUIRE((res->Collection().GetValue(7, 11).IsNull()));          // INTEGER[]: NULL
 
 		// DECIMAL: scale and radix
-		REQUIRE((res->GetValue(4, 2).ToString() == "3"));  // xdbc_decimal_digits = scale = 3
-		REQUIRE((res->GetValue(5, 2).ToString() == "10")); // xdbc_num_prec_radix = 10
+		REQUIRE((res->Collection().GetValue(4, 2).ToString() == "3"));  // xdbc_decimal_digits = scale = 3
+		REQUIRE((res->Collection().GetValue(5, 2).ToString() == "10")); // xdbc_num_prec_radix = 10
 
 		// xdbc_char_octet_length: NULL for unbounded VARCHAR/BLOB
-		REQUIRE((res->GetValue(8, 3).IsNull())); // VARCHAR (unbounded)
-		REQUIRE((res->GetValue(8, 4).IsNull())); // BLOB (unbounded)
-		REQUIRE((res->GetValue(8, 0).IsNull())); // BOOLEAN: not a char type
+		REQUIRE((res->Collection().GetValue(8, 3).IsNull())); // VARCHAR (unbounded)
+		REQUIRE((res->Collection().GetValue(8, 4).IsNull())); // BLOB (unbounded)
+		REQUIRE((res->Collection().GetValue(8, 0).IsNull())); // BOOLEAN: not a char type
 
 		db.Query("Drop table result;");
 	}
@@ -3079,9 +3087,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			ORDER BY catalog_name ASC
 		)");
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(0, 0).ToString() == "system"));
-		REQUIRE((res->GetValue(0, 1).ToString() == "temp"));
-		REQUIRE((res->GetValue(0, 2).ToString() == "test_all_depth"));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == "system"));
+		REQUIRE((res->Collection().GetValue(0, 1).ToString() == "temp"));
+		REQUIRE((res->Collection().GetValue(0, 2).ToString() == "test_all_depth"));
 		string expected_1 = R"(
             {
                 'db_schema_name': information_schema,
@@ -3209,9 +3217,12 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_2, "\n", ""), "\t", ""), " ", "");
 		string expected_3_clean =
 		    StringUtil::Replace(StringUtil::Replace(StringUtil::Replace(expected_3, "\n", ""), "\t", ""), " ", "");
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 0).ToString(), " ", "").find(expected_1_clean) != string::npos));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 1).ToString(), " ", "").find(expected_2_clean) != string::npos));
-		REQUIRE((StringUtil::Replace(res->GetValue(1, 2).ToString(), " ", "").find(expected_3_clean) != string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 0).ToString(), " ", "").find(expected_1_clean) !=
+		         string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 1).ToString(), " ", "").find(expected_2_clean) !=
+		         string::npos));
+		REQUIRE((StringUtil::Replace(res->Collection().GetValue(1, 2).ToString(), " ", "").find(expected_3_clean) !=
+		         string::npos));
 		db.Query("Drop table result;");
 
 		// Test Filters
@@ -3232,9 +3243,9 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query("Select * from result order by catalog_name asc");
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
-		REQUIRE((res->GetValue(1, 0).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 1).ToString() == "[]"));
-		REQUIRE((res->GetValue(1, 2).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 0).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 1).ToString() == "[]"));
+		REQUIRE((res->Collection().GetValue(1, 2).ToString() == "[]"));
 		db.Query("Drop table result;");
 
 		// table_name
@@ -3258,7 +3269,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		res = db.Query(select_catalog_db_schemas);
 		REQUIRE((res->RowCount() == 1));
 		string expected = "[{'db_schema_name': main, 'db_schema_tables': []}]";
-		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
 
 		// column_name
@@ -3288,7 +3299,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			"}"
 		"]";
 		// clang-format on
-		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == expected));
 		db.Query("Drop table result;");
 
 		{
@@ -3300,7 +3311,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected[2]) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 
@@ -3313,7 +3325,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			res = db.Query(select_catalog_db_schemas);
 			REQUIRE((res->ColumnCount() == 1));
 			REQUIRE((res->RowCount() == 1));
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "").find(expected[2]) != string::npos));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "").find(expected[2]) !=
+			         string::npos));
 			db.Query("Drop table result;");
 		}
 
@@ -3389,7 +3402,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
             }])";
 			string expected_clean = StringUtil::Replace(
 			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "") == expected_clean));
 			db.Query("Drop table result;");
 		}
 
@@ -3458,7 +3471,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
             }])";
 			string expected_clean = StringUtil::Replace(
 			    StringUtil::Replace(StringUtil::Replace(expected_result, "\n", ""), "\t", ""), " ", "");
-			REQUIRE((StringUtil::Replace(res->GetValue(0, 0).ToString(), " ", "") == expected_clean));
+			REQUIRE((StringUtil::Replace(res->Collection().GetValue(0, 0).ToString(), " ", "") == expected_clean));
 			db.Query("Drop table result;");
 		}
 	}
@@ -3554,7 +3567,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 			"}"
 		"]";
 		// clang-format on
-		REQUIRE((res->GetValue(0, 0).ToString() == expected));
+		REQUIRE((res->Collection().GetValue(0, 0).ToString() == expected));
 		db.Query("DROP TABLE result;");
 	}
 	// Now lets test some errors
@@ -3652,7 +3665,7 @@ TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 		auto res = db.Query("SELECT catalog_db_schemas FROM result ORDER BY catalog_name");
 		REQUIRE(res->RowCount() > 0);
 		for (idx_t i = 0; i < res->RowCount(); i++) {
-			REQUIRE(res->GetValue(0, i).ToString() == "[]");
+			REQUIRE(res->Collection().GetValue(0, i).ToString() == "[]");
 		}
 		db.Query("Drop table result;");
 	}
@@ -3667,7 +3680,7 @@ TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 			FROM result WHERE catalog_name = 'test_empty_list'
 		)");
 		REQUIRE(res->RowCount() == 1);
-		REQUIRE(res->GetValue(0, 0).ToString().find("NULL") == string::npos);
+		REQUIRE(res->Collection().GetValue(0, 0).ToString().find("NULL") == string::npos);
 		db.Query("Drop table result;");
 	}
 }
@@ -3686,7 +3699,7 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 		db.CreateTable("test_table", input_data);
 		auto result = db.Query("SELECT * FROM test_table");
 		REQUIRE(result->RowCount() == 1);
-		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 42);
+		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 42);
 	}
 
 	// Test CREATE mode error (table already exists)
@@ -3726,8 +3739,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 
 		auto result = db.Query("SELECT * FROM test_table ORDER BY value");
 		REQUIRE(result->RowCount() == 2);
-		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 42);
-		REQUIRE(result->GetValue(0, 1).GetValue<int32_t>() == 43);
+		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 42);
+		REQUIRE(result->Collection().GetValue(0, 1).GetValue<int32_t>() == 43);
 	}
 
 	// Test REPLACE mode
@@ -3748,7 +3761,7 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 
 		auto result = db.Query("SELECT * FROM test_table");
 		REQUIRE(result->RowCount() == 1);
-		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 44);
+		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 44);
 	}
 
 	// Test CREATE_APPEND mode (table exists)
@@ -3769,8 +3782,8 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 
 		auto result = db.Query("SELECT * FROM test_table ORDER BY value");
 		REQUIRE(result->RowCount() == 2);
-		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 44);
-		REQUIRE(result->GetValue(0, 1).GetValue<int32_t>() == 45);
+		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 44);
+		REQUIRE(result->Collection().GetValue(0, 1).GetValue<int32_t>() == 45);
 	}
 
 	// Test CREATE_APPEND mode (table does not exist)
@@ -3791,7 +3804,7 @@ TEST_CASE("Test ADBC 1.1.0 Ingestion Modes", "[adbc]") {
 
 		auto result = db.Query("SELECT * FROM test_table2");
 		REQUIRE(result->RowCount() == 1);
-		REQUIRE(result->GetValue(0, 0).GetValue<int32_t>() == 46);
+		REQUIRE(result->Collection().GetValue(0, 0).GetValue<int32_t>() == 46);
 	}
 }
 

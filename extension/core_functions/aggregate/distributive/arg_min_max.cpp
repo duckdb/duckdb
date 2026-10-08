@@ -918,7 +918,7 @@ void AddArgMinMaxNFunction(AggregateFunctionSet &set) {
 	    .AddParameter("val", LogicalTypeId::ANY)
 	    .AddParameter("N", LogicalType::BIGINT);
 
-	return set.AddFunction(function);
+	set.AddFunction(function);
 }
 
 } // namespace

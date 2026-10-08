@@ -4,6 +4,8 @@
 #include "test_cpp_api.hpp"
 
 #include <atomic>
+#include <optional>
+#include <string>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -249,7 +251,7 @@ TEST_CASE("Stable C++API: scalar function variadic tail via GetArgCount", "[cpp_
 
 	auto function = ScalarFunction::Create(conn);
 	function.SetName("cpp_vsum").SetExecCallback(VsumExec);
-	function.GetSignature().AddParameter("a", integer).SetVarArgs(integer).SetReturnType(integer);
+	function.GetSignature().AddParameter("a", integer).AddArgs("rest", integer).SetReturnType(integer);
 	function.Register();
 
 	REQUIRE(CollectInts(conn.Execute("SELECT cpp_vsum(1)")) == std::vector<int32_t> {1});
@@ -729,4 +731,106 @@ TEST_CASE("Stable C++API: scalar function properties", "[cpp_api]") {
 	special.Register();
 
 	REQUIRE(CollectInts(conn.Execute("SELECT prop_special(NULL::INTEGER)")) == std::vector<int32_t> {1});
+}
+
+// ---------------------------------------------------------------------------
+// Parameter kinds: cpp_kw(x, /, *args, scale := 1, **kwargs) = (x + sum(args) + sum(kwargs)) * scale.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+struct KindBind {
+	idx_t scale_index;
+	bool operator==(const KindBind &other) const {
+		return scale_index == other.scale_index;
+	}
+};
+
+struct {
+	ArgumentCounts counts;
+	std::vector<std::string> names;
+	std::optional<int32_t> scale;
+	LogicalTypeId scale_type = LogicalTypeId::INVALID;
+	bool missing_found = true;
+} kind_probe;
+
+void KindBindCb(ScalarFunction::BindInput &input) {
+	kind_probe.counts = input.GetArgumentCounts();
+	kind_probe.names.clear();
+	for (idx_t i = 0; i < input.GetArgCount(); i++) {
+		kind_probe.names.push_back(input.GetArgName(i));
+	}
+	kind_probe.missing_found = input.FindArg("missing").has_value();
+	// "scale" is named-only, so the call always has it
+	const auto scale_index = input.FindArg("scale").value();
+	kind_probe.scale_type = input.GetArgType(scale_index).GetTypeId();
+	const auto scale = input.TryGetConstantArgument(scale_index);
+	kind_probe.scale = scale ? std::optional<int32_t>(scale->Get<int32_t>()) : std::nullopt;
+	input.SetBindData<KindBind>(KindBind {scale_index});
+}
+
+void KindExecCb(ScalarFunction::ExecInput &input) {
+	const auto scale_index = input.GetBindData<KindBind>().scale_index;
+	auto result = input.GetResult();
+	auto *out = result.GetDataMutable<int32_t>();
+	const auto count = input.GetRowCount();
+	for (idx_t i = 0; i < count; i++) {
+		out[i] = 0;
+	}
+	auto accumulate = [&](Vector vector, bool multiply) {
+		const auto view = vector.GetView();
+		for (idx_t i = 0; i < count; i++) {
+			const auto value = view.Data<int32_t>()[view.SelAt(i)];
+			out[i] = multiply ? out[i] * value : out[i] + value;
+		}
+	};
+	for (idx_t i = 0; i < input.GetArgCount(); i++) {
+		if (i != scale_index) {
+			accumulate(input.GetArg(i), false);
+		}
+	}
+	accumulate(input.GetArg(scale_index), true);
+}
+
+} // namespace
+
+TEST_CASE("Stable C++API: scalar function parameter kinds lay out the argument list", "[cpp_api]") {
+	Environment env;
+	auto db = env.Open(":memory:");
+	auto conn = db.Connect();
+	const auto integer = conn.ParseType("INTEGER");
+
+	auto function = ScalarFunction::Create(conn);
+	function.SetName("cpp_kw").SetBindCallback(KindBindCb).SetExecCallback(KindExecCb);
+	function.WithSignature([&](FunctionSignature &sig) {
+		sig.AddKwargs("kwargs", integer);
+		sig.AddParameter("scale", integer, Value::Create(conn, int32_t {1}), FunctionParameterKind::NAMED_ONLY);
+		sig.AddArgs("args", integer);
+		sig.AddParameter("x", integer, FunctionParameterKind::POSITIONAL_ONLY);
+		sig.SetReturnType(integer);
+	});
+	function.Register();
+
+	REQUIRE(CollectInts(conn.Execute("SELECT cpp_kw(4)")) == std::vector<int32_t> {4});
+	REQUIRE(kind_probe.counts.positional_fixed == 1);
+	REQUIRE(kind_probe.counts.positional_variadic == 0);
+	REQUIRE(kind_probe.counts.named_fixed == 1);
+	REQUIRE(kind_probe.counts.named_variadic == 0);
+	REQUIRE(kind_probe.names == std::vector<std::string> {"x", "scale"});
+	REQUIRE(kind_probe.scale == 1);
+	REQUIRE(kind_probe.scale_type == LogicalTypeId::INTEGER);
+	REQUIRE_FALSE(kind_probe.missing_found);
+
+	REQUIRE(CollectInts(conn.Execute("SELECT cpp_kw(1, 2, 3, extra := 4, scale := 2, x := 5)")) ==
+	        std::vector<int32_t> {30});
+	REQUIRE(kind_probe.counts.positional_variadic == 2);
+	REQUIRE(kind_probe.counts.named_variadic == 2);
+	REQUIRE(kind_probe.counts.NamedOffset() == 3);
+	REQUIRE(kind_probe.names == std::vector<std::string> {"x", "", "", "scale", "extra", "x"});
+	REQUIRE(kind_probe.scale == 2);
+
+	// A column passed as "scale" has no constant value at bind time.
+	REQUIRE(CollectInts(conn.Execute("SELECT cpp_kw(r::INTEGER, scale := r::INTEGER) FROM range(3) t(r)")) ==
+	        std::vector<int32_t> {0, 1, 4});
+	REQUIRE_FALSE(kind_probe.scale.has_value());
 }

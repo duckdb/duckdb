@@ -371,6 +371,9 @@ public:
 				return false;
 			}
 			offset = bigint_value->GetValue<int64_t>();
+			if (offset == NumericLimits<int64_t>::Minimum()) {
+				return false;
+			}
 		}
 
 		//	We can only support LEAD and LAG values within one standard vector
@@ -1331,7 +1334,10 @@ struct TryExtrapolateOperator {
 	template <typename T>
 	static bool Operation(const T &lo, const double d, const T &hi, T &result) {
 		if (lo > hi) {
-			return Operation<T>(hi, -d, lo, result);
+			//	Swap the endpoints to keep the offset positive.
+			//	The slope in the exchanged frame is (1 - d), not (-d):
+			//	lo + d*(hi - lo) == hi + (1 - d)*(lo - hi)
+			return Operation<T>(hi, 1 - d, lo, result);
 		}
 		const auto delta = LossyNumericCast<double>(hi) - LossyNumericCast<double>(lo);
 		T offset;
