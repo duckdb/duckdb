@@ -442,6 +442,13 @@ public:
 		return optional_ptr<ParseResult>(result);
 	}
 
+	//! Uninitialized room for up to capacity children in the arena, where it lives as long as the results it
+	//! belongs to; an empty set still takes an address, which costs nothing and keeps the span non-null
+	reference<ParseResult> *AllocateChildren(idx_t capacity) {
+		arena.AlignNext();
+		return reinterpret_cast<reference<ParseResult> *>(arena.Allocate(capacity * sizeof(reference<ParseResult>)));
+	}
+
 	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to
 	unsafe_array_ptr<reference<ParseResult>> MakeChildren(const arena_vector<reference<ParseResult>> &children) {
 		auto count = children.size();
