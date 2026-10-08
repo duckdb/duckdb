@@ -72,8 +72,9 @@ public:
 class VariantColumnWriter : public StructColumnWriter {
 public:
 	VariantColumnWriter(ParquetWriter &writer, ParquetColumnSchema &&column_schema, vector<Identifier> schema_path_p,
-	                    vector<unique_ptr<ColumnWriter>> child_writers_p)
-	    : StructColumnWriter(writer, std::move(column_schema), std::move(schema_path_p), std::move(child_writers_p)) {
+	                    vector<unique_ptr<ColumnWriter>> child_writers_p, bool auto_shred)
+	    : StructColumnWriter(writer, std::move(column_schema), std::move(schema_path_p), std::move(child_writers_p)),
+	      is_analyzed(!auto_shred) {
 	}
 	~VariantColumnWriter() override = default;
 
@@ -114,7 +115,7 @@ public:
 	static LogicalType TransformTypedValueRecursive(const LogicalType &type);
 
 private:
-	//! Whether the schema of the variant has been analyzed already
+	//! Whether the schema has been analyzed or explicitly specified
 	bool is_analyzed = false;
 	ShreddingType analyzed_shredding_type;
 };
