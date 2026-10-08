@@ -616,8 +616,8 @@ IndexTypeSet &DBConfig::GetIndexTypes() {
 	return *index_types;
 }
 
-void DBConfig::SetDefaultMaxMemory(optional_ptr<DatabaseInstance> db) {
-	auto memory = GetSystemAvailableMemory(*file_system, db);
+void DBConfig::SetDefaultMaxMemory() {
+	auto memory = GetSystemAvailableMemory(*file_system);
 	if (memory == DBConfigOptions().maximum_memory) {
 		// If GetSystemAvailableMemory returned the default, use it as is
 		options.maximum_memory = memory;
@@ -659,14 +659,14 @@ void DBConfig::CheckLock(const Identifier &name) {
 	throw InvalidInputException("Cannot change configuration option \"%s\" - the configuration has been locked", name);
 }
 
-idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs, optional_ptr<DatabaseInstance> db) {
+idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 1;
 #else
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
 	string slurm_cpus;
-	if (db && OSUtil::Get(*db).GetEnvUnrestricted("SLURM_CPUS_ON_NODE", slurm_cpus)) {
+	if (OSUtil::GetConfigurationEnv("SLURM_CPUS_ON_NODE", slurm_cpus)) {
 		idx_t slurm_threads;
 		if (TryCast::Operation<string_t, idx_t>(string_t(slurm_cpus), slurm_threads)) {
 			return MaxValue<idx_t>(slurm_threads, 1);
@@ -679,15 +679,15 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs, optional_ptr<DatabaseInstanc
 #endif
 }
 
-idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs, optional_ptr<DatabaseInstance> db) {
+idx_t DBConfig::GetSystemMaxAsyncThreads(FileSystem &fs) {
 #ifdef DUCKDB_NO_THREADS
 	return 0;
 #else
-	return MinValue<idx_t>(4 * GetSystemMaxThreads(fs, db), 256);
+	return MinValue<idx_t>(4 * GetSystemMaxThreads(fs), 256);
 #endif
 }
 
-idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs, optional_ptr<DatabaseInstance> db) {
+idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs) {
 	// System memory detection
 	auto memory = FileSystem::GetAvailableMemory();
 	auto available_memory = memory.IsValid() ? memory.GetIndex() : DBConfigOptions().maximum_memory;
@@ -696,11 +696,8 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs, optional_ptr<DatabaseIn
 	// Check SLURM environment variables first
 	string slurm_mem_per_node;
 	string slurm_mem_per_cpu;
-	if (db) {
-		auto &os_util = OSUtil::Get(*db);
-		os_util.GetEnvUnrestricted("SLURM_MEM_PER_NODE", slurm_mem_per_node);
-		os_util.GetEnvUnrestricted("SLURM_MEM_PER_CPU", slurm_mem_per_cpu);
-	}
+	OSUtil::GetConfigurationEnv("SLURM_MEM_PER_NODE", slurm_mem_per_node);
+	OSUtil::GetConfigurationEnv("SLURM_MEM_PER_CPU", slurm_mem_per_cpu);
 
 	if (!slurm_mem_per_node.empty()) {
 		auto limit = ParseMemoryLimitSlurm(slurm_mem_per_node);
@@ -710,7 +707,7 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs, optional_ptr<DatabaseIn
 	} else if (!slurm_mem_per_cpu.empty()) {
 		auto mem_per_cpu = ParseMemoryLimitSlurm(slurm_mem_per_cpu);
 		if (mem_per_cpu.IsValid()) {
-			idx_t num_threads = GetSystemMaxThreads(fs, db);
+			idx_t num_threads = GetSystemMaxThreads(fs);
 			return mem_per_cpu.GetIndex() * num_threads;
 		}
 	}
@@ -796,7 +793,8 @@ optional_idx DBConfig::ParseMemoryLimitSlurm(const string &arg) {
 
 // Right now we only really care about access mode when comparing DBConfigs
 bool DBConfigOptions::operator==(const DBConfigOptions &other) const {
-	return other.access_mode == access_mode && other.user_options == user_options;
+	return other.access_mode == access_mode && other.user_options == user_options &&
+	       other.configuration_env == configuration_env;
 }
 
 bool DBConfig::operator==(const DBConfig &other) {

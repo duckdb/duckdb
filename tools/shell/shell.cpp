@@ -1271,6 +1271,10 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 	duckdb::shared_ptr<duckdb::LogStorage> storage_ptr = std_out_log_storage;
 
 	if (!db) {
+		// the variables the shell configures itself from, readable through the database regardless of external access
+		for (auto variable : {"DUCKDB_PAGER", "PAGER", "DUCKDB_HISTORY", "TEMP", "TMP"}) {
+			config.options.configuration_env.insert(variable);
+		}
 		try {
 			db = make_uniq<duckdb::DuckDB>(zDbFilename.c_str(), &config);
 			RegisterShellLogger(*db, storage_ptr);
@@ -1289,12 +1293,6 @@ void ShellState::OpenDB(ShellOpenFlags flags) {
 		db->LoadStaticExtension<duckdb::AutocompleteExtension>();
 #endif
 		db->LoadStaticExtension<duckdb::ShellExtension>();
-		RegisterShellEnvironment();
-		if (!agent_mode_detected) {
-			// the environment is read through the database, so the mode is only known once one exists
-			agent_mode_detected = true;
-			DetectAgentMode();
-		}
 		// before the configuration is locked in safe mode
 		ApplyDisplaySettings();
 		if (safe_mode) {
@@ -3542,25 +3540,12 @@ static const AgentEnvironmentMarker AGENT_ENVIRONMENT_MARKERS[] = {{"AI_AGENT", 
                                                                    {"COPILOT_AGENT_SESSION_ID", "github-copilot"},
                                                                    {nullptr, nullptr}};
 
-//! The variables the shell reads for its own configuration, besides the agent markers
-static const char *SHELL_ENVIRONMENT[] = {
-    "DUCKDB_AGENT_MODE", "DUCKDB_PAGER", "PAGER", "DUCKDB_HISTORY", "TEMP", "TMP", nullptr};
-
-void ShellState::RegisterShellEnvironment() {
-	auto &os_util = duckdb::OSUtil::Get(*db->instance);
-	for (idx_t i = 0; SHELL_ENVIRONMENT[i]; i++) {
-		os_util.RegisterConfigurationEnv(SHELL_ENVIRONMENT[i]);
-	}
-	for (idx_t i = 0; AGENT_ENVIRONMENT_MARKERS[i].variable; i++) {
-		os_util.RegisterConfigurationEnv(AGENT_ENVIRONMENT_MARKERS[i].variable);
-	}
-}
-
+// Agent mode is decided before any database exists, so these read the process environment directly
 bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
 	for (idx_t i = 0; AGENT_ENVIRONMENT_MARKERS[i].variable; i++) {
 		auto &entry = AGENT_ENVIRONMENT_MARKERS[i];
-		auto value = GetEnv(entry.variable);
-		if (value.empty()) {
+		auto value = getenv(entry.variable);
+		if (!value || !value[0]) {
 			continue;
 		}
 		agent_name = entry.agent_name ? entry.agent_name : value;
@@ -3573,8 +3558,8 @@ bool ShellState::DetectAgentEnvironment(string &agent_name, string &marker) {
 //! DUCKDB_AGENT_MODE=1/0 (on/off, true/false, yes/no) forces agent mode on or off - like -agent / -no-agent, which
 //! take precedence. Unset, empty or "auto" leaves it to the auto-detection
 static OptionType AgentModeFromEnvironment(ShellState &state) {
-	auto value = state.GetEnv("DUCKDB_AGENT_MODE");
-	if (value.empty() || StringUtil::CIEquals(value, "auto")) {
+	auto value = getenv("DUCKDB_AGENT_MODE");
+	if (!value || !value[0] || StringUtil::CIEquals(value, "auto")) {
 		return OptionType::DEFAULT;
 	}
 	for (auto on : {"1", "on", "true", "yes"}) {
@@ -3587,8 +3572,7 @@ static OptionType AgentModeFromEnvironment(ShellState &state) {
 			return OptionType::OFF;
 		}
 	}
-	state.PrintF(PrintOutput::STDERR, "warning: ignoring DUCKDB_AGENT_MODE=%s (expected 1, 0 or auto)\n",
-	             value.c_str());
+	state.PrintF(PrintOutput::STDERR, "warning: ignoring DUCKDB_AGENT_MODE=%s (expected 1, 0 or auto)\n", value);
 	return OptionType::DEFAULT;
 }
 
@@ -3917,8 +3901,9 @@ int RunShell(int argc, const char **argv) {
 		data.zDbFilename = ":memory:";
 	}
 	data.out = stdout;
+	data.DetectAgentMode();
 
-	// Open the database file; this also detects agent mode, which reads the environment through the database
+	// Open the database file
 	data.OpenDB();
 
 	/* Process the initialization file if there is one.  If no -init option

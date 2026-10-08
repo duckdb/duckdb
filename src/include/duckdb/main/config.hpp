@@ -154,6 +154,9 @@ struct DBConfigOptions {
 	bool abort_on_wal_failure = false;
 	//! Paths that are explicitly allowed, even if enable_external_access is false
 	unordered_set<string> allowed_paths;
+	//! Environment variables the embedding application configures itself from, readable through
+	//! OSUtil::GetEnvUnrestricted regardless of enable_external_access. Fixed once the database is initialized.
+	unordered_set<string> configuration_env;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
 	//! Additional configuration options that are allowed to be changed even when the configuration is locked
@@ -298,11 +301,11 @@ public:
 	DUCKDB_API TypeManager &GetTypeManager();
 	DUCKDB_API CollationBinding &GetCollationBinding();
 	DUCKDB_API IndexTypeSet &GetIndexTypes();
-	static idx_t GetSystemMaxThreads(FileSystem &fs, optional_ptr<DatabaseInstance> db);
-	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs, optional_ptr<DatabaseInstance> db);
-	static idx_t GetSystemAvailableMemory(FileSystem &fs, optional_ptr<DatabaseInstance> db);
+	static idx_t GetSystemMaxThreads(FileSystem &fs);
+	static idx_t GetSystemMaxAsyncThreads(FileSystem &fs);
+	static idx_t GetSystemAvailableMemory(FileSystem &fs);
 	static optional_idx ParseMemoryLimitSlurm(const string &arg);
-	void SetDefaultMaxMemory(optional_ptr<DatabaseInstance> db);
+	void SetDefaultMaxMemory();
 	void SetDefaultTempDirectory();
 
 	OrderType ResolveOrder(ClientContext &context, OrderType order_type) const;

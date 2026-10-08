@@ -290,6 +290,8 @@ public:
 	//! Gets the users home directory
 	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
 	DUCKDB_API static string GetHomeDirectory(DatabaseInstance &db);
+	//! The home directory of the process, when no database or setting says otherwise
+	DUCKDB_API static string DefaultHomeDirectory();
 	//! Gets the users home directory
 	DUCKDB_API virtual string GetHomeDirectory();
 	//! Expands a given path, including e.g. expanding the home directory of the user
@@ -320,7 +322,10 @@ public:
 	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
 	DUCKDB_API string ExtractName(const string &path);
 
-	//! Returns the value of an environment variable - or the empty string if it is not set
+	//! Deprecated: reads the process environment directly, outside of enable_external_access. Code that has a
+	//! database reads through OSUtil::Get(db).GetEnv; the engine's own configuration variables through
+	//! OSUtil::GetConfigurationEnv. Kept for out-of-tree extensions that still call it.
+	DUCKDB_API static string GetEnvVariable(const string &name);
 
 	//! Whether there is a glob in the string
 	DUCKDB_API static bool HasGlob(const string &str);

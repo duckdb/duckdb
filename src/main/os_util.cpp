@@ -9,11 +9,41 @@
 
 namespace duckdb {
 
-OSUtil::OSUtil(DatabaseInstance &db) : db(db) {
+OSUtil::OSUtil(DatabaseInstance &db, unordered_set<string> configuration_env_p)
+    : db(db), configuration_env(std::move(configuration_env_p)) {
 }
 
 OSUtil &OSUtil::Get(DatabaseInstance &db) {
 	return db.GetOSUtil();
+}
+
+bool OSUtil::IsConfigurationEnv(const string &name) {
+	// the home directory, the resource limits of the job the database runs in, its proxy and its time zone
+	static const char *CONFIGURATION_ENV[] = {
+	    "HOME", "USERPROFILE", "SLURM_CPUS_ON_NODE", "SLURM_MEM_PER_NODE", "SLURM_MEM_PER_CPU", "HTTP_PROXY", "TZ"};
+	for (auto known : CONFIGURATION_ENV) {
+		if (name == known) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool OSUtil::GetConfigurationEnv(const string &name, string &value) {
+	if (!IsConfigurationEnv(name)) {
+		throw InternalException("Environment variable \"%s\" is not a configuration variable of the engine - read it "
+		                        "through the database with GetEnv",
+		                        name);
+	}
+	return ReadEnv(name, value);
+}
+
+string OSUtil::GetConfigurationEnv(const string &name) {
+	string value;
+	if (!GetConfigurationEnv(name, value)) {
+		return string();
+	}
+	return value;
 }
 
 bool OSUtil::GetEnv(const string &name, string &value) {
@@ -32,30 +62,10 @@ string OSUtil::GetEnv(const string &name) {
 	return value;
 }
 
-bool OSUtil::IsConfigurationEnv(const string &name) {
-	// the home directory, the resource limits of the job the database runs in, its proxy and its time zone
-	static const char *CONFIGURATION_ENV[] = {
-	    "HOME", "USERPROFILE", "SLURM_CPUS_ON_NODE", "SLURM_MEM_PER_NODE", "SLURM_MEM_PER_CPU", "HTTP_PROXY", "TZ"};
-	for (auto known : CONFIGURATION_ENV) {
-		if (name == known) {
-			return true;
-		}
-	}
-	return false;
-}
-
-void OSUtil::RegisterConfigurationEnv(const string &name) {
-	lock_guard<mutex> guard(lock);
-	configuration_env.insert(name);
-}
-
 bool OSUtil::GetEnvUnrestricted(const string &name, string &value) {
-	if (!IsConfigurationEnv(name)) {
-		lock_guard<mutex> guard(lock);
-		if (configuration_env.find(name) == configuration_env.end()) {
-			throw InternalException("Environment variable \"%s\" is not a configuration variable - read it with GetEnv",
-			                        name);
-		}
+	if (!IsConfigurationEnv(name) && configuration_env.find(name) == configuration_env.end()) {
+		throw InternalException("Environment variable \"%s\" is not a configuration variable - read it with GetEnv",
+		                        name);
 	}
 	return ReadEnv(name, value);
 }

@@ -514,10 +514,10 @@ static unique_ptr<TimeZone> TryCreateWindowsDefault() {
 }
 #endif
 
-unique_ptr<TimeZone> TimeZone::TryCreateDefault(DatabaseInstance &db) {
+unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
 	// an explicitly configured zone takes priority over the host configuration
 	string tz_id;
-	if (OSUtil::Get(db).GetEnvUnrestricted("TZ", tz_id)) {
+	if (OSUtil::GetConfigurationEnv("TZ", tz_id)) {
 		// the zone can be prefixed with a colon to force it to be interpreted as a name
 		if (!tz_id.empty() && tz_id[0] == ':') {
 			tz_id = tz_id.substr(1);

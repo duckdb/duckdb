@@ -256,8 +256,6 @@ public:
 	string agent_marker;
 	//! Whether DUCKDB_AGENT_MODE forced agent mode on or off (no -agent / -no-agent was given)
 	bool agent_mode_from_environment = false;
-	//! Whether DetectAgentMode has run; it runs once, when the first database is opened
-	bool agent_mode_detected = false;
 	//! Whether an output mode was given on the command line (-csv, -json, ...): detected agent mode then stays off
 	bool output_mode_flag = false;
 	//! Whether the exit hint (see PrintExitHint) went out already
@@ -398,8 +396,6 @@ public:
 	void OpenDB(ShellOpenFlags open_flags = ShellOpenFlags::EXIT_ON_FAILURE);
 	//! Progress bar and error rendering for the open database, following the console and agent mode
 	void ApplyDisplaySettings();
-	//! Registers the variables the shell configures itself from, so they can be read through the database
-	void RegisterShellEnvironment();
 
 	void SetOrClearFlag(ShellFlags mFlag, const string &zArg);
 	bool ShellHasFlag(ShellFlags flag) {
@@ -462,7 +458,7 @@ public:
 	//! Decide whether agent mode is active, from the -agent/-no-agent flags or the environment (see agent_mode)
 	void DetectAgentMode();
 	//! Whether the environment marks the shell as being run by an AI coding agent, which one, and by which variable
-	bool DetectAgentEnvironment(string &agent_name, string &marker);
+	static bool DetectAgentEnvironment(string &agent_name, string &marker);
 	//! Print how agent mode renders and the engine features an agent should know about; `startup` is the one-line
 	//! form printed before anything runs
 	void PrintAgentHelp(PrintOutput output, bool startup);
