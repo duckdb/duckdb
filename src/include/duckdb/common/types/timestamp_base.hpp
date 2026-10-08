@@ -71,19 +71,20 @@ struct timestamp_base_t { // NOLINT
 		return timestamp_base_t(0);
 	} // NOLINT
 
-	//! The smallest valid timestamp: 290309-12-22 (BC) 00:00:00, or the smallest int64 if that is out of range
+	//! The smallest valid timestamp: 290309-12-22 (BC) 00:00:00, or the smallest int64 for TIMESTAMP_NS, which
+	//! cannot represent that date
 	static constexpr timestamp_base_t min_value() { // NOLINT
-		return timestamp_base_t(P <= MICROS_PER_SEC ? MIN_MICROS / (MICROS_PER_SEC / (P <= MICROS_PER_SEC ? P : 1))
-		                                            : NumericLimits<int64_t>::Minimum());
+		static_assert(P >= MICROS_PER_SEC, "min_value() is only defined for microsecond and nanosecond timestamps");
+		return timestamp_base_t(P == MICROS_PER_SEC ? MIN_MICROS : NumericLimits<int64_t>::Minimum());
 	} // NOLINT
 
 	//! True, if the timestamp is finite, else false.
 	inline bool IsFinite() const {
 		return *this != infinity() && *this != ninfinity();
 	}
-	//! True, if the timestamp is finite and not below the smallest valid timestamp, else false.
+	//! True, if the timestamp is infinite or not below the smallest valid timestamp, else false.
 	inline bool IsValid() const {
-		return IsFinite() && *this >= min_value();
+		return *this >= min_value() || *this == ninfinity();
 	}
 
 private:
