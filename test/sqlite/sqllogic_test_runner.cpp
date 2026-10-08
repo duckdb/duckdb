@@ -1,6 +1,7 @@
 
 #include "sqllogic_test_runner.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/json_document.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -228,9 +229,21 @@ ExtensionLoadResult SQLLogicTestRunner::LoadExtension(DuckDB &db, const std::str
 	auto &test_config = TestConfiguration::Get();
 	Connection con(db);
 	if (test_config.GetExtensionAutoLoadingMode() == TestConfiguration::ExtensionAutoLoadingMode::NONE) {
-		// try INSTALL extension
-		auto repo = test_config.GetLocalExtensionRepository();
-		con.Query("INSTALL " + extension + " FROM '" + repo + "'");
+		auto extension_path = extension;
+		if (!ExtensionHelper::IsFullPath(extension)) {
+			auto &fs = FileSystem::GetFileSystem(*con.context);
+			auto extension_name = ExtensionHelper::ApplyExtensionAlias(extension);
+			extension_path =
+			    fs.JoinPath(test_config.GetLocalExtensionRepository(), ExtensionHelper::GetVersionDirectoryName());
+			extension_path = fs.JoinPath(extension_path, DuckDB::Platform());
+			extension_path = fs.JoinPath(extension_path, extension_name + ".duckdb_extension");
+		}
+		try {
+			ExtensionHelper::LoadExternalExtension(*con.context, ExtensionLoadOptions(extension_path));
+			return ExtensionLoadResult::LOADED_EXTENSION;
+		} catch (std::exception &) {
+			return linked_result;
+		}
 	}
 
 	// try LOAD extension
