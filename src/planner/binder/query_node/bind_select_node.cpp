@@ -654,13 +654,6 @@ BoundStatement Binder::BindSelectNode(SelectNode &statement, BoundStatement from
 		SetCanContainNulls(prev_can_contain_nulls);
 	}
 	result.groups.grouping_sets = std::move(statement.groups.grouping_sets);
-	for (idx_t i = 0; i < bind_state.unbound_groups.size(); i++) {
-		auto expanded = bind_state.unbound_groups[i]->Copy();
-		if (bind_context.ExpandGeneratedColumnReferences(expanded)) {
-			bind_state.expanded_group_map[*expanded] = ProjectionIndex(i);
-			bind_state.expanded_groups.push_back(std::move(expanded));
-		}
-	}
 
 	// bind the HAVING clause, if any
 	if (statement.having) {

@@ -6,6 +6,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -22,6 +23,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_qualifier.hpp"
 
 #include <algorithm>
 
@@ -501,28 +503,125 @@ static bool CanReconstructGeneratedColumn(const Expression &expression) {
 	return has_column;
 }
 
-void ExpressionBinder::ExpandGeneratedDependencies(unique_ptr<ParsedExpression> &expression) {
-	auto stack_checker = StackCheck(*expression);
-	if (expression->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto &colref = expression->Cast<ColumnRefExpression>();
-		if (!colref.IsQualified()) {
-			return;
-		}
-		ErrorData error;
-		auto binding = binder.bind_context.GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
-		column_t column_index;
-		if (!binding || !binding->TryGetBindingIndex(colref.GetColumnName(), column_index) ||
-		    !ColumnIsGenerated(*binding, column_index)) {
-			return;
-		}
-		auto expanded = binding->Cast<TableBinding>().ExpandGeneratedColumn(colref.GetColumnName());
-		expanded->SetAlias(expression->GetAlias());
-		expression = std::move(expanded);
-		ExpandGeneratedDependencies(expression);
-		return;
+unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnDependency(ColumnRefExpression &colref) {
+	if (!colref.IsQualified()) {
+		return nullptr;
 	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expression, [&](unique_ptr<ParsedExpression> &child) { ExpandGeneratedDependencies(child); });
+	ErrorData error;
+	auto binding = GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
+	column_t column_index;
+	if (!binding || !binding->TryGetBindingIndex(colref.GetColumnName(), column_index) ||
+	    !ColumnIsGenerated(*binding, column_index)) {
+		return nullptr;
+	}
+	return binding->Cast<TableBinding>().ExpandGeneratedColumn(colref.GetColumnName());
+}
+
+bool BindContext::HasGeneratedProjection() const {
+	for (auto &binding : bindings_list) {
+		for (auto &source : binding->projection_expressions) {
+			if (source.second.generated) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool BindContext::MatchesGeneratedExpression(ParsedExpression &expression, ParsedExpression &group,
+                                             bool source_expression, bool expand_group) {
+	enum class MatchScope : uint8_t { QUERY, GROUP, SOURCE };
+	struct MatchExpression {
+		reference<ParsedExpression> expression;
+		MatchScope scope;
+	};
+	struct MatchPair {
+		MatchExpression left;
+		MatchExpression right;
+	};
+	parsed_expression_map_t<unique_ptr<ParsedExpression>> dependencies;
+	auto expand = [&](MatchExpression &entry) {
+		while (entry.scope != MatchScope::QUERY &&
+		       entry.expression.get().GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+			auto &colref = entry.expression.get().Cast<ColumnRefExpression>();
+			if (entry.scope == MatchScope::GROUP) {
+				if (!colref.IsQualified()) {
+					break;
+				}
+				ErrorData error;
+				auto binding = GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
+				if (!binding) {
+					break;
+				}
+				auto source = binding->projection_expressions.find(colref.GetColumnName());
+				// Reuse safety results: matching must not bind discarded macro arguments.
+				if (source == binding->projection_expressions.end() || !source->second.can_reconstruct.has_value() ||
+				    !source->second.can_reconstruct.value()) {
+					break;
+				}
+			}
+			auto it = dependencies.find(colref);
+			if (it == dependencies.end()) {
+				auto dependency = GetGeneratedColumnDependency(colref);
+				it = dependencies.emplace(colref, std::move(dependency)).first;
+			}
+			if (!it->second) {
+				break;
+			}
+			entry.expression = *it->second;
+			entry.scope = MatchScope::SOURCE;
+		}
+	};
+	auto shape = [&](ParsedExpression &expr, MatchScope scope) {
+		// Use parsed equality for node properties and compare children separately.
+		auto result = expr.Copy();
+		for (auto &child : result->ChildrenMutable()) {
+			child = ConstantExpression::FromValue(Value());
+		}
+		if (scope == MatchScope::SOURCE && result->GetExpressionClass() == ExpressionClass::FUNCTION) {
+			ColumnQualifier qualifier(binder);
+			qualifier.QualifyFunction(result->Cast<FunctionExpression>());
+		}
+		return result;
+	};
+	vector<MatchPair> pending;
+	pending.push_back({{expression, source_expression ? MatchScope::SOURCE : MatchScope::QUERY},
+	                   {group, expand_group ? MatchScope::GROUP : MatchScope::QUERY}});
+	vector<reference_map_t<ParsedExpression, reference_set_t<ParsedExpression>>> compared(9);
+	while (!pending.empty()) {
+		auto pair = pending.back();
+		pending.pop_back();
+		// Identical source definitions need no expansion, including their unused macro arguments.
+		if (pair.left.scope == pair.right.scope && pair.left.expression.get().Equals(pair.right.expression.get())) {
+			continue;
+		}
+		expand(pair.left);
+		expand(pair.right);
+		auto &left = pair.left.expression.get();
+		auto &right = pair.right.expression.get();
+		auto &seen = compared[static_cast<idx_t>(pair.left.scope) * 3 + static_cast<idx_t>(pair.right.scope)];
+		if (!seen[left].insert(right).second) {
+			continue;
+		}
+		if (left.GetExpressionType() != right.GetExpressionType() ||
+		    left.GetExpressionClass() != right.GetExpressionClass()) {
+			return false;
+		}
+		auto left_shape = shape(left, pair.left.scope);
+		auto right_shape = shape(right, pair.right.scope);
+		if (!left_shape->Equals(*right_shape)) {
+			return false;
+		}
+		auto left_children = left.ChildrenMutable();
+		auto right_children = right.ChildrenMutable();
+		D_ASSERT(left_children.size() == right_children.size());
+		auto right_child = right_children.begin();
+		for (auto &left_child : left_children) {
+			pending.push_back({{*left_child, pair.left.scope}, {**right_child, pair.right.scope}});
+			++right_child;
+		}
+	}
+	return true;
 }
 
 shared_ptr<Binder> BindContext::CreateSourceBinder(Binding &binding) {
@@ -541,7 +640,7 @@ unique_ptr<Expression> BindContext::BindSourceExpression(Binding &binding, Sourc
 	}
 	auto source_binder = CreateSourceBinder(binding);
 	ExpressionBinder expression_binder(*source_binder, binder.context);
-	// Normal binding checks macro bodies and their arguments before dependencies are materialized.
+	// Source binding supplies depth checks and the complete-expression safety result.
 	auto expression = source.expression->Copy();
 	auto bound_expression = expression_binder.Bind(expression);
 	source.can_reconstruct = source.generated && CanReconstructGeneratedColumn(*bound_expression);
@@ -617,37 +716,14 @@ unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnExpression(ColumnRef
 	if (!source.can_reconstruct.value() || (only_constant_null && !source.is_constant_null)) {
 		return nullptr;
 	}
-	if (!source.expanded_expression) {
-		if (source.is_constant_null) {
-			auto &bound =
-			    source.bound_expression
-			        ? *source.bound_expression
-			        : *binding->source_projection->expressions[binding->projected_columns.at(colref.GetColumnName())];
-			source.expanded_expression = ConstantExpression::FromValue(Value(bound.GetReturnType()));
-		} else {
-			auto source_binder = CreateSourceBinder(*binding);
-			ExpressionBinder expression_binder(*source_binder, binder.context);
-			auto expanded = source.expression->Copy();
-			expression_binder.ExpandGeneratedDependencies(expanded);
-			ExpressionBinder::QualifyColumnNames(*source_binder, expanded);
-			source.expanded_expression = std::move(expanded);
-		}
+	if (source.is_constant_null) {
+		auto &bound =
+		    source.bound_expression
+		        ? *source.bound_expression
+		        : *binding->source_projection->expressions[binding->projected_columns.at(colref.GetColumnName())];
+		return ConstantExpression::FromValue(Value(bound.GetReturnType()));
 	}
-	return source.expanded_expression->Copy();
-}
-
-bool BindContext::ExpandGeneratedColumnReferences(unique_ptr<ParsedExpression> &expression) {
-	bool expanded = false;
-	if (expression->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
-		auto source = GetGeneratedColumnExpression(expression->Cast<ColumnRefExpression>());
-		if (source) {
-			expression = std::move(source);
-			return true;
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expression, [&](unique_ptr<ParsedExpression> &child) { expanded |= ExpandGeneratedColumnReferences(child); });
-	return expanded;
+	return source.expression->Copy();
 }
 
 void BindContext::AddSourceProjection(BoundStatement &statement) {

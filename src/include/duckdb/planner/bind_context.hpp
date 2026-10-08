@@ -63,7 +63,12 @@ public:
 	Identifier GetColumnDiagnosticName(ColumnRefExpression &colref);
 	unique_ptr<ParsedExpression> GetGeneratedColumnExpression(ColumnRefExpression &colref,
 	                                                          bool only_constant_null = false);
-	bool ExpandGeneratedColumnReferences(unique_ptr<ParsedExpression> &expression);
+	//! Return one source definition, leaving its dependencies unexpanded.
+	unique_ptr<ParsedExpression> GetGeneratedColumnDependency(ColumnRefExpression &colref);
+	bool HasGeneratedProjection() const;
+	//! Compare parsed grouping expressions without materializing dependency trees.
+	bool MatchesGeneratedExpression(ParsedExpression &expression, ParsedExpression &group, bool source_expression,
+	                                bool expand_group);
 	string BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name);
 	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 

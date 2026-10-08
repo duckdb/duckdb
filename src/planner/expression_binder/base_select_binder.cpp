@@ -21,6 +21,13 @@ BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, Bound
 
 BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = *expr_ptr;
+	if (reconstructing_generated_column && expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto dependency = binder.bind_context.GetGeneratedColumnDependency(expr.Cast<ColumnRefExpression>());
+		if (dependency) {
+			auto stack_checker = StackCheck(expr);
+			return BindExpression(dependency, depth, root_expression);
+		}
+	}
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr);
 	if (group_index.IsValid()) {
@@ -80,7 +87,7 @@ bool BaseSelectBinder::MatchesGroup(ParsedExpression &expr) {
 }
 
 ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
-	if (inside_aggregate) {
+	if (inside_aggregate || node.bind_state.unbound_groups.empty()) {
 		return ProjectionIndex();
 	}
 	// first check the group alias map, if expr is a ColumnRefExpression
@@ -98,19 +105,34 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	// no alias reference found
 	// check the list of group columns for a match
 	auto &group_map = node.bind_state.group_map;
-	auto entry = group_map.find(expr);
-	if (entry != group_map.end()) {
-		return entry->second;
+	if (!reconstructing_generated_column) {
+		auto entry = group_map.find(expr);
+		if (entry != group_map.end()) {
+			return entry->second;
+		}
 	}
-	auto &expanded_group_map = node.bind_state.expanded_group_map;
-	auto expanded_entry = expanded_group_map.find(expr);
-	if (expanded_entry != expanded_group_map.end()) {
-		return expanded_entry->second;
+	if (reconstructing_generated_column || binder.bind_context.HasGeneratedProjection()) {
+		// Original grouping keys take precedence over equivalent generated definitions.
+		for (bool expand_group : {false, true}) {
+			if (!expand_group && !reconstructing_generated_column) {
+				continue;
+			}
+			for (idx_t index = 0; index < node.bind_state.unbound_groups.size(); index++) {
+				auto i = expand_group ? node.bind_state.unbound_groups.size() - index - 1 : index;
+				auto &group = *node.bind_state.unbound_groups[i];
+				if (binder.bind_context.MatchesGeneratedExpression(expr, group, reconstructing_generated_column,
+				                                                   expand_group)) {
+					return ProjectionIndex(i);
+				}
+			}
+		}
 	}
 #ifdef DEBUG
-	for (auto map_entry : group_map) {
-		D_ASSERT(!map_entry.first.get().Equals(expr));
-		D_ASSERT(!expr.Equals(map_entry.first.get()));
+	if (!reconstructing_generated_column) {
+		for (auto map_entry : group_map) {
+			D_ASSERT(!map_entry.first.get().Equals(expr));
+			D_ASSERT(!expr.Equals(map_entry.first.get()));
+		}
 	}
 #endif
 	return ProjectionIndex();

@@ -27,9 +27,6 @@ struct SelectBindState {
 	vector<unique_ptr<ParsedExpression>> original_expressions;
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	parsed_expression_map_t<ProjectionIndex> group_map;
-	//! Safe generated definitions retain parsed grouping-match semantics.
-	vector<unique_ptr<ParsedExpression>> expanded_groups;
-	parsed_expression_map_t<ProjectionIndex> expanded_group_map;
 	identifier_map_t<ProjectionIndex> group_alias_map;
 	unordered_map<ProjectionIndex, ProjectionIndex> collated_groups;
 	unordered_set<idx_t> used_group_aliases;
