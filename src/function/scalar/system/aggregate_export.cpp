@@ -854,7 +854,8 @@ unique_ptr<ParsedExpression> ExportAggregateFunction::StateToSQL(const LogicalTy
 	vector<Value> signature;
 	vector<unique_ptr<ParsedExpression>> constant_arguments;
 	for (idx_t i = 0; i < types.size(); i++) {
-		if (!TypeExpression::CanRepresent(types[i]) || TypeVisitor::Contains(types[i], [](const LogicalType &child) {
+		if ((types[i] != LogicalType::ANY && !TypeExpression::CanRepresent(types[i])) ||
+		    TypeVisitor::Contains(types[i], [](const LogicalType &child) {
 			    return child.id() == LogicalTypeId::VARCHAR && !StringType::GetCollation(child).empty();
 		    })) {
 			return nullptr;
