@@ -27,6 +27,9 @@ struct SelectionVector;
 class StringHeap;
 struct UnifiedVectorFormat;
 
+class ChunkColumnView;
+class AggregateInputLayout;
+
 struct RowOperationsState {
 	explicit RowOperationsState(ArenaAllocator &allocator) : allocator(allocator) {
 	}
@@ -49,14 +52,18 @@ struct RowOperations {
 	//! update - aligned addresses
 	static void UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses, DataChunk &payload,
 	                         idx_t arg_idx, optional_ptr<const ClusteredAggr> clustered = nullptr);
+	static void UpdateStates(RowOperationsState &state, AggregateObject &aggr, Vector &addresses,
+	                         const ChunkColumnView &arguments, optional_ptr<const ClusteredAggr> clustered = nullptr);
 	//! filtered update - aligned addresses
 	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr,
 	                                 Vector &addresses, DataChunk &payload, idx_t arg_idx);
+	static void UpdateFilteredStates(RowOperationsState &state, AggregateFilterData &filter_data, AggregateObject &aggr,
+	                                 Vector &addresses, DataChunk &payload, const ChunkColumnView &arguments);
 	//! clustered update loop shared by grouped and perfect aggregate hash tables
 	static void UpdateStatesClustered(RowOperationsState &state, vector<AggregateObject> &aggregates,
 	                                  AggregateFilterDataSet *filter_set, const unsafe_vector<idx_t> *filter,
-	                                  Vector &addresses, DataChunk &payload, ClusteredAggr &clustered,
-	                                  bool skip_addresses);
+	                                  Vector &addresses, DataChunk &payload, const AggregateInputLayout &input_layout,
+	                                  ClusteredAggr &clustered, bool skip_addresses);
 	//! combine - unaligned addresses, updated
 	static void CombineStates(RowOperationsState &state, TupleDataLayout &layout, Vector &sources, Vector &targets);
 	//! finalize - unaligned addresses, updated

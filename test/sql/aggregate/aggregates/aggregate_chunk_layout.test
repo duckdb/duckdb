@@ -1,0 +1,75 @@
+# name: test/sql/aggregate/aggregates/aggregate_chunk_layout.test
+# description: Shared aggregate payload layouts with empty arguments, filters and distinct replay
+# group: [aggregates]
+
+statement ok
+CREATE TABLE layout_input(g INTEGER, x INTEGER, y INTEGER, s VARCHAR, n INTEGER[], keep BOOLEAN);
+
+statement ok
+INSERT INTO layout_input VALUES
+    (1, 1, 10, 'a', [1], true), (1, 2, 20, 'b', [2], false),
+    (1, 1, 10, 'a', [1], true), (1, NULL, 30, NULL, NULL, NULL),
+    (2, 4, 40, 'd', [4], false), (2, 5, 50, 'e', [5], NULL);
+
+# Exercise both perfect and general hash aggregation with the same payload.
+foreach threshold 0 20
+
+statement ok
+SET perfect_ht_threshold = {threshold};
+
+query IIIIIIITT
+SELECT g, count(*), count(*) FILTER (WHERE keep), sum(x) FILTER (WHERE keep),
+       sum(y) FILTER (WHERE keep), count(*) FILTER (WHERE NOT keep),
+       regr_count(y, x) FILTER (WHERE keep), min(s) FILTER (WHERE keep), min(n) FILTER (WHERE keep)
+FROM layout_input GROUP BY g ORDER BY g;
+----
+1	4	2	2	20	1	2	a	[1]
+2	2	0	NULL	NULL	1	0	NULL	NULL
+
+# Only zero-argument aggregates, with and without a filter.
+query III
+SELECT g, count(*), count(*) FILTER (WHERE keep) FROM layout_input GROUP BY g ORDER BY g;
+----
+1	4	2
+2	2	0
+
+query II
+SELECT g, count(*) FROM layout_input GROUP BY g ORDER BY g;
+----
+1	4
+2	2
+
+# Groups must survive when no aggregate's filter matches.
+query III
+SELECT g, sum(x) FILTER (WHERE false), count(*) FILTER (WHERE false)
+FROM layout_input GROUP BY g ORDER BY g;
+----
+1	NULL	0
+2	NULL	0
+
+query II
+SELECT g, count(*) FROM layout_input WHERE false GROUP BY g;
+----
+
+endloop
+
+# DISTINCT replay skips other aggregates and populates only its own arguments.
+query IIIIIIT
+SELECT g, count(*), sum(x), count(DISTINCT x) FILTER (WHERE keep),
+       sum(DISTINCT y) FILTER (WHERE keep), count(DISTINCT x) FILTER (WHERE NOT keep),
+       min(s) FILTER (WHERE keep)
+FROM layout_input GROUP BY g ORDER BY g;
+----
+1	4	4	1	10	1	a
+2	2	9	0	NULL	1	NULL
+
+query IIII rowsort
+SELECT g, count(*), count(DISTINCT x) FILTER (WHERE keep), sum(y) FILTER (WHERE keep)
+FROM layout_input GROUP BY GROUPING SETS ((g), ());
+----
+1	4	1	20
+2	2	0	NULL
+NULL	6	1	20
+
+statement ok
+RESET perfect_ht_threshold;
