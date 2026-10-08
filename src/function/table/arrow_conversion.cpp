@@ -731,12 +731,12 @@ void ArrowToDuckDBConversion::ColumnArrowToDuckDBRunEndEncoded(Vector &vector, c
 		run_end_encoding.run_ends = make_uniq<Vector>(run_ends_type.GetDuckType(), compressed_size);
 		run_end_encoding.values = make_uniq<Vector>(values_type.GetDuckType(), compressed_size);
 
-		ArrowToDuckDBConversion::ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, chunk_offset,
-		                                             array_state, compressed_size, run_ends_type);
+		// the run ends and values are scanned in full - the offsets of the scan apply to the logical (decoded) rows
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(*run_end_encoding.run_ends, run_ends_array, 0, array_state,
+		                                             compressed_size, run_ends_type);
 		auto &values = *run_end_encoding.values;
-		ArrowToDuckDBConversion::SetValidityMask(values, values_array, chunk_offset, compressed_size,
-		                                         NumericCast<int64_t>(parent_offset), nested_offset);
-		ArrowToDuckDBConversion::ColumnArrowToDuckDB(values, values_array, chunk_offset, array_state, compressed_size,
+		ArrowToDuckDBConversion::SetValidityMask(values, values_array, 0, compressed_size, 0, -1);
+		ArrowToDuckDBConversion::ColumnArrowToDuckDB(values, values_array, 0, array_state, compressed_size,
 		                                             values_type);
 	}
 
