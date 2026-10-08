@@ -512,7 +512,9 @@ public:
 		return !stopped && finished < total_tasks;
 	}
 	//! Get the next task given the current state
-	bool TryNextTask(TaskPtr &task, Task &task_local);
+	bool TryNextTask(TaskPtr &task, Task &task_local) DUCKDB_EXCLUDES(lock);
+	//! Same, with the lock held, so that a caller can block on failure without missing an unblock
+	bool TryNextTaskLocked(TaskPtr &task, Task &task_local) DUCKDB_REQUIRES(lock);
 
 	//! Context for executing computations
 	ClientContext &client;
@@ -1037,6 +1039,10 @@ WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
 
 bool WindowGlobalSourceState::TryNextTask(TaskPtr &task, Task &task_local) {
 	annotated_lock_guard<annotated_mutex> guard(lock);
+	return TryNextTaskLocked(task, task_local);
+}
+
+bool WindowGlobalSourceState::TryNextTaskLocked(TaskPtr &task, Task &task_local) {
 	FinishTask(task);
 
 	if (!HasMoreTasks()) {
@@ -1281,11 +1287,15 @@ SourceResultType PhysicalWindow::GetDataInternal(ExecutionContext &context, Data
 				// no more tasks - exit
 				gsource.UnblockTasks();
 				break;
-			} else {
-				// there are more tasks available, but we can't execute them yet
-				// block the source
-				return gsource.BlockSource(source.interrupt_state);
 			}
+			// TryAssignTask released the lock: another thread may have prepared the next stage and unblocked the
+			// blocked tasks in between, so look again before blocking, or no one would ever unblock this task.
+			if (gsource.TryNextTaskLocked(lsource.task, lsource.task_local)) {
+				continue;
+			}
+			// there are more tasks available, but we can't execute them yet
+			// block the source
+			return gsource.BlockSource(source.interrupt_state);
 		}
 	}
 
