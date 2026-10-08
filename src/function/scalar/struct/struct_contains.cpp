@@ -224,7 +224,7 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, info.matching_members, target, count, result);
 }
 
-static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &input) {
+static void StructContainsResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -238,14 +238,14 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
 		bound_function.GetArguments()[1] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
-		return nullptr;
+		return;
 	}
 
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	if (struct_children.empty()) {
 		// an empty struct contains nothing, the search always returns false (or position 0)
 		bound_function.GetArguments()[0] = child_type;
-		return make_uniq<StructSearchBindData>(vector<idx_t>());
+		return;
 	}
 	if (child_type.id() != LogicalTypeId::TUPLE) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
@@ -263,14 +263,12 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 	bound_function.GetArguments()[1] = target_type;
 	// cast the children that can be compared with the value to that type - the others never match
 	vector<LogicalType> new_child_types;
-	vector<idx_t> matching_members;
 	for (idx_t child_idx = 0; child_idx < struct_children.size(); child_idx++) {
 		auto &struct_child_type = struct_children[child_idx].second;
 		LogicalType max_type;
 		if (LogicalType::TryGetMaxLogicalType(context, struct_child_type, target_type, max_type) &&
 		    max_type == target_type) {
 			new_child_types.push_back(target_type);
-			matching_members.push_back(child_idx);
 		} else {
 			new_child_types.push_back(struct_child_type);
 		}
@@ -283,20 +281,38 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 
 	// the input is an unnamed struct - represent it as a TUPLE
 	bound_function.GetArguments()[0] = LogicalType::TUPLE(cast_children);
+}
 
+static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &input) {
+	auto &arguments = input.GetArguments();
+	vector<idx_t> matching_members;
+	auto &child_type = arguments[0]->GetReturnType();
+	if (child_type.id() != LogicalTypeId::SQLNULL) {
+		// the members that can match the value were cast to the type of the value when resolving the types
+		auto &target_type = arguments[1]->GetReturnType();
+		auto &struct_children = StructType::GetChildTypes(child_type);
+		for (idx_t child_idx = 0; child_idx < struct_children.size(); child_idx++) {
+			if (struct_children[child_idx].second == target_type) {
+				matching_members.push_back(child_idx);
+			}
+		}
+	}
 	return make_uniq<StructSearchBindData>(std::move(matching_members));
 }
 
 ScalarFunction StructContainsFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {}, LogicalType::BOOLEAN, StructSearchFunction<bool>, StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::BOOLEAN, StructSearchFunction<bool>);
 	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
+	fun.SetResolveTypesCallback(StructContainsResolveTypes);
+	fun.SetBindCallback(StructContainsBind);
 	return fun;
 }
 
 ScalarFunction StructPositionFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {}, LogicalType::INTEGER, StructSearchFunction<int32_t, true>,
-	                   StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::INTEGER, StructSearchFunction<int32_t, true>);
 	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
+	fun.SetResolveTypesCallback(StructContainsResolveTypes);
+	fun.SetBindCallback(StructContainsBind);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }

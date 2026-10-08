@@ -121,7 +121,7 @@ void OpaqueExec(ScalarFunction::ExecInput &input) {
 }
 
 // Resolves an ANY return type to INTEGER through the binding context.
-void AnyReturnBind(ScalarFunction::BindInput &input) {
+void AnyReturnResolveTypes(ScalarFunction::ResolveTypesInput &input) {
 	input.SetReturnType(input.GetContext().ParseType("INTEGER"));
 }
 
@@ -166,6 +166,10 @@ void ArgProbeBind(ScalarFunction::BindInput &input) {
 	// The first argument is whatever the caller passed, so it may well not be constant.
 	arg_probe.tried_non_constant = input.TryGetConstantArgument(0).has_value();
 	arg_probe.tried_out_of_range = input.TryGetConstantArgument(input.GetArgCount()).has_value();
+}
+
+// The return type follows the type of the second argument.
+void ArgProbeResolveTypes(ScalarFunction::ResolveTypesInput &input) {
 	input.SetReturnType(input.GetArgType(1));
 }
 
@@ -260,13 +264,13 @@ TEST_CASE("Stable C++API: scalar function variadic tail via GetArgCount", "[cpp_
 	        std::vector<int32_t> {110, 111});
 }
 
-TEST_CASE("Stable C++API: scalar function bind resolves an ANY return type", "[cpp_api]") {
+TEST_CASE("Stable C++API: scalar function resolve types resolves an ANY return type", "[cpp_api]") {
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
 
 	auto function = ScalarFunction::Create(conn);
-	function.SetName("cpp_double").SetBindCallback(AnyReturnBind).SetExecCallback(DoubleExec);
+	function.SetName("cpp_double").SetResolveTypesCallback(AnyReturnResolveTypes).SetExecCallback(DoubleExec);
 	function.GetSignature()
 	    .AddParameter("a", conn.ParseType("INTEGER"))
 	    .SetReturnType(conn.CreateType(LogicalTypeId::ANY));
@@ -283,7 +287,10 @@ TEST_CASE("Stable C++API: scalar function bind reads argument types and constant
 	auto conn = db.Connect();
 
 	auto function = ScalarFunction::Create(conn);
-	function.SetName("cpp_arg_probe").SetBindCallback(ArgProbeBind).SetExecCallback(ArgProbeExec);
+	function.SetName("cpp_arg_probe")
+	    .SetResolveTypesCallback(ArgProbeResolveTypes)
+	    .SetBindCallback(ArgProbeBind)
+	    .SetExecCallback(ArgProbeExec);
 	function.GetSignature()
 	    .AddParameter("a", conn.CreateType(LogicalTypeId::ANY))
 	    .AddParameter("b", conn.ParseType("INTEGER"))
@@ -357,7 +364,7 @@ TEST_CASE("Stable C++API: scalar function registration validation", "[cpp_api]")
 		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 
-	// An ANY return type without a bind callback to resolve it.
+	// An ANY return type without a resolve types callback to resolve it.
 	{
 		auto function = ScalarFunction::Create(conn);
 		function.SetName("cpp_unresolved_any").SetExecCallback(PlusOneExec);

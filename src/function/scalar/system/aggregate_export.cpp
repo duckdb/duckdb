@@ -706,7 +706,9 @@ void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAg
 	}
 }
 
-unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
+//! Binds the exported aggregate from the constant arguments, and resolves the state / return types from it
+template <class INPUT>
+unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &context = input.GetClientContext();
@@ -787,6 +789,14 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	bound_function.GetArguments()[0] = state_layout;
 	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get()));
 	return std::move(bind_data);
+}
+
+void ToAggregateStateResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	BindToAggregateState(input);
+}
+
+unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
+	return BindToAggregateState(input);
 }
 
 void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -940,6 +950,7 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
 		                        ToAggregateStateBind);
+		function.SetResolveTypesCallback(ToAggregateStateResolveTypes);
 		auto &sig = function.GetSignature();
 		sig.GetParameter(0).SetName("data");
 		sig.GetParameter(1).SetName("name");
