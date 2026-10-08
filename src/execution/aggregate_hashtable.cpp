@@ -325,6 +325,9 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 		throw InternalException("Cannot downsize a non-empty hash table!");
 	}
 	D_ASSERT(Count() == 0 || Count() == GetMaterializedCount());
+	if (Count() == 0 && size == capacity && hash_map.GetSize() == size * sizeof(ht_entry_t)) {
+		return;
+	}
 
 	auto new_hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(size * sizeof(ht_entry_t));
 	capacity = size;
