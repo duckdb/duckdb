@@ -290,11 +290,11 @@ typedef struct _duckdb_v2_value {
  * (`duckdb_v2_result_step()`) or draining (`duckdb_v2_result_fetch_chunk()`). Single consumer: step from one thread at
  * a time.
  *
- * A result is a cursor on the connection's execution, not a box of data. While it is live — not finished, cancelled,
- * errored, or destroyed — the connection refuses new queries with ERROR_RESOURCE_IN_USE, and the query's transaction
- * stays open, deferring version cleanup and checkpointing, so drain or destroy it promptly. Side-effecting statements
- * (PRAGMA, ALTER, ...) take effect only once the result is drained. Always destroy via `duckdb_v2_result_destroy()`,
- * which is safe even on a partially consumed stream.
+ * A result is a cursor on the connection's execution, not a box of data. While its statement runs — at most until it is
+ * finished, cancelled, errored, or destroyed — the connection refuses new queries with ERROR_RESOURCE_IN_USE, and the
+ * query's transaction stays open, deferring version cleanup and checkpointing, so drain or destroy it promptly.
+ * Side-effecting statements (PRAGMA, ALTER, ...) take effect only once the result is drained. Always destroy via
+ * `duckdb_v2_result_destroy()`, which is safe even on a partially consumed stream.
  */
 typedef struct _duckdb_v2_result {
 	void *internal_ptr;
@@ -11605,8 +11605,8 @@ typedef struct _duckdb_v2_prepared_statement {
  * `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup finds
  * out here rather than after silently taking the slow path.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that result
- * first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
+ * Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running. Drain, destroy, or
+ * interrupt that result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11650,9 +11650,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_conne
  * parameter type that differs from the one the cached plan assumed, triggers a re-bind that is invisible apart from its
  * cost.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it first,
- * or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
- * `*out_result` is set to NULL on failure.
+ * Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running; drain, destroy, or
+ * interrupt that result first, or execute on another connection. A failed execution, at any stage, leaves the prepared
+ * statement usable. `*out_result` is set to NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11796,8 +11796,8 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  * with more than one row-producing statement cannot be streamed as a single result and reports
  * ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
  *
- * One live result per connection: this refuses with ERROR_RESOURCE_IN_USE while the connection already has a live
- * result. Drain, destroy, or interrupt that one first, or open another connection.
+ * One running statement per connection: this refuses with ERROR_RESOURCE_IN_USE while a statement on the connection is
+ * still running. Drain, destroy, or interrupt that result first, or open another connection.
  *
  * Schema metadata — result type, statement type, column count, names, logical types — is available on the returned
  * handle immediately, before the first step.

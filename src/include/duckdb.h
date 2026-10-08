@@ -2245,10 +2245,10 @@ DUCKDB_C_API duckdb_error_data duckdb_appender_error_data(duckdb_appender append
 
 #if DUCKDB_API_VERSION_AT_LEAST(0, 2, 5)
 /*!
- * Flush the appender to the table, forcing the cache of the appender to be cleared. If flushing the data triggers a
- * constraint violation or any other error, then all data is invalidated, and this function returns DuckDBError. It is
- * not possible to append more values. Call duckdb_appender_error_data to obtain the error data followed by
- * duckdb_appender_destroy to destroy the invalidated appender.
+ * Flush the appender to the table, forcing the cache of the appender to be cleared. Requires a connection with no open
+ * result. If flushing the data triggers a constraint violation or any other error, then all data is invalidated, and
+ * this function returns DuckDBError. It is not possible to append more values. Call duckdb_appender_error_data to
+ * obtain the error data followed by duckdb_appender_destroy to destroy the invalidated appender.
  *
  * history:
  * - stable: v0.2.5

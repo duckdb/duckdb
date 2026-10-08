@@ -72,8 +72,8 @@ struct ResultWrapperV2 {
 	//! fragment execution path.
 	bool owns_wrapping_transaction = false;
 
-	//! The owning connection's busy slot; released on terminal transition
-	//! or destroy, whichever comes first.
+	//! The connection's busy slot, kept for the result's lifetime for its cancel flag. A group claims the slot
+	//! until a terminal transition or destroy, whichever comes first.
 	shared_ptr<ConnectionBusySlotV2> busy_slot;
 
 	//! Principal fragment's metadata, valid once metadata_available.
@@ -118,14 +118,13 @@ struct ResultWrapperV2 {
 		RollbackIncompleteGroup();
 	}
 
-	//! Frees the connection for its next query. Only the current owner can
+	//! Releases a group's claim on the connection. Only the current owner can
 	//! release the slot, so a release after the connection moved on is a
 	//! no-op.
 	void ReleaseBusySlot() {
 		if (busy_slot) {
 			void *expected = this;
 			busy_slot->owner.compare_exchange_strong(expected, nullptr);
-			busy_slot.reset();
 		}
 	}
 
@@ -173,15 +172,14 @@ auto Convert(duckdb_v2_result_handle handle) -> ResultWrapperV2 *;
 auto ConvertArrowResult(ResultWrapperV2 *wrapper) -> duckdb_v2_arrow_result_handle;
 auto Convert(duckdb_v2_arrow_result_handle handle) -> ResultWrapperV2 *;
 
-//! Preprocesses and submits a borrowed statement in `format`, claiming the connection's live-result slot first.
-//! Throws ResourceInUseException when the connection already has a live result.
+//! Preprocesses and submits a borrowed statement in `format`; a statement that expands into a group claims the
+//! connection's busy slot. Throws ResourceInUseException while a statement on the connection is still running.
 auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLStatement &statement,
                         const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
                         idx_t parameter_count, const char *function_name, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2>;
-//! Runs a prepared statement as a single-statement result, claiming the connection's
-//! live-result slot first. `context` is the session the result holds on to, so it survives
-//! disconnect. Throws ResourceInUseException when the connection already has a live result.
+//! Runs a prepared statement as a single-statement result. `context` is the session the result holds on to, so it
+//! survives disconnect. Throws ResourceInUseException while a statement on the connection is still running.
 auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, PreparedStatement &prepared,
                                 identifier_map_t<BoundParameterData> &values, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2>;

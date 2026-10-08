@@ -405,24 +405,18 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
                                 identifier_map_t<BoundParameterData> &values, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2> {
 	auto wrapper = make_uniq<ResultWrapperV2>();
-	// One live result per connection, claimed the way statement_execute claims it and
-	// before the submission runs, which the engine would refuse.
-	auto busy_slot = GetBusySlot(*context);
-	void *expected = nullptr;
-	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
-		throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before starting "
-		                             "a new query (or open another connection)");
-	}
-	// On any failure below, the wrapper's destructor releases the slot.
-	wrapper->busy_slot = std::move(busy_slot);
-	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
+	wrapper->busy_slot = GetBusySlot(*context);
+	ThrowIfGroupRunning(*wrapper->busy_slot);
 	wrapper->context = context;
 	wrapper->format = std::move(format);
 	// A prepared statement is always one engine statement: preprocessing, expansion and
 	// the wrapping transaction all happened at prepare time, so this bypasses the fragment
 	// machinery and is always principal. fragment_count is 1 for metadata symmetry only.
 	wrapper->fragment_count = 1;
+	// The engine refuses the submission while another statement on the connection is running
 	wrapper->BeginPending(prepared.Submit(values, QueryParameters(wrapper->format)), true);
+	// A fresh query starts uncancelled, as the engine clears its interrupt flag at query begin
+	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
 	// The engine runs a prepared statement through an internal EXECUTE, whose statement type
 	// would otherwise be what the result reports. Report the type of the statement that was
 	// prepared instead, so a prepared result is indistinguishable from a stateless one.
@@ -435,24 +429,9 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
                         idx_t parameter_count, const char *function_name, shared_ptr<ResultFormat> format)
     -> unique_ptr<ResultWrapperV2> {
 	auto wrapper = make_uniq<ResultWrapperV2>();
-	// One live result per connection. The busy slot lives in the context's
-	// registered-state map (so the connection handle stays a bare Connection *),
-	// shared with this result. The busy check is a manual return path: no
-	// ExceptionType maps to RESOURCE_IN_USE, so routing it through
-	// WithErrorHandler would degrade the code. It must run before PendingQuery,
-	// which the engine would refuse.
-	auto busy_slot = GetBusySlot(*context);
-	void *expected = nullptr;
-	if (!busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
-		throw ResourceInUseException("connection has a live result; drain, destroy, or interrupt it before starting "
-		                             "a new query (or open another connection)");
-	}
-	// On any failure below, the wrapper's destructor releases the slot.
-	wrapper->busy_slot = std::move(busy_slot);
-	// A fresh query starts uncancelled: clear any consumer-cancellation request
-	// left over from before this result claimed the slot (mirrors the engine
-	// clearing interrupt_state at query begin).
-	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
+	// The busy slot lives in the context's registered-state map, so the connection handle stays a bare Connection *
+	wrapper->busy_slot = GetBusySlot(*context);
+	ThrowIfGroupRunning(*wrapper->busy_slot);
 
 	// Borrowed, not consumed: execute a copy so the caller keeps the original.
 	auto stmt = statement.Copy();
@@ -492,10 +471,20 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
 	}
 	wrapper->context = context;
 	wrapper->format = std::move(format);
+	if (wrapper->fragments.size() > 1) {
+		// On any failure below, the wrapper's destructor releases the claim
+		void *expected = nullptr;
+		if (!wrapper->busy_slot->owner.compare_exchange_strong(expected, wrapper.get())) {
+			ThrowConnectionInUse();
+		}
+	}
 	// Prepare the first fragment. Lazy streaming execution: nothing
 	// executes until the result is stepped; for non-expanding statements
-	// (the common case) this also captures the metadata immediately.
+	// (the common case) this also captures the metadata immediately. The engine refuses the
+	// submission while another statement on the connection is running.
 	wrapper->StartNextFragment();
+	// A fresh query starts uncancelled, as the engine clears its interrupt flag at query begin
+	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
 	return wrapper;
 }
 
