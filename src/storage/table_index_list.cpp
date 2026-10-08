@@ -443,37 +443,34 @@ void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_i
 			throw InternalException("index entry bind state cannot be BOUND here");
 		}
 
-		// Create a binder to bind this index.
-		auto binder = Binder::CreateBinder(context);
-
-		// Add the table to the binder.
-		vector<ColumnIndex> dummy_column_ids;
-		binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), StringsToIdentifiers(column_names), column_types,
-		                                  dummy_column_ids, table);
-
-		// Create an IndexBinder to bind the index
-		IndexBinder idx_binder(*binder, context);
-
 		// Apply any outstanding buffered replays and replace the unbound index with a bound index.
 		unique_ptr<BoundIndex> bound_idx;
-		{
+		try {
+			// Create a binder to bind this index.
+			auto binder = Binder::CreateBinder(context);
+
+			// Add the table to the binder.
+			vector<ColumnIndex> dummy_column_ids;
+			binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), StringsToIdentifiers(column_names),
+			                                  column_types, dummy_column_ids, table);
+
+			// Create an IndexBinder to bind the index
+			IndexBinder idx_binder(*binder, context);
+
 			vector<LogicalType> physical_column_types;
 			for (auto &col : table.GetColumns().Physical()) {
 				physical_column_types.push_back(col.Type());
 			}
-			try {
-				bound_idx = index_entry->Bind(idx_binder, physical_column_types);
-			} catch (std::exception &ex) {
-				// Reset the bind state, so that any other thread waiting for this bind can retry it.
-				if (index_entry->AbortBind()) {
-					throw;
-				}
-				// The index handed off its storage to a bound index we failed to construct: it cannot be bound
-				// again, and the buffered replays are lost.
-				ErrorData error(ex);
-				throw FatalException("Failed to bind index %s with buffered write-ahead log operations: %s",
-				                     index_entry->GetName(), error.RawMessage());
+			bound_idx = index_entry->Bind(idx_binder, physical_column_types);
+		} catch (std::exception &ex) {
+			// Reset the bind state, so that any other thread waiting for this bind can retry it.
+			if (index_entry->AbortBind()) {
+				throw;
 			}
+			// The storage was handed off to a bound index that failed: the buffered replays are lost.
+			ErrorData error(ex);
+			throw FatalException("Failed to bind index %s with buffered write-ahead log operations: %s",
+			                     index_entry->GetName(), error.RawMessage());
 		}
 
 		// Commit the bound index to the index entry.

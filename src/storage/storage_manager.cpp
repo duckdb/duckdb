@@ -8,9 +8,9 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
-#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
@@ -787,8 +787,7 @@ static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDat
 	return result;
 }
 
-//! Runs bind in a read-only transaction of a separate connection. We are holding the checkpoint lock, and a read-only
-//! transaction does not take the start_transaction_lock, which a concurrent FORCE CHECKPOINT holds while waiting.
+//! Binds in a separate read-only transaction: the caller's may be finished, and read-only skips start_transaction_lock.
 static void BindInReadOnlyTransaction(AttachedDatabase &db, const std::function<void(ClientContext &)> &bind) {
 	Connection con(db.GetDatabase());
 	auto &context = *con.context;
@@ -844,7 +843,9 @@ static void TryBindIndexes(AttachedDatabase &db) {
 }
 
 bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options) {
-	if (options.explicit_checkpoint && context.GetClientContext()) {
+	// Only a full checkpoint vacuums.
+	if (options.explicit_checkpoint && options.type != CheckpointType::CONCURRENT_CHECKPOINT &&
+	    context.GetClientContext()) {
 		TryBindIndexes(db);
 	}
 	if (!HasBufferedIndexReplays()) {
@@ -877,8 +878,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			if (!IsExpectedBindError(error)) {
-				// Not a missing index type or an index expression we cannot resolve: this is a bug or a failure
-				// that we cannot recover from, so we must not mask it.
+				// Unexpected bind errors indicate a bug: do not mask them.
 				throw;
 			}
 			error_message = error.RawMessage();
@@ -890,9 +890,8 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		return true;
 	}
 	if (options.explicit_checkpoint) {
-		throw InvalidInputException("Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be "
-		                            "bound, so these operations cannot be persisted: %s",
-		                            error_message);
+		throw InvalidInputException(
+		    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s", error_message);
 	}
 	// Keep the WAL: it is the only remaining record of the buffered operations.
 	DUCKDB_LOG_WARNING(db.GetDatabase(),

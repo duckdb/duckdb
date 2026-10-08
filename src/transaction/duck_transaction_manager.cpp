@@ -337,8 +337,7 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 		// any failure during checkpoint will cause this transactions' changes to be lost,
 		// while later concurrent commits will not be
 		// this can cause undefined state, as those commits were made assuming this one was already committed
-		// we also have to write to the WAL if the checkpoint might not be able to persist all of its changes:
-		// an index with buffered write-ahead log operations cancels the checkpoint if it cannot be bound
+		// we must write the WAL if an unbound index has buffered replays: the checkpoint may be cancelled
 		if (undo_properties.estimated_size >= Settings::Get<AutoCheckpointSkipWalThresholdSetting>(context) &&
 		    !db.GetStorageManager().HasBufferedIndexReplays()) {
 			skip_wal_write_due_to_checkpoint = true;

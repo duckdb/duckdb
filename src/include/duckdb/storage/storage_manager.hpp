@@ -189,8 +189,7 @@ protected:
 	//! WAL.
 	atomic<idx_t> wal_size;
 	atomic<idx_t> wal_entries_count;
-	//! Set when an unbound index buffers a WAL replay. Only ever cleared by a checkpoint that has verified that no
-	//! buffered replays remain, so it is never false while buffered replays exist.
+	//! Set when an unbound index buffers a WAL replay. Only cleared by a checkpoint that verified none remain.
 	atomic<bool> buffered_index_replays {false};
 	//! Storage options passed in through configuration
 	StorageOptions storage_options;
