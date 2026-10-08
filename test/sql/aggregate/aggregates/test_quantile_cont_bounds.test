@@ -21,10 +21,13 @@ SELECT quantile_cont(y, 0.5) FROM
 294247-01-10 04:00:54.775803
 
 # The delta between min and max overflows int64, so this exercises the long double
-# fallback path - the symmetric weights sum to the epoch exactly on every platform
+# fallback path - the symmetric weights sum to the epoch exactly on every platform.
+# The most negative timestamps (below -9223372022400000000us) cannot be rendered as
+# strings (days x us/day underflows int64 in Timestamp::Convert), so the symmetric
+# pair stops at the last printable boundary.
 query T
 SELECT quantile_cont(y, 0.5) FROM
-	(VALUES (make_timestamp(-9223372036854775806::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+	(VALUES (make_timestamp(-9223372022400000000::BIGINT)), (make_timestamp(9223372022400000000::BIGINT))) t(y);
 ----
 1970-01-01 00:00:00
 
