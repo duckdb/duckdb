@@ -118,7 +118,8 @@ bool SQLFormatter::SkipNonCodeToken(const vector<MatcherToken> &tokens, idx_t &t
 	if (token.offset > pos) {
 		return false;
 	}
-	bool quoted_identifier = token.type == TokenType::IDENTIFIER && !token.text.empty() && token.text[0] == '"';
+	bool quoted_identifier =
+	    token.type == TokenType::IDENTIFIER && !token.text.empty() && (token.text[0] == '"' || token.text[0] == '`');
 	if (token.type != TokenType::STRING_LITERAL && token.type != TokenType::COMMENT && !quoted_identifier) {
 		return false;
 	}
