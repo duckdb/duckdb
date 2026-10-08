@@ -9,6 +9,21 @@ BoundConstantExpression::BoundConstantExpression(Value value_p)
       value(std::move(value_p)) {
 }
 
+void BoundConstantExpression::SetValue(Value value_p) {
+	return_type = value_p.type();
+	value = std::move(value_p);
+}
+
+Value BoundConstantExpression::TakeValue() {
+	return std::move(value);
+}
+
+void BoundConstantExpression::SetReturnType(LogicalType type) {
+	D_ASSERT(value.type() == type);
+	value = value.WithType(type);
+	return_type = std::move(type);
+}
+
 string BoundConstantExpression::ToString() const {
 	return value.ToSQLString();
 }

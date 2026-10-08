@@ -151,7 +151,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	// Check if we are happy with the result or if we need to do more sniffing
 	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
 		// If we got no errors, we also run full if schemas do not match.
-		if (!set_columns.IsSet() && !file_options.AnySet()) {
+		if (!set_columns.IsSet()) {
 			string error;
 			run_full = !file_schema.SchemasMatch(error, min_sniff_res, options.file_path, true);
 		}

@@ -1,4 +1,4 @@
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"

@@ -5,8 +5,11 @@
 #include "duckdb/common/string_util.hpp"
 
 #include "duckdb.h"
+#include "duckdb/common/arrow/arrow_format.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+#include "duckdb/main/query_parameters.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
@@ -129,58 +132,117 @@ struct DuckDBAdbcStatementWrapper {
 	uint64_t plan_length;
 };
 
-struct MaterializedData {
-	ArrowArray *batches;
-	idx_t count;
-	idx_t current;
-};
-
 struct DuckDBAdbcStreamWrapper {
-	duckdb_result result;
-	char *last_error;
-	AdbcStatusCode status_code;
-	AdbcError adbc_error;
-	MaterializedData *materialized;
-	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper;
+	~DuckDBAdbcStreamWrapper() {
+		free(last_error);
+		InitializeADBCError(&adbc_error);
+	}
+
+	//! Drained into `materialized` and reset when another statement runs on the connection
+	duckdb::unique_ptr<duckdb::QueryResultStream<duckdb::ArrowFormat>> stream;
+	//! A result that completed at submission, which no later statement on the connection affects
+	duckdb::unique_ptr<duckdb::QueryResult> result;
+	duckdb::ArrowSchemaWrapper schema;
+	//! What MaterializeStreams drained, handed out before the error it ran into, if any
+	duckdb::vector<duckdb::unique_ptr<duckdb::ArrowArrayWrapper>> materialized;
+	idx_t materialized_index = 0;
+	char *last_error = nullptr;
+	AdbcStatusCode status_code = ADBC_STATUS_OK;
+	AdbcError adbc_error = {};
+	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper = nullptr;
 };
 
-class DuckDBAdbcStreamWrapperGuard {
-public:
-	explicit DuckDBAdbcStreamWrapperGuard(DuckDBAdbcStreamWrapper *ptr_p) : ptr(ptr_p) {
-	}
-	DuckDBAdbcStreamWrapperGuard(const DuckDBAdbcStreamWrapperGuard &) = delete;
-	DuckDBAdbcStreamWrapperGuard &operator=(const DuckDBAdbcStreamWrapperGuard &) = delete;
+static bool IsCancellation(duckdb::optional_ptr<duckdb::DuckDBAdbcConnectionWrapper> conn_wrapper,
+                           duckdb::ExceptionType type) {
+	return type == duckdb::ExceptionType::INTERRUPT && conn_wrapper && conn_wrapper->cancel_requested;
+}
 
-	~DuckDBAdbcStreamWrapperGuard() {
-		if (ptr) {
-			duckdb_destroy_result(&ptr->result);
-			free(ptr);
+static void SetStreamError(DuckDBAdbcStreamWrapper &wrapper, const duckdb::ErrorData &error) {
+	free(wrapper.last_error);
+	wrapper.last_error = strdup(error.Message().c_str());
+	wrapper.status_code =
+	    IsCancellation(wrapper.conn_wrapper, error.Type()) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+	wrapper.adbc_error.message = wrapper.last_error;
+	wrapper.adbc_error.vendor_code = ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA;
+	delete static_cast<DuckDBErrorDetails *>(wrapper.adbc_error.private_data);
+	wrapper.adbc_error.private_data = nullptr;
+	wrapper.adbc_error.release = nullptr;
+	auto *details = new (std::nothrow) DuckDBErrorDetails();
+	if (details) {
+		details->entries.emplace_back("duckdb:error_type", DuckDBErrorTypeToString(duckdb::ErrorTypeToC(error.Type())));
+		wrapper.adbc_error.private_data = details;
+		wrapper.adbc_error.release = ::ReleaseStreamErrorDetails;
+	}
+}
+
+//! The next array, null at the end of the result and on an error, which goes to `error`
+static duckdb::unique_ptr<duckdb::ArrowArrayWrapper> FetchArray(DuckDBAdbcStreamWrapper &wrapper,
+                                                                duckdb::ErrorData &error) {
+	try {
+		if (wrapper.stream) {
+			auto array = wrapper.stream->Fetch();
+			if (!array && wrapper.stream->HasError()) {
+				error = wrapper.stream->GetErrorObject();
+			}
+			return array;
 		}
+		if (wrapper.result) {
+			return wrapper.result->Fetch<duckdb::ArrowFormat>();
+		}
+	} catch (std::exception &ex) {
+		error = duckdb::ErrorData(ex);
+	} catch (...) {
+		error = duckdb::ErrorData("Unknown error in Fetch");
 	}
+	return nullptr;
+}
 
-	DuckDBAdbcStreamWrapper *release() {
-		auto tmp = ptr;
-		ptr = nullptr;
-		return tmp;
+static void CopySchema(const ArrowSchema &source, duckdb::ArrowSchemaWrapper &target) {
+	if (target.arrow_schema.release) {
+		target.arrow_schema.release(&target.arrow_schema);
 	}
-
-	DuckDBAdbcStreamWrapper *get() const {
-		return ptr;
+	if (duckdb_nanoarrow::ArrowSchemaDeepCopy(&source, &target.arrow_schema) != NANOARROW_OK) {
+		throw duckdb::OutOfMemoryException("Failed to copy the Arrow schema of the result");
 	}
+}
 
-	DuckDBAdbcStreamWrapper *operator->() const {
-		return ptr;
+//! A result that cannot stream completes here, so that the next statement on the connection leaves it intact.
+//! rows_affected stays -1, which ADBC defines as unknown, unless the statement reports a changed-row count
+static AdbcStatusCode ExecuteArrow(duckdb::PreparedStatementWrapper &prepared, DuckDBAdbcStreamWrapper &out,
+                                   int64_t &rows_affected, struct AdbcError *error) {
+	out.stream.reset();
+	out.result.reset();
+	rows_affected = -1;
+	duckdb::ErrorData error_data;
+	try {
+		duckdb::QueryParameters parameters(duckdb::make_shared_ptr<duckdb::ArrowFormat>(STANDARD_VECTOR_SIZE));
+		auto result = prepared.statement->Submit(prepared.values, parameters);
+		if (!result->HasError() &&
+		    result->GetStatementProperties().result_eagerness != duckdb::ResultEagerness::FORCED) {
+			out.stream = duckdb::make_uniq<duckdb::QueryResultStream<duckdb::ArrowFormat>>(std::move(result));
+			CopySchema(out.stream->FormatState().Schema(), out.schema);
+			return ADBC_STATUS_OK;
+		}
+		result->Complete();
+		if (!result->HasError()) {
+			CopySchema(result->FormatState<duckdb::ArrowFormat>().Schema(), out.schema);
+			if (result->GetStatementProperties().return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
+				auto &arrays = result->Collection<duckdb::ArrowFormat>();
+				auto rows_changed = arrays.empty() ? 0 : duckdb::ArrowFormat::ChangedRows(arrays.front()->arrow_array);
+				rows_affected = static_cast<int64_t>(rows_changed);
+			}
+			out.result = std::move(result);
+			return ADBC_STATUS_OK;
+		}
+		error_data = result->GetErrorObject();
+	} catch (std::exception &ex) {
+		error_data = duckdb::ErrorData(ex);
+	} catch (...) {
+		error_data = duckdb::ErrorData("Unknown error in Execute");
 	}
-
-private:
-	DuckDBAdbcStreamWrapper *ptr;
-};
-
-static bool IsInterruptError(const char *message) {
-	if (!message) {
-		return false;
-	}
-	return std::strcmp(message, duckdb::InterruptException::INTERRUPT_MESSAGE) == 0;
+	SetError(error, error_data.Message());
+	AppendDuckDBErrorDetails(error, duckdb::ErrorTypeToC(error_data.Type()));
+	return IsCancellation(out.conn_wrapper, error_data.Type()) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
 }
 
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
@@ -839,6 +901,7 @@ AdbcStatusCode ConnectionCancel(struct AdbcConnection *connection, struct AdbcEr
 		SetError(error, "Connection is not initialized");
 		return ADBC_STATUS_INVALID_STATE;
 	}
+	conn_wrapper->cancel_requested = true;
 	duckdb_interrupt(conn_wrapper->connection);
 	return ADBC_STATUS_OK;
 }
@@ -1406,29 +1469,8 @@ static int get_schema(struct ArrowArrayStream *stream, struct ArrowSchema *out) 
 	if (!stream || !stream->private_data || !out) {
 		return DuckDBError;
 	}
-	auto result_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
-	auto count = duckdb_column_count(&result_wrapper->result);
-	std::vector<duckdb_logical_type> types(count);
-
-	std::vector<std::string> owned_names;
-	owned_names.reserve(count);
-	duckdb::vector<const char *> names(count);
-	for (idx_t i = 0; i < count; i++) {
-		types[i] = duckdb_column_logical_type(&result_wrapper->result, i);
-		auto column_name = duckdb_column_name(&result_wrapper->result, i);
-		owned_names.emplace_back(column_name);
-		names[i] = owned_names.back().c_str();
-	}
-
-	auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
-
-	auto res = duckdb_to_arrow_schema(arrow_options, types.data(), names.data(), count, out);
-	duckdb_destroy_arrow_options(&arrow_options);
-	for (auto &type : types) {
-		duckdb_destroy_logical_type(&type);
-	}
-	if (res) {
-		duckdb_destroy_error_data(&res);
+	auto &result_wrapper = *static_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
+	if (duckdb_nanoarrow::ArrowSchemaDeepCopy(&result_wrapper.schema.arrow_schema, out) != NANOARROW_OK) {
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
@@ -1439,87 +1481,23 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 		return DuckDBError;
 	}
 	out->release = nullptr;
-	auto result_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
-
-	// If the stream has been materialized, return from stored batches
-	if (result_wrapper->materialized) {
-		auto mat = result_wrapper->materialized;
-		if (mat->current >= mat->count) {
-			// Surface any error that was encountered during materialization
-			if (result_wrapper->last_error) {
-				return DuckDBError;
-			}
-			return DuckDBSuccess; // end of stream
-		}
-		// Transfer ownership of the batch to the caller
-		*out = mat->batches[mat->current];
-		mat->batches[mat->current].release = nullptr;
-		mat->current++;
+	auto &result_wrapper = *static_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
+	if (result_wrapper.materialized_index < result_wrapper.materialized.size()) {
+		auto array = std::move(result_wrapper.materialized[result_wrapper.materialized_index++]);
+		array->MoveTo(*out);
 		return DuckDBSuccess;
 	}
-
-	auto duckdb_chunk = duckdb_fetch_chunk(result_wrapper->result);
-	if (!duckdb_chunk) {
-		// End of stream or error; distinguish by checking the result error message.
-		auto err = duckdb_result_error(&result_wrapper->result);
-		if (err && err[0] != '\0') {
-			if (result_wrapper->last_error) {
-				free(result_wrapper->last_error);
-			}
-			result_wrapper->last_error = strdup(err);
-			result_wrapper->status_code = IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
-			// Populate adbc_error for AdbcErrorFromArrayStream with rich metadata
-			result_wrapper->adbc_error.message = result_wrapper->last_error;
-			result_wrapper->adbc_error.vendor_code = ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA;
-			if (result_wrapper->adbc_error.private_data) {
-				delete static_cast<DuckDBErrorDetails *>(result_wrapper->adbc_error.private_data);
-				result_wrapper->adbc_error.private_data = nullptr;
-			}
-			auto *details = new (std::nothrow) DuckDBErrorDetails();
-			if (details) {
-				details->entries.emplace_back(
-				    "duckdb:error_type", DuckDBErrorTypeToString(duckdb_result_error_type(&result_wrapper->result)));
-				result_wrapper->adbc_error.private_data = details;
-				result_wrapper->adbc_error.release = ::ReleaseStreamErrorDetails;
-			} else {
-				result_wrapper->adbc_error.release = nullptr;
-			}
-			return DuckDBError;
-		}
-		return DuckDBSuccess;
-	}
-	auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
-
-	auto conversion_success = duckdb_data_chunk_to_arrow(arrow_options, duckdb_chunk, out);
-	duckdb_destroy_arrow_options(&arrow_options);
-	duckdb_destroy_data_chunk(&duckdb_chunk);
-
-	if (conversion_success) {
-		auto conv_err_msg = duckdb_error_data_message(conversion_success);
-		if (conv_err_msg && conv_err_msg[0] != '\0') {
-			if (result_wrapper->last_error) {
-				free(result_wrapper->last_error);
-			}
-			result_wrapper->last_error = strdup(conv_err_msg);
-			result_wrapper->status_code = ADBC_STATUS_INTERNAL;
-			result_wrapper->adbc_error.message = result_wrapper->last_error;
-			result_wrapper->adbc_error.vendor_code = ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA;
-			if (result_wrapper->adbc_error.private_data) {
-				delete static_cast<DuckDBErrorDetails *>(result_wrapper->adbc_error.private_data);
-				result_wrapper->adbc_error.private_data = nullptr;
-			}
-			auto *details = new (std::nothrow) DuckDBErrorDetails();
-			if (details) {
-				details->entries.emplace_back(
-				    "duckdb:error_type", DuckDBErrorTypeToString(duckdb_error_data_error_type(conversion_success)));
-				result_wrapper->adbc_error.private_data = details;
-				result_wrapper->adbc_error.release = ::ReleaseStreamErrorDetails;
-			} else {
-				result_wrapper->adbc_error.release = nullptr;
-			}
-		}
-		duckdb_destroy_error_data(&conversion_success);
+	if (result_wrapper.last_error) {
 		return DuckDBError;
+	}
+	duckdb::ErrorData error;
+	auto array = FetchArray(result_wrapper, error);
+	if (error.HasError()) {
+		SetStreamError(result_wrapper, error);
+		return DuckDBError;
+	}
+	if (array) {
+		array->MoveTo(*out);
 	}
 	return DuckDBSuccess;
 }
@@ -1528,33 +1506,13 @@ void release(struct ArrowArrayStream *stream) {
 	if (!stream || !stream->release) {
 		return;
 	}
-	auto result_wrapper = reinterpret_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
+	auto result_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
 	if (result_wrapper) {
-		// Unregister from connection's active streams
 		if (result_wrapper->conn_wrapper) {
 			result_wrapper->conn_wrapper->UnregisterStream(result_wrapper);
 		}
-		// Clean up materialized data if present
-		if (result_wrapper->materialized) {
-			auto mat = result_wrapper->materialized;
-			for (idx_t i = mat->current; i < mat->count; i++) {
-				if (mat->batches[i].release) {
-					mat->batches[i].release(&mat->batches[i]);
-				}
-			}
-			free(mat->batches);
-			free(mat);
-			result_wrapper->materialized = nullptr;
-		}
-		duckdb_destroy_result(&result_wrapper->result);
-		if (result_wrapper->last_error) {
-			free(result_wrapper->last_error);
-			result_wrapper->last_error = nullptr;
-		}
-		// Release any error that was set on the stream wrapper
-		InitializeADBCError(&result_wrapper->adbc_error);
+		delete result_wrapper;
 	}
-	free(stream->private_data);
 	stream->private_data = nullptr;
 	stream->release = nullptr;
 }
@@ -1644,9 +1602,10 @@ static std::string BuildCreateTableSQL(const char *catalog, const char *schema, 
 	return create_table.str();
 }
 
-AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const char *table_name, const char *schema,
-                      struct ArrowArrayStream *input, struct AdbcError *error, IngestionMode ingestion_mode,
-                      bool temporary, int64_t *rows_affected) {
+AdbcStatusCode Ingest(duckdb_connection connection,
+                      duckdb::optional_ptr<duckdb::DuckDBAdbcConnectionWrapper> conn_wrapper, const char *catalog,
+                      const char *table_name, const char *schema, struct ArrowArrayStream *input,
+                      struct AdbcError *error, IngestionMode ingestion_mode, bool temporary, int64_t *rows_affected) {
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -1741,7 +1700,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		if (duckdb_query(connection, sql.c_str(), &result) == DuckDBError) {
 			const char *error_msg = duckdb_result_error(&result);
 			bool already_exists = error_msg && std::string(error_msg).find("already exists") != std::string::npos;
-			bool interrupted = IsInterruptError(error_msg);
+			bool interrupted = IsCancellation(conn_wrapper, duckdb::ErrorTypeFromC(duckdb_result_error_type(&result)));
 			SetError(error, error_msg);
 			AppendDuckDBErrorDetails(error, duckdb_result_error_type(&result));
 			duckdb_destroy_result(&result);
@@ -1769,7 +1728,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
 			AppendDuckDBErrorDetails(error, duckdb_result_error_type(&result));
-			bool interrupted = IsInterruptError(err);
+			bool interrupted = IsCancellation(conn_wrapper, duckdb::ErrorTypeFromC(duckdb_result_error_type(&result)));
 			duckdb_destroy_result(&result);
 			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
@@ -1784,7 +1743,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 			auto err = duckdb_result_error(&result);
 			SetError(error, err);
 			AppendDuckDBErrorDetails(error, duckdb_result_error_type(&result));
-			bool interrupted = IsInterruptError(err);
+			bool interrupted = IsCancellation(conn_wrapper, duckdb::ErrorTypeFromC(duckdb_result_error_type(&result)));
 			duckdb_destroy_result(&result);
 			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 		}
@@ -1802,6 +1761,20 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 		}
 		return ADBC_STATUS_INTERNAL;
 	}
+	auto appender_error = [&]() {
+		auto error_data = duckdb_appender_error_data(appender.Get());
+		auto err = duckdb_error_data_message(error_data);
+		if (err && err[0] != '\0') {
+			set_ingest_error(err);
+		} else {
+			SetError(error, missing_table_error);
+		}
+		bool interrupted =
+		    IsCancellation(conn_wrapper, duckdb::ErrorTypeFromC(duckdb_error_data_error_type(error_data)));
+		AppendDuckDBErrorDetails(error, error_data);
+		duckdb_destroy_error_data(&error_data);
+		return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+	};
 	duckdb::ArrowArrayWrapper arrow_array_wrapper;
 
 	// Initialize rows_affected counter if requested
@@ -1823,20 +1796,14 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *catalog, const c
 			affected += static_cast<int64_t>(chunk->size());
 		}
 		if (duckdb_append_data_chunk(appender.Get(), out_chunk.chunk) != DuckDBSuccess) {
-			auto error_data = duckdb_appender_error_data(appender.Get());
-			auto err = duckdb_error_data_message(error_data);
-			if (err && err[0] != '\0') {
-				set_ingest_error(err);
-			} else {
-				SetError(error, missing_table_error);
-			}
-			bool interrupted = IsInterruptError(err);
-			AppendDuckDBErrorDetails(error, error_data);
-			duckdb_destroy_error_data(&error_data);
-			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
+			return appender_error();
 		}
 		arrow_array_wrapper = duckdb::ArrowArrayWrapper();
 		input->get_next(input, &arrow_array_wrapper.arrow_array);
+	}
+	// The appender writes the rows it still holds when it closes, so a failure there must fail the ingestion
+	if (duckdb_appender_close(appender.Get()) != DuckDBSuccess) {
+		return appender_error();
 	}
 	if (rows_affected) {
 		*rows_affected = affected;
@@ -1928,6 +1895,9 @@ AdbcStatusCode StatementCancel(struct AdbcStatement *statement, struct AdbcError
 		// Return INVALID_ARGUMENT since the statement object itself is invalid.
 		SetError(error, "Invalid statement object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (wrapper->conn_wrapper) {
+		wrapper->conn_wrapper->cancel_requested = true;
 	}
 	duckdb_interrupt(wrapper->connection);
 	return ADBC_STATUS_OK;
@@ -2058,9 +2028,9 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 	auto stream = statement->ingestion_stream;
 
 	// Ingest into a table from the bound stream
-	return Ingest(statement->connection, statement->target_catalog, statement->ingestion_table_name,
-	              statement->db_schema, &stream, error, statement->ingestion_mode, statement->temporary_table,
-	              rows_affected);
+	return Ingest(statement->connection, statement->conn_wrapper, statement->target_catalog,
+	              statement->ingestion_table_name, statement->db_schema, &stream, error, statement->ingestion_mode,
+	              statement->temporary_table, rows_affected);
 }
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
@@ -2084,6 +2054,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	// same connection.
 	if (wrapper->conn_wrapper) {
 		wrapper->conn_wrapper->MaterializeStreams();
+		wrapper->conn_wrapper->cancel_requested = false;
 	}
 
 	// TODO: Set affected rows, careful with early return
@@ -2113,21 +2084,16 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		return ADBC_STATUS_OK;
 	}
 
-	auto *raw_stream_wrapper = static_cast<DuckDBAdbcStreamWrapper *>(malloc(sizeof(DuckDBAdbcStreamWrapper)));
-	if (!raw_stream_wrapper) {
+	duckdb::unique_ptr<DuckDBAdbcStreamWrapper> stream_wrapper(new (std::nothrow) DuckDBAdbcStreamWrapper());
+	if (!stream_wrapper) {
 		SetError(error, "Allocation error");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	raw_stream_wrapper->last_error = nullptr;
-	raw_stream_wrapper->status_code = ADBC_STATUS_OK;
-	raw_stream_wrapper->materialized = nullptr;
-	raw_stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
-	std::memset(&raw_stream_wrapper->adbc_error, 0, sizeof(raw_stream_wrapper->adbc_error));
-	std::memset(&raw_stream_wrapper->result, 0, sizeof(raw_stream_wrapper->result));
-	DuckDBAdbcStreamWrapperGuard stream_wrapper(raw_stream_wrapper);
+	stream_wrapper->conn_wrapper = wrapper->conn_wrapper;
+	auto &prepared = *reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement);
+	int64_t affected = -1;
 	// Only process the stream if there are parameters to bind
-	auto prepared_statement_params =
-	    reinterpret_cast<duckdb::PreparedStatementWrapper *>(wrapper->statement)->statement->GetParameterCount();
+	auto prepared_statement_params = prepared.statement->GetParameterCount();
 	if (has_stream && prepared_statement_params > 0) {
 		// A stream was bound to the statement, use that to bind parameters
 		ArrowArrayStream stream = wrapper->ingestion_stream;
@@ -2190,44 +2156,28 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 			}
-			// Destroy any previous result before overwriting to avoid leaks
-			duckdb_destroy_result(&stream_wrapper->result);
-			auto res = duckdb_execute_prepared_streaming(wrapper->statement, &stream_wrapper->result);
-			if (res != DuckDBSuccess) {
-				auto err = duckdb_result_error(&stream_wrapper->result);
-				SetError(error, err);
-				AppendDuckDBErrorDetails(error, duckdb_result_error_type(&stream_wrapper->result));
-				bool interrupted = IsInterruptError(err);
-				return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
+			auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error);
+			if (status != ADBC_STATUS_OK) {
+				return status;
 			}
 			// Recreate wrappers for next iteration
 			arrow_array_wrapper = duckdb::ArrowArrayWrapper();
 			stream.get_next(&stream, &arrow_array_wrapper.arrow_array);
 		}
+		if (!stream_wrapper->stream && !stream_wrapper->result) {
+			SetError(error, "Please provide a non-empty chunk to be bound");
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
 	} else {
-		auto res = duckdb_execute_prepared_streaming(wrapper->statement, &stream_wrapper->result);
-		if (res != DuckDBSuccess) {
-			auto err = duckdb_result_error(&stream_wrapper->result);
-			SetError(error, err);
-			AppendDuckDBErrorDetails(error, duckdb_result_error_type(&stream_wrapper->result));
-			bool interrupted = IsInterruptError(err);
-			return interrupted ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INVALID_ARGUMENT;
+		auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error);
+		if (status != ADBC_STATUS_OK) {
+			return status;
 		}
 	}
 
 	// Set rows_affected for queries (if not already set by ingestion path)
 	if (rows_affected && !(has_stream && to_table)) {
-		// For DML queries (INSERT/UPDATE/DELETE), duckdb_rows_changed() returns the count
-		// For SELECT queries, duckdb_rows_changed() returns 0
-		auto rows_changed = duckdb_rows_changed(&stream_wrapper->result);
-		if (rows_changed > 0) {
-			// This was a DML query
-			*rows_affected = static_cast<int64_t>(rows_changed);
-		} else {
-			// This is a SELECT or other query that returns a result set
-			// Return -1 to indicate unknown, as results are streamed
-			*rows_affected = -1;
-		}
+		*rows_affected = affected;
 	}
 
 	if (out) {
@@ -3361,8 +3311,9 @@ AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const 
 	duckdb::vector<StatisticsCatalogGroup> catalogs;
 	idx_t schema_count = 0;
 	idx_t stat_count = 0;
+	auto rows = result->Collection().GetRows();
 	for (idx_t row_idx = 0; row_idx < result->RowCount(); row_idx++) {
-		auto size_value = result->GetValue(3, row_idx);
+		auto size_value = rows.GetValue(3, row_idx);
 		if (size_value.IsNull()) {
 			continue;
 		}
@@ -3370,9 +3321,9 @@ AdbcStatusCode ConnectionGetStatistics(struct AdbcConnection *connection, const 
 		if (estimated_size < 0) {
 			continue;
 		}
-		auto catalog_name = result->GetValue(0, row_idx).GetValue<duckdb::string>();
-		auto schema_name = result->GetValue(1, row_idx).GetValue<duckdb::string>();
-		auto current_table = result->GetValue(2, row_idx).GetValue<duckdb::string>();
+		auto catalog_name = rows.GetValue(0, row_idx).GetValue<duckdb::string>();
+		auto schema_name = rows.GetValue(1, row_idx).GetValue<duckdb::string>();
+		auto current_table = rows.GetValue(2, row_idx).GetValue<duckdb::string>();
 		if (catalogs.empty() || catalogs.back().name != catalog_name) {
 			catalogs.push_back({catalog_name, {}});
 		}
@@ -3487,119 +3438,27 @@ void duckdb::DuckDBAdbcConnectionWrapper::UnregisterStream(duckdb_adbc::DuckDBAd
 void duckdb::DuckDBAdbcConnectionWrapper::MaterializeStreams() {
 	const duckdb::lock_guard<duckdb::mutex> guard(stream_mutex);
 	for (auto *result_wrapper : active_streams) {
-		if (!result_wrapper || result_wrapper->materialized) {
+		if (!result_wrapper || !result_wrapper->stream) {
 			continue;
 		}
-
-		// Collect remaining batches from the streaming result. Errors encountered mid-stream
-		// are stored on result_wrapper so that get_next can return buffered batches first
-		// and then surface the error once they are exhausted.
-		duckdb::vector<ArrowArray> batches;
-		auto arrow_options = duckdb_result_get_arrow_options(&result_wrapper->result);
-		while (true) {
-			ArrowArray array;
-			std::memset(&array, 0, sizeof(ArrowArray));
-
-			auto duckdb_chunk = duckdb_fetch_chunk(result_wrapper->result);
-			if (!duckdb_chunk) {
-				// End of stream or error; distinguish by checking the result error message.
-				auto err = duckdb_result_error(&result_wrapper->result);
-				if (err && err[0] != '\0') {
-					if (result_wrapper->last_error) {
-						free(result_wrapper->last_error);
-					}
-					result_wrapper->last_error = strdup(err);
-					result_wrapper->status_code =
-					    duckdb_adbc::IsInterruptError(err) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
-					result_wrapper->adbc_error.message = result_wrapper->last_error;
-					result_wrapper->adbc_error.vendor_code = ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA;
-					if (result_wrapper->adbc_error.private_data) {
-						delete static_cast<DuckDBErrorDetails *>(result_wrapper->adbc_error.private_data);
-						result_wrapper->adbc_error.private_data = nullptr;
-					}
-					auto *details = new (std::nothrow) DuckDBErrorDetails();
-					if (details) {
-						details->entries.emplace_back(
-						    "duckdb:error_type",
-						    DuckDBErrorTypeToString(duckdb_result_error_type(&result_wrapper->result)));
-						result_wrapper->adbc_error.private_data = details;
-						result_wrapper->adbc_error.release = ::ReleaseStreamErrorDetails;
-					} else {
-						result_wrapper->adbc_error.release = nullptr;
-					}
+		// An error found while draining is reported once the arrays read before it are handed out
+		try {
+			while (!result_wrapper->last_error) {
+				duckdb::ErrorData error;
+				auto array = duckdb_adbc::FetchArray(*result_wrapper, error);
+				if (error.HasError()) {
+					duckdb_adbc::SetStreamError(*result_wrapper, error);
+					break;
 				}
-				break;
+				if (!array) {
+					break;
+				}
+				result_wrapper->materialized.push_back(std::move(array));
 			}
-			auto conversion_err = duckdb_data_chunk_to_arrow(arrow_options, duckdb_chunk, &array);
-			duckdb_destroy_data_chunk(&duckdb_chunk);
-
-			if (conversion_err) {
-				// Store error before freeing so get_next can surface it after buffered batches
-				auto conv_err_msg = duckdb_error_data_message(conversion_err);
-				if (conv_err_msg && conv_err_msg[0] != '\0') {
-					if (result_wrapper->last_error) {
-						free(result_wrapper->last_error);
-					}
-					result_wrapper->last_error = strdup(conv_err_msg);
-					result_wrapper->status_code = ADBC_STATUS_INTERNAL;
-					result_wrapper->adbc_error.message = result_wrapper->last_error;
-					result_wrapper->adbc_error.vendor_code = ADBC_ERROR_VENDOR_CODE_PRIVATE_DATA;
-					if (result_wrapper->adbc_error.private_data) {
-						delete static_cast<DuckDBErrorDetails *>(result_wrapper->adbc_error.private_data);
-						result_wrapper->adbc_error.private_data = nullptr;
-					}
-					auto *details = new (std::nothrow) DuckDBErrorDetails();
-					if (details) {
-						details->entries.emplace_back(
-						    "duckdb:error_type", DuckDBErrorTypeToString(duckdb_error_data_error_type(conversion_err)));
-						result_wrapper->adbc_error.private_data = details;
-						result_wrapper->adbc_error.release = ::ReleaseStreamErrorDetails;
-					} else {
-						result_wrapper->adbc_error.release = nullptr;
-					}
-				}
-				duckdb_destroy_error_data(&conversion_err);
-				if (array.release) {
-					array.release(&array);
-				}
-				break;
-			}
-			batches.push_back(array);
+		} catch (std::exception &ex) {
+			duckdb_adbc::SetStreamError(*result_wrapper, duckdb::ErrorData(ex));
 		}
-		duckdb_destroy_arrow_options(&arrow_options);
-
-		// Store materialized data
-		auto mat = static_cast<duckdb_adbc::MaterializedData *>(malloc(sizeof(duckdb_adbc::MaterializedData)));
-		if (!mat) {
-			// Allocation failed — release fetched batches and skip materialization
-			for (auto &batch : batches) {
-				if (batch.release) {
-					batch.release(&batch);
-				}
-			}
-			continue;
-		}
-		mat->current = 0;
-		mat->count = static_cast<idx_t>(batches.size());
-		if (!batches.empty()) {
-			mat->batches = static_cast<ArrowArray *>(malloc(sizeof(ArrowArray) * batches.size()));
-			if (!mat->batches) {
-				// Allocation failed — release fetched batches and skip materialization
-				for (auto &batch : batches) {
-					if (batch.release) {
-						batch.release(&batch);
-					}
-				}
-				free(mat);
-				continue;
-			}
-			for (idx_t i = 0; i < batches.size(); i++) {
-				mat->batches[i] = batches[i];
-			}
-		} else {
-			mat->batches = nullptr;
-		}
-		result_wrapper->materialized = mat;
+		result_wrapper->stream.reset();
 	}
 }
 
