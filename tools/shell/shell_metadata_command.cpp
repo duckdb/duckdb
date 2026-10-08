@@ -919,6 +919,10 @@ MetadataResult SetPager(ShellState &state, const vector<string> &args) {
 	} else if (args[1] == "automatic") {
 		state.pager_mode = PagerMode::PAGER_AUTOMATIC;
 	} else {
+		if (state.safe_mode) {
+			state.Print(PrintOutput::STDERR, ".pager cannot be used in -safe mode\n");
+			return MetadataResult::FAIL;
+		}
 		state.pager_command = args[1];
 	}
 	return MetadataResult::SUCCESS;
