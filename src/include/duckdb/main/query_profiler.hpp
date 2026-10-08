@@ -110,6 +110,8 @@ public:
 	//! Track the compressed size of column data scanned (always tracked, even when profiling disabled). Unlike
 	//! query.total_bytes_scanned, the running total includes scans inside secure views
 	DUCKDB_API void TrackBytesScanned(idx_t amount);
+	//! Zero the running total of bytes scanned, at the start of every statement
+	void ResetBytesScanned();
 	//! Track memory allocated (thread-safe; always tracked).
 	DUCKDB_API void TrackTotalMemoryAllocated(idx_t amount);
 	//! Add to a metric counter (profiling-only).

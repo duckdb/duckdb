@@ -280,6 +280,10 @@ void QueryProfiler::TrackBytesScanned(const idx_t amount) {
 	query_metrics.UpdateBytesScanned(amount);
 }
 
+void QueryProfiler::ResetBytesScanned() {
+	query_metrics.bytes_scanned = 0;
+}
+
 void QueryProfiler::TrackTotalMemoryAllocated(const idx_t amount) {
 	query_metrics.UpdateTotalMemoryAllocated(amount);
 }

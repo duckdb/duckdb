@@ -175,7 +175,9 @@ TEST_CASE("Test the running total of bytes scanned", "[api][parquet]") {
 TEST_CASE("Test the running total of bytes scanned after a failed query", "[api][parquet]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	// bytes are counted when a row group's read is scheduled: no read-ahead, so the failure stops the counting
 	REQUIRE_NO_FAIL(con.Query("SET threads = 1"));
+	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth = 0"));
 	auto path = TestCreatePath("bytes_scanned_failed_query.parquet");
 	REQUIRE_NO_FAIL(
 	    con.Query("COPY (SELECT range AS i FROM range(6144)) TO '" + path + "' (FORMAT parquet, ROW_GROUP_SIZE 2048)"));
@@ -193,4 +195,9 @@ TEST_CASE("Test the running total of bytes scanned after a failed query", "[api]
 	// and the next query starts from zero
 	REQUIRE_NO_FAIL(con.Query("SELECT sum(i) FROM read_parquet('" + path + "')"));
 	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == chunk_bytes);
+
+	// a statement that fails before it starts executing does not report the previous one's total
+	auto missing_parameter = con.ExtractStatements("SELECT $1::INTEGER");
+	REQUIRE_FAIL(con.Query(std::move(missing_parameter[0])));
+	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == 0);
 }
