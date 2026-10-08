@@ -151,6 +151,15 @@ unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request) {
 }
 
 unique_ptr<HTTPResponse> HTTPUtil::Request(BaseRequest &request, unique_ptr<HTTPClient> &client) {
+	if (request.params.db && !request.params.skip_external_access_check) {
+		// HTTP requests access an external resource - check this is allowed by the file access settings. This is the
+		// central check for requests that do not go through the file system (e.g. the REST catalog calls of iceberg).
+		auto &config = request.params.db->config;
+		if (!config.CanAccessFile(request.url, FileType::FILE_TYPE_REGULAR)) {
+			throw PermissionException("Cannot access \"%s\" - file system operations are disabled by configuration",
+			                          request.url);
+		}
+	}
 	auto response = SendRequest(request, client);
 	if (!response) {
 		auto method = EnumUtil::ToString(request.type);

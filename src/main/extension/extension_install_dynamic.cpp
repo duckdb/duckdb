@@ -212,6 +212,9 @@ static unique_ptr<HTTPResponse> RequestExtension(DatabaseInstance &db, optional_
 	// to avoid lengthy retry on 304
 	params.follow_location = false;
 	params.keep_alive = false;
+	// extension installation enforces its own access control (allowed_directories for the extension directory), so
+	// the download URL is not subject to the central enable_external_access check
+	params.skip_external_access_check = true;
 
 	GetRequestInfo get_request(url, headers, params, nullptr, nullptr);
 	get_request.try_request = true;
