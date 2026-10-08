@@ -284,8 +284,8 @@ void CachingFileHandle::ReconcileCacheAfterRead(CachedFile &cached_file) {
 CachingFileHandle::CachingFileHandle(QueryContext context, CachingFileSystem &caching_file_system_p,
                                      const OpenFileInfo &path_p, FileOpenFlags flags_p,
                                      optional_ptr<FileOpener> opener_p)
-    : context(context), caching_file_system(caching_file_system_p),
-      external_file_cache(caching_file_system.external_file_cache), path(path_p), flags(std::move(flags_p)),
+    : context(context), file_system(caching_file_system_p.file_system), db(caching_file_system_p.db),
+      external_file_cache(caching_file_system_p.external_file_cache), path(path_p), flags(std::move(flags_p)),
       opener(opener_p), validate(ExternalFileCacheUtil::GetCacheValidationMode(path_p, context.GetClientContext(),
                                                                                caching_file_system_p.db)),
       cached_file(nullptr), position(0) {
@@ -323,9 +323,9 @@ shared_ptr<FileHandle> CachingFileHandle::GetFileHandle() {
 	// Request parallel access on the underlying filesystem handle to avoid races in implementations that
 	// require explicit opt-in for concurrent pread-style access (e.g., HTTPFS).
 	auto internal_flags = flags | FileFlags::FILE_FLAGS_PARALLEL_ACCESS;
-	file_handle = caching_file_system.file_system.OpenFile(path, internal_flags, opener);
+	file_handle = file_system.OpenFile(path, internal_flags, opener);
 	// Snapshot the metadata with a single Stats call, avoiding repeated metadata lookups (e.g., fstat)
-	validation_info = GetValidationInfo(caching_file_system.file_system, *file_handle);
+	validation_info = GetValidationInfo(file_system, *file_handle);
 
 	{
 		annotated_lock_guard<annotated_mutex> meta_guard(cached_file->meta_lock);
@@ -397,7 +397,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 	// Schedule block fetch tasks for all blocks.
 	vector<BufferHandle> pins(num_blocks);
-	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
+	auto &scheduler = TaskScheduler::GetScheduler(db);
 	TaskExecutor executor(scheduler, TaskSchedulerType::ASYNC);
 
 	for (idx_t idx = 0; idx < num_blocks; idx++) {
@@ -436,7 +436,7 @@ FileBufferHandleGroup CachingFileHandle::Read(const idx_t nr_bytes, const idx_t 
 
 void CachingFileHandle::ReadUncached(data_ptr_t buffer, idx_t nr_bytes, idx_t location) {
 	const idx_t max_block_size = external_file_cache.GetCacheMaxBlockSize(path.path);
-	auto &scheduler = TaskScheduler::GetScheduler(caching_file_system.db);
+	auto &scheduler = TaskScheduler::GetScheduler(db);
 	// idle worker threads also run async tasks, so the pieces are only sure to run serially without any other thread
 	const bool single_threaded = scheduler.NumberOfThreads() <= 1 && scheduler.NumberOfAsyncThreads() == 0;
 	if (nr_bytes <= max_block_size || !external_file_cache.ShouldCacheFile(path.path) || !CanSeek() ||

@@ -316,6 +316,25 @@ TEST_CASE("Reads of files the cache does not handle are not split", "[external_f
 	REQUIRE(recording_fs->TakeReads() == vector<pair<idx_t, idx_t>> {{0, FILE_SIZE}});
 }
 
+TEST_CASE("A handle can still read after its caching file system is destroyed", "[external_file_cache]") {
+	DuckDB db = MakeCacheLocalFilesDB();
+	auto &db_instance = *db.instance;
+	auto recording_fs = make_uniq<EFCTrackingFileSystem>();
+
+	const idx_t FILE_SIZE = 65536;
+	auto content = MakeTestContent(FILE_SIZE);
+	EFCTestFileGuard test_file("test_efc_handle_outlives_fs.bin", content);
+
+	// Readers own their caching file system, but read-ahead tasks can keep the handle alive longer
+	auto cfs = make_uniq<CachingFileSystem>(*recording_fs, db_instance);
+	auto handle = cfs->OpenFile(MakeTestOpenFileInfo(test_file.GetPath()), ReaderSizedFlags());
+	cfs.reset();
+
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+	db_instance.GetExternalFileCache().SetEnabled(false);
+	REQUIRE(ReadFull(*handle, FILE_SIZE) == content);
+}
+
 TEST_CASE("Compressed remote files are read in chunks of up to the file size", "[external_file_cache]") {
 	DuckDB db(nullptr);
 	Connection con(db);
