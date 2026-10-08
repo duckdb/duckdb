@@ -3,18 +3,16 @@ module: instance
 # of GLOBAL settings, and the databases attached to it. Creating the handle,
 # attaching a database, and choosing the default database are separate steps:
 #
-#   instance_create(env, &instance);
-#   instance_set_option(instance, "access_mode", "READ_ONLY");   // startup option
-#   instance_attach(instance, "path/to/file.db", NULL, NULL, true); // like ATTACH, and the default database
-#   instance_set_option(instance, "memory_limit", "4GB");        // SET GLOBAL
+#   instance_create_with_options(env, {"access_mode"}, {"READ_ONLY"}, 1, &instance);  // startup option
+#   instance_attach(instance, "path/to/file.db", NULL, NULL, true);     // like ATTACH, and the default database
+#   instance_get_config(instance, &config);
+#   config_set_option_text(config, "memory_limit", "4GB", DEFAULT);     // SET GLOBAL
 #   connection_create(instance, &conn);
 #
-# The instance starts on its first use: the first instance_attach or
-# connection_create. Options set before that point go into the startup
-# configuration, so options that can only be chosen at startup (access_mode,
-# enable_external_access, threads, block sizes, ...) are set through the same
-# call as the ones that can change at runtime. After startup,
-# instance_set_option is SQL `SET GLOBAL`.
+# The instance exists as soon as instance_create returns. Options that can
+# only be chosen at startup (access_mode, allow_unsigned_extensions, ...) are
+# passed to instance_create_with_options; every other option can be passed there too, or
+# written afterwards through the instance's config, which is SQL `SET GLOBAL`.
 #
 # Nothing is attached until instance_attach: only the system catalog and each
 # connection's temporary catalog exist. Attaching never picks a default
@@ -38,19 +36,70 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Creates an instance handle under the environment.
+      Creates an instance under the environment with no startup options.
 
-      The handle starts with no database attached and with its instance not
-      yet started; set startup options with `[[instance_set_option]]`, then attach
-      a database with `[[instance_attach]]` and pick the default with
-      `[[instance_set_default]]`, or connect with `[[connection_create]]`. The caller destroys it
-      via `[[instance_destroy]]`.
+      The instance is ready on return, with no database attached: attach one
+      with `[[instance_attach]]` and pick the default with
+      `[[instance_set_default]]`, or connect with `[[connection_create]]`.
+      To choose an option that cannot change once the instance exists, such
+      as access_mode, use `[[instance_create_with_options]]` instead. The
+      caller destroys the instance via `[[instance_destroy]]`.
     role: constructor
     belongs_to: instance
     parameters:
       env:
         type: environment
         description: "The environment."
+      out_instance:
+        type: instance
+        indirection: 1
+        kind: OUT
+        description: "Receives the new instance handle."
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+  instance_create_with_options:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-04" ]
+    description: |
+      Creates an instance under the environment, configured with startup
+      options.
+
+      Behaves as `[[instance_create]]`, applying the startup options first.
+
+      Startup options are (name, value) pairs in two parallel arrays, the
+      values in the textual form SQL `SET` accepts. They are the only way to
+      choose an option that cannot change once the instance exists, such as
+      access_mode or allow_unsigned_extensions; every other option can be
+      written now or later through `[[instance_get_config]]`. An option that
+      needs a running instance (the logging options, allowed_directories,
+      allowed_paths, disabled_filesystems) returns ERROR_INPUT_INVALID here:
+      write it through the instance's config after creation. A name no core
+      option or loaded extension defines is kept for an extension to consume
+      while the instance starts up, and creation fails with the names none
+      claimed. The caller destroys the instance via `[[instance_destroy]]`.
+    role: constructor
+    belongs_to: instance
+    parameters:
+      env:
+        type: environment
+        description: "The environment."
+      option_names:
+        type: str
+        indirection: 1
+        const: true
+        description: "Optional. An array of option_count option names (canonical or alias). Pass NULL when option_count is 0."
+      option_values:
+        type: str
+        indirection: 1
+        const: true
+        description: "Optional. An array of option_count values, parallel to option_names, in the textual form SQL `SET` accepts. Pass NULL when option_count is 0."
+      option_count:
+        type: idx
+        description: "The number of startup options."
       out_instance:
         type: instance
         indirection: 1
@@ -85,8 +134,7 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Attaches a database to the instance, starting it if it has not
-      started yet.
+      Attaches a database to the instance.
 
       Attaches the database at `path` exactly like `ATTACH 'path'`:
         - `:memory:` or an empty view attaches a fresh in-memory database

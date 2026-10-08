@@ -9,7 +9,6 @@ DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance, 
 	*out_conn = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &instance_wrapper = *Convert(instance);
-		duckdb::lock_guard<duckdb::mutex> guard(instance_wrapper.lock);
 		auto connection = duckdb::make_uniq<CV2Connection>(instance_wrapper.GetDatabase());
 		*out_conn = Convert(connection.release());
 	});
@@ -34,35 +33,6 @@ DUCKDB_V2_ERROR duckdb_v2_connection_get_context(duckdb_v2_connection_handle con
 	DUCKDB_CHECK_ARG(out_context);
 	*out_context = nullptr;
 	return WithErrorHandler(err, [&]() { *out_context = Convert(&Convert(conn)->context_handle); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_connection_get_option_value(duckdb_v2_connection_handle conn,
-                                                      const duckdb_v2_identifier_t *name,
-                                                      duckdb_v2_value_handle *out_value,
-                                                      DUCKDB_V2_SETTING_SCOPE *out_scope,
-                                                      duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(out_value);
-	DUCKDB_CHECK_ARG(out_scope);
-	*out_value = nullptr;
-	return WithErrorHandler(err, [&]() {
-		duckdb::Value value;
-		*out_scope = CV2OptionSource(*Convert(conn)->context).ReadValue(ConvertIdentifierName(name), value);
-		*out_value = Convert(new duckdb::Value(std::move(value)));
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn, const duckdb_v2_identifier_t *name,
-                                                duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
-                                                duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(value);
-	return WithErrorHandler(err, [&]() {
-		duckdb::PhysicalSet::SetVariable(*Convert(conn)->context, duckdb::Identifier(ConvertIdentifierName(name)),
-		                                 ConvertSetScope(scope), *Convert(value));
-	});
 }
 
 // ---------------------------------------------------------------------------

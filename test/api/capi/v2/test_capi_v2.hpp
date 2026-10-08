@@ -69,12 +69,18 @@ struct EnvFixture {
 	duckdb_v2_context_handle ctx = nullptr;
 	//! Borrowed from `conn`.
 	duckdb_v2_factory_handle factory = nullptr;
+	//! Borrowed from `conn`.
+	duckdb_v2_config_handle config = nullptr;
+	//! Borrowed from `instance`: the GLOBAL scope.
+	duckdb_v2_config_handle instance_config = nullptr;
 	EnvFixture() {
 		duckdb_v2_environment_create(&env, nullptr);
 		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
 		duckdb_v2_connection_create(instance, &conn, nullptr);
 		duckdb_v2_connection_get_context(conn, &ctx, nullptr);
 		duckdb_v2_connection_get_factory(conn, &factory, nullptr);
+		duckdb_v2_connection_get_config(conn, &config, nullptr);
+		duckdb_v2_instance_get_config(instance, &instance_config, nullptr);
 	}
 	~EnvFixture() {
 		duckdb_v2_connection_destroy(&conn);

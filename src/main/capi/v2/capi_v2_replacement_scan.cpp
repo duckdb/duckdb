@@ -211,7 +211,6 @@ DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_instance(duckdb_v2_instan
 	*out_scan = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &instance_wrapper = *Convert(instance);
-		duckdb::lock_guard<duckdb::mutex> guard(instance_wrapper.lock);
 		auto &db = *instance_wrapper.GetDatabase().instance;
 		auto scan = duckdb::make_uniq<CV2InstanceReplacementScan>(db);
 		*out_scan = Convert(scan.release());

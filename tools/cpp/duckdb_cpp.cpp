@@ -52,6 +52,10 @@ struct HandleTraits<Factory> {
 	using handle = duckdb_v2_factory_handle;
 };
 template <>
+struct HandleTraits<Config> {
+	using handle = duckdb_v2_config_handle;
+};
+template <>
 struct HandleTraits<Extension> {
 	using handle = duckdb_v2_extension_handle;
 };
@@ -217,48 +221,35 @@ InterruptException::InterruptException(const std::string &message, std::string r
 namespace {
 // Perform a DuckDB C-API call, setup an error info object, and throw an exception if it fails.
 // This is used to simplify error handling in the C++ wrapper.
+// Raise a failed call's error info as the matching exception type, consuming the info handle.
+[[noreturn]] void ThrowAPIError(DUCKDB_V2_ERROR code, duckdb_v2_error_info_handle err) {
+	duckdb_v2_str message_view = {nullptr, 0};
+	duckdb_v2_str raw_view = {nullptr, 0};
+	if (err) {
+		duckdb_v2_error_info_get_text(err, &message_view);
+		duckdb_v2_error_info_get_raw_text(err, &raw_view);
+	}
+	std::string message = message_view.ptr ? std::string(message_view.ptr, message_view.len) : "unknown error";
+	std::string raw = raw_view.ptr ? std::string(raw_view.ptr, raw_view.len) : "";
+	duckdb_v2_error_info_destroy(&err);
+	// Map error codes with a dedicated exception type to that type so callers can catch it directly.
+	switch (code) {
+	case DUCKDB_V2_ERROR_INPUT_INVALID:
+		throw InvalidInputException(message, std::move(raw));
+	case DUCKDB_V2_ERROR_RUNTIME_INTERRUPT:
+		throw InterruptException(message, std::move(raw));
+	default:
+		throw Exception(code, std::move(message), std::move(raw));
+	}
+}
+
 template <class F, class... ARGS>
 auto CheckedAPICall(F &&func, ARGS &&... args) -> void {
 	duckdb_v2_error_info_handle err = nullptr;
 	const auto code = func(std::forward<ARGS>(args)..., &err);
 	if (code != DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_str message_view = {nullptr, 0};
-		duckdb_v2_str raw_view = {nullptr, 0};
-		if (err) {
-			duckdb_v2_error_info_get_text(err, &message_view);
-			duckdb_v2_error_info_get_raw_text(err, &raw_view);
-		}
-		std::string message = message_view.ptr ? std::string(message_view.ptr, message_view.len) : "unknown error";
-		std::string raw = raw_view.ptr ? std::string(raw_view.ptr, raw_view.len) : "";
-		duckdb_v2_error_info_destroy(&err);
-		// Map error codes with a dedicated exception type to that type so callers can catch it directly.
-		switch (code) {
-		case DUCKDB_V2_ERROR_INPUT_INVALID:
-			throw InvalidInputException(message, std::move(raw));
-		case DUCKDB_V2_ERROR_RUNTIME_INTERRUPT:
-			throw InterruptException(message, std::move(raw));
-		default:
-			throw Exception(code, std::move(message), std::move(raw));
-		}
+		ThrowAPIError(code, err);
 	}
-}
-
-// Reads a setting's value through one of the *_get_option_value functions.
-template <class HANDLE, class GETTER>
-auto GetOptionValueThrough(GETTER getter, HANDLE source, std::string_view name) -> OptionValue {
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	duckdb_v2_value_handle value = nullptr;
-	DUCKDB_V2_SETTING_SCOPE scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
-	CheckedAPICall(getter, source, &name_str, &value, &scope);
-	return OptionValue {detail::HandleFactory::Make<Value>(value), static_cast<SettingScope>(scope)};
-}
-
-// Writes a setting through one of the *_set_option functions.
-template <class HANDLE, class SETTER>
-auto SetOptionThrough(SETTER setter, HANDLE source, std::string_view name, const Value &value, SettingScope scope)
-    -> void {
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(setter, source, &name_str, value.handle(), static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
 }
 
 // Borrows the factory of an instance, connection or context handle.
@@ -267,6 +258,14 @@ auto GetFactoryHandle(GETTER getter, void *source) -> duckdb_v2_factory_handle {
 	duckdb_v2_factory_handle factory = nullptr;
 	CheckedAPICall(getter, static_cast<SOURCE>(source), &factory);
 	return factory;
+}
+
+// Borrows the config of an instance, connection or context handle.
+template <class SOURCE, class GETTER>
+auto GetConfigHandle(GETTER getter, void *source) -> duckdb_v2_config_handle {
+	duckdb_v2_config_handle config = nullptr;
+	CheckedAPICall(getter, static_cast<SOURCE>(source), &config);
+	return config;
 }
 
 // Borrow a std::string as a length-delimited view for the C API.
@@ -417,8 +416,30 @@ auto Environment::CreateInstance() -> Instance {
 	return detail::HandleFactory::Make<Instance>(instance);
 }
 
+auto Environment::CreateInstance(const std::vector<std::pair<std::string, std::string>> &options) -> Instance {
+	std::vector<duckdb_v2_str> names;
+	std::vector<duckdb_v2_str> values;
+	names.reserve(options.size());
+	values.reserve(options.size());
+	for (auto &[name, value] : options) {
+		names.push_back(ToStr(name));
+		values.push_back(ToStr(value));
+	}
+	duckdb_v2_instance_handle instance = nullptr;
+	CheckedAPICall(duckdb_v2_instance_create_with_options, handle(), names.data(), values.data(),
+	               static_cast<idx_t>(options.size()), &instance);
+	return detail::HandleFactory::Make<Instance>(instance);
+}
+
 auto Environment::Open(const std::string &path) -> Instance {
 	auto instance = CreateInstance();
+	instance.Attach(path, true);
+	return instance;
+}
+
+auto Environment::Open(const std::string &path, const std::vector<std::pair<std::string, std::string>> &options)
+    -> Instance {
+	auto instance = CreateInstance(options);
 	instance.Attach(path, true);
 	return instance;
 }
@@ -489,7 +510,9 @@ OptionDescription::~OptionDescription() {
 Instance::Instance(void *impl)
     : detail::Handle<Instance>(impl),
       factory(detail::HandleFactory::Make<Factory>(
-          GetFactoryHandle<duckdb_v2_instance_handle>(duckdb_v2_instance_get_factory, impl))) {
+          GetFactoryHandle<duckdb_v2_instance_handle>(duckdb_v2_instance_get_factory, impl))),
+      config(detail::HandleFactory::Make<Config>(
+          GetConfigHandle<duckdb_v2_instance_handle>(duckdb_v2_instance_get_config, impl))) {
 }
 
 Instance::~Instance() {
@@ -534,41 +557,81 @@ auto Instance::SetDefault(const std::string &path) -> void {
 	CheckedAPICall(duckdb_v2_instance_set_default, handle(), &path_str);
 }
 
-auto Instance::GetOptionCount() const -> size_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_instance_get_option_count, handle(), &count);
-	return static_cast<size_t>(count);
-}
-
-auto Instance::GetOptionDescription(size_t index) const -> OptionDescription {
-	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_instance_get_option_by_index, handle(), static_cast<idx_t>(index), &option);
-	return detail::HandleFactory::Make<OptionDescription>(option);
-}
-
-auto Instance::GetOptionDescription(std::string_view name) const -> OptionDescription {
-	duckdb_v2_option_handle option = nullptr;
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(duckdb_v2_instance_get_option_by_name, handle(), &name_str, &option);
-	return detail::HandleFactory::Make<OptionDescription>(option);
-}
-
-auto Instance::GetOption(std::string_view name) const -> OptionValue {
-	return GetOptionValueThrough(duckdb_v2_instance_get_option_value, handle(), name);
-}
-
-auto Instance::SetOption(std::string_view name, const Value &value, SettingScope scope) -> void {
-	SetOptionThrough(duckdb_v2_instance_set_option, handle(), name, value, scope);
-}
-
-auto Instance::SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void {
-	SetOption(name, Value::Create(factory, varchar_t(value)), scope);
-}
-
 auto Instance::Connect() -> Connection {
 	duckdb_v2_connection_handle conn = nullptr;
 	CheckedAPICall(duckdb_v2_connection_create, handle(), &conn);
 	return detail::HandleFactory::Make<Connection>(conn, true);
+}
+
+//---------------------------------------------------------------------------
+// Config
+//---------------------------------------------------------------------------
+
+Config::Config(void *impl) : detail::Handle<Config>(impl) {
+}
+
+Config::~Config() {
+}
+
+auto Config::GetOptionCount() const -> size_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_config_get_option_count, handle(), &count);
+	return static_cast<size_t>(count);
+}
+
+auto Config::DescribeOption(size_t index) const -> OptionDescription {
+	duckdb_v2_option_handle option = nullptr;
+	CheckedAPICall(duckdb_v2_config_get_option_by_index, handle(), static_cast<idx_t>(index), &option);
+	return detail::HandleFactory::Make<OptionDescription>(option);
+}
+
+auto Config::DescribeOption(std::string_view name) const -> OptionDescription {
+	duckdb_v2_option_handle option = nullptr;
+	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
+	CheckedAPICall(duckdb_v2_config_get_option_by_name, handle(), &name_str, &option);
+	return detail::HandleFactory::Make<OptionDescription>(option);
+}
+
+auto Config::TryGetOption(std::string_view name) const -> std::optional<OptionValue> {
+	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
+	duckdb_v2_value_handle value = nullptr;
+	DUCKDB_V2_SETTING_SCOPE scope = DUCKDB_V2_SETTING_SCOPE_DEFAULT;
+	duckdb_v2_error_info_handle err = nullptr;
+	const auto code = duckdb_v2_config_get_option_value(handle(), &name_str, &value, &scope, &err);
+	if (code == DUCKDB_V2_ERROR_INPUT_INVALID) {
+		// no setting goes by that name
+		duckdb_v2_error_info_destroy(&err);
+		return std::nullopt;
+	}
+	if (code != DUCKDB_V2_ERROR_NONE) {
+		ThrowAPIError(code, err);
+	}
+	return OptionValue {detail::HandleFactory::Make<Value>(value), static_cast<SettingScope>(scope)};
+}
+
+auto Config::GetOption(std::string_view name) const -> OptionValue {
+	auto value = TryGetOption(name);
+	if (!value) {
+		throw InvalidInputException("unknown configuration option: " + std::string(name));
+	}
+	return std::move(*value);
+}
+
+auto Config::SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void {
+	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
+	auto setting_str = duckdb_v2_str {value.data(), value.size()};
+	CheckedAPICall(duckdb_v2_config_set_option_text, handle(), &name_str, &setting_str,
+	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
+}
+
+auto Config::operator[](std::string_view name) const -> OptionValue {
+	return GetOption(name);
+}
+
+auto Config::SetOption(std::string_view name, const Value &value, SettingScope scope) -> void {
+	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
+	CheckedAPICall(duckdb_v2_config_set_option, handle(), &name_str, value.handle(),
+	               static_cast<DUCKDB_V2_SETTING_SCOPE>(scope));
 }
 
 //---------------------------------------------------------------------------
@@ -587,6 +650,8 @@ Connection::Connection(void *impl, bool owned)
     : detail::Handle<Connection>(impl), context(detail::HandleFactory::Make<Context>(GetConnectionContext(impl))),
       factory(detail::HandleFactory::Make<Factory>(
           GetFactoryHandle<duckdb_v2_connection_handle>(duckdb_v2_connection_get_factory, impl))),
+      config(detail::HandleFactory::Make<Config>(
+          GetConfigHandle<duckdb_v2_connection_handle>(duckdb_v2_connection_get_config, impl))),
       owned(owned) {
 }
 
@@ -595,18 +660,6 @@ Connection::~Connection() {
 		auto _h = handle();
 		duckdb_v2_connection_destroy(&_h);
 	}
-}
-
-auto Connection::GetOption(std::string_view name) const -> OptionValue {
-	return GetOptionValueThrough(duckdb_v2_connection_get_option_value, handle(), name);
-}
-
-auto Connection::SetOption(std::string_view name, const Value &value, SettingScope scope) -> void {
-	SetOptionThrough(duckdb_v2_connection_set_option, handle(), name, value, scope);
-}
-
-auto Connection::SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void {
-	SetOption(name, Value::Create(factory, varchar_t(value)), scope);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -838,42 +891,13 @@ Factory::~Factory() {
 Context::Context(void *impl)
     : detail::Handle<Context>(impl),
       factory(detail::HandleFactory::Make<Factory>(
-          GetFactoryHandle<duckdb_v2_context_handle>(duckdb_v2_context_get_factory, impl))) {
+          GetFactoryHandle<duckdb_v2_context_handle>(duckdb_v2_context_get_factory, impl))),
+      config(detail::HandleFactory::Make<Config>(
+          GetConfigHandle<duckdb_v2_context_handle>(duckdb_v2_context_get_config, impl))) {
 }
 
 Context::~Context() {
 	// Context lifetime is managed by DuckDB, so we don't destroy the handle here
-}
-
-auto Context::GetOptionCount() const -> size_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_context_get_option_count, handle(), &count);
-	return static_cast<size_t>(count);
-}
-
-auto Context::GetOptionDescription(size_t index) const -> OptionDescription {
-	duckdb_v2_option_handle option = nullptr;
-	CheckedAPICall(duckdb_v2_context_get_option_by_index, handle(), static_cast<idx_t>(index), &option);
-	return detail::HandleFactory::Make<OptionDescription>(option);
-}
-
-auto Context::GetOption(std::string_view name) const -> OptionValue {
-	return GetOptionValueThrough(duckdb_v2_context_get_option_value, handle(), name);
-}
-
-auto Context::SetOption(std::string_view name, const Value &value, SettingScope scope) -> void {
-	SetOptionThrough(duckdb_v2_context_set_option, handle(), name, value, scope);
-}
-
-auto Context::SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void {
-	SetOption(name, Value::Create(factory, varchar_t(value)), scope);
-}
-
-auto Context::GetOptionDescription(std::string_view name) const -> OptionDescription {
-	duckdb_v2_option_handle option = nullptr;
-	auto name_str = duckdb_v2_identifier_t {name.data(), name.size()};
-	CheckedAPICall(duckdb_v2_context_get_option_by_name, handle(), &name_str, &option);
-	return detail::HandleFactory::Make<OptionDescription>(option);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

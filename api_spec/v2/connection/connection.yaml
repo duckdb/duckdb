@@ -5,8 +5,7 @@ functions:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]
     description: |
-      Opens a connection to an instance, starting it if it has not
-      started yet.
+      Opens a connection to an instance.
 
       Each connection carries its own client context and session-scoped (LOCAL)
       settings. Connections to the same instance share its catalog, buffer

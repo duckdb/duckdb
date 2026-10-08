@@ -382,13 +382,6 @@ DUCKDB_V2_SETTING_SCOPE CV2OptionSource::ReadValue(std::string_view name, Value 
 		throw InvalidInputException("unknown configuration option: %s", name_id.GetIdentifierName());
 	}
 	auto canonical_name = option ? Identifier(option->name) : name_id;
-	if (staged_settings) {
-		auto staged = staged_settings->find(canonical_name);
-		if (staged != staged_settings->end()) {
-			result = staged->second;
-			return DUCKDB_V2_SETTING_SCOPE_GLOBAL;
-		}
-	}
 	auto lookup = context ? context->TryGetCurrentSetting(canonical_name, result)
 	                      : config.TryGetCurrentSetting(canonical_name, result);
 	if (!lookup) {

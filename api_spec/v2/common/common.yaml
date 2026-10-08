@@ -44,6 +44,15 @@ handles:
       instance with its own LOCAL settings and transaction state. Always
       destroy via `[[connection_destroy]]`.
     cleanup_with: connection_destroy
+  config:
+    description: |
+      A borrowed handle to the scope config options are read from and written
+      at. Taken from an instance (`[[instance_get_config]]`), a connection
+      (`[[connection_get_config]]`) or a context (`[[context_get_config]]`),
+      and valid for as long as its source is; the caller never destroys it.
+      An instance's config is the GLOBAL scope alone; a connection's or a context's config reads that client's cascade
+      (its SESSION value, else the GLOBAL one, else the default) and writes at
+      any scope the option supports.
   option:
     description: |
       An opaque, owned, read-only descriptor of a single config option as

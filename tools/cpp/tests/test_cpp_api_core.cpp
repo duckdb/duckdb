@@ -23,16 +23,16 @@ TEST_CASE("Stable C++API: Instance GetOption by name and option target scope", "
 	auto instance = env.Open(":memory:");
 
 	// Options describe the scopes they may be written at.
-	auto option = instance.GetOptionDescription("allow_community_extensions");
+	auto option = instance.GetConfig().DescribeOption("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
 	REQUIRE(option.SupportsScope(SettingScope::GLOBAL));
 	REQUIRE_FALSE(option.SupportsScope(SettingScope::SESSION));
 	REQUIRE(option.GetDefaultScope() == SettingScope::GLOBAL);
 
 	// An alias resolves to its canonical option.
-	REQUIRE(instance.GetOptionDescription("memory_limit").GetName() == "max_memory");
+	REQUIRE(instance.GetConfig().DescribeOption("memory_limit").GetName() == "max_memory");
 
-	REQUIRE_THROWS_MATCHES(instance.GetOptionDescription("no_such_option"), Exception,
+	REQUIRE_THROWS_MATCHES(instance.GetConfig().DescribeOption("no_such_option"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_api]") {
@@ -43,10 +43,10 @@ TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_
 	auto instance = env.Open(":memory:");
 	REQUIRE(env.GetInstanceCount() == 1);
 
-	REQUIRE(instance.GetOptionCount() > 0);
+	REQUIRE(instance.GetConfig().GetOptionCount() > 0);
 	bool found_memory_limit = false;
-	for (size_t i = 0; i < instance.GetOptionCount(); i++) {
-		auto option = instance.GetOptionDescription(i);
+	for (size_t i = 0; i < instance.GetConfig().GetOptionCount(); i++) {
+		auto option = instance.GetConfig().DescribeOption(i);
 		if (option.GetName() != "max_memory") {
 			continue;
 		}
@@ -60,12 +60,12 @@ TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_
 		REQUIRE(found_alias);
 	}
 	REQUIRE(found_memory_limit);
-	REQUIRE_FALSE(instance.GetOptionDescription("allow_community_extensions").GetDefaultValue().IsNull());
+	REQUIRE_FALSE(instance.GetConfig().DescribeOption("allow_community_extensions").GetDefaultValue().IsNull());
 
 	auto conn = instance.Connect();
 	auto &ctx = conn.GetContext();
-	REQUIRE(ctx.GetOptionCount() == instance.GetOptionCount());
-	REQUIRE_FALSE(ctx.GetOptionDescription(0).GetName().empty());
+	REQUIRE(ctx.GetConfig().GetOptionCount() == instance.GetConfig().GetOptionCount());
+	REQUIRE_FALSE(ctx.GetConfig().DescribeOption(0).GetName().empty());
 }
 
 TEST_CASE("Stable C++API: Instance SetDefault selects the database for new connections", "[cpp_api]") {
@@ -151,24 +151,24 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	auto conn_b = instance.Connect();
 
 	// A SESSION write on conn_a stays invisible to conn_b, and reads back as SESSION.
-	conn_a.SetOption("max_execution_time", "5000", SettingScope::SESSION);
-	auto seen = conn_a.GetOption("max_execution_time");
+	conn_a.GetConfig().SetOption("max_execution_time", "5000", SettingScope::SESSION);
+	auto seen = conn_a.GetConfig().GetOption("max_execution_time");
 	REQUIRE(seen.value.ToText() == "5000");
 	REQUIRE(seen.scope == SettingScope::SESSION);
-	REQUIRE(conn_b.GetOption("max_execution_time").value.ToText() != "5000");
+	REQUIRE(conn_b.GetConfig().GetOption("max_execution_time").value.ToText() != "5000");
 
 	// A GLOBAL write on conn_a is visible identically on conn_b, and on the instance.
-	conn_a.SetOption("memory_limit", "987MB", SettingScope::GLOBAL);
-	auto seen_a = conn_a.GetOption("memory_limit");
-	auto seen_b = conn_b.GetOption("memory_limit");
+	conn_a.GetConfig().SetOption("memory_limit", "987MB", SettingScope::GLOBAL);
+	auto seen_a = conn_a.GetConfig().GetOption("memory_limit");
+	auto seen_b = conn_b.GetConfig().GetOption("memory_limit");
 	REQUIRE(seen_a.value.ToText() == seen_b.value.ToText());
-	auto seen_instance = instance.GetOption("memory_limit");
+	auto seen_instance = instance.GetConfig().GetOption("memory_limit");
 	REQUIRE(seen_instance.value.ToText() == seen_a.value.ToText());
 	REQUIRE(seen_instance.scope == SettingScope::GLOBAL);
 
 	// A GLOBAL-only option rejects a SESSION write.
-	REQUIRE_THROWS_MATCHES(conn_a.SetOption("allow_community_extensions", "false", SettingScope::SESSION), Exception,
-	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(conn_a.GetConfig().SetOption("allow_community_extensions", "false", SettingScope::SESSION),
+	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: Context options and the scopeless SetOption default", "[cpp_api]") {
 	using namespace duckdb::cxx;
@@ -178,20 +178,20 @@ TEST_CASE("Stable C++API: Context options and the scopeless SetOption default", 
 	auto conn = instance.Connect();
 	auto &ctx = conn.GetContext();
 
-	auto option = ctx.GetOptionDescription("allow_community_extensions");
+	auto option = ctx.GetConfig().DescribeOption("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
 
 	// The scopeless overload writes the option's default scope (SQL `SET` semantics): the session here.
-	conn.SetOption("max_execution_time", "4242");
-	auto seen = ctx.GetOption("max_execution_time");
+	conn.GetConfig().SetOption("max_execution_time", "4242");
+	auto seen = ctx.GetConfig().GetOption("max_execution_time");
 	REQUIRE(seen.value.ToText() == "4242");
 	REQUIRE(seen.scope == SettingScope::SESSION);
 
 	// A context writes too, at any scope.
-	ctx.SetOption("max_execution_time", "77", SettingScope::GLOBAL);
-	REQUIRE(instance.GetOption("max_execution_time").value.ToText() == "77");
+	ctx.GetConfig().SetOption("max_execution_time", "77", SettingScope::GLOBAL);
+	REQUIRE(instance.GetConfig().GetOption("max_execution_time").value.ToText() == "77");
 
-	REQUIRE_THROWS_MATCHES(ctx.GetOptionDescription("no_such_option_xyz"), Exception,
+	REQUIRE_THROWS_MATCHES(ctx.GetConfig().DescribeOption("no_such_option_xyz"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: Instance::Attach with a name and options", "[cpp_api]") {
@@ -241,9 +241,7 @@ TEST_CASE("Stable C++API: a startup option set before Open enforces read-only", 
 	}
 
 	{
-		auto ro_instance = env.CreateInstance();
-		ro_instance.SetOption("access_mode", "READ_ONLY");
-		ro_instance.Attach(path, true);
+		auto ro_instance = env.Open(path, {{"access_mode", "READ_ONLY"}});
 		auto ro_conn = ro_instance.Connect();
 
 		// Reads see the seeded data. Scoped so the live result is released
@@ -294,4 +292,45 @@ TEST_CASE("Stable C++API: typed exceptions carry their error code", "[cpp_api]")
 	} catch (const Exception &caught) {
 		REQUIRE(caught.GetCode() == static_cast<uint32_t>(DUCKDB_V2_ERROR_DATABASE_CATALOG));
 	}
+}
+
+TEST_CASE("Stable C++API: Config reads, writes and describes settings", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
+	auto &config = conn.GetConfig();
+
+	// A value destructures into the value and the scope it came from.
+	config.SetOption("max_execution_time", "5000", SettingScope::SESSION);
+	auto [value, scope] = config.GetOption("max_execution_time");
+	REQUIRE(value.ToText() == "5000");
+	REQUIRE(scope == SettingScope::SESSION);
+
+	// operator[] is GetOption.
+	REQUIRE(config["max_execution_time"].value.ToText() == "5000");
+
+	// A typed value writes as well as text does.
+	config.SetOption("max_execution_time", conn.GetFactory().CreateValue(int64_t(77)), SettingScope::SESSION);
+	REQUIRE(config["max_execution_time"].value.ToText() == "77");
+
+	// TryGetOption reports an unknown name rather than throwing.
+	REQUIRE(config.TryGetOption("no_such_option_xyz") == std::nullopt);
+	REQUIRE(config.TryGetOption("max_execution_time").has_value());
+	REQUIRE_THROWS_MATCHES(config.GetOption("no_such_option_xyz"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+
+	// The three configs of one database describe the same settings.
+	REQUIRE(instance.GetConfig().GetOptionCount() == config.GetOptionCount());
+	REQUIRE(conn.GetContext().GetConfig().GetOptionCount() == config.GetOptionCount());
+	REQUIRE(instance.GetConfig().DescribeOption("max_memory").GetName() == "max_memory");
+
+	// An instance's config is GLOBAL alone.
+	REQUIRE_THROWS_MATCHES(instance.GetConfig().SetOption("max_execution_time", "1", SettingScope::SESSION), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+
+	// A const source hands out a config that reads but does not write.
+	const auto &const_conn = conn;
+	REQUIRE(const_conn.GetConfig()["max_execution_time"].value.ToText() == "77");
 }

@@ -13,7 +13,7 @@ functions:
 
       The factory creates the built-in types and their values, casts with the
       built-in casts only, and allocates data chunks and column data
-      collections through the instance, starting it if it has not started yet.
+      collections through the instance.
       Anything that needs a catalog — catalog-registered types, qualified type
       names — returns ERROR_INPUT_INVALID. The returned handle is borrowed: it
       is valid for as long as the instance is, and must not be destroyed.
