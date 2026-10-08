@@ -26,10 +26,10 @@ tpcds_append_information::tpcds_append_information(duckdb::ClientContext &contex
 	if (mode == TPCDSAppendMode::APPENDER) {
 		appender = duckdb::make_uniq<duckdb::InternalAppender>(context_p, *table, flush_count);
 	} else {
-		if (!table->IsDuckTable()) {
+		table_entry = table->TryGetDuckTableEntry();
+		if (!table_entry) {
 			throw duckdb::InvalidInputException("dsdgen is only supported for DuckDB database files");
 		}
-		table_entry = table->Cast<duckdb::DuckTableEntry>();
 		optimistic_writer = duckdb::make_uniq<duckdb::OptimisticDataWriter>(context_p, table_entry->GetStorage());
 		auto collection = optimistic_writer->CreateCollection(table_entry->GetStorage(), types, partial_manager_type);
 		auto &row_collection = *collection->collection;
