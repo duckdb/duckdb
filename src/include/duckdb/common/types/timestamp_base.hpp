@@ -71,10 +71,25 @@ struct timestamp_base_t { // NOLINT
 		return timestamp_base_t(0);
 	} // NOLINT
 
+	//! The smallest valid timestamp: 290308-12-22 (BC) 00:00:00, or the smallest int64 if that is out of range
+	static constexpr timestamp_base_t min_value() { // NOLINT
+		return timestamp_base_t(P <= MICROS_PER_SEC ? MIN_MICROS / (MICROS_PER_SEC / (P <= MICROS_PER_SEC ? P : 1))
+		                                            : NumericLimits<int64_t>::Minimum());
+	} // NOLINT
+
 	//! True, if the timestamp is finite, else false.
 	inline bool IsFinite() const {
 		return *this != infinity() && *this != ninfinity();
 	}
+	//! True, if the timestamp is finite and not below the smallest valid timestamp, else false.
+	inline bool IsValid() const {
+		return IsFinite() && *this >= min_value();
+	}
+
+private:
+	static constexpr int64_t MICROS_PER_SEC = 1000000;
+	//! 290308-12-22 (BC) 00:00:00 in microseconds
+	static constexpr int64_t MIN_MICROS = -9223372022400000000LL;
 };
 
 //! Type used to represent TIMESTAMP_S. timestamp_sec_t holds the seconds since 1970-01-01.

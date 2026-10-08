@@ -107,21 +107,10 @@ struct MakeTimestampOperator {
 		return Timestamp::FromDatetime(d, t);
 	}
 
-	static bool IsBelowMinimum(timestamp_t result) {
-		// the smallest valid timestamp is 290308-12-22 (BC) 00:00:00
-		static const auto min_timestamp = Timestamp::FromDatetime(
-		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0));
-		return result < min_timestamp;
-	}
-	static bool IsBelowMinimum(timestamp_ns_t result) {
-		// every finite value is a valid TIMESTAMP_NS
-		return false;
-	}
-
 	template <typename T, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(T value) {
 		const auto result = RESULT_TYPE(value);
-		if (!result.IsFinite() || IsBelowMinimum(result)) {
+		if (!result.IsValid()) {
 			throw ConversionException("Timestamp microseconds out of range: %ld", value);
 		}
 		return RESULT_TYPE(value);
