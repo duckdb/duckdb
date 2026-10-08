@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/test_invalid_utf8_projection.test
+# description: Test invalid UTF-8 in a projected column that is not the first file column
+# group: [csv]
+
+statement error
+SELECT c FROM read_csv('{DATA_DIR}/csv/invalid_utf8_projection.csv', auto_detect=false, header=true, delim=',', columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'})
+----
+Invalid unicode (byte sequence mismatch) detected
+
+query I
+SELECT c FROM read_csv('{DATA_DIR}/csv/invalid_utf8_projection.csv', auto_detect=false, header=true, delim=',', columns={'a':'VARCHAR','b':'VARCHAR','c':'VARCHAR'}, ignore_errors=true)
+----
+3
+3
