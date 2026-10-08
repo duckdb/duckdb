@@ -239,6 +239,27 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	// START GENERATED SECOND TOKEN LOOKAHEAD RULES
 	//===--------------------------------------------------------------------===//
 	AddSecondTokenLookaheadRule("TypeLiteral");
+	AddSecondTokenLookaheadRule("StarExpression");
+	AddSecondTokenLookaheadRule("FunctionExpression");
+	AddSecondTokenLookaheadRule("TableFunction");
+	AddSecondTokenLookaheadRule("AnyAllParsedOperator");
+	AddSecondTokenLookaheadRule("NamedOtherOperator");
+	AddSecondTokenLookaheadRule("OperatorLiteral");
+	AddSecondTokenLookaheadRule("ColIdExpression");
+	AddSecondTokenLookaheadRule("NamedFunctionArgument");
+	AddSecondTokenLookaheadRule("CatalogReservedSchemaTypeName");
+	AddSecondTokenLookaheadRule("SchemaReservedTypeName");
+	AddSecondTokenLookaheadRule("NestedSchemaTableColumnName");
+	AddSecondTokenLookaheadRule("CatalogReservedSchemaTableColumnName");
+	AddSecondTokenLookaheadRule("SchemaReservedTableColumnName");
+	AddSecondTokenLookaheadRule("TableReservedColumnName");
+	AddSecondTokenLookaheadRule("CatalogReservedSchemaFunctionName");
+	AddSecondTokenLookaheadRule("SchemaReservedFunctionName");
+	AddSecondTokenLookaheadRule("QualifiedTableName");
+	AddSecondTokenLookaheadRule("TableFunctionAliasColon");
+	AddSecondTokenLookaheadRule("TableFunctionLateralOpt");
+	AddSecondTokenLookaheadRule("CatalogReservedSchemaTable");
+	AddSecondTokenLookaheadRule("SchemaReservedTable");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED SECOND TOKEN LOOKAHEAD RULES
 	//===--------------------------------------------------------------------===//

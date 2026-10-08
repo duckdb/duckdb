@@ -1904,6 +1904,27 @@ collapsible_rules:
 # attempt and only pays off for rules that are often attempted and fail at their second token.
 second_token_lookahead_rules:
   - TypeLiteral
+  - StarExpression
+  - FunctionExpression
+  - TableFunction
+  - AnyAllParsedOperator
+  - NamedOtherOperator
+  - OperatorLiteral
+  - ColIdExpression
+  - NamedFunctionArgument
+  - CatalogReservedSchemaTypeName
+  - SchemaReservedTypeName
+  - NestedSchemaTableColumnName
+  - CatalogReservedSchemaTableColumnName
+  - SchemaReservedTableColumnName
+  - TableReservedColumnName
+  - CatalogReservedSchemaFunctionName
+  - SchemaReservedFunctionName
+  - QualifiedTableName
+  - TableFunctionAliasColon
+  - TableFunctionLateralOpt
+  - CatalogReservedSchemaTable
+  - SchemaReservedTable
 
 packrat_memoized_rules:
   - Expression
