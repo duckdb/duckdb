@@ -15,6 +15,8 @@ public:
 	RadixSinkFixture(const string &memory_limit, bool aggregate = false)
 	    : db(nullptr), con(db), thread(*con.context), context(*con.context, thread, nullptr) {
 		REQUIRE_NO_FAIL(con.Query("SET threads=4; SET memory_limit='" + memory_limit + "';"));
+		REQUIRE_NO_FAIL(
+		    con.Query("SET temp_directory = " + Value(TestCreatePath("radix_ht_sink_spill")).ToSQLString()));
 		vector<unique_ptr<Expression>> groups;
 		groups.push_back(make_uniq<BoundReferenceExpression>(LogicalType::VARCHAR, 0));
 		vector<unique_ptr<Expression>> aggregates;
@@ -248,21 +250,83 @@ TEST_CASE("Aggregate observation retires on hits and distinct convergence", "[ra
 	}
 }
 
-TEST_CASE("Spilling releases pointer allocations retained across iteration reuse", "[radix_ht_sink]") {
-	RadixSinkFixture fixture("128MB");
-	fixture.Keys(0, 1);
+TEST_CASE("Spilling tolerates memory pressure while shrinking retained pointer allocations", "[radix_ht_sink]") {
+	for (const bool memory_pressure : {false, true}) {
+		CAPTURE(memory_pressure);
+		RadixSinkFixture fixture("128MB");
+		fixture.Keys(0, STANDARD_VECTOR_SIZE);
+		fixture.Sink();
+		auto &local = fixture.Local();
+		local.ht->Resize(1048576);
+		fixture.radix->ResetLocalSinkState(fixture.context, *fixture.global, *fixture.locals[0]);
+		fixture.Sink();
+		const auto old_capacity = local.ht->Capacity();
+		REQUIRE(old_capacity < fixture.Global().config.sink_capacity);
+		const auto retained_size = local.ht->GetSizeInBytes();
+		const auto old_materialized = local.ht->GetMaterializedCount();
+		REQUIRE(retained_size >= 1048576 * sizeof(ht_entry_t));
+		{
+			AllocatedData competing_allocation;
+			if (memory_pressure) {
+				auto &manager = BufferManager::GetBufferManager(*fixture.con.context);
+				competing_allocation =
+				    manager.GetBufferAllocator().Allocate(manager.GetMaxMemory() - manager.GetUsedMemory() - 65536);
+			}
+			REQUIRE(fixture.Global().config.SetRadixBitsToExternal());
+			REQUIRE_NOTHROW(fixture.Sink());
+			REQUIRE(local.spilling);
+			REQUIRE_FALSE(local.ht->HLLEnabled());
+			REQUIRE(local.ht->GetMaterializedCount() == old_materialized + STANDARD_VECTOR_SIZE);
+			REQUIRE(local.local_sink_capacity == local.ht->Capacity());
+			if (memory_pressure) {
+				REQUIRE(local.ht->Capacity() == old_capacity);
+				REQUIRE(local.ht->GetSizeInBytes() >= retained_size);
+			} else {
+				REQUIRE(local.ht->Capacity() == fixture.Global().config.sink_capacity);
+				REQUIRE(local.ht->GetSizeInBytes() < retained_size);
+			}
+		}
+		fixture.Sink();
+		fixture.Combine(0);
+		REQUIRE(fixture.ScanGroupCount() == STANDARD_VECTOR_SIZE);
+	}
+}
+
+TEST_CASE("Aggregate memory accounting tracks hits and replacement tuple storage", "[radix_ht_sink]") {
+	RadixSinkFixture fixture("128MB", true);
+	fixture.Keys(0, STANDARD_VECTOR_SIZE, 800);
 	fixture.Sink();
-	auto &local = fixture.Local();
-	local.ht->Resize(1048576);
-	fixture.radix->ResetLocalSinkState(fixture.context, *fixture.global, *fixture.locals[0]);
-	REQUIRE(local.ht->Capacity() < fixture.Global().config.sink_capacity);
-	const auto retained_size = local.ht->GetSizeInBytes();
-	REQUIRE(retained_size >= 1048576 * sizeof(ht_entry_t));
-	REQUIRE(fixture.Global().config.SetRadixBitsToExternal());
-	fixture.Sink();
-	REQUIRE(local.spilling);
-	REQUIRE(local.ht->Capacity() == fixture.Global().config.sink_capacity);
-	REQUIRE(local.ht->GetSizeInBytes() < retained_size);
+	auto &ht = *fixture.Local().ht;
+	const auto wide_size = ht.GetSizeInBytes();
+	const auto materialized = ht.GetMaterializedCount();
+	const auto old_arena_size = ht.GetAggregateAllocator()->AllocationSize();
+	fixture.SetPayload(Value(string(2048, 'p')));
+	// Updating existing groups can grow aggregate states without allocating tuple blocks.
+	ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
+	REQUIRE(ht.GetMaterializedCount() == materialized);
+	const auto arena_growth = ht.GetAggregateAllocator()->AllocationSize() - old_arena_size;
+	REQUIRE(arena_growth > 0);
+	REQUIRE(ht.GetSizeInBytes() == wide_size + arena_growth);
+
+	fixture.SetPayload(Value(LogicalType::VARCHAR));
+	ht.ResetForNewIteration(ht.GetRadixBits());
+	fixture.Keys(0, STANDARD_VECTOR_SIZE);
+	ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
+	REQUIRE(ht.GetMaterializedCount() == materialized);
+	const auto narrow_size = ht.GetSizeInBytes();
+	REQUIRE(narrow_size < wide_size);
+
+	ht.Abandon();
+	ht.SetRadixBits(ht.GetRadixBits() + 1);
+	ht.Repartition();
+	REQUIRE(ht.GetMaterializedCount() == materialized);
+	REQUIRE(ht.GetSizeInBytes() > narrow_size);
+	const auto repartitioned_size = ht.GetSizeInBytes();
+	auto old_data = ht.AcquirePartitionedData();
+	REQUIRE(ht.GetSizeInBytes() < repartitioned_size);
+	ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
+	REQUIRE(ht.GetMaterializedCount() == materialized);
+	REQUIRE(ht.GetSizeInBytes() >= narrow_size);
 }
 
 TEST_CASE("Failed adaptive growth preserves rows and falls back to the existing table", "[radix_ht_sink]") {

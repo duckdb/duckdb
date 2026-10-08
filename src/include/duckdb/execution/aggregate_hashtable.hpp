@@ -218,6 +218,9 @@ private:
 	//! The data of the HT
 	unique_ptr<PartitionedTupleData> partitioned_data;
 	unique_ptr<PartitionedTupleData> unpartitioned_data;
+	//! Cache tuple allocations while the materialized groups and their storage stay unchanged.
+	mutable optional_idx tuple_size_count;
+	mutable idx_t tuple_size = 0;
 
 	//! Predicates for matching groups (always ExpressionType::COMPARE_EQUAL)
 	vector<ExpressionType> predicates;

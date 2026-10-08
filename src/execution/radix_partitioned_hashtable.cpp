@@ -322,7 +322,11 @@ void RadixHTLocalSinkState::PrepareForSpill(RadixHTGlobalSinkState &gstate) {
 	ht->Abandon();
 	if (!spilling) {
 		// Iteration reuse can retain a larger allocation than the logical capacity.
-		ht->Resize(gstate.config.sink_capacity);
+		try {
+			ht->Resize(gstate.config.sink_capacity);
+		} catch (const OutOfMemoryException &) {
+			// Keep the existing table if the temporary replacement allocation cannot fit.
+		}
 		spilling = true;
 	}
 	local_sink_capacity = ht->Capacity();

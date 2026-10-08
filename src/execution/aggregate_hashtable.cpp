@@ -93,6 +93,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
+	tuple_size_count.SetInvalid();
 	if (!partitioned_data ||
 	    RadixPartitioning::RadixBitsOfPowerOfTwo(partitioned_data->PartitionCount()) != radix_bits) {
 		D_ASSERT(!partitioned_data || partitioned_data->Count() == 0);
@@ -111,6 +112,7 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 }
 
 void GroupedAggregateHashTable::InitializeUnpartitionedData() {
+	tuple_size_count.SetInvalid();
 	D_ASSERT(radix_bits >= UNPARTITIONED_RADIX_BITS_THRESHOLD);
 	if (!unpartitioned_data) {
 		unpartitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout_ptr, MemoryTag::HASH_TABLE,
@@ -127,9 +129,13 @@ const PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() cons
 }
 
 idx_t GroupedAggregateHashTable::GetSizeInBytes() const {
-	return partitioned_data->GetAllocatedSizeInBytes() +
-	       (unpartitioned_data ? unpartitioned_data->GetAllocatedSizeInBytes() : 0) +
-	       aggregate_allocator->AllocationSize() + hash_map.GetSize();
+	const auto materialized_count = GetMaterializedCount();
+	if (!tuple_size_count.IsValid() || tuple_size_count.GetIndex() != materialized_count) {
+		tuple_size = partitioned_data->GetAllocatedSizeInBytes() +
+		             (unpartitioned_data ? unpartitioned_data->GetAllocatedSizeInBytes() : 0);
+		tuple_size_count = materialized_count;
+	}
+	return tuple_size + aggregate_allocator->AllocationSize() + hash_map.GetSize();
 }
 
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
@@ -1264,6 +1270,7 @@ bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk
 }
 
 void GroupedAggregateHashTable::ResetForNewIteration(idx_t radix_bits_p) {
+	tuple_size_count.SetInvalid();
 	// Save the previous iteration's group count before destroying aggregate states.
 	// This lets us size the pointer table based on actual prior data rather than the
 	// global sink capacity, which is typically much larger than recursive iteration sizes.
