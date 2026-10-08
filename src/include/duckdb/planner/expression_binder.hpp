@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/stack_checker.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
@@ -219,12 +220,19 @@ public:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
+	//! Called for every reference to a macro parameter, with the expression that holds the reference
+	using macro_parameter_callback_t = std::function<void(unique_ptr<ParsedExpression> &expr, ColumnRefExpression &)>;
+
 	//! FIXME: Generalise this for extensibility.
 	//! Recursively replaces macro parameters with the provided input parameters.
 	void ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params);
+	//! Recursively calls the callback for every reference to a macro parameter
+	void VisitMacroParameters(unique_ptr<ParsedExpression> &expr, vector<identifier_set_t> &lambda_params,
+	                          const macro_parameter_callback_t &callback);
 	//! Enables special-handling of lambda parameters during macro replacement by tracking them in the lambda_params
 	//! vector.
-	void ReplaceMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params);
+	void VisitMacroParametersInLambda(FunctionExpression &function, vector<identifier_set_t> &lambda_params,
+	                                  const macro_parameter_callback_t &callback);
 
 	static LogicalType GetExpressionReturnType(const Expression &expr);
 
@@ -296,6 +304,8 @@ protected:
 	                             unique_ptr<ParsedExpression> &expr_ptr);
 	void FindAggregateExprs(unique_ptr<ParsedExpression> &expr, vector<reference<unique_ptr<ParsedExpression>>> &exprs);
 	void UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> &expr, ScalarMacroFunction &macro_def);
+	bool CanEvaluateMacroInLambda(ParsedExpression &expr,
+	                              reference_set_t<const ScalarMacroCatalogEntry> &visited_macros);
 	void UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
 	                           unique_ptr<ParsedExpression> &expr, idx_t depth);
 
