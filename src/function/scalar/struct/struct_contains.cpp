@@ -191,7 +191,7 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
 }
 
-static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &input) {
+static void StructContainsResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -205,14 +205,14 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
 		bound_function.GetArguments()[1] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
-		return nullptr;
+		return;
 	}
 
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	if (struct_children.empty()) {
 		// an empty struct contains nothing, the search always returns false (or position 0)
 		bound_function.GetArguments()[0] = child_type;
-		return nullptr;
+		return;
 	}
 	if (child_type.id() != LogicalTypeId::TUPLE) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
@@ -221,38 +221,37 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 
 	// the value type must match one of the struct's children
 	LogicalType max_child_type = arguments[1]->GetReturnType();
-	vector<LogicalType> new_child_types;
+	vector<bool> compatible_children;
 	for (auto &child : struct_children) {
-		if (!LogicalType::TryGetMaxLogicalType(context, child.second, max_child_type, max_child_type)) {
-			new_child_types.push_back(child.second);
-			continue;
-		}
-
-		new_child_types.push_back(max_child_type);
-		bound_function.GetArguments()[1] = max_child_type;
+		compatible_children.push_back(
+		    LogicalType::TryGetMaxLogicalType(context, child.second, max_child_type, max_child_type));
 	}
 
+	// cast all compatible children to the final max type
 	child_list_t<LogicalType> cast_children;
-	for (idx_t i = 0; i < new_child_types.size(); i++) {
-		cast_children.push_back(make_pair(struct_children[i].first, new_child_types[i]));
+	for (idx_t i = 0; i < struct_children.size(); i++) {
+		auto &child = struct_children[i];
+		cast_children.push_back(make_pair(child.first, compatible_children[i] ? max_child_type : child.second));
+		if (compatible_children[i]) {
+			bound_function.GetArguments()[1] = max_child_type;
+		}
 	}
 
 	// the input is an unnamed struct - represent it as a TUPLE
 	bound_function.GetArguments()[0] = LogicalType::TUPLE(cast_children);
-
-	return nullptr;
 }
 
 ScalarFunction StructContainsFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {}, LogicalType::BOOLEAN, StructSearchFunction<bool>, StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::BOOLEAN, StructSearchFunction<bool>);
 	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
+	fun.SetResolveTypesCallback(StructContainsResolveTypes);
 	return fun;
 }
 
 ScalarFunction StructPositionFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {}, LogicalType::INTEGER, StructSearchFunction<int32_t, true>,
-	                   StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::INTEGER, StructSearchFunction<int32_t, true>);
 	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
+	fun.SetResolveTypesCallback(StructContainsResolveTypes);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
