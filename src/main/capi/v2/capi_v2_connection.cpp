@@ -1,26 +1,5 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
 
-namespace duckdb {
-namespace capiv2 {
-namespace {
-
-// Map V2's user-facing scope choice to DuckDB's SetScope.
-SetScope MapSettingScope(DUCKDB_V2_SETTING_SCOPE s) {
-	switch (s) {
-	case DUCKDB_V2_SETTING_SCOPE_GLOBAL:
-		return SetScope::GLOBAL;
-	case DUCKDB_V2_SETTING_SCOPE_LOCAL:
-		return SetScope::SESSION;
-	default:
-		return SetScope::AUTOMATIC;
-	}
-}
-
-} // namespace
-
-} // namespace capiv2
-} // namespace duckdb
-
 using namespace duckdb::capiv2;
 
 DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance, duckdb_v2_connection_handle *out_conn,
@@ -57,16 +36,32 @@ DUCKDB_V2_ERROR duckdb_v2_connection_get_context(duckdb_v2_connection_handle con
 	return WithErrorHandler(err, [&]() { *out_context = Convert(&Convert(conn)->context_handle); });
 }
 
+DUCKDB_V2_ERROR duckdb_v2_connection_get_option_value(duckdb_v2_connection_handle conn,
+                                                      const duckdb_v2_identifier_t *name,
+                                                      duckdb_v2_value_handle *out_value,
+                                                      DUCKDB_V2_SETTING_SCOPE *out_scope,
+                                                      duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(out_value);
+	DUCKDB_CHECK_ARG(out_scope);
+	*out_value = nullptr;
+	return WithErrorHandler(err, [&]() {
+		duckdb::Value value;
+		*out_scope = CV2OptionSource(*Convert(conn)->context).ReadValue(ConvertIdentifierName(name), value);
+		*out_value = Convert(new duckdb::Value(std::move(value)));
+	});
+}
+
 DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn, const duckdb_v2_identifier_t *name,
-                                                const duckdb_v2_str *setting, DUCKDB_V2_SETTING_SCOPE scope,
+                                                duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
                                                 duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(setting);
+	DUCKDB_CHECK_ARG(value);
 	return WithErrorHandler(err, [&]() {
-		auto &client = *Convert(conn)->context;
-		duckdb::PhysicalSet::SetVariable(client, duckdb::Identifier(ConvertIdentifierName(name)),
-		                                 MapSettingScope(scope), duckdb::Value(duckdb::string(Convert(setting))));
+		duckdb::PhysicalSet::SetVariable(*Convert(conn)->context, duckdb::Identifier(ConvertIdentifierName(name)),
+		                                 ConvertSetScope(scope), *Convert(value));
 	});
 }
 

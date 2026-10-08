@@ -22,15 +22,17 @@ TEST_CASE("Stable C++API: Instance GetOption by name and option target scope", "
 	Environment env;
 	auto instance = env.Open(":memory:");
 
-	// Instance-resolved options carry their declared scope.
-	auto option = instance.GetOption("allow_community_extensions");
+	// Options describe the scopes they may be written at.
+	auto option = instance.GetOptionDescription("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
-	REQUIRE(option.GetTargetScope() == OptionTargetScope::GLOBAL_ONLY);
+	REQUIRE(option.SupportsScope(SettingScope::GLOBAL));
+	REQUIRE_FALSE(option.SupportsScope(SettingScope::SESSION));
+	REQUIRE(option.GetDefaultScope() == SettingScope::GLOBAL);
 
 	// An alias resolves to its canonical option.
-	REQUIRE(instance.GetOption("memory_limit").GetName() == "max_memory");
+	REQUIRE(instance.GetOptionDescription("memory_limit").GetName() == "max_memory");
 
-	REQUIRE_THROWS_MATCHES(instance.GetOption("no_such_option"), Exception,
+	REQUIRE_THROWS_MATCHES(instance.GetOptionDescription("no_such_option"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_api]") {
@@ -44,7 +46,7 @@ TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_
 	REQUIRE(instance.GetOptionCount() > 0);
 	bool found_memory_limit = false;
 	for (size_t i = 0; i < instance.GetOptionCount(); i++) {
-		auto option = instance.GetOptionByIndex(i);
+		auto option = instance.GetOptionDescription(i);
 		if (option.GetName() != "max_memory") {
 			continue;
 		}
@@ -58,12 +60,12 @@ TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_
 		REQUIRE(found_alias);
 	}
 	REQUIRE(found_memory_limit);
-	REQUIRE_FALSE(instance.GetOption("allow_community_extensions").GetDefaultValue().empty());
+	REQUIRE_FALSE(instance.GetOptionDescription("allow_community_extensions").GetDefaultValue().IsNull());
 
 	auto conn = instance.Connect();
 	auto &ctx = conn.GetContext();
 	REQUIRE(ctx.GetOptionCount() == instance.GetOptionCount());
-	REQUIRE_FALSE(ctx.GetOptionByIndex(0).GetName().empty());
+	REQUIRE_FALSE(ctx.GetOptionDescription(0).GetName().empty());
 }
 
 TEST_CASE("Stable C++API: Instance SetDefault selects the database for new connections", "[cpp_api]") {
@@ -148,27 +150,27 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	auto conn_a = instance.Connect();
 	auto conn_b = instance.Connect();
 
-	// max_execution_time is LOCAL_DEFAULT: a LOCAL write on conn_a stays
-	// invisible to conn_b.
-	conn_a.SetOption("max_execution_time", "5000", SettingScope::LOCAL);
-	REQUIRE(conn_a.GetContext().GetOption("max_execution_time").GetValue() == "5000");
-	REQUIRE(conn_b.GetContext().GetOption("max_execution_time").GetValue() != "5000");
+	// A SESSION write on conn_a stays invisible to conn_b, and reads back as SESSION.
+	conn_a.SetOption("max_execution_time", "5000", SettingScope::SESSION);
+	auto seen = conn_a.GetOption("max_execution_time");
+	REQUIRE(seen.value.ToText() == "5000");
+	REQUIRE(seen.scope == SettingScope::SESSION);
+	REQUIRE(conn_b.GetOption("max_execution_time").value.ToText() != "5000");
 
-	// A GLOBAL write on conn_a is visible identically on conn_b. The options
-	// must outlive the borrowed views their getters return.
+	// A GLOBAL write on conn_a is visible identically on conn_b, and on the instance.
 	conn_a.SetOption("memory_limit", "987MB", SettingScope::GLOBAL);
-	auto option_a = conn_a.GetContext().GetOption("memory_limit");
-	auto option_b = conn_b.GetContext().GetOption("memory_limit");
-	auto seen_a = option_a.GetValue();
-	auto seen_b = option_b.GetValue();
-	REQUIRE_FALSE(seen_a.empty());
-	REQUIRE(std::string(seen_a) == std::string(seen_b));
+	auto seen_a = conn_a.GetOption("memory_limit");
+	auto seen_b = conn_b.GetOption("memory_limit");
+	REQUIRE(seen_a.value.ToText() == seen_b.value.ToText());
+	auto seen_instance = instance.GetOption("memory_limit");
+	REQUIRE(seen_instance.value.ToText() == seen_a.value.ToText());
+	REQUIRE(seen_instance.scope == SettingScope::GLOBAL);
 
-	// A GLOBAL_ONLY option rejects a LOCAL scope.
-	REQUIRE_THROWS_MATCHES(conn_a.SetOption("allow_community_extensions", "false", SettingScope::LOCAL), Exception,
+	// A GLOBAL-only option rejects a SESSION write.
+	REQUIRE_THROWS_MATCHES(conn_a.SetOption("allow_community_extensions", "false", SettingScope::SESSION), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
-TEST_CASE("Stable C++API: Context::GetOption by name and the scopeless SetOption default", "[cpp_api]") {
+TEST_CASE("Stable C++API: Context options and the scopeless SetOption default", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
@@ -176,14 +178,21 @@ TEST_CASE("Stable C++API: Context::GetOption by name and the scopeless SetOption
 	auto conn = instance.Connect();
 	auto &ctx = conn.GetContext();
 
-	auto option = ctx.GetOption("allow_community_extensions");
+	auto option = ctx.GetOptionDescription("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
 
-	// The scopeless overload uses Automatic scope (SQL `SET` semantics).
+	// The scopeless overload writes the option's default scope (SQL `SET` semantics): the session here.
 	conn.SetOption("max_execution_time", "4242");
-	REQUIRE(ctx.GetOption("max_execution_time").GetValue() == "4242");
+	auto seen = ctx.GetOption("max_execution_time");
+	REQUIRE(seen.value.ToText() == "4242");
+	REQUIRE(seen.scope == SettingScope::SESSION);
 
-	REQUIRE_THROWS_MATCHES(ctx.GetOption("no_such_option_xyz"), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	// A context writes too, at any scope.
+	ctx.SetOption("max_execution_time", "77", SettingScope::GLOBAL);
+	REQUIRE(instance.GetOption("max_execution_time").value.ToText() == "77");
+
+	REQUIRE_THROWS_MATCHES(ctx.GetOptionDescription("no_such_option_xyz"), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: Instance::Attach with a name and options", "[cpp_api]") {
 	using namespace duckdb::cxx;

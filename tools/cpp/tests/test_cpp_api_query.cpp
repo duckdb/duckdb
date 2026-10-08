@@ -143,7 +143,7 @@ TEST_CASE("Stable C++API: GetQueryProgress reports unavailable progress", "[cpp_
 	Environment env;
 	auto db = env.Open(":memory:");
 	auto conn = db.Connect();
-	conn.SetOption("enable_progress_bar", "true", SettingScope::LOCAL);
+	conn.SetOption("enable_progress_bar", "true", SettingScope::SESSION);
 
 	auto result = conn.Execute("SELECT sum(sin(i)) FROM unnest(range(100000)) AS t(i)");
 	REQUIRE(result.FetchChunk());

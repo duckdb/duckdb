@@ -167,17 +167,30 @@ void CV2Instance::SetDefault(const string &path) {
 	DatabaseManager::Get(instance).SetDefaultDatabase(attached->GetName());
 }
 
-void CV2Instance::SetOption(const Identifier &name, const string &setting) {
+void CV2Instance::SetOption(const Identifier &name, const Value &value, DUCKDB_V2_SETTING_SCOPE scope) {
+	if (scope == DUCKDB_V2_SETTING_SCOPE_SESSION) {
+		throw InvalidInputException("an instance has no SESSION scope: write the option through a connection");
+	}
 	if (!IsStarted()) {
 		// Staged for startup: the only route to options that cannot change once the instance runs.
-		config->SetOptionByName(name, Value(setting));
+		config->SetOptionByName(name, value);
 		auto option = DBConfig::GetOptionByName(name);
-		staged_settings[option ? Identifier(option->name) : name] = setting;
+		staged_settings[option ? Identifier(option->name) : name] = value;
 		return;
 	}
-	// Force GLOBAL scope: the internal context has no LOCAL settings of its own, and instance-scoped settings only
+	// Force GLOBAL scope: the internal context has no SESSION settings of its own, and instance-scoped settings only
 	// make sense as GLOBAL anyway.
-	PhysicalSet::SetVariable(*internal_connection->context, name, SetScope::GLOBAL, Value(setting));
+	PhysicalSet::SetVariable(*internal_connection->context, name, SetScope::GLOBAL, value);
+}
+
+Value CV2Instance::GetOptionValue(std::string_view name) {
+	Value value;
+	if (!IsStarted()) {
+		CV2OptionSource(*config, staged_settings).ReadValue(name, value);
+	} else {
+		CV2OptionSource(*internal_connection->context).ReadValue(name, value);
+	}
+	return value;
 }
 
 unique_ptr<CV2Option> CV2Instance::GetOption(std::string_view name) {
@@ -308,15 +321,34 @@ DUCKDB_V2_ERROR duckdb_v2_instance_set_default(duckdb_v2_instance_handle instanc
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
-                                              const duckdb_v2_str *setting, duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_instance_get_option_value(duckdb_v2_instance_handle instance,
+                                                    const duckdb_v2_identifier_t *name,
+                                                    duckdb_v2_value_handle *out_value,
+                                                    DUCKDB_V2_SETTING_SCOPE *out_scope,
+                                                    duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(instance);
 	DUCKDB_CHECK_ARG(name);
-	DUCKDB_CHECK_ARG(setting);
+	DUCKDB_CHECK_ARG(out_value);
+	DUCKDB_CHECK_ARG(out_scope);
+	*out_value = nullptr;
 	return WithErrorHandler(err, [&]() {
 		auto &wrapper = *Convert(instance);
 		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
-		wrapper.SetOption(duckdb::Identifier(ConvertIdentifierName(name)), duckdb::string(Convert(setting)));
+		*out_value = Convert(new duckdb::Value(wrapper.GetOptionValue(ConvertIdentifierName(name))));
+		*out_scope = DUCKDB_V2_SETTING_SCOPE_GLOBAL;
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance, const duckdb_v2_identifier_t *name,
+                                              duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
+                                              duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(instance);
+	DUCKDB_CHECK_ARG(name);
+	DUCKDB_CHECK_ARG(value);
+	return WithErrorHandler(err, [&]() {
+		auto &wrapper = *Convert(instance);
+		duckdb::lock_guard<duckdb::mutex> guard(wrapper.lock);
+		wrapper.SetOption(duckdb::Identifier(ConvertIdentifierName(name)), *Convert(value), scope);
 	});
 }
 

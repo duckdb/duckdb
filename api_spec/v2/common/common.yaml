@@ -46,12 +46,13 @@ handles:
     cleanup_with: connection_destroy
   option:
     description: |
-      An opaque, owned, read-only descriptor of a single config option as seen
-      from an instance, connection, or context: its canonical name, current
-      setting, default setting, description, target scope, and aliases.
-      Returned by the *_get_option and *_get_option_by_index functions; the
-      caller always destroys it via `[[option_destroy]]`. Options are written with
-      the *_set_option functions, which take a name and a setting directly.
+      An opaque, owned, read-only descriptor of a single config option as
+      registered on an instance: its canonical name, default value,
+      description, the scopes it may be written at, and aliases. It carries no
+      current value: read that with the *_get_option_value functions, and
+      write it with the *_set_option functions. Returned by the
+      *_get_option_by_name and *_get_option_by_index functions; the caller
+      always destroys it via `[[option_destroy]]`.
     cleanup_with: option_destroy
   # Error reporting. Every fallible function takes a trailing
   # `error_info *err` out-parameter.

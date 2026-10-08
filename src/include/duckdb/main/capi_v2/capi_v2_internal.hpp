@@ -289,8 +289,10 @@ public:
 	void Detach(const string &path);
 	//! Makes the database attached from `path`, or attached under that name, the default for new connections.
 	void SetDefault(const string &path);
-	//! Stages a startup option, or SET GLOBAL once started.
-	void SetOption(const Identifier &name, const string &setting);
+	//! Stages a startup option, or SET GLOBAL once started. An instance has no LOCAL scope.
+	void SetOption(const Identifier &name, const Value &value, DUCKDB_V2_SETTING_SCOPE scope);
+	//! The effective value of an option: staged, GLOBAL, or the default.
+	Value GetOptionValue(std::string_view name);
 	unique_ptr<CV2Option> GetOption(std::string_view name);
 	idx_t GetOptionCount();
 	unique_ptr<CV2Option> GetOptionByIndex(idx_t index);
@@ -304,8 +306,8 @@ public:
 private:
 	//! Staged until Start consumes it.
 	unique_ptr<DBConfig> config;
-	//! The staged settings as written, by canonical name: legacy options cannot be read back from a DBConfig.
-	identifier_map_t<string> staged_settings;
+	//! The staged values as written, by canonical name: legacy options cannot be read back from a DBConfig.
+	identifier_map_t<Value> staged_settings;
 	shared_ptr<DuckDB> database;
 	unique_ptr<Connection> internal_connection;
 };
@@ -444,35 +446,48 @@ class CV2OptionSource {
 public:
 	explicit CV2OptionSource(ClientContext &context) : context(&context), config(DBConfig::GetConfig(context)) {
 	}
-	CV2OptionSource(const DBConfig &config, const identifier_map_t<string> &staged_settings)
+	CV2OptionSource(const DBConfig &config, const identifier_map_t<Value> &staged_settings)
 	    : config(config), staged_settings(&staged_settings) {
 	}
 
 	const DBConfig &GetConfig() const {
 		return config;
 	}
-	//! The effective setting of `name`, or `fallback` when the cascade yields NULL.
-	string ReadSetting(const Identifier &name, const string &fallback) const;
+	//! The effective value of `name`, and the scope DuckDB attributes it to. Throws for an unknown option.
+	DUCKDB_V2_SETTING_SCOPE ReadValue(std::string_view name, Value &result) const;
 
 private:
 	optional_ptr<ClientContext> context;
 	const DBConfig &config;
-	optional_ptr<const identifier_map_t<string>> staged_settings;
+	optional_ptr<const identifier_map_t<Value>> staged_settings;
 };
 
 class CV2Option {
 public:
 	Identifier name;
-	string setting;
-	string default_setting;
+	Value default_value;
 	string description;
-	DUCKDB_V2_OPTION_TARGET_SCOPE target_scope = DUCKDB_V2_OPTION_TARGET_SCOPE_UNKNOWN;
+	bool supports_global = false;
+	bool supports_session = false;
+	DUCKDB_V2_SETTING_SCOPE default_scope = DUCKDB_V2_SETTING_SCOPE_GLOBAL;
 	vector<string> aliases;
 
 	static unique_ptr<CV2Option> FromIndex(const CV2OptionSource &source, idx_t index);
 	static unique_ptr<CV2Option> FromName(const CV2OptionSource &source, std::string_view name);
 	static idx_t Count(const CV2OptionSource &source);
 };
+
+//! The engine's write scope for a V2 scope.
+inline SetScope ConvertSetScope(DUCKDB_V2_SETTING_SCOPE scope) {
+	switch (scope) {
+	case DUCKDB_V2_SETTING_SCOPE_GLOBAL:
+		return SetScope::GLOBAL;
+	case DUCKDB_V2_SETTING_SCOPE_SESSION:
+		return SetScope::SESSION;
+	default:
+		return SetScope::AUTOMATIC;
+	}
+}
 
 inline auto Convert(duckdb_v2_option_handle opt) -> CV2Option * {
 	return reinterpret_cast<CV2Option *>(opt);

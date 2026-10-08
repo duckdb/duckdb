@@ -249,10 +249,10 @@ typedef struct _duckdb_v2_connection {
 } * duckdb_v2_connection_handle;
 
 /*!
- * An opaque, owned, read-only descriptor of a single config option as seen from an instance, connection, or context:
- * its canonical name, current setting, default setting, description, target scope, and aliases. Returned by the
- * *_get_option and *_get_option_by_index functions; the caller always destroys it via `duckdb_v2_option_destroy()`.
- * Options are written with the *_set_option functions, which take a name and a setting directly.
+ * An opaque, owned, read-only descriptor of a single config option as registered on an instance: its canonical name,
+ * default value, description, the scopes it may be written at, and aliases. It carries no current value: read that with
+ * the *_get_option_value functions, and write it with the *_set_option functions. Returned by the *_get_option_by_name
+ * and *_get_option_by_index functions; the caller always destroys it via `duckdb_v2_option_destroy()`.
  */
 typedef struct _duckdb_v2_option {
 	void *internal_ptr;
@@ -1465,41 +1465,21 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_data_collection_scan(
 /* --- Enums for configuration --- */
 
 /*!
- * The scope target of an option: where DuckDB permits its setting to be written. UNKNOWN is reported for an option
- * whose declaration carries no explicit scope target, which includes every extension option.
- */
-typedef enum DUCKDB_V2_OPTION_TARGET_SCOPE {
-	//! Target scope is not known.
-	DUCKDB_V2_OPTION_TARGET_SCOPE_UNKNOWN = 0,
-
-	//! May only be written at GLOBAL (instance) scope.
-	DUCKDB_V2_OPTION_TARGET_SCOPE_GLOBAL_ONLY = 1,
-
-	//! May only be written at LOCAL (session) scope.
-	DUCKDB_V2_OPTION_TARGET_SCOPE_LOCAL_ONLY = 2,
-
-	//! May be written at either scope; defaults to GLOBAL when unspecified.
-	DUCKDB_V2_OPTION_TARGET_SCOPE_GLOBAL_DEFAULT = 3,
-
-	//! May be written at either scope; defaults to LOCAL when unspecified.
-	DUCKDB_V2_OPTION_TARGET_SCOPE_LOCAL_DEFAULT = 4,
-	DUCKDB_V2_OPTION_TARGET_SCOPE_MAX_ENUM = 0x7FFFFFFF,
-} DUCKDB_V2_OPTION_TARGET_SCOPE;
-
-/*!
- * Destination scope for a connection-side option write, as taken by connection_option_set. AUTOMATIC defers to the
- * option's target scope, like SQL `SET name = value`. GLOBAL writes through to the instance, visible to all
- * connections, like `SET GLOBAL`. LOCAL writes to the connection's session only, like `SET LOCAL` / `SET SESSION`.
+ * The scope of an option's value. Writes take DEFAULT, GLOBAL or SESSION: DEFAULT writes to the option's default scope
+ * (`duckdb_v2_option_get_default_scope()`), like SQL `SET name = value`; GLOBAL writes through to the instance, visible
+ * to all connections, like `SET GLOBAL`; SESSION writes to one connection's session only, like `SET SESSION`. Reads
+ * report GLOBAL or SESSION, as DuckDB attributes the value: an option no scope sets reads as GLOBAL, its default, and a
+ * legacy option read through a connection or context reads as SESSION.
  */
 typedef enum DUCKDB_V2_SETTING_SCOPE {
-	//! Resolve from the option's target scope.
-	DUCKDB_V2_SETTING_SCOPE_AUTOMATIC = 0,
+	//! Write only: the option's default scope (`duckdb_v2_option_get_default_scope()`), not its default value.
+	DUCKDB_V2_SETTING_SCOPE_DEFAULT = 0,
 
-	//! Write through to the instance (visible to all connections).
+	//! The instance's value, visible to all connections.
 	DUCKDB_V2_SETTING_SCOPE_GLOBAL = 1,
 
-	//! Write to the connection's session only.
-	DUCKDB_V2_SETTING_SCOPE_LOCAL = 2,
+	//! A connection's session value.
+	DUCKDB_V2_SETTING_SCOPE_SESSION = 2,
 	DUCKDB_V2_SETTING_SCOPE_MAX_ENUM = 0x7FFFFFFF,
 } DUCKDB_V2_SETTING_SCOPE;
 
@@ -1546,39 +1526,22 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_name(duckdb_v2_option_handle o
                                                        duckdb_v2_error_info_handle *err);
 
 /*!
- * Borrows the option's current setting (its string-encoded value).
+ * Returns the option's static default, as a value of the option's type.
  *
- * The effective setting at the scope of the instance, connection, or context the descriptor was read from.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param option The option.
- * @param out_setting Receives a borrowed view of the setting. Valid until the option is destroyed.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_setting(duckdb_v2_option_handle option, duckdb_v2_str *out_setting,
-                                                          duckdb_v2_error_info_handle *err);
-
-/*!
- * Borrows the option's static default setting.
- *
- * The empty view for an option whose declaration has no default.
+ * A NULL value for an option whose declaration has no default. The caller destroys the returned value.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param option The option.
- * @param out_default_setting Receives a borrowed view of the default setting. Valid until the option is destroyed.
+ * @param out_value Receives the default value.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_default_setting(duckdb_v2_option_handle option,
-                                                                  duckdb_v2_str *out_default_setting,
-                                                                  duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_default_value(duckdb_v2_option_handle option,
+                                                                duckdb_v2_value_handle *out_value,
+                                                                duckdb_v2_error_info_handle *err);
 
 /*!
  * Borrows the option's human-readable description.
@@ -1597,23 +1560,40 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_description(duckdb_v2_option_h
                                                               duckdb_v2_error_info_handle *err);
 
 /*!
- * Returns the option's target scope.
+ * Reports whether the option may be written at a scope.
  *
- * OPTION_TARGET_SCOPE_UNKNOWN for an option whose declaration carries no explicit scope target, which includes every
- * extension option.
+ * GLOBAL and SESSION are the scopes to ask about; DEFAULT is supported by every option that supports either. A write at
+ * an unsupported scope returns ERROR_INPUT_INVALID.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param option The option.
- * @param out_target_scope Receives the target scope.
+ * @param scope The scope to ask about.
+ * @param out_supported Receives whether a write at the scope is accepted.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_target_scope(duckdb_v2_option_handle option,
-                                                               DUCKDB_V2_OPTION_TARGET_SCOPE *out_target_scope,
-                                                               duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_supports_scope(duckdb_v2_option_handle option,
+                                                             DUCKDB_V2_SETTING_SCOPE scope, bool *out_supported,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the scope a DEFAULT write of the option goes to: GLOBAL or SESSION.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param option The option.
+ * @param out_scope Receives the default scope.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_default_scope(duckdb_v2_option_handle option,
+                                                                DUCKDB_V2_SETTING_SCOPE *out_scope,
+                                                                duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the number of aliases registered for this option.
@@ -1652,19 +1632,225 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_option_get_alias(duckdb_v2_option_handle 
                                                         duckdb_v2_error_info_handle *err);
 
 /*!
- * Reads a config option through a context.
+ * Reads the effective value of an option on the instance.
  *
- * The context is a connection seen from inside DuckDB, so this reads the connection's cascade: the LOCAL override if
- * the connection set one, otherwise the GLOBAL value, otherwise the static default. Aliases resolve transparently, and
- * an unknown name returns ERROR_INPUT_INVALID. The caller destroys the returned option. A context is a read scope:
- * options are written through an instance or connection.
+ * Before startup this is the staged startup value, or the default; afterwards the GLOBAL value, or the default. Always
+ * reports GLOBAL. Aliases resolve transparently, and an unknown name returns ERROR_INPUT_INVALID.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param name Option name (canonical or alias).
+ * @param out_value Receives the value, typed as the option. Owned by the caller.
+ * @param out_scope Receives the scope the value came from.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_value(duckdb_v2_instance_handle instance,
+                                                                 const duckdb_v2_identifier_t *name,
+                                                                 duckdb_v2_value_handle *out_value,
+                                                                 DUCKDB_V2_SETTING_SCOPE *out_scope,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reads the effective value of an option on a connection.
+ *
+ * The connection's SESSION value if it set one, otherwise the GLOBAL value, otherwise the default. Aliases resolve
+ * transparently, and an unknown name returns ERROR_INPUT_INVALID.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection.
+ * @param name Option name (canonical or alias).
+ * @param out_value Receives the value, typed as the option. Owned by the caller.
+ * @param out_scope Receives the scope the value came from.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_option_value(duckdb_v2_connection_handle connection,
+                                                                   const duckdb_v2_identifier_t *name,
+                                                                   duckdb_v2_value_handle *out_value,
+                                                                   DUCKDB_V2_SETTING_SCOPE *out_scope,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Reads the effective value of an option through a context.
+ *
+ * The context's connection cascade, as `duckdb_v2_connection_get_option_value()` reads it: the SESSION value if set,
+ * otherwise the GLOBAL value, otherwise the default.
  *
  * history:
  * - stable: v2.0.0
  *
  * @param ctx The context.
  * @param name Option name (canonical or alias).
- * @param out_option Receives the populated option handle.
+ * @param out_value Receives the value, typed as the option. Owned by the caller.
+ * @param out_scope Receives the scope the value came from.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_value(duckdb_v2_context_handle ctx,
+                                                                const duckdb_v2_identifier_t *name,
+                                                                duckdb_v2_value_handle *out_value,
+                                                                DUCKDB_V2_SETTING_SCOPE *out_scope,
+                                                                duckdb_v2_error_info_handle *err);
+
+/*!
+ * Writes an option on the instance.
+ *
+ * Before the instance has started (no `duckdb_v2_instance_attach()` or `duckdb_v2_connection_create()` yet), the option
+ * goes into the startup configuration: this is the only way to set an option that can only be chosen at startup, such
+ * as access_mode or enable_external_access. Unknown names are kept for an extension to consume at startup; if none
+ * does, startup fails with the unrecognized names. After startup, this is `SET GLOBAL name = value` and an unknown name
+ * is rejected unless an extension that defines it can be autoloaded.
+ *
+ * An instance has only GLOBAL scope: DEFAULT and GLOBAL write there, and SESSION returns ERROR_INPUT_INVALID, as does
+ * an option that does not support GLOBAL.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param name Option name (canonical or alias).
+ * @param value The value, cast to the option's type as SQL `SET` does. Borrowed.
+ * @param scope Target scope: DEFAULT, GLOBAL, or SESSION.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance,
+                                                           const duckdb_v2_identifier_t *name,
+                                                           duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
+                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Writes an option through the connection.
+ *
+ * `scope` chooses the destination, mirroring SQL:
+ *   - DEFAULT writes to the option's default scope, like a bare `SET name = value`.
+ *   - GLOBAL writes through to the instance, visible to all connections, like `SET GLOBAL`.
+ *   - SESSION writes to this connection's session only, like `SET SESSION`.
+ * A scope the option does not support (`duckdb_v2_option_supports_scope()`) returns ERROR_INPUT_INVALID. An unknown
+ * name is rejected unless an extension that defines it can be autoloaded; to stage a setting for an extension before
+ * startup, use `duckdb_v2_instance_set_option()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param connection The connection.
+ * @param name Option name (canonical or alias).
+ * @param value The value, cast to the option's type as SQL `SET` does. Borrowed.
+ * @param scope Target scope: DEFAULT, GLOBAL, or SESSION.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle connection,
+                                                             const duckdb_v2_identifier_t *name,
+                                                             duckdb_v2_value_handle value,
+                                                             DUCKDB_V2_SETTING_SCOPE scope,
+                                                             duckdb_v2_error_info_handle *err);
+
+/*!
+ * Writes an option through a context.
+ *
+ * As `duckdb_v2_connection_set_option()`, for the context's connection.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param ctx The context.
+ * @param name Option name (canonical or alias).
+ * @param value The value, cast to the option's type as SQL `SET` does. Borrowed.
+ * @param scope Target scope: DEFAULT, GLOBAL, or SESSION.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_set_option(duckdb_v2_context_handle ctx,
+                                                          const duckdb_v2_identifier_t *name,
+                                                          duckdb_v2_value_handle value, DUCKDB_V2_SETTING_SCOPE scope,
+                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Describes a config option registered on the instance, by name.
+ *
+ * Allocates an option descriptor: canonical name, default value, description, supported and default scopes, and
+ * aliases. Aliases resolve transparently — passing an alias returns the canonical option, with the alias listed in its
+ * alias array. An unknown name returns ERROR_INPUT_INVALID; before startup that includes an option of an extension that
+ * has not loaded yet, even if a value for it has been staged. The caller destroys the returned option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param name Option name (canonical or alias).
+ * @param out_option Receives the option descriptor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_name(duckdb_v2_instance_handle instance,
+                                                                   const duckdb_v2_identifier_t *name,
+                                                                   duckdb_v2_option_handle *out_option,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the number of config options registered on the instance.
+ *
+ * Counts core options plus the extension options registered on this instance. Aliases are NOT counted separately; each
+ * one is reachable through its canonical option's alias array.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param out_count Receives the option count.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_count(duckdb_v2_instance_handle instance, idx_t *out_count,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Describes the config option at the given index on the instance.
+ *
+ * Index space: [0, core_count) addresses core options, [core_count, total) extension options. The mapping is stable for
+ * as long as no extension registers new options. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys
+ * the returned option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance handle.
+ * @param index The option index, in [0, option_count).
+ * @param out_option Receives the option descriptor.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_index(duckdb_v2_instance_handle instance, idx_t index,
+                                                                    duckdb_v2_option_handle *out_option,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Describes a config option through a context, by name.
+ *
+ * The same descriptor `duckdb_v2_instance_get_option_by_name()` returns for the context's instance. Aliases resolve
+ * transparently, and an unknown name returns ERROR_INPUT_INVALID. The caller destroys the returned option.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param ctx The context.
+ * @param name Option name (canonical or alias).
+ * @param out_option Receives the option descriptor.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
@@ -1693,7 +1879,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_count(duckdb_v2_contex
                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
- * Reads the config option at the given index visible to this context.
+ * Describes the config option at the given index visible to this context.
  *
  * Index space: [0, core_count) addresses core options, [core_count, total) the extension options visible from this
  * context's instance. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys the returned option.
@@ -1703,7 +1889,7 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_count(duckdb_v2_contex
  *
  * @param ctx The context.
  * @param index The option index, in [0, option_count).
- * @param out_option Receives the populated option handle.
+ * @param out_option Receives the option descriptor.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
@@ -1713,6 +1899,126 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_option_by_index(duckdb_v2_con
                                                                    duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for configuration --- */
+
+/* ============================================================================
+ * MODULE: connection
+ * ============================================================================ */
+
+/* --- Enums for connection --- */
+
+/* --- Struct forward declarations for connection --- */
+
+/* --- Types for connection --- */
+
+/* --- Constants for connection --- */
+
+/* --- Function pointer typedefs for connection --- */
+
+/* --- Functions for connection --- */
+
+/*!
+ * Opens a connection to an instance, starting it if it has not started yet.
+ *
+ * Each connection carries its own client context and session-scoped (LOCAL) settings. Connections to the same instance
+ * share its catalog, buffer pool, and transaction manager. A connection may be created before any database is attached
+ * to the instance; until one is, only the system catalog and the connection's temporary catalog are visible. The caller
+ * destroys it via `duckdb_v2_connection_destroy()`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance to connect to.
+ * @param out_conn Receives the new connection handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance,
+                                                         duckdb_v2_connection_handle *out_conn,
+                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Destroys the connection.
+ *
+ * Always succeeds. Releases the connection's reference on the underlying database instance, which survives for as long
+ * as anything else still references it. On success the handle is set to null. Safe to call on an already-null slot.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_handle *conn);
+
+/*!
+ * Borrows the client context of a connection.
+ *
+ * The context is the scope that constructs values and types and reads settings and the file system, the same scope a
+ * callback receives. Calls through it run in the connection's active transaction, or in a transaction of their own when
+ * none is open. The returned handle is borrowed: it is valid for as long as the connection is, and must not be
+ * destroyed.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection.
+ * @param out_context Receives the borrowed context.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_context(duckdb_v2_connection_handle conn,
+                                                              duckdb_v2_context_handle *out_context,
+                                                              duckdb_v2_error_info_handle *err);
+
+/*!
+ * Interrupts the query currently executing on the connection.
+ *
+ * The cross-thread (but not cross-connection) cancellation entry point for streaming results: safe to call from any
+ * thread within the execution of a query through a connection, including while another thread steps the query's result.
+ * A no-op when no query is active. Cancellation surfaces on the consuming side as step status CANCELLED
+ * (`duckdb_v2_result_step()`), or as ERROR_RUNTIME_INTERRUPT (`duckdb_v2_result_fetch_chunk()`).
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection whose active query to interrupt.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_interrupt(duckdb_v2_connection_handle conn,
+                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Captures a snapshot of the active query's execution progress.
+ *
+ * Reads the percentage and row counts from one consistent snapshot of the query currently executing on the connection.
+ * Safe to call from any thread, including while another thread steps the query's result.
+ *
+ * Progress is published only when the enable_progress_bar option is set; the bridge does not enable tracking itself.
+ * Both row counts are 0 when no information is available. The percentage is -1 when tracking is disabled, no query is
+ * active, or no progress has been published yet.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection.
+ * @param out_percentage Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active,
+ * or no progress has been published yet.
+ * @param out_rows_processed Receives the number of rows processed so far.
+ * @param out_total_rows_to_process Receives the total number of rows the query will process.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle conn, double *out_percentage,
+                                                               uint64_t *out_rows_processed,
+                                                               uint64_t *out_total_rows_to_process,
+                                                               duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for connection --- */
 
 /* ============================================================================
  * MODULE: custom type
@@ -3262,94 +3568,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_set(duckdb_v2_attach_optio
  * @return DUCKDB_V2_ERROR
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_attach_options_destroy(duckdb_v2_attach_options_handle *options);
-
-/*!
- * Sets a config option on the instance (GLOBAL scope).
- *
- * Before the instance has started (no `duckdb_v2_instance_attach()` or `duckdb_v2_connection_create()` yet), the option
- * goes into the startup configuration: this is the only way to set an option that can only be chosen at startup, such
- * as access_mode or enable_external_access. Unknown names are kept for an extension to consume at startup; if none
- * does, startup fails with the unrecognized names. After startup, this is `SET GLOBAL name = setting` and an unknown
- * name is rejected unless an extension that defines it can be autoloaded. Returns ERROR_INPUT_INVALID for an option
- * declared LOCAL_ONLY, and for a legacy option with no global setter.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param instance The instance handle.
- * @param name Option name (canonical or alias).
- * @param setting The setting, in the textual form SQL `SET` accepts.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_set_option(duckdb_v2_instance_handle instance,
-                                                           const duckdb_v2_identifier_t *name,
-                                                           const duckdb_v2_str *setting,
-                                                           duckdb_v2_error_info_handle *err);
-
-/*!
- * Reads a config option from the instance (GLOBAL scope) by name.
- *
- * Allocates a fully populated option: canonical name, current GLOBAL setting, default setting, description, target
- * scope, and aliases. Before startup the current setting is the staged startup value, or the default. Aliases resolve
- * transparently — passing an alias returns the canonical option, with the alias listed in its alias array. An unknown
- * name returns ERROR_INPUT_INVALID; before startup that includes an option of an extension that has not loaded yet,
- * even if a setting for it has been staged. The caller destroys the returned option.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param instance The instance handle.
- * @param name Option name (canonical or alias).
- * @param out_option Receives the populated option handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_name(duckdb_v2_instance_handle instance,
-                                                                   const duckdb_v2_identifier_t *name,
-                                                                   duckdb_v2_option_handle *out_option,
-                                                                   duckdb_v2_error_info_handle *err);
-
-/*!
- * Returns the number of config options registered on the instance.
- *
- * Counts core options plus the extension options registered on this instance. Aliases are NOT counted separately; each
- * one is reachable through its canonical option's alias array.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param instance The instance handle.
- * @param out_count Receives the option count.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_count(duckdb_v2_instance_handle instance, idx_t *out_count,
-                                                                 duckdb_v2_error_info_handle *err);
-
-/*!
- * Reads the config option at the given index from the instance.
- *
- * Index space: [0, core_count) addresses core options, [core_count, total) extension options. The mapping is stable for
- * as long as no extension registers new options. An out-of-range index returns ERROR_INPUT_INVALID. The caller destroys
- * the returned option.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param instance The instance handle.
- * @param index The option index, in [0, option_count).
- * @param out_option Receives the populated option handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_option_by_index(duckdb_v2_instance_handle instance, idx_t index,
-                                                                    duckdb_v2_option_handle *out_option,
-                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
  * Returns the version of the linked DuckDB library.
@@ -5493,154 +5711,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_description_has_generated(duckdb_v
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_description_destroy(duckdb_v2_column_description_handle *column);
 
 /* --- Struct definitions for catalog --- */
-
-/* ============================================================================
- * MODULE: connection
- * ============================================================================ */
-
-/* --- Enums for connection --- */
-
-/* --- Struct forward declarations for connection --- */
-
-/* --- Types for connection --- */
-
-/* --- Constants for connection --- */
-
-/* --- Function pointer typedefs for connection --- */
-
-/* --- Functions for connection --- */
-
-/*!
- * Opens a connection to an instance, starting it if it has not started yet.
- *
- * Each connection carries its own client context and session-scoped (LOCAL) settings. Connections to the same instance
- * share its catalog, buffer pool, and transaction manager. A connection may be created before any database is attached
- * to the instance; until one is, only the system catalog and the connection's temporary catalog are visible. The caller
- * destroys it via `duckdb_v2_connection_destroy()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param instance The instance to connect to.
- * @param out_conn Receives the new connection handle.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_handle instance,
-                                                         duckdb_v2_connection_handle *out_conn,
-                                                         duckdb_v2_error_info_handle *err);
-
-/*!
- * Destroys the connection.
- *
- * Always succeeds. Releases the connection's reference on the underlying database instance, which survives for as long
- * as anything else still references it. On success the handle is set to null. Safe to call on an already-null slot.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection to destroy.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_handle *conn);
-
-/*!
- * Borrows the client context of a connection.
- *
- * The context is the scope that constructs values and types and reads settings and the file system, the same scope a
- * callback receives. Calls through it run in the connection's active transaction, or in a transaction of their own when
- * none is open. The returned handle is borrowed: it is valid for as long as the connection is, and must not be
- * destroyed.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection.
- * @param out_context Receives the borrowed context.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_context(duckdb_v2_connection_handle conn,
-                                                              duckdb_v2_context_handle *out_context,
-                                                              duckdb_v2_error_info_handle *err);
-
-/*!
- * Sets a config option through the connection.
- *
- * `scope` chooses the destination, mirroring SQL:
- *   - AUTOMATIC resolves it from the option's target scope, like a bare `SET name = setting`.
- *   - GLOBAL writes through to the instance, visible to all connections, like `SET GLOBAL`.
- *   - LOCAL writes to this connection's session only, like `SET LOCAL` / `SET SESSION`.
- * A disallowed combination returns ERROR_INPUT_INVALID: GLOBAL against a LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY
- * one, and the legacy analogues. An unknown name is rejected unless an extension that defines it can be autoloaded; to
- * stage a setting for an extension before startup, use `duckdb_v2_instance_set_option()`.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection.
- * @param name Option name (canonical or alias).
- * @param setting The setting, in the textual form SQL `SET` accepts.
- * @param scope Target scope: AUTOMATIC, GLOBAL, or LOCAL.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_set_option(duckdb_v2_connection_handle conn,
-                                                             const duckdb_v2_identifier_t *name,
-                                                             const duckdb_v2_str *setting,
-                                                             DUCKDB_V2_SETTING_SCOPE scope,
-                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Interrupts the query currently executing on the connection.
- *
- * The cross-thread (but not cross-connection) cancellation entry point for streaming results: safe to call from any
- * thread within the execution of a query through a connection, including while another thread steps the query's result.
- * A no-op when no query is active. Cancellation surfaces on the consuming side as step status CANCELLED
- * (`duckdb_v2_result_step()`), or as ERROR_RUNTIME_INTERRUPT (`duckdb_v2_result_fetch_chunk()`).
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection whose active query to interrupt.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_interrupt(duckdb_v2_connection_handle conn,
-                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Captures a snapshot of the active query's execution progress.
- *
- * Reads the percentage and row counts from one consistent snapshot of the query currently executing on the connection.
- * Safe to call from any thread, including while another thread steps the query's result.
- *
- * Progress is published only when the enable_progress_bar option is set; the bridge does not enable tracking itself.
- * Both row counts are 0 when no information is available. The percentage is -1 when tracking is disabled, no query is
- * active, or no progress has been published yet.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection.
- * @param out_percentage Receives the percentage complete in [0, 100], -1 if tracking is disabled, no query is active,
- * or no progress has been published yet.
- * @param out_rows_processed Receives the number of rows processed so far.
- * @param out_total_rows_to_process Receives the total number of rows the query will process.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connection_handle conn, double *out_percentage,
-                                                               uint64_t *out_rows_processed,
-                                                               uint64_t *out_total_rows_to_process,
-                                                               duckdb_v2_error_info_handle *err);
-
-/* --- Struct definitions for connection --- */
 
 /* ============================================================================
  * MODULE: copy

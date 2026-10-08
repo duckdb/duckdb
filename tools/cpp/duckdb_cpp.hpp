@@ -58,7 +58,8 @@ namespace cxx {
 typedef uint64_t idx_t;
 
 class Exception;
-class InstanceOption;
+class OptionDescription;
+struct OptionValue;
 class Environment;
 class Instance;
 class Connection;
@@ -314,59 +315,46 @@ public:
 //----------------------------------------------------------------------------------------------------------------------
 // Instance Option
 //----------------------------------------------------------------------------------------------------------------------
-// Configuration settings. Write one with `Instance::SetOption` or `Connection::SetOption`, which take the name and
-// value directly; read one back as a `InstanceOption` to inspect its current value, default value, description,
-// target scope or aliases. Settings that can only be chosen at startup are written on an `Instance` before its first
-// `Attach` or `Connect`.
+// Configuration settings. Write one with `SetOption` on an `Instance`, a `Connection` or a `Context`, and read its
+// current value with `GetOption`, which also reports the scope it came from. Describe one with `GetOptionDescription`:
+// its default value, description, the scopes it may be written at, and aliases. Settings that can only be chosen at
+// startup are written on an `Instance` before its first `Attach` or `Connect`.
 
-/// At which scope a setting may be written.
-enum class OptionTargetScope : uint8_t {
-	/// Unknown: the setting declares no target scope, which includes every extension setting.
-	UNKNOWN = 0,
-	/// Writable only at GLOBAL (database) scope.
-	GLOBAL_ONLY = 1,
-	/// Writable only at LOCAL (session) scope.
-	LOCAL_ONLY = 2,
-	/// Writable at either scope, GLOBAL when unspecified.
-	GLOBAL_DEFAULT = 3,
-	/// Writable at either scope, LOCAL when unspecified.
-	LOCAL_DEFAULT = 4,
-};
-
-/// Which scope a connection-level write applies to.
+/// The scope a setting is written at, or its value was read from.
 enum class SettingScope : uint8_t {
-	/// Resolve from the setting's own target scope, exactly like SQL `SET name = value`.
-	AUTOMATIC = 0,
-	/// Apply to the whole database.
+	/// Write only: the setting's default scope (not its default value), exactly like SQL `SET name = value`.
+	DEFAULT = 0,
+	/// The whole database, like SQL `SET GLOBAL`.
 	GLOBAL = 1,
-	/// Apply to this session only.
-	LOCAL = 2,
+	/// One connection's session, like SQL `SET SESSION`.
+	SESSION = 2,
 };
 
-/// A single configuration setting as read from a database or connection: its current value there, plus the
-/// metadata DuckDB declares for it. Read-only.
+/// The description of a configuration setting, as DuckDB declares it: the same from every source, and without its
+/// current value (read that with `GetOption`). Read-only.
 /// The string accessors return views borrowed from this option, valid until it is destroyed.
-class InstanceOption final : public detail::Handle<InstanceOption> {
+class OptionDescription final : public detail::Handle<OptionDescription> {
 	friend detail::HandleFactory;
 
 public:
-	InstanceOption(InstanceOption &&) noexcept = default;
-	InstanceOption &operator=(InstanceOption &&) noexcept = default;
+	OptionDescription(OptionDescription &&) noexcept = default;
+	OptionDescription &operator=(OptionDescription &&) noexcept = default;
 
 	/// The setting's name.
 	auto GetName() const -> std::string_view;
 
-	/// The setting's current value where it was read from, as text.
-	auto GetValue() const -> std::string_view;
-
-	/// The value the setting falls back to when it is not set. Empty when the setting declares no default.
-	auto GetDefaultValue() const -> std::string_view;
+	/// The value the setting falls back to when it is not set. NULL when the setting declares no default.
+	auto GetDefaultValue() const -> Value;
 
 	/// A human-readable description of the setting.
 	auto GetDescription() const -> std::string_view;
 
-	/// At which scope this setting may be written.
-	auto GetTargetScope() const -> OptionTargetScope;
+	/// Whether the setting may be written at a scope.
+	/// @param scope GLOBAL or SESSION; DEFAULT asks whether it may be written at all.
+	auto SupportsScope(SettingScope scope) const -> bool;
+
+	/// The scope a write at `SettingScope::DEFAULT` goes to: GLOBAL or SESSION.
+	auto GetDefaultScope() const -> SettingScope;
 
 	/// How many alternative names resolve to this setting. 0 for an extension setting.
 	auto GetAliasCount() const -> size_t;
@@ -375,10 +363,10 @@ public:
 	/// @param index Alias index in [0, GetAliasCount()).
 	auto GetAliasByIndex(size_t index) const -> std::string_view;
 
-	~InstanceOption() override;
+	~OptionDescription() override;
 
 private:
-	explicit InstanceOption(void *impl);
+	explicit OptionDescription(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -472,15 +460,29 @@ public:
 	/// How many settings this context exposes.
 	auto GetOptionCount() const -> size_t;
 
-	/// One setting with its current value in this context.
+	/// The description of one setting.
 	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> InstanceOption;
+	auto GetOptionDescription(size_t index) const -> OptionDescription;
 
-	/// One setting with its current value in this context.
+	/// The description of one setting.
 	/// @param name The setting's name or one of its aliases.
-	/// @return The setting.
 	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> InstanceOption;
+	auto GetOptionDescription(std::string_view name) const -> OptionDescription;
+
+	/// The current value of a setting, and the scope it was read from.
+	/// @param name The setting's name or one of its aliases.
+	/// @throws InvalidInputException When no setting goes by that name.
+	auto GetOption(std::string_view name) const -> OptionValue;
+
+	/// Writes a setting.
+	/// @param name The setting to write, either its canonical name or one of its aliases.
+	/// @param value The new value, cast to the setting's type as SQL `SET` does.
+	/// @param scope GLOBAL to write it database-wide, SESSION for one session only, or DEFAULT for the setting's
+	/// default scope.
+	/// @throws Exception When no setting goes by that name, the value does not cast, or the scope is not supported.
+	auto SetOption(std::string_view name, const Value &value, SettingScope scope = SettingScope::DEFAULT) -> void;
+	/// The text overload of the above, for a value in the textual form SQL `SET` accepts.
+	auto SetOption(std::string_view name, std::string_view value, SettingScope scope = SettingScope::DEFAULT) -> void;
 
 	/// The file system this context reads and writes through. Borrowed, and valid only while the context is.
 	auto GetFileSystem() const -> FileSystem;
@@ -732,18 +734,20 @@ public:
 		return factory;
 	}
 
-	/// Writes a setting at the scope it declares for itself, like SQL `SET name = value`.
-	/// @param name The setting to write, either its canonical name or one of its aliases.
-	/// @param value The new value, in the same textual form SQL's `SET` accepts.
-	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
-	auto SetOption(std::string_view name, std::string_view value) -> void;
+	/// The current value of a setting, and the scope it was read from.
+	/// @param name The setting's name or one of its aliases.
+	/// @throws InvalidInputException When no setting goes by that name.
+	auto GetOption(std::string_view name) const -> OptionValue;
 
-	/// Writes a setting at an explicit scope.
+	/// Writes a setting.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
-	/// @param value The new value, in the same textual form SQL's `SET` accepts.
-	/// @param scope GLOBAL to write it database-wide, LOCAL for this session only.
-	/// @throws Exception When the setting does not allow the requested scope.
-	auto SetOption(std::string_view name, std::string_view value, SettingScope scope) -> void;
+	/// @param value The new value, cast to the setting's type as SQL `SET` does.
+	/// @param scope GLOBAL to write it database-wide, SESSION for one session only, or DEFAULT for the setting's
+	/// default scope.
+	/// @throws Exception When no setting goes by that name, the value does not cast, or the scope is not supported.
+	auto SetOption(std::string_view name, const Value &value, SettingScope scope = SettingScope::DEFAULT) -> void;
+	/// The text overload of the above, for a value in the textual form SQL `SET` accepts.
+	auto SetOption(std::string_view name, std::string_view value, SettingScope scope = SettingScope::DEFAULT) -> void;
 
 	/// Parses a SQL string into an iterator over its statements, without binding or executing any of them.
 	/// Parsing happens statement by statement as the iterator advances, so a syntax error surfaces from
@@ -879,23 +883,30 @@ public:
 	/// How many settings this database exposes.
 	auto GetOptionCount() const -> size_t;
 
-	/// One setting with its current global value.
+	/// The description of one setting.
 	/// @param index Setting index in [0, GetOptionCount()).
-	auto GetOptionByIndex(size_t index) const -> InstanceOption;
+	auto GetOptionDescription(size_t index) const -> OptionDescription;
 
-	/// One setting with its current global value.
+	/// The description of one setting.
 	/// @param name The setting's name or one of its aliases; an alias resolves to the canonical setting.
-	/// @return The setting.
 	/// @throws InvalidInputException When no setting goes by that name.
-	auto GetOption(std::string_view name) const -> InstanceOption;
+	auto GetOptionDescription(std::string_view name) const -> OptionDescription;
+
+	/// The current global value of a setting; the scope is always GLOBAL.
+	/// @param name The setting's name or one of its aliases.
+	/// @throws InvalidInputException When no setting goes by that name.
+	auto GetOption(std::string_view name) const -> OptionValue;
 
 	/// Writes a setting globally, for this database and every session on it. Before the first `Attach` or `Connect`
 	/// the setting goes into the startup configuration, which is how settings that can only be chosen at startup,
 	/// such as access_mode, are written; afterwards this is SQL `SET GLOBAL`.
 	/// @param name The setting to write, either its canonical name or one of its aliases.
-	/// @param value The new value, in the same textual form SQL's `SET` accepts.
-	/// @throws InvalidInputException When no setting goes by that name or the value does not parse.
-	auto SetOption(std::string_view name, std::string_view value) -> void;
+	/// @param value The new value, cast to the setting's type as SQL `SET` does.
+	/// @param scope DEFAULT or GLOBAL; an instance has no SESSION scope.
+	/// @throws Exception When no setting goes by that name, the value does not cast, or the scope is SESSION.
+	auto SetOption(std::string_view name, const Value &value, SettingScope scope = SettingScope::DEFAULT) -> void;
+	/// The text overload of the above, for a value in the textual form SQL `SET` accepts.
+	auto SetOption(std::string_view name, std::string_view value, SettingScope scope = SettingScope::DEFAULT) -> void;
 
 	/// Opens a new session on this database, starting the instance if this is its first use.
 	/// @return An owning `Connection`, which disconnects when destroyed. Open one per thread.
@@ -1794,6 +1805,14 @@ template <class T>
 auto Factory::CreateValue(T &&value) -> Value {
 	return Value::Create(*this, std::forward<T>(value));
 }
+
+/// The current value of a setting, and the scope it was read from.
+struct OptionValue {
+	/// The value, typed as the setting.
+	Value value;
+	/// GLOBAL or SESSION, as DuckDB attributes the value.
+	SettingScope scope;
+};
 
 /// One parameter of a type: a value, plus a name when the parameter is a named one. A parameter with an empty name is
 /// positional.

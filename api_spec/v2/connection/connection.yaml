@@ -78,51 +78,6 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
-  connection_set_option:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-04" ]
-    description: |
-      Sets a config option through the connection.
-
-      `scope` chooses the destination, mirroring SQL:
-        - AUTOMATIC resolves it from the option's target scope, like a bare
-          `SET name = setting`.
-        - GLOBAL writes through to the instance, visible to all connections,
-          like `SET GLOBAL`.
-        - LOCAL writes to this connection's session only, like `SET LOCAL` /
-          `SET SESSION`.
-      A disallowed combination returns ERROR_INPUT_INVALID: GLOBAL against a
-      LOCAL_ONLY option, LOCAL against a GLOBAL_ONLY one, and the legacy
-      analogues. An unknown name is rejected unless an extension that
-      defines it can be autoloaded; to stage a setting for an extension
-      before startup, use `[[instance_set_option]]`.
-    role: setter
-    belongs_to: connection
-    parameters:
-      conn:
-        type: connection
-        description: "The connection."
-      name:
-        type: identifier
-        indirection: 1
-        const: true
-        kind: IN
-        description: "Option name (canonical or alias)."
-      setting:
-        type: str
-        indirection: 1
-        const: true
-        kind: IN
-        description: "The setting, in the textual form SQL `SET` accepts."
-      scope:
-        type: SETTING_SCOPE
-        description: "Target scope: AUTOMATIC, GLOBAL, or LOCAL."
-      err:
-        type: error_info
-        indirection: 1
-        kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
-    return_type: ERROR
   # Query processing
   connection_interrupt:
     lifecycle:
