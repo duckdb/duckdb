@@ -1,0 +1,72 @@
+# name: test/sql/aggregate/aggregates/test_quantile_cont_bounds.test
+# description: Test QUANTILE_CONT interpolation at timestamp bounds - the out-of-range float to int64 cast is UB (x86 yields INT64_MIN, ARM saturates) - and the .5 tie-break rule
+# group: [aggregates]
+
+require 64bit
+
+# Median of two identical near-max timestamps is the timestamp itself, not +/-infinity.
+# The pre-fix float path rounded the interpolated total up to 2^63, and casting that
+# back to int64 overflowed.
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775806::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775806
+
+# Interpolation between two distinct near-max timestamps stays finite
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775800::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775803
+
+# The delta between min and max overflows int64, so this exercises the long double
+# fallback path - the symmetric weights sum to the epoch exactly on every platform
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(-9223372036854775806::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+1970-01-01 00:00:00
+
+# Ordinary timestamp quantiles are unaffected
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '2020-01-01 00:00:00'), (TIMESTAMP '2020-01-03 00:00:00')) t(y);
+----
+2020-01-02 00:00:00
+
+# .5 ties round to the earlier of the two adjacent microseconds on either side of the epoch.
+# midpoint -0.5us across the epoch: rounds down to -1us (the old llround of the total agreed)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999998'), (TIMESTAMP '1970-01-01 00:00:00.000001')) t(y);
+----
+1969-12-31 23:59:59.999999
+
+# midpoint -2.5us with both endpoints negative: rounds down to -3us (the old rule agreed)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999996'), (TIMESTAMP '1969-12-31 23:59:59.999999')) t(y);
+----
+1969-12-31 23:59:59.999997
+
+# median() uses the same interpolation
+query T
+SELECT median(y) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999998'), (TIMESTAMP '1970-01-01 00:00:00.000001')) t(y);
+----
+1969-12-31 23:59:59.999999
+
+# midpoint +2.5us: rounds down to +2us (the old llround of the total gave +3us)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1970-01-01 00:00:00.000001'), (TIMESTAMP '1970-01-01 00:00:00.000004')) t(y);
+----
+1970-01-01 00:00:00.000002
+
+# TIME ties follow the same rule
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIME '00:00:00.000001'), (TIME '00:00:00.000004')) t(y);
+----
+00:00:00.000002

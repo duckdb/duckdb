@@ -19,7 +19,18 @@ struct InterpolateOperator {
 	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
 		const auto delta = static_cast<double>(hi) - static_cast<double>(lo);
-		return LossyNumericCast<TARGET_TYPE>(static_cast<double>(lo) + delta * d);
+		const auto result = static_cast<double>(lo) + delta * d;
+		// casting an out-of-range double to an integer is UB and platform-dependent
+		// (x86 cvttsd2si yields the integer indefinite value, ARM fcvtzs saturates) - clamp first.
+		// for int64/uint64 the bound rounds up to exactly 2^63/2^64 in double, so every
+		// representable-in-double in-range value still passes through unchanged.
+		if (result >= static_cast<double>(NumericLimits<TARGET_TYPE>::Maximum())) {
+			return NumericLimits<TARGET_TYPE>::Maximum();
+		}
+		if (result <= static_cast<double>(NumericLimits<TARGET_TYPE>::Minimum())) {
+			return NumericLimits<TARGET_TYPE>::Minimum();
+		}
+		return LossyNumericCast<TARGET_TYPE>(result);
 	}
 };
 
