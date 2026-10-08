@@ -1440,9 +1440,11 @@ void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::ReleaseFreeBlockInUse(block_id_t id) {
+void SingleFileBlockManager::ReleaseFreeBlockInUse(unique_lock<mutex> &lock, block_id_t id) {
+	if (!lock.owns_lock()) {
+		throw InternalException("ReleaseFreeBlockInUse must be called while holding the lock");
+	}
 	// check if the block is part of the newly free list
-	lock_guard<mutex> lock(single_file_block_lock);
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
 		// it is! move it to the regular free list so the block can be re-used
@@ -1452,17 +1454,23 @@ void SingleFileBlockManager::ReleaseFreeBlockInUse(block_id_t id) {
 }
 
 void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	unique_lock<mutex> lock(single_file_block_lock);
 	// perform the actual unregistration
 	BlockManager::UnregisterBlock(id);
-	ReleaseFreeBlockInUse(id);
+	ReleaseFreeBlockInUse(lock, id);
 }
 
 bool SingleFileBlockManager::UnregisterExpiredBlock(block_id_t id) {
+	// hold the lock across the live-handle check and the free-list transition: otherwise a
+	// re-registration and retirement of the block id can interleave between them, and the
+	// free-list transition would run although a live handle exists
+	// lock order: single_file_block_lock before blocks_lock, as in AddFreeBlock
+	unique_lock<mutex> lock(single_file_block_lock);
 	if (!BlockManager::UnregisterExpiredBlock(id)) {
 		// a newer handle is registered for this block id - the block id is still in use
 		return false;
 	}
-	ReleaseFreeBlockInUse(id);
+	ReleaseFreeBlockInUse(lock, id);
 	return true;
 }
 

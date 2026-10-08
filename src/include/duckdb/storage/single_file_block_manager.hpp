@@ -196,7 +196,7 @@ private:
 	//! Adds a free block to the free_list, returns true if it was added to the regular free_list
 	bool AddFreeBlock(unique_lock<mutex> &lock, block_id_t block_id);
 	//! Move the block from free_blocks_in_use to the free list, if present
-	void ReleaseFreeBlockInUse(block_id_t id);
+	void ReleaseFreeBlockInUse(unique_lock<mutex> &lock, block_id_t id);
 	//! Returns true, if the block is in the free list. Takes the lock (verification only).
 	bool BlockIsFreeListed(block_id_t block_id);
 
