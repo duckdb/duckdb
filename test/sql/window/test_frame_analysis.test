@@ -69,6 +69,8 @@ window ib as (rows between 0 preceding and 0 following exclude current row)
 0	0
 
 # any other
+# Note that the paper is wrong here: ranking window functions do not return NULL
+# for empty arguments (checked against PG)
 
 # 0 arguments
 foreach func rank dense_rank cume_dist
@@ -79,7 +81,7 @@ select {func}() over ia
 from t
 window ia as (rows between current row and current row exclude current row)
 ----
-physical_plan	<!REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*WINDOW.*
 
 query I
 select {func}() over ia
@@ -97,7 +99,7 @@ select {func}() over ib
 from t
 window ib as (rows between 0 preceding and 0 following exclude current row)
 ----
-physical_plan	<!REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*WINDOW.*
 
 query I
 select {func}() over ib
@@ -117,7 +119,7 @@ select percent_rank() over ia
 from t
 window ia as (rows between current row and current row exclude current row)
 ----
-physical_plan	<!REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*WINDOW.*
 
 query I
 select percent_rank() over ia
@@ -135,7 +137,7 @@ select percent_rank() over ib
 from t
 window ib as (rows between 0 preceding and 0 following exclude current row)
 ----
-physical_plan	<!REGEX>:.*WINDOW.*
+physical_plan	<REGEX>:.*WINDOW.*
 
 query I
 select percent_rank() over ib
@@ -580,6 +582,79 @@ FROM p
 WINDOW iii AS (ORDER BY id, grp {framing} BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
 ----
 physical_plan	<REGEX>:.*WINDOW.*
+
+foreach func rank dense_rank row_number
+
+query II
+EXPLAIN
+SELECT id, {func}() OVER (
+    ORDER BY id {framing} BETWEEN CURRENT ROW AND CURRENT ROW
+) 
+FROM p 
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query II
+SELECT id, {func}() OVER (
+    ORDER BY id {framing} BETWEEN CURRENT ROW AND CURRENT ROW
+) 
+FROM p 
+ORDER BY id;
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+endloop
+
+query II
+EXPLAIN
+SELECT id, percent_rank() OVER (
+    ORDER BY id {framing} BETWEEN CURRENT ROW AND CURRENT ROW
+) 
+FROM p 
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query II
+SELECT id, percent_rank() OVER (
+    ORDER BY id {framing} BETWEEN CURRENT ROW AND CURRENT ROW
+) 
+FROM p 
+ORDER BY id;
+----
+1	0.0
+2	0.25
+3	0.5
+4	0.75
+5	1.0
+
+query II
+EXPLAIN
+SELECT id, cume_dist() OVER (
+    ORDER BY id {framing} BETWEEN CURRENT ROW AND CURRENT ROW
+) 
+FROM p 
+ORDER BY id;
+----
+physical_plan	<REGEX>:.*WINDOW.*
+
+query II
+SELECT id, cume_dist() OVER (
+    ORDER BY id {framing} BETWEEN CURRENT ROW AND CURRENT ROW
+) 
+FROM p 
+ORDER BY id;
+----
+1	0.2
+2	0.4
+3	0.6
+4	0.8
+5	1.0
 
 endloop
 

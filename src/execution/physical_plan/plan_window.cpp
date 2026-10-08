@@ -20,7 +20,21 @@ namespace {
 using ucc_set_t = vector<column_binding_set_t>;
 using bindings_t = vector<ColumnBinding>;
 
+// §4.2: Ranking functions require UCC partitions
+bool IsRankingFunction(BoundWindowExpression &wexpr) {
+	//	Aggregates are not ranking
+	if (wexpr.AggregateFunction()) {
+		return false;
+	}
+
+	return wexpr.WindowFunction()->IsRanking();
+}
+
 bool HasDegenerateFrameCase1(ClientContext &client, BoundWindowExpression &wexpr) {
+	if (IsRankingFunction(wexpr)) {
+		return false;
+	}
+
 	const auto start_boundary = wexpr.WindowStart();
 	const auto end_boundary = wexpr.WindowEnd();
 	if (start_boundary == WindowBoundary::CURRENT_ROW_ROWS && end_boundary == WindowBoundary::CURRENT_ROW_ROWS) {
@@ -53,6 +67,10 @@ bool HasDegenerateFrameCase1(ClientContext &client, BoundWindowExpression &wexpr
 }
 
 bool HasDegenerateFrameCase2(BoundWindowExpression &wexpr) {
+	if (IsRankingFunction(wexpr)) {
+		return false;
+	}
+
 	switch (wexpr.WindowStart()) {
 	case WindowBoundary::CURRENT_ROW_RANGE:
 	case WindowBoundary::CURRENT_ROW_GROUPS:
@@ -85,6 +103,10 @@ ColumnBinding GetColumnBinding(const Expression &expr, const bindings_t &binding
 }
 
 bool HasDegenerateFrameCase3(BoundWindowExpression &wexpr, const ucc_set_t &uccs, const bindings_t &bindings) {
+	if (IsRankingFunction(wexpr)) {
+		return false;
+	}
+
 	switch (wexpr.WindowStart()) {
 	case WindowBoundary::CURRENT_ROW_RANGE:
 	case WindowBoundary::CURRENT_ROW_GROUPS:
