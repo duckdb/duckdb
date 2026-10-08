@@ -2,6 +2,7 @@
 import argparse
 import concurrent.futures
 import contextlib
+import json
 import os
 import re
 import shutil
@@ -279,7 +280,10 @@ def load_tests(path: Path):
 
 
 def build_test_command(config: TestRunnerConfig, test_list: str):
-    flags = shlex.join(shlex.split(config.test_flags))
+    test_flags = shlex.split(config.test_flags)
+    if "--emit-test-events" not in test_flags:
+        test_flags.append("--emit-test-events")
+    flags = shlex.join(test_flags)
     return config.test_command.format(
         binary=shlex.quote(config.unittest_bin),
         flags=flags,
@@ -1000,8 +1004,8 @@ def retarget_failing_test(new_test_name: str | None, test_name: str | None, line
 
 
 def parse_failure_info(message: str | None, stdout: str, stderr: str, batch, returncode: int | None = None):
-    stderr_lines = strip_skipped_test_summary_lines(strip_ansi(stderr).splitlines())
-    stdout_lines = strip_skipped_test_summary_lines(strip_ansi(stdout).splitlines())
+    stderr_lines = strip_test_event_lines(strip_skipped_test_summary_lines(strip_ansi(stderr).splitlines()))
+    stdout_lines = strip_test_event_lines(strip_skipped_test_summary_lines(strip_ansi(stdout).splitlines()))
     stderr_non_empty_lines = [line.strip() for line in stderr_lines if line.strip()]
     stdout_non_empty_lines = [line.strip() for line in stdout_lines if line.strip()]
     batch_test_name = batch[0] if len(batch) == 1 else None
@@ -1181,7 +1185,9 @@ def is_low_information_failure(failure: FailureInfo):
 def render_raw_output_tail(stdout: str, stderr: str):
     lines = []
     for stream_name, output in (("stdout", stdout), ("stderr", stderr)):
-        stream_lines = [line.rstrip() for line in strip_ansi(normalize_output(output)).splitlines()]
+        stream_lines = strip_test_event_lines(
+            [line.rstrip() for line in strip_ansi(normalize_output(output)).splitlines()]
+        )
         while stream_lines and not stream_lines[-1].strip():
             stream_lines.pop()
         if not stream_lines:
@@ -1272,10 +1278,15 @@ SKIP_REASON_PATTERN = re.compile(r"(.+):\s+(\d+)$")
 MODE_SKIP_REASON_PATTERN = re.compile(r"^mode skip(?:\s+(.*\S))?\s*$")
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 TEST_RUNTIME_PATTERN = re.compile(r"^\[\d+/\d+\] \(\d+%\): (.+) took ([0-9]+(?:\.[0-9]+)?)s\s*$")
+TEST_EVENT_MARKER = "[TEST_EVENT] "
 
 
 def strip_ansi(text: str):
     return ANSI_ESCAPE_PATTERN.sub("", text)
+
+
+def strip_test_event_lines(lines: list[str]):
+    return [line for line in lines if TEST_EVENT_MARKER not in line]
 
 
 def parse_test_runtimes(output: str):
@@ -1336,6 +1347,57 @@ def parse_skipped_test_summary(output: str):
     return skipped_count, reasons
 
 
+def parse_test_events(output: str):
+    events = []
+    for line in strip_ansi(output).splitlines():
+        marker_idx = line.find(TEST_EVENT_MARKER)
+        if marker_idx < 0:
+            continue
+        try:
+            event = json.loads(line[marker_idx + len(TEST_EVENT_MARKER) :])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+    return events
+
+
+def extract_skip_events(stdout: str, stderr: str):
+    skipped_test_names = set()
+    skipped_reason_test_names = {}
+    partial_test_names = set()
+    partial_reason_test_names = {}
+    saw_end_event = False
+    for event in parse_test_events(stdout) + parse_test_events(stderr):
+        if event.get("event") != "end":
+            continue
+        saw_end_event = True
+        test_name = event.get("name")
+        if not isinstance(test_name, str):
+            continue
+        status = event.get("status")
+        if status == "skip-requirement":
+            skipped_test_names.add(test_name)
+            reason = event.get("data")
+            if isinstance(reason, str):
+                skipped_reason_test_names.setdefault(reason, set()).add(test_name)
+            continue
+        reasons = event.get("partial-skip-reasons", [])
+        if status != "ok" or event.get("skip-mode", 0) <= 0 or not reasons:
+            continue
+        partial_test_names.add(test_name)
+        for reason in reasons:
+            if isinstance(reason, str):
+                partial_reason_test_names.setdefault(reason, set()).add(test_name)
+    return (
+        saw_end_event,
+        skipped_test_names,
+        skipped_reason_test_names,
+        partial_test_names,
+        partial_reason_test_names,
+    )
+
+
 def strip_skipped_test_summary_lines(lines: list[str]):
     filtered_lines = []
     in_skip_summary = False
@@ -1356,11 +1418,21 @@ def strip_skipped_test_summary_lines(lines: list[str]):
 
 
 def extract_skipped_test_output(stdout: str, stderr: str):
-    # catch prints the skipped count on stdout, the reason breakdown goes to stderr: pick each
-    # field separately, preferring stdout, so a summary present in both streams is not counted twice
+    event_summary = extract_skip_events(stdout, stderr)
+    saw_end_event, skipped_names, skipped_reason_names, partial_names, partial_reason_names = event_summary
     stdout_count, stdout_reasons = parse_skipped_test_summary(stdout)
     stderr_count, stderr_reasons = parse_skipped_test_summary(stderr)
-    return (stdout_count or stderr_count), (stdout_reasons or stderr_reasons)
+    reasons = stdout_reasons or stderr_reasons
+    full_skip_reasons = {
+        reason: count for reason, count in reasons.items() if not MODE_SKIP_REASON_PATTERN.match(reason)
+    }
+    aggregate_count = stdout_count or stderr_count
+    if saw_end_event and (skipped_names or aggregate_count == 0):
+        skipped_reasons = {reason: len(test_names) for reason, test_names in skipped_reason_names.items()}
+        return len(skipped_names), skipped_reasons, partial_names, partial_reason_names
+
+    # Custom test commands and older event fixtures might not emit whole-test terminal events.
+    return aggregate_count, full_skip_reasons, partial_names, partial_reason_names
 
 
 def coverage_profile_file_pattern(profile_dir: Path):
@@ -1786,6 +1858,7 @@ class ConfigRunResult:
     failed_tests: int
     skipped_tests: int
     elapsed_seconds: float
+    partially_skipped_tests: int = 0
     failed_test_names: tuple[str, ...] = ()
 
 
@@ -1934,6 +2007,7 @@ def run_single_config(
                 failed_tests=max(1, initial_run_result.failed_tests),
                 skipped_tests=initial_run_result.skipped_tests,
                 elapsed_seconds=initial_run_result.elapsed_seconds,
+                partially_skipped_tests=initial_run_result.partially_skipped_tests,
                 failed_test_names=tuple(dict.fromkeys(stabilization_failed_test_names)),
             )
 
@@ -2027,16 +2101,19 @@ def main_impl(argv: list[str] | None = None):
             if group_open:
                 print("::endgroup::")
             if returncode in (0, 1):
+                partial_skip_suffix = ""
+                if run_result.partially_skipped_tests:
+                    partial_skip_suffix = f" ({run_result.partially_skipped_tests} partially)"
                 if run_result.failed_tests > 0:
                     print(
                         "❌ ran tests: "
                         f"{run_result.passed_tests} passed, {run_result.failed_tests} failed, "
-                        f"{run_result.skipped_tests} skipped in {run_result.elapsed_seconds:.0f}s"
+                        f"{run_result.skipped_tests} skipped{partial_skip_suffix} in {run_result.elapsed_seconds:.0f}s"
                     )
                 else:
                     print(
                         "ran tests: "
-                        f"{run_result.passed_tests} passed, {run_result.skipped_tests} skipped "
+                        f"{run_result.passed_tests} passed, {run_result.skipped_tests} skipped{partial_skip_suffix} "
                         f"in {run_result.elapsed_seconds:.0f}s"
                     )
             if returncode == 130:
@@ -2095,7 +2172,9 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
     state = BatchRunState()
     progress = DotProgressBar(len(batches))
     total_skipped_tests = 0
+    partially_skipped_test_names = set()
     skipped_reason_counts = {}
+    partial_skip_reason_test_names = {}
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
         future_to_batch = {}
@@ -2136,10 +2215,15 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
                 if result["failed"]:
                     if handle_failed_batch(ctx, batch_info, result):
                         continue
-                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_skipped_test_output(
+                        result["stdout"], result["stderr"]
+                    )
                     total_skipped_tests += skipped_count
+                    partially_skipped_test_names.update(partial_names)
                     for reason, count in skipped_reasons.items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
+                    for reason, test_names in partial_reason_names.items():
+                        partial_skip_reason_test_names.setdefault(reason, set()).update(test_names)
                 else:
                     attempt_summaries = ctx.state.pop_failed_attempts(batch_info["batch_idx"])
                     if attempt_summaries:
@@ -2152,10 +2236,15 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
                                 retry_count=batch_info["attempt"],
                             )
                         )
-                    skipped_count, skipped_reasons = extract_skipped_test_output(result["stdout"], result["stderr"])
+                    skipped_count, skipped_reasons, partial_names, partial_reason_names = extract_skipped_test_output(
+                        result["stdout"], result["stderr"]
+                    )
                     total_skipped_tests += skipped_count
+                    partially_skipped_test_names.update(partial_names)
                     for reason, count in skipped_reasons.items():
                         skipped_reason_counts[reason] = skipped_reason_counts.get(reason, 0) + count
+                    for reason, test_names in partial_reason_names.items():
+                        partial_skip_reason_test_names.setdefault(reason, set()).update(test_names)
                 progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching and not stop_requested():
@@ -2163,20 +2252,32 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
 
     progress.flush_line()
     elapsed = time.monotonic() - start
+    total_partially_skipped_tests = len(partially_skipped_test_names)
     if stop_requested():
         return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=elapsed)
     exit_code = 0
     if state.failed_count:
         exit_code = 1
-    elif total_skipped_tests:
-        print(f"all tests passed in {elapsed:.0f}s ({total_skipped_tests} skipped tests)")
+    elif total_skipped_tests or total_partially_skipped_tests:
+        skip_parts = []
+        if total_skipped_tests:
+            skip_parts.append(f"{total_skipped_tests} skipped tests")
+        if total_partially_skipped_tests:
+            noun = "test" if total_partially_skipped_tests == 1 else "tests"
+            skip_parts.append(f"{total_partially_skipped_tests} partially skipped {noun}")
+        print(f"all tests passed in {elapsed:.0f}s ({', '.join(skip_parts)})")
     else:
         print(f"all tests passed in {elapsed:.0f}s")
     if skipped_reason_counts:
         print()
-        print("Skipped tests for the following reasons:")
+        print(f"Skipped tests ({total_skipped_tests}):")
         for reason in sorted(skipped_reason_counts):
             print(f"{reason}: {skipped_reason_counts[reason]}")
+    if total_partially_skipped_tests:
+        print()
+        print(f"Partially skipped tests ({total_partially_skipped_tests}):")
+        for reason in sorted(partial_skip_reason_test_names):
+            print(f"{reason}: {len(partial_skip_reason_test_names[reason])}")
     failed_tests = state.failed_count
     passed_tests = max(0, total_tests - failed_tests - total_skipped_tests)
     failed_test_names = []
@@ -2191,6 +2292,7 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
         failed_tests=failed_tests,
         skipped_tests=total_skipped_tests,
         elapsed_seconds=elapsed,
+        partially_skipped_tests=total_partially_skipped_tests,
         failed_test_names=tuple(failed_test_names),
     )
 
