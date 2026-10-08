@@ -477,7 +477,11 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 			if (option_values.empty()) {
 				throw BinderException("BATCH_SIZE/ROW_GROUP_SIZE cannot be empty");
 			}
-			parsed_options.batch_size = option_values[0].GetValue<uint64_t>();
+			auto batch_size = option_values[0].GetValue<uint64_t>();
+			if (batch_size == DConstants::INVALID_INDEX) {
+				throw BinderException("BATCH_SIZE/ROW_GROUP_SIZE value %llu is too large", batch_size);
+			}
+			parsed_options.batch_size = batch_size;
 		} else if (option_name == "batch_size_bytes" || option_name == "row_group_size_bytes") {
 			if (option_values.empty()) {
 				throw BinderException("BATCH_SIZE_BYTES/ROW_GROUP_SIZE_BYTES cannot be empty");
