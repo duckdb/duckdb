@@ -220,6 +220,7 @@ public:
 			result->table_columns = IdentifiersToStrings(names);
 		}
 		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+		result->file_options.VerifyColumnStatistics(result->names, result->types);
 		return std::move(result);
 	}
 
@@ -1144,6 +1145,19 @@ public:
 		for (auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
 			if (hive_partitioning_index.index == primary_index) {
 				return nullptr;
+			}
+		}
+
+		// statistics the caller gave for the column (the "column_statistics" option) stand in for the files' -
+		// they describe the scan as a whole, which is what the optimizer asks about, where a file's describe one file
+		if (!bind_data.file_options.column_statistics.IsNull()) {
+			auto explicit_stats = bind_data.file_options.GetColumnStatistics(col_name, bind_data.types[primary_index]);
+			if (explicit_stats) {
+				if (!column_index.IsPushdownExtract()) {
+					return explicit_stats;
+				}
+				auto storage_index = StorageIndex::FromColumnIndex(column_index);
+				return explicit_stats->PushdownExtract(storage_index.GetChildIndexes()[0]);
 			}
 		}
 

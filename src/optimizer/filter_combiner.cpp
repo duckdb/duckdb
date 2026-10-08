@@ -568,13 +568,8 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	auto &constant_value_expr = func.GetChildren()[1]->Cast<BoundConstantExpression>();
 	auto proj_index = column_ref.Binding().column_index;
 
-	// constant value expr can sometimes be null. if so, push is not null filter, which will
-	// make the filter unsatisfiable and return no results.
 	if (constant_value_expr.GetValue().IsNull()) {
-		auto is_not_null = ExpressionFilter::CreateNullCheckExpression(
-		    CreateFilterTargetExpression(*func.GetChildren()[0]), ExpressionType::OPERATOR_IS_NOT_NULL);
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(is_not_null)));
-		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+		return FilterPushdownResult::NO_PUSHDOWN;
 	}
 	auto &like_string = StringValue::Get(constant_value_expr.GetValue());
 	if (like_string[0] == '%' || like_string[0] == '_') {
