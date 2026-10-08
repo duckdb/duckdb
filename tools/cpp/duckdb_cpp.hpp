@@ -496,8 +496,7 @@ private:
 	explicit Factory(void *impl);
 };
 
-/// A borrowed handle to a client context: the one a callback is handed, valid only for the duration of that callback,
-/// or the one a `Connection` holds, valid for as long as the connection is.
+/// A borrowed handle to a client context: the one a callback is handed, valid only for the duration of that callback.
 class Context final : public detail::Handle<Context> {
 	friend detail::HandleFactory;
 
@@ -729,15 +728,13 @@ class Connection final : public detail::Handle<Connection> {
 	friend detail::HandleFactory;
 
 public:
-	Connection(Connection &&other) noexcept
-	    : context(std::move(other.context)), factory(std::move(other.factory)), config(std::move(other.config)) {
+	Connection(Connection &&other) noexcept : factory(std::move(other.factory)), config(std::move(other.config)) {
 		std::swap(impl, other.impl);
 		std::swap(owned, other.owned);
 	}
 
 	Connection &operator=(Connection &&other) noexcept {
 		std::swap(impl, other.impl);
-		std::swap(context, other.context);
 		std::swap(factory, other.factory);
 		std::swap(config, other.config);
 		std::swap(owned, other.owned);
@@ -757,12 +754,6 @@ public:
 
 	~Connection() override;
 
-	/// The context of this connection: the scope that creates values, types and data chunks, reads settings, and
-	/// reaches the file system. Valid for as long as this connection is.
-	auto GetContext() -> Context & {
-		return context;
-	}
-
 	/// The factory values, types and data chunks are created through on this connection.
 	auto GetFactory() -> Factory & {
 		return factory;
@@ -776,6 +767,18 @@ public:
 	auto GetConfig() const -> const Config & {
 		return config;
 	}
+
+	/// The file system this connection reads and writes through, with its settings and secrets. Borrowed, and valid
+	/// only while the connection is.
+	auto GetFileSystem() const -> FileSystem;
+
+	/// Writes a message to DuckDB's log, readable through `SELECT * FROM duckdb_logs`.
+	/// Whether the entry is recorded is up to the database's log configuration; a message it filters out is dropped
+	/// without error.
+	/// @param level The severity of the message.
+	/// @param message The message body.
+	/// @param log_type The log type to record under, matched case-sensitively. Empty selects the default type.
+	auto Log(LogLevel level, std::string_view message, std::string_view log_type = {}) const -> void;
 
 	/// Parses a SQL string into an iterator over its statements, without binding or executing any of them.
 	/// Parsing happens statement by statement as the iterator advances, so a syntax error surfaces from
@@ -857,7 +860,6 @@ public:
 
 private:
 	explicit Connection(void *impl, bool owned);
-	Context context;
 	Factory factory;
 	Config config;
 	bool owned = false; // TODO: This should be fixed C++ side
@@ -927,6 +929,18 @@ public:
 	auto GetFactory() -> Factory & {
 		return factory;
 	}
+
+	/// The file system of this database, with its GLOBAL settings and secrets. Borrowed, and valid only while the
+	/// instance is.
+	auto GetFileSystem() const -> FileSystem;
+
+	/// Writes a message to DuckDB's log, readable through `SELECT * FROM duckdb_logs`.
+	/// Whether the entry is recorded is up to the database's log configuration; a message it filters out is dropped
+	/// without error.
+	/// @param level The severity of the message.
+	/// @param message The message body.
+	/// @param log_type The log type to record under, matched case-sensitively. Empty selects the default type.
+	auto Log(LogLevel level, std::string_view message, std::string_view log_type = {}) const -> void;
 
 private:
 	explicit Instance(void *impl);

@@ -343,11 +343,9 @@ typedef struct _duckdb_v2_arena {
 /*!
  * A borrowed handle to a client context: a connection seen from inside DuckDB. Handed out within DuckDB-managed scopes
  * — function bind / init / exec callbacks, replacement scans, and the extension entrypoint — and valid only for the
- * duration of that scope, or taken from a connection with `duckdb_v2_connection_get_context()` and valid for as long as
- * the connection is; the caller never destroys it. A context is the scope for reading settings and the file system;
- * values, types and data chunks are created through its factory (`duckdb_v2_context_get_factory()`). Within a callback
- * scope a transaction is already active; through a connection's context, calls that need one run in the connection's
- * transaction or open their own.
+ * duration of that scope; the caller never destroys it. Within that scope a transaction is already active. A context
+ * reaches the same capabilities a connection does, through `duckdb_v2_context_get_factory()`,
+ * `duckdb_v2_context_get_config()`, `duckdb_v2_context_get_file_system()` and `duckdb_v2_context_log()`.
  */
 typedef struct _duckdb_v2_context {
 	void *internal_ptr;
@@ -1892,27 +1890,6 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_create(duckdb_v2_instance_hand
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_handle *conn);
 
 /*!
- * Borrows the client context of a connection.
- *
- * The context is the scope that constructs values and types and reads settings and the file system, the same scope a
- * callback receives. Calls through it run in the connection's active transaction, or in a transaction of their own when
- * none is open. The returned handle is borrowed: it is valid for as long as the connection is, and must not be
- * destroyed.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param conn The connection.
- * @param out_context Receives the borrowed context.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_context(duckdb_v2_connection_handle conn,
-                                                              duckdb_v2_context_handle *out_context,
-                                                              duckdb_v2_error_info_handle *err);
-
-/*!
  * Interrupts the query currently executing on the connection.
  *
  * The cross-thread (but not cross-connection) cancellation entry point for streaming results: safe to call from any
@@ -2614,9 +2591,10 @@ typedef enum DUCKDB_V2_FILE_FLAG {
 /* --- Types for file system --- */
 
 /*!
- * A borrowed opaque handle to a file system. Obtained from `duckdb_v2_context_get_file_system()`, and used to open
- * files with `duckdb_v2_file_system_open()`. Borrowed: the handle belongs to the context it came from, is valid only
- * for as long as that is, and must not be destroyed.
+ * A borrowed opaque handle to a file system. Obtained from `duckdb_v2_instance_get_file_system()`,
+ * `duckdb_v2_connection_get_file_system()` or `duckdb_v2_context_get_file_system()`, and used to open files with
+ * `duckdb_v2_file_system_open()`. Borrowed: the handle belongs to the instance, connection or context it came from, is
+ * valid only for as long as that is, and must not be destroyed.
  */
 typedef struct _duckdb_v2_file_system {
 	void *internal_ptr;
@@ -2664,6 +2642,47 @@ typedef struct _duckdb_v2_file {
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_get_file_system(duckdb_v2_context_handle context,
                                                                duckdb_v2_file_system_handle *file_system,
                                                                duckdb_v2_error_info_handle *err);
+
+/*!
+ * Borrows the file system of an instance.
+ *
+ * Paths are resolved with the instance's GLOBAL settings and secrets, and file I/O is not attributed to any query.
+ *
+ * The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance to take the file system from.
+ * @param file_system Receives the borrowed file system.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_get_file_system(duckdb_v2_instance_handle instance,
+                                                                duckdb_v2_file_system_handle *file_system,
+                                                                duckdb_v2_error_info_handle *err);
+
+/*!
+ * Borrows the file system of a connection.
+ *
+ * Paths are resolved with the connection's settings and secrets, and file I/O is attributed to its running query, as
+ * through `duckdb_v2_context_get_file_system()` in a callback.
+ *
+ * The returned handle is borrowed: it is valid only for as long as the connection is, and must not be destroyed.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to take the file system from.
+ * @param file_system Receives the borrowed file system.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_get_file_system(duckdb_v2_connection_handle conn,
+                                                                  duckdb_v2_file_system_handle *file_system,
+                                                                  duckdb_v2_error_info_handle *err);
 
 /*!
  * Creates a set of open options for a file system.
@@ -3622,6 +3641,50 @@ typedef enum DUCKDB_V2_LOG_LEVEL {
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_context_log(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level,
                                                    const duckdb_v2_str *log_type, const duckdb_v2_str *message,
                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Writes a message to DuckDB's log.
+ *
+ * The entry is attributed to the database scope: it carries no connection or query ids. Whether it is recorded at all
+ * is up to the database's log configuration: if logging is off, or level is below the configured threshold, or log_type
+ * is not among the enabled types, the call succeeds and writes nothing. An empty log_type selects the default type.
+ * Read entries back with `SELECT * FROM duckdb_logs`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance to log through.
+ * @param level Severity of the message.
+ * @param log_type The log type to record under, matched case-sensitively. Empty selects the default type.
+ * @param message The message body. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_log(duckdb_v2_instance_handle instance, DUCKDB_V2_LOG_LEVEL level,
+                                                    const duckdb_v2_str *log_type, const duckdb_v2_str *message,
+                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Writes a message to DuckDB's log.
+ *
+ * The entry is attributed to the connection scope, so it carries the connection's ids. Whether it is recorded at all is
+ * up to the database's log configuration: if logging is off, or level is below the configured threshold, or log_type is
+ * not among the enabled types, the call succeeds and writes nothing. An empty log_type selects the default type. Read
+ * entries back with `SELECT * FROM duckdb_logs`.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to log through.
+ * @param level Severity of the message.
+ * @param log_type The log type to record under, matched case-sensitively. Empty selects the default type.
+ * @param message The message body. Borrowed for the call only.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_log(duckdb_v2_connection_handle conn, DUCKDB_V2_LOG_LEVEL level,
+                                                      const duckdb_v2_str *log_type, const duckdb_v2_str *message,
+                                                      duckdb_v2_error_info_handle *err);
 
 /* --- Struct definitions for logging --- */
 

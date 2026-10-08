@@ -12,9 +12,9 @@ namespace test_capi_v2 {
 
 namespace {
 
-duckdb_v2_file_system_handle FsOf(duckdb_v2_context_handle ctx) {
+duckdb_v2_file_system_handle FsOf(duckdb_v2_connection_handle conn) {
 	duckdb_v2_file_system_handle fs = nullptr;
-	REQUIRE(duckdb_v2_context_get_file_system(ctx, &fs, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_get_file_system(conn, &fs, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(fs != nullptr);
 	return fs;
 }
@@ -83,7 +83,7 @@ idx_t FsTell(duckdb_v2_file_handle handle) {
 
 TEST_CASE("V2 file system: write, read back, and seek", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_roundtrip.bin");
 
 	{
@@ -113,20 +113,33 @@ TEST_CASE("V2 file system: write, read back, and seek", "[capi_v2][file_system]"
 	duckdb_v2_file_destroy(&handle);
 }
 
-TEST_CASE("V2 file system: borrowed from a context", "[capi_v2][file_system]") {
+TEST_CASE("V2 file system: borrowed from an instance or a connection", "[capi_v2][file_system]") {
 	EnvFixture fx;
 	duckdb_v2_file_system_handle from_conn = nullptr;
-	REQUIRE(duckdb_v2_context_get_file_system(fx.ctx, &from_conn, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_get_file_system(fx.conn, &from_conn, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(from_conn != nullptr);
 	// Borrowed: there is no destroy, and asking twice gives the same file system.
 	duckdb_v2_file_system_handle again = nullptr;
-	REQUIRE(duckdb_v2_context_get_file_system(fx.ctx, &again, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_get_file_system(fx.conn, &again, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(again == from_conn);
+
+	// The instance has a file system of its own, which opens files just the same.
+	duckdb_v2_file_system_handle from_instance = nullptr;
+	REQUIRE(duckdb_v2_instance_get_file_system(fx.instance, &from_instance, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(from_instance != nullptr);
+	REQUIRE(from_instance != from_conn);
+	auto path = duckdb::TestCreatePath("v2_fs_instance.txt");
+	auto options = FsOptions(from_instance, {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW});
+	auto path_str = Convert(path);
+	duckdb_v2_file_handle handle = nullptr;
+	REQUIRE(duckdb_v2_file_system_open(from_instance, &path_str, options, &handle, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_file_destroy(&handle);
+	duckdb_v2_file_open_options_destroy(&options);
 }
 
 TEST_CASE("V2 file system: CREATE opens an existing file as it is", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_create.bin");
 
 	{
@@ -144,7 +157,7 @@ TEST_CASE("V2 file system: CREATE opens an existing file as it is", "[capi_v2][f
 
 TEST_CASE("V2 file system: CREATE_NEW truncates an existing file", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_create_new.bin");
 
 	{
@@ -168,7 +181,7 @@ TEST_CASE("V2 file system: CREATE_NEW truncates an existing file", "[capi_v2][fi
 
 TEST_CASE("V2 file system: EXCLUSIVE_CREATE refuses an existing file", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_exclusive.bin");
 
 	{
@@ -194,7 +207,7 @@ TEST_CASE("V2 file system: EXCLUSIVE_CREATE refuses an existing file", "[capi_v2
 
 TEST_CASE("V2 file system: APPEND writes at the end", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_append.bin");
 
 	{
@@ -216,7 +229,7 @@ TEST_CASE("V2 file system: APPEND writes at the end", "[capi_v2][file_system]") 
 
 TEST_CASE("V2 file system: open refusals", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	duckdb_v2_file_handle handle = nullptr;
 
 	// A missing file without CREATE.
@@ -236,7 +249,7 @@ TEST_CASE("V2 file system: open refusals", "[capi_v2][file_system]") {
 
 TEST_CASE("V2 file system: close leaves the handle destroyable", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_close.bin");
 
 	auto handle = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW});
@@ -249,7 +262,7 @@ TEST_CASE("V2 file system: close leaves the handle destroyable", "[capi_v2][file
 
 TEST_CASE("V2 file system: null arguments and destroy null-safety", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_nulls.bin");
 	auto handle = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW});
 
@@ -259,7 +272,9 @@ TEST_CASE("V2 file system: null arguments and destroy null-safety", "[capi_v2][f
 	char buffer[4] = {0};
 
 	REQUIRE(duckdb_v2_context_get_file_system(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_context_get_file_system(fx.ctx, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_get_file_system(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_get_file_system(nullptr, &out_fs, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_get_file_system(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_file_open_options_handle options = nullptr;
 	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_file_open_options_set_flag(options, DUCKDB_V2_FILE_FLAG_READ, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -292,7 +307,7 @@ TEST_CASE("V2 file system: null arguments and destroy null-safety", "[capi_v2][f
 
 TEST_CASE("V2 file system: positional read and write", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_positional.bin");
 	const auto flags = {DUCKDB_V2_FILE_FLAG_READ, DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW,
 	                    DUCKDB_V2_FILE_FLAG_PARALLEL_ACCESS};
@@ -331,7 +346,7 @@ TEST_CASE("V2 file system: positional read and write", "[capi_v2][file_system]")
 
 TEST_CASE("V2 file system: positional read and write null arguments", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_positional_nulls.bin");
 	auto handle = FsOpen(fs, path, {DUCKDB_V2_FILE_FLAG_WRITE, DUCKDB_V2_FILE_FLAG_CREATE_NEW});
 	char buffer[4] = {0};
@@ -346,7 +361,7 @@ TEST_CASE("V2 file system: positional read and write null arguments", "[capi_v2]
 
 TEST_CASE("V2 file system: open options carry flags and values", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	auto path = duckdb::TestCreatePath("v2_fs_options.bin");
 
 	duckdb_v2_file_open_options_handle options = nullptr;
@@ -397,7 +412,7 @@ TEST_CASE("V2 file system: open options carry flags and values", "[capi_v2][file
 
 TEST_CASE("V2 file system: open options null arguments", "[capi_v2][file_system]") {
 	EnvFixture fx;
-	auto fs = FsOf(fx.ctx);
+	auto fs = FsOf(fx.conn);
 	duckdb_v2_file_open_options_handle options = nullptr;
 	REQUIRE(duckdb_v2_file_open_options_create(fs, &options, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto value = MakeInt64Value(fx.factory, 1);

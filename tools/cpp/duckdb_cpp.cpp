@@ -638,16 +638,8 @@ auto Config::SetOption(std::string_view name, const Value &value, SettingScope s
 // Connection
 //---------------------------------------------------------------------------
 
-namespace {
-auto GetConnectionContext(void *conn) -> duckdb_v2_context_handle {
-	duckdb_v2_context_handle ctx = nullptr;
-	CheckedAPICall(duckdb_v2_connection_get_context, static_cast<duckdb_v2_connection_handle>(conn), &ctx);
-	return ctx;
-}
-} // namespace
-
 Connection::Connection(void *impl, bool owned)
-    : detail::Handle<Connection>(impl), context(detail::HandleFactory::Make<Context>(GetConnectionContext(impl))),
+    : detail::Handle<Connection>(impl),
       factory(detail::HandleFactory::Make<Factory>(
           GetFactoryHandle<duckdb_v2_connection_handle>(duckdb_v2_connection_get_factory, impl))),
       config(detail::HandleFactory::Make<Config>(
@@ -939,6 +931,20 @@ auto Context::Log(LogLevel level, std::string_view message, std::string_view log
 	               &message_str);
 }
 
+auto Connection::Log(LogLevel level, std::string_view message, std::string_view log_type) const -> void {
+	auto log_type_str = ToStr(log_type);
+	auto message_str = ToStr(message);
+	CheckedAPICall(duckdb_v2_connection_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), &log_type_str,
+	               &message_str);
+}
+
+auto Instance::Log(LogLevel level, std::string_view message, std::string_view log_type) const -> void {
+	auto log_type_str = ToStr(log_type);
+	auto message_str = ToStr(message);
+	CheckedAPICall(duckdb_v2_instance_log, handle(), static_cast<DUCKDB_V2_LOG_LEVEL>(level), &log_type_str,
+	               &message_str);
+}
+
 auto Factory::CreateType(std::string_view name) const -> LogicalType {
 	return CreateType(name, {});
 }
@@ -950,6 +956,18 @@ auto Factory::CreateType(std::string_view name, const std::vector<TypeParam> &pa
 auto Context::GetFileSystem() const -> FileSystem {
 	duckdb_v2_file_system_handle fs = nullptr;
 	CheckedAPICall(duckdb_v2_context_get_file_system, handle(), &fs);
+	return detail::HandleFactory::Make<FileSystem>(fs);
+}
+
+auto Connection::GetFileSystem() const -> FileSystem {
+	duckdb_v2_file_system_handle fs = nullptr;
+	CheckedAPICall(duckdb_v2_connection_get_file_system, handle(), &fs);
+	return detail::HandleFactory::Make<FileSystem>(fs);
+}
+
+auto Instance::GetFileSystem() const -> FileSystem {
+	duckdb_v2_file_system_handle fs = nullptr;
+	CheckedAPICall(duckdb_v2_instance_get_file_system, handle(), &fs);
 	return detail::HandleFactory::Make<FileSystem>(fs);
 }
 

@@ -26,15 +26,6 @@ DUCKDB_V2_ERROR duckdb_v2_connection_destroy(duckdb_v2_connection_handle *conn) 
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_connection_get_context(duckdb_v2_connection_handle conn,
-                                                 duckdb_v2_context_handle *out_context,
-                                                 duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(conn);
-	DUCKDB_CHECK_ARG(out_context);
-	*out_context = nullptr;
-	return WithErrorHandler(err, [&]() { *out_context = Convert(&Convert(conn)->context_handle); });
-}
-
 // ---------------------------------------------------------------------------
 // Query process management
 // ---------------------------------------------------------------------------

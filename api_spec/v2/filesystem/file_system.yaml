@@ -5,7 +5,8 @@ module: file system
 # whatever is configured, including virtual and remote file systems registered
 # by other extensions.
 #
-# A file system is borrowed from a context and lives as long as that does. Files opened through it are owned by the caller.
+# A file system is borrowed from an instance, a connection or a context and lives as long as that does. Files opened
+# through it are owned by the caller.
 
 #-----------------------------------------------------------------------------------------------------------------------
 # Enums
@@ -58,9 +59,10 @@ enums:
 handles:
   file_system:
     description: |
-      A borrowed opaque handle to a file system. Obtained from
-      `[[context_get_file_system]]`, and used to open files with `[[file_system_open]]`. Borrowed: the handle belongs
-      to the context it came from, is valid only for as long as that is, and must not be destroyed.
+      A borrowed opaque handle to a file system. Obtained from `[[instance_get_file_system]]`,
+      `[[connection_get_file_system]]` or `[[context_get_file_system]]`, and used to open files with
+      `[[file_system_open]]`. Borrowed: the handle belongs to the instance, connection or context it came from, is
+      valid only for as long as that is, and must not be destroyed.
 
   file_open_options:
     description: |
@@ -93,6 +95,58 @@ functions:
       context:
         type: context
         description: The context to take the file system from.
+      file_system:
+        type: file_system
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed file system.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  instance_get_file_system:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-08" ]
+    description: |
+      Borrows the file system of an instance.
+
+      Paths are resolved with the instance's GLOBAL settings and secrets, and file I/O is not attributed to any query.
+
+      The returned handle is borrowed: it is valid only for as long as the instance is, and must not be destroyed.
+    role: getter
+    belongs_to: instance
+    parameters:
+      instance:
+        type: instance
+        description: The instance to take the file system from.
+      file_system:
+        type: file_system
+        indirection: 1
+        kind: OUT
+        description: Receives the borrowed file system.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  connection_get_file_system:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-08" ]
+    description: |
+      Borrows the file system of a connection.
+
+      Paths are resolved with the connection's settings and secrets, and file I/O is attributed to its running query, as through `[[context_get_file_system]]` in a callback.
+
+      The returned handle is borrowed: it is valid only for as long as the connection is, and must not be destroyed.
+    role: getter
+    belongs_to: connection
+    parameters:
+      conn:
+        type: connection
+        description: The connection to take the file system from.
       file_system:
         type: file_system
         indirection: 1

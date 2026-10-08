@@ -1163,8 +1163,6 @@ typedef struct {
 	 const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
 	 idx_t parameter_count, idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_context)
-	(duckdb_v2_connection_handle conn, duckdb_v2_context_handle *out_context, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_factory)
 	(duckdb_v2_connection_handle conn, duckdb_v2_factory_handle *out_factory, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_factory)
@@ -1182,10 +1180,20 @@ typedef struct {
 	 DUCKDB_V2_SETTING_SCOPE scope, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_config)
 	(duckdb_v2_connection_handle conn, duckdb_v2_config_handle *out_config, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_get_file_system)
+	(duckdb_v2_connection_handle conn, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_log)
+	(duckdb_v2_connection_handle conn, DUCKDB_V2_LOG_LEVEL level, const duckdb_v2_str *log_type,
+	 const duckdb_v2_str *message, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_config)
 	(duckdb_v2_context_handle ctx, duckdb_v2_config_handle *out_config, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_instance_get_config)
 	(duckdb_v2_instance_handle instance, duckdb_v2_config_handle *out_config, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_get_file_system)
+	(duckdb_v2_instance_handle instance, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_log)
+	(duckdb_v2_instance_handle instance, DUCKDB_V2_LOG_LEVEL level, const duckdb_v2_str *log_type,
+	 const duckdb_v2_str *message, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_option_get_default_scope)
 	(duckdb_v2_option_handle option, DUCKDB_V2_SETTING_SCOPE *out_scope, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_option_supports_scope)
@@ -1780,7 +1788,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_arrow_result_wait = duckdb_v2_arrow_result_wait;
 	result.duckdb_v2_prepared_statement_execute_arrow = duckdb_v2_prepared_statement_execute_arrow;
 	result.duckdb_v2_statement_execute_arrow = duckdb_v2_statement_execute_arrow;
-	result.duckdb_v2_connection_get_context = duckdb_v2_connection_get_context;
 	result.duckdb_v2_connection_get_factory = duckdb_v2_connection_get_factory;
 	result.duckdb_v2_context_get_factory = duckdb_v2_context_get_factory;
 	result.duckdb_v2_instance_get_factory = duckdb_v2_instance_get_factory;
@@ -1788,8 +1795,12 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_config_set_option = duckdb_v2_config_set_option;
 	result.duckdb_v2_config_set_option_text = duckdb_v2_config_set_option_text;
 	result.duckdb_v2_connection_get_config = duckdb_v2_connection_get_config;
+	result.duckdb_v2_connection_get_file_system = duckdb_v2_connection_get_file_system;
+	result.duckdb_v2_connection_log = duckdb_v2_connection_log;
 	result.duckdb_v2_context_get_config = duckdb_v2_context_get_config;
 	result.duckdb_v2_instance_get_config = duckdb_v2_instance_get_config;
+	result.duckdb_v2_instance_get_file_system = duckdb_v2_instance_get_file_system;
+	result.duckdb_v2_instance_log = duckdb_v2_instance_log;
 	result.duckdb_v2_option_get_default_scope = duckdb_v2_option_get_default_scope;
 	result.duckdb_v2_option_supports_scope = duckdb_v2_option_supports_scope;
 	result.duckdb_v2_copy_to_set_statistics_callback = duckdb_v2_copy_to_set_statistics_callback;

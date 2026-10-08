@@ -32,6 +32,8 @@
 #include "duckdb/main/setting_info.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/query_context.hpp"
+#include "duckdb/common/file_system.hpp"
 
 // The engine implements the whole V2 C API, including the unstable surface
 #ifndef DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -309,6 +311,16 @@ inline auto Convert(CV2AttachOptions *options) -> duckdb_v2_attach_options_handl
 	return reinterpret_cast<duckdb_v2_attach_options_handle>(options);
 }
 
+//! A file system handle: the file system plus the query its reads and writes are attributed to, if any.
+class CV2FileSystem {
+public:
+	CV2FileSystem(FileSystem &fs, QueryContext query) : fs(fs), query(query) {
+	}
+
+	FileSystem &fs;
+	QueryContext query;
+};
+
 //! An instance handle: a DuckDB instance, built from its startup options when the handle is created.
 class CV2Instance {
 public:
@@ -326,12 +338,15 @@ public:
 		return *database;
 	}
 
+private:
+	//! Declared first: the members below are built from it.
+	shared_ptr<DuckDB> database;
+
+public:
 	CV2Environment &env;
 	CV2InstanceFactory factory;
 	CV2InstanceConfig config_handle;
-
-private:
-	shared_ptr<DuckDB> database;
+	CV2FileSystem file_system;
 };
 
 inline auto Convert(duckdb_v2_instance_handle instance) -> CV2Instance * {
@@ -377,7 +392,9 @@ private:
 //! A context handle: the client context plus how a call through it obtains a transaction.
 class CV2Context {
 public:
-	explicit CV2Context(ClientContext &context) : context(context), factory(*this), config_handle(context) {
+	explicit CV2Context(ClientContext &context)
+	    : context(context), factory(*this), config_handle(context),
+	      file_system(FileSystem::GetFileSystem(context), QueryContext(context)) {
 	}
 	virtual ~CV2Context() = default;
 
@@ -387,6 +404,7 @@ public:
 	ClientContext &context;
 	CV2ContextFactory factory;
 	CV2ClientConfig config_handle;
+	CV2FileSystem file_system;
 };
 
 inline DatabaseInstance &CV2ContextFactory::GetDatabase() {

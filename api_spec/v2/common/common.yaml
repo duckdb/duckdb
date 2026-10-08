@@ -138,14 +138,11 @@ handles:
       A borrowed handle to a client context: a connection seen from inside
       DuckDB. Handed out within DuckDB-managed scopes — function bind / init /
       exec callbacks, replacement scans, and the extension entrypoint — and
-      valid only for the duration of that scope, or taken from a connection
-      with `[[connection_get_context]]` and valid for as long as the
-      connection is; the caller never destroys it. A context is the scope for
-      reading settings and the file system; values, types and data chunks are
-      created through its factory (`[[context_get_factory]]`). Within a
-      callback scope a transaction is already active; through a connection's
-      context, calls that need one run in the connection's transaction or
-      open their own.
+      valid only for the duration of that scope; the caller never destroys it.
+      Within that scope a transaction is already active. A context reaches
+      the same capabilities a connection does, through
+      `[[context_get_factory]]`, `[[context_get_config]]`,
+      `[[context_get_file_system]]` and `[[context_log]]`.
   factory:
     description: |
       A borrowed handle to the scope values, types, data chunks and column

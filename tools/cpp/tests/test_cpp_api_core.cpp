@@ -63,9 +63,8 @@ TEST_CASE("Stable C++API: options can be enumerated with their metadata", "[cpp_
 	REQUIRE_FALSE(instance.GetConfig().DescribeOption("allow_community_extensions").GetDefaultValue().IsNull());
 
 	auto conn = instance.Connect();
-	auto &ctx = conn.GetContext();
-	REQUIRE(ctx.GetConfig().GetOptionCount() == instance.GetConfig().GetOptionCount());
-	REQUIRE_FALSE(ctx.GetConfig().DescribeOption(0).GetName().empty());
+	REQUIRE(conn.GetConfig().GetOptionCount() == instance.GetConfig().GetOptionCount());
+	REQUIRE_FALSE(conn.GetConfig().DescribeOption(0).GetName().empty());
 }
 
 TEST_CASE("Stable C++API: Instance SetDefault selects the database for new connections", "[cpp_api]") {
@@ -170,28 +169,41 @@ TEST_CASE("Stable C++API: Connection::SetOption scope split is visible correctly
 	REQUIRE_THROWS_MATCHES(conn_a.GetConfig().SetOption("allow_community_extensions", "false", SettingScope::SESSION),
 	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
-TEST_CASE("Stable C++API: Context options and the scopeless SetOption default", "[cpp_api]") {
+TEST_CASE("Stable C++API: Instance and Connection write to the log", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
 	Environment env;
 	auto instance = env.Open(":memory:");
 	auto conn = instance.Connect();
-	auto &ctx = conn.GetContext();
+	conn.Execute("SET enable_logging = true").Drain();
+	instance.Log(LogLevel::LOG_INFO, "cpp instance log");
+	conn.Log(LogLevel::LOG_INFO, "cpp connection log");
+	auto result = conn.Execute("SELECT count(*) FROM duckdb_logs WHERE (message = 'cpp instance log' AND scope = "
+	                           "'DATABASE') OR (message = 'cpp connection log' AND scope = 'CONNECTION')");
+	REQUIRE(result.FetchChunk().GetVector(0).GetValue(0).Get<int64_t>() == 2);
+}
 
-	auto option = ctx.GetConfig().DescribeOption("allow_community_extensions");
+TEST_CASE("Stable C++API: Connection options and the scopeless SetOption default", "[cpp_api]") {
+	using namespace duckdb::cxx;
+
+	Environment env;
+	auto instance = env.Open(":memory:");
+	auto conn = instance.Connect();
+
+	auto option = conn.GetConfig().DescribeOption("allow_community_extensions");
 	REQUIRE(option.GetName() == "allow_community_extensions");
 
 	// The scopeless overload writes the option's default scope (SQL `SET` semantics): the session here.
 	conn.GetConfig().SetOption("max_execution_time", "4242");
-	auto seen = ctx.GetConfig().GetOption("max_execution_time");
+	auto seen = conn.GetConfig().GetOption("max_execution_time");
 	REQUIRE(seen.value.ToText() == "4242");
 	REQUIRE(seen.scope == SettingScope::SESSION);
 
 	// A context writes too, at any scope.
-	ctx.GetConfig().SetOption("max_execution_time", "77", SettingScope::GLOBAL);
+	conn.GetConfig().SetOption("max_execution_time", "77", SettingScope::GLOBAL);
 	REQUIRE(instance.GetConfig().GetOption("max_execution_time").value.ToText() == "77");
 
-	REQUIRE_THROWS_MATCHES(ctx.GetConfig().DescribeOption("no_such_option_xyz"), Exception,
+	REQUIRE_THROWS_MATCHES(conn.GetConfig().DescribeOption("no_such_option_xyz"), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: Instance::Attach with a name and options", "[cpp_api]") {
@@ -323,7 +335,7 @@ TEST_CASE("Stable C++API: Config reads, writes and describes settings", "[cpp_ap
 
 	// The three configs of one database describe the same settings.
 	REQUIRE(instance.GetConfig().GetOptionCount() == config.GetOptionCount());
-	REQUIRE(conn.GetContext().GetConfig().GetOptionCount() == config.GetOptionCount());
+	REQUIRE(conn.GetConfig().GetOptionCount() == config.GetOptionCount());
 	REQUIRE(instance.GetConfig().DescribeOption("max_memory").GetName() == "max_memory");
 
 	// An instance's config is GLOBAL alone.

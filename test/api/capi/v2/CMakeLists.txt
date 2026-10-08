@@ -17,6 +17,7 @@ add_library_unity(
   test_capi_v2_factory.cpp
   test_capi_v2_file_system.cpp
   test_capi_v2_identifier.cpp
+  test_capi_v2_logging.cpp
   test_capi_v2_logical_type.cpp
   test_capi_v2_option.cpp
   test_capi_v2_prepared_statement.cpp

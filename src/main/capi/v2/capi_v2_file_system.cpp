@@ -7,24 +7,6 @@
 
 namespace duckdb::capiv2 {
 
-// The file system handle, borrowed. It carries the context it was taken from alongside the file system itself, so
-// that reads and writes can hand the engine a QueryContext and have their bytes attributed to the query. Kept on the
-// context's own state, so the handle stays borrowed -- one per context, alive exactly as long as the context is.
-class CV2FileSystem : public ClientContextState {
-public:
-	optional_ptr<FileSystem> fs;
-	//! The context the file system was taken from, so reads and writes can be attributed to the query.
-	QueryContext query;
-};
-
-inline auto GetFileSystemSlot(ClientContext &context) -> shared_ptr<CV2FileSystem> {
-	constexpr auto FILE_SYSTEM_SLOT_KEY = "c_api_v2_file_system";
-	auto slot = context.registered_state->GetOrCreate<CV2FileSystem>(FILE_SYSTEM_SLOT_KEY);
-	slot->fs = &FileSystem::GetFileSystem(context);
-	slot->query = context;
-	return slot;
-}
-
 // How a file is opened, owned. Holds the flag word as given rather than the engine's FileOpenFlags, so that
 // "no flags set yet" stays distinguishable and is reported when the options are actually used.
 class CV2FileOpenOptions {
@@ -124,8 +106,25 @@ DUCKDB_V2_ERROR duckdb_v2_context_get_file_system(duckdb_v2_context_handle conte
 	DUCKDB_CHECK_ARG(context);
 	DUCKDB_CHECK_ARG(out_file_system);
 	*out_file_system = nullptr;
-	return WithErrorHandler(err,
-	                        [&]() { *out_file_system = Convert(GetFileSystemSlot(Convert(context)->context).get()); });
+	return WithErrorHandler(err, [&]() { *out_file_system = Convert(&Convert(context)->file_system); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_instance_get_file_system(duckdb_v2_instance_handle instance,
+                                                   duckdb_v2_file_system_handle *out_file_system,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(instance);
+	DUCKDB_CHECK_ARG(out_file_system);
+	*out_file_system = nullptr;
+	return WithErrorHandler(err, [&]() { *out_file_system = Convert(&Convert(instance)->file_system); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_connection_get_file_system(duckdb_v2_connection_handle conn,
+                                                     duckdb_v2_file_system_handle *out_file_system,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
+	DUCKDB_CHECK_ARG(out_file_system);
+	*out_file_system = nullptr;
+	return WithErrorHandler(err, [&]() { *out_file_system = Convert(&Convert(conn)->context_handle.file_system); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_file_open_options_create(duckdb_v2_file_system_handle file_system,
@@ -197,7 +196,7 @@ DUCKDB_V2_ERROR duckdb_v2_file_system_open(duckdb_v2_file_system_handle file_sys
 		// No opener is passed: FileSystem::GetFileSystem hands back the context's own OpenerFileSystem, which
 		// pushes the opener itself -- which is how a remote file system reaches settings and secrets. Supplying one
 		// here is rejected outright ("the opener is pushed automatically").
-		auto handle = slot.fs->OpenFile(info, opts.flags);
+		auto handle = slot.fs.OpenFile(info, opts.flags);
 		if (!handle) {
 			throw duckdb::IOException("Failed to open file: %s", info.path);
 		}

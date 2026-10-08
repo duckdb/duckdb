@@ -48,36 +48,6 @@ functions:
         indirection: 1
         description: "The connection to destroy."
     return_type: ERROR
-  connection_get_context:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-10-07" ]
-    description: |
-      Borrows the client context of a connection.
-
-      The context is the scope that constructs values and types and reads
-      settings and the file system, the same scope a callback receives. Calls
-      through it run in the connection's active transaction, or in a
-      transaction of their own when none is open. The returned handle is
-      borrowed: it is valid for as long as the connection is, and must not be
-      destroyed.
-    role: getter
-    belongs_to: connection
-    parameters:
-      conn:
-        type: connection
-        description: "The connection."
-      out_context:
-        type: context
-        indirection: 1
-        kind: OUT
-        description: "Receives the borrowed context."
-      err:
-        type: error_info
-        indirection: 1
-        kind: OUT
-        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
-    return_type: ERROR
-  # Query processing
   connection_interrupt:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-04" ]

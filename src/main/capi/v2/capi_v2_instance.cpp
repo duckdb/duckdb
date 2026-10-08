@@ -12,11 +12,11 @@
 namespace duckdb {
 namespace capiv2 {
 
+// Routed through the env's DBInstanceCache so every instance shares its path manager: opening one file twice is
+// detected across instances, while no instance is memoized.
 CV2Instance::CV2Instance(CV2Environment &env, DBConfig &startup_config)
-    : env(env), factory(*this), config_handle(*this) {
-	// Routed through the env's DBInstanceCache so every instance shares its path manager: opening one file twice is
-	// detected across instances, while no instance is memoized.
-	database = env.cache->CreateEmptyInstance(startup_config);
+    : database(env.cache->CreateEmptyInstance(startup_config)), env(env), factory(*this), config_handle(*this),
+      file_system(FileSystem::GetFileSystem(*database->instance), QueryContext()) {
 }
 
 DatabaseInstance &CV2InstanceFactory::GetDatabase() {
