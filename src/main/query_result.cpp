@@ -231,9 +231,20 @@ QueryResultState QueryResult::Poll() {
 }
 
 QueryResultState QueryResult::ExecuteTask() {
+	if (IsCollected()) {
+		// An earlier call ended the query: keep reporting the terminal state
+		return QueryResultState::FINISHED;
+	}
+	// Ending the query drops the handle's reference to the context, which the lock below outlives
+	auto keep_alive = context;
 	auto lock = LockContext();
 	CheckExecutableInternal(*lock);
-	return context->ExecuteTaskInternal(*lock, *this);
+	auto state = context->ExecuteTaskInternal(*lock, *this);
+	// Only a statement that sank no row finishes undecided, since producers park until the decision
+	if (state == QueryResultState::FINISHED && buffer && buffer->Lifetime() != ResultLifetime::DRAINING) {
+		return EndFinishedInternal(*lock);
+	}
+	return state;
 }
 
 void QueryResult::WaitForTask() {
@@ -254,9 +265,8 @@ void QueryResult::Close() {
 	if (context) {
 		auto lock = context->LockContext();
 		if (context->IsActiveResult(*lock, *this)) {
-			// Abandoned before the result was consumed: release the active-query state now (matching
-			// InitialCleanup) instead of leaking it until the next query or context teardown
-			context->CleanupInternal(*lock, this, false);
+			// No call ended the query, so it was abandoned and nothing it ran may be committed
+			context->AbortInternal(*lock);
 		}
 	}
 	context.reset();
@@ -352,12 +362,7 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 			}
 		}
 		if (state == QueryResultState::FINISHED) {
-			auto produced = context->GetExecutor().GetResult();
-			// Cleanup can fail on an autocommit commit; it records the error on this result
-			context->CleanupInternal(lock, this, false);
-			if (!HasError()) {
-				AdoptCollected(*produced);
-			}
+			EndFinishedInternal(lock);
 		}
 	} catch (...) {
 		// the caller holds the context lock - clean up with it here, as closing this result would lock it again
@@ -371,6 +376,17 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 		throw;
 	}
 	context.reset();
+}
+
+QueryResultState QueryResult::EndFinishedInternal(ClientContextLock &lock) {
+	auto produced = context->GetExecutor().GetResult();
+	// Cleanup can fail on an autocommit commit; it records the error on this result
+	context->CleanupInternal(lock, this, false);
+	if (!HasError()) {
+		AdoptCollected(*produced);
+	}
+	context.reset();
+	return HasError() ? QueryResultState::EXECUTION_ERROR : QueryResultState::FINISHED;
 }
 
 void QueryResult::ThrowNoCollection() const {
