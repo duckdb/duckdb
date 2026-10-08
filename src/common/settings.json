@@ -1192,6 +1192,13 @@
         "default_value": "1000"
     },
     {
+        "name": "max_macro_expansion_size",
+        "description": "The maximum number of expression nodes that expanding macros can produce in a single query.",
+        "type": "UBIGINT",
+        "default_scope": "local",
+        "default_value": "100000"
+    },
+    {
         "name": "max_memory",
         "description": "The maximum memory of the system (e.g. 1GB).",
         "type": "VARCHAR",

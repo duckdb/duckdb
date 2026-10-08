@@ -8,6 +8,7 @@
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -167,6 +168,13 @@ void ExpressionBinder::UnfoldWindowMacroExpression(unique_ptr<ParsedExpression> 
 	expr = std::move(macro_copy);
 }
 
+static idx_t CountExpressionNodes(ParsedExpression &expr) {
+	idx_t count = 1;
+	ParsedExpressionIterator::EnumerateChildren(expr,
+	                                            [&](ParsedExpression &child) { count += CountExpressionNodes(child); });
+	return count;
+}
+
 void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
                                              unique_ptr<ParsedExpression> &expr, idx_t depth) {
 	// validate the arguments and separate positional and default arguments
@@ -200,12 +208,22 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	// now replace the parameters
 	vector<identifier_set_t> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
+
+	// a macro that uses a parameter multiple times copies its argument, so nested macros can grow exponentially
+	auto &expansion_size = binder.global_binder_state->macro_expansion_size;
+	expansion_size += CountExpressionNodes(*expr);
+	auto max_expansion_size = Settings::Get<MaxMacroExpansionSizeSetting>(context);
+	if (expansion_size > max_expansion_size) {
+		throw BinderException(*expr,
+		                      "Max macro expansion size of %llu exceeded. Use \"SET max_macro_expansion_size TO x\" to "
+		                      "increase the maximum macro expansion size.",
+		                      max_expansion_size);
+	}
 }
 
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
 	auto stack_checker = StackCheck(*expr, 3);
-	context.InterruptCheck();
 
 	// unfold the macro expression
 	UnfoldMacroExpression(function, macro_func, expr, depth);

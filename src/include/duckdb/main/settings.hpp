@@ -1931,6 +1931,19 @@ struct MaxExpressionDepthSetting {
 	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
 };
 
+struct MaxMacroExpansionSizeSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "max_macro_expansion_size";
+	static constexpr const char *Description =
+	    "The maximum number of expression nodes that expanding macros can produce in a single query.";
+	static constexpr const char *InputType = "UBIGINT";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = false;
+	static constexpr const char *DefaultValue = "100000";
+	static constexpr SettingScopeTarget Scope = SettingScopeTarget::LOCAL_DEFAULT;
+	static constexpr idx_t SettingIndex = NEXT_SETTING_INDEX();
+};
+
 struct MaxMemorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "max_memory";
