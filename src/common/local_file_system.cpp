@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <type_traits>
 
 #ifndef _WIN32
@@ -660,6 +661,24 @@ bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<File
 	}
 	// if any condition fails
 	return false;
+}
+
+optional_idx LocalFileSystem::GetAvailableDiskSpace(const string &path, optional_ptr<FileOpener> opener) {
+	struct statvfs vfs;
+
+	auto ret = statvfs(path.c_str(), &vfs);
+	if (ret == -1) {
+		return optional_idx();
+	}
+	auto block_size = vfs.f_frsize;
+	// These are the blocks available for creating new files or extending existing ones
+	auto available_blocks = vfs.f_bfree;
+	idx_t available_disk_space = DConstants::INVALID_INDEX;
+	if (!TryMultiplyOperator::Operation(static_cast<idx_t>(block_size), static_cast<idx_t>(available_blocks),
+	                                    available_disk_space)) {
+		return optional_idx();
+	}
+	return available_disk_space;
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
@@ -1449,6 +1468,18 @@ static DWORD WindowsGetFileAttributes(const std::wstring &filename) {
 bool LocalFileSystem::DirectoryExists(const string &directory, optional_ptr<FileOpener> opener) {
 	DWORD attrs = WindowsGetFileAttributes(*this, directory, opener);
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
+}
+
+optional_idx LocalFileSystem::GetAvailableDiskSpace(const string &path, optional_ptr<FileOpener> opener) {
+	ULARGE_INTEGER available_bytes, total_bytes, free_bytes;
+
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	if (!GetDiskFreeSpaceExW(unicode_path.c_str(), &available_bytes, &total_bytes, &free_bytes)) {
+		return optional_idx();
+	}
+	(void)total_bytes;
+	(void)free_bytes;
+	return NumericCast<idx_t>(available_bytes.QuadPart);
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
