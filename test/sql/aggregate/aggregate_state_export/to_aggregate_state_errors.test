@@ -53,3 +53,124 @@ SELECT to_aggregate_state(
 );
 ----
 ordered aggregate state value must be a LIST of STRUCTs
+
+# ANY is a signature descriptor, not a general SQL type or a nested wildcard.
+statement error
+SELECT CAST(NULL AS ANY);
+----
+ANY
+
+statement error
+CREATE TABLE any_column(v ANY);
+----
+ANY
+
+statement error
+SELECT make_type('ANY');
+----
+ANY
+
+statement error
+SELECT to_aggregate_state(0::BIGINT, 'count', ['ANY[]']);
+----
+ANY
+
+statement error
+SELECT to_aggregate_state({'not_a_count': 1}, 'count', ['ANY']);
+----
+Unimplemented type for cast
+
+statement error
+SELECT to_aggregate_state(0::BIGINT, 'count', ['ANY'], [NULL, NULL]);
+----
+exactly one entry per argument
+
+statement error
+SELECT to_aggregate_state([{'v0': 'a'}], 'count', ['ANY'], NULL,
+                         [{'column': 1, 'order': 'ASC NULLS LAST'}]);
+----
+out of range
+
+# ANY does not select a concrete overload or supply a missing template type.
+foreach aggregate sum bool_and count_star
+
+statement error
+SELECT to_aggregate_state(0::BIGINT, '{aggregate}', ['ANY']);
+----
+Could not re-bind exported aggregate
+
+endloop
+
+foreach aggregate min max first last any_value list mode entropy histogram string_agg
+
+statement error
+SELECT to_aggregate_state(0::BIGINT, '{aggregate}', ['ANY']);
+----
+requires a concrete type for signature argument 1
+
+endloop
+
+statement error
+SELECT to_aggregate_state(0::BIGINT, 'count', ['ANY', 'ANY']);
+----
+Could not re-bind exported aggregate
+
+# MIN/MAX-N also specialize the ANY input before creating their implementation.
+foreach aggregate min max
+
+statement error
+SELECT to_aggregate_state([1, 2], '{aggregate}', ['ANY', 'BIGINT'], [NULL, 2]);
+----
+requires a concrete type for signature argument 1
+
+endloop
+
+# Concrete MIN/MAX and their N overloads still use their native implementations.
+query IIII
+SELECT min(v), max(v), min(v, 2), max(v, 2) FROM (VALUES (1),(4),(1),(NULL)) input(v);
+----
+1	4	[1, 1]	[4, 1]
+
+
+# A state-type callback must still produce complete result and state value types.
+foreach aggregate arg_min arg_max arg_min_null arg_max_null
+
+statement error
+SELECT to_aggregate_state({'arg': 1::BIGINT, 'by': 2::BIGINT}, '{aggregate}', ['ANY', 'BIGINT']);
+----
+signature does not resolve a complete result type
+
+statement error
+SELECT to_aggregate_state({'arg': 1::BIGINT, 'by': 2::BIGINT}, '{aggregate}', ['BIGINT', 'ANY']);
+----
+signature does not resolve a complete state type
+
+# Ordered reconstruction must not use the supplied buffer to infer a signature.
+statement error
+SELECT to_aggregate_state([{'arg': 1::BIGINT, 'by': 2::BIGINT}], '{aggregate}',
+                         ['BIGINT', 'ANY'], NULL, [{'column': 1, 'order': 'ASC NULLS LAST'}]);
+----
+signature does not resolve a complete state type
+
+query II
+SELECT finalize(to_aggregate_state({'arg': 1::BIGINT, 'by': 2::BIGINT}, '{aggregate}', ['BIGINT', 'BIGINT'])),
+       finalize(to_aggregate_state([{'arg': 1::BIGINT, 'by': 2::BIGINT}], '{aggregate}',
+                                  ['BIGINT', 'BIGINT'], NULL, [{'column': 1, 'order': 'ASC NULLS LAST'}]));
+----
+1	1
+
+endloop
+
+statement error
+SELECT finalize(to_aggregate_state(
+    NULL::STRUCT(k UBIGINT, "values" STRUCT("value" BIGINT, count UBIGINT)[], "filter" UBIGINT[]),
+    'approx_top_k', ['ANY', 'BIGINT'], [NULL, 2]));
+----
+signature does not resolve a complete result type
+
+query I
+SELECT finalize(to_aggregate_state(
+    NULL::STRUCT(k UBIGINT, "values" STRUCT("value" BIGINT, count UBIGINT)[], "filter" UBIGINT[]),
+    'approx_top_k', ['BIGINT', 'BIGINT'], [NULL, 2]));
+----
+NULL
