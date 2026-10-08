@@ -108,7 +108,7 @@ def test_informational_exit_stays_successful(shell, tmp_path, option):
 def test_configured_command_error_cleans_up_database(shell, tmp_path, mode):
     database = tmp_path / "configured.duckdb"
     # -connect rejects a positional database, so open it through a prior callback.
-    arguments = ["-cmd", f'.open "{database}"', "-cmd", "CREATE TABLE saved AS SELECT 42 AS value;"]
+    arguments = ["-cmd", f'.open "{database.as_posix()}"', "-cmd", "CREATE TABLE saved AS SELECT 42 AS value;"]
     expected_error = "missing_cleanup_table"
     if mode == "-manual":
         arguments += ["-manual", "too.many.name.components"]
