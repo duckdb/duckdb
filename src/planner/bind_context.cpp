@@ -5,6 +5,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
@@ -524,21 +525,23 @@ void ExpressionBinder::ExpandGeneratedDependencies(unique_ptr<ParsedExpression> 
 	    *expression, [&](unique_ptr<ParsedExpression> &child) { ExpandGeneratedDependencies(child); });
 }
 
-unique_ptr<Expression> BindContext::BindSourceExpression(Binding &binding, SourceExpression &source) {
-	if (source.bound_expression) {
-		return std::move(source.bound_expression);
-	}
+shared_ptr<Binder> BindContext::CreateSourceBinder(Binding &binding) {
 	auto source_binder = Binder::CreateBinder(binder.context, &binder);
 	for (auto &source_binding : bindings_list) {
 		if (source_binding->source_projection == binding.source_projection) {
 			source_binder->bind_context.AddBinding(source_binding->CopyForSourceBinding());
 		}
 	}
-	ExpressionBinder expression_binder(*source_binder, binder.context);
-	if (source.generated) {
-		expression_binder.ExpandGeneratedDependencies(source.expression);
-		ExpressionBinder::QualifyColumnNames(*source_binder, source.expression);
+	return source_binder;
+}
+
+unique_ptr<Expression> BindContext::BindSourceExpression(Binding &binding, SourceExpression &source) {
+	if (source.bound_expression) {
+		return std::move(source.bound_expression);
 	}
+	auto source_binder = CreateSourceBinder(binding);
+	ExpressionBinder expression_binder(*source_binder, binder.context);
+	// Normal binding checks macro bodies and their arguments before dependencies are materialized.
 	auto expression = source.expression->Copy();
 	auto bound_expression = expression_binder.Bind(expression);
 	source.can_reconstruct = source.generated && CanReconstructGeneratedColumn(*bound_expression);
@@ -614,7 +617,23 @@ unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnExpression(ColumnRef
 	if (!source.can_reconstruct.value() || (only_constant_null && !source.is_constant_null)) {
 		return nullptr;
 	}
-	return source.expression->Copy();
+	if (!source.expanded_expression) {
+		if (source.is_constant_null) {
+			auto &bound =
+			    source.bound_expression
+			        ? *source.bound_expression
+			        : *binding->source_projection->expressions[binding->projected_columns.at(colref.GetColumnName())];
+			source.expanded_expression = ConstantExpression::FromValue(Value(bound.GetReturnType()));
+		} else {
+			auto source_binder = CreateSourceBinder(*binding);
+			ExpressionBinder expression_binder(*source_binder, binder.context);
+			auto expanded = source.expression->Copy();
+			expression_binder.ExpandGeneratedDependencies(expanded);
+			ExpressionBinder::QualifyColumnNames(*source_binder, expanded);
+			source.expanded_expression = std::move(expanded);
+		}
+	}
+	return source.expanded_expression->Copy();
 }
 
 bool BindContext::ExpandGeneratedColumnReferences(unique_ptr<ParsedExpression> &expression) {

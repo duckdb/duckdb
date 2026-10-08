@@ -179,6 +179,7 @@ public:
 	vector<reference<Binding>> GetBindings(const BindingAlias &alias, ErrorData &out_error);
 
 private:
+	shared_ptr<Binder> CreateSourceBinder(Binding &binding);
 	unique_ptr<Expression> BindSourceExpression(Binding &binding, SourceExpression &source);
 	void AddBinding(unique_ptr<Binding> binding);
 	static string AmbiguityException(const BindingAlias &alias, const vector<reference<Binding>> &bindings);

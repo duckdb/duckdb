@@ -37,6 +37,9 @@ Binding::Binding(const Binding &other)
 		if (source.bound_expression) {
 			copy.bound_expression = source.bound_expression->Copy();
 		}
+		if (source.expanded_expression) {
+			copy.expanded_expression = source.expanded_expression->Copy();
+		}
 		copy.can_reconstruct = source.can_reconstruct;
 		copy.is_constant_null = source.is_constant_null;
 		projection_expressions.emplace(entry.first, std::move(copy));

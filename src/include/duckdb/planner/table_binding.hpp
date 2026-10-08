@@ -43,6 +43,8 @@ struct SourceExpression {
 	unique_ptr<ParsedExpression> expression;
 	//! Reuse an eligibility probe if the expression subsequently needs projection.
 	unique_ptr<Expression> bound_expression;
+	//! Prepared only when grouping needs a parsed reconstruction.
+	unique_ptr<ParsedExpression> expanded_expression;
 	Identifier diagnostic_name;
 	bool generated;
 	optional<bool> can_reconstruct;
