@@ -145,8 +145,8 @@ public:
 	                  idx_t group_count, DataChunk &result) const;
 
 	const PartitionedTupleData &GetPartitionedData() const;
-	idx_t GetDataSizeInBytes() const;
-	idx_t GetAllocatedDataSizeInBytes() const;
+	//! Retained tuple blocks, allocator metadata, aggregate arena, and pointer table
+	idx_t GetSizeInBytes() const;
 	unique_ptr<PartitionedTupleData> AcquirePartitionedData();
 	void Abandon();
 	void Repartition();
@@ -167,7 +167,7 @@ public:
 	//! Skips lookups from here on out
 	void SkipLookups();
 	bool LookupsSkipped() const;
-	//! Enable/disable HLL
+	//! Enable/disable HLL; a fresh sketch must start before inserting groups
 	void EnableHLL(bool enable);
 	//! Whether HLL is enabled
 	bool HLLEnabled() const;

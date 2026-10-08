@@ -126,13 +126,10 @@ const PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() cons
 	return *partitioned_data;
 }
 
-idx_t GroupedAggregateHashTable::GetDataSizeInBytes() const {
-	return partitioned_data->SizeInBytes() + (unpartitioned_data ? unpartitioned_data->SizeInBytes() : 0);
-}
-
-idx_t GroupedAggregateHashTable::GetAllocatedDataSizeInBytes() const {
+idx_t GroupedAggregateHashTable::GetSizeInBytes() const {
 	return partitioned_data->GetAllocatedSizeInBytes() +
-	       (unpartitioned_data ? unpartitioned_data->GetAllocatedSizeInBytes() : 0);
+	       (unpartitioned_data ? unpartitioned_data->GetAllocatedSizeInBytes() : 0) +
+	       aggregate_allocator->AllocationSize() + hash_map.GetSize();
 }
 
 unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedData() {
@@ -309,6 +306,7 @@ bool GroupedAggregateHashTable::LookupsSkipped() const {
 }
 
 void GroupedAggregateHashTable::EnableHLL(bool enable) {
+	D_ASSERT(!enable || enable_hll || GetMaterializedCount() == 0);
 	enable_hll = enable;
 }
 
@@ -328,7 +326,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	}
 	D_ASSERT(Count() == 0 || Count() == GetMaterializedCount());
 
-	auto new_hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(capacity * sizeof(ht_entry_t));
+	auto new_hash_map = buffer_manager.GetBufferAllocator().TryAllocateHuge(size * sizeof(ht_entry_t));
 	capacity = size;
 	hash_map = std::move(new_hash_map);
 	entries = reinterpret_cast<ht_entry_t *>(hash_map.get());
@@ -848,16 +846,15 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	// convert all vectors to unified format
 	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
 
-	if (enable_hll) {
-		hll.Update(group_hashes_v);
-	}
-
 	const auto hashes = group_hashes_v.Values<hash_t>();
 
 	addresses_v.Flatten();
 	const auto addresses = FlatVector::GetDataMutable<data_ptr_t>(addresses_v);
 
 	if (skip_lookups) {
+		if (enable_hll) {
+			hll.Update(group_hashes_v);
+		}
 		// Just appending now
 		partitioned_data->AppendUnified(state.partitioned_append_state, state.group_chunk,
 		                                *FlatVector::IncrementalSelectionVector(), chunk_size);
@@ -983,6 +980,17 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	}
 	if (iteration_count == capacity) {
 		throw InternalException("Maximum outer iteration count reached in GroupedAggregateHashTable");
+	}
+
+	if (enable_hll && new_group_count > 0) {
+		if (new_group_count == chunk_size) {
+			hll.Update(group_hashes_v);
+		} else {
+			// Lookup hits were already observed when their groups were inserted.
+			for (idx_t i = 0; i < new_group_count; i++) {
+				hll.InsertElement(hashes[new_groups_out.get_index(i)].GetValue());
+			}
+		}
 	}
 
 	FlatVector::SetSize(addresses_v, chunk_size);
