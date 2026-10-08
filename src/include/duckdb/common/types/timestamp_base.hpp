@@ -71,7 +71,7 @@ struct timestamp_base_t { // NOLINT
 		return timestamp_base_t(0);
 	} // NOLINT
 
-	//! The smallest valid timestamp: 290308-12-22 (BC) 00:00:00, or the smallest int64 if that is out of range
+	//! The smallest valid timestamp: 290309-12-22 (BC) 00:00:00, or the smallest int64 if that is out of range
 	static constexpr timestamp_base_t min_value() { // NOLINT
 		return timestamp_base_t(P <= MICROS_PER_SEC ? MIN_MICROS / (MICROS_PER_SEC / (P <= MICROS_PER_SEC ? P : 1))
 		                                            : NumericLimits<int64_t>::Minimum());
@@ -88,7 +88,7 @@ struct timestamp_base_t { // NOLINT
 
 private:
 	static constexpr int64_t MICROS_PER_SEC = 1000000;
-	//! 290308-12-22 (BC) 00:00:00 in microseconds
+	//! 290309-12-22 (BC) 00:00:00 in microseconds
 	static constexpr int64_t MIN_MICROS = -9223372022400000000LL;
 };
 
