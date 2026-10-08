@@ -500,14 +500,15 @@ static bool CanReconstructGeneratedColumn(const Expression &expression) {
 	return has_column;
 }
 
-static void ExpandGeneratedDependencies(BindContext &context, unique_ptr<ParsedExpression> &expression) {
+void ExpressionBinder::ExpandGeneratedDependencies(unique_ptr<ParsedExpression> &expression) {
+	auto stack_checker = StackCheck(*expression);
 	if (expression->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &colref = expression->Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
 			return;
 		}
 		ErrorData error;
-		auto binding = context.GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
+		auto binding = binder.bind_context.GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
 		column_t column_index;
 		if (!binding || !binding->TryGetBindingIndex(colref.GetColumnName(), column_index) ||
 		    !ColumnIsGenerated(*binding, column_index)) {
@@ -516,11 +517,11 @@ static void ExpandGeneratedDependencies(BindContext &context, unique_ptr<ParsedE
 		auto expanded = binding->Cast<TableBinding>().ExpandGeneratedColumn(colref.GetColumnName());
 		expanded->SetAlias(expression->GetAlias());
 		expression = std::move(expanded);
-		ExpandGeneratedDependencies(context, expression);
+		ExpandGeneratedDependencies(expression);
 		return;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
-	    *expression, [&](unique_ptr<ParsedExpression> &child) { ExpandGeneratedDependencies(context, child); });
+	    *expression, [&](unique_ptr<ParsedExpression> &child) { ExpandGeneratedDependencies(child); });
 }
 
 unique_ptr<Expression> BindContext::BindSourceExpression(Binding &binding, SourceExpression &source) {
@@ -533,12 +534,12 @@ unique_ptr<Expression> BindContext::BindSourceExpression(Binding &binding, Sourc
 			source_binder->bind_context.AddBinding(source_binding->CopyForSourceBinding());
 		}
 	}
+	ExpressionBinder expression_binder(*source_binder, binder.context);
 	if (source.generated) {
-		ExpandGeneratedDependencies(source_binder->bind_context, source.expression);
+		expression_binder.ExpandGeneratedDependencies(source.expression);
 		ExpressionBinder::QualifyColumnNames(*source_binder, source.expression);
 	}
 	auto expression = source.expression->Copy();
-	ExpressionBinder expression_binder(*source_binder, binder.context);
 	auto bound_expression = expression_binder.Bind(expression);
 	source.can_reconstruct = source.generated && CanReconstructGeneratedColumn(*bound_expression);
 	source.is_constant_null = source.generated && IsConstantNull(*bound_expression);

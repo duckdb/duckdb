@@ -118,6 +118,8 @@ public:
 public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, optional_ptr<LogicalType> result_type = nullptr,
 	                            bool root_expression = true);
+	//! Expand source dependencies using the same depth budget as expression binding.
+	void ExpandGeneratedDependencies(unique_ptr<ParsedExpression> &expression);
 
 	//! Returns whether or not any columns have been bound by the expression binder
 	bool HasBoundColumns() {
