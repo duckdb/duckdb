@@ -2164,6 +2164,210 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertEqual(proc.stdout.count("ran tests: "), 2)
         self.assertIn("all 2 config runs passed", proc.stdout)
 
+    def test_multiple_test_configs_run_concurrently(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            helper_path = create_temp_file(
+                """
+                #!/bin/sh
+                if [ "$3" = "--list-tests" ]; then
+                  printf 'name\\tgroup\\ntest/sql/a.test\\t[fast]\\n'
+                  exit 0
+                fi
+
+                case "$2" in
+                  *a.json) marker=a ;;
+                  *b.json) marker=b ;;
+                  *) exit 2 ;;
+                esac
+                touch "{state_dir}/$marker.started"
+                attempts=0
+                while [ ! -f "{state_dir}/a.started" ] || [ ! -f "{state_dir}/b.started" ]; do
+                  attempts=$((attempts + 1))
+                  if [ "$attempts" -gt 100 ]; then
+                    exit 3
+                  fi
+                  sleep 0.02
+                done
+                """,
+                state_dir=state_dir,
+            )
+            os.chmod(helper_path, 0o755)
+            try:
+                with mock.patch.dict(os.environ, {"CI": ""}, clear=False):
+                    proc = start_runner(
+                        [
+                            "--workers",
+                            "2",
+                            "--batch-size",
+                            "1",
+                            "--test-config",
+                            "test/configs/a.json",
+                            "--test-config",
+                            "test/configs/b.json",
+                            str(helper_path),
+                        ]
+                    )
+            finally:
+                helper_path.unlink(missing_ok=True)
+
+            a_started = (Path(state_dir) / "a.started").exists()
+            b_started = (Path(state_dir) / "b.started").exists()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue(a_started)
+        self.assertTrue(b_started)
+
+    def test_multiple_test_configs_share_global_worker_limit(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            helper_path = create_temp_file(
+                """
+                #!/bin/sh
+                if [ "$3" = "--list-tests" ]; then
+                  printf 'name\\tgroup\\ntest/sql/a.test\\t[fast]\\n'
+                  exit 0
+                fi
+
+                slot=''
+                if mkdir "{state_dir}/slot-1" 2>/dev/null; then
+                  slot="{state_dir}/slot-1"
+                elif mkdir "{state_dir}/slot-2" 2>/dev/null; then
+                  slot="{state_dir}/slot-2"
+                else
+                  exit 4
+                fi
+                trap 'rmdir "$slot"' EXIT
+                sleep 0.1
+                """,
+                state_dir=state_dir,
+            )
+            os.chmod(helper_path, 0o755)
+            try:
+                with mock.patch.dict(os.environ, {"CI": ""}, clear=False):
+                    proc = start_runner(
+                        [
+                            "--workers",
+                            "2",
+                            "--batch-size",
+                            "1",
+                            "--test-config",
+                            "test/configs/a.json",
+                            "--test-config",
+                            "test/configs/b.json",
+                            "--test-config",
+                            "test/configs/c.json",
+                            str(helper_path),
+                        ]
+                    )
+            finally:
+                helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_single_test_config_uses_live_output_path(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+
+        def fake_run_single_config(*args, **kwargs):
+            self.assertEqual(kwargs, {})
+            self.assertEqual(len(args), 10)
+            print("live config output")
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-config",
+                        "test/configs/a.json",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("live config output", proc.stdout)
+        self.assertNotIn("running 1 configs", proc.stdout)
+
+    def test_default_config_uses_live_output_path(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+
+        def fake_run_single_config(*args, **kwargs):
+            self.assertEqual(kwargs, {})
+            self.assertEqual(len(args), 10)
+            self.assertFalse(args[9])
+            print("live default output")
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("live default output", proc.stdout)
+        self.assertNotIn("=== config run: default ===", proc.stdout)
+
+    def test_multiple_test_configs_buffer_output_separately(self):
+        seen_executors = []
+        seen_outputs = []
+
+        def fake_run_single_config(*args):
+            invocation = args[8]
+            executor = args[10]
+            output = args[11]
+            seen_executors.append(executor)
+            seen_outputs.append(output)
+            print(f"only in {invocation.label}", file=output)
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        with (
+            mock.patch.dict(os.environ, {"CI": ""}, clear=False),
+            mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config),
+        ):
+            proc = start_runner(
+                [
+                    "--workers",
+                    "2",
+                    "--test-config",
+                    "test/configs/a.json",
+                    "--test-config",
+                    "test/configs/b.json",
+                    "unused-binary",
+                ]
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(len({id(executor) for executor in seen_executors}), 1)
+        self.assertEqual(len({id(output) for output in seen_outputs}), 2)
+        for label, other_label in (("a", "b"), ("b", "a")):
+            header = f"=== config run: test/configs/{label}.json ==="
+            other_header = f"=== config run: test/configs/{other_label}.json ==="
+            section_start = proc.stdout.index(header)
+            other_start = proc.stdout.find(other_header, section_start + len(header))
+            section_end = len(proc.stdout) if other_start == -1 else other_start
+            section = proc.stdout[section_start:section_end]
+            self.assertIn(f"only in test/configs/{label}.json", section)
+            self.assertNotIn(f"only in test/configs/{other_label}.json", section)
+
     def test_multiple_test_configs_aggregate_failure(self):
         failing_helper = create_temp_file(
             """

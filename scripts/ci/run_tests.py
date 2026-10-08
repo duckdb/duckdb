@@ -173,15 +173,16 @@ class BatchRunState:
 
 
 class DotProgressBar:
-    def __init__(self, total_batches: int):
+    def __init__(self, total_batches: int, output=None):
         self.total_batches = total_batches
         self.printed_dots = 0
         self.row_width = 50
         self._line_open = False
+        self.output = output if output is not None else sys.stdout
 
     def _write(self, text: str):
-        sys.stdout.write(text)
-        sys.stdout.flush()
+        self.output.write(text)
+        self.output.flush()
 
     def flush_line(self):
         if self._line_open:
@@ -190,7 +191,7 @@ class DotProgressBar:
 
     def print_message(self, text: str):
         self.flush_line()
-        print(text)
+        print(text, file=self.output)
 
     def advance(self, completed_batches: int):
         if self.total_batches <= 0:
@@ -360,6 +361,7 @@ def generate_test_list(
     patterns: list[str],
     test_list_files: list[Path] | None = None,
     coverage_profile_dir: Path | None = None,
+    error_output=None,
 ):
     # Catch can return a non-zero status code for list commands when tests
     # are found, so we accept non-zero if stdout still contains test output.
@@ -381,7 +383,13 @@ def generate_test_list(
         env=child_env,
     )
     if proc.returncode != 0 and not proc.stdout:
-        print("Stderr:", proc.stderr, end="", file=sys.stderr, flush=True)
+        print(
+            "Stderr:",
+            proc.stderr,
+            end="",
+            file=error_output if error_output is not None else sys.stderr,
+            flush=True,
+        )
         raise RuntimeError(f"failed to generate test list from {unittest_bin} (exit: {proc.returncode})")
     test_file.write(proc.stdout)
     test_file.flush()
@@ -1886,9 +1894,18 @@ def create_temp_test_list(
     patterns: list[str],
     test_list_files: list[Path] | None,
     coverage_profile_dir: Path | None = None,
+    error_output=None,
 ):
     with tempfile.NamedTemporaryFile(mode="w", encoding="utf8", delete=False) as test_file:
-        generate_test_list(test_file, unittest_bin, test_flags, patterns, test_list_files, coverage_profile_dir)
+        generate_test_list(
+            test_file,
+            unittest_bin,
+            test_flags,
+            patterns,
+            test_list_files,
+            coverage_profile_dir,
+            error_output,
+        )
         return Path(test_file.name)
 
 
@@ -1903,19 +1920,31 @@ def run_single_config(
     test_list_files: list[Path],
     invocation: ConfigInvocation,
     print_config_header: bool,
+    executor: concurrent.futures.ThreadPoolExecutor | None = None,
+    output=None,
 ):
+    output = output if output is not None else sys.stdout
     if stop_requested():
         return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
     if print_config_header:
-        print(f"=== config run: {invocation.label} ===")
+        print(f"=== config run: {invocation.label} ===", file=output)
     generated_test_list: Path | None = None
     try:
         if args.test_list is not None and len(test_list_files) == 1:
             test_list_path = args.test_list
         else:
-            generated_test_list = create_temp_test_list(
-                unittest_bin, invocation.test_flags, args.patterns, test_list_files, args.coverage_profile_dir
+            create_args = (
+                unittest_bin,
+                invocation.test_flags,
+                args.patterns,
+                test_list_files,
+                args.coverage_profile_dir,
+                output,
             )
+            if executor is None:
+                generated_test_list = create_temp_test_list(*create_args)
+            else:
+                generated_test_list = executor.submit(create_temp_test_list, *create_args).result()
             test_list_path = generated_test_list
         config = TestRunnerConfig(
             test_list=test_list_path,
@@ -1939,7 +1968,7 @@ def run_single_config(
         if stop_requested():
             return ConfigRunResult(returncode=130, passed_tests=0, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0)
         if len(tests) == 0:
-            print(f"error: no tests selected for config '{invocation.label}'")
+            print(f"error: no tests selected for config '{invocation.label}'", file=output)
             return ConfigRunResult(returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0)
         stabilization_tests = []
         if args.changed_tests is not None:
@@ -1947,7 +1976,7 @@ def run_single_config(
             base_names = {test.name for test in load_tests(args.test_list)}
             changed_test_names = merged_names - base_names
             added_test_count = len(changed_test_names)
-            print(f"added {added_test_count} tests from --changed-tests file to the smoke test run")
+            print(f"added {added_test_count} tests from --changed-tests file to the smoke test run", file=output)
             changed_test_name_set = set(changed_test_names)
             stabilization_tests = [test for test in tests if test.name in changed_test_name_set]
         elif args.stabilize_tests:
@@ -1962,10 +1991,15 @@ def run_single_config(
         config_values.pop("coverage_profile_dir", None)
         config_values = {k: v for k, v in config_values.items() if v is not None and v != "" and v != []}
         config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
-        print(f"config: {config_output}")
+        print(f"config: {config_output}", file=output)
+
+        def run_test_batches(test_batches, test_count):
+            if executor is None and output is sys.stdout:
+                return run_tests(config, test_batches, test_count)
+            return run_tests(config, test_batches, test_count, executor=executor, output=output)
 
         batches = list(chunked(tests, computed_batch_size))
-        initial_run_result = run_tests(config, batches, len(tests))
+        initial_run_result = run_test_batches(batches, len(tests))
         if initial_run_result.returncode != 0 or not stabilization_tests:
             return initial_run_result
 
@@ -1975,7 +2009,8 @@ def run_single_config(
             "stabilizing tests: "
             f"{len(stabilization_tests)} changed/selected tests "
             f"({len(fast_tests)} fast, {len(slow_tests)} slow), "
-            f"extra reruns fast={fast_extra_runs}, slow={slow_extra_runs}"
+            f"extra reruns fast={fast_extra_runs}, slow={slow_extra_runs}",
+            file=output,
         )
 
         stabilization_failed = False
@@ -1983,16 +2018,16 @@ def run_single_config(
         for rerun_idx in range(max(fast_extra_runs, slow_extra_runs)):
             rerun_round = rerun_idx + 1
             if rerun_idx < fast_extra_runs and fast_tests:
-                print(f"stabilization rerun {rerun_round}/{fast_extra_runs} for fast tests")
+                print(f"stabilization rerun {rerun_round}/{fast_extra_runs} for fast tests", file=output)
                 fast_batches = list(chunked(fast_tests, computed_batch_size))
-                fast_result = run_tests(config, fast_batches, len(fast_tests))
+                fast_result = run_test_batches(fast_batches, len(fast_tests))
                 if fast_result.returncode != 0:
                     stabilization_failed = True
                     stabilization_failed_test_names.extend(fast_result.failed_test_names)
             if rerun_idx < slow_extra_runs and slow_tests:
-                print(f"stabilization rerun {rerun_round}/{slow_extra_runs} for slow tests")
+                print(f"stabilization rerun {rerun_round}/{slow_extra_runs} for slow tests", file=output)
                 slow_batches = list(chunked(slow_tests, computed_batch_size))
-                slow_result = run_tests(config, slow_batches, len(slow_tests))
+                slow_result = run_test_batches(slow_batches, len(slow_tests))
                 if slow_result.returncode != 0:
                     stabilization_failed = True
                     stabilization_failed_test_names.extend(slow_result.failed_test_names)
@@ -2000,7 +2035,7 @@ def run_single_config(
                 break
 
         if stabilization_failed:
-            print("error: stabilization rerun failure detected")
+            print("error: stabilization rerun failure detected", file=output)
             return ConfigRunResult(
                 returncode=1,
                 passed_tests=initial_run_result.passed_tests,
@@ -2015,6 +2050,45 @@ def run_single_config(
     finally:
         if generated_test_list is not None:
             generated_test_list.unlink(missing_ok=True)
+
+
+def failed_config_run_result():
+    return ConfigRunResult(returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0)
+
+
+def print_config_run_summary(run_result: ConfigRunResult):
+    if run_result.returncode not in (0, 1):
+        return
+    partial_skip_suffix = ""
+    if run_result.partially_skipped_tests:
+        partial_skip_suffix = f" ({run_result.partially_skipped_tests} partially)"
+    if run_result.failed_tests > 0:
+        print(
+            "❌ ran tests: "
+            f"{run_result.passed_tests} passed, {run_result.failed_tests} failed, "
+            f"{run_result.skipped_tests} skipped{partial_skip_suffix} in {run_result.elapsed_seconds:.0f}s"
+        )
+    else:
+        print(
+            "ran tests: "
+            f"{run_result.passed_tests} passed, {run_result.skipped_tests} skipped{partial_skip_suffix} "
+            f"in {run_result.elapsed_seconds:.0f}s"
+        )
+
+
+def print_buffered_config_run(
+    invocation: ConfigInvocation, output: StringIO, run_result: ConfigRunResult, use_config_groups: bool
+):
+    if use_config_groups:
+        print(f"::group::test config: {invocation.label}")
+    else:
+        print(f"=== config run: {invocation.label} ===")
+    contents = output.getvalue()
+    if contents:
+        print(contents, end="" if contents.endswith("\n") else "\n")
+    if use_config_groups:
+        print("::endgroup::")
+    print_config_run_summary(run_result)
 
 
 def main(argv: list[str] | None = None):
@@ -2061,25 +2135,17 @@ def main_impl(argv: list[str] | None = None):
     failed_test_names = []
     failed_test_name_set = set()
     if len(config_invocations) > 1:
-        print(f"running {len(config_invocations)} configs")
+        print(f"running {len(config_invocations)} configs with {workers} shared workers")
     coverage_profile_tmp = None
     try:
         if args.coverage_report is not None:
             coverage_profile_tmp = tempfile.TemporaryDirectory(prefix="duckdb-coverage-")
             args.coverage_profile_dir = Path(coverage_profile_tmp.name)
-        for invocation in config_invocations:
-            if stop_requested():
-                print("interrupted")
-                return 130
-            group_open = False
-            if use_config_groups:
-                print(f"::group::test config: {invocation.label}")
-                group_open = True
-            print_config_header = not use_config_groups and not (
-                len(config_invocations) == 1 and invocation.label == "default"
-            )
+        config_results: list[ConfigRunResult | None] = [None] * len(config_invocations)
+        if len(config_invocations) == 1:
+            invocation = config_invocations[0]
             try:
-                run_result = run_single_config(
+                config_results[0] = run_single_config(
                     args,
                     unittest_bin,
                     workers,
@@ -2089,37 +2155,56 @@ def main_impl(argv: list[str] | None = None):
                     batch_size,
                     test_list_files,
                     invocation,
-                    print_config_header,
+                    invocation.label != "default",
                 )
             except Exception as exc:
                 print(f"error: {exc}")
                 traceback.print_exc()
-                run_result = ConfigRunResult(
-                    returncode=1, passed_tests=0, failed_tests=1, skipped_tests=0, elapsed_seconds=0.0
-                )
-            returncode = run_result.returncode
-            if group_open:
-                print("::endgroup::")
-            if returncode in (0, 1):
-                partial_skip_suffix = ""
-                if run_result.partially_skipped_tests:
-                    partial_skip_suffix = f" ({run_result.partially_skipped_tests} partially)"
-                if run_result.failed_tests > 0:
-                    print(
-                        "❌ ran tests: "
-                        f"{run_result.passed_tests} passed, {run_result.failed_tests} failed, "
-                        f"{run_result.skipped_tests} skipped{partial_skip_suffix} in {run_result.elapsed_seconds:.0f}s"
-                    )
-                else:
-                    print(
-                        "ran tests: "
-                        f"{run_result.passed_tests} passed, {run_result.skipped_tests} skipped{partial_skip_suffix} "
-                        f"in {run_result.elapsed_seconds:.0f}s"
-                    )
-            if returncode == 130:
-                print("interrupted")
-                return 130
-            if returncode != 0:
+                config_results[0] = failed_config_run_result()
+            print_config_run_summary(config_results[0])
+        else:
+            config_worker_count = min(len(config_invocations), workers)
+            buffers = [StringIO() for _ in config_invocations]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as batch_executor:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=config_worker_count) as config_executor:
+                    future_to_config = {}
+                    for config_idx, invocation in enumerate(config_invocations):
+                        future = config_executor.submit(
+                            run_single_config,
+                            args,
+                            unittest_bin,
+                            workers,
+                            retry,
+                            max_retries,
+                            max_failures,
+                            batch_size,
+                            test_list_files,
+                            invocation,
+                            False,
+                            batch_executor,
+                            buffers[config_idx],
+                        )
+                        future_to_config[future] = config_idx
+                    for future in concurrent.futures.as_completed(future_to_config):
+                        config_idx = future_to_config[future]
+                        invocation = config_invocations[config_idx]
+                        try:
+                            run_result = future.result()
+                        except Exception as exc:
+                            print(f"error: {exc}", file=buffers[config_idx])
+                            traceback.print_exc(file=buffers[config_idx])
+                            run_result = failed_config_run_result()
+                        config_results[config_idx] = run_result
+                        print_buffered_config_run(invocation, buffers[config_idx], run_result, use_config_groups)
+
+        if any(run_result is not None and run_result.returncode == 130 for run_result in config_results):
+            print("interrupted")
+            return 130
+
+        for invocation, run_result in zip(config_invocations, config_results):
+            if run_result is None:
+                continue
+            if run_result.returncode != 0:
                 failed_configs.append(invocation.label)
                 if run_result.failed_test_names:
                     if invocation.test_config is not None:
@@ -2167,20 +2252,32 @@ def invoke(argv: list[str], cwd: Path | None = None) -> InvocationResult:
     return InvocationResult(returncode=returncode, stdout=stdout_buffer.getvalue(), stderr=stderr_buffer.getvalue())
 
 
-def run_tests(config: TestRunnerConfig, batches, total_tests: int):
+def run_tests(
+    config: TestRunnerConfig,
+    batches,
+    total_tests: int,
+    executor: concurrent.futures.ThreadPoolExecutor | None = None,
+    output=None,
+):
+    output = output if output is not None else sys.stdout
     start = time.monotonic()
     state = BatchRunState()
-    progress = DotProgressBar(len(batches))
+    progress = DotProgressBar(len(batches), output)
     total_skipped_tests = 0
     partially_skipped_test_names = set()
     skipped_reason_counts = {}
     partial_skip_reason_test_names = {}
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=config.workers) as executor:
+    executor_context = (
+        concurrent.futures.ThreadPoolExecutor(max_workers=config.workers)
+        if executor is None
+        else contextlib.nullcontext(executor)
+    )
+    with executor_context as active_executor:
         future_to_batch = {}
         next_batch_idx = 0
         ctx = RunContext(
-            executor=executor,
+            executor=active_executor,
             config=config,
             state=state,
             future_to_batch=future_to_batch,
@@ -2188,8 +2285,14 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
         )
 
         if stop_requested():
-            return 130
-        next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
+            return ConfigRunResult(
+                returncode=130,
+                passed_tests=0,
+                failed_tests=0,
+                skipped_tests=0,
+                elapsed_seconds=time.monotonic() - start,
+            )
+        next_batch_idx = submit_batches(active_executor, config, batches, future_to_batch, next_batch_idx)
 
         while future_to_batch:
             if stop_requested():
@@ -2248,7 +2351,7 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
                 progress.advance(next_batch_idx - len(future_to_batch))
 
             if not state.stop_launching and not stop_requested():
-                next_batch_idx = submit_batches(executor, config, batches, future_to_batch, next_batch_idx)
+                next_batch_idx = submit_batches(active_executor, config, batches, future_to_batch, next_batch_idx)
 
     progress.flush_line()
     elapsed = time.monotonic() - start
@@ -2265,19 +2368,19 @@ def run_tests(config: TestRunnerConfig, batches, total_tests: int):
         if total_partially_skipped_tests:
             noun = "test" if total_partially_skipped_tests == 1 else "tests"
             skip_parts.append(f"{total_partially_skipped_tests} partially skipped {noun}")
-        print(f"all tests passed in {elapsed:.0f}s ({', '.join(skip_parts)})")
+        print(f"all tests passed in {elapsed:.0f}s ({', '.join(skip_parts)})", file=output)
     else:
-        print(f"all tests passed in {elapsed:.0f}s")
+        print(f"all tests passed in {elapsed:.0f}s", file=output)
     if skipped_reason_counts:
-        print()
-        print(f"Skipped tests ({total_skipped_tests}):")
+        print(file=output)
+        print(f"Skipped tests ({total_skipped_tests}):", file=output)
         for reason in sorted(skipped_reason_counts):
-            print(f"{reason}: {skipped_reason_counts[reason]}")
+            print(f"{reason}: {skipped_reason_counts[reason]}", file=output)
     if total_partially_skipped_tests:
-        print()
-        print(f"Partially skipped tests ({total_partially_skipped_tests}):")
+        print(file=output)
+        print(f"Partially skipped tests ({total_partially_skipped_tests}):", file=output)
         for reason in sorted(partial_skip_reason_test_names):
-            print(f"{reason}: {len(partial_skip_reason_test_names[reason])}")
+            print(f"{reason}: {len(partial_skip_reason_test_names[reason])}", file=output)
     failed_tests = state.failed_count
     passed_tests = max(0, total_tests - failed_tests - total_skipped_tests)
     failed_test_names = []
