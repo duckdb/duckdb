@@ -10,25 +10,16 @@
 
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
-class ClientContext;
-class Optimizer;
 
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
-	explicit InClauseRewriter(ClientContext &context, Optimizer &optimizer) : context(context), optimizer(optimizer) {
-	}
-
-	ClientContext &context;
-	Optimizer &optimizer;
-	optional_ptr<LogicalOperator> current_op;
-	unique_ptr<LogicalOperator> root;
-
-public:
-	// Minimum number of values to use a hash join
+	//! Minimum number of children (including the probe expression) to evaluate an IN with a hash lookup
 	static constexpr idx_t IN_CLAUSE_REWRITE_THRESHOLD = 6;
+	//! Whether the IN is evaluated with a hash lookup of its constant values
+	static bool UsesHashLookup(const BoundOperatorExpression &expr);
+	//! Whether the expression contains an IN that is evaluated with a hash lookup
 	static bool HasRewritableInClause(const Expression &expr);
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;

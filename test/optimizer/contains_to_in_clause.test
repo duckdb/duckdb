@@ -23,11 +23,11 @@ EXPLAIN FROM the_table WHERE the_id in [1,2,3]
 ----
 logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
 
-# Non-contiguous list. Should still use a join
+# Non-contiguous list. Evaluated with a hash lookup, not a join
 query II
 EXPLAIN FROM the_table WHERE the_id in [1,42,999,12345,99999,100001]
 ----
-logical_opt	<REGEX>:.*COMPARISON_JOIN.*
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
 
 # Not yet implemented
 query II

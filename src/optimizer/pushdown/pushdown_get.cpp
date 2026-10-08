@@ -183,7 +183,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
-		// Keep expressions owned by InClauseRewriter in the logical plan so they can become hash joins.
+		// Keep large constant IN clauses in the logical plan, where they are evaluated with a hash lookup.
 		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
 		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN &&
 		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {

@@ -1,0 +1,176 @@
+# name: test/sql/optimizer/in_clause_hash_lookup.test
+# description: Large constant IN lists are evaluated with a hash lookup matching regular equality
+# group: [optimizer]
+
+# NULL semantics
+query IIII
+SELECT 3 IN (1, 2, 3, 4, 5), 9 IN (1, 2, 3, 4, 5), 9 IN (1, 2, 3, 4, NULL), NULL::INT IN (1, 2, 3, 4, 5);
+----
+true	false	NULL	NULL
+
+query IIII
+SELECT 3 NOT IN (1, 2, 3, 4, 5), 9 NOT IN (1, 2, 3, 4, 5), 9 NOT IN (1, 2, 3, 4, NULL), 3 NOT IN (1, 2, 3, 4, NULL);
+----
+false	true	NULL	false
+
+statement ok
+CREATE TABLE vals AS SELECT
+	CASE WHEN i % 17 = 0 THEN NULL ELSE i % 40 END AS i,
+	(i % 40)::TINYINT AS ti,
+	(i % 40)::UTINYINT AS uti,
+	(i % 40)::HUGEINT AS hi,
+	(i % 40)::UHUGEINT AS uhi,
+	(i % 40)::DECIMAL(18, 3) / 4 AS dec,
+	(i % 40)::DECIMAL(38, 2) / 4 AS bigdec,
+	CASE i % 5 WHEN 0 THEN 'nan'::DOUBLE WHEN 1 THEN -0.0::DOUBLE ELSE (i % 40) / 2 END AS d,
+	CASE i % 5 WHEN 0 THEN 'nan'::FLOAT WHEN 1 THEN -0.0::FLOAT ELSE (i % 40) / 2 END AS f,
+	CASE WHEN i % 3 = 0 THEN 'a fairly long string value ' || (i % 40) ELSE 's' || (i % 40) END AS s,
+	('s' || (i % 40))::BLOB AS b,
+	DATE '2024-01-01' + (i % 40)::INT AS dt,
+	TIMESTAMP '2024-01-01' + INTERVAL (i % 40) HOUR AS ts,
+	INTERVAL (i % 40) DAY AS iv,
+	i % 2 = 0 AS bo,
+	[i % 4] AS l
+FROM range(5000) tbl(i);
+
+query I
+SELECT bool_and((i IN (1, 5, 9, 13, 17, 21, NULL)) IS NOT DISTINCT FROM (i = 1 OR i = 5 OR i = 9 OR i = 13 OR i = 17 OR i = 21 OR i = NULL)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((i NOT IN (1, 5, 9, 13, 17, 21)) IS NOT DISTINCT FROM (i <> 1 AND i <> 5 AND i <> 9 AND i <> 13 AND i <> 17 AND i <> 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((ti IN (1, 5, 9, 13, 17, 21)) = (ti = 1 OR ti = 5 OR ti = 9 OR ti = 13 OR ti = 17 OR ti = 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((uti IN (1, 5, 9, 13, 17, 21)) = (uti = 1 OR uti = 5 OR uti = 9 OR uti = 13 OR uti = 17 OR uti = 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((hi IN (1, 5, 9, 13, 17, 170141183460469231731687303715884105727)) = (hi = 1 OR hi = 5 OR hi = 9 OR hi = 13 OR hi = 17 OR hi = 170141183460469231731687303715884105727)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((uhi IN (1, 5, 9, 13, 17, 21)) = (uhi = 1 OR uhi = 5 OR uhi = 9 OR uhi = 13 OR uhi = 17 OR uhi = 21)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((dec IN (0.25, 1.5, 2.75, 4, 9.75, 7)) = (dec = 0.25 OR dec = 1.5 OR dec = 2.75 OR dec = 4 OR dec = 9.75 OR dec = 7)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((bigdec IN (0.25, 1.5, 2.75, 4, 9.75, 7)) = (bigdec = 0.25 OR bigdec = 1.5 OR bigdec = 2.75 OR bigdec = 4 OR bigdec = 9.75 OR bigdec = 7)) FROM vals;
+----
+true
+
+# NaN equals NaN and -0.0 equals 0.0
+query II
+SELECT count(*) FILTER (WHERE d IN ('nan'::DOUBLE, 0.0, 1.5, 3, 7.5, 12)), count(*) FILTER (WHERE d = 'nan'::DOUBLE OR d = 0.0 OR d = 1.5 OR d = 3 OR d = 7.5 OR d = 12) FROM vals;
+----
+2250	2250
+
+query II
+SELECT count(*) FILTER (WHERE f IN ('nan'::FLOAT, 0.0, 1.5, 3, 7.5, 12)), count(*) FILTER (WHERE f = 'nan'::FLOAT OR f = 0.0 OR f = 1.5 OR f = 3 OR f = 7.5 OR f = 12) FROM vals;
+----
+2250	2250
+
+query I
+SELECT bool_and((s IN ('s1', 's5', 'a fairly long string value 3', 'a fairly long string value 9', 's22', 's')) = (s = 's1' OR s = 's5' OR s = 'a fairly long string value 3' OR s = 'a fairly long string value 9' OR s = 's22' OR s = 's')) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((b IN ('s1'::BLOB, 's5'::BLOB, 's9'::BLOB, 's13'::BLOB, 's17'::BLOB)) = (b = 's1'::BLOB OR b = 's5'::BLOB OR b = 's9'::BLOB OR b = 's13'::BLOB OR b = 's17'::BLOB)) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((dt IN (DATE '2024-01-02', DATE '2024-01-06', DATE '2024-01-10', DATE '2024-01-14', DATE '2024-01-18')) = (dt = DATE '2024-01-02' OR dt = DATE '2024-01-06' OR dt = DATE '2024-01-10' OR dt = DATE '2024-01-14' OR dt = DATE '2024-01-18')) FROM vals;
+----
+true
+
+query I
+SELECT bool_and((ts IN (TIMESTAMP '2024-01-01 01:00', TIMESTAMP '2024-01-01 05:00', TIMESTAMP '2024-01-01 09:00', TIMESTAMP '2024-01-01 13:00', TIMESTAMP '2024-01-02 01:00')) = (ts = TIMESTAMP '2024-01-01 01:00' OR ts = TIMESTAMP '2024-01-01 05:00' OR ts = TIMESTAMP '2024-01-01 09:00' OR ts = TIMESTAMP '2024-01-01 13:00' OR ts = TIMESTAMP '2024-01-02 01:00')) FROM vals;
+----
+true
+
+# intervals compare normalized: 30 days equals 1 month
+query II
+SELECT count(*) FILTER (WHERE iv IN (INTERVAL 1 MONTH, INTERVAL 1 DAY, INTERVAL 48 HOUR, INTERVAL 5 DAY, INTERVAL 9 DAY)), count(*) FILTER (WHERE iv = INTERVAL 1 MONTH OR iv = INTERVAL 1 DAY OR iv = INTERVAL 48 HOUR OR iv = INTERVAL 5 DAY OR iv = INTERVAL 9 DAY) FROM vals;
+----
+625	625
+
+query I
+SELECT bool_and((bo IN (true, true, true, true, true)) = bo) FROM vals;
+----
+true
+
+# nested types fall back to pairwise comparison
+query I
+SELECT bool_and((l IN ([0], [1], [5], [6], [7])) = (l = [0] OR l = [1] OR l = [5] OR l = [6] OR l = [7])) FROM vals;
+----
+true
+
+# enums and uuids
+statement ok
+CREATE TYPE mood AS ENUM ('a', 'b', 'c', 'd', 'e', 'f', 'g');
+
+query I
+SELECT count(*) FROM (SELECT ('abcdefg'[i % 7 + 1])::mood AS m FROM range(700) tbl(i)) WHERE m IN ('a', 'c', 'e', 'f', 'g');
+----
+500
+
+query I
+SELECT count(*) FROM (SELECT ('00000000-0000-0000-0000-00000000000' || (i % 10))::UUID AS u FROM range(100) tbl(i))
+WHERE u IN ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000005');
+----
+50
+
+# collations apply to the IN values
+query I
+SELECT 'HELLO' COLLATE NOCASE IN ('hello', 'a', 'b', 'c', 'd', 'e');
+----
+true
+
+# empty input does not evaluate the constants
+query I
+SELECT count(*) FROM vals WHERE false AND i IN (1, 2, 3, 4, 5, 6);
+----
+0
+
+# dictionary compressed input
+load __TEST_DIR__/in_clause_hash_lookup.db
+
+statement ok
+CREATE TABLE dict AS SELECT CASE WHEN i % 11 = 0 THEN NULL ELSE 'value_' || (i % 50) END AS s FROM range(200000) tbl(i);
+
+statement ok
+CHECKPOINT;
+
+query II
+SELECT count(*) FILTER (WHERE s IN ('value_1', 'value_7', 'value_13', 'value_42', 'value_49', 'missing')),
+	count(*) FILTER (WHERE s = 'value_1' OR s = 'value_7' OR s = 'value_13' OR s = 'value_42' OR s = 'value_49' OR s = 'missing')
+FROM dict;
+----
+18183	18183
+
+query I
+SELECT count(*) FROM dict WHERE (s NOT IN ('value_1', 'value_7', 'value_13', 'value_42', 'value_49', NULL)) IS NULL;
+----
+181817
+
+# IN as part of a join condition
+query I
+SELECT count(*) FROM range(100) a(x), range(100) b(y) WHERE x = y AND (x IN (1, 2, 3, 4, 5, 6) OR y > 90);
+----
+15

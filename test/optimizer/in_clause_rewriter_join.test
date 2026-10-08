@@ -1,5 +1,5 @@
 # name: test/optimizer/in_clause_rewriter_join.test
-# description: Keep large IN clauses visible to the IN clause rewriter
+# description: Large IN clauses are evaluated with a hash lookup instead of a MARK join
 # group: [optimizer]
 
 statement ok
@@ -17,14 +17,14 @@ INSERT INTO in_right VALUES (1), (2), (11);
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
-# A large IN clause nested in a cross-table predicate is rewritten to a MARK join
+# A large IN clause nested in a cross-table predicate stays an IN
 query II
 EXPLAIN SELECT *
 FROM in_left, in_right
 WHERE in_left.i = in_right.i
   AND (in_left.j IN (1, 2, 3, 4, 5, 6) OR in_right.i > 10);
 ----
-logical_opt	<REGEX>:.*MARK.*
+logical_opt	<!REGEX>:.*MARK.*
 
 # Small IN clauses stay in the comparison join residual predicate
 query II
@@ -35,7 +35,7 @@ WHERE in_left.i = in_right.i
 ----
 logical_opt	<!REGEX>:.*MARK.*
 
-# A non-rewritable outer IN clause does not hide a nested rewritable IN clause
+# A nested large IN clause stays an IN
 query II
 EXPLAIN SELECT *
 FROM in_left, in_right
@@ -43,7 +43,7 @@ WHERE (CASE WHEN in_left.j IN (1, 2, 3, 4, 5, 6)
 	THEN in_left.i ELSE 0 END)
 	IN (in_right.i, 10, 20, 30, 40, 50);
 ----
-logical_opt	<REGEX>:.*MARK.*
+logical_opt	<!REGEX>:.*MARK.*
 
 query III
 SELECT *

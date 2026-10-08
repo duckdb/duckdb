@@ -294,7 +294,7 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter ic_rewriter(context, *this);
+		InClauseRewriter ic_rewriter;
 		plan = ic_rewriter.Rewrite(std::move(plan));
 	});
 
