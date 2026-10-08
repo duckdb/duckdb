@@ -26,11 +26,12 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		REQUIRE(OSUtil::IsConfigurationEnv("HOME"));
 		REQUIRE(!OSUtil::IsConfigurationEnv("DUCKDB_TEST_OS_UTIL"));
 		REQUIRE(!OSUtil::GetConfigurationEnv("HOME").empty());
-		REQUIRE_THROWS(OSUtil::GetConfigurationEnv("DUCKDB_TEST_OS_UTIL"));
 		REQUIRE(!FileSystem::DefaultHomeDirectory().empty());
-
-		// a variable the embedder did not declare is not configuration
+#ifndef DUCKDB_CRASH_ON_ASSERT
+		// reading a variable that is not configuration is a programmer error
+		REQUIRE_THROWS(OSUtil::GetConfigurationEnv("DUCKDB_TEST_OS_UTIL"));
 		REQUIRE_THROWS(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
+#endif
 
 		// the env secret provider picks up proxy settings from the environment
 		Connection con(db);
@@ -54,7 +55,9 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		REQUIRE(!FileSystem::GetHomeDirectory(*db.instance).empty());
 		REQUIRE(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
 		REQUIRE(value == "quack");
+#ifndef DUCKDB_CRASH_ON_ASSERT
 		REQUIRE_THROWS(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL_OTHER", value));
+#endif
 
 		// the env secret provider is refused rather than silently producing an empty secret
 		Connection con(db);

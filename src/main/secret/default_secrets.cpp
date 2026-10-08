@@ -1,5 +1,6 @@
 #include "duckdb/main/secret/default_secrets.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/os_util.hpp"
 
 namespace duckdb {
