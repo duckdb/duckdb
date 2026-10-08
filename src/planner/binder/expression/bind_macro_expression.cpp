@@ -224,7 +224,6 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
 	auto stack_checker = StackCheck(*expr, 3);
-	context.InterruptCheck();
 
 	// unfold the macro expression
 	UnfoldMacroExpression(function, macro_func, expr, depth);

@@ -1196,7 +1196,7 @@
         "description": "The maximum number of expression nodes that expanding macros can produce in a single query.",
         "type": "UBIGINT",
         "default_scope": "local",
-        "default_value": "10000000"
+        "default_value": "100000"
     },
     {
         "name": "max_memory",

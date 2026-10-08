@@ -11,28 +11,10 @@ SELECT length(f(f(f('ab'))));
 16
 
 # every level of nesting doubles the size of the expanded expression
-statement ok
-SET max_macro_expansion_size=10000
-
 statement error
 SELECT length(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f('ab')))))))))))))))))))))))));
 ----
-Max macro expansion size of 10000 exceeded
-
-statement ok
-RESET max_macro_expansion_size
-
-# max_execution_time also interrupts the expansion
-statement ok
-SET max_execution_time=100
-
-statement error
-SELECT length(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f(f('ab')))))))))))))))))))))))));
-----
-Query exceeded maximum execution time
-
-statement ok
-RESET max_execution_time
+Max macro expansion size of 100000 exceeded
 
 statement ok
 SET max_macro_expansion_size=10
