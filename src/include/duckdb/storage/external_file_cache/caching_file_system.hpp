@@ -102,7 +102,7 @@ private:
 private:
 	QueryContext context;
 
-	//! The client file system (copied, as the caching file system can be destroyed before the handle)
+	//! The client file system, held directly because the caching file system can be destroyed before this handle
 	FileSystem &file_system;
 	//! The DatabaseInstance
 	DatabaseInstance &db;
