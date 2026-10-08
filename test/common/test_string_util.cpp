@@ -574,3 +574,28 @@ TEST_CASE("Test CIHash is independent of char signedness", "[string_util]") {
 	// ASCII is unaffected
 	REQUIRE(StringUtil::CIHash("hello") == StringUtil::CIHash("HeLLo"));
 }
+
+TEST_CASE("Test CILessThan handles embedded NUL bytes", "[string_util]") {
+	const string secret("secret");
+	const string secret_nul("secret\0other", 12);
+	const string secret_nul2("secret\0zzz", 10);
+
+	// a string with content after an embedded NUL is NOT equal to its prefix: exactly one of (a<b, b<a) holds
+	REQUIRE(StringUtil::CILessThan(secret, secret_nul) != StringUtil::CILessThan(secret_nul, secret));
+	// the shorter prefix sorts first
+	REQUIRE(StringUtil::CILessThan(secret, secret_nul));
+	REQUIRE(!StringUtil::CILessThan(secret_nul, secret));
+
+	// equality (neither less than the other) only for genuinely equal strings
+	REQUIRE((!StringUtil::CILessThan(secret, secret) && !StringUtil::CILessThan(secret, secret)));
+	REQUIRE((!StringUtil::CILessThan(secret_nul, secret_nul) && !StringUtil::CILessThan(secret_nul, secret_nul)));
+
+	// strings that differ only after the NUL byte are ordered by that byte (strict weak ordering, no collision)
+	REQUIRE(StringUtil::CILessThan(secret_nul, secret_nul2)); // 'o' < 'z'
+	REQUIRE(!StringUtil::CILessThan(secret_nul2, secret_nul));
+
+	// case-insensitivity is preserved
+	REQUIRE(!StringUtil::CILessThan("Hello", "hello"));
+	REQUIRE(!StringUtil::CILessThan("hello", "Hello"));
+	REQUIRE(StringUtil::CILessThan("abc", "abd"));
+}
