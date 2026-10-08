@@ -62,7 +62,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	unique_ptr<ParquetFileReaderOptions> options;
 	unordered_map<idx_t, ParquetReaderProjectionExpression> projection_expressions;
-	vector<unique_ptr<ParquetReader>> partition_stats_readers;
 
 	ParquetOptions &GetParquetOptions() {
 		return options->options;
@@ -179,10 +178,17 @@ const vector<ParquetMetadataCacheEntry> &ParquetReadBindData::TryLoadCaches(cons
 	return caches;
 }
 
+//! Keeps the metadata reader a row group's statistics refer to alive
+struct ParquetCachedPartitionRowGroup {
+	shared_ptr<ParquetReader> reader;
+	shared_ptr<PartitionRowGroup> row_group;
+};
+
 //! The row groups of every file of the scan, taken from their cached metadata - empty unless all of it can be used
 static vector<PartitionStatistics>
 GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCacheEntry> &cached_metadata,
-                        const shared_ptr<ParquetEncryptionConfig> &encryption_config) {
+                        const shared_ptr<ParquetEncryptionConfig> &encryption_config,
+                        optional_ptr<const ParquetOptions> parquet_options, bool union_by_name) {
 	vector<PartitionStatistics> result;
 	if (cached_metadata.empty()) {
 		// no cached metadata - bail
@@ -213,13 +219,23 @@ GetCachedPartitionStats(ClientContext &context, const vector<ParquetMetadataCach
 
 	// all caches are valid! we can return the partition stats
 	for (auto &cache : cached_metadata) {
-		if (bind_data.file_options.union_by_name) {
+		if (union_by_name || !parquet_options) {
 			ParquetReader::GetPartitionStats(*cache.metadata->metadata, result);
 			continue;
 		}
-		auto reader = make_uniq<ParquetReader>(context, parquet_options, cache.metadata);
+		auto reader = ParquetReader::CreateMetadataReader(context, *parquet_options, cache.metadata);
+		const idx_t first_new = result.size();
 		reader->GetPartitionStats(result);
-		parquet_data.partition_stats_readers.push_back(std::move(reader));
+		for (idx_t i = first_new; i < result.size(); i++) {
+			auto &row_group = result[i].partition_row_group;
+			if (!row_group) {
+				continue;
+			}
+			auto holder = make_shared_ptr<ParquetCachedPartitionRowGroup>();
+			holder->reader = reader;
+			holder->row_group = std::move(row_group);
+			row_group = shared_ptr<PartitionRowGroup>(holder, holder->row_group.get());
+		}
 	}
 	return result;
 }
@@ -235,11 +251,14 @@ static vector<PartitionStatistics> ParquetMultiFileGetPartitionStats(ClientConte
 	// without the bind of a file we do not know the key the files are encrypted with - encrypted files are then not
 	// answered from their metadata
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
+	optional_ptr<const ParquetOptions> parquet_options;
 	auto &file_bind_data = bind_data.bind_data->Cast<TableFunctionMultiFileData>().options.schema_bind_data;
 	if (file_bind_data) {
-		encryption_config = ParquetScanFunction::GetFileOptions(*file_bind_data).encryption_config;
+		parquet_options = ParquetScanFunction::GetFileOptions(*file_bind_data);
+		encryption_config = parquet_options->encryption_config;
 	}
-	return GetCachedPartitionStats(context, LoadMetadataCaches(context, *bind_data.file_list), encryption_config);
+	return GetCachedPartitionStats(context, LoadMetadataCaches(context, *bind_data.file_list), encryption_config,
+	                               parquet_options, bind_data.file_options.union_by_name);
 }
 
 void ParquetScanFunction::AddNamedParameters(TableFunction &table_function) {
