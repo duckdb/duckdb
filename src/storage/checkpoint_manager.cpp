@@ -1,6 +1,7 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
+#include "duckdb/catalog/catalog_entry/duck_schema_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
@@ -120,19 +121,19 @@ unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(Table
 	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer);
 }
 
-static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEntry>> &schemas) {
+static catalog_entry_vector_t GetCatalogEntries(vector<reference<DuckSchemaEntry>> &schemas, VisibilityBound bound) {
 	catalog_entry_vector_t entries;
 	for (auto &schema_p : schemas) {
 		auto &schema = schema_p.get();
 		entries.push_back(schema);
-		schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TYPE_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
 			entries.push_back(entry);
 		});
 
-		schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::SEQUENCE_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -141,7 +142,7 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 
 		catalog_entry_vector_t tables;
 		vector<reference<ViewCatalogEntry>> views;
-		schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TABLE_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -169,14 +170,14 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 				continue;
 			}
 			auto &duck_table = table.Cast<DuckTableEntry>();
-			duck_table.ScanTriggersNonTransactional([&](CatalogEntry &entry) {
+			duck_table.ScanTriggers(bound, [&](CatalogEntry &entry) {
 				if (!entry.internal) {
 					entries.push_back(entry);
 				}
 			});
 		}
 
-		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -185,7 +186,7 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 			}
 		});
 
-		schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, bound, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
@@ -194,7 +195,7 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 			}
 		});
 
-		schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(CatalogType::INDEX_ENTRY, bound, [&](CatalogEntry &entry) {
 			D_ASSERT(!entry.internal);
 			entries.push_back(entry);
 		});
@@ -247,16 +248,16 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		ThreadUtil::SleepMs(checkpoint_sleep_ms);
 	}
 
-	vector<reference<SchemaCatalogEntry>> schemas;
-	// we scan the set of committed schemas
+	vector<reference<DuckSchemaEntry>> schemas;
+	// write the catalog as of the bound: later commits are in the WAL that outlives this checkpoint
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+	catalog.ScanSchemas(options.visibility_bound, [&](DuckSchemaEntry &entry) { schemas.push_back(entry); });
 
 	D_ASSERT(catalog.IsDuckCatalog());
 
 	auto &dependency_manager = *catalog.GetDependencyManager();
-	catalog_entries = GetCatalogEntries(schemas);
-	dependency_manager.ReorderEntries(catalog_entries);
+	catalog_entries = GetCatalogEntries(schemas, options.visibility_bound);
+	dependency_manager.ReorderEntries(catalog_entries, options.visibility_bound);
 
 	// write the actual data into the database
 

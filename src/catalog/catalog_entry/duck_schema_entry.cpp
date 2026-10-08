@@ -361,8 +361,13 @@ void DuckSchemaEntry::Scan(ClientContext &context, CatalogType type,
 }
 
 void DuckSchemaEntry::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
+	Scan(type, VisibilityBound::AllCommitted(), callback);
+}
+
+void DuckSchemaEntry::Scan(CatalogType type, VisibilityBound bound,
+                           const std::function<void(CatalogEntry &)> &callback) {
 	auto &set = GetCatalogSet(type);
-	set.Scan(callback);
+	set.Scan(bound, callback);
 }
 
 void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
