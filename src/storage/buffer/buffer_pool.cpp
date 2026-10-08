@@ -349,10 +349,7 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 	TempBufferPoolReservation r(tag, *this, extra_memory);
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
-		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			block_allocator.FlushForAllocation(extra_memory,
-			                                   memory_limit - MinValue(memory_limit, GetUsedMemory(false)));
-		}
+		FlushForAllocation(extra_memory, memory_limit);
 		return {true, std::move(r)};
 	}
 
@@ -374,11 +371,18 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 	}
 	if (!success) {
 		r.Resize(0);
-	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		block_allocator.FlushForAllocation(extra_memory, memory_limit - MinValue(memory_limit, GetUsedMemory(false)));
+	} else {
+		FlushForAllocation(extra_memory, memory_limit);
 	}
 
 	return {success, std::move(r)};
+}
+
+void BufferPool::FlushForAllocation(const idx_t extra_memory, const idx_t memory_limit) {
+	if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
+		const auto used_memory = GetUsedMemory(false);
+		block_allocator.FlushForAllocation(extra_memory, memory_limit - MinValue(memory_limit, used_memory));
+	}
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(QueryContext context, MemoryTag tag, idx_t extra_memory,
@@ -403,10 +407,7 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 	bool found = false;
 
 	if (memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH) <= memory_limit) {
-		if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-			block_allocator.FlushForAllocation(extra_memory,
-			                                   memory_limit - MinValue(memory_limit, GetUsedMemory(false)));
-		}
+		FlushForAllocation(extra_memory, memory_limit);
 		return {true, std::move(r)};
 	}
 
@@ -433,8 +434,8 @@ BufferPool::EvictionResult BufferPool::EvictBlocksInternal(QueryContext context,
 
 	if (!found) {
 		r.Resize(0);
-	} else if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		block_allocator.FlushForAllocation(extra_memory, memory_limit - MinValue(memory_limit, GetUsedMemory(false)));
+	} else {
+		FlushForAllocation(extra_memory, memory_limit);
 	}
 
 	return {found, std::move(r)};
@@ -583,7 +584,7 @@ idx_t BufferPool::GetBulkDeallocationFlushThreshold() const {
 }
 
 void BufferPool::FlushAllocator(const optional_idx extra_memory) {
-	block_allocator.FlushAll(extra_memory);
+	block_allocator.FlushAll();
 }
 
 void BufferPool::FlushOnBulkDeallocation() {

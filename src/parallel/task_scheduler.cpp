@@ -32,6 +32,7 @@ TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db) {
 		pools[i] = make_uniq<TaskSchedulerPool>(db, static_cast<TaskSchedulerType>(i));
 		queues[i] = make_uniq<TaskSchedulerQueue>(static_cast<TaskSchedulerType>(i));
 	}
+	BlockAllocator::Get(db).SetScheduler(*this);
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -40,11 +41,12 @@ TaskScheduler::~TaskScheduler() {
 		for (auto &pool : pools) {
 			pool->RelaunchThreads(*this, true);
 		}
-		BlockAllocator::Get(db).FlushAll(optional_idx(), true);
+		BlockAllocator::Get(db).FlushOnShutdown();
 	} catch (...) {
 		// nothing we can do in the destructor if this fails
 	}
 #endif
+	BlockAllocator::Get(db).ClearScheduler();
 }
 
 TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
@@ -182,7 +184,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 				if (!pool.Wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 - INITIAL_FLUSH_WAIT)) {
 					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
 					// mark it as idle and start an untimed wait
-					block_allocator.ThreadIdle(*this);
+					block_allocator.ThreadIdle();
 					pool.Wait();
 				}
 			}
@@ -203,7 +205,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker, const TaskSchedulerType
 	if (block_allocator.SupportsFlush()) {
 		block_allocator.ThreadFlush(Settings::Get<AllocatorBackgroundThreadsSetting>(db), 0,
 		                            GetPool(TaskSchedulerType::REGULAR).NumberOfThreads());
-		block_allocator.ThreadIdle(nullptr, true);
+		block_allocator.ThreadExit();
 	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");

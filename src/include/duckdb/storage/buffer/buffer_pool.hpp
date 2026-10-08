@@ -97,6 +97,8 @@ protected:
 
 	//! Evict object cache entries if needed.
 	EvictionResult EvictObjectCacheEntries(MemoryTag tag, idx_t extra_memory, idx_t memory_limit);
+	//! Flush bulk allocations using the headroom left by their live reservations.
+	void FlushForAllocation(idx_t extra_memory, idx_t memory_limit);
 
 	//! Return freed memory to the OS, optionally releasing up to extra_memory from the block allocator's pool
 	void FlushAllocator(optional_idx extra_memory = optional_idx());
