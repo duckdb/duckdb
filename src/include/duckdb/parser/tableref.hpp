@@ -55,6 +55,8 @@ public:
 
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<TableRef> Deserialize(Deserializer &deserializer);
+	//! Throws a SerializationException if a deserialized table reference does not have a valid shape
+	void VerifyDeserialized() const;
 
 public:
 	template <class TARGET>

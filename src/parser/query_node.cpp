@@ -5,6 +5,8 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 namespace duckdb {
 
 CommonTableExpressionMap::CommonTableExpressionMap() {
@@ -184,6 +186,63 @@ void QueryNode::AddDistinct() {
 		}
 	}
 	modifiers.push_back(make_uniq<DistinctModifier>());
+}
+
+void QueryNode::VerifyDeserialized(const unique_ptr<QueryNode> &node) {
+	if (!node) {
+		throw SerializationException("Failed to deserialize query node: missing query node");
+	}
+	for (auto &modifier : node->modifiers) {
+		if (!modifier) {
+			throw SerializationException("Failed to deserialize query node: missing result modifier");
+		}
+		if (modifier->type == ResultModifierType::ORDER_MODIFIER) {
+			for (auto &order : modifier->Cast<OrderModifier>().orders) {
+				if (!order.expression) {
+					throw SerializationException("Failed to deserialize query node: missing ORDER BY expression");
+				}
+			}
+		} else if (modifier->type == ResultModifierType::DISTINCT_MODIFIER) {
+			for (auto &target : modifier->Cast<DistinctModifier>().distinct_on_targets) {
+				if (!target) {
+					throw SerializationException("Failed to deserialize query node: missing DISTINCT ON expression");
+				}
+			}
+		}
+	}
+	for (auto &cte : node->cte_map.map) {
+		if (!cte.second || !cte.second->query_node) {
+			throw SerializationException("Failed to deserialize query node: missing CTE query");
+		}
+	}
+	switch (node->type) {
+	case QueryNodeType::SELECT_NODE: {
+		auto &select_node = node->Cast<SelectNode>();
+		if (select_node.select_list.empty()) {
+			throw SerializationException("Failed to deserialize query node: empty select list");
+		}
+		for (auto &expr : select_node.select_list) {
+			if (!expr) {
+				throw SerializationException("Failed to deserialize query node: missing select list expression");
+			}
+		}
+		for (auto &expr : select_node.groups.group_expressions) {
+			if (!expr) {
+				throw SerializationException("Failed to deserialize query node: missing group expression");
+			}
+		}
+		break;
+	}
+	case QueryNodeType::RECURSIVE_CTE_NODE: {
+		auto &cte_node = node->Cast<RecursiveCTENode>();
+		if (!cte_node.left || !cte_node.right) {
+			throw SerializationException("Failed to deserialize query node: missing recursive CTE child");
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 } // namespace duckdb
