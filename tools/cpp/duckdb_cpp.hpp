@@ -42,10 +42,11 @@
 #include <cstring>
 #include <limits>
 
-// Arrow C Data Interface structs. Forward declared only: the definitions come from `duckdb_v2.h` or from the
-// consumer's own Arrow headers, under the standard ARROW_C_DATA_INTERFACE guard.
+// Arrow C Data and C Stream Interface structs. Forward declared only: the definitions come from `duckdb_v2.h` or from
+// the consumer's own Arrow headers, under the standard ARROW_C_DATA_INTERFACE and ARROW_C_STREAM_INTERFACE guards.
 struct ArrowSchema;
 struct ArrowArray;
+struct ArrowArrayStream;
 
 namespace duckdb {
 namespace cxx {
@@ -73,12 +74,14 @@ class Arena;
 class DataChunk;
 class ColumnDataCollection;
 class QueryResult;
+class ArrowResult;
 class PreparedStatement;
 class ArrowImporter;
 class ArrowExporter;
 
 struct TypeParam;
 struct NamedParam;
+struct ArrowFormat;
 
 enum class LogicalTypeId : uint32_t;
 enum class CastMode : uint8_t;
@@ -596,7 +599,8 @@ struct TokenList {
 
 /// A statement bound and planned once, executable repeatedly. Produced by `Connection::Prepare`.
 /// Where `Connection::Execute` re-binds on every call, this may run the plan it built at prepare time; ask
-/// `ReusesPlan` which one you got. Execution returns the same `QueryResult`, with identical behaviour.
+/// `ReusesPlan` which one you got. Execution returns the same `QueryResult`, with identical behaviour, or an
+/// `ArrowResult` when an `ArrowFormat` is passed.
 /// It keeps its connection's session alive, so it stays usable even after the `Connection` is gone.
 class PreparedStatement final : public detail::Handle<PreparedStatement> {
 	friend detail::Factory;
@@ -626,6 +630,24 @@ public:
 	/// @param parameters One binding per parameter; each binds to $name, or positionally when its name is empty.
 	auto Execute(const std::vector<NamedParam> &parameters) -> QueryResult;
 
+	/// Executes like the positional-parameter `Execute`, into a result that produces Arrow arrays.
+	/// @param parameters Values for the statement's parameters, bound positionally. Not consumed.
+	/// @param parameter_count How many values `parameters` points at.
+	/// @param format The Arrow format options, chiefly the rows-per-array cap.
+	/// @return A streaming Arrow result. Execution is deferred until the result is read; binding errors throw here.
+	/// @throws Exception While an earlier result on the connection is still live, in either format. A failed
+	/// execution leaves the prepared statement usable.
+	auto Execute(const Value *parameters, idx_t parameter_count, ArrowFormat format) -> ArrowResult;
+
+	/// The Arrow form of a statement that takes no parameters.
+	auto Execute(ArrowFormat format) -> ArrowResult;
+
+	/// `std::vector` overload of the positional-parameter Arrow `Execute`.
+	auto Execute(const std::vector<Value> &parameters, ArrowFormat format) -> ArrowResult;
+
+	/// The Arrow form of the named-parameter `Execute`.
+	auto Execute(const std::vector<NamedParam> &parameters, ArrowFormat format) -> ArrowResult;
+
 	/// Whether executions reuse the plan built at prepare time, rather than re-binding each time and being no
 	/// faster than `Connection::Execute`. A static property of the built plan; see the C API's
 	/// `duckdb_v2_prepared_statement_reuses_plan` for what qualifies.
@@ -633,6 +655,8 @@ public:
 
 private:
 	explicit PreparedStatement(void *impl);
+
+	auto ExecuteArrowNamed(const NamedParam *parameters, idx_t parameter_count, ArrowFormat format) -> ArrowResult;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -744,6 +768,34 @@ public:
 	/// @throws InvalidInputException When `sql` does not hold exactly one statement.
 	auto Execute(const std::string &sql) -> QueryResult;
 
+	/// Executes a statement like `Execute`, into a result that produces Arrow arrays instead of `DataChunk`s.
+	/// @param statement The statement to execute. Not consumed, so it can be executed again.
+	/// @param parameters Values for the statement's parameters, bound positionally ($1 = parameters[0]). Not consumed.
+	/// @param parameter_count How many values `parameters` points at.
+	/// @param format The Arrow format options, chiefly the rows-per-array cap.
+	/// @return A streaming Arrow result. Execution is deferred until the result is read; binding errors throw here.
+	/// @throws Exception While an earlier result on this connection is still live, in either format.
+	auto Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count, ArrowFormat format)
+	    -> ArrowResult;
+
+	/// The Arrow form of a statement that takes no parameters.
+	auto Execute(const SqlStatement &statement, ArrowFormat format) -> ArrowResult;
+
+	/// `std::vector` overload of the positional-parameter Arrow `Execute`.
+	auto Execute(const SqlStatement &statement, const std::vector<Value> &parameters, ArrowFormat format)
+	    -> ArrowResult;
+
+	/// The Arrow form of the named-parameter `Execute`.
+	/// @param parameters One binding per parameter; each binds to $name, or positionally when its name is empty. A
+	/// statement cannot mix named and positional parameters.
+	auto Execute(const SqlStatement &statement, const std::vector<NamedParam> &parameters, ArrowFormat format)
+	    -> ArrowResult;
+
+	/// Parses and executes a single SQL statement in one call, into a result that produces Arrow arrays.
+	/// @param sql Exactly one SQL statement. Use `ParseSQL` for multi-statement input.
+	/// @throws InvalidInputException When `sql` does not hold exactly one statement.
+	auto Execute(const std::string &sql, ArrowFormat format) -> ArrowResult;
+
 	/// Binds a statement without executing it, borrowing it rather than consuming it.
 	/// @param statement The statement to bind.
 	/// @return Its signature: the columns it will produce and the parameters it expects.
@@ -803,7 +855,8 @@ public:
 	auto CreateValue(T &&value) -> Value;
 
 	/// Asks the running query to stop. `QueryResult::Step` then reports CANCELLED, and `FetchChunk` / `Drain` throw
-	/// `InterruptException`. Callable from any thread, and a no-op when no query is running.
+	/// `InterruptException`. An `ArrowResult` reacts the same way, with `FetchArray` in place of `FetchChunk`.
+	/// Callable from any thread, and a no-op when no query is running.
 	auto Interrupt() -> void;
 
 	/// Reads how far the running query has come. Callable from any thread.
@@ -818,6 +871,10 @@ public:
 
 private:
 	explicit Connection(void *impl, bool owned);
+
+	auto ExecuteArrowNamed(const SqlStatement &statement, const NamedParam *parameters, idx_t parameter_count,
+	                       ArrowFormat format) -> ArrowResult;
+
 	bool owned = false; // TODO: This should be fixed C++ side
 };
 
@@ -2638,7 +2695,8 @@ private:
 // Interop with the Arrow C Data Interface, in both directions. `ArrowExporter` fills caller-allocated Arrow structs,
 // which the caller then releases; `ArrowImporter` hands an Arrow array's buffers to `DataChunk`s zero-copy. Both
 // resolve their schema once, at construction, and both gather rows up to a batch size across inputs, so the last
-// input is marked with `flush`.
+// input is marked with `flush`. To execute SQL straight into Arrow arrays, pass an `ArrowFormat` to `Execute` and
+// read the `ArrowResult`.
 
 /// Converts Arrow arrays into `DataChunk`s against one resolved `ArrowSchema`. Construct it once, for example at a
 /// table function's bind time, and reuse it for every array of that shape. Give it an array with `Append`, then call
@@ -2712,7 +2770,7 @@ public:
 	~ArrowExporter() override;
 
 	/// The Arrow schema of the arrays this exporter produces, written into the caller-allocated `out`, which the
-	/// caller then owns and releases with `out.release(&out)`.
+	/// caller then owns and releases with `out.release(&out)`. `out` is left released on any throw.
 	auto GetSchema(ArrowSchema &out) const -> void;
 
 	/// Converts one chunk in full, making the arrays it completed available from `NextArray`. The chunk is borrowed
@@ -2726,8 +2784,8 @@ public:
 	auto Flush() -> void;
 
 	/// Takes the next completed array into the caller-allocated `out`, which the caller then owns and releases.
-	/// @return False when none is ready, leaving `out` released. Rows held back towards an unfinished batch are not
-	/// an array yet; they come out after a further `Append` or a `Flush`.
+	/// @return False when none is ready, leaving `out` released; it is also left released on any throw. Rows held
+	/// back towards an unfinished batch are not an array yet; they come out after a further `Append` or a `Flush`.
 	auto NextArray(ArrowArray &out) -> bool;
 
 private:
@@ -2745,23 +2803,41 @@ private:
 // - `FetchChunk` blocks until the next chunk is ready, and is what most callers probably want.
 // - `Step` performs a bounded amount of work and reports what came of it, which allows an async runtime to drive a
 // query without necessarily occupying a thread indefinitely.
+// An `ArrowResult` (below) is the same stream in Arrow form, read the same two ways.
+
+/// The status of one `QueryResult::Step` or `ArrowResult::Step`.
+enum class StepStatus : uint8_t {
+	/// Nothing was produced by this step; call `Wait`, or come back later.
+	WAITING = 0,
+	/// A chunk was produced, or for an `ArrowResult`, an array.
+	CHUNK = 1,
+	/// The result is exhausted. Sticky.
+	FINISHED = 2,
+	/// The query was canceled. Sticky.
+	CANCELLED = 3,
+};
+
+/// The shape of a result, as `QueryResult::GetResultType` and `ArrowResult::GetResultType` report it.
+enum class ResultType : uint8_t {
+	/// Produces rows: SELECT, EXPLAIN, RETURNING, and other row-producing statements.
+	QUERY_RESULT = 0,
+	/// Carries a count of affected rows: INSERT / UPDATE / DELETE and the like, without RETURNING.
+	CHANGED_ROWS = 1,
+	/// Produces no rows: most DDL and utility statements.
+	NOTHING = 2,
+};
 
 /// A streaming query result.
 class QueryResult final : public detail::Handle<QueryResult> {
 	friend detail::Factory;
 
 public:
-	/// The status of one `Step`.
-	enum class StepStatus : uint8_t {
-		/// No chunk was produced by this step; call `Wait`, or come back later.
-		WAITING = 0,
-		/// A chunk was produced.
-		CHUNK = 1,
-		/// The result is exhausted. Sticky.
-		FINISHED = 2,
-		/// The query was canceled. Sticky.
-		CANCELLED = 3,
-	};
+	/// The status of one `Step`; see `cxx::StepStatus`.
+	using StepStatus = cxx::StepStatus;
+	/// The shape of a result; see `cxx::ResultType`.
+	using ResultType = cxx::ResultType;
+	/// The kind of SQL statement a result came from; see `cxx::StatementType`.
+	using StatementType = cxx::StatementType;
 
 	/// The outcome of one `Step`.
 	struct StepResult {
@@ -2770,19 +2846,6 @@ public:
 		/// The chunk produced, empty unless `status` is CHUNK.
 		DataChunk chunk;
 	};
-
-	/// The shape of a result.
-	enum class ResultType : uint8_t {
-		/// Produces rows: SELECT, EXPLAIN, RETURNING, and other row-producing statements.
-		QUERY_RESULT = 0,
-		/// Carries a count of affected rows: INSERT / UPDATE / DELETE and the like, without RETURNING.
-		CHANGED_ROWS = 1,
-		/// Produces no rows: most DDL and utility statements.
-		NOTHING = 2,
-	};
-
-	/// The kind of SQL statement a result came from; see `cxx::StatementType`.
-	using StatementType = cxx::StatementType;
 
 	QueryResult(QueryResult &&) noexcept = default;
 	QueryResult &operator=(QueryResult &&) noexcept = default;
@@ -2835,6 +2898,101 @@ public:
 
 private:
 	explicit QueryResult(void *impl);
+};
+
+//----------------------------------------------------------------------------------------------------------------------
+// Arrow Result
+//----------------------------------------------------------------------------------------------------------------------
+// An `ArrowResult` is the same lazily executed stream in Arrow form: `Execute` with an `ArrowFormat` produces one, and
+// it is read through `FetchArray` and `Step` the way a `QueryResult` is read through `FetchChunk` and `Step`.
+
+/// Selects the Arrow result format: passing one to `Execute` yields an `ArrowResult` instead of a `QueryResult`.
+struct ArrowFormat {
+	/// Explicit so a braced argument cannot silently turn a parameter value into a batch size.
+	explicit ArrowFormat(idx_t batch_size = 0) : batch_size(batch_size) {
+	}
+
+	/// Maximum rows per array; arrays can be shorter. 0 means the engine's default, 131072 today.
+	idx_t batch_size;
+};
+
+/// A streaming query result that produces Arrow arrays: the Arrow form of `QueryResult`, produced by passing an
+/// `ArrowFormat` to `Connection::Execute` or `PreparedStatement::Execute`. It behaves like a `QueryResult` in all but
+/// the format: execution is deferred until the result is read, it is the connection's one live result, and
+/// `Connection::Interrupt` cancels it. Every array holds at most the batch size chosen at execution, and can hold
+/// fewer. Arrays and schemas are written into caller-allocated structs, which the caller then owns and releases
+/// through their `release` callback; they stay valid after the result, its connection, instance and environment are
+/// destroyed. Use a result from one thread at a time.
+class ArrowResult final : public detail::Handle<ArrowResult> {
+	friend detail::Factory;
+
+public:
+	/// The status of one `Step`; see `cxx::StepStatus`.
+	using StepStatus = cxx::StepStatus;
+	/// The shape of a result; see `cxx::ResultType`.
+	using ResultType = cxx::ResultType;
+	/// The kind of SQL statement a result came from; see `cxx::StatementType`.
+	using StatementType = cxx::StatementType;
+
+	ArrowResult(ArrowResult &&) noexcept = default;
+	ArrowResult &operator=(ArrowResult &&) noexcept = default;
+
+	~ArrowResult() override;
+
+	/// The Arrow schema of the result's arrays, a struct with one child per column. Each call writes an independent
+	/// copy. Available as soon as `QueryResult::GetSchema` would be: at once for most statements, after stepping for
+	/// one that expands into several, such as PIVOT.
+	/// @param out Caller-allocated; overwritten. The caller then owns it and releases it with `out.release(&out)`.
+	/// @throws InvalidInputException When the schema is not available yet; step the result first. `out` is left
+	/// released on any throw.
+	auto GetSchema(ArrowSchema &out) const -> void;
+
+	/// The shape of the result, so a caller can decide between reading arrays and draining without inspecting the SQL.
+	/// @throws InvalidInputException When the shape is not available yet; step the result first.
+	auto GetResultType() const -> ResultType;
+
+	/// The kind of SQL statement this result came from.
+	/// @throws InvalidInputException When the kind is not available yet; step the result first.
+	auto GetStatementType() const -> StatementType;
+
+	/// Does a bounded amount of work and returns without blocking.
+	/// @param out Caller-allocated; overwritten. On CHUNK it holds the next array, which the caller then owns and
+	/// releases; otherwise, and on any throw, it is left released.
+	/// @return What the step accomplished.
+	/// @throws Exception On an execution error; the error is sticky, and later `Step`s rethrow it.
+	auto Step(ArrowArray &out) -> StepStatus;
+
+	/// Blocks until `Step` may be able to make progress, returning immediately once the result is finished or
+	/// canceled. May not block at all.
+	/// @throws Exception On an execution error.
+	auto Wait() -> void;
+
+	/// Takes the next array, blocking until it is ready.
+	/// @param out Caller-allocated; overwritten. Holds the array, which the caller then owns and releases, when this
+	/// returns true; left released otherwise, and on any throw.
+	/// @return False at the end of the stream; calling it again then keeps returning false.
+	/// @throws InterruptException When the query was canceled.
+	auto FetchArray(ArrowArray &out) -> bool;
+
+	/// Runs the result to the end, applying its side effects and discarding any rows.
+	/// @return The number of rows affected for a CHANGED_ROWS result, 0 otherwise.
+	/// @throws InterruptException When the query was canceled.
+	auto Drain() -> idx_t;
+
+	/// Turns the result into an Arrow C stream, consuming it: the stream takes the result over, and this wrapper is
+	/// empty afterwards. The stream continues where `Step` and `FetchArray` left off, so arrays already taken are not
+	/// repeated. Converting runs no part of the query, but the stream's `get_schema` can: for a statement that expands
+	/// into several, such as PIVOT, it runs the ones before the statement that returns rows. The stream keeps the
+	/// result alive, with its connection busy and its instance open; releasing the stream destroys the result and
+	/// frees the connection. A failing `get_next` or `get_schema` returns EIO, and `get_last_error` has the message.
+	/// @param out Caller-allocated; overwritten. The caller then owns the stream and releases it with
+	/// `out.release(&out)`.
+	/// @throws Exception When the conversion fails; the result then stays with this wrapper, and `out` is left
+	/// released.
+	auto ToArrowStream(ArrowArrayStream &out) -> void;
+
+private:
+	explicit ArrowResult(void *impl);
 };
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -6151,6 +6309,33 @@ inline auto Connection::Execute(const SqlStatement &statement, const std::vector
 
 inline auto PreparedStatement::Execute(const std::vector<Value> &parameters) -> QueryResult {
 	return Execute(parameters.data(), parameters.size());
+}
+
+inline auto Connection::Execute(const SqlStatement &statement, const std::vector<Value> &parameters, ArrowFormat format)
+    -> ArrowResult {
+	return Execute(statement, parameters.data(), parameters.size(), format);
+}
+
+inline auto Connection::Execute(const SqlStatement &statement, const std::vector<NamedParam> &parameters,
+                                ArrowFormat format) -> ArrowResult {
+	return ExecuteArrowNamed(statement, parameters.data(), parameters.size(), format);
+}
+
+inline auto Connection::Execute(const std::string &sql, ArrowFormat format) -> ArrowResult {
+	auto statements = ParseSQL(sql);
+	auto statement = statements.Next();
+	if (!statement || statements.Next()) {
+		throw InvalidInputException("Execute expects exactly one statement; use ParseSQL for multi-statement input");
+	}
+	return Execute(statement, format);
+}
+
+inline auto PreparedStatement::Execute(const std::vector<Value> &parameters, ArrowFormat format) -> ArrowResult {
+	return Execute(parameters.data(), parameters.size(), format);
+}
+
+inline auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters, ArrowFormat format) -> ArrowResult {
+	return ExecuteArrowNamed(parameters.data(), parameters.size(), format);
 }
 
 } // namespace cxx
