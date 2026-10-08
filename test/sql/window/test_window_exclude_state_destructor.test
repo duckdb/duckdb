@@ -1,0 +1,26 @@
+# name: test/sql/window/test_window_exclude_state_destructor.test
+# description: Window aggregates with EXCLUDE destroy the states of the part of the frame after the excluded rows
+# group: [window]
+
+query I
+SELECT histogram(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) FROM range(3) t(i) ORDER BY i
+----
+{1=1}
+{0=1, 2=1}
+{1=1}
+
+query IIII
+SELECT histogram(i) OVER w, approx_top_k(i, 2) OVER w, entropy(i) OVER w, reservoir_quantile(i, 0.5) OVER w FROM range(50) t(i) WINDOW w AS (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) ORDER BY i LIMIT 2
+----
+{1=1}	[1]	0.0	1
+{0=1, 2=1}	[0, 2]	1.0	0
+
+query II
+SELECT count(*), count(h) FROM (SELECT histogram(i % 3) OVER (ORDER BY i % 3 RANGE BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE GROUP) h FROM range(100) t(i))
+----
+100	100
+
+query I
+SELECT count(x) FROM (SELECT reservoir_quantile(i, 0.5) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE CURRENT ROW) x FROM range(10000) t(i))
+----
+10000

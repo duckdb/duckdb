@@ -82,6 +82,8 @@ public:
 	                        data_ptr_t current_state);
 	//! Writes result and calls destructors
 	void Finalize(Vector &result, idx_t count);
+	//! Destroy the states (that have been combined into another part)
+	void Destroy(idx_t count);
 
 	void Combine(WindowSegmentTreePart &other, idx_t count);
 
@@ -286,6 +288,13 @@ void WindowSegmentTreePart::WindowSegmentValue(const WindowSegmentTreeGlobalStat
 		}
 	}
 }
+void WindowSegmentTreePart::Destroy(idx_t count) {
+	if (aggr.function.HasStateDestructorCallback()) {
+		AggregateInputData aggr_input_data(aggr, allocator);
+		aggr.function.GetStateDestructorCallback()(statef, aggr_input_data, count);
+	}
+}
+
 void WindowSegmentTreePart::Finalize(Vector &result, idx_t count) {
 	//	Finalise the result aggregates and write to result if write_result is set
 	AggregateFinalizeInputData aggr_input_data(aggr, allocator);
@@ -466,6 +475,7 @@ void WindowSegmentTreeLocalState::Evaluate(ExecutionContext &context, const Wind
 
 		// 4. combine the buffer state into the Segment Tree State
 		part->Combine(*right_part, count);
+		right_part->Destroy(count);
 	} else {
 		part->Evaluate(gtstate, window_begin, window_end, nullptr, result, count, row_idx, WindowSegmentTreePart::FULL);
 	}
