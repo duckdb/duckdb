@@ -275,6 +275,8 @@ struct MatcherFirstSet {
 	bool any = false;
 	//! MatcherTokenClass bits
 	uint8_t class_mask = 0;
+	//! classes whose every token is consumed by a matcher this one can start with
+	uint8_t exact_class_mask = 0;
 	//! bitset over grammar literal ids (keywords and symbols)
 	vector<uint64_t> literals;
 	optional_ptr<const GrammarLiteralTable> table;
@@ -300,6 +302,13 @@ struct MatcherFirstSet {
 	vector<uint64_t> second_literals;
 	//! the matcher always consumes at least two tokens and its second-token set is informative
 	bool use_second = false;
+	//! the same, restricted to matches whose first token is consumed by an identifier matcher
+	bool ident_can_one = false;
+	bool ident_can_multi = false;
+	bool ident_second_any = false;
+	uint8_t ident_second_class_mask = 0;
+	vector<uint64_t> ident_second_literals;
+	bool use_ident_second = false;
 
 	bool HasSecondLiteral(idx_t literal_id) const {
 		auto word = literal_id / 64;

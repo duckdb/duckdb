@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
+#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
@@ -14,6 +15,10 @@ bool MatcherFirstSet::Merge(const MatcherFirstSet &other) {
 	}
 	if ((class_mask | other.class_mask) != class_mask) {
 		class_mask |= other.class_mask;
+		changed = true;
+	}
+	if ((exact_class_mask | other.exact_class_mask) != exact_class_mask) {
+		exact_class_mask |= other.exact_class_mask;
 		changed = true;
 	}
 	if (other.literals.size() > literals.size()) {
@@ -129,6 +134,41 @@ struct FirstSetTraversalEntry {
 //===--------------------------------------------------------------------===//
 // Second-token sets
 //===--------------------------------------------------------------------===//
+static bool MergeTokenSet(bool &any, uint8_t &mask, vector<uint64_t> &literals, bool other_any, uint8_t other_mask,
+                          const vector<uint64_t> &other_literals) {
+	bool changed = false;
+	if (other_any && !any) {
+		any = changed = true;
+	}
+	if ((mask | other_mask) != mask) {
+		mask |= other_mask;
+		changed = true;
+	}
+	if (other_literals.size() > literals.size()) {
+		literals.resize(other_literals.size(), 0);
+	}
+	for (idx_t i = 0; i < other_literals.size(); i++) {
+		auto merged = literals[i] | other_literals[i];
+		if (merged != literals[i]) {
+			literals[i] = merged;
+			changed = true;
+		}
+	}
+	return changed;
+}
+
+//! Merge a FIRST set into the identifier-start second-token set
+static bool MergeIntoIdentSecond(MatcherFirstSet &target, const MatcherFirstSet &first) {
+	return MergeTokenSet(target.ident_second_any, target.ident_second_class_mask, target.ident_second_literals,
+	                     first.any, first.class_mask, first.literals);
+}
+
+//! Merge another matcher's identifier-start second-token set into target
+static bool MergeIdentSecond(MatcherFirstSet &target, const MatcherFirstSet &other) {
+	return MergeTokenSet(target.ident_second_any, target.ident_second_class_mask, target.ident_second_literals,
+	                     other.ident_second_any, other.ident_second_class_mask, other.ident_second_literals);
+}
+
 //! Merge a FIRST set into a second-token set, returns whether anything changed
 static bool MergeIntoSecond(MatcherFirstSet &target, const MatcherFirstSet &first) {
 	bool changed = false;
@@ -193,7 +233,11 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 		}
 		if (first.any || !matcher.IsAtomic()) {
 			first.can_one = first.can_multi = first.second_any = true;
+			first.ident_can_one = first.ident_can_multi = first.ident_second_any = true;
 			continue;
+		}
+		if (matcher.Type() == MatcherType::VARIABLE) {
+			first.ident_can_one = true;
 		}
 		switch (matcher.Type()) {
 		case MatcherType::KEYWORD:
@@ -209,6 +253,7 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 			break;
 		default:
 			first.can_one = first.can_multi = first.second_any = true;
+			first.ident_can_one = first.ident_can_multi = first.ident_second_any = true;
 			break;
 		}
 	}
@@ -226,24 +271,37 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 				bool nullable = true;
 				bool one = false;
 				bool multi = false;
+				bool ident_one = false;
+				bool ident_multi = false;
 				for (auto &child_ref : matcher.Cast<ListMatcher>().matchers) {
 					auto &child = child_ref.get().first_set;
 					// after a one-token prefix, the first token of the next element is the second token
 					if (one) {
 						changed |= MergeIntoSecond(target, child);
 					}
+					if (ident_one) {
+						changed |= MergeIntoIdentSecond(target, child);
+					}
 					if (nullable) {
 						changed |= MergeSecond(target, child);
+						changed |= MergeIdentSecond(target, child);
 					}
 					bool new_one = (one && child.nullable) || (nullable && child.can_one);
 					bool new_multi =
 					    multi || (one && (child.can_one || child.can_multi)) || (nullable && child.can_multi);
+					bool new_ident_one = (ident_one && child.nullable) || (nullable && child.ident_can_one);
+					bool new_ident_multi = ident_multi || (ident_one && (child.can_one || child.can_multi)) ||
+					                       (nullable && child.ident_can_multi);
 					nullable = nullable && child.nullable;
 					one = new_one;
 					multi = new_multi;
+					ident_one = new_ident_one;
+					ident_multi = new_ident_multi;
 				}
 				changed |= SetFlag(target.can_one, one);
 				changed |= SetFlag(target.can_multi, multi);
+				changed |= SetFlag(target.ident_can_one, ident_one);
+				changed |= SetFlag(target.ident_can_multi, ident_multi);
 				break;
 			}
 			case MatcherType::CHOICE:
@@ -252,6 +310,9 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 					changed |= MergeSecond(target, child);
 					changed |= SetFlag(target.can_one, child.can_one);
 					changed |= SetFlag(target.can_multi, child.can_multi);
+					changed |= MergeIdentSecond(target, child);
+					changed |= SetFlag(target.ident_can_one, child.ident_can_one);
+					changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
 				}
 				break;
 			case MatcherType::OPTIONAL: {
@@ -259,6 +320,9 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 				changed |= MergeSecond(target, child);
 				changed |= SetFlag(target.can_one, child.can_one);
 				changed |= SetFlag(target.can_multi, child.can_multi);
+				changed |= MergeIdentSecond(target, child);
+				changed |= SetFlag(target.ident_can_one, child.ident_can_one);
+				changed |= SetFlag(target.ident_can_multi, child.ident_can_multi);
 				break;
 			}
 			case MatcherType::REPEAT: {
@@ -270,6 +334,12 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 				}
 				changed |= SetFlag(target.can_one, child.can_one);
 				changed |= SetFlag(target.can_multi, child.can_multi || child.can_one);
+				changed |= MergeIdentSecond(target, child);
+				if (child.ident_can_one) {
+					changed |= MergeIntoIdentSecond(target, child);
+				}
+				changed |= SetFlag(target.ident_can_one, child.ident_can_one);
+				changed |= SetFlag(target.ident_can_multi, child.ident_can_multi || child.ident_can_one);
 				break;
 			}
 			default:
@@ -280,6 +350,8 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 	for (auto &entry : matchers) {
 		auto &first = entry.get().first_set;
 		first.use_second = !first.nullable && !first.any && !first.can_one && !first.second_any;
+		first.use_ident_second =
+		    !first.nullable && !first.any && !first.ident_can_one && !first.ident_second_any;
 	}
 }
 
@@ -352,6 +424,19 @@ bool MatcherFirstSet::MightMatch(MatchState &state) const {
 }
 
 
+//! The characters OperatorMatcher accepts
+static bool IsOperatorText(const string &text) {
+	if (text.empty()) {
+		return false;
+	}
+	for (auto c : text) {
+		if (!Tokenizer::CharacterIsOperator(c)) {
+			return false;
+		}
+	}
+	return true;
+}
+
 //! A word or a double-quoted identifier, consumed by every identifier matcher when it is not a keyword
 static bool IsPlainIdentifierToken(const string &text) {
 	if (text.empty()) {
@@ -364,8 +449,19 @@ static bool IsPlainIdentifierToken(const string &text) {
 	return isalpha(c) || c == '_';
 }
 
+//! Whether a token is in a token set given by its class mask and literal bitset
+static bool InTokenSet(const MatcherToken &token, LiteralInfo literal, uint8_t class_mask,
+                       const vector<uint64_t> &literals) {
+	if (token.token_class & class_mask) {
+		return true;
+	}
+	auto literal_id = literal.LiteralId();
+	auto word = literal_id / 64;
+	return literal_id && word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
+}
+
 bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
-	if (!computed || !use_second) {
+	if (!computed || (!use_second && !use_ident_second)) {
 		return true;
 	}
 	auto token = state.token_iterator.Current();
@@ -373,20 +469,28 @@ bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 		return true;
 	}
 	// a skipped attempt would have consumed the current token, which is only reproducible for the furthest-position
-	// bookkeeping when the token is certainly consumed: an exact literal, or a plain identifier that is no keyword
+	// bookkeeping when the token is certainly consumed: an exact literal, an operator of a class some starting
+	// matcher accepts entirely, or a plain identifier that is no keyword (then only identifier matchers consume it)
 	auto literal_id = state.token_iterator.CurrentLiteralInfo(*table).LiteralId();
-	bool certainly_consumed = literal_id ? HasLiteral(literal_id)
-	                                     : (class_mask & MatcherTokenClass::WORD) && IsPlainIdentifierToken(token->text);
-	if (!certainly_consumed) {
+	bool identifier = false;
+	if (literal_id && HasLiteral(literal_id)) {
+		// consumed by a keyword matcher for exactly this literal
+	} else if ((token->token_class & exact_class_mask) && IsOperatorText(token->text)) {
+		// consumed by an operator matcher that accepts its whole class (punctuation shares the class)
+	} else if (!literal_id && (class_mask & MatcherTokenClass::WORD) && IsPlainIdentifierToken(token->text)) {
+		identifier = true;
+	} else {
+		return true;
+	}
+	if (identifier ? !use_ident_second : !use_second) {
 		return true;
 	}
 	auto next = state.token_iterator.Next();
 	if (next) {
-		if (next->token_class & second_class_mask) {
-			return true;
-		}
-		auto next_literal = state.token_iterator.NextLiteralInfo(*table).LiteralId();
-		if (next_literal && HasSecondLiteral(next_literal)) {
+		auto next_literal = state.token_iterator.NextLiteralInfo(*table);
+		bool fits = identifier ? InTokenSet(*next, next_literal, ident_second_class_mask, ident_second_literals)
+		                       : InTokenSet(*next, next_literal, second_class_mask, second_literals);
+		if (fits) {
 			return true;
 		}
 	}
