@@ -272,6 +272,57 @@ TEST_CASE("BlockAllocator reclamation preserves partially decayed retention", "[
 	}
 }
 
+TEST_CASE("BlockAllocator allocation reclaims a bounded amount of expired free memory", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t BLOCK_COUNT = 256;
+	auto private_data = make_uniq<BlockAllocatorFallbackData>();
+	auto &fallback_data = *private_data;
+	Allocator fallback(BlockAllocatorFallbackData::Allocate, Allocator::DefaultFree, Allocator::DefaultReallocate,
+	                   std::move(private_data));
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE * BLOCK_COUNT, BLOCK_SIZE * BLOCK_COUNT);
+	auto live = allocator.AllocateData(BLOCK_SIZE);
+	live[0] = 84;
+	live[BLOCK_SIZE - 1] = 84;
+	vector<data_ptr_t> blocks;
+	for (idx_t i = 1; i < BLOCK_COUNT; i++) {
+		auto block = allocator.AllocateData(BLOCK_SIZE);
+		block[0] = 42;
+		block[BLOCK_SIZE - 1] = 42;
+		blocks.push_back(block);
+	}
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	blocks.clear();
+	BlockAllocatorTestHelper::Expire(allocator);
+	blocks.push_back(allocator.AllocateData(BLOCK_SIZE));
+	CHECK(BlockAllocatorTestHelper::FreeBlocks(allocator) > BLOCK_COUNT / 2);
+	for (idx_t i = 2; i < BLOCK_COUNT; i++) {
+		blocks.push_back(allocator.AllocateData(BLOCK_SIZE));
+	}
+	std::unordered_set<data_ptr_t> allocated {live};
+	idx_t reclaimed = 0;
+	for (auto block : blocks) {
+		CHECK(allocated.insert(block).second);
+		if (block[0] == 0 && block[BLOCK_SIZE - 1] == 0) {
+			reclaimed++;
+		}
+	}
+#if defined(__linux__) || defined(_WIN32)
+	CHECK(reclaimed > 0);
+#endif
+	CHECK(reclaimed < BLOCK_COUNT - 1);
+	CHECK(blocks[0][0] == 42);
+	CHECK(blocks[0][BLOCK_SIZE - 1] == 42);
+	CHECK(live[0] == 84);
+	CHECK(live[BLOCK_SIZE - 1] == 84);
+	CHECK(fallback_data.allocation_count == 0);
+	for (auto block : blocks) {
+		allocator.FreeData(block, BLOCK_SIZE);
+	}
+	allocator.FreeData(live, BLOCK_SIZE);
+}
+
 TEST_CASE("BlockAllocator batch transfers do not wait for maintenance", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 65536;
 	constexpr idx_t BLOCK_COUNT = 128;
@@ -323,6 +374,7 @@ TEST_CASE("BlockAllocator batch transfers do not wait for maintenance", "[api][b
 		unique_lock<mutex> guard(gate);
 		initialized = cv.wait_for(guard, std::chrono::seconds(10), [&]() { return ready; });
 	}
+	BlockAllocatorTestHelper::Expire(allocator);
 	bool progressed;
 	{
 		annotated_lock_guard<annotated_mutex> maintenance_guard(helper.MaintenanceLock());
@@ -499,6 +551,25 @@ TEST_CASE("BlockAllocator reclaims only free blocks and preserves pool capacity"
 	SECTION("Byte-limited flush") {
 		expected_reclaimed = 17;
 		allocator.FlushAll(expected_reclaimed * BLOCK_SIZE + BLOCK_SIZE / 2);
+	}
+	SECTION("Allocation with ample headroom preserves warm blocks") {
+		STATIC_REQUIRE(noexcept(allocator.FlushForAllocation(POOL_SIZE, POOL_SIZE)));
+		allocator.FlushForAllocation(POOL_SIZE, POOL_SIZE);
+	}
+	SECTION("Allocation reclaims only blocks exceeding headroom") {
+		expected_reclaimed = 17;
+		allocator.FlushForAllocation(POOL_SIZE, (BLOCK_COUNT - 2 - expected_reclaimed) * BLOCK_SIZE + BLOCK_SIZE / 2);
+	}
+	SECTION("Allocation reclamation is bounded by the requested size") {
+		expected_reclaimed = 17;
+		allocator.FlushForAllocation(expected_reclaimed * BLOCK_SIZE + BLOCK_SIZE / 2, 0);
+	}
+	SECTION("Allocation without headroom reclaims all free blocks") {
+		expected_reclaimed = BLOCK_COUNT - 2;
+		allocator.FlushForAllocation(POOL_SIZE, 0);
+	}
+	SECTION("Allocation smaller than a block does not reclaim") {
+		allocator.FlushForAllocation(BLOCK_SIZE - 1, 0);
 	}
 	SECTION("Complete flush spans reclamation batches") {
 		expected_reclaimed = BLOCK_COUNT - 2;

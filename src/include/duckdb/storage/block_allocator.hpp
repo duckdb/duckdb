@@ -64,10 +64,12 @@ public:
 	idx_t GetDeallocatedSinceFlush() const;
 	//! Flush if at least threshold bytes were freed since the last flush, returns whether a flush happened
 	bool TryFlushDeallocated(idx_t threshold) const;
+	//! Retain free pool blocks that fit alongside the buffer manager's outstanding reservations.
+	void FlushForAllocation(idx_t extra_memory, idx_t memory_headroom) const noexcept DUCKDB_EXCLUDES(flush_lock);
 
 private:
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
-	enum class ReclaimMode : uint8_t { FORCE, DECAY };
+	enum class ReclaimMode : uint8_t { FORCE, DECAY, OPPORTUNISTIC };
 
 	bool IsActive() const;
 	bool IsEnabled() const;

@@ -34,6 +34,8 @@ struct BlockAllocatorConfig {
 	static constexpr idx_t MAX_FLUSH_BLOCKS = 64;
 	//! Width of each retention bucket, rounding return times up to the bucket end.
 	static constexpr idx_t RETENTION_INTERVAL_MS = 500;
+	//! Minimum interval between bounded decay checks on each allocating thread.
+	static constexpr idx_t ACTIVE_DECAY_INTERVAL_MS = RETENTION_INTERVAL_MS;
 	//! Linear decay on the same one-second timescale as bundled jemalloc, without extra grace.
 	static constexpr idx_t RETENTION_DECAY_MS = DEFAULT_DECAY_DELAY * 1000;
 	//! Current bucket plus the complete decay history.
@@ -269,6 +271,7 @@ private:
 		cached_uuid = block_allocator_p.uuid;
 		block_allocator = block_allocator_p;
 		lifetime_state = block_allocator_p.lifetime_state;
+		next_decay_check = 0;
 		untouched.reserve(BlockAllocatorConfig::BATCH_SIZE);
 		touched.reserve(BlockAllocatorConfig::FREE_THRESHOLD);
 	}
@@ -292,10 +295,20 @@ private:
 		D_ASSERT(local.empty());
 		local.resize(BlockAllocatorConfig::BATCH_SIZE);
 		const auto size = global.q.try_dequeue_bulk(local.begin(), BlockAllocatorConfig::BATCH_SIZE);
-		if (size > 0 && RefersToSameObject(global, *block_allocator->touched)) {
-			block_allocator->ReuseRetention(size, RetentionTimeMillis());
-		}
 		local.resize(size);
+		if (size > 0 && RefersToSameObject(global, *block_allocator->touched)) {
+			const auto now = RetentionTimeMillis();
+			block_allocator->ReuseRetention(size, now);
+			if (now >= next_decay_check) {
+				next_decay_check = now + BlockAllocatorConfig::ACTIVE_DECAY_INTERVAL_MS;
+				try {
+					block_allocator->FreeInternal(optional_idx(), BlockAllocatorConfig::MAX_FLUSH_BLOCKS,
+					                              BlockAllocator::ReclaimMode::OPPORTUNISTIC);
+				} catch (...) {
+					// Failed reclamation leaves blocks available for reuse.
+				}
+			}
+		}
 		std::sort(local.begin(), local.end());
 		return !local.empty();
 	}
@@ -304,6 +317,7 @@ private:
 	hugeint_t cached_uuid;
 	optional_ptr<const BlockAllocator> block_allocator;
 	shared_ptr<BlockAllocatorLifetimeState> lifetime_state;
+	idx_t next_decay_check = 0;
 
 	vector<uint32_t> untouched;
 	vector<uint32_t> touched;
@@ -593,6 +607,9 @@ idx_t BlockAllocator::GetReclaimableBlockCount(const ReclaimMode mode) const {
 idx_t BlockAllocator::FlushPool(const optional_idx block_limit, const optional_idx task_limit,
                                 const ReclaimMode mode) const noexcept {
 	try {
+		if (IsActive() && IsEnabled()) {
+			GetBlockAllocatorThreadLocalState(*this).Clear();
+		}
 		return FreeInternal(block_limit, task_limit, mode);
 	} catch (...) {
 		// Failed reclamation leaves blocks available for reuse.
@@ -634,16 +651,38 @@ bool BlockAllocator::TryFlushDeallocated(const idx_t threshold) const {
 	return true;
 }
 
+void BlockAllocator::FlushForAllocation(const idx_t extra_memory, const idx_t memory_headroom) const noexcept {
+	idx_t reclaim_bytes = 0;
+	try {
+		if (IsActive() && IsEnabled()) {
+			GetBlockAllocatorThreadLocalState(*this).Clear();
+			annotated_lock_guard<annotated_mutex> guard(flush_lock);
+			const auto available = GetFreeBlockCount();
+			const auto excess = available - MinValue(available, DivBlockSize(memory_headroom));
+			reclaim_bytes = MinValue(extra_memory, excess * block_size);
+		}
+	} catch (...) {
+		// Fallback reclamation must still run if the pool cannot be flushed.
+	}
+	FlushAll(reclaim_bytes);
+}
+
 idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optional_idx task_limit,
                                    const ReclaimMode mode) const {
 	if (!IsActive() || !IsEnabled()) {
 		return 0;
 	}
-	GetBlockAllocatorThreadLocalState(*this).Clear();
 	// Bound this flush even when other threads keep freeing blocks.
 	idx_t remaining;
 	{
-		annotated_lock_guard<annotated_mutex> guard(flush_lock);
+		annotated_unique_lock<annotated_mutex> guard(flush_lock, std::defer_lock);
+		if (mode == ReclaimMode::OPPORTUNISTIC) {
+			if (!guard.try_lock()) {
+				return 0;
+			}
+		} else {
+			guard.lock();
+		}
 		remaining = GetReclaimableBlockCount(mode);
 	}
 	if (block_limit.IsValid()) {
@@ -651,13 +690,20 @@ idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optiona
 	}
 	auto task_remaining = task_limit.IsValid() ? MinValue(remaining, task_limit.GetIndex()) : remaining;
 	const auto batch_size =
-	    mode == ReclaimMode::DECAY ? BlockAllocatorConfig::MAX_FLUSH_BLOCKS : BlockAllocatorConfig::RECLAIM_BATCH_SIZE;
+	    mode == ReclaimMode::FORCE ? BlockAllocatorConfig::RECLAIM_BATCH_SIZE : BlockAllocatorConfig::MAX_FLUSH_BLOCKS;
 	unsafe_vector<uint32_t> to_free_buffer;
 	to_free_buffer.resize(MinValue(task_remaining, batch_size));
 	while (task_remaining > 0) {
 		idx_t count;
 		{
-			annotated_lock_guard<annotated_mutex> guard(flush_lock);
+			annotated_unique_lock<annotated_mutex> guard(flush_lock, std::defer_lock);
+			if (mode == ReclaimMode::OPPORTUNISTIC) {
+				if (!guard.try_lock()) {
+					return 0;
+				}
+			} else {
+				guard.lock();
+			}
 			const auto eligible = MinValue(task_remaining, GetReclaimableBlockCount(mode));
 			count = touched->q.try_dequeue_bulk(to_free_buffer.begin(), MinValue(eligible, batch_size));
 		}
