@@ -210,7 +210,6 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(LoggingStorage),
     DUCKDB_SETTING(MaxExecutionTimeSetting),
     DUCKDB_SETTING(MaxExpressionDepthSetting),
-    DUCKDB_SETTING(MaxMacroExpansionSizeSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
     DUCKDB_LOCAL(MaxStreamingBufferSizeSetting),
     DUCKDB_GLOBAL(MaxTempDirectorySizeSetting),

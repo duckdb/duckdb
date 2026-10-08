@@ -184,8 +184,6 @@ private:
 struct GlobalBinderState {
 	//! The count of bound_tables
 	idx_t bound_tables = 0;
-	//! The number of expression nodes produced by expanding macros so far
-	idx_t macro_expansion_size = 0;
 	//! Statement properties
 	StatementProperties prop;
 	//! Binding mode
