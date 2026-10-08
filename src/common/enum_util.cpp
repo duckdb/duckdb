@@ -208,6 +208,7 @@
 #include "duckdb/parser/peg/ast/expression_chain.hpp"
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/operator_matcher.hpp"
+#include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/sql_formatter.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
 #include "duckdb/parser/peg/transformer/peg_transformer.hpp"
@@ -2234,6 +2235,25 @@ const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value) {
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value) {
 	return static_cast<ExpressionClass>(StringUtil::StringToEnum(GetExpressionClassValues(), 40, "ExpressionClass", value));
+}
+
+const StringUtil::EnumStringLiteral *GetExpressionDepthKindValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExpressionDepthKind::NONE), "NONE" },
+		{ static_cast<uint32_t>(ExpressionDepthKind::NESTING), "NESTING" },
+		{ static_cast<uint32_t>(ExpressionDepthKind::CHAIN), "CHAIN" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExpressionDepthKind>(ExpressionDepthKind value) {
+	return StringUtil::EnumToString(GetExpressionDepthKindValues(), 3, "ExpressionDepthKind", static_cast<uint32_t>(value));
+}
+
+template<>
+ExpressionDepthKind EnumUtil::FromString<ExpressionDepthKind>(const char *value) {
+	return static_cast<ExpressionDepthKind>(StringUtil::StringToEnum(GetExpressionDepthKindValues(), 3, "ExpressionDepthKind", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExpressionTailTypeValues() {
