@@ -380,15 +380,6 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const 
 }
 
 void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type) {
-	BindInternal(context, table_info, index_type, /*buffered_replays_only=*/false);
-}
-
-void TableIndexList::BindBufferedReplays(ClientContext &context, DataTableInfo &table_info) {
-	BindInternal(context, table_info, optional<string>(), /*buffered_replays_only=*/true);
-}
-
-void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type,
-                                  bool buffered_replays_only) {
 	{
 		// Early-out, if we have no unbound indexes.
 		annotated_lock_guard lock(index_entries_lock);
@@ -417,8 +408,7 @@ void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_i
 		shared_ptr<IndexEntry> index_entry;
 		for (auto &entry : index_entries) {
 			if (entry->GetBindState() != IndexBindState::BOUND &&
-			    (!index_type || entry->GetIndexType() == *index_type) &&
-			    (!buffered_replays_only || entry->HasBufferedReplays())) {
+			    (!index_type || entry->GetIndexType() == *index_type)) {
 				index_entry = entry;
 				break;
 			}
@@ -467,10 +457,9 @@ void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_i
 			if (index_entry->AbortBind()) {
 				throw;
 			}
-			// The storage was handed off to a bound index that failed: the buffered replays are lost.
+			// The bound index released the index's on-disk blocks when it was destroyed: it cannot be bound again.
 			ErrorData error(ex);
-			throw FatalException("Failed to bind index %s with buffered write-ahead log operations: %s",
-			                     index_entry->GetName(), error.RawMessage());
+			throw FatalException("Failed to bind index %s: %s", index_entry->GetName(), error.RawMessage());
 		}
 
 		// Commit the bound index to the index entry.
@@ -479,8 +468,6 @@ void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_i
 		if (current_entry == index_entries.end()) {
 			continue;
 		}
-		// Bind returns nullptr only for retired entries, which are no longer in the list.
-		D_ASSERT(bound_idx);
 		index_entry->CommitBind(std::move(bound_idx));
 		unbound_count--;
 	}

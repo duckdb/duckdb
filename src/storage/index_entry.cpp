@@ -334,20 +334,12 @@ void IndexEntry::Retire() {
 
 unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<LogicalType> &table_types) {
 	auto entry_lock = lock.GetExclusiveLock();
-	if (!owned_index) {
-		// The index was dropped concurrently.
-		return nullptr;
-	}
 	return owned_index->Cast<UnboundIndex>().Bind(binder, table_types);
 }
 
 bool IndexEntry::AbortBind() {
 	auto entry_lock = lock.GetExclusiveLock();
-	if (!owned_index) {
-		// The index was dropped concurrently: there is nothing to reset.
-		return true;
-	}
-	if (owned_index->IsBound() || owned_index->Cast<UnboundIndex>().StorageReclaimed()) {
+	if (owned_index->Cast<UnboundIndex>().StorageReclaimed()) {
 		return false;
 	}
 	bind_state = IndexBindState::UNBOUND;

@@ -136,12 +136,12 @@ public:
 	bool HasBufferedReplays() const;
 	//! Destroys the physical index.
 	void Retire();
-	//! Binds the unbound physical index without replacing it. Returns nullptr if the index was retired.
+	//! Binds the unbound physical index without replacing it.
 	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &table_types);
 	//! Replaces the unbound physical index with its bound representation.
 	void CommitBind(unique_ptr<BoundIndex> bound_index);
 	//! Resets a failed bind so that binding can be retried. Returns false if the index can no longer be bound,
-	//! because it has handed off its storage to a bound index that was not committed.
+	//! because a bound index that was not committed released its on-disk blocks.
 	bool AbortBind();
 	//! Verifies that rows can be appended to the bound physical index.
 	void VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,

@@ -130,7 +130,6 @@ TEST_CASE("Checkpoint buffered replays of an index type that is not loaded", "[s
 
 	{
 		DuckDB db(database_path, config.get());
-		RegisterTestIndexType(db);
 		Connection con(db);
 
 		auto result = con.Query("SELECT count(*), sum(b) FROM big");
@@ -138,6 +137,10 @@ TEST_CASE("Checkpoint buffered replays of an index type that is not loaded", "[s
 		REQUIRE(CHECK_COLUMN(result, 1, {Value::BIGINT(5000050000)}));
 		result = con.Query("SELECT count(*) FROM other");
 		REQUIRE(CHECK_COLUMN(result, 0, {20000}));
+
+		// Loading the index type after a failed bind allows binding the index in the same database instance.
+		REQUIRE(con.Query("CHECKPOINT")->HasError());
+		RegisterTestIndexType(db);
 
 		// The buffered index operations are still there: the unique index sees the rows of the WAL.
 		result = con.Query("INSERT INTO ext VALUES (150)");
