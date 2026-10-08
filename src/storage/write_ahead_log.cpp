@@ -23,6 +23,8 @@
 #include "duckdb/storage/wal_entry.hpp"
 #include "duckdb/main/attached_database.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 constexpr uint64_t WAL_VERSION_NUMBER = 2;
@@ -520,13 +522,13 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 }
 
 void WriteAheadLog::RemovePendingCheckpointBlocks(const unordered_set<block_id_t> &block_ids) {
-	vector<block_id_t> remaining_blocks;
-	for (auto &block_id : pending_checkpoint_blocks) {
-		if (block_ids.find(block_id) == block_ids.end()) {
-			remaining_blocks.push_back(block_id);
-		}
+	if (block_ids.empty() || pending_checkpoint_blocks.empty()) {
+		return;
 	}
-	pending_checkpoint_blocks = std::move(remaining_blocks);
+	pending_checkpoint_blocks.erase(
+	    std::remove_if(pending_checkpoint_blocks.begin(), pending_checkpoint_blocks.end(),
+	                   [&](block_id_t block_id) { return block_ids.find(block_id) != block_ids.end(); }),
+	    pending_checkpoint_blocks.end());
 }
 
 void WriteAheadLog::MarkPendingBlocksAsCheckpointed() {
