@@ -8,6 +8,7 @@
 #include "reader/variant_column_reader.hpp"
 #include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 #include "column_reader.hpp"
+#include "parquet_reader.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
@@ -73,6 +74,11 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 		}
 	}
 
+	if (child_readers.size() < 2 || !child_readers[0] || !child_readers[1]) {
+		throw DataCorruptionException("Failed to read file \"%s\": the Variant column must have 'metadata' and 'value' "
+		                              "as the first two columns",
+		                              reader.GetFileName());
+	}
 	if (child_readers[0]->Schema().name == "metadata" && child_readers[1]->Schema().name == "value") {
 		metadata_reader_idx = 0;
 		value_reader_idx = 1;
@@ -80,7 +86,9 @@ VariantColumnReader::VariantColumnReader(ClientContext &context, const ParquetRe
 		metadata_reader_idx = 1;
 		value_reader_idx = 0;
 	} else {
-		throw InternalException("The Variant column must have 'metadata' and 'value' as the first two columns");
+		throw DataCorruptionException("Failed to read file \"%s\": the Variant column must have 'metadata' and 'value' "
+		                              "as the first two columns",
+		                              reader.GetFileName());
 	}
 }
 
