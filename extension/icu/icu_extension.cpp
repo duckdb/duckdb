@@ -445,7 +445,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-	auto tz = TimeZone::TryCreateDefault();
+	auto tz = TimeZone::TryCreateDefault(loader.GetDatabaseInstance());
 	// If the host time zone is unknown, fall back to UTC
 	string tz_string = tz ? tz->GetId() : "UTC";
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),

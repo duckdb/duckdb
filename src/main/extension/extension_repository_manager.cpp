@@ -275,7 +275,7 @@ string ExtensionRepositoryManager::NormalizeRepositoryName(const string &name) {
 string ExtensionRepositoryManager::GetRepositoryDirectory(DatabaseInstance &db, FileSystem &fs) {
 	auto directory = Settings::Get<ExtensionRepositoryDirectorySetting>(db);
 	if (directory.empty()) {
-		directory = fs.JoinPath(fs.JoinPath(fs.GetHomeDirectory(), ".duckdb"), "extension_repositories");
+		directory = fs.JoinPath(fs.JoinPath(FileSystem::GetHomeDirectory(db), ".duckdb"), "extension_repositories");
 	}
 	return fs.ExpandPath(fs.ConvertSeparators(directory));
 }

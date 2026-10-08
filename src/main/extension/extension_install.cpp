@@ -152,7 +152,7 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	string extension_directory = extension_directories[0]; // Use first/primary directory
 	{
 		if (!fs.DirectoryExists(extension_directory)) {
-			string home_directory = fs.GetHomeDirectory();
+			string home_directory = FileSystem::GetHomeDirectory(db);
 			if (extension_directory.rfind(home_directory, 0) == 0 && !fs.DirectoryExists(home_directory)) {
 				throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
 				                  "home_directory='/path/to/dir' option.",

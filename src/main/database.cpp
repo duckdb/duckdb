@@ -6,6 +6,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/http/http_util.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/main/extension/external_extension_provider.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
@@ -86,6 +87,7 @@ DatabaseInstance::DatabaseInstance() : db_validity(*this) {
 	create_api_v1 = nullptr;
 	invoke_capi_v2 = nullptr;
 	parser_cache = make_uniq<ParserCache>();
+	os_util = make_uniq<OSUtil>(*this);
 }
 
 ParserCache &DatabaseInstance::GetParserCache() {
@@ -553,7 +555,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	} else {
 		config.file_system = make_uniq<VirtualFileSystem>(FileSystem::CreateLocal());
 	}
-	config.http_transport_manager->Initialize(config);
+	config.http_transport_manager->Initialize(config, *this);
 	if (database_path && !Settings::Get<EnableExternalAccessSetting>(*this)) {
 		config.AddAllowedDatabasePath(database_path);
 		if (!config.options.temporary_directory.empty()) {
@@ -564,13 +566,13 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		config.secret_manager = std::move(new_config.secret_manager);
 	}
 	if (config.options.maximum_memory == DConstants::INVALID_INDEX) {
-		config.SetDefaultMaxMemory();
+		config.SetDefaultMaxMemory(*this);
 	}
 	if (new_config.options.maximum_threads == DConstants::INVALID_INDEX) {
-		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+		config.options.maximum_threads = config.GetSystemMaxThreads(*config.file_system, *this);
 	}
 	if (new_config.options.async_threads == DConstants::INVALID_INDEX) {
-		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
+		config.options.async_threads = config.GetSystemMaxAsyncThreads(*config.file_system, *this);
 	}
 	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
@@ -579,9 +581,10 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 	config.block_allocator = std::move(new_config.block_allocator);
 	if (!config.block_allocator) {
 		auto default_block_size = Settings::Get<DefaultBlockSizeSetting>(config);
-		config.block_allocator = make_uniq<BlockAllocator>(
-		    *config.allocator, default_block_size, DBConfig::GetSystemAvailableMemory(*config.file_system) * 8 / 10,
-		    config.options.block_allocator_size);
+		config.block_allocator =
+		    make_uniq<BlockAllocator>(*config.allocator, default_block_size,
+		                              DBConfig::GetSystemAvailableMemory(*config.file_system, *this) * 8 / 10,
+		                              config.options.block_allocator_size);
 	}
 	config.replacement_scans = std::move(new_config.replacement_scans);
 	if (new_config.callback_manager) {
@@ -705,6 +708,10 @@ void DatabaseInstance::InvokeExtensionEntrypointV2(const ExtensionInitResult &in
 
 LogManager &DatabaseInstance::GetLogManager() const {
 	return *log_manager;
+}
+
+OSUtil &DatabaseInstance::GetOSUtil() {
+	return *os_util;
 }
 
 MetricsManager &DatabaseInstance::GetMetricsManager() {

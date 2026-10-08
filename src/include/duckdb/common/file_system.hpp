@@ -289,6 +289,7 @@ public:
 	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
 	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
+	DUCKDB_API static string GetHomeDirectory(DatabaseInstance &db);
 	//! Gets the users home directory
 	DUCKDB_API virtual string GetHomeDirectory();
 	//! Expands a given path, including e.g. expanding the home directory of the user
@@ -320,6 +321,7 @@ public:
 	DUCKDB_API string ExtractName(const string &path);
 
 	//! Returns the value of an environment variable - or the empty string if it is not set
+	//! Reads the process environment directly; code that has a database goes through OSUtil::Get(db) instead
 	DUCKDB_API static string GetEnvVariable(const string &name);
 
 	//! Whether there is a glob in the string

@@ -14,6 +14,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/os_util.hpp"
+#include "duckdb/main/settings.hpp"
 #include "duckdb/common/windows_util.hpp"
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/logging/log_manager.hpp"
@@ -343,11 +345,23 @@ string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 			}
 		}
 	}
+	auto db = FileOpener::TryGetDatabase(opener);
+	if (!db) {
+		return string();
+	}
+	return GetHomeDirectory(*db);
+}
+
+string FileSystem::GetHomeDirectory(DatabaseInstance &db) {
+	auto home_directory = Settings::Get<HomeDirectorySetting>(db);
+	if (!home_directory.empty()) {
+		return home_directory;
+	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	return FileSystem::GetEnvVariable("USERPROFILE");
+	return OSUtil::Get(db).GetEnv("USERPROFILE");
 #else
-	return FileSystem::GetEnvVariable("HOME");
+	return OSUtil::Get(db).GetEnv("HOME");
 #endif
 }
 
@@ -397,7 +411,11 @@ string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opene
 		return path;
 	}
 	if (path[0] == '~') {
-		return GetHomeDirectory(opener) + path.substr(1);
+		auto home_directory = GetHomeDirectory(opener);
+		if (home_directory.empty()) {
+			return path;
+		}
+		return home_directory + path.substr(1);
 	}
 	// handle file URIs
 	auto file_offset = GetFileUrlOffset(path);

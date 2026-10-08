@@ -59,7 +59,7 @@ int32_t JapaneseCalendar::GetEra(int32_t year, int32_t month, int32_t day) {
 int32_t JapaneseCalendar::GetCurrentEra() {
 	// the era of the current date, in the time zone of the host, which is what ICU uses
 	static const auto CURRENT_ERA = []() {
-		auto zone = TimeZone::TryCreateDefault();
+		auto zone = TimeZone::TryCreateHost();
 		auto millis = GetNow();
 		if (zone) {
 			int32_t raw_offset;

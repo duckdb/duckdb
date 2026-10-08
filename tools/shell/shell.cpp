@@ -3246,8 +3246,11 @@ int ShellState::ProcessInput(InputMode mode) {
 }
 
 static string GetHomeDirectory() {
-	duckdb::LocalFileSystem lfs;
-	return lfs.GetHomeDirectory();
+#ifdef _WIN32
+	return duckdb::FileSystem::GetEnvVariable("USERPROFILE");
+#else
+	return duckdb::FileSystem::GetEnvVariable("HOME");
+#endif
 }
 
 string ShellState::GetDefaultDuckDBRC() {

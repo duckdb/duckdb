@@ -48,7 +48,7 @@ void SecretManager::Initialize(DatabaseInstance &db) {
 
 	// Construct default path
 	auto &fs = FileSystem::GetLocal(db);
-	config.default_secret_path = fs.GetHomeDirectory();
+	config.default_secret_path = FileSystem::GetHomeDirectory(db);
 	vector<string> path_components = {".duckdb", "stored_secrets"};
 	for (auto &path_ele : path_components) {
 		config.default_secret_path = fs.JoinPath(config.default_secret_path, path_ele);

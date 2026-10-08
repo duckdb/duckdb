@@ -1,6 +1,7 @@
 #include "timezone.hpp"
 
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "grego.hpp"
 
 #include <climits>
@@ -513,11 +514,10 @@ static unique_ptr<TimeZone> TryCreateWindowsDefault() {
 }
 #endif
 
-unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
+unique_ptr<TimeZone> TimeZone::TryCreateDefault(DatabaseInstance &db) {
 	// an explicitly configured zone takes priority over the host configuration
-	const auto tz_env = std::getenv("TZ");
-	if (tz_env) {
-		string tz_id(tz_env);
+	string tz_id;
+	if (OSUtil::Get(db).TryGetEnv("TZ", tz_id)) {
 		// the zone can be prefixed with a colon to force it to be interpreted as a name
 		if (!tz_id.empty() && tz_id[0] == ':') {
 			tz_id = tz_id.substr(1);
@@ -527,6 +527,10 @@ unique_ptr<TimeZone> TimeZone::TryCreateDefault() {
 			return result;
 		}
 	}
+	return TryCreateHost();
+}
+
+unique_ptr<TimeZone> TimeZone::TryCreateHost() {
 #ifdef _WIN32
 	auto windows_zone = TryCreateWindowsDefault();
 	if (windows_zone) {

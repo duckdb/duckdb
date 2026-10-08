@@ -19,6 +19,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/os_util.hpp"
 #include "duckdb/main/extension_repository_manager.hpp"
 #include "duckdb/common/operator/double_cast_operator.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -93,12 +94,12 @@ static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) 
 
 //! The available system memory. The config's filesystem is not set until the database starts, but
 //! options can be configured before that, so fall back to a temporary local filesystem.
-static idx_t GetAvailableSystemMemory(DBConfig &config) {
+static idx_t GetAvailableSystemMemory(optional_ptr<DatabaseInstance> db, DBConfig &config) {
 	if (config.file_system) {
-		return DBConfig::GetSystemAvailableMemory(*config.file_system);
+		return DBConfig::GetSystemAvailableMemory(*config.file_system, db);
 	}
 	auto local_fs = FileSystem::CreateLocal();
-	return DBConfig::GetSystemAvailableMemory(*local_fs);
+	return DBConfig::GetSystemAvailableMemory(*local_fs, db);
 }
 
 } // namespace
@@ -1104,8 +1105,8 @@ void HTTPProxySetting::SetGlobal(DatabaseInstance *, DBConfig &config, const Val
 	config.options.http_proxy = input.GetValue<string>();
 }
 
-void HTTPProxySetting::ResetGlobal(DatabaseInstance *, DBConfig &config) {
-	config.options.http_proxy = FileSystem::GetEnvVariable("HTTP_PROXY");
+void HTTPProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.http_proxy = db ? OSUtil::Get(*db).GetEnv("HTTP_PROXY") : string();
 }
 
 //===----------------------------------------------------------------------===//
@@ -1156,7 +1157,7 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
 	auto maximum_memory =
-	    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(config); });
+	    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(db, config); });
 	if (db) {
 		BufferManager::GetBufferManager(*db).SetMemoryLimit(maximum_memory);
 	}
@@ -1165,7 +1166,7 @@ void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const V
 
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	auto old_memory = config.options.maximum_memory;
-	config.SetDefaultMaxMemory();
+	config.SetDefaultMaxMemory(db);
 	auto new_memory = config.options.maximum_memory;
 	config.options.maximum_memory = old_memory;
 	if (db) {
@@ -1674,7 +1675,7 @@ void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Val
 }
 
 void ThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system);
+	idx_t new_maximum_threads = config.GetSystemMaxThreads(*config.file_system, db);
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetThreads(new_maximum_threads, Settings::Get<ExternalThreadsSetting>(config));
 	}
@@ -1690,7 +1691,7 @@ static void ResizeAutomaticHTTPClientPool(optional_ptr<DatabaseInstance> db, DBC
 	if (!db || config.options.http_client_pool_capacity != DConstants::INVALID_INDEX) {
 		return;
 	}
-	config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config));
+	config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config, db));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1713,7 +1714,7 @@ void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 }
 
 void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	idx_t new_async_threads = config.GetSystemMaxAsyncThreads(*config.file_system);
+	idx_t new_async_threads = config.GetSystemMaxAsyncThreads(*config.file_system, db);
 	if (db) {
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}
@@ -1744,7 +1745,7 @@ void HTTPClientPoolCapacitySetting::SetGlobal(DatabaseInstance *db, DBConfig &co
 
 void HTTPClientPoolCapacitySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	if (db) {
-		config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config));
+		config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config, db));
 	}
 	config.options.http_client_pool_capacity = DConstants::INVALID_INDEX;
 }

@@ -13,6 +13,8 @@
 #include "tz_data.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
+
 namespace datetime {
 
 //! How a local time that either does not exist or occurs twice is resolved.
@@ -33,8 +35,10 @@ public:
 	//! The identifiers that refer to the same data as the given zone, including the zone itself.
 	//! Returns an empty list if the zone has no aliases.
 	static vector<string> GetEquivalentIds(const string &id);
+	//! The zone configured through TZ, or else the zone of the host; nullptr if neither can be determined
+	static unique_ptr<TimeZone> TryCreateDefault(DatabaseInstance &db);
 	//! The time zone of the host, or nullptr if it cannot be determined
-	static unique_ptr<TimeZone> TryCreateDefault();
+	static unique_ptr<TimeZone> TryCreateHost();
 
 	const string &GetId() const {
 		return id;
