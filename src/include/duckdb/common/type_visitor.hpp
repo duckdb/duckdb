@@ -168,7 +168,6 @@ inline LogicalType TypeVisitor::VisitReplaceInternal(const LogicalType &type, F 
 	return result_stack.back();
 }
 
-
 template <class F>
 inline bool TypeVisitor::Contains(const LogicalType &type, F &&predicate) {
 	return ContainsInternal(type, predicate);
