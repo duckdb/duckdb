@@ -301,9 +301,9 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 		column_t column_index;
 		if (!invoke_arguments.empty() && macro_binding->TryGetBindingIndex(col_ref.GetColumnName(), column_index) &&
 		    !lambda_names[column_index].empty()) {
-			auto alias = col_ref.GetAlias();
-			param = make_uniq<ColumnRefExpression>(Identifier(lambda_names[column_index]));
-			param->SetAlias(alias);
+			auto lambda_param = make_uniq<ColumnRefExpression>(Identifier(lambda_names[column_index]));
+			lambda_param->SetAlias(col_ref.GetAlias());
+			param = std::move(lambda_param);
 			return;
 		}
 		param = macro_binding->ParamToArg(col_ref);
