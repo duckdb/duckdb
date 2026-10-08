@@ -540,6 +540,8 @@ public:
 			l_state.job_rows_scanned += job_scan.RowsScanned();
 			job_scan.table_state.rows_scanned = 0;
 			job_scan.local_state.rows_scanned = 0;
+			// a pooled state outlives the pipeline, it must not keep blocks pinned that a sink may still convert
+			job_scan.ReleasePins();
 			state_pool.Push(std::move(l_state.job->scan_state));
 			l_state.job.reset();
 			if (TryYieldControl(data_p)) {
