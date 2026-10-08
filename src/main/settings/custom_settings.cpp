@@ -1106,7 +1106,7 @@ void HTTPProxySetting::SetGlobal(DatabaseInstance *, DBConfig &config, const Val
 }
 
 void HTTPProxySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.http_proxy = db ? OSUtil::Get(*db).GetEnv("HTTP_PROXY") : string();
+	config.options.http_proxy = db ? OSUtil::Get(*db).GetEnvUnrestricted("HTTP_PROXY") : string();
 }
 
 //===----------------------------------------------------------------------===//

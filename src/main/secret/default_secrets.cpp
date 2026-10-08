@@ -55,9 +55,9 @@ vector<CreateSecretFunction> CreateHTTPSecretFunctions::GetDefaultSecretFunction
 	return result;
 }
 
-static bool TryGetEnv(ClientContext &context, const string &name, string &value) {
+static bool GetEnv(ClientContext &context, const string &name, string &value) {
 	auto &os_util = OSUtil::Get(*context.db);
-	return os_util.TryGetEnv(name, value) || os_util.TryGetEnv(StringUtil::Upper(name), value);
+	return os_util.GetEnv(name, value) || os_util.GetEnv(StringUtil::Upper(name), value);
 }
 
 unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromEnv(ClientContext &context,
@@ -65,13 +65,13 @@ unique_ptr<BaseSecret> CreateHTTPSecretFunctions::CreateHTTPSecretFromEnv(Client
 	auto secret = make_uniq<KeyValueSecret>(input.scope, input.type, input.provider, input.name);
 
 	string value;
-	if (TryGetEnv(context, "http_proxy", value)) {
+	if (GetEnv(context, "http_proxy", value)) {
 		secret->secret_map["http_proxy"] = Value(value);
 	}
-	if (TryGetEnv(context, "http_proxy_password", value)) {
+	if (GetEnv(context, "http_proxy_password", value)) {
 		secret->secret_map["http_proxy_password"] = Value(value);
 	}
-	if (TryGetEnv(context, "http_proxy_username", value)) {
+	if (GetEnv(context, "http_proxy_username", value)) {
 		secret->secret_map["http_proxy_username"] = Value(value);
 	}
 

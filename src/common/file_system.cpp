@@ -339,9 +339,9 @@ string FileSystem::GetHomeDirectory(DatabaseInstance &db) {
 	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	return OSUtil::Get(db).GetEnv("USERPROFILE");
+	return OSUtil::Get(db).GetEnvUnrestricted("USERPROFILE");
 #else
-	return OSUtil::Get(db).GetEnv("HOME");
+	return OSUtil::Get(db).GetEnvUnrestricted("HOME");
 #endif
 }
 

@@ -256,6 +256,8 @@ public:
 	string agent_marker;
 	//! Whether DUCKDB_AGENT_MODE forced agent mode on or off (no -agent / -no-agent was given)
 	bool agent_mode_from_environment = false;
+	//! Whether DetectAgentMode has run; it runs once, when the first database is opened
+	bool agent_mode_detected = false;
 	//! Whether an output mode was given on the command line (-csv, -json, ...): detected agent mode then stays off
 	bool output_mode_flag = false;
 	//! Whether the exit hint (see PrintExitHint) went out already
@@ -394,8 +396,6 @@ public:
 	void RunSchemaDumpQuery(const string &zQuery);
 	void RunTableDumpQuery(const string &zSelect);
 	void OpenDB(ShellOpenFlags open_flags = ShellOpenFlags::EXIT_ON_FAILURE);
-	//! Declares the variables the shell configures itself from as readable regardless of external access
-	void RegisterShellEnvironment();
 	//! Progress bar and error rendering for the open database, following the console and agent mode
 	void ApplyDisplaySettings();
 
@@ -422,7 +422,7 @@ public:
 	idx_t GetScreenHeight();
 	idx_t GetMaxRenderWidth() const;
 	string GetSystemPager();
-	//! An environment variable, read through the database so its settings apply; empty if unset or not allowed
+	//! A variable the shell configures itself from, read through the database; empty if unset
 	string GetEnv(const string &name);
 	//! The home directory, from the home_directory setting or the environment
 	string GetHomeDirectory();

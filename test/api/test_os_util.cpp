@@ -16,10 +16,11 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		DuckDB db(nullptr);
 		auto &os_util = OSUtil::Get(*db.instance);
 		string value;
-		REQUIRE(os_util.TryGetEnv("DUCKDB_TEST_OS_UTIL", value));
+		REQUIRE(os_util.GetEnv("DUCKDB_TEST_OS_UTIL", value));
 		REQUIRE(value == "quack");
 		REQUIRE(os_util.GetEnv("DUCKDB_TEST_OS_UTIL") == "quack");
-		REQUIRE(!os_util.TryGetEnv("DUCKDB_TEST_OS_UTIL_UNSET", value));
+		REQUIRE(!os_util.GetEnv("DUCKDB_TEST_OS_UTIL_UNSET", value));
+		REQUIRE(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
 		REQUIRE(os_util.GetEnv("DUCKDB_TEST_OS_UTIL_UNSET").empty());
 		REQUIRE(!FileSystem::GetHomeDirectory(*db.instance).empty());
 
@@ -30,7 +31,7 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		REQUIRE(CHECK_COLUMN(result, 0, {true}));
 	}
 	{
-		// without external access only the variables the engine needs to configure itself are visible
+		// without external access only the variables the engine needs to configure itself are readable
 		DBConfig config;
 		config.SetOptionByName("enable_external_access", Value::BOOLEAN(false));
 		// the persistent secret directory cannot be scanned without external access
@@ -38,16 +39,18 @@ TEST_CASE("Environment variables are read through OSUtil", "[api]") {
 		DuckDB db(nullptr, &config);
 		auto &os_util = OSUtil::Get(*db.instance);
 		string value;
-		REQUIRE(!os_util.TryGetEnv("DUCKDB_TEST_OS_UTIL", value));
-		REQUIRE(os_util.GetEnv("DUCKDB_TEST_OS_UTIL").empty());
-		REQUIRE(OSUtil::IsSafeEnv("HOME"));
-		REQUIRE(!OSUtil::IsSafeEnv("DUCKDB_TEST_OS_UTIL"));
+		REQUIRE_THROWS(os_util.GetEnv("DUCKDB_TEST_OS_UTIL", value));
+		REQUIRE_THROWS(os_util.GetEnv("DUCKDB_TEST_OS_UTIL"));
+		// configuration reads are not restricted
+		REQUIRE(os_util.GetEnvUnrestricted("DUCKDB_TEST_OS_UTIL", value));
+		REQUIRE(value == "quack");
 		REQUIRE(!FileSystem::GetHomeDirectory(*db.instance).empty());
 
+		// the env secret provider is refused rather than silently producing an empty secret
 		Connection con(db);
-		REQUIRE_NO_FAIL(con.Query("CREATE SECRET http_env (TYPE http, PROVIDER env)"));
-		auto result = con.Query("SELECT secret_string LIKE '%env_user%' FROM duckdb_secrets() WHERE name = 'http_env'");
-		REQUIRE(CHECK_COLUMN(result, 0, {false}));
+		auto result = con.Query("CREATE SECRET http_env (TYPE http, PROVIDER env)");
+		REQUIRE_FAIL(result);
+		REQUIRE(StringUtil::Contains(result->GetError(), "environment access is disabled"));
 	}
 	unsetenv("DUCKDB_TEST_OS_UTIL");
 	unsetenv("http_proxy_username");

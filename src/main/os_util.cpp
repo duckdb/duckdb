@@ -1,5 +1,6 @@
 #include "duckdb/main/os_util.hpp"
 
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/windows_util.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
@@ -15,36 +16,25 @@ OSUtil &OSUtil::Get(DatabaseInstance &db) {
 	return db.GetOSUtil();
 }
 
-bool OSUtil::IsSafeEnv(const string &name) {
-	// the home directory and the resource limits of the job the database runs in
-	static const char *SAFE_ENV[] = {"HOME", "USERPROFILE", "SLURM_CPUS_ON_NODE", "SLURM_MEM_PER_NODE",
-	                                 "SLURM_MEM_PER_CPU"};
-	for (auto safe : SAFE_ENV) {
-		if (name == safe) {
-			return true;
-		}
+bool OSUtil::GetEnv(const string &name, string &value) {
+	if (!Settings::Get<EnableExternalAccessSetting>(db)) {
+		throw PermissionException(
+		    "Cannot read environment variable \"%s\" - environment access is disabled by configuration", name);
 	}
-	return false;
-}
-
-void OSUtil::AddSafeEnv(const string &name) {
-	lock_guard<mutex> guard(lock);
-	safe_env.insert(name);
-}
-
-bool OSUtil::TryGetEnv(const string &name, string &value) {
-	if (!IsSafeEnv(name) && !Settings::Get<EnableExternalAccessSetting>(db)) {
-		lock_guard<mutex> guard(lock);
-		if (safe_env.find(name) == safe_env.end()) {
-			return false;
-		}
-	}
-	return ReadEnv(name, value);
+	return GetEnvUnrestricted(name, value);
 }
 
 string OSUtil::GetEnv(const string &name) {
 	string value;
-	if (!TryGetEnv(name, value)) {
+	if (!GetEnv(name, value)) {
+		return string();
+	}
+	return value;
+}
+
+string OSUtil::GetEnvUnrestricted(const string &name) {
+	string value;
+	if (!GetEnvUnrestricted(name, value)) {
 		return string();
 	}
 	return value;
@@ -52,7 +42,7 @@ string OSUtil::GetEnv(const string &name) {
 
 #ifndef _WIN32
 
-bool OSUtil::ReadEnv(const string &name, string &value) {
+bool OSUtil::GetEnvUnrestricted(const string &name, string &value) {
 	const char *env = std::getenv(name.c_str());
 	if (!env) {
 		return false;
@@ -63,7 +53,7 @@ bool OSUtil::ReadEnv(const string &name, string &value) {
 
 #else
 
-bool OSUtil::ReadEnv(const string &name, string &value) {
+bool OSUtil::GetEnvUnrestricted(const string &name, string &value) {
 	auto name_w = WindowsUtil::UTF8ToUnicode(name.c_str());
 	auto value_w = _wgetenv(name_w.c_str());
 	if (!value_w) {

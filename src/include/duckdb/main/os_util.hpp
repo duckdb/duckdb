@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
-#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
@@ -26,27 +24,20 @@ public:
 	DUCKDB_API static OSUtil &Get(DatabaseInstance &db);
 
 public:
-	//! Reads an environment variable. Returns false if it is unset, or if reading it is not allowed.
-	//! Variables the engine needs to configure itself (see IsSafeEnv) can always be read; everything
-	//! else requires enable_external_access.
-	DUCKDB_API virtual bool TryGetEnv(const string &name, string &value);
-	//! The value of an environment variable, or an empty string if it is unset or not allowed
+	//! Reads an environment variable on behalf of the user. Returns false if it is unset, and throws a
+	//! PermissionException when enable_external_access is disabled.
+	DUCKDB_API virtual bool GetEnv(const string &name, string &value);
+	//! The value of an environment variable, or an empty string if it is unset; same restrictions as above
 	DUCKDB_API string GetEnv(const string &name);
 
-	//! Whether a variable can be read even when external access is disabled
-	DUCKDB_API static bool IsSafeEnv(const string &name);
-	//! Marks a variable the embedding application uses to configure itself as readable regardless of external access
-	DUCKDB_API void AddSafeEnv(const string &name);
-
-protected:
-	//! Reads a variable from the process environment, without any policy
-	DUCKDB_API virtual bool ReadEnv(const string &name, string &value);
+	//! Reads a variable the engine (or the embedding application) configures itself from, such as HOME or TZ.
+	//! Not subject to enable_external_access: use it only for configuration, never for data a query asked for.
+	DUCKDB_API virtual bool GetEnvUnrestricted(const string &name, string &value);
+	//! The value of such a variable, or an empty string if it is unset
+	DUCKDB_API string GetEnvUnrestricted(const string &name);
 
 protected:
 	DatabaseInstance &db;
-	mutex lock;
-	//! Variables declared safe through AddSafeEnv
-	unordered_set<string> safe_env;
 };
 
 } // namespace duckdb

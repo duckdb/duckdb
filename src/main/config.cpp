@@ -666,7 +666,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs, optional_ptr<DatabaseInstanc
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
 	string slurm_cpus;
-	if (db && OSUtil::Get(*db).TryGetEnv("SLURM_CPUS_ON_NODE", slurm_cpus)) {
+	if (db && OSUtil::Get(*db).GetEnvUnrestricted("SLURM_CPUS_ON_NODE", slurm_cpus)) {
 		idx_t slurm_threads;
 		if (TryCast::Operation<string_t, idx_t>(string_t(slurm_cpus), slurm_threads)) {
 			return MaxValue<idx_t>(slurm_threads, 1);
@@ -698,8 +698,8 @@ idx_t DBConfig::GetSystemAvailableMemory(FileSystem &fs, optional_ptr<DatabaseIn
 	string slurm_mem_per_cpu;
 	if (db) {
 		auto &os_util = OSUtil::Get(*db);
-		os_util.TryGetEnv("SLURM_MEM_PER_NODE", slurm_mem_per_node);
-		os_util.TryGetEnv("SLURM_MEM_PER_CPU", slurm_mem_per_cpu);
+		os_util.GetEnvUnrestricted("SLURM_MEM_PER_NODE", slurm_mem_per_node);
+		os_util.GetEnvUnrestricted("SLURM_MEM_PER_CPU", slurm_mem_per_cpu);
 	}
 
 	if (!slurm_mem_per_node.empty()) {
