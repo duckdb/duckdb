@@ -113,6 +113,8 @@ private:
 	unique_ptr<FunctionData> bind_data;
 	unique_ptr<GlobalTableFunctionState> global_state;
 	atomic<bool> finished;
+	//! The column indexes to scan - the row id is scanned if no columns are projected
+	vector<ColumnIndex> scan_column_indexes;
 	idx_t column_count;
 	Identifier schema_name;
 	Identifier table_name;
@@ -123,6 +125,8 @@ struct DuckDBReadGlobalState : GlobalTableFunctionState {};
 struct DuckDBReadLocalState : LocalTableFunctionState {
 	unique_ptr<LocalTableFunctionState> local_state;
 	shared_ptr<AttachedDatabaseWrapper> attached_database;
+	//! The chunk to scan into when no columns are projected (we then scan the row ids)
+	DataChunk row_id_chunk;
 };
 
 string DuckDBFileReaderOptions::GetCandidates(const vector<reference<TableCatalogEntry>> &tables) const {
@@ -297,16 +301,24 @@ bool DuckDBReader::TryInitializeScan(ClientContext &context, GlobalTableFunction
 			}
 		}
 
+		scan_column_indexes = column_indexes;
+		if (scan_column_indexes.empty()) {
+			// the table scan requires at least one column - scan the row id if no columns are projected
+			scan_column_indexes.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		}
 		// initialize the scan over this table
-		TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), filters.get());
+		TableFunctionInitInput input(bind_data.get(), scan_column_indexes, vector<idx_t>(), filters.get());
 		global_state = scan_function.init_global(context, input);
 	}
 	AssignSharedPointer(lstate.attached_database, db_wrapper);
 	// initialize the local scan
 	ThreadContext thread(context);
 	ExecutionContext exec_context(context, thread, nullptr);
-	TableFunctionInitInput input(bind_data.get(), column_indexes, vector<idx_t>(), filters.get());
+	TableFunctionInitInput input(bind_data.get(), scan_column_indexes, vector<idx_t>(), filters.get());
 	lstate.local_state = scan_function.init_local(exec_context, input, global_state.get());
+	if (column_indexes.empty() && lstate.row_id_chunk.ColumnCount() == 0) {
+		lstate.row_id_chunk.Initialize(context, {LogicalType::ROW_TYPE});
+	}
 	return true;
 }
 
@@ -320,7 +332,14 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 	} else {
 		input.async_result = AsyncResultType::IMPLICIT;
 		input.results_execution_mode = AsyncResultsExecutionMode::TASK_EXECUTOR;
-		scan_function.function(context, input, chunk);
+		if (column_indexes.empty()) {
+			// no columns are projected - scan the row ids and only emit the count
+			lstate.row_id_chunk.Reset();
+			scan_function.function(context, input, lstate.row_id_chunk);
+			chunk.SetCardinality(lstate.row_id_chunk.size());
+		} else {
+			scan_function.function(context, input, chunk);
+		}
 
 		if (input.async_result.GetResultType() == AsyncResultType::BLOCKED) {
 			return std::move(input.async_result);
