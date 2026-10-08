@@ -246,7 +246,7 @@ public:
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	//! Whether any of the rows (offsets within the vector) has a conflicting update in any column
-	bool HasConflictingUpdate(TransactionData transaction, idx_t vector_idx, const row_t rows[], idx_t count) const;
+	bool HasConflictingUpdate(TransactionData transaction, idx_t vector_idx, const row_t rows[], idx_t count);
 	RowVersionManager &GetOrCreateVersionInfo();
 
 	// Serialization

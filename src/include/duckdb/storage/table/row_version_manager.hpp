@@ -39,9 +39,12 @@ public:
 	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t row_group_start, idx_t count);
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
-	//! Whether any of the rows (ids[i] - offset) of the vector was deleted by another transaction
-	bool HasConflictingDelete(transaction_t transaction_id, idx_t vector_idx, const row_t ids[], idx_t count,
-	                          row_t offset);
+	//! Records an update of the columns of the rows (ids[i] - offset) of the vector, throws if another transaction
+	//! deleted one of them
+	void UpdateRows(transaction_t transaction_id, idx_t vector_idx, const vector<PhysicalIndex> &column_ids,
+	                const row_t ids[], idx_t count, row_t offset);
+	//! The columns updated in the vector
+	vector<storage_t> GetUpdatedColumns(idx_t vector_idx);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
 
 	//! Attempts to compress the per-row insert/delete ids of each vector into constants. Ids that precede

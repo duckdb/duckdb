@@ -1354,14 +1354,11 @@ void RowGroup::Update(TransactionData transaction, DuckTableEntry &table_entry, 
 	if (!transaction.transaction) {
 		return;
 	}
-	// check after the update is in place: of a racing update and delete of a row, at least one finds the other
+	// record and check after the update is in place: of a racing update and delete of a row, one finds the other
 	auto vector_idx = (UnsafeNumericCast<idx_t>(ids[offset]) - row_group_start) / STANDARD_VECTOR_SIZE;
 	auto vector_start = UnsafeNumericCast<row_t>(row_group_start + vector_idx * STANDARD_VECTOR_SIZE);
-	auto version_info = GetVersionInfo();
-	if (version_info && version_info->HasConflictingDelete(transaction.GetTransactionId(), vector_idx, ids + offset,
-	                                                       count, vector_start)) {
-		throw TransactionException("Conflict on update!");
-	}
+	GetOrCreateVersionInfo().UpdateRows(transaction.GetTransactionId(), vector_idx, column_ids, ids + offset, count,
+	                                    vector_start);
 }
 
 void RowGroup::UpdateColumn(TransactionData transaction, DuckTableEntry &table_entry, DataChunk &updates,
@@ -2164,11 +2161,13 @@ idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t
 	return GetOrCreateVersionInfo().DeleteRows(vector_idx, transaction_id, rows, count);
 }
 
-bool RowGroup::HasConflictingUpdate(TransactionData transaction, idx_t vector_idx, const row_t rows[],
-                                    idx_t count) const {
-	for (storage_t c = 0; c < columns.size(); c++) {
-		// a column is loaded before it is updated
-		if (ColumnIsLoaded(c) && columns[c]->HasConflictingUpdate(transaction, vector_idx, rows, count)) {
+bool RowGroup::HasConflictingUpdate(TransactionData transaction, idx_t vector_idx, const row_t rows[], idx_t count) {
+	for (auto c : GetOrCreateVersionInfo().GetUpdatedColumns(vector_idx)) {
+		// ALTER shares the version info with row groups of another column layout; an updated column is loaded
+		if (c >= columns.size() || !ColumnIsLoaded(c)) {
+			continue;
+		}
+		if (columns[c]->HasConflictingUpdate(transaction, vector_idx, rows, count)) {
 			return true;
 		}
 	}

@@ -442,6 +442,19 @@ idx_t ChunkVectorInfo::Delete(transaction_t transaction_id, row_t rows[], idx_t 
 	return deleted_tuples;
 }
 
+void ChunkVectorInfo::Update(transaction_t transaction_id, const vector<PhysicalIndex> &column_ids, const row_t ids[],
+                             idx_t count, row_t offset) {
+	for (auto &column_id : column_ids) {
+		auto entry = std::lower_bound(updated_columns.begin(), updated_columns.end(), column_id.index);
+		if (entry == updated_columns.end() || *entry != column_id.index) {
+			updated_columns.insert(entry, column_id.index);
+		}
+	}
+	if (HasConflictingDelete(transaction_id, ids, count, offset)) {
+		throw TransactionException("Conflict on update!");
+	}
+}
+
 void ChunkVectorInfo::CommitDelete(transaction_t commit_id, const DeleteInfo &info) {
 	if (info.is_consecutive && info.count == STANDARD_VECTOR_SIZE) {
 		// the delete covers the entire vector - all rows share the same deleted id
@@ -642,6 +655,10 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 bool ChunkVectorInfo::Cleanup(VisibilityBound lowest_visibility_bound) const {
 	if (AnyDeleted()) {
 		// if any rows are deleted we can't clean-up
+		return false;
+	}
+	if (!updated_columns.empty()) {
+		// a later delete still has to check the updated columns
 		return false;
 	}
 	// check if the insertion markers have to be used by all transactions going forward

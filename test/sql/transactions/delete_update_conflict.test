@@ -526,6 +526,92 @@ SELECT * FROM t14 ORDER BY id
 ----
 1	new
 
+# ALTER shares the version info that recorded the updated columns with row groups of the new column layout
+statement ok
+CREATE TABLE t17 (a INTEGER, b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO t17 VALUES (1, 1, 1), (2, 2, 2), (3, 3, 3);
+
+statement ok
+UPDATE t17 SET c = 10 WHERE a = 1
+
+statement ok
+ALTER TABLE t17 DROP COLUMN b
+
+statement ok
+DELETE FROM t17 WHERE a = 3
+
+statement ok con2
+BEGIN
+
+query II con2
+SELECT * FROM t17 ORDER BY a
+----
+1	10
+2	2
+
+statement ok con1
+UPDATE t17 SET c = 20 WHERE a = 2
+
+statement error con2
+DELETE FROM t17 WHERE a = 2
+----
+Conflict on tuple deletion
+
+statement ok con2
+ROLLBACK
+
+# the cleanup of an append keeps the version info that recorded an update of the appended rows
+statement ok
+CREATE TABLE t18 (id INTEGER, v INTEGER);
+
+statement ok
+CREATE TABLE t18_other AS SELECT 1 AS x;
+
+statement ok con3
+BEGIN
+
+query I con3
+SELECT count(*) FROM t18
+----
+0
+
+# with an update, the appending transaction is only cleaned up once con3 ends
+statement ok con1
+BEGIN
+
+statement ok con1
+INSERT INTO t18 SELECT i, i FROM range(4096) t(i);
+
+statement ok con1
+UPDATE t18_other SET x = 2
+
+statement ok con1
+COMMIT
+
+statement ok con1
+BEGIN
+
+statement ok con1
+UPDATE t18 SET v = -1 WHERE id = 7
+
+statement ok con3
+ROLLBACK
+
+statement error con2
+DELETE FROM t18 WHERE id = 7
+----
+Conflict on tuple deletion
+
+statement ok con1
+COMMIT
+
+query II
+SELECT count(*), sum(v) FILTER (id = 7) FROM t18
+----
+4096	-1
+
 # a checkpoint cannot fold an update that an active transaction does not see, so a later delete still conflicts
 statement ok
 CREATE TABLE t15 AS SELECT i AS id, 'open' AS status FROM range(4096) t(i);
