@@ -12,6 +12,7 @@
 #include "duckdb/main/query_result_stream.hpp"
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/mutex.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/adbc/options.h"
@@ -144,10 +145,14 @@ struct DuckDBAdbcStreamWrapper {
 	//! A result that completed at submission, which no later statement on the connection affects
 	duckdb::unique_ptr<duckdb::QueryResult> result;
 	duckdb::ArrowSchemaWrapper schema;
-	//! What MaterializeStreams drained, handed out before the error it ran into, if any
+	//! What draining collected, handed out before the error it ran into, if any
 	duckdb::vector<duckdb::unique_ptr<duckdb::ArrowArrayWrapper>> materialized;
+	//! Serializes a reader of this stream with a drain; per stream, so a drain of one stream
+	//! never blocks a query that pulls another stream of the same connection
+	duckdb::mutex fetch_mutex;
 	idx_t materialized_index = 0;
 	char *last_error = nullptr;
+	duckdb_error_type last_error_type = DUCKDB_ERROR_INVALID;
 	AdbcStatusCode status_code = ADBC_STATUS_OK;
 	AdbcError adbc_error = {};
 	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper = nullptr;
@@ -161,6 +166,7 @@ static bool IsCancellation(duckdb::optional_ptr<duckdb::DuckDBAdbcConnectionWrap
 static void SetStreamError(DuckDBAdbcStreamWrapper &wrapper, const duckdb::ErrorData &error) {
 	free(wrapper.last_error);
 	wrapper.last_error = strdup(error.Message().c_str());
+	wrapper.last_error_type = duckdb::ErrorTypeToC(error.Type());
 	wrapper.status_code =
 	    IsCancellation(wrapper.conn_wrapper, error.Type()) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 	wrapper.adbc_error.message = wrapper.last_error;
@@ -196,6 +202,31 @@ static duckdb::unique_ptr<duckdb::ArrowArrayWrapper> FetchArray(DuckDBAdbcStream
 		error = duckdb::ErrorData("Unknown error in Fetch");
 	}
 	return nullptr;
+}
+
+//! Drains the stream into `materialized`; an error ends the drain and is recorded on the wrapper
+static void MaterializeStream(DuckDBAdbcStreamWrapper &wrapper) {
+	const duckdb::lock_guard<duckdb::mutex> guard(wrapper.fetch_mutex);
+	if (!wrapper.stream) {
+		return;
+	}
+	try {
+		while (!wrapper.last_error) {
+			duckdb::ErrorData error;
+			auto array = FetchArray(wrapper, error);
+			if (error.HasError()) {
+				SetStreamError(wrapper, error);
+				break;
+			}
+			if (!array) {
+				break;
+			}
+			wrapper.materialized.push_back(std::move(array));
+		}
+	} catch (std::exception &ex) {
+		SetStreamError(wrapper, duckdb::ErrorData(ex));
+	}
+	wrapper.stream.reset();
 }
 
 static void CopySchema(const ArrowSchema &source, duckdb::ArrowSchemaWrapper &target) {
@@ -269,6 +300,20 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 		return status;
 	}
 	StatementRelease(&statement, error);
+	if (!out->private_data) {
+		return ADBC_STATUS_OK;
+	}
+	// Metadata calls promise a point-in-time snapshot. A lazily executed stream takes its catalog
+	// snapshot whenever execution first touches a database, racing with DDL on other connections.
+	auto &stream_wrapper = *static_cast<DuckDBAdbcStreamWrapper *>(out->private_data);
+	MaterializeStream(stream_wrapper);
+	if (stream_wrapper.last_error) {
+		SetError(error, stream_wrapper.last_error);
+		AppendDuckDBErrorDetails(error, stream_wrapper.last_error_type);
+		auto status_code = stream_wrapper.status_code;
+		out->release(out);
+		return status_code;
+	}
 	return ADBC_STATUS_OK;
 }
 
@@ -1508,6 +1553,8 @@ static int get_next(struct ArrowArrayStream *stream, struct ArrowArray *out) {
 	}
 	out->release = nullptr;
 	auto &result_wrapper = *static_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
+	// A statement on the same connection drains this stream from its own thread; serialize with that drain
+	const duckdb::lock_guard<duckdb::mutex> guard(result_wrapper.fetch_mutex);
 	if (result_wrapper.materialized_index < result_wrapper.materialized.size()) {
 		auto array = std::move(result_wrapper.materialized[result_wrapper.materialized_index++]);
 		array->MoveTo(*out);
@@ -3463,27 +3510,10 @@ void duckdb::DuckDBAdbcConnectionWrapper::UnregisterStream(duckdb_adbc::DuckDBAd
 void duckdb::DuckDBAdbcConnectionWrapper::MaterializeStreams() {
 	const duckdb::lock_guard<duckdb::mutex> guard(stream_mutex);
 	for (auto *result_wrapper : active_streams) {
-		if (!result_wrapper || !result_wrapper->stream) {
+		if (!result_wrapper) {
 			continue;
 		}
-		// An error found while draining is reported once the arrays read before it are handed out
-		try {
-			while (!result_wrapper->last_error) {
-				duckdb::ErrorData error;
-				auto array = duckdb_adbc::FetchArray(*result_wrapper, error);
-				if (error.HasError()) {
-					duckdb_adbc::SetStreamError(*result_wrapper, error);
-					break;
-				}
-				if (!array) {
-					break;
-				}
-				result_wrapper->materialized.push_back(std::move(array));
-			}
-		} catch (std::exception &ex) {
-			duckdb_adbc::SetStreamError(*result_wrapper, duckdb::ErrorData(ex));
-		}
-		result_wrapper->stream.reset();
+		duckdb_adbc::MaterializeStream(*result_wrapper);
 	}
 }
 

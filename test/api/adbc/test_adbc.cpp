@@ -3648,6 +3648,98 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	}
 }
 
+TEST_CASE("Test AdbcConnectionGetObjects - snapshot at call time", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	// GetObjects describes the catalog as of the call. Catalog changes made on another
+	// connection between the call and reading the stream must not leak into the result.
+
+	ADBCTestDatabase db("test_metadata_snapshot");
+	db.Query("CREATE TABLE before_snapshot (i INTEGER)");
+
+	AdbcError adbc_error = {};
+	InitializeADBCError(&adbc_error);
+	ArrowArrayStream arrow_stream;
+	REQUIRE(SUCCESS(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr,
+	                                         nullptr, nullptr, &arrow_stream, &adbc_error)));
+	// DDL on the second connection, so nothing drains the GetObjects stream first
+	db.QueryArrowForIngest("CREATE TABLE after_snapshot (i INTEGER)");
+	db.CreateTable("result", arrow_stream);
+	auto res = db.Query(R"(
+		SELECT
+			list_sort(flatten(list_transform(
+				catalog_db_schemas,
+				lambda dbs: list_transform(dbs.db_schema_tables, lambda t: t.table_name)
+			)))
+		FROM result
+		WHERE catalog_name = 'test_metadata_snapshot'
+	)");
+	REQUIRE((res->RowCount() == 1));
+	REQUIRE((res->Collection().GetValue(0, 0).ToString() == "[before_snapshot]"));
+	db.Query("Drop table result;");
+}
+
+TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	// Executing a statement drains the open streams of its connection; a reader on another
+	// thread must see every row exactly once, from the live stream or from the drained arrays.
+
+	ADBCTestDatabase db;
+	AdbcError adbc_error = {};
+	InitializeADBCError(&adbc_error);
+
+	AdbcStatement adbc_statement;
+	ArrowArrayStream reader_stream;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT i FROM range(1000000) t(i)", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &reader_stream, nullptr, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+
+	std::atomic<int64_t> total_rows {0};
+	std::atomic<bool> read_error {false};
+	std::thread reader([&]() {
+		while (true) {
+			ArrowArray array = {};
+			if (reader_stream.get_next(&reader_stream, &array) != 0) {
+				read_error = true;
+				break;
+			}
+			if (!array.release) {
+				break;
+			}
+			total_rows += array.length;
+			array.release(&array);
+		}
+	});
+	// Wait until the reader is mid-stream, so the first drain overlaps with live reads
+	while (total_rows.load() == 0 && !read_error.load()) {
+		std::this_thread::yield();
+	}
+	idx_t failed_statements = 0;
+	for (idx_t i = 0; i < 20; i++) {
+		AdbcStatement statement;
+		ArrowArrayStream drain_trigger;
+		if (!SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &adbc_error)) ||
+		    !SUCCESS(AdbcStatementSetSqlQuery(&statement, "SELECT 42", &adbc_error)) ||
+		    !SUCCESS(AdbcStatementExecuteQuery(&statement, &drain_trigger, nullptr, &adbc_error))) {
+			failed_statements++;
+		} else {
+			drain_trigger.release(&drain_trigger);
+		}
+		AdbcStatementRelease(&statement, &adbc_error);
+	}
+	reader.join();
+	REQUIRE((failed_statements == 0));
+	REQUIRE(!read_error.load());
+	REQUIRE((total_rows.load() == 1000000));
+	reader_stream.release(&reader_stream);
+}
+
 TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
