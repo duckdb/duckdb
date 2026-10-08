@@ -2789,20 +2789,23 @@ namespace {
 // slot so the trampolines can find it; the user's own slot (SetUserData) rides
 // inside it. Owned by the registered function, freed at engine teardown.
 struct ScalarFunctionInfo {
+	ScalarFunction::ResolveTypesCallback resolve_types_callback = nullptr;
 	ScalarFunction::BindCallback bind_callback = nullptr;
 	ScalarFunction::InitCallback init_callback = nullptr;
 	ScalarFunction::ExecCallback exec_callback = nullptr;
 	detail::UserData user_data;
 
-	ScalarFunctionInfo(ScalarFunction::BindCallback bind_callback, ScalarFunction::InitCallback init_callback,
+	ScalarFunctionInfo(ScalarFunction::ResolveTypesCallback resolve_types_callback,
+	                   ScalarFunction::BindCallback bind_callback, ScalarFunction::InitCallback init_callback,
 	                   ScalarFunction::ExecCallback exec_callback, detail::UserData user_data)
-	    : bind_callback(bind_callback), init_callback(init_callback), exec_callback(exec_callback),
-	      user_data(std::move(user_data)) {
+	    : resolve_types_callback(resolve_types_callback), bind_callback(bind_callback), init_callback(init_callback),
+	      exec_callback(exec_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const ScalarFunctionInfo &other) const {
-		return bind_callback == other.bind_callback && init_callback == other.init_callback &&
-		       exec_callback == other.exec_callback && user_data.get() == other.user_data.get();
+		return resolve_types_callback == other.resolve_types_callback && bind_callback == other.bind_callback &&
+		       init_callback == other.init_callback && exec_callback == other.exec_callback &&
+		       user_data.get() == other.user_data.get();
 	}
 };
 
@@ -2867,6 +2870,34 @@ auto ScalarFunction::GetSignature() -> FunctionSignature {
 
 auto ScalarFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
 	user_data = detail::UserData(data, destructor);
+}
+
+auto ScalarFunction::SetResolveTypesCallback(ResolveTypesCallback callback) & -> ScalarFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_scalar_function_set_resolve_types_callback, handle(), nullptr);
+		resolve_types_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info,
+	                            duckdb_v2_scalar_function_resolve_types_info_handle result,
+	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_function_bind_get_user_data, info, &user_data);
+			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
+
+			auto input = detail::Factory::Make<ResolveTypesInput>(
+			    static_cast<void *>(info), static_cast<void *>(result), static_cast<void *>(context));
+			function.resolve_types_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_scalar_function_set_resolve_types_callback, handle(), trampoline);
+	resolve_types_callback = callback;
+	return *this;
 }
 
 auto ScalarFunction::SetBindCallback(BindCallback callback) & -> ScalarFunction & {
@@ -2972,8 +3003,8 @@ auto ScalarFunction::SetCollationHandling(FunctionCollationHandling value) & -> 
 auto ScalarFunction::Register() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
-	auto info = std::unique_ptr<ScalarFunctionInfo>(
-	    new ScalarFunctionInfo(bind_callback, init_callback, exec_callback, std::move(user_data)));
+	auto info = std::unique_ptr<ScalarFunctionInfo>(new ScalarFunctionInfo(
+	    resolve_types_callback, bind_callback, init_callback, exec_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<ScalarFunctionInfo>,
 	                         detail::TypedEquals<ScalarFunctionInfo>};
 	CheckedAPICall(duckdb_v2_scalar_function_set_user_data, handle(), &opaque);
@@ -2983,14 +3014,26 @@ auto ScalarFunction::Register() -> void {
 	CheckedAPICall(duckdb_v2_scalar_function_register, handle());
 }
 
-void *ScalarFunction::BindInput::GetUserDataInternal() const {
+void *ScalarFunction::ResolveTypesInput::GetUserDataInternal() const {
 	const auto &function = *static_cast<const ScalarFunctionInfo *>(GetFunctionInfo());
 	return RequireUserData(function.user_data);
 }
 
-auto ScalarFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
-	CheckedAPICall(duckdb_v2_scalar_function_bind_set_return_type,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(result), type.handle());
+auto ScalarFunction::ResolveTypesInput::SetReturnType(const LogicalType &type) -> void {
+	CheckedAPICall(duckdb_v2_scalar_function_resolve_types_set_return_type,
+	               static_cast<duckdb_v2_scalar_function_resolve_types_info_handle>(result), type.handle());
+}
+
+void ScalarFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
+                                                    void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, equals};
+	CheckedAPICall(duckdb_v2_scalar_function_bind_set_bind_data,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(result), &opaque);
+}
+
+void *ScalarFunction::BindInput::GetUserDataInternal() const {
+	const auto &function = *static_cast<const ScalarFunctionInfo *>(GetFunctionInfo());
+	return RequireUserData(function.user_data);
 }
 
 void *ScalarFunction::InitInput::GetBindDataInternal() const {
