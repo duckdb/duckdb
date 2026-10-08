@@ -768,9 +768,8 @@ unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(Qu
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options);
 }
 
-//! Returns the tables of the database whose index list matches the predicate.
-static vector<reference<DuckTableEntry>> GetTables(AttachedDatabase &db,
-                                                   const std::function<bool(TableIndexList &)> &predicate) {
+//! Returns the tables of the database that have an unbound index.
+static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
 	vector<reference<DuckTableEntry>> result;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	catalog.ScanSchemas([&](SchemaCatalogEntry &schema) {
@@ -778,8 +777,9 @@ static vector<reference<DuckTableEntry>> GetTables(AttachedDatabase &db,
 			if (entry.type != CatalogType::TABLE_ENTRY) {
 				return;
 			}
+			// Only take the index list lock here: index entry locks are held while binding, which takes catalog locks.
 			auto &table = entry.Cast<DuckTableEntry>();
-			if (predicate(table.GetStorage().GetDataTableInfo()->GetIndexes())) {
+			if (table.GetStorage().GetDataTableInfo()->GetIndexes().HasUnbound()) {
 				result.push_back(table);
 			}
 		});
@@ -819,7 +819,7 @@ static bool IsExpectedBindError(const ErrorData &error) {
 
 //! Binds the unbound indexes of a loaded index type where possible, so that checkpoint vacuum can rewrite their tables.
 static void TryBindIndexes(AttachedDatabase &db) {
-	auto tables = GetTables(db, [](TableIndexList &indexes) { return indexes.HasUnbound(); });
+	auto tables = GetTablesWithUnboundIndexes(db);
 	if (tables.empty()) {
 		return;
 	}
@@ -850,7 +850,12 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 	if (!HasBufferedIndexReplays()) {
 		return true;
 	}
-	auto tables = GetTables(db, [](TableIndexList &indexes) { return indexes.HasBufferedReplays(); });
+	vector<reference<DuckTableEntry>> tables;
+	for (auto &table : GetTablesWithUnboundIndexes(db)) {
+		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
+			tables.push_back(table);
+		}
+	}
 	if (tables.empty()) {
 		// All buffered replays have been applied by binding the indexes elsewhere.
 		buffered_index_replays = false;
