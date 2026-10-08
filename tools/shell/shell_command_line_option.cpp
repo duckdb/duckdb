@@ -101,8 +101,7 @@ MetadataResult LaunchUI(ShellState &state, const vector<string> &args) {
 	// run the UI command
 	auto rc = state.RunInitialCommand((char *)state.ui_command.c_str(), true);
 	if (rc != 0) {
-		ShellState::Exit(rc);
-		return MetadataResult::EXIT;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -265,8 +264,7 @@ MetadataResult ProcessFile(ShellState &state, const vector<string> &args) {
 	state.readStdin = false;
 	auto &file = args[1];
 	if (!state.ProcessFile(file)) {
-		ShellState::Exit(1);
-		return MetadataResult::EXIT;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -294,8 +292,7 @@ MetadataResult RunCommand(ShellState &state, const vector<string> &args) {
 	auto &cmd = args[1];
 	auto rc = state.RunInitialCommand(cmd.c_str(), bail);
 	if (rc != 0) {
-		ShellState::Exit(rc);
-		return MetadataResult::EXIT;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }

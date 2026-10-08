@@ -3943,6 +3943,10 @@ int RunShell(int argc, const char **argv) {
 			continue;
 		}
 		auto result = option.post_init_callback(data, call.arguments);
+		if (result == MetadataResult::FAIL) {
+			// Return through main so database owners are destroyed before process-wide cleanup.
+			return 1;
+		}
 		if (result == MetadataResult::EXIT) {
 			return 0;
 		}
