@@ -6,6 +6,7 @@
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/memory_mapped_file.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/process_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/thread.hpp"
@@ -24,11 +25,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
 #include <type_traits>
 
 #ifndef _WIN32
 #include <dirent.h>
+#include <sys/statvfs.h>
 #include <fcntl.h>
 #include <string.h>
 #include <sys/mman.h>
