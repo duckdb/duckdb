@@ -179,20 +179,20 @@ class StdOutLogSink : public BufferingLogSink {
 public:
 	explicit StdOutLogSink(DatabaseInstance &db);
 	~StdOutLogSink() override;
- 
+
 	const string GetSinkName() override {
 		return "StdOutLogSink";
 	}
- 
+
 protected:
 	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) override;
 	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
- 
+
 private:
 	class StdOutWriteStream : public WriteStream {
 		void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
 	};
- 
+
 	StdOutWriteStream stdout_stream;
 	unique_ptr<CSVFormatWriter> writer; // single writer, ALL_LOGS table only
 };
@@ -213,17 +213,14 @@ public:
 protected:
 	void FlushChunk(LoggingTargetTable table, DataChunk &chunk) override;
 	void UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) override;
-	// ResetAllBuffers: inherited from BufferingLogSink unchanged — no CSV-specific
-	// cast-buffer reset here anymore, that's CSVFormatWriter's own concern now.
 
 private:
 	// Lazily creates file_writer + LogFormatWriter for `table`, if not already done.
 	void Initialize(LoggingTargetTable table);
 	void InitializeFile(DatabaseInstance &db, LoggingTargetTable table);
 	static unique_ptr<BufferedFileWriter> InitializeFileWriter(DatabaseInstance &db, const string &path);
-	unique_ptr<TableRef> BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
-	                                         const string &path, const string &select_clause,
-	                                         const string &csv_columns);
+	unique_ptr<TableRef> BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input, const string &path,
+	                                         const string &select_clause, const string &csv_columns);
 	void SetPaths(const string &base_path);
 
 	DatabaseInstance &db;
@@ -235,6 +232,8 @@ private:
 		bool initialized = false;
 	};
 	map<LoggingTargetTable, TableWriter> tables;
+	//! Format writer config (e.g. delim), also applied to the format writers that are created later
+	case_insensitive_map_t<Value> format_config;
 
 	string base_path;
 };
