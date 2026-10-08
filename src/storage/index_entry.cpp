@@ -500,11 +500,8 @@ IndexStorageInfo IndexEntry::SerializeToDisk(QueryContext context, const case_in
 		return owned_index->Cast<BoundIndex>().SerializeToDisk(context, options);
 	}
 	auto &unbound_index = owned_index->Cast<UnboundIndex>();
-	if (unbound_index.HasBufferedReplays()) {
-		// Writing the index as-is loses these operations: the checkpoint must bind the index, or not run at all.
-		throw InternalException("Attempting to checkpoint index %s while it has buffered write-ahead log operations",
-		                        unbound_index.GetIndexName());
-	}
+	// The checkpoint binds indexes with buffered replays before it starts, or does not run at all.
+	D_ASSERT(!unbound_index.HasBufferedReplays());
 	return unbound_index.CopyStorageInfo();
 }
 

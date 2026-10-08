@@ -479,7 +479,7 @@ void TableIndexList::BindInternal(ClientContext &context, DataTableInfo &table_i
 		if (current_entry == index_entries.end()) {
 			continue;
 		}
-		// Only entries removed from the list are retired.
+		// Bind returns nullptr only for retired entries, which are no longer in the list.
 		D_ASSERT(bound_idx);
 		index_entry->CommitBind(std::move(bound_idx));
 		unbound_count--;

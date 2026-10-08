@@ -62,4 +62,3 @@ query I
 SELECT count(*) FROM t WHERE i = 4097
 ----
 1
-
