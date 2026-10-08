@@ -128,6 +128,10 @@ bool MatchStack::ExecuteFrame(MatchStackFrame &frame) {
 			frame.child_result = MatcherResult::Failure();
 			return false;
 		}
+		if (child->matcher.HasSecondTokenLookahead() && !child->matcher.first_set.MightMatchSecond(child->state)) {
+			frame.child_result = MatcherResult::Failure();
+			return false;
+		}
 	}
 	PushFrame(*child);
 	return false;

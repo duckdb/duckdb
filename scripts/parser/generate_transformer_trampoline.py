@@ -15,6 +15,7 @@ from grammar_types import (
     load_collapsible_rules,
     load_expression_depth_rules,
     load_packrat_memoized_rules,
+    load_second_token_lookahead_rules,
 )
 from transformer_trampoline_config import (
     TrampolineRuleMode,
@@ -96,6 +97,8 @@ MATCHER_START_BLOCK = SEPARATOR + "\t// START GENERATED RULE OVERRIDES\n" + SEPA
 MATCHER_END_BLOCK = SEPARATOR + "\t// END GENERATED RULE OVERRIDES\n" + SEPARATOR
 PACKRAT_START_BLOCK = SEPARATOR + "\t// START GENERATED PACKRAT MEMOIZED RULES\n" + SEPARATOR
 PACKRAT_END_BLOCK = SEPARATOR + "\t// END GENERATED PACKRAT MEMOIZED RULES\n" + SEPARATOR
+LOOKAHEAD_START_BLOCK = SEPARATOR + "\t// START GENERATED SECOND TOKEN LOOKAHEAD RULES\n" + SEPARATOR
+LOOKAHEAD_END_BLOCK = SEPARATOR + "\t// END GENERATED SECOND TOKEN LOOKAHEAD RULES\n" + SEPARATOR
 COLLAPSIBLE_START_BLOCK = SEPARATOR + "\t// START GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
 COLLAPSIBLE_END_BLOCK = SEPARATOR + "\t// END GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
 DEPTH_START_BLOCK = SEPARATOR + "\t// START GENERATED EXPRESSION DEPTH RULES\n" + SEPARATOR
@@ -1580,6 +1583,20 @@ def write_packrat_memoized_rules(packrat_memoized_rules):
     print(f"Updated {matcher_cpp_path}")
 
 
+def write_second_token_lookahead_rules(lookahead_rules):
+    content = matcher_cpp_path.read_text()
+    lines = [f'\tAddSecondTokenLookaheadRule("{rule_name}");\n' for rule_name in lookahead_rules]
+    content = replace_generated_block(
+        content,
+        LOOKAHEAD_START_BLOCK,
+        LOOKAHEAD_END_BLOCK,
+        "".join(lines),
+        matcher_cpp_path,
+    )
+    matcher_cpp_path.write_text(content)
+    print(f"Updated {matcher_cpp_path}")
+
+
 def write_collapsible_rules(collapsible_rules):
     content = transformer_factory_cpp_path.read_text()
     lines = [f'\tcollapsible_rules.insert("{rule_name}");\n' for rule_name in collapsible_rules]
@@ -1658,6 +1675,7 @@ def main():
         packrat_rules = load_packrat_memoized_rules(grammar_types_file, all_rules.keys())
         collapsible_rules = load_collapsible_rules(grammar_types_file, emitter.emitted_ops_rules())
         write_packrat_memoized_rules(packrat_rules)
+        write_second_token_lookahead_rules(load_second_token_lookahead_rules(grammar_types_file, all_rules.keys()))
         write_collapsible_rules(collapsible_rules)
         write_expression_depth_rules(*load_expression_depth_rules(grammar_types_file, all_rules.keys()))
     elif args.report:

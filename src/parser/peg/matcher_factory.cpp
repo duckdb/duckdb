@@ -166,6 +166,9 @@ Matcher &MatcherFactory::CreateMatcher(string_t rule_name, vector<reference<Matc
 	if (packrat_memoized_rules.count(rule_name)) {
 		matcher.SetPackratMemoized();
 	}
+	if (second_token_lookahead_rules.count(rule_name)) {
+		matcher.SetSecondTokenLookahead();
+	}
 	if (compiled_rule.collapsible) {
 		matcher.SetCollapsible();
 	}
@@ -199,6 +202,10 @@ void MatcherFactory::AddPackratMemoizedRule(const char *name) {
 	packrat_memoized_rules.insert(name);
 }
 
+void MatcherFactory::AddSecondTokenLookaheadRule(const char *name) {
+	second_token_lookahead_rules.insert(name);
+}
+
 void MatcherFactory::SuppressSuggestions(const char *name) {
 	no_suggestion_rules.insert(name);
 }
@@ -227,6 +234,13 @@ Matcher &MatcherFactory::CreateRootMatcher(const string &root_rule) {
 	AddPackratMemoizedRule("ReservedSchemaQualification");
 	//===--------------------------------------------------------------------===//
 	// END GENERATED PACKRAT MEMOIZED RULES
+	//===--------------------------------------------------------------------===//
+	//===--------------------------------------------------------------------===//
+	// START GENERATED SECOND TOKEN LOOKAHEAD RULES
+	//===--------------------------------------------------------------------===//
+	AddSecondTokenLookaheadRule("TypeLiteral");
+	//===--------------------------------------------------------------------===//
+	// END GENERATED SECOND TOKEN LOOKAHEAD RULES
 	//===--------------------------------------------------------------------===//
 
 	for (auto &entry : terminal_rule_overrides) {

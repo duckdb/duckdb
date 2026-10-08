@@ -1899,6 +1899,12 @@ collapsible_rules:
   - IntersectChain
   - TableRef
 
+# second_token_lookahead_rules: named grammar rules whose attempts are skipped when the token after the
+# current one cannot be the second token of a match. Keep this selective: the check costs a token peek per
+# attempt and only pays off for rules that are often attempted and fail at their second token.
+second_token_lookahead_rules:
+  - TypeLiteral
+
 packrat_memoized_rules:
   - Expression
   - Identifier

@@ -126,6 +126,163 @@ struct FirstSetTraversalEntry {
 	bool expanded = false;
 };
 
+//===--------------------------------------------------------------------===//
+// Second-token sets
+//===--------------------------------------------------------------------===//
+//! Merge a FIRST set into a second-token set, returns whether anything changed
+static bool MergeIntoSecond(MatcherFirstSet &target, const MatcherFirstSet &first) {
+	bool changed = false;
+	if (first.any && !target.second_any) {
+		target.second_any = changed = true;
+	}
+	if ((target.second_class_mask | first.class_mask) != target.second_class_mask) {
+		target.second_class_mask |= first.class_mask;
+		changed = true;
+	}
+	if (first.literals.size() > target.second_literals.size()) {
+		target.second_literals.resize(first.literals.size(), 0);
+	}
+	for (idx_t i = 0; i < first.literals.size(); i++) {
+		auto merged = target.second_literals[i] | first.literals[i];
+		if (merged != target.second_literals[i]) {
+			target.second_literals[i] = merged;
+			changed = true;
+		}
+	}
+	return changed;
+}
+
+//! Merge another matcher's second-token set into target, returns whether anything changed
+static bool MergeSecond(MatcherFirstSet &target, const MatcherFirstSet &other) {
+	bool changed = false;
+	if (other.second_any && !target.second_any) {
+		target.second_any = changed = true;
+	}
+	if ((target.second_class_mask | other.second_class_mask) != target.second_class_mask) {
+		target.second_class_mask |= other.second_class_mask;
+		changed = true;
+	}
+	if (other.second_literals.size() > target.second_literals.size()) {
+		target.second_literals.resize(other.second_literals.size(), 0);
+	}
+	for (idx_t i = 0; i < other.second_literals.size(); i++) {
+		auto merged = target.second_literals[i] | other.second_literals[i];
+		if (merged != target.second_literals[i]) {
+			target.second_literals[i] = merged;
+			changed = true;
+		}
+	}
+	return changed;
+}
+
+static bool SetFlag(bool &flag, bool value) {
+	if (value && !flag) {
+		flag = true;
+		return true;
+	}
+	return false;
+}
+
+//! Least fixed point over the grammar; a superset of the tokens any atomic matcher can consume second on any path
+static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
+	for (auto &entry : matchers) {
+		auto &matcher = entry.get();
+		auto &first = matcher.first_set;
+		if (IsComposite(matcher)) {
+			continue;
+		}
+		if (first.any || !matcher.IsAtomic()) {
+			first.can_one = first.can_multi = first.second_any = true;
+			continue;
+		}
+		switch (matcher.Type()) {
+		case MatcherType::KEYWORD:
+		case MatcherType::VARIABLE:
+		case MatcherType::OPERATOR:
+		case MatcherType::NUMBER_LITERAL:
+			first.can_one = true;
+			break;
+		case MatcherType::STRING_LITERAL:
+			// adjacent string literals continue the literal
+			first.can_one = first.can_multi = true;
+			first.second_class_mask = MatcherTokenClass::STRING;
+			break;
+		default:
+			first.can_one = first.can_multi = first.second_any = true;
+			break;
+		}
+	}
+	bool changed = true;
+	while (changed) {
+		changed = false;
+		for (auto &entry : matchers) {
+			auto &matcher = entry.get();
+			if (!IsComposite(matcher)) {
+				continue;
+			}
+			auto &target = matcher.first_set;
+			switch (matcher.Type()) {
+			case MatcherType::LIST: {
+				bool nullable = true;
+				bool one = false;
+				bool multi = false;
+				for (auto &child_ref : matcher.Cast<ListMatcher>().matchers) {
+					auto &child = child_ref.get().first_set;
+					// after a one-token prefix, the first token of the next element is the second token
+					if (one) {
+						changed |= MergeIntoSecond(target, child);
+					}
+					if (nullable) {
+						changed |= MergeSecond(target, child);
+					}
+					bool new_one = (one && child.nullable) || (nullable && child.can_one);
+					bool new_multi =
+					    multi || (one && (child.can_one || child.can_multi)) || (nullable && child.can_multi);
+					nullable = nullable && child.nullable;
+					one = new_one;
+					multi = new_multi;
+				}
+				changed |= SetFlag(target.can_one, one);
+				changed |= SetFlag(target.can_multi, multi);
+				break;
+			}
+			case MatcherType::CHOICE:
+				for (auto &child_ref : matcher.Cast<ChoiceMatcher>().matchers) {
+					auto &child = child_ref.get().first_set;
+					changed |= MergeSecond(target, child);
+					changed |= SetFlag(target.can_one, child.can_one);
+					changed |= SetFlag(target.can_multi, child.can_multi);
+				}
+				break;
+			case MatcherType::OPTIONAL: {
+				auto &child = matcher.Cast<OptionalMatcher>().GetChildMatcher().first_set;
+				changed |= MergeSecond(target, child);
+				changed |= SetFlag(target.can_one, child.can_one);
+				changed |= SetFlag(target.can_multi, child.can_multi);
+				break;
+			}
+			case MatcherType::REPEAT: {
+				auto &child = matcher.Cast<RepeatMatcher>().GetChildMatcher().first_set;
+				changed |= MergeSecond(target, child);
+				if (child.can_one) {
+					// a one-token repetition followed by another repetition
+					changed |= MergeIntoSecond(target, child);
+				}
+				changed |= SetFlag(target.can_one, child.can_one);
+				changed |= SetFlag(target.can_multi, child.can_multi || child.can_one);
+				break;
+			}
+			default:
+				break;
+			}
+		}
+	}
+	for (auto &entry : matchers) {
+		auto &first = entry.get().first_set;
+		first.use_second = !first.nullable && !first.any && !first.can_one && !first.second_any;
+	}
+}
+
 void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 	// collect the reachable matchers, children before their parents (except for recursive references)
 	vector<reference<Matcher>> matchers;
@@ -173,6 +330,7 @@ void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table) {
 			changed |= UpdateFirstSet(matcher.get());
 		}
 	}
+	ComputeSecondSets(matchers);
 	for (auto &entry : matchers) {
 		entry.get().first_set.computed = true;
 	}
@@ -191,6 +349,53 @@ bool MatcherFirstSet::MightMatch(MatchState &state) const {
 	}
 	auto literal_id = state.token_iterator.CurrentLiteralInfo(*table).LiteralId();
 	return literal_id && HasLiteral(literal_id);
+}
+
+
+//! A word or a double-quoted identifier, consumed by every identifier matcher when it is not a keyword
+static bool IsPlainIdentifierToken(const string &text) {
+	if (text.empty()) {
+		return false;
+	}
+	auto c = static_cast<unsigned char>(text[0]);
+	if (c == '"') {
+		return text.size() > 1 && text.back() == '"';
+	}
+	return isalpha(c) || c == '_';
+}
+
+bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
+	if (!computed || !use_second) {
+		return true;
+	}
+	auto token = state.token_iterator.Current();
+	if (!token) {
+		return true;
+	}
+	// a skipped attempt would have consumed the current token, which is only reproducible for the furthest-position
+	// bookkeeping when the token is certainly consumed: an exact literal, or a plain identifier that is no keyword
+	auto literal_id = state.token_iterator.CurrentLiteralInfo(*table).LiteralId();
+	bool certainly_consumed = literal_id ? HasLiteral(literal_id)
+	                                     : (class_mask & MatcherTokenClass::WORD) && IsPlainIdentifierToken(token->text);
+	if (!certainly_consumed) {
+		return true;
+	}
+	auto next = state.token_iterator.Next();
+	if (next) {
+		if (next->token_class & second_class_mask) {
+			return true;
+		}
+		auto next_literal = state.token_iterator.NextLiteralInfo(*table).LiteralId();
+		if (next_literal && HasSecondLiteral(next_literal)) {
+			return true;
+		}
+	}
+	// the skipped attempt would have consumed the current token before failing on the next one
+	auto position = state.token_iterator.Position();
+	if (state.context.max_token_index < position + 1) {
+		state.context.max_token_index = position + 1;
+	}
+	return false;
 }
 
 } // namespace duckdb
