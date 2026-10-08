@@ -308,6 +308,8 @@ bool StorageManager::WALStartCheckpoint(MetaBlockPointer meta_block, CheckpointO
 
 void StorageManager::WALFinishCheckpoint(unique_lock<mutex> &) {
 	D_ASSERT(wal.get());
+	// the header is written - the next checkpoint includes the commits of the checkpoint WAL
+	wal->MarkPendingBlocksAsCheckpointed();
 
 	// "wal" points to the checkpoint WAL
 	// first check if the checkpoint WAL has been written to
@@ -633,6 +635,7 @@ private:
 	StorageManager &storage;
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
+	idx_t initial_pending_checkpoint_blocks = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
@@ -643,6 +646,7 @@ SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &stora
 	auto initial_size = storage.GetWALSize();
 	initial_written = wal.GetTotalWritten();
 	initial_wal_size = initial_size;
+	initial_pending_checkpoint_blocks = wal.PendingCheckpointBlockCount();
 }
 
 SingleFileStorageCommitState::~SingleFileStorageCommitState() {
@@ -671,6 +675,7 @@ void SingleFileStorageCommitState::RevertCommit() {
 		// remove any entries written into the WAL by truncating it
 		wal.Truncate(initial_wal_size);
 	}
+	wal.TruncatePendingCheckpointBlocks(initial_pending_checkpoint_blocks);
 	auto &block_manager = storage.GetBlockManager();
 	for (auto &entry : optimistically_written_data) {
 		for (auto &rg_entry : entry.second) {

@@ -505,11 +505,31 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 	serializer.WriteProperty(101, "row_group_data", data);
 	serializer.End();
 
+	// only the checkpoint WAL has a checkpoint iteration - the running checkpoint does not include this commit
+	if (checkpoint_iteration.IsValid()) {
+		for (auto &block_id : data.GetBlockIds()) {
+			pending_checkpoint_blocks.push_back(block_id);
+		}
+		return;
+	}
 	// mark written blocks as checkpointed
 	auto &block_manager = GetDatabase().GetStorageManager().GetBlockManager();
 	for (auto &block_id : data.GetBlockIds()) {
 		block_manager.MarkBlockAsCheckpointed(block_id);
 	}
+}
+
+void WriteAheadLog::TruncatePendingCheckpointBlocks(idx_t count) {
+	D_ASSERT(count <= pending_checkpoint_blocks.size());
+	pending_checkpoint_blocks.resize(count);
+}
+
+void WriteAheadLog::MarkPendingBlocksAsCheckpointed() {
+	auto &block_manager = GetDatabase().GetStorageManager().GetBlockManager();
+	for (auto &block_id : pending_checkpoint_blocks) {
+		block_manager.MarkBlockAsCheckpointed(block_id);
+	}
+	pending_checkpoint_blocks.clear();
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {

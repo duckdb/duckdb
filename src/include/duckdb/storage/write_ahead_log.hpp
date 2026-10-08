@@ -125,6 +125,15 @@ public:
 	void IncrementWALEntriesCount();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
+	//! Number of row group blocks of this checkpoint WAL that are not yet marked as checkpointed
+	idx_t PendingCheckpointBlockCount() const {
+		return pending_checkpoint_blocks.size();
+	}
+	//! Drop the pending blocks of a reverted commit
+	void TruncatePendingCheckpointBlocks(idx_t count);
+	//! Mark the pending blocks as checkpointed, called after the concurrent checkpoint has written its header
+	void MarkPendingBlocksAsCheckpointed();
+
 protected:
 	StorageManager &storage_manager;
 	mutex wal_lock;
@@ -132,6 +141,8 @@ protected:
 	string wal_path;
 	atomic<WALInitState> init_state;
 	optional_idx checkpoint_iteration;
+	//! Row group blocks written to this checkpoint WAL, they stay newly used until the running checkpoint is done
+	vector<block_id_t> pending_checkpoint_blocks;
 };
 
 } // namespace duckdb
