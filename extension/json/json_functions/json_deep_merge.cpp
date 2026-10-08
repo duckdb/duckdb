@@ -9,9 +9,9 @@ namespace duckdb {
 static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root, yyjson_mut_val *patch_root) {
 	if (!yyjson_mut_is_obj(orig_root) || !yyjson_mut_is_obj(patch_root)) {
 		if (unsafe_yyjson_is_null(patch_root)) {
-			return yyjson_mut_val_mut_copy(doc, orig_root);
+			return JSONCommon::MutValMutCopy(doc, orig_root);
 		}
-		return yyjson_mut_val_mut_copy(doc, patch_root);
+		return JSONCommon::MutValMutCopy(doc, patch_root);
 	}
 
 	auto root_builder = yyjson_mut_obj(doc);
@@ -41,8 +41,8 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 				auto patch_val =
 				    yyjson_mut_obj_getn(nodes.patch_node, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 				if (!patch_val || unsafe_yyjson_is_null(patch_val)) {
-					auto mut_key = yyjson_mut_val_mut_copy(doc, key);
-					auto mut_val = yyjson_mut_val_mut_copy(doc, orig_val);
+					auto mut_key = JSONCommon::MutValMutCopy(doc, key);
+					auto mut_val = JSONCommon::MutValMutCopy(doc, orig_val);
 					yyjson_mut_obj_add(builder, mut_key, mut_val);
 				}
 			}
@@ -60,7 +60,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 
 				auto orig_val =
 				    yyjson_mut_obj_getn(nodes.orig_node, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-				auto mut_key = yyjson_mut_val_mut_copy(doc, key);
+				auto mut_key = JSONCommon::MutValMutCopy(doc, key);
 
 				// at least one of (patch_val, orig_val) is not an object, then we copy the patch if it's not null, and
 				// the original otherwise
@@ -71,9 +71,9 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 
 					yyjson_mut_val *mut_val;
 					if (unsafe_yyjson_is_null(patch_val) && orig_val) {
-						mut_val = yyjson_mut_val_mut_copy(doc, orig_val);
+						mut_val = JSONCommon::MutValMutCopy(doc, orig_val);
 					} else {
-						mut_val = yyjson_mut_val_mut_copy(doc, patch_val);
+						mut_val = JSONCommon::MutValMutCopy(doc, patch_val);
 					}
 					yyjson_mut_obj_add(builder, mut_key, mut_val);
 				} else {
