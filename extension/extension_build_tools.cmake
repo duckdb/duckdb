@@ -149,7 +149,29 @@ endfunction()
 
 # Links what duckdb_resolve_static_link picked at configure time, capabilities first, into a DuckDB target.
 function(link_extension_libraries LIBRARY LINKAGE)
+    # From an extension's own CMakeLists, while the extensions are added: what to link isn't resolved yet, and neither
+    # the DuckDB targets nor the extensions after this one exist. Done by duckdb_link_deferred_extension_libraries.
+    if(DUCKDB_ADDING_EXTENSIONS)
+        set_property(GLOBAL APPEND PROPERTY DUCKDB_DEFERRED_EXTENSION_LINKS "${LIBRARY}" "${LINKAGE}")
+        return()
+    endif()
     duckdb_link_extensions(${LIBRARY} ${LINKAGE} ${DUCKDB_STATICALLY_LINKED_CAPABILITIES} ${DUCKDB_STATICALLY_LINKED_EXTENSIONS})
+endfunction()
+
+# Called by the top-level CMakeLists once every target exists
+function(duckdb_link_deferred_extension_libraries)
+    get_property(DEFERRED GLOBAL PROPERTY DUCKDB_DEFERRED_EXTENSION_LINKS)
+    list(LENGTH DEFERRED COUNT)
+    if(COUNT EQUAL 0)
+        return()
+    endif()
+    math(EXPR LAST "${COUNT} - 1")
+    foreach(I RANGE 0 ${LAST} 2)
+        math(EXPR J "${I} + 1")
+        list(GET DEFERRED ${I} LIBRARY)
+        list(GET DEFERRED ${J} LINKAGE)
+        link_extension_libraries(${LIBRARY} "${LINKAGE}")
+    endforeach()
 endfunction()
 
 function(link_threads LIBRARY LINKAGE)
@@ -960,30 +982,14 @@ function(set_extension_version_sources EXT_NAME)
     set_property(SOURCE ${ARGN} APPEND PROPERTY COMPILE_DEFINITIONS ${DEFINITION})
 endfunction()
 
+# Add subdirectories for registered extensions
+set(DUCKDB_ADDING_EXTENSIONS TRUE)
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+
     if (NOT DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD)
         set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD TRUE)
     endif()
-endforeach()
-
-# Resolve what the DuckDB targets link once; each extension's SHOULD_LINK follows it, so everything that reads it agrees.
-# Before the extensions are added: an extension's own CMakeLists may call link_extension_libraries (httpfs's unittest).
-duckdb_resolve_static_link(DUCKDB_STATICALLY_LINKED_CAPABILITIES DUCKDB_STATICALLY_LINKED_EXTENSIONS)
-if(NOT ${BUILD_EXTENSIONS_ONLY})
-    foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-        string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-        if(EXT_NAME IN_LIST DUCKDB_STATICALLY_LINKED_EXTENSIONS)
-            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK TRUE)
-        else()
-            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK FALSE)
-        endif()
-    endforeach()
-endif()
-
-# Add subdirectories for registered extensions
-foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
 
     # Skip explicitly disabled extensions
     if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD} OR ${EXTENSION_CONFIG_BUILD})
@@ -1014,6 +1020,20 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
         remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
     endif()
 endforeach()
+unset(DUCKDB_ADDING_EXTENSIONS)
+
+# Resolve what the DuckDB targets link once; each extension's SHOULD_LINK follows it, so everything that reads it agrees
+duckdb_resolve_static_link(DUCKDB_STATICALLY_LINKED_CAPABILITIES DUCKDB_STATICALLY_LINKED_EXTENSIONS)
+if(NOT ${BUILD_EXTENSIONS_ONLY})
+    foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+        string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+        if(EXT_NAME IN_LIST DUCKDB_STATICALLY_LINKED_EXTENSIONS)
+            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK TRUE)
+        else()
+            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK FALSE)
+        endif()
+    endforeach()
+endif()
 
 # Output the extensions that we linked into DuckDB for some nice build logs
 set(DEFAULT_LINKED_EXTENSIONS "")
