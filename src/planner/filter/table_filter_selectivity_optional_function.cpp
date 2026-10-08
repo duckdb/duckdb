@@ -34,7 +34,7 @@ void SelectivityOptionalFilterState::SelectivityStats::Update(idx_t accepted, id
 		tuples_accepted = 0;
 		tuples_processed = 0;
 		status = FilterStatus::ACTIVE;
-	} else if (vectors_processed >= n_vectors_to_check) {
+	} else if (status == FilterStatus::ACTIVE && vectors_processed >= n_vectors_to_check) {
 		// pause the filter if we processed enough vectors and the selectivity is too high
 		if (GetSelectivity() >= selectivity_threshold) {
 			status = FilterStatus::PAUSED_DUE_TO_HIGH_SELECTIVITY;
