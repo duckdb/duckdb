@@ -752,7 +752,7 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(char *const bu
 	}
 
 	// We weren't able to parse an array, could be broken or an array larger than our buffer size, let's skip over '['
-	SkipWhitespace(buffer_ptr, ++buffer_offset, --remaining);
+	SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
 	remaining = buffer_size - buffer_offset;
 
 	// If it's '{' we know there's RECORDS in the ARRAY, else it's VALUES
@@ -768,7 +768,10 @@ bool JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
                            const idx_t remaining) {
 	yyjson_doc *doc;
 	yyjson_read_err err;
-	if (options.type == JSONScanType::READ_JSON_OBJECTS) { // If we return strings, we cannot parse INSITU
+	// If we return strings, we cannot parse INSITU. If we ignore errors, we cannot parse INSITU either: a malformed
+	// document could extend into (and modify) the next one
+	const bool ignorable_errors = options.ignore_errors && GetFormat() == JSONFormat::NEWLINE_DELIMITED;
+	if (options.type == JSONScanType::READ_JSON_OBJECTS || ignorable_errors) {
 		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG,
 		                                     scan_state.allocator.GetYYAlc(), &err);
 	} else {
