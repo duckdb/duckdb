@@ -1,6 +1,5 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/list.hpp"
-#include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/common/reference_map.hpp"
 
 namespace duckdb {
@@ -350,8 +349,7 @@ static void ComputeSecondSets(vector<reference<Matcher>> &matchers) {
 	for (auto &entry : matchers) {
 		auto &first = entry.get().first_set;
 		first.use_second = !first.nullable && !first.any && !first.can_one && !first.second_any;
-		first.use_ident_second =
-		    !first.nullable && !first.any && !first.ident_can_one && !first.ident_second_any;
+		first.use_ident_second = !first.nullable && !first.any && !first.ident_can_one && !first.ident_second_any;
 	}
 }
 
@@ -423,20 +421,6 @@ bool MatcherFirstSet::MightMatch(MatchState &state) const {
 	return literal_id && HasLiteral(literal_id);
 }
 
-
-//! The characters OperatorMatcher accepts
-static bool IsOperatorText(const string &text) {
-	if (text.empty()) {
-		return false;
-	}
-	for (auto c : text) {
-		if (!Tokenizer::CharacterIsOperator(c)) {
-			return false;
-		}
-	}
-	return true;
-}
-
 //! A word or a double-quoted identifier, consumed by every identifier matcher when it is not a keyword
 static bool IsPlainIdentifierToken(const string &text) {
 	if (text.empty()) {
@@ -475,8 +459,8 @@ bool MatcherFirstSet::MightMatchSecond(MatchState &state) const {
 	bool identifier = false;
 	if (literal_id && HasLiteral(literal_id)) {
 		// consumed by a keyword matcher for exactly this literal
-	} else if ((token->token_class & exact_class_mask) && IsOperatorText(token->text)) {
-		// consumed by an operator matcher that accepts its whole class (punctuation shares the class)
+	} else if (token->token_class & exact_class_mask) {
+		// consumed by an operator matcher that accepts its whole class
 	} else if (!literal_id && (class_mask & MatcherTokenClass::WORD) && IsPlainIdentifierToken(token->text)) {
 		identifier = true;
 	} else {

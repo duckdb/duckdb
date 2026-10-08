@@ -1062,7 +1062,11 @@ TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]
 	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
 	REQUIRE(token_class("+") == generic_operator);
 	REQUIRE(token_class("||") == generic_operator);
-	REQUIRE(token_class("(") == generic_operator);
+	// punctuation is only matched as a literal, operator matchers reject it
+	REQUIRE(token_class("(") == 0);
+	REQUIRE(token_class(",") == 0);
+	REQUIRE(token_class(":") == 0);
+	REQUIRE(token_class("{") == 0);
 	// operators with their own precedence level are not generic operators
 	REQUIRE(token_class("<=") == MatcherTokenClass::OPERATOR);
 	REQUIRE(token_class("=") == MatcherTokenClass::OPERATOR);
