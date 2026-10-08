@@ -239,7 +239,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(),
 	                           Identifier(function_name)));
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-		throw InternalException("Could not find aggregate %s", function_name);
+		throw BinderException("Could not find aggregate %s", function_name);
 	}
 	auto &aggr_entry = func.Cast<AggregateFunctionCatalogEntry>();
 
@@ -247,7 +247,7 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 	FunctionBinder function_binder(context);
 	auto best_function = function_binder.BindFunction(aggr_entry.name, aggr_entry.functions, argument_types, error);
 	if (!best_function.IsValid()) {
-		throw InternalException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
+		throw BinderException("Could not re-bind exported aggregate %s: %s", function_name, error.Message());
 	}
 	const auto &aggr = aggr_entry.functions.GetFunctionByOffset(best_function.GetIndex());
 
@@ -275,8 +275,8 @@ unique_ptr<ExportAggregateBindData> BindExportedAggregate(ClientContext &context
 		}
 	}
 	if (!signature_matches) {
-		throw InternalException("Type mismatch for exported aggregate %s: bound=[%s] requested=[%s]", function_name,
-		                        StringUtil::ToString(bound_args, ", "), StringUtil::ToString(argument_types, ", "));
+		throw BinderException("Type mismatch for exported aggregate %s: bound=[%s] requested=[%s]", function_name,
+		                      StringUtil::ToString(bound_args, ", "), StringUtil::ToString(argument_types, ", "));
 	}
 
 	const auto state_size = bound_aggr.GetStateSize(bind_info.get());
@@ -360,6 +360,10 @@ unique_ptr<ExportAggregateBindData> BindAggregateStateInternal(ClientContext &co
 	ParseOrderBys(order_entry->second, column_count, orders);
 	// the leading buffered columns are the inner aggregate's bound arguments (post constant-erasure)
 	const idx_t argument_count = inner->aggr.GetArguments().size();
+	if (argument_count == 0) {
+		throw BinderException("Aggregate \"%s\" has no arguments and cannot have an ordered aggregate state",
+		                      function_name);
+	}
 	if (argument_count > column_count) {
 		throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
 		                      (uint64_t)argument_count, (uint64_t)column_count);
@@ -759,6 +763,11 @@ unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 		const idx_t column_count = buffer_columns.size();
 		// the leading buffered columns are the aggregate's arguments - cast them to the argument types
 		auto &aggr_arguments = aggr.GetArguments();
+		if (aggr_arguments.empty()) {
+			throw BinderException("to_aggregate_state: aggregate \"%s\" has no arguments and cannot have an ordered "
+			                      "aggregate state",
+			                      function_name);
+		}
 		if (aggr_arguments.size() > column_count) {
 			throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
 			                      (uint64_t)aggr_arguments.size(), (uint64_t)column_count);
@@ -885,9 +894,11 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	D_ASSERT(bound_function.HasStateSizeCallback());
 	D_ASSERT(bound_function.HasStateFinalizeCallback());
 	D_ASSERT(child_aggregate->Function().GetReturnType().id() != LogicalTypeId::INVALID);
-	if (child_aggregate->GetOrderBys() && !child_aggregate->GetOrderBys()->orders.empty()) {
-		// ordered aggregate: export the buffer of values. The sorted wrapper is built later (physical planning); here
-		// we only fix the AGGREGATE_STATE type so downstream binding (finalize/combine) sees it
+	if (child_aggregate->GetOrderBys() && !child_aggregate->GetOrderBys()->orders.empty() &&
+	    !child_aggregate->GetChildren().empty()) {
+		// ordered aggregate (the ORDER BY of an aggregate without arguments is ignored): export the buffer of values.
+		// The sorted wrapper is built later (physical planning); here we only fix the AGGREGATE_STATE type so
+		// downstream binding (finalize/combine) sees it
 		LogicalType buffer_struct;
 		vector<SortedAggregateStateOrder> orders;
 		idx_t argument_count; // re-derived from the inner aggregate on re-bind
