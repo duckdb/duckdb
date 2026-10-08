@@ -131,6 +131,8 @@ struct DuckDBAdbcStatementWrapper {
 	ArrowArrayStream ingestion_stream;
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
 	bool temporary_table = false;
+	//! Metadata calls complete their result at submit, so they snapshot the catalog at the call
+	bool eager_result = false;
 	uint64_t plan_length;
 };
 
@@ -147,12 +149,10 @@ struct DuckDBAdbcStreamWrapper {
 	duckdb::ArrowSchemaWrapper schema;
 	//! What draining collected, handed out before the error it ran into, if any
 	duckdb::vector<duckdb::unique_ptr<duckdb::ArrowArrayWrapper>> materialized;
-	//! Serializes a reader of this stream with a drain; per stream, so a drain of one stream
-	//! never blocks a query that pulls another stream of the same connection
+	//! Serializes a reader with a drain; per stream, so a drain never blocks another stream's reader
 	duckdb::mutex fetch_mutex;
 	idx_t materialized_index = 0;
 	char *last_error = nullptr;
-	duckdb_error_type last_error_type = DUCKDB_ERROR_INVALID;
 	AdbcStatusCode status_code = ADBC_STATUS_OK;
 	AdbcError adbc_error = {};
 	duckdb::DuckDBAdbcConnectionWrapper *conn_wrapper = nullptr;
@@ -166,7 +166,6 @@ static bool IsCancellation(duckdb::optional_ptr<duckdb::DuckDBAdbcConnectionWrap
 static void SetStreamError(DuckDBAdbcStreamWrapper &wrapper, const duckdb::ErrorData &error) {
 	free(wrapper.last_error);
 	wrapper.last_error = strdup(error.Message().c_str());
-	wrapper.last_error_type = duckdb::ErrorTypeToC(error.Type());
 	wrapper.status_code =
 	    IsCancellation(wrapper.conn_wrapper, error.Type()) ? ADBC_STATUS_CANCELLED : ADBC_STATUS_INTERNAL;
 	wrapper.adbc_error.message = wrapper.last_error;
@@ -238,18 +237,21 @@ static void CopySchema(const ArrowSchema &source, duckdb::ArrowSchemaWrapper &ta
 	}
 }
 
-//! A result that cannot stream completes here, so that the next statement on the connection leaves it intact.
-//! rows_affected stays -1, which ADBC defines as unknown, unless the statement reports a changed-row count
+//! A result that cannot stream, or whose caller forces eagerness, completes here, intact under later statements.
+//! rows_affected stays -1 (ADBC: unknown) unless the statement reports a changed-row count
 static AdbcStatusCode ExecuteArrow(duckdb::PreparedStatementWrapper &prepared, DuckDBAdbcStreamWrapper &out,
-                                   int64_t &rows_affected, struct AdbcError *error) {
+                                   int64_t &rows_affected, struct AdbcError *error, bool eager) {
 	out.stream.reset();
 	out.result.reset();
 	rows_affected = -1;
 	duckdb::ErrorData error_data;
 	try {
 		duckdb::QueryParameters parameters(duckdb::make_shared_ptr<duckdb::ArrowFormat>(STANDARD_VECTOR_SIZE));
+		if (eager) {
+			parameters.result_eagerness = duckdb::ResultEagerness::FORCED;
+		}
 		auto result = prepared.statement->Submit(prepared.values, parameters);
-		if (!result->HasError() &&
+		if (!result->HasError() && !eager &&
 		    result->GetStatementProperties().result_eagerness != duckdb::ResultEagerness::FORCED) {
 			out.stream = duckdb::make_uniq<duckdb::QueryResultStream<duckdb::ArrowFormat>>(std::move(result));
 			CopySchema(out.stream->FormatState().Schema(), out.schema);
@@ -287,6 +289,8 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 		SetError(error, "unable to initialize statement");
 		return status;
 	}
+	// A metadata call promises a point-in-time snapshot, so its result must complete before the call returns
+	static_cast<DuckDBAdbcStatementWrapper *>(statement.private_data)->eager_result = true;
 	status = StatementSetSqlQuery(&statement, query, error);
 	if (status != ADBC_STATUS_OK) {
 		StatementRelease(&statement, error);
@@ -300,20 +304,6 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 		return status;
 	}
 	StatementRelease(&statement, error);
-	if (!out->private_data) {
-		return ADBC_STATUS_OK;
-	}
-	// Metadata calls promise a point-in-time snapshot. A lazily executed stream takes its catalog
-	// snapshot whenever execution first touches a database, racing with DDL on other connections.
-	auto &stream_wrapper = *static_cast<DuckDBAdbcStreamWrapper *>(out->private_data);
-	MaterializeStream(stream_wrapper);
-	if (stream_wrapper.last_error) {
-		SetError(error, stream_wrapper.last_error);
-		AppendDuckDBErrorDetails(error, stream_wrapper.last_error_type);
-		auto status_code = stream_wrapper.status_code;
-		out->release(out);
-		return status_code;
-	}
 	return ADBC_STATUS_OK;
 }
 
@@ -1595,7 +1585,8 @@ const char *get_last_error(struct ArrowArrayStream *stream) {
 		return nullptr;
 	}
 	auto result_wrapper = reinterpret_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
-	return result_wrapper ? result_wrapper->last_error : nullptr;
+	const duckdb::lock_guard<duckdb::mutex> guard(result_wrapper->fetch_mutex);
+	return result_wrapper->last_error;
 }
 
 const AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatusCode *status) {
@@ -1607,6 +1598,7 @@ const AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatu
 		return nullptr;
 	}
 	auto result_wrapper = reinterpret_cast<DuckDBAdbcStreamWrapper *>(stream->private_data);
+	const duckdb::lock_guard<duckdb::mutex> guard(result_wrapper->fetch_mutex);
 	if (!result_wrapper->last_error) {
 		return nullptr;
 	}
@@ -1918,6 +1910,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->target_catalog = nullptr;
 	statement_wrapper->db_schema = nullptr;
 	statement_wrapper->temporary_table = false;
+	statement_wrapper->eager_result = false;
 
 	statement_wrapper->ingestion_mode = IngestionMode::CREATE;
 	return ADBC_STATUS_OK;
@@ -2228,7 +2221,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					return ADBC_STATUS_INVALID_ARGUMENT;
 				}
 			}
-			auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error);
+			auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error, wrapper->eager_result);
 			if (status != ADBC_STATUS_OK) {
 				return status;
 			}
@@ -2241,7 +2234,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 	} else {
-		auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error);
+		auto status = ExecuteArrow(prepared, *stream_wrapper, affected, error, wrapper->eager_result);
 		if (status != ADBC_STATUS_OK) {
 			return status;
 		}

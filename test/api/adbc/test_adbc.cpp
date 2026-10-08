@@ -3653,9 +3653,7 @@ TEST_CASE("Test AdbcConnectionGetObjects - snapshot at call time", "[adbc]") {
 		return;
 	}
 
-	// GetObjects describes the catalog as of the call. Catalog changes made on another
-	// connection between the call and reading the stream must not leak into the result.
-
+	// Catalog changes on another connection between the call and reading the stream must not leak in
 	ADBCTestDatabase db("test_metadata_snapshot");
 	db.Query("CREATE TABLE before_snapshot (i INTEGER)");
 
@@ -3686,9 +3684,7 @@ TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
 		return;
 	}
 
-	// Executing a statement drains the open streams of its connection; a reader on another
-	// thread must see every row exactly once, from the live stream or from the drained arrays.
-
+	// A reader must see every row exactly once while statements drain the connection's streams
 	ADBCTestDatabase db;
 	AdbcError adbc_error = {};
 	InitializeADBCError(&adbc_error);
@@ -3738,6 +3734,62 @@ TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
 	REQUIRE(!read_error.load());
 	REQUIRE((total_rows.load() == 1000000));
 	reader_stream.release(&reader_stream);
+}
+
+TEST_CASE("ADBC - commit and rollback drain open streams", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	// COMMIT and ROLLBACK run on the raw connection; an open stream must be drained first, not invalidated
+	ADBCTestDatabase db;
+	AdbcError adbc_error = {};
+	InitializeADBCError(&adbc_error);
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
+
+	auto read_all = [](ArrowArrayStream &stream) {
+		int64_t total = 0;
+		while (true) {
+			ArrowArray array = {};
+			if (stream.get_next(&stream, &array) != 0 || !array.release) {
+				break;
+			}
+			total += array.length;
+			array.release(&array);
+		}
+		return total;
+	};
+
+	auto open_stream = [&](ArrowArrayStream &stream) {
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT i FROM range(100000) t(i)", &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, nullptr, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	};
+
+	for (bool commit : {true, false}) {
+		ArrowArrayStream stream;
+		open_stream(stream);
+		if (commit) {
+			REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &adbc_error)));
+		} else {
+			REQUIRE(SUCCESS(AdbcConnectionRollback(&db.adbc_connection, &adbc_error)));
+		}
+		REQUIRE((read_all(stream) == 100000));
+		stream.release(&stream);
+	}
+
+	{
+		// The USE statement behind the current-catalog option must drain too
+		ArrowArrayStream stream;
+		open_stream(stream);
+		REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, "memory",
+		                                        &adbc_error)));
+		REQUIRE((read_all(stream) == 100000));
+		stream.release(&stream);
+	}
 }
 
 TEST_CASE("Test AdbcConnectionGetObjects - empty list not NULL", "[adbc]") {
