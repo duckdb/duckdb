@@ -1845,9 +1845,20 @@ hugeint_t CastFromUHugeintToUUID::Operation(uhugeint_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastToGeometry::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
-	// Pass the query location of the cast source if available.
-	return Geometry::FromString(input, result, StringVector::GetStringHeap(result_vector), parameters.strict,
-	                            parameters.cast_source ? parameters.cast_source->GetQueryLocation() : QueryLocation());
+	auto &heap = StringVector::GetStringHeap(result_vector);
+	if (!parameters.error_message) {
+		// Pass the query location of the cast source if available.
+		return Geometry::FromString(input, result, heap, parameters.strict,
+		                            parameters.cast_source ? parameters.cast_source->GetQueryLocation()
+		                                                   : QueryLocation());
+	}
+	// the caller collects errors (e.g. TRY_CAST) - report malformed WKT as a cast error
+	string error_message;
+	if (Geometry::TryFromString(input, result, heap, error_message)) {
+		return true;
+	}
+	HandleCastError::AssignError(error_message, parameters);
+	return false;
 }
 
 //===--------------------------------------------------------------------===//

@@ -165,7 +165,8 @@ UnifInt(DSS_HUGE nLow, DSS_HUGE nHigh, seed_t *seed)
 	int32_t nLow32 = (int32_t)nLow, nHigh32 = (int32_t)nHigh;
 
 	if ((nHigh == MAX_LONG) && (nLow == 0)) {
-		dRange = (double)((DSS_HUGE)(nHigh32 - nLow32) + 1);
+		// the reference dbgen overflows int32 here; replicate it to stay bit-compatible
+		dRange = (double)std::numeric_limits<int32_t>::min();
 	} else {
 		dRange = (double)(nHigh - nLow + 1);
 	}
