@@ -34,7 +34,11 @@ Binding::Binding(const Binding &other)
 	for (auto &entry : other.projection_expressions) {
 		auto &source = entry.second;
 		auto copy = SourceExpression(source.expression->Copy(), source.diagnostic_name, source.generated);
+		if (source.bound_expression) {
+			copy.bound_expression = source.bound_expression->Copy();
+		}
 		copy.can_reconstruct = source.can_reconstruct;
+		copy.is_constant_null = source.is_constant_null;
 		projection_expressions.emplace(entry.first, std::move(copy));
 	}
 }

@@ -500,17 +500,48 @@ static bool CanReconstructGeneratedColumn(const Expression &expression) {
 	return has_column;
 }
 
+static void ExpandGeneratedDependencies(BindContext &context, unique_ptr<ParsedExpression> &expression) {
+	if (expression->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto &colref = expression->Cast<ColumnRefExpression>();
+		if (!colref.IsQualified()) {
+			return;
+		}
+		ErrorData error;
+		auto binding = context.GetBinding(GetBindingAlias(colref), colref.GetColumnName(), error);
+		column_t column_index;
+		if (!binding || !binding->TryGetBindingIndex(colref.GetColumnName(), column_index) ||
+		    !ColumnIsGenerated(*binding, column_index)) {
+			return;
+		}
+		auto expanded = binding->Cast<TableBinding>().ExpandGeneratedColumn(colref.GetColumnName());
+		expanded->SetAlias(expression->GetAlias());
+		expression = std::move(expanded);
+		ExpandGeneratedDependencies(context, expression);
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expression, [&](unique_ptr<ParsedExpression> &child) { ExpandGeneratedDependencies(context, child); });
+}
+
 unique_ptr<Expression> BindContext::BindSourceExpression(Binding &binding, SourceExpression &source) {
+	if (source.bound_expression) {
+		return std::move(source.bound_expression);
+	}
 	auto source_binder = Binder::CreateBinder(binder.context, &binder);
 	for (auto &source_binding : bindings_list) {
 		if (source_binding->source_projection == binding.source_projection) {
 			source_binder->bind_context.AddBinding(source_binding->CopyForSourceBinding());
 		}
 	}
+	if (source.generated) {
+		ExpandGeneratedDependencies(source_binder->bind_context, source.expression);
+		ExpressionBinder::QualifyColumnNames(*source_binder, source.expression);
+	}
 	auto expression = source.expression->Copy();
 	ExpressionBinder expression_binder(*source_binder, binder.context);
 	auto bound_expression = expression_binder.Bind(expression);
 	source.can_reconstruct = source.generated && CanReconstructGeneratedColumn(*bound_expression);
+	source.is_constant_null = source.generated && IsConstantNull(*bound_expression);
 	return bound_expression;
 }
 
@@ -560,7 +591,8 @@ Identifier BindContext::GetColumnDiagnosticName(ColumnRefExpression &colref) {
 	return colref.GetColumnName();
 }
 
-unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnExpression(ColumnRefExpression &colref) {
+unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnExpression(ColumnRefExpression &colref,
+                                                                       bool only_constant_null) {
 	if (!colref.IsQualified()) {
 		return nullptr;
 	}
@@ -576,9 +608,9 @@ unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnExpression(ColumnRef
 	auto &source = entry->second;
 	if (!source.can_reconstruct.has_value()) {
 		// Checking eligibility must not schedule an extra evaluation of a volatile expression.
-		BindSourceExpression(*binding, source);
+		source.bound_expression = BindSourceExpression(*binding, source);
 	}
-	if (!source.can_reconstruct.value()) {
+	if (!source.can_reconstruct.value() || (only_constant_null && !source.is_constant_null)) {
 		return nullptr;
 	}
 	return source.expression->Copy();
@@ -589,9 +621,8 @@ bool BindContext::ExpandGeneratedColumnReferences(unique_ptr<ParsedExpression> &
 	if (expression->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto source = GetGeneratedColumnExpression(expression->Cast<ColumnRefExpression>());
 		if (source) {
-			ExpressionBinder::QualifyColumnNames(binder, source);
 			expression = std::move(source);
-			expanded = true;
+			return true;
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(

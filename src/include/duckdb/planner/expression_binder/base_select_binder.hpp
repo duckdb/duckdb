@@ -58,6 +58,7 @@ protected:
 	bool inside_aggregate = false;
 	bool bound_aggregate = false;
 	bool inside_aggregate_filter = false;
+	bool reconstructing_generated_column = false;
 
 	BoundSelectNode &node;
 };

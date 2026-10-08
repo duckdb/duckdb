@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -25,7 +26,8 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	if (group_index.IsValid()) {
 		return BindGroup(expr, depth, group_index);
 	}
-	if (!inside_aggregate && expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+	if (!inside_aggregate && !reconstructing_generated_column &&
+	    expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto result = TryBindGeneratedColumn(expr.Cast<ColumnRefExpression>(), depth);
 		if (result.expression) {
 			return result;
@@ -47,13 +49,13 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 }
 
 BindResult BaseSelectBinder::TryBindGeneratedColumn(ColumnRefExpression &expr, idx_t depth) {
-	auto expression = binder.bind_context.GetGeneratedColumnExpression(expr);
+	// Without grouping keys, only a constant NULL can bypass the source projection.
+	auto expression = binder.bind_context.GetGeneratedColumnExpression(expr, node.groups.group_expressions.empty());
 	if (!expression) {
 		return BindResult();
 	}
-	ExpressionBinder::QualifyColumnNames(binder, expression);
-	// Keep ungrouped columns from a failed reconstruction out of the caller's binding state.
 	BaseSelectBinder generated_binder(binder, context, node);
+	generated_binder.reconstructing_generated_column = true;
 	auto result = generated_binder.BindExpression(expression, depth);
 	if (result.HasError() || generated_binder.HasBoundColumns()) {
 		return BindResult();
@@ -115,6 +117,16 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 }
 
 BindResult BaseSelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
+	if (reconstructing_generated_column) {
+		auto &colref = expr_ptr->Cast<ColumnRefExpression>();
+		auto lambda_ref = colref.IsQualified()
+		                      ? nullptr
+		                      : LambdaRefExpression::FindMatchingBinding(lambda_bindings, colref.GetColumnName());
+		if (!lambda_ref) {
+			// Reject before binding can add columns to the source projection.
+			return BindResult(BinderException(colref, "Cannot reconstruct an ungrouped column"));
+		}
+	}
 	return ExpressionBinder::BindExpression(expr_ptr, depth);
 }
 

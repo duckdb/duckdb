@@ -61,7 +61,8 @@ public:
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
 	Identifier GetColumnDiagnosticName(ColumnRefExpression &colref);
-	unique_ptr<ParsedExpression> GetGeneratedColumnExpression(ColumnRefExpression &colref);
+	unique_ptr<ParsedExpression> GetGeneratedColumnExpression(ColumnRefExpression &colref,
+	                                                          bool only_constant_null = false);
 	bool ExpandGeneratedColumnReferences(unique_ptr<ParsedExpression> &expression);
 	string BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name);
 	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);

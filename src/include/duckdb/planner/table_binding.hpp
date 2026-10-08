@@ -41,9 +41,12 @@ struct SourceExpression {
 	}
 
 	unique_ptr<ParsedExpression> expression;
+	//! Reuse an eligibility probe if the expression subsequently needs projection.
+	unique_ptr<Expression> bound_expression;
 	Identifier diagnostic_name;
 	bool generated;
 	optional<bool> can_reconstruct;
+	bool is_constant_null = false;
 };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.
