@@ -14,6 +14,7 @@
 #include "duckdb/common/enums/wal_type.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/block.hpp"
 
 namespace duckdb {
@@ -125,12 +126,8 @@ public:
 	void IncrementWALEntriesCount();
 	void WriteCheckpoint(MetaBlockPointer meta_block);
 
-	//! Number of row group blocks of this checkpoint WAL that are not yet marked as checkpointed
-	idx_t PendingCheckpointBlockCount() const {
-		return pending_checkpoint_blocks.size();
-	}
 	//! Drop the pending blocks of a reverted commit
-	void TruncatePendingCheckpointBlocks(idx_t count);
+	void RemovePendingCheckpointBlocks(const unordered_set<block_id_t> &block_ids);
 	//! Mark the pending blocks as checkpointed, called after the concurrent checkpoint has written its header
 	void MarkPendingBlocksAsCheckpointed();
 

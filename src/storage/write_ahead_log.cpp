@@ -519,9 +519,14 @@ void WriteAheadLog::WriteRowGroupData(const PersistentCollectionData &data) {
 	}
 }
 
-void WriteAheadLog::TruncatePendingCheckpointBlocks(idx_t count) {
-	D_ASSERT(count <= pending_checkpoint_blocks.size());
-	pending_checkpoint_blocks.resize(count);
+void WriteAheadLog::RemovePendingCheckpointBlocks(const unordered_set<block_id_t> &block_ids) {
+	vector<block_id_t> remaining_blocks;
+	for (auto &block_id : pending_checkpoint_blocks) {
+		if (block_ids.find(block_id) == block_ids.end()) {
+			remaining_blocks.push_back(block_id);
+		}
+	}
+	pending_checkpoint_blocks = std::move(remaining_blocks);
 }
 
 void WriteAheadLog::MarkPendingBlocksAsCheckpointed() {

@@ -635,7 +635,6 @@ private:
 	StorageManager &storage;
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
-	idx_t initial_pending_checkpoint_blocks = 0;
 	WriteAheadLog &wal;
 	WALCommitState state;
 	reference_map_t<DataTable, unordered_map<idx_t, OptimisticallyWrittenRowGroupData>> optimistically_written_data;
@@ -646,7 +645,6 @@ SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &stora
 	auto initial_size = storage.GetWALSize();
 	initial_written = wal.GetTotalWritten();
 	initial_wal_size = initial_size;
-	initial_pending_checkpoint_blocks = wal.PendingCheckpointBlockCount();
 }
 
 SingleFileStorageCommitState::~SingleFileStorageCommitState() {
@@ -675,17 +673,19 @@ void SingleFileStorageCommitState::RevertCommit() {
 		// remove any entries written into the WAL by truncating it
 		wal.Truncate(initial_wal_size);
 	}
-	wal.TruncatePendingCheckpointBlocks(initial_pending_checkpoint_blocks);
 	auto &block_manager = storage.GetBlockManager();
+	unordered_set<block_id_t> reverted_blocks;
 	for (auto &entry : optimistically_written_data) {
 		for (auto &rg_entry : entry.second) {
 			if (rg_entry.second.row_group_data) {
 				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
 					block_manager.MarkBlockAsModified(block_id);
+					reverted_blocks.insert(block_id);
 				}
 			}
 		}
 	}
+	wal.RemovePendingCheckpointBlocks(reverted_blocks);
 	state = WALCommitState::TRUNCATED;
 }
 
