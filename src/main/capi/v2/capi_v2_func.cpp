@@ -84,6 +84,10 @@ DUCKDB_V2_ERROR duckdb_v2_function_bind_set_bind_data(duckdb_v2_function_bind_in
 	DUCKDB_CHECK_ARG(info);
 	DUCKDB_CHECK_ARG(data);
 	return WithErrorHandler(err, [&]() {
+		if (!Convert(info)->can_set_bind_data) {
+			throw duckdb::InvalidInputException(
+			    "Scalar functions set the bind data through duckdb_v2_scalar_function_bind_set_bind_data");
+		}
 		Convert(info)->out_bind_data =
 		    data->ptr ? duckdb::make_shared_ptr<CV2UserData>(data->ptr, data->destroy, data->equals) : nullptr;
 	});

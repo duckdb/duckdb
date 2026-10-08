@@ -191,7 +191,7 @@ static void StructSearchFunction(DataChunk &args, ExpressionState &state, Vector
 	StructSearchOp<RETURN_TYPE, FIND_NULLS>(input_vector, members, target, count, result);
 }
 
-static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &input) {
+static void StructContainsResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -205,14 +205,14 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
 		bound_function.GetArguments()[1] = LogicalTypeId::UNKNOWN;
 		bound_function.SetReturnType(LogicalType::SQLNULL);
-		return nullptr;
+		return;
 	}
 
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->GetReturnType());
 	if (struct_children.empty()) {
 		// an empty struct contains nothing, the search always returns false (or position 0)
 		bound_function.GetArguments()[0] = child_type;
-		return nullptr;
+		return;
 	}
 	if (child_type.id() != LogicalTypeId::TUPLE) {
 		throw BinderException("%s can only be used on unnamed structs", bound_function.GetName());
@@ -239,20 +239,19 @@ static unique_ptr<FunctionData> StructContainsBind(BindScalarFunctionInput &inpu
 
 	// the input is an unnamed struct - represent it as a TUPLE
 	bound_function.GetArguments()[0] = LogicalType::TUPLE(cast_children);
-
-	return nullptr;
 }
 
 ScalarFunction StructContainsFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {}, LogicalType::BOOLEAN, StructSearchFunction<bool>, StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::BOOLEAN, StructSearchFunction<bool>);
 	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
+	fun.SetResolveTypesCallback(StructContainsResolveTypes);
 	return fun;
 }
 
 ScalarFunction StructPositionFun::GetFunction() {
-	ScalarFunction fun("struct_contains", {}, LogicalType::INTEGER, StructSearchFunction<int32_t, true>,
-	                   StructContainsBind);
+	ScalarFunction fun("struct_contains", {}, LogicalType::INTEGER, StructSearchFunction<int32_t, true>);
 	fun.GetSignature().AddParameter("struct", LogicalTypeId::TUPLE).AddParameter("entry", LogicalType::ANY);
+	fun.SetResolveTypesCallback(StructContainsResolveTypes);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return fun;
 }
