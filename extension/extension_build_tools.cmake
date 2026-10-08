@@ -960,13 +960,30 @@ function(set_extension_version_sources EXT_NAME)
     set_property(SOURCE ${ARGN} APPEND PROPERTY COMPILE_DEFINITIONS ${DEFINITION})
 endfunction()
 
-# Add subdirectories for registered extensions
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-
     if (NOT DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD)
         set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD TRUE)
     endif()
+endforeach()
+
+# Resolve what the DuckDB targets link once; each extension's SHOULD_LINK follows it, so everything that reads it agrees.
+# Before the extensions are added: an extension's own CMakeLists may call link_extension_libraries (httpfs's unittest).
+duckdb_resolve_static_link(DUCKDB_STATICALLY_LINKED_CAPABILITIES DUCKDB_STATICALLY_LINKED_EXTENSIONS)
+if(NOT ${BUILD_EXTENSIONS_ONLY})
+    foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+        string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+        if(EXT_NAME IN_LIST DUCKDB_STATICALLY_LINKED_EXTENSIONS)
+            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK TRUE)
+        else()
+            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK FALSE)
+        endif()
+    endforeach()
+endif()
+
+# Add subdirectories for registered extensions
+foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
 
     # Skip explicitly disabled extensions
     if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD} OR ${EXTENSION_CONFIG_BUILD})
@@ -997,19 +1014,6 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
         remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
     endif()
 endforeach()
-
-# Resolve what the DuckDB targets link once; each extension's SHOULD_LINK follows it, so everything that reads it agrees
-duckdb_resolve_static_link(DUCKDB_STATICALLY_LINKED_CAPABILITIES DUCKDB_STATICALLY_LINKED_EXTENSIONS)
-if(NOT ${BUILD_EXTENSIONS_ONLY})
-    foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-        string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-        if(EXT_NAME IN_LIST DUCKDB_STATICALLY_LINKED_EXTENSIONS)
-            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK TRUE)
-        else()
-            set(DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK FALSE)
-        endif()
-    endforeach()
-endif()
 
 # Output the extensions that we linked into DuckDB for some nice build logs
 set(DEFAULT_LINKED_EXTENSIONS "")
