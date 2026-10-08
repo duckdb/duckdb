@@ -61,8 +61,8 @@ public:
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
 	Identifier GetColumnDiagnosticName(ColumnRefExpression &colref);
-	unique_ptr<Expression> GetGeneratedColumnExpression(ColumnRefExpression &colref);
-	void ExpandSourceProjectionReferences(unique_ptr<Expression> &expression);
+	unique_ptr<ParsedExpression> GetGeneratedColumnExpression(ColumnRefExpression &colref);
+	bool ExpandGeneratedColumnReferences(unique_ptr<ParsedExpression> &expression);
 	string BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name);
 	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 
@@ -94,6 +94,7 @@ public:
 
 	void GetTypesAndNames(vector<Identifier> &result_names, vector<LogicalType> &result_types);
 	void AddSourceProjection(BoundStatement &statement);
+	void ProjectSourceColumns(unique_ptr<Expression> &expression);
 
 	//! Adds a base table with the given alias to the BindContext.
 	void AddBaseTable(TableIndex index, const Identifier &alias, const vector<Identifier> &names,
@@ -177,6 +178,7 @@ public:
 	vector<reference<Binding>> GetBindings(const BindingAlias &alias, ErrorData &out_error);
 
 private:
+	unique_ptr<Expression> BindSourceExpression(Binding &binding, SourceExpression &source);
 	void AddBinding(unique_ptr<Binding> binding);
 	static string AmbiguityException(const BindingAlias &alias, const vector<reference<Binding>> &bindings);
 

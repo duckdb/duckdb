@@ -8,10 +8,12 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -474,16 +476,42 @@ static bool HasSafeConstantBranches(const Expression &expression, bool &has_colu
 	return safe && (has_column || !expression.CanThrow());
 }
 
+static bool IsConstantNull(const Expression &expression) {
+	if (expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return expression.Cast<BoundConstantExpression>().GetValue().IsNull();
+	}
+	if (BoundCastExpression::IsCast(expression) && expression.PropagatesNullValues()) {
+		return IsConstantNull(BoundCastExpression::Child(expression.Cast<BoundFunctionExpression>()));
+	}
+	return false;
+}
+
 static bool CanReconstructGeneratedColumn(const Expression &expression) {
 	if (expression.IsVolatile() || !expression.PropagatesNullValues()) {
 		return false;
+	}
+	if (IsConstantNull(expression)) {
+		return true;
 	}
 	bool has_column = false;
 	if (!HasSafeConstantBranches(expression, has_column)) {
 		return false;
 	}
-	return has_column || (expression.GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
-	                      expression.Cast<BoundConstantExpression>().GetValue().IsNull());
+	return has_column;
+}
+
+unique_ptr<Expression> BindContext::BindSourceExpression(Binding &binding, SourceExpression &source) {
+	auto source_binder = Binder::CreateBinder(binder.context, &binder);
+	for (auto &source_binding : bindings_list) {
+		if (source_binding->source_projection == binding.source_projection) {
+			source_binder->bind_context.AddBinding(source_binding->CopyForSourceBinding());
+		}
+	}
+	auto expression = source.expression->Copy();
+	ExpressionBinder expression_binder(*source_binder, binder.context);
+	auto bound_expression = expression_binder.Bind(expression);
+	source.can_reconstruct = source.generated && CanReconstructGeneratedColumn(*bound_expression);
+	return bound_expression;
 }
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
@@ -505,17 +533,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 		if (projected_entry != binding->projected_columns.end()) {
 			projection_index = projected_entry->second;
 		} else {
-			auto source_binder = Binder::CreateBinder(binder.context, &binder);
-			for (auto &source_binding : bindings_list) {
-				if (source_binding->source_projection == binding->source_projection) {
-					source_binder->bind_context.AddBinding(source_binding->CopyForSourceBinding());
-				}
-			}
-			auto &source = expression_entry->second;
-			auto expression = source.expression->Copy();
-			ExpressionBinder expression_binder(*source_binder, binder.context);
-			auto bound_expression = expression_binder.Bind(expression);
-			source.can_reconstruct = source.generated && CanReconstructGeneratedColumn(*bound_expression);
+			auto bound_expression = BindSourceExpression(*binding, expression_entry->second);
 			projection_index = ProjectionIndex(projection.expressions.size());
 			if (!bound_expression->IsVolatile()) {
 				binding->projected_columns.emplace(colref.GetColumnName(), projection_index);
@@ -542,7 +560,7 @@ Identifier BindContext::GetColumnDiagnosticName(ColumnRefExpression &colref) {
 	return colref.GetColumnName();
 }
 
-unique_ptr<Expression> BindContext::GetGeneratedColumnExpression(ColumnRefExpression &colref) {
+unique_ptr<ParsedExpression> BindContext::GetGeneratedColumnExpression(ColumnRefExpression &colref) {
 	if (!colref.IsQualified()) {
 		return nullptr;
 	}
@@ -555,34 +573,30 @@ unique_ptr<Expression> BindContext::GetGeneratedColumnExpression(ColumnRefExpres
 	if (entry == binding->projection_expressions.end() || !entry->second.generated) {
 		return nullptr;
 	}
-	auto result = BindColumn(colref, 0);
-	if (result.HasError() || !entry->second.can_reconstruct) {
+	auto &source = entry->second;
+	if (!source.can_reconstruct.has_value()) {
+		// Checking eligibility must not schedule an extra evaluation of a volatile expression.
+		BindSourceExpression(*binding, source);
+	}
+	if (!source.can_reconstruct.value()) {
 		return nullptr;
 	}
-	auto projection_index = binding->projected_columns.at(colref.GetColumnName());
-	return binding->source_projection->expressions[projection_index]->Copy();
+	return source.expression->Copy();
 }
 
-void BindContext::ExpandSourceProjectionReferences(unique_ptr<Expression> &expression) {
-	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
-	    expression, [&](BoundColumnRefExpression &column, unique_ptr<Expression> &child) {
-		    if (column.Depth() != 0) {
-			    return;
-		    }
-		    for (auto &binding : bindings_list) {
-			    auto projection = binding->source_projection;
-			    if (projection && projection->table_index == column.Binding().table_index) {
-				    auto &source = *projection->expressions[column.Binding().column_index];
-				    // Source definitions must retain their meaning after NULL-extension.
-				    if (!CanReconstructGeneratedColumn(source)) {
-					    return;
-				    }
-				    child = source.Copy();
-				    ExpandSourceProjectionReferences(child);
-				    return;
-			    }
-		    }
-	    });
+bool BindContext::ExpandGeneratedColumnReferences(unique_ptr<ParsedExpression> &expression) {
+	bool expanded = false;
+	if (expression->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+		auto source = GetGeneratedColumnExpression(expression->Cast<ColumnRefExpression>());
+		if (source) {
+			ExpressionBinder::QualifyColumnNames(binder, source);
+			expression = std::move(source);
+			expanded = true;
+		}
+	}
+	ParsedExpressionIterator::EnumerateChildren(
+	    *expression, [&](unique_ptr<ParsedExpression> &child) { expanded |= ExpandGeneratedColumnReferences(child); });
+	return expanded;
 }
 
 void BindContext::AddSourceProjection(BoundStatement &statement) {
@@ -602,6 +616,22 @@ void BindContext::AddSourceProjection(BoundStatement &statement) {
 	}
 	projection->AddChild(std::move(statement.plan));
 	statement.plan = std::move(projection);
+}
+
+void BindContext::ProjectSourceColumns(unique_ptr<Expression> &expression) {
+	ExpressionIterator::VisitExpressionMutable<BoundColumnRefExpression>(
+	    expression, [&](BoundColumnRefExpression &column, unique_ptr<Expression> &child) {
+		    if (column.Depth() != 0) {
+			    return;
+		    }
+		    for (auto &binding : bindings_list) {
+			    if (binding->GetIndex() == column.Binding().table_index && binding->HasSourceProjection()) {
+				    child =
+				        binding->ProjectColumn(unique_ptr_cast<Expression, BoundColumnRefExpression>(column.Copy()));
+				    return;
+			    }
+		    }
+	    });
 }
 
 string BindContext::BindColumn(PositionalReferenceExpression &ref, Identifier &table_name, Identifier &column_name) {

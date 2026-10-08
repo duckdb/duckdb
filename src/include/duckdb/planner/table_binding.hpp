@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
@@ -42,7 +43,7 @@ struct SourceExpression {
 	unique_ptr<ParsedExpression> expression;
 	Identifier diagnostic_name;
 	bool generated;
-	bool can_reconstruct = false;
+	optional<bool> can_reconstruct;
 };
 
 //! A Binding represents a binding to a table, table-producing function or subquery with a specified table index.

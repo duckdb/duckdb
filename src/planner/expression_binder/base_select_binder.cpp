@@ -8,8 +8,6 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
@@ -27,8 +25,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	if (group_index.IsValid()) {
 		return BindGroup(expr, depth, group_index);
 	}
-	if (!inside_aggregate && !node.groups.group_expressions.empty() &&
-	    expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
+	if (!inside_aggregate && expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto result = TryBindGeneratedColumn(expr.Cast<ColumnRefExpression>(), depth);
 		if (result.expression) {
 			return result;
@@ -54,36 +51,15 @@ BindResult BaseSelectBinder::TryBindGeneratedColumn(ColumnRefExpression &expr, i
 	if (!expression) {
 		return BindResult();
 	}
-	vector<unique_ptr<Expression>> source_groups;
-	for (idx_t i = 0; i < node.groups.group_expressions.size(); i++) {
-		auto collated = node.bind_state.collated_groups.find(ProjectionIndex(i));
-		auto &group = collated == node.bind_state.collated_groups.end()
-		                  ? node.groups.group_expressions[i]
-		                  : node.aggregates[collated->second]->Cast<BoundAggregateExpression>().GetChildren()[0];
-		auto source_group = group->Copy();
-		binder.bind_context.ExpandSourceProjectionReferences(source_group);
-		source_groups.push_back(std::move(source_group));
-	}
-	std::function<bool(unique_ptr<Expression> &)> reconstruct = [&](unique_ptr<Expression> &child) {
-		for (idx_t i = 0; i < source_groups.size(); i++) {
-			if (child->Equals(*source_groups[i])) {
-				child = BindGroup(expr, depth, ProjectionIndex(i)).expression;
-				return true;
-			}
-		}
-		if (child->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
-			return false;
-		}
-		bool valid = true;
-		ExpressionIterator::EnumerateChildren(
-		    *child, [&](unique_ptr<Expression> &argument) { valid &= reconstruct(argument); });
-		return valid;
-	};
-	if (!reconstruct(expression)) {
+	ExpressionBinder::QualifyColumnNames(binder, expression);
+	// Keep ungrouped columns from a failed reconstruction out of the caller's binding state.
+	BaseSelectBinder generated_binder(binder, context, node);
+	auto result = generated_binder.BindExpression(expression, depth);
+	if (result.HasError() || generated_binder.HasBoundColumns()) {
 		return BindResult();
 	}
-	expression->SetAlias(expr.GetAlias());
-	return BindResult(std::move(expression));
+	result.expression->SetAlias(expr.GetAlias());
+	return result;
 }
 
 bool BaseSelectBinder::ClaimsAlias(ColumnRefExpression &colref) {
@@ -123,6 +99,11 @@ ProjectionIndex BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	auto entry = group_map.find(expr);
 	if (entry != group_map.end()) {
 		return entry->second;
+	}
+	auto &expanded_group_map = node.bind_state.expanded_group_map;
+	auto expanded_entry = expanded_group_map.find(expr);
+	if (expanded_entry != expanded_group_map.end()) {
+		return expanded_entry->second;
 	}
 #ifdef DEBUG
 	for (auto map_entry : group_map) {

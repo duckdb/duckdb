@@ -3,6 +3,105 @@
 # group: [virtual]
 
 statement ok
+CREATE TABLE grouped_constants(i INTEGER, b AS (i > 0), same_b AS (i > 0), cast_b AS (i > 0::INTEGER), n AS (NULL), typed_n VARCHAR AS (NULL), nested_n INTEGER[] AS (NULL), tagged_n UNION(x INTEGER) AS (NULL::INTEGER), fixed AS (42));
+
+statement ok
+INSERT INTO grouped_constants VALUES (1);
+
+statement ok
+CREATE SEQUENCE generated_sequence;
+
+statement ok
+CREATE TABLE sequenced(i INTEGER, v AS (nextval('generated_sequence')));
+
+statement ok
+INSERT INTO sequenced VALUES (1);
+
+foreach optimizer enable disable
+
+statement ok
+PRAGMA {optimizer}_optimizer;
+
+statement ok
+CREATE OR REPLACE TABLE sequence_before AS SELECT currval('generated_sequence') AS v;
+
+query I
+SELECT r.v = (SELECT v + 1 FROM sequence_before) FROM (VALUES (1)) l(i) LEFT JOIN sequenced r USING (i);
+----
+true
+
+# Binding a cast must not make a different parsed expression match a grouping key.
+query II rowsort
+SELECT r.b, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY GROUPING SETS ((r.i, 0::INTEGER), (r.i));
+----
+true	1
+true	1
+
+query II rowsort
+SELECT r.cast_b, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY GROUPING SETS ((r.i, 0::INTEGER), (r.i));
+----
+true	1
+NULL	1
+
+query II
+SELECT r.n, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i);
+----
+NULL	2
+
+query II rowsort
+SELECT r.same_b, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY r.b;
+----
+true	1
+NULL	1
+
+# Explicit group references retain priority over equivalent generated definitions.
+query III rowsort
+SELECT r.b, r.same_b, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY GROUPING SETS ((r.b), (r.same_b));
+----
+true	NULL	1
+NULL	true	1
+
+query IT
+SELECT count(*), r.typed_n FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY ();
+----
+2	NULL
+
+query ITI
+SELECT r.n, r.typed_n, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r USING (i) WHERE false;
+----
+NULL	NULL	0
+
+query TI
+SELECT r.typed_n, count(*) FROM (VALUES (1)) l(i) LEFT JOIN grouped_constants r ON false GROUP BY ();
+----
+NULL	1
+
+query TI
+SELECT r.nested_n, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY ();
+----
+NULL	2
+
+statement error
+SELECT r.tagged_n, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i);
+----
+column "tagged_n" must appear in the GROUP BY clause
+
+statement error
+SELECT r.fixed, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i);
+----
+column "fixed" must appear in the GROUP BY clause
+
+statement error
+SELECT r.b, count(*) FROM (VALUES (1), (2)) l(i) LEFT JOIN grouped_constants r USING (i) GROUP BY ();
+----
+column "b" must appear in the GROUP BY clause
+
+endloop
+
+statement ok
+PRAGMA enable_optimizer;
+
+statement ok
 CREATE TABLE l(i INTEGER);
 
 statement ok
