@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/logging/log_sink.hpp
+// duckdb/logging/log_format_writer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -22,17 +22,15 @@
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/common/csv_writer.hpp"
 
-
 namespace duckdb {
 
-enum class LoggingTargetTable : uint8_t; 
+enum class LoggingTargetTable : uint8_t;
 
 class DataChunk;
 class WriteStream;
 class CSVWriter;
 struct CSVReaderOptions;
 struct CSVWriterOptions;
-
 
 class LogFormatWriter {
 public:
@@ -41,9 +39,7 @@ public:
 	//! Casts chunk, writes it, and flushes. Stream is already bound at construction.
 	DUCKDB_API virtual void WriteChunk(DataChunk &chunk) = 0;
 
-	//! Called once by the owning sink, lazily, once the stream is ready.
-	//! write_header: sink decides this (e.g. FileLogSink checks GetFileSize() == 0);
-	//! the writer has no visibility into whether its stream already has content.
+	//! Called once the stream is ready, write_header is set by the sink (e.g. if the file is empty)
 	DUCKDB_API virtual void Initialize(bool write_header) = 0;
 	DUCKDB_API virtual const string GetFormatName() const = 0;
 	DUCKDB_API virtual void Truncate() = 0;
@@ -52,8 +48,9 @@ public:
 
 class CSVFormatWriter : public LogFormatWriter {
 public:
-	//! stream must outlive this writer — same lifetime contract CSVWriter has today.
-	DUCKDB_API CSVFormatWriter(WriteStream &stream, LoggingTargetTable table, vector<Identifier> column_names);
+	//! The stream must outlive this writer
+	DUCKDB_API CSVFormatWriter(WriteStream &stream, LoggingTargetTable table, vector<Identifier> column_names,
+	                           const string &delimiter, CSVNewLineMode newline_mode);
 
 	DUCKDB_API void WriteChunk(DataChunk &chunk) override;
 	DUCKDB_API void Initialize(bool write_header) override;
@@ -64,16 +61,16 @@ public:
 	}
 
 private:
-	void ResetCastChunk();
+	void ResetCastChunk(idx_t capacity);
 	void ExecuteCast(DataChunk &chunk);
 	void ApplyOptions(const CSVReaderOptions &reader_options, const CSVWriterOptions &writer_options);
-
 
 	LoggingTargetTable table;
 	vector<Identifier> column_names;
 
 	unique_ptr<CSVWriter> writer;
 	unique_ptr<DataChunk> cast_chunk;
+	idx_t cast_chunk_capacity = 0;
 
 	CSVReaderOptions reader_options;
 	unique_ptr<CSVWriterOptions> writer_options;

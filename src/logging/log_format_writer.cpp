@@ -17,34 +17,39 @@
 
 namespace duckdb {
 
-CSVFormatWriter::CSVFormatWriter(WriteStream &stream, LoggingTargetTable table_p,
-                                 vector<Identifier> column_names_p)
+CSVFormatWriter::CSVFormatWriter(WriteStream &stream, LoggingTargetTable table_p, vector<Identifier> column_names_p,
+                                 const string &delimiter, CSVNewLineMode newline_mode)
     : table(table_p), column_names(std::move(column_names_p)) {
-
 	writer = make_uniq<CSVWriter>(stream, column_names, false);
 
 	reader_options = CSVReaderOptions();
 	reader_options.dialect_options.state_machine_options.escape = '"';
 	reader_options.dialect_options.state_machine_options.quote = '"';
-	reader_options.dialect_options.state_machine_options.delimiter = CSVOption<string>(",");
+	reader_options.dialect_options.state_machine_options.delimiter = CSVOption<string>(delimiter);
 
 	writer_options = make_uniq<CSVWriterOptions>(reader_options);
-	writer_options->newline_writing_mode = CSVNewLineMode::WRITE_BEFORE;
+	writer_options->newline_writing_mode = newline_mode;
 
-	ResetCastChunk();
+	ApplyOptions(reader_options, *writer_options);
+	ResetCastChunk(STANDARD_VECTOR_SIZE);
 }
 
-void CSVFormatWriter::ResetCastChunk() {
+void CSVFormatWriter::ResetCastChunk(idx_t capacity) {
 	cast_chunk = make_uniq<DataChunk>();
 	auto schema = LogSink::GetSchema(table);
 	vector<LogicalType> types;
 	types.resize(schema.size(), LogicalType::VARCHAR);
-	cast_chunk->Initialize(Allocator::DefaultAllocator(), types, STANDARD_VECTOR_SIZE);
+	cast_chunk->Initialize(Allocator::DefaultAllocator(), types, capacity);
+	cast_chunk_capacity = capacity;
 }
 
 void CSVFormatWriter::ExecuteCast(DataChunk &chunk) {
-	cast_chunk->Reset();
 	auto count = chunk.size();
+	// sinks flush chunks of up to their buffer size, which can be larger than a vector
+	if (count > cast_chunk_capacity) {
+		ResetCastChunk(count);
+	}
+	cast_chunk->Reset();
 	for (idx_t i = 0; i < chunk.data.size(); i++) {
 		VectorOperations::DefaultCast(chunk.data[i], cast_chunk->data[i], count, false);
 	}
@@ -60,7 +65,8 @@ void CSVFormatWriter::WriteChunk(DataChunk &chunk) {
 
 void CSVFormatWriter::Truncate() {
 	writer->Reset(nullptr);
-	Initialize(true); 
+	writer->options.dialect_options.header = CSVOption<bool>(true);
+	writer->Initialize(true);
 }
 
 void CSVFormatWriter::Initialize(bool write_header) {
@@ -70,8 +76,7 @@ void CSVFormatWriter::Initialize(bool write_header) {
 	writer->SetWrittenAnything(true);
 }
 
-void CSVFormatWriter::ApplyOptions(const CSVReaderOptions &reader_options_p,
-								   const CSVWriterOptions &writer_options_p) {
+void CSVFormatWriter::ApplyOptions(const CSVReaderOptions &reader_options_p, const CSVWriterOptions &writer_options_p) {
 	writer->options = reader_options_p;
 	writer->writer_options = writer_options_p;
 	writer->options.name_list = column_names;
@@ -81,8 +86,7 @@ void CSVFormatWriter::ApplyOptions(const CSVReaderOptions &reader_options_p,
 void CSVFormatWriter::UpdateConfig(const case_insensitive_map_t<Value> &config) {
 	for (const auto &it : config) {
 		if (StringUtil::Lower(it.first) == "delim") {
-			reader_options.dialect_options.state_machine_options.delimiter =
-			    CSVOption<string>(it.second.ToString());
+			reader_options.dialect_options.state_machine_options.delimiter = CSVOption<string>(it.second.ToString());
 		}
 	}
 

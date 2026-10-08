@@ -95,8 +95,6 @@ unique_ptr<TableRef> LogSink::BindReplace(ClientContext &context, TableFunctionB
 	return nullptr;
 }
 
-
-
 void BufferingLogSink::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	lock_guard<mutex> lck(lock);
 	return UpdateConfigInternal(db, config);
@@ -145,16 +143,16 @@ void StdOutLogSink::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t 
 StdOutLogSink::StdOutLogSink(DatabaseInstance &db) : BufferingLogSink(db, 1, /*normalize=*/false) {
 	auto target_table = LoggingTargetTable::ALL_LOGS;
 	auto column_names = GetColumnNames(target_table);
-	writer = make_uniq<CSVFormatWriter>(stdout_stream, target_table, column_names);
+	writer = make_uniq<CSVFormatWriter>(stdout_stream, target_table, column_names, "\t", CSVNewLineMode::WRITE_AFTER);
 }
- 
+
 StdOutLogSink::~StdOutLogSink() {
 }
- 
+
 void StdOutLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 	writer->WriteChunk(chunk);
 }
- 
+
 void StdOutLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	auto config_copy = config;
 
@@ -170,7 +168,7 @@ void StdOutLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_
 	for (const auto &it : to_remove) {
 		config_copy.erase(it);
 	}
- 
+
 	BufferingLogSink::UpdateConfigInternal(db, config_copy);
 }
 
@@ -196,6 +194,8 @@ void FileLogSink::Initialize(LoggingTargetTable table) {
 
 void FileLogSink::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
 	auto &table_writer = tables[table];
+	// the format writer writes to the file writer, so it goes first
+	table_writer.writer.reset();
 	table_writer.file_writer.reset();
 	table_writer.file_writer = InitializeFileWriter(db, table_writer.path);
 
@@ -203,7 +203,8 @@ void FileLogSink::InitializeFile(DatabaseInstance &db, LoggingTargetTable table)
 
 	auto column_names = GetColumnNames(table);
 	auto format_writer =
-	    make_uniq<CSVFormatWriter>(*file_writer, table, column_names);
+	    make_uniq<CSVFormatWriter>(*file_writer, table, column_names, ",", CSVNewLineMode::WRITE_BEFORE);
+	format_writer->UpdateConfig(format_config);
 
 	bool should_write_header = file_writer->handle->GetFileSize() == 0;
 	format_writer->Initialize(should_write_header);
@@ -215,13 +216,13 @@ void FileLogSink::InitializeFile(DatabaseInstance &db, LoggingTargetTable table)
 
 unique_ptr<BufferedFileWriter> FileLogSink::InitializeFileWriter(DatabaseInstance &db, const string &path) {
 	auto &fs = db.GetFileSystem();
- 
+
 	// Create parent directories if non existent
 	auto pos = path.find_last_of("/\\");
 	if (pos != path.npos) {
 		fs.CreateDirectoriesRecursive(path.substr(0, pos));
 	}
- 
+
 	FileOpenFlags flags;
 	if (!fs.FileExists(path)) {
 		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE |
@@ -229,7 +230,7 @@ unique_ptr<BufferedFileWriter> FileLogSink::InitializeFileWriter(DatabaseInstanc
 	} else {
 		flags = FileFlags::FILE_FLAGS_DISABLE_LOGGING | FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND;
 	}
- 
+
 	return make_uniq<BufferedFileWriter>(fs, path, flags);
 }
 
@@ -246,8 +247,6 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 	bool normalize_contexts_new_value = normalize_contexts;
 	bool normalize_set_explicitly = false;
 	bool require_reinitializing_files = false;
-	bool changed_writer_settings = false;
-	case_insensitive_map_t<Value> writer_config;
 	vector<string> to_remove;
 	for (const auto &it : config_copy) {
 		auto key = StringUtil::Lower(it.first);
@@ -263,7 +262,9 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 			normalize_contexts_new_value = it.second.GetValue<bool>();
 			to_remove.push_back(it.first);
 		} else if (key == "delim") {
-			writer_config[it.first] = it.second;
+			// the files are reinitialized, so the new format writers pick this up
+			format_config[it.first] = it.second;
+			require_reinitializing_files = true;
 			to_remove.push_back(it.first);
 		}
 	}
@@ -291,13 +292,6 @@ void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_ma
 		ResetAllBuffers();
 		for (auto &table : tables) {
 			table.second.initialized = false;
-			table.second.writer.reset(); // new: writer is now owned per-table, must drop it too
-		}
-	} else if (!writer_config.empty()) {
-		for (auto &it : tables) {
-			if (it.second.writer) {
-				it.second.writer->UpdateConfig(writer_config);
-			}
 		}
 	}
 
