@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.h"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -23,6 +24,9 @@ namespace duckdb {
 struct DuckDBAdbcConnectionWrapper {
 	duckdb_connection connection;
 	unordered_map<string, string> options;
+	//! A cancel and a max_execution_time timeout raise the same exception type, and errors_as_json rewrites the
+	//! message that would tell them apart. Cleared when a statement starts executing
+	atomic<bool> cancel_requested {false};
 
 	//! Register a stream wrapper so it can be materialized if another query runs on this connection.
 	void RegisterStream(duckdb_adbc::DuckDBAdbcStreamWrapper *stream);

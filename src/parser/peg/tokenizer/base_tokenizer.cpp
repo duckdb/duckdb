@@ -37,7 +37,9 @@ bool Tokenizer::BackslashEscapesStringLiterals() const {
 }
 
 bool Tokenizer::IsQuotedIdentifierDelimiter(char character) const {
-	return character == '"';
+	// double quotes are the SQL standard delimiter; backticks are accepted as an alternative
+	// (as in several other SQL dialects), with the same doubling rule for escaping the delimiter
+	return character == '"' || character == '`';
 }
 
 void Tokenizer::HandleLastToken(TokenizerBehavior &behavior, TokenizeState state, const string &sql,

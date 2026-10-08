@@ -11,9 +11,9 @@
 namespace duckdb {
 
 TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context, string table_function_name_p,
-                                         string clause_p)
+                                         string clause_p, IdentifierConversionPolicy identifier_conversion_policy_p)
     : ExpressionBinder(binder, context), table_function_name(std::move(table_function_name_p)),
-      clause(std::move(clause_p)) {
+      clause(std::move(clause_p)), identifier_conversion_policy(identifier_conversion_policy_p) {
 }
 
 BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
@@ -78,7 +78,9 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		                      result_name);
 	}
 
-	auto setting = Settings::Get<TableFunctionIdentifierConversionSetting>(context);
+	auto setting = identifier_conversion_policy == IdentifierConversionPolicy::ALLOW
+	                   ? TableFunctionIdentifierConversion::ENABLE_IMPLICIT_STRING
+	                   : Settings::Get<TableFunctionIdentifierConversionSetting>(context);
 	auto implicit_conversion_disabled = setting == TableFunctionIdentifierConversion::DISABLE_IMPLICIT_STRING;
 	auto warn_implicit_conversion = setting == TableFunctionIdentifierConversion::DEFAULT;
 	const auto msg =
