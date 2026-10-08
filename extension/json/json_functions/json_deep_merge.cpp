@@ -9,9 +9,9 @@ namespace duckdb {
 static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root, yyjson_mut_val *patch_root) {
 	if (!yyjson_mut_is_obj(orig_root) || !yyjson_mut_is_obj(patch_root)) {
 		if (unsafe_yyjson_is_null(patch_root)) {
-			return yyjson_mut_val_mut_copy(doc, orig_root);
+			return CopyMutableValIterative(doc, orig_root);
 		}
-		return yyjson_mut_val_mut_copy(doc, patch_root);
+		return CopyMutableValIterative(doc, patch_root);
 	}
 
 	auto root_builder = yyjson_mut_obj(doc);
@@ -42,7 +42,7 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 				    yyjson_mut_obj_getn(nodes.patch_node, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 				if (!patch_val || unsafe_yyjson_is_null(patch_val)) {
 					auto mut_key = yyjson_mut_val_mut_copy(doc, key);
-					auto mut_val = yyjson_mut_val_mut_copy(doc, orig_val);
+					auto mut_val = CopyMutableValIterative(doc, orig_val);
 					yyjson_mut_obj_add(builder, mut_key, mut_val);
 				}
 			}
@@ -71,9 +71,9 @@ static yyjson_mut_val *DeepMerge(yyjson_mut_doc *doc, yyjson_mut_val *orig_root,
 
 					yyjson_mut_val *mut_val;
 					if (unsafe_yyjson_is_null(patch_val) && orig_val) {
-						mut_val = yyjson_mut_val_mut_copy(doc, orig_val);
+						mut_val = CopyMutableValIterative(doc, orig_val);
 					} else {
-						mut_val = yyjson_mut_val_mut_copy(doc, patch_val);
+						mut_val = CopyMutableValIterative(doc, patch_val);
 					}
 					yyjson_mut_obj_add(builder, mut_key, mut_val);
 				} else {

@@ -41,7 +41,7 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 				    yyjson_mut_obj_getn(nodes.patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
 				if (!patch_val) {
 					yyjson_mut_obj_add(nodes.builder, yyjson_mut_val_mut_copy(doc, key),
-					                   yyjson_mut_val_mut_copy(doc, orig_val));
+					                   CopyMutableValIterative(doc, orig_val));
 				}
 			}
 		}
@@ -55,7 +55,7 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 			}
 			auto mut_key = yyjson_mut_val_mut_copy(doc, key);
 			if (!yyjson_mut_is_obj(patch_val)) {
-				yyjson_mut_obj_add(nodes.builder, mut_key, yyjson_mut_val_mut_copy(doc, patch_val));
+				yyjson_mut_obj_add(nodes.builder, mut_key, CopyMutableValIterative(doc, patch_val));
 				continue;
 			}
 			auto orig_val = yyjson_mut_obj_getn(nodes.orig, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));

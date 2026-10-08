@@ -1,0 +1,54 @@
+# name: test/sql/json/scalar/test_json_merge_deep_nesting.test
+# description: json_merge_patch / json_deep_merge copy deeply nested subtrees without recursing
+# group: [scalar]
+
+require json
+
+# deep array as a patch value
+query I
+SELECT length(json_merge_patch('{"a":1}', '{"a":' || repeat('[', 200000) || repeat(']', 200000) || '}'));
+----
+400006
+
+# deep orig value under a key the patch does not touch
+query I
+SELECT length(json_merge_patch('{"a":' || repeat('[', 200000) || repeat(']', 200000) || '}', '{"b":1}'));
+----
+400012
+
+# deep object as orig, empty patch
+query I
+SELECT length(json_merge_patch(repeat('{"a":', 200000) || '1' || repeat('}', 200000), '{}'));
+----
+1200001
+
+query I
+SELECT length(json_deep_merge('{"a":1}', '{"a":' || repeat('[', 200000) || repeat(']', 200000) || '}'));
+----
+400006
+
+query I
+SELECT length(json_deep_merge('{"a":' || repeat('[', 200000) || repeat(']', 200000) || '}', '{"b":1}'));
+----
+400012
+
+# the merge semantics are unchanged
+query I
+SELECT json_merge_patch('{"a":{"x":1,"y":2},"b":[1,2]}', '{"a":{"y":9,"z":3},"c":5}');
+----
+{"b":[1,2],"a":{"x":1,"y":9,"z":3},"c":5}
+
+query I
+SELECT json_merge_patch('{"a":{"b":1}}', '{"a":{"b":null,"c":2}}');
+----
+{"a":{"c":2}}
+
+query I
+SELECT json_deep_merge('{"a":{"x":1}}', '{"a":{"y":2},"b":3}');
+----
+{"a":{"x":1,"y":2},"b":3}
+
+query I
+SELECT json_deep_merge('{"a":5}', '{"a":null,"b":2}');
+----
+{"a":5,"b":2}
