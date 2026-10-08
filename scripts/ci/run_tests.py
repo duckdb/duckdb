@@ -1922,6 +1922,7 @@ def run_single_config(
     print_config_header: bool,
     executor: concurrent.futures.ThreadPoolExecutor | None = None,
     output=None,
+    tail_callback=None,
 ):
     output = output if output is not None else sys.stdout
     if stop_requested():
@@ -1993,13 +1994,20 @@ def run_single_config(
         config_output = ", ".join(f"{key}={value}" for key, value in config_values.items())
         print(f"config: {config_output}", file=output)
 
-        def run_test_batches(test_batches, test_count):
+        def run_test_batches(test_batches, test_count, notify_tail=False):
             if executor is None and output is sys.stdout:
                 return run_tests(config, test_batches, test_count)
-            return run_tests(config, test_batches, test_count, executor=executor, output=output)
+            return run_tests(
+                config,
+                test_batches,
+                test_count,
+                executor=executor,
+                output=output,
+                tail_callback=tail_callback if notify_tail else None,
+            )
 
         batches = list(chunked(tests, computed_batch_size))
-        initial_run_result = run_test_batches(batches, len(tests))
+        initial_run_result = run_test_batches(batches, len(tests), notify_tail=True)
         if initial_run_result.returncode != 0 or not stabilization_tests:
             return initial_run_result
 
@@ -2165,24 +2173,42 @@ def main_impl(argv: list[str] | None = None):
         else:
             config_worker_count = min(len(config_invocations), workers)
             buffers = [StringIO() for _ in config_invocations]
+            config_start_events = [threading.Event() for _ in config_invocations]
+            config_start_events[0].set()
+
+            def run_config_after_previous_tail(config_idx, batch_executor):
+                config_start_events[config_idx].wait()
+                next_config_event = (
+                    config_start_events[config_idx + 1] if config_idx + 1 < len(config_invocations) else None
+                )
+                try:
+                    return run_single_config(
+                        args,
+                        unittest_bin,
+                        workers,
+                        retry,
+                        max_retries,
+                        max_failures,
+                        batch_size,
+                        test_list_files,
+                        config_invocations[config_idx],
+                        False,
+                        batch_executor,
+                        buffers[config_idx],
+                        next_config_event.set if next_config_event is not None else None,
+                    )
+                finally:
+                    if next_config_event is not None:
+                        next_config_event.set()
+
             with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as batch_executor:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=config_worker_count) as config_executor:
                     future_to_config = {}
-                    for config_idx, invocation in enumerate(config_invocations):
+                    for config_idx in range(len(config_invocations)):
                         future = config_executor.submit(
-                            run_single_config,
-                            args,
-                            unittest_bin,
-                            workers,
-                            retry,
-                            max_retries,
-                            max_failures,
-                            batch_size,
-                            test_list_files,
-                            invocation,
-                            False,
+                            run_config_after_previous_tail,
+                            config_idx,
                             batch_executor,
-                            buffers[config_idx],
                         )
                         future_to_config[future] = config_idx
                     for future in concurrent.futures.as_completed(future_to_config):
@@ -2258,6 +2284,7 @@ def run_tests(
     total_tests: int,
     executor: concurrent.futures.ThreadPoolExecutor | None = None,
     output=None,
+    tail_callback=None,
 ):
     output = output if output is not None else sys.stdout
     start = time.monotonic()
@@ -2267,6 +2294,13 @@ def run_tests(
     partially_skipped_test_names = set()
     skipped_reason_counts = {}
     partial_skip_reason_test_names = {}
+    tail_notified = False
+
+    def notify_tail(next_batch_idx):
+        nonlocal tail_notified
+        if tail_callback is not None and not tail_notified and next_batch_idx >= len(batches):
+            tail_notified = True
+            tail_callback()
 
     executor_context = (
         concurrent.futures.ThreadPoolExecutor(max_workers=config.workers)
@@ -2293,6 +2327,7 @@ def run_tests(
                 elapsed_seconds=time.monotonic() - start,
             )
         next_batch_idx = submit_batches(active_executor, config, batches, future_to_batch, next_batch_idx)
+        notify_tail(next_batch_idx)
 
         while future_to_batch:
             if stop_requested():
@@ -2352,6 +2387,7 @@ def run_tests(
 
             if not state.stop_launching and not stop_requested():
                 next_batch_idx = submit_batches(active_executor, config, batches, future_to_batch, next_batch_idx)
+                notify_tail(next_batch_idx)
 
     progress.flush_line()
     elapsed = time.monotonic() - start

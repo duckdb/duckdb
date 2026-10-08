@@ -2217,6 +2217,72 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertTrue(a_started)
         self.assertTrue(b_started)
 
+    def test_next_test_config_starts_only_during_previous_tail(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            helper_path = create_temp_file(
+                """
+                #!/bin/sh
+                if [ "$3" = "--list-tests" ]; then
+                  if [ "$2" = "test/configs/a.json" ]; then
+                    printf 'name\\tgroup\\ntest/sql/a1.test\\t[fast]\\ntest/sql/a2.test\\t[fast]\\n'
+                    printf 'test/sql/a3.test\\t[fast]\\ntest/sql/a4.test\\t[fast]\\n'
+                  else
+                    printf 'name\\tgroup\\ntest/sql/b.test\\t[fast]\\n'
+                  fi
+                  exit 0
+                fi
+
+                for batch_file do :; done
+                test_name=$(head -n 1 "$batch_file")
+                case "$test_name" in
+                  *a1.test) touch "{state_dir}/a1.done" ;;
+                  *a2.test) touch "{state_dir}/a2.done" ;;
+                  *a3.test)
+                    touch "{state_dir}/a3.started"
+                    sleep 0.05
+                    touch "{state_dir}/a3.done"
+                    ;;
+                  *a4.test)
+                    touch "{state_dir}/a4.started"
+                    sleep 1
+                    touch "{state_dir}/a4.done"
+                    ;;
+                  *b.test)
+                    [ -f "{state_dir}/a1.done" ] || exit 5
+                    [ -f "{state_dir}/a2.done" ] || exit 6
+                    [ -f "{state_dir}/a4.started" ] || exit 7
+                    [ ! -f "{state_dir}/a4.done" ] || exit 8
+                    touch "{state_dir}/b.started"
+                    ;;
+                  *) exit 9 ;;
+                esac
+                """,
+                state_dir=state_dir,
+            )
+            os.chmod(helper_path, 0o755)
+            try:
+                with mock.patch.dict(os.environ, {"CI": ""}, clear=False):
+                    proc = start_runner(
+                        [
+                            "--workers",
+                            "2",
+                            "--batch-size",
+                            "1",
+                            "--test-config",
+                            "test/configs/a.json",
+                            "--test-config",
+                            "test/configs/b.json",
+                            str(helper_path),
+                        ]
+                    )
+            finally:
+                helper_path.unlink(missing_ok=True)
+
+            b_started = (Path(state_dir) / "b.started").exists()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue(b_started)
+
     def test_multiple_test_configs_share_global_worker_limit(self):
         with tempfile.TemporaryDirectory() as state_dir:
             helper_path = create_temp_file(
