@@ -259,7 +259,8 @@ public:
 private:
 	void ReturnTouched(const idx_t count) {
 		block_allocator->AddRetention(count, RetentionTimeMillis());
-		block_allocator->touched->q.enqueue_bulk(touched.end() - count, count);
+		block_allocator->touched->q.enqueue_bulk(touched.end() - NumericCast<vector<uint32_t>::difference_type>(count),
+		                                         count);
 		touched.resize(touched.size() - count);
 	}
 
@@ -665,7 +666,8 @@ idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optiona
 		}
 		remaining -= count;
 		task_remaining -= count;
-		std::sort(to_free_buffer.begin(), to_free_buffer.begin() + count);
+		std::sort(to_free_buffer.begin(),
+		          to_free_buffer.begin() + NumericCast<unsafe_vector<uint32_t>::difference_type>(count));
 
 		idx_t start = 0;
 		while (start < count) {
@@ -677,10 +679,13 @@ idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optiona
 				FreeContiguousBlocks(to_free_buffer[start], to_free_buffer[end - 1]);
 			} catch (...) {
 				annotated_lock_guard<annotated_mutex> guard(flush_lock);
-				touched->q.enqueue_bulk(to_free_buffer.begin() + start, count - start);
+				touched->q.enqueue_bulk(to_free_buffer.begin() +
+				                            NumericCast<unsafe_vector<uint32_t>::difference_type>(start),
+				                        count - start);
 				throw;
 			}
-			untouched->q.enqueue_bulk(to_free_buffer.begin() + start, end - start);
+			untouched->q.enqueue_bulk(
+			    to_free_buffer.begin() + NumericCast<unsafe_vector<uint32_t>::difference_type>(start), end - start);
 			start = end;
 		}
 	}
