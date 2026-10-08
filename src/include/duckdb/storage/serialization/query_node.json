@@ -80,6 +80,15 @@
         "name": "qualify",
         "type": "ParsedExpression*"
       }
+    ],
+    "finalize_deserialization": [
+      "for (auto &grouping_set : result->groups.grouping_sets) {",
+      "\tfor (auto &group_index : grouping_set) {",
+      "\t\tif (!group_index.IsValid() || group_index.GetIndex() >= result->groups.group_expressions.size()) {",
+      "\t\t\tthrow SerializationException(\"Grouping set refers to a group that does not exist\");",
+      "\t\t}",
+      "\t}",
+      "}"
     ]
   },
   {
