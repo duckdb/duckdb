@@ -318,7 +318,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 	D_ASSERT(schema_obj.type == CatalogType::SCHEMA_ENTRY);
 	if (!info.temporary) {
 		auto &properties = GetStatementProperties();
-		properties.RegisterDBModify(schema_obj.catalog, context, DatabaseModificationType::CREATE_CATALOG_ENTRY);
+		properties.RegisterDBModify(schema_obj.catalog, context, info.GetModifications());
 	}
 	return schema_obj;
 }
@@ -855,7 +855,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &info = stmt.info->Cast<CreateSchemaInfo>();
 		BindCreateSchema(info);
 		properties.RegisterDBModify(Catalog::GetCatalog(context, info.SchemaCatalog()), context,
-		                            DatabaseModificationType::CREATE_CATALOG_ENTRY);
+		                            info.GetModifications());
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	}

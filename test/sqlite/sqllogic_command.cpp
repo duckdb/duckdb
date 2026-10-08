@@ -152,8 +152,8 @@ bool CanRestart(Connection &conn) {
 		auto &temp = conn.client_data->temporary_objects;
 		auto &temp_catalog = temp->GetCatalog().Cast<DuckCatalog>();
 		vector<reference<DuckSchemaEntry>> schemas;
-		temp_catalog.ScanSchemas(
-		    [&](SchemaCatalogEntry &schema) { schemas.push_back(schema.Cast<DuckSchemaEntry>()); });
+		temp_catalog.ScanSchemas(VisibilityBound::AllCommitted(),
+		                         [&](DuckSchemaEntry &schema) { schemas.push_back(schema); });
 		if (schemas.size() != 1) {
 			return false;
 		}
@@ -164,7 +164,7 @@ bool CanRestart(Connection &conn) {
 		                                   CatalogType::MACRO_ENTRY,     CatalogType::TABLE_MACRO_ENTRY};
 		bool found_temp_object = false;
 		for (auto &catalog_type : catalog_types) {
-			temp_schema.Scan(catalog_type, [&](CatalogEntry &entry) {
+			temp_schema.Scan(catalog_type, VisibilityBound::AllCommitted(), [&](CatalogEntry &entry) {
 				if (entry.internal) {
 					return;
 				}
