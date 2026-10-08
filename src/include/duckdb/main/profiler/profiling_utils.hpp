@@ -114,7 +114,7 @@ public:
 		string_counters.clear();
 		bytes_read = 0;
 		bytes_written = 0;
-		bytes_scanned = 0;
+		// bytes_scanned is not reset here, so it can be read after a failed query; StartQuery resets it
 		total_memory_allocated = 0;
 
 		query_sql = "";

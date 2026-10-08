@@ -171,3 +171,26 @@ TEST_CASE("Test the running total of bytes scanned", "[api][parquet]") {
 	REQUIRE_NO_FAIL(con.Query("SELECT sum(i) FROM secure_scan"));
 	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == chunk_bytes);
 }
+
+TEST_CASE("Test the running total of bytes scanned after a failed query", "[api][parquet]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads = 1"));
+	auto path = TestCreatePath("bytes_scanned_failed_query.parquet");
+	REQUIRE_NO_FAIL(
+	    con.Query("COPY (SELECT range AS i FROM range(6144)) TO '" + path + "' (FORMAT parquet, ROW_GROUP_SIZE 2048)"));
+	auto chunks = con.Query("SELECT sum(total_compressed_size)::UBIGINT FROM parquet_metadata('" + path + "')");
+	REQUIRE_NO_FAIL(*chunks);
+	auto chunk_bytes = chunks->Collection().GetValue(0, 0).GetValue<uint64_t>();
+
+	// fails in the second of three row groups, after scanning the first
+	REQUIRE_FAIL(
+	    con.Query("SELECT sum(CASE WHEN i = 3000 THEN error('boom') ELSE i END) FROM read_parquet('" + path + "')"));
+	auto scanned_before_failing = QueryProfiler::Get(*con.context).GetBytesScanned();
+	REQUIRE(scanned_before_failing > 0);
+	REQUIRE(scanned_before_failing < chunk_bytes);
+
+	// and the next query starts from zero
+	REQUIRE_NO_FAIL(con.Query("SELECT sum(i) FROM read_parquet('" + path + "')"));
+	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == chunk_bytes);
+}
