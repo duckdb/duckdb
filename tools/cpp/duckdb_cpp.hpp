@@ -3064,17 +3064,23 @@ enum class OrderPreservation : uint8_t {
 /// lives on in the catalog.
 ///
 /// The callbacks receive their state through the input objects: `SetUserData` plants data readable from every
-/// callback, the bind callback may plant bind data for init and exec, and the init callback may plant init data for
-/// exec. A callback reports failure by throwing; the exception surfaces as the query's error.
+/// callback, the resolve types callback may resolve the return type, the bind callback may plant bind data for init
+/// and exec, and the init callback may plant init data for exec. A callback reports failure by throwing; the exception
+/// surfaces as the query's error.
 class ScalarFunction final : public detail::Handle<ScalarFunction> {
 	friend detail::Factory;
 
 public:
+	class ResolveTypesInput;
 	class BindInput;
 	class InitInput;
 	class ExecInput;
 
-	/// Called once per query while the function call is bound. Optional; required when the return type is ANY.
+	/// Called once per query while the function call is bound, before the arguments are cast to the parameter types.
+	/// Optional; required when the return type is ANY.
+	using ResolveTypesCallback = void (*)(ResolveTypesInput &input);
+	/// Called once per query while the function call is bound, after the arguments are cast to the parameter types.
+	/// Optional.
 	using BindCallback = void (*)(BindInput &input);
 	/// Called once per execution thread before the first `ExecCallback` on it. Optional.
 	using InitCallback = void (*)(InitInput &input);
@@ -3095,11 +3101,12 @@ public:
 	auto SetName(const std::string &name) & -> ScalarFunction &;
 
 	/// The function's signature, borrowed for in-place mutation. Registration requires a return type that is either
-	/// a fully defined concrete type, or ANY combined with a bind callback that resolves it.
+	/// a fully defined concrete type, or ANY combined with a resolve types callback that resolves it.
 	auto GetSignature() -> FunctionSignature;
 
 	/// Calls `configure` with the function's signature, borrowed for in-place mutation. Registration requires a return
-	/// type that is either a fully defined concrete type, or ANY combined with a bind callback that resolves it.
+	/// type that is either a fully defined concrete type, or ANY combined with a resolve types callback that resolves
+	/// it.
 	template <class F>
 	auto WithSignature(F &&configure) & -> ScalarFunction & {
 		auto sig = GetSignature();
@@ -3116,6 +3123,7 @@ public:
 		return *this;
 	}
 
+	auto SetResolveTypesCallback(ResolveTypesCallback callback) & -> ScalarFunction &;
 	auto SetBindCallback(BindCallback callback) & -> ScalarFunction &;
 	auto SetInitCallback(InitCallback callback) & -> ScalarFunction &;
 	auto SetExecCallback(ExecCallback callback) & -> ScalarFunction &;
@@ -3140,14 +3148,16 @@ private:
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
+	ResolveTypesCallback resolve_types_callback = nullptr;
 	BindCallback bind_callback = nullptr;
 	InitCallback init_callback = nullptr;
 	ExecCallback exec_callback = nullptr;
 	detail::UserData user_data;
 
 public:
-	/// What the bind callback works with. Borrowed, valid only for the callback duration.
-	class BindInput final : public FunctionBindInput {
+	/// What the resolve types callback works with. The argument types are the types the caller passed, before they
+	/// are cast to the parameter types. Borrowed, valid only for the callback duration.
+	class ResolveTypesInput final : public FunctionBindInput {
 		friend detail::Factory;
 
 	public:
@@ -3163,11 +3173,46 @@ public:
 		auto SetReturnType(const LogicalType &type) -> void;
 
 	private:
+		ResolveTypesInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
+		}
+
+		/// The bind data can only be set from the bind callback
+		using FunctionBindInput::SetBindData;
+
+		void *result;
+
+		void *GetUserDataInternal() const;
+	};
+
+	/// What the bind callback works with. The argument types are the parameter types the arguments were cast to.
+	/// Borrowed, valid only for the callback duration.
+	class BindInput final : public FunctionBindInput {
+		friend detail::Factory;
+
+	public:
+		/// Constructs bind data of type `T`, owned by the bound function call and readable from the init and exec
+		/// callbacks via `GetBindData<T>`. The engine compares bind data when it compares expressions: by
+		/// `operator==` when `T` has one, by identity otherwise.
+		template <class T, class... ARGS>
+		void SetBindData(ARGS &&... args) {
+			auto ptr = new T(std::forward<ARGS>(args)...);
+			SetBindDataInternal(ptr, detail::SelectEquals<T>(), detail::TypedDelete<T>);
+		}
+
+		/// The user data set via `ScalarFunction::SetUserData`.
+		/// @throws InvalidInputException When none was set.
+		template <class T>
+		auto GetUserData() const -> T & {
+			return *static_cast<T *>(GetUserDataInternal());
+		}
+
+	private:
 		BindInput(void *args, void *result, void *context) : FunctionBindInput(args, context), result(result) {
 		}
 
 		void *result;
 
+		void SetBindDataInternal(void *data, bool (*equals)(void *a, void *b), void (*destructor)(void *));
 		void *GetUserDataInternal() const;
 	};
 
