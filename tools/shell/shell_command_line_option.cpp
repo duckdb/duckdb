@@ -151,13 +151,11 @@ bool ShellState::ExpandCommandParameters(const string &command, string &result) 
 static MetadataResult RunConfiguredCommand(ShellState &state, const string &command) {
 	string expanded_command;
 	if (!state.ExpandCommandParameters(command, expanded_command)) {
-		ShellState::Exit(1);
-		return MetadataResult::EXIT;
+		return MetadataResult::FAIL;
 	}
 	auto rc = state.RunInitialCommand(expanded_command.c_str(), true);
 	if (rc != 0) {
-		ShellState::Exit(rc);
-		return MetadataResult::EXIT;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
@@ -301,8 +299,7 @@ MetadataResult RunManual(ShellState &state, const vector<string> &args) {
 	// show the manual page and exit; unlike -c we keep interactive detection so the output stays colored
 	state.readStdin = false;
 	if (state.DisplayManual(args) == MetadataResult::FAIL) {
-		ShellState::Exit(1);
-		return MetadataResult::EXIT;
+		return MetadataResult::FAIL;
 	}
 	return MetadataResult::SUCCESS;
 }
