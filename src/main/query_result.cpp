@@ -354,14 +354,26 @@ void QueryResult::CompleteInternal(ClientContextLock &lock) {
 	}
 	D_ASSERT(buffer);
 	buffer->Decide(ResultLifetime::RETAINED);
-	QueryResultState state;
-	while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
-		if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
-			context->WaitForTask(lock, *this);
+	try {
+		QueryResultState state;
+		while (!IsTerminal(state = context->ExecuteTaskInternal(lock, *this))) {
+			if (state == QueryResultState::BLOCKED || state == QueryResultState::READY) {
+				context->WaitForTask(lock, *this);
+			}
 		}
-	}
-	if (state == QueryResultState::FINISHED) {
-		EndFinishedInternal(lock);
+		if (state == QueryResultState::FINISHED) {
+			EndFinishedInternal(lock);
+		}
+	} catch (...) {
+		// the caller holds the context lock - clean up with it here, as closing this result would lock it again
+		try {
+			if (context->IsActiveResult(lock, *this)) {
+				context->CleanupInternal(lock, this, true);
+			}
+		} catch (...) { // NOLINT
+		}
+		context.reset();
+		throw;
 	}
 	context.reset();
 }
