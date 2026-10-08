@@ -1825,8 +1825,7 @@ string Value::NestedToSQLString(const Value &value, const std::function<string(c
 	switch (type.id()) {
 	case LogicalTypeId::TUPLE:
 	case LogicalTypeId::STRUCT: {
-		// a TUPLE is always unnamed (even when empty, where IsUnnamed cannot tell)
-		bool is_unnamed = type.id() == LogicalTypeId::TUPLE || StructType::IsUnnamed(type);
+		bool is_unnamed = type.id() == LogicalTypeId::TUPLE;
 		string ret = is_unnamed ? "(" : "{";
 		auto &child_types = StructType::GetChildTypes(type);
 		auto &struct_values = StructValue::GetChildren(value);
