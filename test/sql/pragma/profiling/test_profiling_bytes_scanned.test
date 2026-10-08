@@ -180,4 +180,4 @@ analyzed_plan	<!REGEX>:[\s\S]*"bytes_scanned": [1-9][\s\S]*
 query II
 EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM regular_scan
 ----
-analyzed_plan	<!REGEX>:[\s\S]*"total_bytes_scanned": 0[\s\S]*
+analyzed_plan	<REGEX>:[\s\S]*"total_bytes_scanned": [1-9][\s\S]*
