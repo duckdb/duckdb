@@ -388,6 +388,35 @@ struct SortedAggregateFunction {
 		AggregateStateInput state_input(aggr, bind_info);
 		data_ptr_t agg_state_ptr = agg_state.data();
 
+		//	The inner aggregate (or the sort) can throw while its state is initialized - destroy it in that case
+		struct InnerStateGuard {
+			~InnerStateGuard() {
+				if (live && destructor) {
+					try {
+						destructor(state_vec, input, 1);
+					} catch (...) { // NOLINT
+					}
+				}
+			}
+			aggregate_destructor_t destructor;
+			Vector &state_vec;
+			AggregateInputData &input;
+			bool live;
+		};
+		InnerStateGuard inner_state_guard {destructor, agg_state_vec, aggr_bind_info, false};
+		auto initialize_inner_state = [&]() {
+			initialize(state_input, &agg_state_ptr, 1);
+			inner_state_guard.live = true;
+		};
+		auto finalize_inner_state = [&](idx_t result_idx) {
+			agg_state_vec.SetVectorType(states.GetVectorType());
+			finalize(agg_state_vec, aggr_bind_info, result, 1, result_idx);
+			if (destructor) {
+				destructor(agg_state_vec, aggr_bind_info, 1);
+			}
+			inner_state_guard.live = false;
+		};
+
 		auto sdata = states.Values<SortedAggregateState *>();
 
 		vector<idx_t> state_unprocessed(count, 0);
@@ -438,7 +467,7 @@ struct SortedAggregateFunction {
 			auto global_source = sort->GetGlobalSourceState(client, *global_sink);
 			auto local_source = sort->GetLocalSourceState(context, *global_source);
 
-			initialize(state_input, &agg_state_ptr, 1);
+			initialize_inner_state();
 			for (;;) {
 				OperatorSourceInput source {*global_source, *local_source, interrupt};
 				scanned.Reset();
@@ -452,13 +481,8 @@ struct SortedAggregateFunction {
 					//	Find the next aggregate that needs data
 					for (; !state_unprocessed[sorted]; ++sorted) {
 						// Finalize a single value at the next offset
-						agg_state_vec.SetVectorType(states.GetVectorType());
-						finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
-						if (destructor) {
-							destructor(agg_state_vec, aggr_bind_info, 1);
-						}
-
-						initialize(state_input, &agg_state_ptr, 1);
+						finalize_inner_state(sorted + offset);
+						initialize_inner_state();
 					}
 					const auto input_count = MinValue(state_unprocessed[sorted], scanned.size() - consumed);
 					for (column_t col_idx = 0; col_idx < scanned.ColumnCount(); ++col_idx) {
@@ -484,11 +508,7 @@ struct SortedAggregateFunction {
 			}
 
 			//	Finalize the last state for this sort
-			agg_state_vec.SetVectorType(states.GetVectorType());
-			finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
-			if (destructor) {
-				destructor(agg_state_vec, aggr_bind_info, 1);
-			}
+			finalize_inner_state(sorted + offset);
 			++sorted;
 
 			//	Stop if we are done
@@ -503,15 +523,9 @@ struct SortedAggregateFunction {
 		}
 
 		for (; sorted < count; ++sorted) {
-			initialize(state_input, &agg_state_ptr, 1);
-
+			initialize_inner_state();
 			// Finalize a single value at the next offset
-			agg_state_vec.SetVectorType(states.GetVectorType());
-			finalize(agg_state_vec, aggr_bind_info, result, 1, sorted + offset);
-
-			if (destructor) {
-				destructor(agg_state_vec, aggr_bind_info, 1);
-			}
+			finalize_inner_state(sorted + offset);
 		}
 
 		result.Verify();
