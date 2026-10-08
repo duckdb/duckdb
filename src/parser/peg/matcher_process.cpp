@@ -1,5 +1,6 @@
 #include "duckdb/parser/peg/matcher.hpp"
 #include "duckdb/parser/peg/matcher/choice_matcher.hpp"
+#include "duckdb/parser/peg/matcher/literal_choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher/optional_matcher.hpp"
 #include "duckdb/parser/peg/matcher/repeat_matcher.hpp"
@@ -20,7 +21,9 @@ optional<MatchInput> MatchStep::GetChild() {
 
 MatcherResult MatchStep::GetResult() const {
 	D_ASSERT(!child);
-	D_ASSERT(result);
+	if (!result) {
+		throw InternalException("Completed match step has no result");
+	}
 	return *result;
 }
 
@@ -89,12 +92,48 @@ public:
 		}
 		state.token_iterator.SetPosition(list_state.token_iterator);
 		DiscardSuggestions();
+		if (matcher.IsCollapsible()) {
+			auto collapsible = FindCollapsibleResult();
+			if (collapsible) {
+				collapsible->collapsed = true;
+				return MatchStep::Complete(MatcherResult::Success(collapsible));
+			}
+		}
 		auto list_name = matcher.HasName() ? matcher.GetName() : string();
 		return MatchStep::Complete(
 		    state.AllocateParseResult<ListParseResult>(std::move(results), std::move(list_name), start_offset));
 	}
 
 private:
+	//! The child that can stand in for this rule's own result, or nullptr when the rule has to build one
+	optional_ptr<ParseResult> FindCollapsibleResult() const {
+		optional_ptr<ParseResult> collapsible;
+		for (auto &child : results) {
+			auto &child_result = child.get();
+			// an optional that matched nothing carries no value, so it does not stop the rule from collapsing
+			if (child_result.type == ParseResultType::OPTIONAL &&
+			    !child_result.Cast<OptionalParseResult>().HasResult()) {
+				continue;
+			}
+
+			// a second child with a result means the rule combines them rather than forwarding one of them
+			if (collapsible) {
+				return nullptr;
+			}
+
+			collapsible = child_result;
+		}
+
+		// only results that carry a rule of their own are collapsible into this one, since the result is
+		// transformed by that rule
+		if (collapsible && !collapsible->GetRule()) {
+			return nullptr;
+		}
+
+		// null when no child produced a result, so a rule that matched empty still gets a result of its own
+		return collapsible;
+	}
+
 	void DiscardSuggestions() {
 		if (!matcher.suppress_suggestions) {
 			return;
@@ -119,9 +158,11 @@ arena_ptr<MatchProcess> ListMatcher::StartMatch(MatchState &state) const {
 	return state.Make<ListMatchProcess>(*this, state);
 }
 
+template <bool SINGLE_CHILD>
 class ChoiceMatchProcess : public MatchProcess {
 public:
-	ChoiceMatchProcess(const ChoiceMatcher &matcher_p, MatchState &state_p) : matcher(matcher_p), state(state_p) {
+	ChoiceMatchProcess(const ChoiceMatcher &matcher_p, MatchState &state_p, idx_t child_index_p = 0)
+	    : matcher(matcher_p), state(state_p), child_index(child_index_p) {
 		if (auto current = state.token_iterator.Current()) {
 			start_offset = optional_idx(current->offset);
 		}
@@ -131,7 +172,9 @@ public:
 		D_ASSERT(awaiting_child == child_result.has_value());
 		if (child_result) {
 			awaiting_child = false;
-			D_ASSERT(child_state);
+			if (!child_state) {
+				throw InternalException("Choice matcher child state is missing");
+			}
 			if (child_result->IsSuccess()) {
 				state.token_iterator.SetPosition(child_state->token_iterator);
 				if (!child_result->HasParseResult()) {
@@ -139,6 +182,9 @@ public:
 				}
 				return MatchStep::Complete(state.AllocateParseResult<ChoiceParseResult>(*child_result->GetParseResult(),
 				                                                                        child_index, start_offset));
+			}
+			if (SINGLE_CHILD) {
+				return MatchStep::Complete(MatcherResult::Failure());
 			}
 			child_index++;
 			child_state.reset();
@@ -161,7 +207,14 @@ private:
 };
 
 arena_ptr<MatchProcess> ChoiceMatcher::StartMatch(MatchState &state) const {
-	return state.Make<ChoiceMatchProcess>(*this, state);
+	return state.Make<ChoiceMatchProcess<false>>(*this, state);
+}
+
+arena_ptr<MatchProcess> LiteralChoiceMatcher::StartMatch(MatchState &state) const {
+	auto literal = state.token_iterator.CurrentLiteralInfo(table);
+	auto entry = literal_children.find(literal.LiteralId());
+	auto child_index = entry == literal_children.end() ? matchers.size() : entry->second;
+	return state.Make<ChoiceMatchProcess<true>>(*this, state, child_index);
 }
 
 class OptionalMatchProcess : public MatchProcess {

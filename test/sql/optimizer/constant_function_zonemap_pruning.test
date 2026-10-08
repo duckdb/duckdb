@@ -70,7 +70,7 @@ SELECT CASE WHEN i < 2048 THEN NULL WHEN i < 4096 THEN 'alpha'
             WHEN i < 6144 THEN 'beta' ELSE 'abcdefghijkl' || (i % 2)::VARCHAR END AS s
 FROM range(8192) t(i);
 
-# RGs 1 and 4 remain unknown; regexp_matches also exercises direct BOOLEAN pruning.
+# RG 4 remains unknown; regexp_matches also exercises direct BOOLEAN pruning.
 foreach predicate hash(s)=hash('beta') reverse(s)='ateb' regexp_matches(s,'(t|z)')
 
 query I
@@ -81,7 +81,7 @@ SELECT count(*) FROM const_db.constant_strings WHERE {predicate};
 query II
 EXPLAIN ANALYZE SELECT s FROM const_db.constant_strings WHERE {predicate};
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 4.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
 
 endloop
 
@@ -127,7 +127,7 @@ SELECT count(*) FROM const_db.constant_strings WHERE reverse(s) = '0lkjihgfedcba
 query II
 EXPLAIN ANALYZE SELECT s FROM const_db.constant_strings WHERE reverse(s) = '0lkjihgfedcba';
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 4.*
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 4.*
 
 # Equal intervals can have different month/day components.
 statement ok

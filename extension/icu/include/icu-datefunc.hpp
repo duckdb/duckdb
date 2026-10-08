@@ -105,6 +105,11 @@ struct ICUDateFunc {
 	static uint64_t SetTimeNS(Calendar *calendar, timestamp_tz_ns_t date);
 	//! Extracts the field from the calendar
 	static int32_t ExtractField(Calendar *calendar, CalendarField field);
+	//! Extracts the UTC offset (in seconds) of the calendar, returns false if a TIMETZ cannot represent it
+	static bool TryGetTimeTZOffset(Calendar *calendar, int32_t &offset);
+	//! Extracts the UTC offset (in seconds) of the calendar, throws if a TIMETZ cannot represent it
+	static int32_t GetTimeTZOffset(Calendar *calendar);
+	static string TimeTZOffsetError(int32_t offset);
 	//! Subtracts the field of the given date from the calendar
 	static int32_t SubtractField(Calendar *calendar, CalendarField field, timestamp_tz_t end_date);
 	//! Adds the timestamp and the interval using the calendar

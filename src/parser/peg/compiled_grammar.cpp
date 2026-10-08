@@ -2,25 +2,16 @@
 #include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/keyword_helper/parsed_grammar_keyword_helper.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/main/client_config.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/extension_callback_manager.hpp"
 #include "duckdb/parser/grammar_extension.hpp"
 
 namespace duckdb {
 
-CompiledGrammar::CompiledGrammar(const ParsedGrammar &grammar, bool has_grammar_changes_p)
-    : owned_keyword_helper(make_uniq<ParsedGrammarKeywordHelper>(grammar)), keyword_helper(*owned_keyword_helper),
-      tokenizer(keyword_helper), has_grammar_changes(has_grammar_changes_p) {
-}
-
-shared_ptr<CompiledGrammar> CompiledGrammar::Get(ClientContext &context) {
-	auto &client_config = ClientConfig::GetConfig(context);
-	if (client_config.cached_grammar) {
-		return client_config.cached_grammar;
-	}
-	return DatabaseInstance::GetDatabase(context).GetParserCache().GetMatcher();
+CompiledGrammar::CompiledGrammar(MatcherAllocator &&allocator_p, unique_ptr<PEGKeywordHelper> &&keyword_helper_p,
+                                 unique_ptr<Tokenizer> &&tokenizer_p, compiled_rules_map_t &&rules_p,
+                                 const Matcher &program_matcher, const Matcher &top_level_statement_matcher)
+    : allocator(std::move(allocator_p)), keyword_helper(std::move(keyword_helper_p)), tokenizer(std::move(tokenizer_p)),
+      rules(std::move(rules_p)), program_matcher(program_matcher),
+      top_level_statement_matcher(top_level_statement_matcher) {
 }
 
 static void ValidateParsedGrammarRoots(const ParsedGrammar &grammar) {
@@ -107,6 +98,8 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	AddTerminalRuleOverride(overrides, "NumberLiteral", make_uniq<NumberLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "StringLiteral", make_uniq<StringLiteralMatcher>());
 	AddTerminalRuleOverride(overrides, "OperatorLiteral", make_uniq<OperatorMatcher>());
+	AddTerminalRuleOverride(overrides, "AnyOperatorLiteral",
+	                        make_uniq<OperatorMatcher>(OperatorMatcherMode::ALL_OPERATORS));
 	//===--------------------------------------------------------------------===//
 	// END GENERATED RULE OVERRIDES
 	//===--------------------------------------------------------------------===//
@@ -118,10 +111,9 @@ terminal_rule_overrides_t ParsedGrammar::BuildTerminalRuleOverrides(const PEGKey
 	return overrides;
 }
 
-shared_ptr<CompiledGrammar>
-CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>> &grammar_extensions) {
+shared_ptr<CompiledGrammar> CompiledGrammar::Create(const vector<reference<GrammarExtension>> &grammar_extensions) {
 	auto grammar = ParsedGrammar::CreateDefault();
-	for (auto &[_, extension] : grammar_extensions) {
+	for (auto &extension : grammar_extensions) {
 		auto changes = extension.get().GetChanges();
 		for (auto &change : changes) {
 			change.Apply(grammar);
@@ -134,49 +126,34 @@ CompiledGrammar::Create(const case_insensitive_map_t<reference<GrammarExtension>
 		CheckReference(grammar, parsed_rule, expression);
 	}
 
-	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(grammar, !grammar_extensions.empty()));
+	auto keyword_helper = make_uniq<ParsedGrammarKeywordHelper>(grammar);
+	auto tokenizer = make_uniq<Tokenizer>(*keyword_helper);
+	compiled_rules_map_t rules;
 	for (auto &entry : grammar.rules) {
 		auto &rule = *entry.second;
-		new_matcher->rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process));
+		rules.emplace(rule.name, make_uniq<CompiledGrammarRule>(rule.name, rule.transform_process, rule.collapsible));
 	}
-	auto terminal_rule_overrides = grammar.BuildTerminalRuleOverrides(new_matcher->GetKeywordHelper());
-	MatcherFactory factory(new_matcher->allocator, grammar, *new_matcher, std::move(terminal_rule_overrides));
-	new_matcher->program_matcher = factory.CreateRootMatcher("Program");
-	new_matcher->top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
+
+	MatcherAllocator allocator;
+	auto terminal_rule_overrides = grammar.BuildTerminalRuleOverrides(*keyword_helper);
+	MatcherFactory factory(allocator, grammar, rules, *keyword_helper, std::move(terminal_rule_overrides));
+
+	auto &program_matcher = factory.CreateRootMatcher("Program");
+	auto &top_level_statement_matcher = factory.GetMatcher("TopLevelStatement");
+
+	auto new_matcher = shared_ptr<CompiledGrammar>(new CompiledGrammar(std::move(allocator), std::move(keyword_helper),
+	                                                                   std::move(tokenizer), std::move(rules),
+	                                                                   program_matcher, top_level_statement_matcher));
 	return new_matcher;
+}
+
+shared_ptr<CompiledGrammar> CompiledGrammar::DefaultGrammar() {
+	static auto grammar = Create();
+	return grammar;
 }
 
 shared_ptr<CompiledGrammar> CompiledGrammar::Create() {
 	return Create({});
-}
-
-shared_ptr<CompiledGrammar> CompiledGrammar::Create(const ClientContext &context,
-                                                    const case_insensitive_set_t &active_extensions) {
-	case_insensitive_map_t<reference<GrammarExtension>> selected_extensions;
-	auto &callback_manager = ExtensionCallbackManager::Get(context);
-	for (auto &name : active_extensions) {
-		auto grammar_extension = callback_manager.FindGrammarExtension(name);
-		if (grammar_extension) {
-			selected_extensions.emplace(name, *grammar_extension);
-		}
-	}
-	return Create(selected_extensions);
-}
-
-shared_ptr<CompiledGrammar> ParserCache::GetMatcher() {
-	{
-		std::unique_lock<std::mutex> lock(mutex);
-		if (matcher) {
-			return matcher;
-		}
-	}
-	auto new_matcher = CompiledGrammar::Create();
-
-	std::unique_lock<std::mutex> lock(mutex);
-	if (!matcher) {
-		matcher = std::move(new_matcher);
-	}
-	return matcher;
 }
 
 optional_ptr<const CompiledGrammarRule> CompiledGrammar::GetRule(const string &rule_name) const {

@@ -46,19 +46,34 @@ namespace test_capi_v2 {
 // Common Fixtures
 //----------------------------------------------------------------------------------------------------------------------
 
+//! Creates an instance handle under `env`, attaches `path` and makes it the default database, destroying the handle
+//! again if that fails.
+inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, duckdb_v2_str path,
+                                    duckdb_v2_instance_handle *out_instance, duckdb_v2_error_info_handle *err) {
+	auto rc = duckdb_v2_instance_create(env, out_instance, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		return rc;
+	}
+	rc = duckdb_v2_instance_attach(*out_instance, &path, nullptr, nullptr, true, err);
+	if (rc != DUCKDB_V2_ERROR_NONE) {
+		duckdb_v2_instance_destroy(out_instance);
+	}
+	return rc;
+}
+
 struct EnvFixture {
 	duckdb_v2_environment_handle env = nullptr;
-	duckdb_v2_database_handle db = nullptr;
+	duckdb_v2_instance_handle instance = nullptr;
 	duckdb_v2_connection_handle conn = nullptr;
 	EnvFixture() {
-		duckdb_v2_create_environment(&env, nullptr);
-		duckdb_v2_open(env, duckdb_v2_str {nullptr, 0}, nullptr, 0, &db, nullptr);
-		duckdb_v2_connect(db, &conn, nullptr);
+		duckdb_v2_environment_create(&env, nullptr);
+		OpenInstance(env, duckdb_v2_str {nullptr, 0}, &instance, nullptr);
+		duckdb_v2_connection_create(instance, &conn, nullptr);
 	}
 	~EnvFixture() {
-		duckdb_v2_disconnect(&conn);
-		duckdb_v2_close(&db);
-		duckdb_v2_destroy_environment(&env);
+		duckdb_v2_connection_destroy(&conn);
+		duckdb_v2_instance_destroy(&instance);
+		duckdb_v2_environment_destroy(&env);
 	}
 };
 
@@ -66,11 +81,20 @@ struct EnvFixture {
 // V1/V2 Converters
 //----------------------------------------------------------------------------------------------------------------------
 
+//! Consumes a V1 logical type, returning an owned V2 handle to the same type. A V1 handle points to a LogicalType, a
+//! V2 handle to the type's LogicalTypeInfo (holding one reference).
 inline auto ConvertToV2(duckdb_logical_type t) -> duckdb_v2_logical_type_handle {
-	return reinterpret_cast<duckdb_v2_logical_type_handle>(t);
+	auto type = *reinterpret_cast<duckdb::LogicalType *>(t);
+	duckdb_destroy_logical_type(&t);
+	auto &type_info = std::move(type).ReleaseTypeInfo();
+	return reinterpret_cast<duckdb_v2_logical_type_handle>(reinterpret_cast<uintptr_t>(&type_info));
 }
-inline auto ConvertToV1(duckdb_v2_logical_type_handle t) -> duckdb_logical_type {
-	return reinterpret_cast<duckdb_logical_type>(t);
+//! The engine type behind a V2 handle - a copy, the handle keeps its own reference
+inline auto V2LogicalType(duckdb_v2_logical_type_handle t) -> duckdb::LogicalType {
+	auto borrowed = duckdb::LogicalType::AdoptTypeInfo(*reinterpret_cast<const duckdb::LogicalTypeInfo *>(t));
+	duckdb::LogicalType result = borrowed;
+	std::move(borrowed).ReleaseTypeInfo();
+	return result;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -156,18 +180,19 @@ struct TextSinkTarget {
 	std::string text;
 	idx_t calls = 0;
 };
-inline void AppendToString(duckdb_v2_str text, void *user_data, duckdb_v2_error_info_handle *) {
+inline void AppendToString(const duckdb_v2_str *text, void *user_data, duckdb_v2_error_info_handle *) {
 	auto &target = *static_cast<TextSinkTarget *>(user_data);
 	target.calls++;
-	if (text.ptr && text.len) {
-		target.text.append(text.ptr, text.len);
+	if (text->ptr && text->len) {
+		target.text.append(text->ptr, text->len);
 	}
 }
 
 // Fails the producing call by populating the slot the library handed over.
-inline void FailWithIOError(duckdb_v2_str, void *, duckdb_v2_error_info_handle *err) {
+inline void FailWithIOError(const duckdb_v2_str *, void *, duckdb_v2_error_info_handle *err) {
 	duckdb_v2_error_info_set_code(*err, DUCKDB_V2_ERROR_IO_GENERAL);
-	duckdb_v2_error_info_set_text(*err, Convert("sink could not write"));
+	auto text_str = Convert("sink could not write");
+	duckdb_v2_error_info_set_text(*err, &text_str);
 }
 
 // Assemble a duckdb_v2_bytes from raw bytes, using arena_allocate for the
@@ -494,13 +519,14 @@ inline duckdb_v2_value_handle MakeInt64Value(duckdb_v2_connection_handle conn, i
 }
 inline duckdb_v2_value_handle MakeVarcharValue(duckdb_v2_connection_handle conn, const char *s) {
 	duckdb_v2_value_handle value = nullptr;
-	REQUIRE(duckdb_v2_value_create_varchar_with_connection(conn, Convert(s), &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto value_str = Convert(s);
+	REQUIRE(duckdb_v2_value_create_varchar_with_connection(conn, &value_str, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 inline duckdb_v2_value_handle MakeBlobValue(duckdb_v2_connection_handle conn, const void *data, idx_t len) {
 	duckdb_v2_value_handle value = nullptr;
 	duckdb_v2_str bytes = {static_cast<const char *>(data), len};
-	REQUIRE(duckdb_v2_value_create_blob_with_connection(conn, bytes, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_value_create_blob_with_connection(conn, &bytes, &value, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return value;
 }
 

@@ -31,6 +31,16 @@ struct OtherOperatorTail {
 	unique_ptr<ParsedExpression> expression;
 };
 
+enum class ExpressionTailType : uint8_t { IS_TEST, DISTINCT, COMPARISON, OTHER_OPERATOR };
+
+struct IsExpressionTail {
+	ExpressionTailType type = ExpressionTailType::IS_TEST;
+	unique_ptr<ParsedExpression> test;
+	IsDistinctFromTail distinct;
+	ComparisonExpressionTail comparison;
+	OtherOperatorTail other;
+};
+
 struct BinaryExpressionTail {
 	string op;
 	unique_ptr<ParsedExpression> expression;

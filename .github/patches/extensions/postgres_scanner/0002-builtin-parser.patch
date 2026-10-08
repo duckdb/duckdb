@@ -1,0 +1,13 @@
+diff --git a/src/storage/postgres_table_set.cpp b/src/storage/postgres_table_set.cpp
+index 2ff3f37..7ef008b 100644
+--- a/src/storage/postgres_table_set.cpp
++++ b/src/storage/postgres_table_set.cpp
+@@ -121,7 +121,7 @@ void PostgresTableSet::AddColumn(optional_ptr<PostgresTransaction> transaction,
+ 		column.SetComment(Value(column_comment));
+ 	}
+ 	if (!default_value.empty()) {
+-		auto expressions = Parser::ParseExpressionList(default_value);
++		auto expressions = Parser::GetBuiltinParser().ParseExpressionList(default_value);
+ 		if (expressions.empty()) {
+ 			throw InternalException("Expression list is empty");
+ 		}

@@ -47,7 +47,8 @@ void AggregateScalarFunc(DataChunk &args, ExpressionState &state, Vector &result
 	auto bind_info = wexpr.BindInfo().get();
 
 	//	Is the frame empty?
-	const idx_t width = (wexpr.WindowExclude() == WindowExcludeMode::CURRENT_ROW) ? 0 : 1;
+	const auto exclude = wexpr.WindowExclude();
+	const idx_t width = (exclude == WindowExcludeMode::CURRENT_ROW || exclude == WindowExcludeMode::GROUP) ? 0 : 1;
 
 	auto &client = scalar_info.client;
 	ThreadContext thread(client);
@@ -101,7 +102,8 @@ void WindowScalarFunc(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &wexpr = scalar_info.wexpr->Cast<BoundWindowExpression>();
 
 	//	Is the frame empty?
-	const idx_t width = (wexpr.WindowExclude() == WindowExcludeMode::CURRENT_ROW) ? 0 : 1;
+	const auto exclude = wexpr.WindowExclude();
+	const idx_t width = (exclude == WindowExcludeMode::CURRENT_ROW || exclude == WindowExcludeMode::GROUP) ? 0 : 1;
 
 	auto &client = scalar_info.client;
 	ThreadContext thread(client);

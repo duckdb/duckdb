@@ -2,7 +2,6 @@
 #include "test_helpers.hpp"
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/settings.hpp"
@@ -137,7 +136,7 @@ TEST_CASE("Test async threads", "[api]") {
 	REQUIRE(scheduler.NumberOfAsyncThreads() == 2);
 }
 
-static idx_t ColumnDataScanMaxThreads(Connection &con, MaterializedQueryResult &result,
+static idx_t ColumnDataScanMaxThreads(Connection &con, QueryResult &result,
                                       const OperatorPartitionInfo &partition_info) {
 	PhysicalPlan physical_plan(Allocator::Get(*con.context));
 	auto &scan = physical_plan.Make<PhysicalColumnDataScan>(result.GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN,
@@ -181,18 +180,20 @@ TEST_CASE("Test scheduling with no threads", "[api]") {
 	Connection con1(db);
 	Connection con2(db);
 
-	const auto query_1 = con1.PendingQuery("SELECT 42");
-	const auto query_2 = con2.PendingQuery("SELECT 42");
+	const auto query_1 = con1.Submit("SELECT 42");
+	const auto query_2 = con2.Submit("SELECT 42");
 	// Get the completed pipelines. Because "executeTask" was never called, there should be no completed pipelines.
 	auto query_1_pipelines = con1.context->GetExecutor().GetCompletedPipelines();
 	REQUIRE((query_1_pipelines == 0));
 
 	// Execute the second query
-	REQUIRE_NO_FAIL(query_2->Execute());
+	query_2->Complete();
+	REQUIRE_NO_FAIL(*query_2);
 
 	// And even after that, there should still be no completed pipelines for the first query.
 	query_1_pipelines = con1.context->GetExecutor().GetCompletedPipelines();
 	REQUIRE((query_1_pipelines == 0));
-	REQUIRE_NO_FAIL(query_1->Execute());
+	query_1->Complete();
+	REQUIRE_NO_FAIL(*query_1);
 }
 #endif

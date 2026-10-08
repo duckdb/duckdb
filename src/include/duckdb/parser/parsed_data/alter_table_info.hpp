@@ -14,6 +14,7 @@
 #include "duckdb/parser/result_modifier.hpp"
 
 #include "duckdb/common/identifier.hpp"
+#include "duckdb/common/enums/constraint_check_mode.hpp"
 namespace duckdb {
 
 enum class AlterForeignKeyType : uint8_t { AFT_ADD = 0, AFT_DELETE = 1 };
@@ -180,17 +181,24 @@ private:
 //===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
+
+struct AddColumnConstraints {
+	bool add_not_null = false;
+	bool add_unique = false;
+	ConstraintCheckMode unique_check_mode = ConstraintCheckMode::DEFAULT;
+};
+
 struct AddColumnInfo : public AlterTableInfo {
-	AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column, bool if_column_not_exists,
-	              bool add_not_null);
+	AddColumnInfo(const AlterEntryData &data, ColumnDefinition new_column_p, bool if_column_not_exists_p,
+	              AddColumnConstraints add_column_constraints_p);
 	~AddColumnInfo() override;
 
 	//! New column
 	ColumnDefinition new_column;
 	//! Whether or not an error should be thrown if the column exist
 	bool if_column_not_exists;
-	//! Whether to add a NOT NULL constraint after adding the column
-	bool add_not_null = false;
+	//! Constraints applied via extra ALTER statements after the column is added
+	AddColumnConstraints add_column_constraints;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -290,12 +298,12 @@ private:
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 struct ChangeColumnTypeInfo : public AlterTableInfo {
-	ChangeColumnTypeInfo(const AlterEntryData &data, Identifier column_name, LogicalType target_type,
+	ChangeColumnTypeInfo(const AlterEntryData &data, vector<Identifier> column_path, LogicalType target_type,
 	                     unique_ptr<ParsedExpression> expression);
 	~ChangeColumnTypeInfo() override;
 
-	//! The column name to alter
-	Identifier column_name;
+	//! Path to the column to alter, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 	//! The target type of the column
 	LogicalType target_type;
 	//! The expression used for data conversion
@@ -307,7 +315,7 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
 	Identifier GetColumnName() const override {
-		return column_name;
+		return column_path[0];
 	}
 
 private:
@@ -318,11 +326,12 @@ private:
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
 struct SetDefaultInfo : public AlterTableInfo {
-	SetDefaultInfo(const AlterEntryData &data, Identifier column_name, unique_ptr<ParsedExpression> new_default);
+	SetDefaultInfo(const AlterEntryData &data, vector<Identifier> column_path,
+	               unique_ptr<ParsedExpression> new_default);
 	~SetDefaultInfo() override;
 
-	//! The column name to alter
-	Identifier column_name;
+	//! Path to the column to alter, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 	//! The expression used for data conversion
 	unique_ptr<ParsedExpression> expression;
 
@@ -366,11 +375,11 @@ private:
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
 struct SetNotNullInfo : public AlterTableInfo {
-	SetNotNullInfo(const AlterEntryData &data, Identifier column_name);
+	SetNotNullInfo(const AlterEntryData &data, vector<Identifier> column_path);
 	~SetNotNullInfo() override;
 
-	//! The column name to alter
-	Identifier column_name;
+	//! Path to the column to alter, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;
@@ -386,11 +395,11 @@ private:
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
 struct DropNotNullInfo : public AlterTableInfo {
-	DropNotNullInfo(const AlterEntryData &data, Identifier column_name);
+	DropNotNullInfo(const AlterEntryData &data, vector<Identifier> column_path);
 	~DropNotNullInfo() override;
 
-	//! The column name to alter
-	Identifier column_name;
+	//! Path to the column to alter, e.g. ["s", "a"] for "s.a"
+	vector<Identifier> column_path;
 
 public:
 	unique_ptr<AlterInfo> Copy() const override;

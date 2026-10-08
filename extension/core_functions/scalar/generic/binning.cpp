@@ -496,7 +496,7 @@ unique_ptr<FunctionData> EquiWidthBinDeserialize(Deserializer &deserializer, Bou
 
 static void AddEquiWidthBinFunction(ScalarFunctionSet &functions, const LogicalType &min_max_type,
                                     scalar_function_t function) {
-	ScalarFunction fun({}, LogicalType::LIST(LogicalType::ANY), function, BindEquiWidthFunction);
+	ScalarFunction fun({}, LogicalType::LIST(LogicalType::ANY), std::move(function), BindEquiWidthFunction);
 	fun.GetSignature()
 	    .AddParameter("min", min_max_type)
 	    .AddParameter("max", min_max_type)

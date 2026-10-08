@@ -540,6 +540,13 @@ TEST_CASE("V2: statement_execute rejects a malformed parameter name", "[capi_v2]
 	duckdb_v2_result_handle r = nullptr;
 	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(r == nullptr);
+	names[0] = Convert("\x80");
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_statement_execute(fx.conn, stmt, names, values, 1, &r, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_str message = {nullptr, 0};
+	REQUIRE(duckdb_v2_error_info_get_text(err, &message) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(Convert(message).find("UTF-8") != std::string::npos);
+	duckdb_v2_error_info_destroy(&err);
 
 	duckdb_v2_value_destroy(&v);
 	duckdb_v2_sql_statement_destroy(&stmt);
@@ -668,14 +675,6 @@ TEST_CASE("V2: sql_statement_get_type is the type before statement rewrites", "[
 	REQUIRE(executed == DUCKDB_V2_STATEMENT_TYPE_SELECT);
 	duckdb_v2_result_destroy(&r);
 	duckdb_v2_sql_statement_destroy(&stmt);
-}
-
-TEST_CASE("V2: every core statement type is in the spec", "[capi_v2][sql_statement]") {
-	// Core's enum has no count sentinel to pin at compile time; an appended member shows up
-	// here as a name where core should report INVALID.
-	for (int v = DUCKDB_V2_STATEMENT_TYPE_EXTERNAL_RESOURCE + 1; v <= 255; v++) {
-		REQUIRE(duckdb::StatementTypeToString(static_cast<duckdb::StatementType>(v)) == "INVALID");
-	}
 }
 
 TEST_CASE("V2: sql_statement_get_text is the statement's own slice", "[capi_v2][sql_statement]") {

@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/optimizer/builtin_function_lookup.hpp"
+#include "duckdb/function/builtin_function_lookup.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -25,8 +25,13 @@ static unique_ptr<Expression> ApplyRule(LogicalOperator &op, const vector<refere
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
 			auto alias = expr->GetAlias();
+#ifdef D_ASSERT_IS_ENABLED
+			auto return_type = expr->GetReturnType();
+#endif
 			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
+				D_ASSERT(result->GetReturnType() != return_type ||
+				         result->GetReturnType().EqualsIncludingCollation(return_type));
 				changes_made = true;
 				// the base node changed: the rule applied changes
 				if (!alias.empty()) {

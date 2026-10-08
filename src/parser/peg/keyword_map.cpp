@@ -2,11 +2,8 @@
 #include "duckdb/parser/peg/keyword_helper/duckdb_keyword_helper.hpp"
 
 namespace duckdb {
-void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
-	if (initialized) {
-		return;
-	};
-	initialized = true;
+DefaultKeywordMaps DuckDBKeywordHelper::InitializeKeywordMaps() {
+	DefaultKeywordMaps keyword_maps;
 
 	auto &reserved_keyword_map = keyword_maps.reserved_keyword_map;
 	auto &unreserved_keyword_map = keyword_maps.unreserved_keyword_map;
@@ -163,6 +160,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("delimiter");
 	unreserved_keyword_map.insert("delimiters");
 	unreserved_keyword_map.insert("depends");
+	unreserved_keyword_map.insert("destroy");
 	unreserved_keyword_map.insert("detach");
 	unreserved_keyword_map.insert("dictionary");
 	unreserved_keyword_map.insert("disable");
@@ -324,6 +322,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("ref");
 	unreserved_keyword_map.insert("referencing");
 	unreserved_keyword_map.insert("refresh");
+	unreserved_keyword_map.insert("register");
 	unreserved_keyword_map.insert("reindex");
 	unreserved_keyword_map.insert("relative");
 	unreserved_keyword_map.insert("release");
@@ -333,6 +332,7 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	unreserved_keyword_map.insert("replica");
 	unreserved_keyword_map.insert("reset");
 	unreserved_keyword_map.insert("resource");
+	unreserved_keyword_map.insert("resources");
 	unreserved_keyword_map.insert("respect");
 	unreserved_keyword_map.insert("restart");
 	unreserved_keyword_map.insert("restrict");
@@ -564,5 +564,6 @@ void DuckDBKeywordHelper::InitializeKeywordMaps() { // Renamed for clarity
 	typename_keyword_map.insert("try_cast");
 	typename_keyword_map.insert("unpack");
 	typename_keyword_map.insert("verbose");
+	return keyword_maps;
 }
 } // namespace duckdb

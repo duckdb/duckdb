@@ -40,3 +40,4 @@ benchmark/micro/aggregate/group_two_string_dictionaries.benchmark
 benchmark/micro/functions/nested_macros.benchmark
 benchmark/micro/result_collection/stream_drop.benchmark
 benchmark/micro/result_collection/stream_materialize.benchmark
+benchmark/parquet/dlba_read-long-1000000.benchmark

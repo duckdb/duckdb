@@ -1,6 +1,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/logging/logger.hpp"
@@ -10,6 +11,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/storage/checkpoint_manager.hpp"
 #include "duckdb/storage/in_memory_block_manager.hpp"
 #include "duckdb/storage/object_cache.hpp"
@@ -632,6 +634,7 @@ public:
 	bool HasRowGroupData() override;
 
 private:
+	StorageManager &storage;
 	idx_t initial_wal_size = 0;
 	idx_t initial_written = 0;
 	WriteAheadLog &wal;
@@ -640,7 +643,7 @@ private:
 };
 
 SingleFileStorageCommitState::SingleFileStorageCommitState(StorageManager &storage, WriteAheadLog &wal)
-    : wal(wal), state(WALCommitState::IN_PROGRESS) {
+    : storage(storage), wal(wal), state(WALCommitState::IN_PROGRESS) {
 	auto initial_size = storage.GetWALSize();
 	initial_written = wal.GetTotalWritten();
 	initial_wal_size = initial_size;
@@ -672,6 +675,16 @@ void SingleFileStorageCommitState::RevertCommit() {
 		// remove any entries written into the WAL by truncating it
 		wal.Truncate(initial_wal_size);
 	}
+	auto &block_manager = storage.GetBlockManager();
+	for (auto &entry : optimistically_written_data) {
+		for (auto &rg_entry : entry.second) {
+			if (rg_entry.second.row_group_data) {
+				for (auto &block_id : rg_entry.second.row_group_data->GetBlockIds()) {
+					block_manager.MarkBlockAsModified(block_id);
+				}
+			}
+		}
+	}
 	state = WALCommitState::TRUNCATED;
 }
 
@@ -679,7 +692,20 @@ idx_t SingleFileStorageCommitState::FlushCommit(bool sync_now) {
 	if (state != WALCommitState::IN_PROGRESS) {
 		return 0;
 	}
+
 	// Move the blocks in this COMMIT into the WAL and mark them as "in use".
+	auto abort_mode = Settings::Get<DebugCheckpointAbortSetting>(storage.GetDatabase());
+	if (wal.Initialized() && abort_mode == CheckpointAbort::DEBUG_ABORT_BEFORE_WAL_FLUSH) {
+		auto &writer = wal.Initialize();
+		writer.Sync();
+		storage.SetWALSize(writer.GetFileSize());
+		ValidChecker::Invalidate(storage.GetDatabase(), "Simulated crash before WAL_FLUSH write");
+		ValidChecker::Invalidate(storage.GetAttached(), "Simulated crash before WAL_FLUSH write");
+		// Prevent `RevertCommit` from truncating the WAL so the torn records are kept for crash recovery
+		state = WALCommitState::FLUSHED;
+		throw FatalException("Simulated crash before WAL_FLUSH write");
+	}
+
 	idx_t wal_sync_offset = 0;
 	if (sync_now) {
 		wal.Flush();
