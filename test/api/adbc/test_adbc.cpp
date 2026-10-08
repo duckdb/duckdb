@@ -4706,12 +4706,14 @@ TEST_CASE("ADBC - Ending a transaction while a stream is open on the connection"
 	auto &stream = db.QueryArrow("SELECT * FROM range(100000)");
 
 	int64_t expected = 1;
+	bool rolled_back = false;
 	SECTION("commit") {
 		REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
 	}
 	SECTION("rollback") {
 		REQUIRE(SUCCESS(AdbcConnectionRollback(&db.adbc_connection, &db.adbc_error)));
 		expected = 0;
+		rolled_back = true;
 	}
 	SECTION("enabling autocommit") {
 		REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
@@ -4720,14 +4722,57 @@ TEST_CASE("ADBC - Ending a transaction while a stream is open on the connection"
 	auto count = observer.Query("SELECT count(*) FROM t");
 	REQUIRE(CHECK_COLUMN(count, 0, {expected}));
 
-	// The stream was read into memory first, so it still reads to the end
 	int64_t rows = 0;
+	int rc = 0;
 	ArrowArray batch;
-	while (stream.get_next(&stream, &batch) == 0 && batch.release) {
+	while ((rc = stream.get_next(&stream, &batch)) == 0 && batch.release) {
 		rows += batch.length;
 		batch.release(&batch);
 	}
-	REQUIRE(rows == 100000);
+	if (rolled_back) {
+		// A rollback closes the stream instead of reading it into memory
+		REQUIRE(rc != 0);
+		REQUIRE(StringUtil::Contains(stream.get_last_error(&stream), "rolled back"));
+		REQUIRE(rows < 100000);
+	} else {
+		// The stream was read into memory first, so it still reads to the end
+		REQUIRE(rows == 100000);
+	}
+}
+
+TEST_CASE("ADBC - Commit reports a transaction that an earlier error rolled back", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(db.adbc_connection.private_data);
+	auto &conn = *reinterpret_cast<Connection *>(conn_wrapper->connection);
+	Connection observer(*conn.context->db);
+	db.Query("CREATE TABLE t (i INTEGER)");
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	db.Query("INSERT INTO t VALUES (1)");
+
+	SECTION("a statement that failed") {
+		REQUIRE(db.Query("SELECT 'x'::INTEGER")->HasError());
+	}
+	SECTION("an open stream that fails while it is read into memory") {
+		db.QueryArrow("SELECT CASE WHEN i = 50000 THEN error('boom') ELSE i END FROM range(100000) t(i)");
+	}
+	REQUIRE(!SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+	REQUIRE(StringUtil::Contains(db.adbc_error.message, "rolled back after an earlier error"));
+	if (db.adbc_error.release) {
+		db.adbc_error.release(&db.adbc_error);
+	}
+	auto count = observer.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(count, 0, {0}));
+
+	// Manual commit mode goes on with a fresh transaction
+	REQUIRE(conn.HasActiveTransaction());
+	db.Query("INSERT INTO t VALUES (2)");
+	REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+	count = observer.Query("SELECT count(*) FROM t");
+	REQUIRE(CHECK_COLUMN(count, 0, {1}));
 }
 
 TEST_CASE("ADBC - Concurrent statements on same connection", "[adbc]") {

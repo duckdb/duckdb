@@ -92,6 +92,11 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class PhysicalTransaction;
 
 public:
+	//! The error of a statement submitted while a result that no call ended holds the connection
+	static constexpr const char *OPEN_RESULT_ERROR =
+	    "connection has an open result; drain or destroy it before starting a new query";
+
+public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 
@@ -219,6 +224,8 @@ public:
 	//! Bind a statement and return its signature, without building a PreparedStatement, optimizing, or
 	//! executing. Read-only: binding touches no in-flight query state, so a live result survives. Throws on error.
 	DUCKDB_API StatementSignature BindStatement(unique_ptr<SQLStatement> statement);
+	//! Throws the error a new statement gets while a result that no call ended holds the connection
+	DUCKDB_API void VerifyNoOpenResult();
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
 	DUCKDB_API QueryProgress GetQueryProgress();
@@ -316,7 +323,14 @@ private:
 	void StatementVerification(ClientContextLock &lock, unique_ptr<SQLStatement> &statement,
 	                           QueryParameters query_parameters);
 
-	void InitialCleanup(ClientContextLock &lock);
+	//! Whether a result that no call ended holds the connection, so that a new statement is refused
+	bool OpenResultHoldsConnection(ClientContextLock &lock);
+	//! The refusal of a statement submitted while a result holds the connection; otherwise null, after abandoning
+	//! what is left of the previous query
+	template <class T>
+	[[nodiscard]] unique_ptr<T> InitialCleanup(ClientContextLock &lock);
+	//! Abandons the query of an open result that no call ended, as Close would, and resets the interrupted flag
+	void AbandonActiveQuery(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal(ClientContextLock &lock, BaseQueryResult *result = nullptr,
 	                     bool invalidate_transaction = false);
@@ -361,9 +375,6 @@ private:
 
 	template <class T>
 	unique_ptr<T> ErrorResult(ErrorData error, const string &query = string());
-	//! The refusal of a statement submitted while a result that no call ended holds the connection, or null
-	template <class T>
-	unique_ptr<T> OpenResultRefusal(ClientContextLock &lock);
 
 	shared_ptr<PreparedStatementData> CreatePreparedStatementInternal(ClientContextLock &lock,
 	                                                                  unique_ptr<SQLStatement> statement,

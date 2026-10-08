@@ -1053,6 +1053,32 @@ TEST_CASE("V2: a statement that expands into a group holds the connection until 
 	duckdb_v2_result_destroy(&filled);
 }
 
+TEST_CASE("V2: a statement that expands into a group is refused while another statement runs",
+          "[capi_v2][query_result]") {
+	EnvFixture fx;
+	duckdb_v2_result_handle setup = nullptr;
+	REQUIRE(Query(fx.conn, "CREATE TABLE t AS SELECT range i FROM range(1000)", &setup) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(setup);
+	duckdb_v2_result_destroy(&setup);
+
+	duckdb_v2_result_handle live = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM range(100000) t(i)", &live) == DUCKDB_V2_ERROR_NONE);
+	// Refused before preprocessing, which would see the running statement's transaction and not wrap the group
+	duckdb_v2_result_handle group = nullptr;
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) ==
+	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(DrainRowCount(live) == 100000);
+	duckdb_v2_result_destroy(&live);
+
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(group);
+	duckdb_v2_result_destroy(&group);
+	duckdb_v2_result_handle filled = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT c FROM t WHERE c IS NOT NULL", &filled) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(filled) == 1000);
+	duckdb_v2_result_destroy(&filled);
+}
+
 TEST_CASE("V2: a statement that completed before its rows are read does not hold the connection",
           "[capi_v2][query_result]") {
 	EnvFixture fx;

@@ -13,6 +13,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/valid_checker.hpp"
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
@@ -592,6 +593,25 @@ static AdbcStatusCode ExecuteQuery(duckdb::DuckDBAdbcConnectionWrapper &conn_wra
 	return ADBC_STATUS_OK;
 }
 
+//! The engine turns a COMMIT of a transaction that an earlier error invalidated into a rollback that reports success,
+//! so that case is reported here. Either way the transaction has ended when this returns.
+static AdbcStatusCode CommitTransaction(duckdb::DuckDBAdbcConnectionWrapper &conn_wrapper, struct AdbcError *error) {
+	// Reading an open stream into memory can fail, which invalidates the transaction
+	conn_wrapper.MaterializeStreams();
+	auto &context = *reinterpret_cast<duckdb::Connection *>(conn_wrapper.connection)->context;
+	std::string invalidated;
+	if (context.transaction.HasActiveTransaction() &&
+	    duckdb::ValidChecker::IsInvalidated(context.ActiveTransaction())) {
+		invalidated = duckdb::ValidChecker::InvalidatedMessage(context.ActiveTransaction());
+	}
+	auto status = ExecuteQuery(conn_wrapper, "COMMIT", error);
+	if (status == ADBC_STATUS_OK && !invalidated.empty()) {
+		SetError(error, "Failed to commit, the transaction was rolled back after an earlier error: " + invalidated);
+		return ADBC_STATUS_INVALID_STATE;
+	}
+	return status;
+}
+
 static AdbcStatusCode InternalSetOption(duckdb::DuckDBAdbcConnectionWrapper &conn_wrapper, struct AdbcError *error) {
 	auto &conn = *reinterpret_cast<duckdb::Connection *>(conn_wrapper.connection);
 	auto &options = conn_wrapper.options;
@@ -600,7 +620,7 @@ static AdbcStatusCode InternalSetOption(duckdb::DuckDBAdbcConnectionWrapper &con
 		if (strcmp(option.first.c_str(), ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
 			if (strcmp(option.second.c_str(), ADBC_OPTION_VALUE_ENABLED) == 0) {
 				if (conn.HasActiveTransaction()) {
-					AdbcStatusCode status = ExecuteQuery(conn_wrapper, "COMMIT", error);
+					AdbcStatusCode status = CommitTransaction(conn_wrapper, error);
 					if (status != ADBC_STATUS_OK) {
 						options.clear();
 						return status;
@@ -864,11 +884,13 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 		return ADBC_STATUS_INVALID_STATE;
 	}
 
-	AdbcStatusCode status = ExecuteQuery(*conn_wrapper, "COMMIT", error);
-	if (status != ADBC_STATUS_OK) {
+	AdbcStatusCode status = CommitTransaction(*conn_wrapper, error);
+	if (status != ADBC_STATUS_OK && status != ADBC_STATUS_INVALID_STATE) {
 		return status;
 	}
-	return ExecuteQuery(*conn_wrapper, "START TRANSACTION", error);
+	// The transaction ended, committed or rolled back, so manual commit mode starts the next one
+	auto restarted = ExecuteQuery(*conn_wrapper, "START TRANSACTION", error);
+	return status == ADBC_STATUS_OK ? restarted : status;
 }
 
 AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -883,6 +905,8 @@ AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct Adbc
 		return ADBC_STATUS_INVALID_STATE;
 	}
 
+	// Reading the open streams into memory first would only keep rows of a transaction that is rolled back
+	conn_wrapper->CloseStreams("the stream was closed because its transaction was rolled back");
 	AdbcStatusCode status = ExecuteQuery(*conn_wrapper, "ROLLBACK", error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
@@ -3459,6 +3483,17 @@ void duckdb::DuckDBAdbcConnectionWrapper::MaterializeStreams() {
 		} catch (std::exception &ex) {
 			duckdb_adbc::SetStreamError(*result_wrapper, duckdb::ErrorData(ex));
 		}
+		result_wrapper->stream.reset();
+	}
+}
+
+void duckdb::DuckDBAdbcConnectionWrapper::CloseStreams(const char *reason) {
+	const duckdb::lock_guard<duckdb::mutex> guard(stream_mutex);
+	for (auto *result_wrapper : active_streams) {
+		if (!result_wrapper || !result_wrapper->stream) {
+			continue;
+		}
+		duckdb_adbc::SetStreamError(*result_wrapper, duckdb::ErrorData(duckdb::ExceptionType::TRANSACTION, reason));
 		result_wrapper->stream.reset();
 	}
 }

@@ -122,7 +122,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::HandleExecutionError(ErrorData err
 	// (e.g. a max_execution_time timeout) must surface as an error carrying the
 	// engine's message, mirroring the eager ClientContext::Query path.
 	bool user_cancelled = error_data.Type() == ExceptionType::INTERRUPT && busy_slot &&
-	                      busy_slot->cancel_requested.load(std::memory_order_relaxed);
+	                      busy_slot->cancel_requests.load() != cancel_requests_at_start;
 	stream.reset();
 	handle.reset();
 	fragments.clear();
@@ -406,6 +406,7 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
     -> unique_ptr<ResultWrapperV2> {
 	auto wrapper = make_uniq<ResultWrapperV2>();
 	wrapper->busy_slot = GetBusySlot(*context);
+	wrapper->cancel_requests_at_start = wrapper->busy_slot->cancel_requests.load();
 	ThrowIfGroupRunning(*wrapper->busy_slot);
 	wrapper->context = context;
 	wrapper->format = std::move(format);
@@ -415,8 +416,6 @@ auto ExecutePreparedStatementV2(const shared_ptr<ClientContext> &context, Prepar
 	wrapper->fragment_count = 1;
 	// The engine refuses the submission while another statement on the connection is running
 	wrapper->BeginPending(prepared.Submit(values, QueryParameters(wrapper->format)), true);
-	// A fresh query starts uncancelled, as the engine clears its interrupt flag at query begin
-	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
 	// The engine runs a prepared statement through an internal EXECUTE, whose statement type
 	// would otherwise be what the result reports. Report the type of the statement that was
 	// prepared instead, so a prepared result is indistinguishable from a stateless one.
@@ -431,7 +430,10 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
 	auto wrapper = make_uniq<ResultWrapperV2>();
 	// The busy slot lives in the context's registered-state map, so the connection handle stays a bare Connection *
 	wrapper->busy_slot = GetBusySlot(*context);
+	wrapper->cancel_requests_at_start = wrapper->busy_slot->cancel_requests.load();
 	ThrowIfGroupRunning(*wrapper->busy_slot);
+	// Refused before preprocessing, which decides from the active transaction whether to wrap a group in its own
+	context->VerifyNoOpenResult();
 
 	// Borrowed, not consumed: execute a copy so the caller keeps the original.
 	auto stmt = statement.Copy();
@@ -483,8 +485,6 @@ auto ExecuteStatementV2(const shared_ptr<ClientContext> &context, const SQLState
 	// (the common case) this also captures the metadata immediately. The engine refuses the
 	// submission while another statement on the connection is running.
 	wrapper->StartNextFragment();
-	// A fresh query starts uncancelled, as the engine clears its interrupt flag at query begin
-	wrapper->busy_slot->cancel_requested.store(false, std::memory_order_relaxed);
 	return wrapper;
 }
 

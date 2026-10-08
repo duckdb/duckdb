@@ -72,9 +72,11 @@ struct ResultWrapperV2 {
 	//! fragment execution path.
 	bool owns_wrapping_transaction = false;
 
-	//! The connection's busy slot, kept for the result's lifetime for its cancel flag. A group claims the slot
+	//! The connection's busy slot, kept for the result's lifetime for its cancel count. A group claims the slot
 	//! until a terminal transition or destroy, whichever comes first.
 	shared_ptr<ConnectionBusySlotV2> busy_slot;
+	//! The slot's cancel count when this result's statement started
+	idx_t cancel_requests_at_start = 0;
 
 	//! Principal fragment's metadata, valid once metadata_available.
 	vector<LogicalType> types;
