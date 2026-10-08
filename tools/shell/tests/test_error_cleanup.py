@@ -73,12 +73,14 @@ def test_successful_command_cleans_up_database(shell, tmp_path, mode):
     assert_checkpointed(database)
 
 
-@pytest.mark.parametrize("mode", ["-c", "-cmd", "-f"])
+@pytest.mark.parametrize("mode", ["-c", "-cmd", "-f", "ascii-import"])
 def test_no_bail_retains_command_behavior(shell, tmp_path, mode):
     database = tmp_path / "no_bail.duckdb"
     arguments = ["-cmd", ".bail off", "-cmd", "CREATE TABLE saved AS SELECT 42 AS value;"]
     failure = "SELECT * FROM missing_cleanup_table;"
-    if mode == "-f":
+    if mode == "ascii-import":
+        arguments += ["-c", ".import -ascii unused.csv saved"]
+    elif mode == "-f":
         script = tmp_path / "no_bail.sql"
         script.write_text(failure + "\nSELECT 'FILE_CONTINUED';\n")
         arguments += [mode, str(script)]
@@ -88,7 +90,8 @@ def test_no_bail_retains_command_behavior(shell, tmp_path, mode):
     result = run_shell(shell, database, arguments, "SELECT 'STDIN_CONTINUED';\n")
     # -f still reports errors after processing the file; -c/-cmd honor .bail off.
     assert result.returncode == (1 if mode == "-f" else 0), result.stderr
-    assert "missing_cleanup_table" in result.stderr
+    expected_error = "-ascii mode is no longer supported" if mode == "ascii-import" else "missing_cleanup_table"
+    assert expected_error in result.stderr
     if mode == "-f":
         assert "FILE_CONTINUED" in result.stdout
         assert "NEXT_COMMAND" not in result.stdout
