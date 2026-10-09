@@ -61,3 +61,16 @@ SELECT l.id, r.id, l.p, r.p FROM bound_l l JOIN bound_r r ON l.k=r.k WHERE l.p=1
 ----
 10	30	1	1.4
 20	30	1	1.4
+
+# These views only name the split scans within this test. Their definitions use
+# a new reader option and are not intended for reopening with older binders.
+statement ok
+DROP VIEW bound_l
+
+statement ok
+DROP VIEW bound_r
+
+query I
+SELECT count(*) FROM duckdb_views() WHERE view_name IN ('bound_l', 'bound_r')
+----
+0
