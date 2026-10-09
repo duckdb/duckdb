@@ -659,6 +659,37 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 		duckdb_destroy_prepare(&stmt);
 	}
 
+	SECTION("an open stream holds the connection until it ends") {
+		duckdb_prepared_statement stmt;
+		REQUIRE(duckdb_prepare(tester.connection, "FROM range(100000)", &stmt) == DuckDBSuccess);
+		duckdb_result res;
+		REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+		REQUIRE(duckdb_result_is_streaming(res));
+		auto chunk = duckdb_stream_fetch_chunk(res);
+		REQUIRE(chunk);
+		duckdb_destroy_data_chunk(&chunk);
+
+		auto refused = tester.Query("SELECT 84");
+		REQUIRE(refused->HasError());
+		REQUIRE(refused->ErrorType() == DUCKDB_ERROR_RESOURCE_IN_USE);
+		REQUIRE(string(refused->ErrorMessage()).find("connection has an open result") != string::npos);
+
+		// fetched to its end, the stream releases the connection
+		while ((chunk = duckdb_stream_fetch_chunk(res))) {
+			duckdb_destroy_data_chunk(&chunk);
+		}
+		REQUIRE(duckdb_result_error(&res) == nullptr);
+		REQUIRE_NO_FAIL(tester.Query("SELECT 84"));
+		duckdb_destroy_result(&res);
+
+		// and so does destroying it unread
+		REQUIRE(duckdb_execute_prepared_streaming(stmt, &res) == DuckDBSuccess);
+		REQUIRE(tester.Query("SELECT 84")->HasError());
+		duckdb_destroy_result(&res);
+		REQUIRE_NO_FAIL(tester.Query("SELECT 84"));
+		duckdb_destroy_prepare(&stmt);
+	}
+
 	SECTION("streaming extracted statements") {
 		duckdb_extracted_statements stmts;
 		auto n_statements = duckdb_extract_statements(tester.connection, "Select 1; Select 2;", &stmts);

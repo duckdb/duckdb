@@ -1,6 +1,13 @@
 # Adds extensions to what the DuckDB targets link by default, for extension configs; STATICALLY_LINK_EXTENSIONS
 # replaces the whole default. An extension that is only loaded with duckdb_extension_load is built, not linked, and can be
 # installed from the build's extension repository.
+set(DUCKDB_NEW_EXTENSION_BUILD_ENABLED FALSE)
+if(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    if(NOT "$ENV{DUCKDB_NEW_EXTENSION_BUILD}" STREQUAL "" AND NOT "$ENV{DUCKDB_NEW_EXTENSION_BUILD}" STREQUAL "0")
+        set(DUCKDB_NEW_EXTENSION_BUILD_ENABLED TRUE)
+    endif()
+endif()
+
 function(duckdb_extension_statically_link)
     set_property(GLOBAL APPEND PROPERTY DUCKDB_EXTENSIONS_STATICALLY_LINKED_BY_CONFIG ${ARGN})
 endfunction()
@@ -641,7 +648,7 @@ macro(register_external_extension NAME URL COMMIT DONT_BUILD LOAD_TESTS PATH INC
     string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
-    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    elseif(DUCKDB_NEW_EXTENSION_BUILD_ENABLED)
         # Use the pre-cloned source from extension/external/<name> (populated by
         # scripts/sync_out_of_tree_extensions.py via `make sync_out_of_tree_extensions`).
         set("${NAME}_extension_fc_SOURCE_DIR" "${DUCKDB_MODULE_BASE_DIR}/extension/external/${NAME}")
@@ -678,7 +685,7 @@ macro(register_external_extension NAME URL COMMIT DONT_BUILD LOAD_TESTS PATH INC
 
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\" @ ${EXTERNAL_EXTENSION_VERSION}")
-    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    elseif(DUCKDB_NEW_EXTENSION_BUILD_ENABLED)
         message(STATUS "Load extension '${NAME}' from extension/external/${NAME} @ ${EXTERNAL_EXTENSION_VERSION}")
     else()
         message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")
@@ -983,12 +990,17 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     endif()
 
     if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
+        # Provide the extension name to the extension's CMakeLists. C-API extensions built from the
+        # extension-template-c template require EXTENSION_NAME to be defined; supplying it here lets
+        # such an extension be built in-tree without a wrapper CMakeLists or hardcoding its own name.
+        set(EXTENSION_NAME ${EXT_NAME})
         if(NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PREBUILT_PATH}" STREQUAL "")
             add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME} EXCLUDE_FROM_ALL)
         else()
             add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
         endif()
         duckdb_add_missing_extension_describe(${EXT_NAME})
+        unset(EXTENSION_NAME)
     else()
         message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
     endif()

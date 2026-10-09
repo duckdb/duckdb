@@ -26,6 +26,7 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -1485,6 +1486,24 @@ const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value) {
 template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value) {
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetConnectionTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConnectionType::USER), "USER" },
+		{ static_cast<uint32_t>(ConnectionType::INTERNAL), "INTERNAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConnectionType>(ConnectionType value) {
+	return StringUtil::EnumToString(GetConnectionTypeValues(), 2, "ConnectionType", static_cast<uint32_t>(value));
+}
+
+template<>
+ConnectionType EnumUtil::FromString<ConnectionType>(const char *value) {
+	return static_cast<ConnectionType>(StringUtil::StringToEnum(GetConnectionTypeValues(), 2, "ConnectionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {

@@ -1626,12 +1626,15 @@ string_t CastFromBlob::Operation(string_t input, StringHeap &heap) {
 }
 
 template <>
-string_t CastFromBlobToBit::Operation(string_t input, StringHeap &heap) {
-	idx_t result_size = input.GetSize() + 1;
-	if (result_size <= 1) {
-		throw ConversionException("Cannot cast empty BLOB to BIT");
+bool TryCastBlobToBit::Operation(string_t input, string_t &result, Vector &result_vector, CastParameters &parameters) {
+	if (input.GetSize() == 0) {
+		HandleCastError::AssignError("Cannot cast empty BLOB to BIT", parameters);
+		return false;
 	}
-	return heap.AddBlob(Bit::BlobToBit(input));
+	result = StringVector::EmptyString(result_vector, input.GetSize() + 1);
+	Bit::BlobToBit(input, result);
+	result.Finalize();
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
