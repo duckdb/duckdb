@@ -26,6 +26,8 @@ int wmain(int argc, wchar_t **wargv) {
 	int rc = 0;
 	try {
 		rc = RunShell(argc, argv);
+	} catch (const ShellExitException &ex) {
+		rc = ex.exit_code;
 	} catch (std::exception &ex) {
 		rc = 1;
 		ErrorData error(ex);
@@ -36,6 +38,7 @@ int wmain(int argc, wchar_t **wargv) {
 	}
 	try {
 		// destroy shell state prior to program clean-up
+		IgnoreInterrupts();
 		if (shell_state) {
 			delete shell_state;
 		}

@@ -102,6 +102,13 @@ enum class PagerMode { PAGER_AUTOMATIC, PAGER_ON, PAGER_OFF };
 enum class MetadataResult : uint8_t { SUCCESS = 0, FAIL = 1, EXIT = 2, PRINT_USAGE = 3 };
 enum class HighlightMode : uint32_t { AUTOMATIC, MIXED_MODE, DARK_MODE, LIGHT_MODE };
 
+// Deliberately not a std::exception: command error handlers must not consume an explicit exit.
+struct ShellExitException {
+	explicit ShellExitException(int exit_code) : exit_code(exit_code) {
+	}
+	int exit_code;
+};
+
 enum class ExecuteSQLSingleValueResult {
 	SUCCESS,
 	EXECUTION_ERROR,
@@ -517,5 +524,7 @@ struct PagerState {
 	optional_ptr<ShellState> state;
 	uint32_t win_console_cp_before_pager = 0;
 };
+
+void IgnoreInterrupts();
 
 } // namespace duckdb_shell

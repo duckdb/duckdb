@@ -775,22 +775,6 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
-void ShellState::Exit(int exit_code) {
-	if (GetReference()) {
-		GetReference()->PrintExitHint(exit_code);
-	}
-	if (exit_code == 0) {
-		// clean-up shell state if this is a successful exit
-		auto shell_state = GetReference();
-		if (shell_state) {
-			delete shell_state;
-		}
-		shell_state = nullptr;
-	}
-	// then exit
-	exit(exit_code);
-}
-
 extern "C" {
 
 /*
@@ -822,6 +806,35 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 	return FALSE;
 }
 #endif
+
+// Stop routing signals to ShellState before any of its owners are destroyed.
+void IgnoreInterrupts() {
+#ifdef SIGINT
+	signal(SIGINT, SIG_IGN);
+#elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
+#endif
+#if !defined(_WIN32) && !defined(WIN32)
+	signal(SIGPIPE, SIG_IGN);
+#endif
+}
+
+void ShellState::Exit(int exit_code) {
+	if (GetReference()) {
+		GetReference()->PrintExitHint(exit_code);
+	}
+	if (exit_code == 0) {
+		// clean-up shell state if this is a successful exit
+		IgnoreInterrupts();
+		auto &shell_state = GetReference();
+		if (shell_state) {
+			delete shell_state;
+		}
+		shell_state = nullptr;
+	}
+	// then exit
+	exit(exit_code);
+}
 
 void ShellState::ClearInterrupt() {
 	seenInterrupt = 0;
@@ -4017,11 +4030,7 @@ int RunShell(int argc, const char **argv) {
 			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
-#if !defined(_WIN32) && !defined(WIN32)
-	signal(SIGINT, SIG_IGN);
-#else
-	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
-#endif
+	IgnoreInterrupts();
 	// before ResetOutput, which forgets that stdout was not a console
 	data.PrintExitHint(rc);
 	data.SetTableName(0);
