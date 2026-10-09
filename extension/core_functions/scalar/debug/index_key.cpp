@@ -75,17 +75,29 @@ static string GetStringArgument(const Value &value, const string &param_name) {
 	return StringValue::Get(value);
 }
 
+//! Explicit indexes may share a name with constraint-backed indexes, so a name can match multiple indexes.
 static shared_ptr<IndexEntry> FindBoundIndexEntry(const TableIndexList &index_list, const Identifier &index_name,
                                                   const TableDescription &path) {
-	auto found = index_list.FindEntry(index_name);
-	if (found) {
-		return found;
-	}
-
 	auto qualified_table = path.qualified_name.ToString(QualifiedNameToStringMode::HIDE_DEFAULT_SCHEMA);
+	vector<shared_ptr<IndexEntry>> candidates;
 	vector<Identifier> available;
 	for (auto entry : index_list.IndexEntries()) {
+		if (entry->GetName() == index_name) {
+			candidates.push_back(entry);
+		}
 		available.push_back(entry->GetName());
+	}
+
+	if (candidates.size() > 1) {
+		throw BinderException("index_key: index name %s is ambiguous on table %s, it matches %llu indexes", index_name,
+		                      qualified_table, candidates.size());
+	}
+	if (candidates.size() == 1) {
+		auto &found = candidates[0];
+		if (found->GetBindState() != IndexBindState::BOUND) {
+			throw InternalException("index_key: index %s is not bound", index_name);
+		}
+		return found;
 	}
 
 	if (available.empty()) {
