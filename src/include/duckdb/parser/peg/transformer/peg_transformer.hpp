@@ -4755,7 +4755,7 @@ public:
 	static unique_ptr<DropStatement> TransformDropTableFunction(PEGTransformer &transformer,
 	                                                            const CatalogType &comment_macro_table,
 	                                                            const optional<bool> &if_exists,
-	                                                            const vector<Identifier> &table_function_name);
+	                                                            const vector<QualifiedName> &table_function_name);
 	static unique_ptr<DropStatement> TransformDropFunction(PEGTransformer &transformer, const bool &function_type_macro,
 	                                                       const optional<bool> &if_exists,
 	                                                       const vector<QualifiedName> &function_identifier);

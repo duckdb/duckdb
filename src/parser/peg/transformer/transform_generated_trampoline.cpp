@@ -12251,7 +12251,13 @@ PEGTransformerFactory::FinalizeDropTableTrampoline(PEGTransformer &transformer, 
 void PEGTransformerFactory::InitializeDropTableFunctionTrampoline(PEGTransformer &transformer,
                                                                   GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
-	process.ReserveChildSlots(2);
+	auto list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = list_items.size();
+	process.ReserveChildSlots(3 + dynamic_child_count - 1);
+	for (idx_t i = list_items.size(); i > 0; i--) {
+		auto child_idx = i - 1;
+		process.PushChild({transformer.GetRule("QualifiedTableFunction"), list_items[child_idx].get()}, 2 + child_idx);
+	}
 	auto &if_exists_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	if (if_exists_opt.HasResult()) {
 		process.PushChild({transformer.GetRule("IfExists"), if_exists_opt.GetResult()}, 1);
@@ -12263,17 +12269,18 @@ unique_ptr<TransformResultValue>
 PEGTransformerFactory::FinalizeDropTableFunctionTrampoline(PEGTransformer &transformer,
                                                            GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto dynamic_list_items = ExtractParseResultsFromList(list_pr.GetChild(2));
+	auto dynamic_child_count = dynamic_list_items.size();
 	auto comment_macro_table = process.TakeResult<CatalogType>(0);
 	optional<bool> if_exists {};
 	if (process.child_results[1]) {
 		if_exists = process.TakeResult<bool>(1);
 	}
-	vector<Identifier> table_function_name;
-	auto table_function_name_items = ExtractParseResultsFromList(list_pr.GetChild(2));
-	for (auto &table_function_name_item : table_function_name_items) {
-		table_function_name.push_back(table_function_name_item.get().Cast<IdentifierParseResult>().identifier);
+	vector<QualifiedName> qualified_table_function;
+	for (idx_t i = 2; i < 2 + dynamic_child_count; i++) {
+		qualified_table_function.push_back(process.TakeResult<QualifiedName>(i));
 	}
-	auto result = TransformDropTableFunction(transformer, comment_macro_table, if_exists, table_function_name);
+	auto result = TransformDropTableFunction(transformer, comment_macro_table, if_exists, qualified_table_function);
 	return make_uniq<TypedTransformResult<unique_ptr<DropStatement>>>(std::move(result));
 }
 
