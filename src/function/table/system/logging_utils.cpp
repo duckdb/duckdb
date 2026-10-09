@@ -26,7 +26,7 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 	auto bind_data = data.bind_data->Cast<EnableLoggingBindData>();
 
 	DUCKDB_LOG_WARNING(context, "The logging settings have been changed so you may lose warnings printed in the CLI.\n"
-	                            "To continue printing warnings to the console, set storage='shell_log_storage'.\n"
+	                            "To continue printing warnings to the console, set storage='shell_log_sink'.\n"
 	                            "For more info see https://duckdb.org/docs/current/operations_manual/logging/overview.")
 
 	auto &log_manager = context.db->GetLogManager();
@@ -42,7 +42,7 @@ static void EnableLogging(ClientContext &context, TableFunctionInput &data, Data
 	}
 
 	if (!bind_data.storage_config.empty()) {
-		log_manager.UpdateLogStorageConfig(*context.db, bind_data.storage_config);
+		log_manager.UpdateLogSinkConfig(*context.db, bind_data.storage_config);
 	}
 }
 
@@ -95,7 +95,7 @@ static unique_ptr<FunctionData> BindEnableLogging(ClientContext &context, TableF
 
 	// If the user didn't explicitly set storage=, infer it. A 'path' in storage_config (provided
 	// either via storage_path= or storage_config={path:...}) implies file storage. Otherwise
-	// preserve the currently configured storage so logging_storage isn't silently reset.
+	// preserve the currently configured storage so logging_sink isn't silently reset.
 	if (!storage_isset) {
 		if (result->storage_config.find("path") != result->storage_config.end()) {
 			result->config.storage = LogConfig::FILE_STORAGE_NAME;
@@ -150,9 +150,9 @@ static void DisableLogging(ClientContext &context, TableFunctionInput &data, Dat
 	context.db->GetLogManager().SetEnableLogging(false);
 }
 
-//! Truncate the current log storage
+//! Truncate the current log sink
 static void TruncateLogs(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
-	context.db->GetLogManager().TruncateLogStorage();
+	context.db->GetLogManager().TruncateLogSink();
 }
 
 static unique_ptr<FunctionData> BindDisableLogging(ClientContext &context, TableFunctionBindInput &input,
