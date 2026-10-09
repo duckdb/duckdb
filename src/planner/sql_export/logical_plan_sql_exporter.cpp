@@ -1,6 +1,7 @@
 #include "duckdb/planner/sql_export/logical_plan_sql_exporter_internal.hpp"
 #include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/planner/logical_plan_sql_exporter.hpp"
+#include "duckdb/planner/sql_export/bound_expression_sql_exporter_internal.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/bound_expression_sql_exporter.hpp"
@@ -188,7 +189,8 @@ LogicalPlanSQLExportContext::ExportChild(LogicalOperator &child, const LogicalPl
 
 LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExportContext::ExportExpression(
     const LogicalOperator &op, const vector<reference<const Expression>> &expressions, idx_t expression_ordinal,
-    const BoundExpressionSQLExportContext &expression_context, const LogicalPlanVerificationPath &path) {
+    const BoundExpressionSQLExportContext &expression_context, const LogicalPlanVerificationPath &path,
+    optional_ptr<BoundExpressionSQLExportState> composition) {
 	D_ASSERT(expression_ordinal < expressions.size());
 	auto &expression = expressions[expression_ordinal].get();
 	unique_ptr<Expression> restored;
@@ -207,6 +209,10 @@ LogicalPlanVerificationResult<unique_ptr<ParsedExpression>> LogicalPlanSQLExport
 				    make_uniq<BoundConstantExpression>(*value);
 			}
 		}
+	}
+	if (composition) {
+		return composition->Export(restored ? *restored : expression,
+		                           LogicalPlanSQLExportHelpers::PlanExpressionPath(path, expression_ordinal));
 	}
 	return BoundExpressionSQLExporter::ExportAtPath(
 	    restored ? *restored : expression, expression_context,

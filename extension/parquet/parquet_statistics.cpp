@@ -22,14 +22,12 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/filter/table_filter_functions.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "reader/uuid_column_reader.hpp"
-#include "duckdb/common/type_visitor.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/constants.hpp"
@@ -128,6 +126,17 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const Parque
 	}
 	return std::move(*result);
 }
+//! Statistics values that do not fit in the width of the decimal are ignored
+template <class T>
+static Value ParquetDecimalStatsValue(T value, uint8_t width, uint8_t scale) {
+	const auto max_value = Hugeint::POWERS_OF_TEN[width];
+	const auto hugeint_value = hugeint_t(value);
+	if (hugeint_value >= max_value || hugeint_value <= -max_value) {
+		return Value();
+	}
+	return Value::DECIMAL(value, width, scale);
+}
+
 Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                                    const std::string &stats) {
 	auto stats_data = const_data_ptr_cast(stats.c_str());
@@ -202,25 +211,25 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			if (stats.size() != sizeof(int32_t)) {
 				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
-			return Value::DECIMAL(Load<int32_t>(stats_data), width, scale);
+			return ParquetDecimalStatsValue(Load<int32_t>(stats_data), width, scale);
 		case ParquetExtraTypeInfo::DECIMAL_INT64:
 			if (stats.size() != sizeof(int64_t)) {
 				throw InvalidInputException("Incorrect stats size for type %s", type.ToString());
 			}
-			return Value::DECIMAL(Load<int64_t>(stats_data), width, scale);
+			return ParquetDecimalStatsValue(Load<int64_t>(stats_data), width, scale);
 		case ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY:
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT32:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT64:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT128:
-				return Value::DECIMAL(
+				return ParquetDecimalStatsValue(
 				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
 				    scale);
 			default:
@@ -252,9 +261,15 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		}
 		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
+			if (!ParquetTimeIsValid(val, Interval::MSECS_PER_SEC * Interval::SECS_PER_DAY)) {
+				return Value();
+			}
 			return Value::TIME(Time::FromTimeMs(val));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 		default:
+			if (!ParquetTimeIsValid(val, Interval::MICROS_PER_DAY)) {
+				return Value();
+			}
 			return Value::TIME(dtime_t(val));
 		}
 	}
@@ -265,7 +280,11 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		if (schema_ele.type_info != ParquetExtraTypeInfo::UNIT_NS) {
 			throw InternalException("TIME_NS requires nanosecond type info");
 		}
-		return Value::TIME_NS(ParquetIntToTimeNs(Load<int64_t>(stats_data)));
+		const auto nanos = Load<int64_t>(stats_data);
+		if (!ParquetTimeIsValid(nanos, Interval::NANOS_PER_DAY)) {
+			return Value();
+		}
+		return Value::TIME_NS(ParquetIntToTimeNs(nanos));
 	}
 	case LogicalTypeId::TIME_TZ: {
 		int64_t val;
@@ -413,7 +432,7 @@ static void ConvertShreddedStats(BaseStatistics &result, optional_ptr<BaseStatis
 		ConvertShreddedStatsItem(ListStats::GetChildStats(result), ListStats::GetChildStats(input));
 		return;
 	}
-	if (type_id == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type_id)) {
 		auto field_count = StructType::GetChildCount(result.GetType());
 		for (idx_t i = 0; i < field_count; i++) {
 			ConvertShreddedStatsItem(StructStats::GetChildStats(result, i), StructStats::GetChildStats(input, i));
@@ -600,7 +619,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		return row_group_stats;
 	}
 	// Structs are handled differently (they dont have stats)
-	if (type.id() == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type)) {
 		auto struct_stats = StructStats::CreateUnknown(type);
 		// Recurse into child readers
 		for (idx_t i = 0; i < schema.children.size(); i++) {
@@ -623,10 +642,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 			//! field is missing)
 			return nullptr;
 		}
-		auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-			return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
-		});
-		auto variant_stats = VariantStats::CreateShredded(shredding_type);
+		auto variant_stats = VariantStats::CreateShredded(VariantStats::GetShreddingType(logical_type));
 
 		//! Take the root stats
 		auto &shredded_stats = VariantStats::GetShreddedStats(variant_stats);
@@ -670,24 +686,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		}
 	}
 	return row_group_stats;
-}
-
-// Optional filters store the expression used for pruning in their bind data.
-static optional_ptr<const Expression> GetOptionalFilterChild(const Expression &expr) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
-		return nullptr;
-	}
-	auto &func = expr.Cast<BoundFunctionExpression>();
-	if (!func.BindInfo()) {
-		return nullptr;
-	}
-	if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-		return func.BindInfo()->Cast<OptionalFilterFunctionData>().child_filter_expr.get();
-	}
-	if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-		return func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>().child_filter_expr.get();
-	}
-	return nullptr;
 }
 
 static bool UsesNormalizedIntervalHash(ParquetBloomFilterHashStrategy hash_strategy) {
@@ -772,7 +770,7 @@ static bool HasFilterConstants(const Expression &expr, ParquetBloomFilterHashStr
 	if (GetBloomFilterInExpression(expr, hash_strategy)) {
 		return true;
 	}
-	auto optional_filter_child = GetOptionalFilterChild(expr);
+	auto optional_filter_child = ExpressionFilter::GetOptionalFilterChild(expr);
 	if (optional_filter_child) {
 		return HasFilterConstants(*optional_filter_child, hash_strategy);
 	}
@@ -1008,7 +1006,7 @@ static bool ApplyBloomFilter(const Expression &expr, ParquetBloomFilter &bloom_f
 		}
 		return true;
 	}
-	auto optional_filter_child = GetOptionalFilterChild(expr);
+	auto optional_filter_child = ExpressionFilter::GetOptionalFilterChild(expr);
 	if (optional_filter_child) {
 		return ApplyBloomFilter(*optional_filter_child, bloom_filter, schema, hash_strategy);
 	}

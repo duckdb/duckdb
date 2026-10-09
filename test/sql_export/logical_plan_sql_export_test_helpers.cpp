@@ -8,7 +8,7 @@
 namespace logical_plan_sql_export_test {
 
 unique_ptr<LogicalOperator> OptimizeLogicalPlanExportQuery(Connection &connection, const string &query) {
-	Parser parser(connection.context->GetParserOptions());
+	Parser parser(*connection.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*connection.context);
@@ -81,10 +81,11 @@ unique_ptr<LogicalProjection> PlanProjection(TableIndex table_index, unique_ptr<
 
 vector<string> SQLExportRows(QueryResult &result, bool ordered) {
 	vector<string> rows;
-	for (idx_t row = 0; row < result.RowCount(); row++) {
+	auto result_rows = result.Collection().GetRows();
+	for (idx_t row = 0; row < result_rows.size(); row++) {
 		string text;
 		for (idx_t col = 0; col < result.ColumnCount(); col++) {
-			auto value = result.GetValue(col, row).ToSQLString();
+			auto value = result_rows.GetValue(col, row).ToSQLString();
 			text += to_string(value.size()) + ":" + value;
 		}
 		rows.push_back(std::move(text));

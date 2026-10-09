@@ -540,6 +540,8 @@ public:
 			l_state.job_rows_scanned += job_scan.RowsScanned();
 			job_scan.table_state.rows_scanned = 0;
 			job_scan.local_state.rows_scanned = 0;
+			// a pooled state outlives the pipeline, it must not keep blocks pinned that a sink may still convert
+			job_scan.ReleasePins();
 			state_pool.Push(std::move(l_state.job->scan_state));
 			l_state.job.reset();
 			if (TryYieldControl(data_p)) {
@@ -805,21 +807,10 @@ static bool CollectValuesAndComparisonsFromExpression(const Expression &expr, va
 	}
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
-		if (func.Function().GetName() == OptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<OptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
-		}
-		if (func.Function().GetName() == SelectivityOptionalFilterScalarFun::NAME) {
-			if (!func.BindInfo()) {
-				return true;
-			}
-			auto &data = func.BindInfo()->Cast<SelectivityOptionalFilterFunctionData>();
-			return !data.child_filter_expr ||
-			       CollectValuesAndComparisonsFromExpression(*data.child_filter_expr, in_values, comparisons);
+		if (ExpressionFilter::IsRootOptionalExpression(func)) {
+			auto optional_child = ExpressionFilter::GetOptionalFilterChild(func);
+			return !optional_child ||
+			       CollectValuesAndComparisonsFromExpression(*optional_child, in_values, comparisons);
 		}
 		if (TableFilterFunctions::IsTableFilterFunction(func.Function())) {
 			return true;
@@ -1118,9 +1109,9 @@ vector<PartitionStatistics> TableScanGetPartitionStats(ClientContext &context, G
 	return storage.GetPartitionStats(context);
 }
 
-BindInfo TableScanGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+optional_ptr<TableCatalogEntry> TableScanGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	return BindInfo(bind_data.table);
+	return &bind_data.table;
 }
 
 void TableScanDependency(LogicalDependencyList &entries, const FunctionData *bind_data_p) {
@@ -1289,7 +1280,7 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.table_scan_progress = TableScanProgress;
 	scan_function.get_partition_data = TableScanGetPartitionData;
 	scan_function.get_partition_stats = TableScanGetPartitionStats;
-	scan_function.get_bind_info = TableScanGetBindInfo;
+	scan_function.get_table_entry = TableScanGetTableEntry;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;

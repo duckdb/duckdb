@@ -32,7 +32,7 @@ struct BoundFunctionInfo {
 };
 
 unique_ptr<LogicalOperator> OptimizeIdentityQuery(Connection &con, const string &query) {
-	Parser parser(con.context->GetParserOptions());
+	Parser parser(*con.context);
 	parser.ParseQuery(query);
 	REQUIRE(parser.statements.size() == 1);
 	Planner planner(*con.context);
@@ -401,13 +401,13 @@ TEST_CASE("Exported recursive payload aggregates resolve qualified schemas",
 		auto expected = string(name) == "memory.main.payload_choice" ? 1 : 3;
 		auto ordinary = connection.Query("SELECT " + string(name) + "(v) FROM (VALUES(1),(3))t(v)");
 		REQUIRE_NO_FAIL(*ordinary);
-		REQUIRE(ordinary->GetValue(0, 0) == Value::INTEGER(expected));
+		REQUIRE(ordinary->Collection().GetValue(0, 0) == Value::INTEGER(expected));
 		auto recursive = connection.Query("WITH RECURSIVE r(k,v) USING KEY(k," + string(name) +
 		                                  "(v)) AS (SELECT * FROM (VALUES(1,1),(1,3))t(k,v) UNION ALL "
 		                                  "SELECT k+1,v FROM r WHERE k<2) SELECT k,v FROM r ORDER BY k");
 		REQUIRE_NO_FAIL(*recursive);
 		REQUIRE(recursive->RowCount() == 2);
-		REQUIRE(recursive->GetValue(1, 0) == Value::INTEGER(expected));
-		REQUIRE(recursive->GetValue(1, 1) == Value::INTEGER(expected));
+		REQUIRE(recursive->Collection().GetValue(1, 0) == Value::INTEGER(expected));
+		REQUIRE(recursive->Collection().GetValue(1, 1) == Value::INTEGER(expected));
 	}
 }

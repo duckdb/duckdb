@@ -48,7 +48,7 @@ struct KahanAvgState {
 	void Combine(const KahanAvgState &other) {
 		this->count += other.count;
 		KahanAddInternal(other.value, this->value, this->err);
-		KahanAddInternal(other.err, this->value, this->err);
+		KahanAddInternal(-other.err, this->value, this->err);
 	}
 };
 
@@ -143,6 +143,27 @@ struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, A
 	}
 };
 
+//! The average of TIME values is within a day - reject imported states that average outside of it
+void ValidateTimeAverageStates(const_data_ptr_t states, idx_t count, idx_t stride) {
+	for (idx_t i = 0; i < count; i++) {
+		const auto state = Load<AvgState<hugeint_t>>(states + i * stride);
+		if (state.count == 0) {
+			continue;
+		}
+		const auto max_value = hugeint_t(0, state.count) * hugeint_t(Interval::MICROS_PER_DAY);
+		if (state.value < 0 || state.value > max_value) {
+			throw InvalidInputException("Invalid avg state - the average of %s over %llu values is not a valid time",
+			                            state.value.ToString(), state.count);
+		}
+	}
+}
+
+AggregateStateLayout TimeAverageStateLayout(AggregateLayoutInput &input) {
+	auto layout = AggregateFunction::StructStateLayout<AvgState<hugeint_t>>(input);
+	layout.validate_state = ValidateTimeAverageStates;
+	return layout;
+}
+
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class STATE, class OP>
 	static void RepeatedCombine(const STATE &source, STATE &target, AggregateInputData &input, idx_t count) {
@@ -182,7 +203,7 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
 		} else {
-			target = (state.value / state.count) + (state.err / state.count);
+			target = (state.value / state.count) - (state.err / state.count);
 		}
 	}
 };
@@ -343,12 +364,14 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	auto time_avg = AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
 	    LogicalType::TIME, LogicalType::TIME);
 	time_avg.GetSignature().GetParameter(0).SetName("x");
+	time_avg.SetStructStateExport(TimeAverageStateLayout);
 	avg.AddFunction(time_avg);
 
 	auto time_tz_avg =
 	    AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, dtime_tz_t, dtime_tz_t, TimeTZAverageOperation>(
 	        LogicalType::TIME_TZ, LogicalType::TIME_TZ);
 	time_tz_avg.GetSignature().GetParameter(0).SetName("x");
+	time_tz_avg.SetStructStateExport(TimeAverageStateLayout);
 	avg.AddFunction(time_tz_avg);
 
 	return avg;

@@ -1066,13 +1066,15 @@ TEST_CASE("V2: MAP write via child vectors", "[capi_v2][vector_write]") {
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vector_set_size(vec, 1, nullptr) == DUCKDB_V2_ERROR_NONE);
 
+	// sizing the entries STRUCT sizes both the keys and the values
+	duckdb_v2_vector_handle kv = nullptr;
+	REQUIRE(duckdb_v2_vector_get_child(vec, 0, &kv, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(kv, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
+
 	duckdb_v2_vector_handle keys = nullptr;
 	duckdb_v2_vector_handle values = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(vec, 0, &keys, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vector_get_child(vec, 1, &values, nullptr) == DUCKDB_V2_ERROR_NONE);
-
-	REQUIRE(duckdb_v2_vector_set_size(keys, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vector_set_size(values, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_get_child(kv, 0, &keys, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_get_child(kv, 1, &values, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	void *keys_raw = nullptr;
 	REQUIRE(duckdb_v2_vector_get_data_mutable(keys, &keys_raw, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1090,6 +1092,12 @@ TEST_CASE("V2: MAP write via child vectors", "[capi_v2][vector_write]") {
 	REQUIRE(duckdb_v2_vector_get_view(keys, &key_view, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(static_cast<const int32_t *>(key_view.data)[0] == 1);
 	REQUIRE(static_cast<const int32_t *>(key_view.data)[1] == 2);
+
+	duckdb_v2_value_handle cell = nullptr;
+	REQUIRE(duckdb_v2_vector_get_value(vec, 0, &cell, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto rendered = Render(cell);
+	duckdb_v2_value_destroy(&cell);
+	REQUIRE(rendered == "{1=one, 2=two}");
 
 	REQUIRE(duckdb_v2_data_chunk_destroy(&chunk) == DUCKDB_V2_ERROR_NONE);
 }

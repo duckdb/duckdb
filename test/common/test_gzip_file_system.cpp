@@ -194,3 +194,8 @@ TEST_CASE("GZIP rejects truncated member boundaries", "[file_system][gzip]") {
 		REQUIRE_NOTHROW(ReadCompressedData(first_member, first_member.size()));
 	}
 }
+
+TEST_CASE("GZIP string decompression rejects a header-only stream with FNAME", "[file_system][gzip]") {
+	const char header[] = {'\x1f', '\x8b', '\x08', '\x08', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00'};
+	REQUIRE_THROWS_AS(GZipFileSystem::UncompressGZIPString(header, sizeof(header)), IOException);
+}

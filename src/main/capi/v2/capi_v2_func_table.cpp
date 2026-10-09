@@ -1,5 +1,9 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/main/capi_v2/capi_v2_function_internal.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/table_function_multi_file.hpp"
 #include "duckdb/execution/partition_info.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -25,6 +29,7 @@ public:
 	bool cardinality_set = false;
 
 	vector<LogicalType> column_types;
+	vector<Identifier> column_names;
 
 	auto Copy() const -> unique_ptr<FunctionData> override {
 		auto copy = make_uniq<CV2TableFunctionData>();
@@ -34,6 +39,7 @@ public:
 		copy->cardinality_is_exact = cardinality_is_exact;
 		copy->cardinality_set = cardinality_set;
 		copy->column_types = column_types;
+		copy->column_names = column_names;
 		return std::move(copy);
 	}
 
@@ -59,6 +65,13 @@ public:
 class CV2TableLocalState final : public LocalTableFunctionState {
 public:
 	CV2UserData handle;
+	//! Whether the caller claims the batches of this thread (see TableFunction::claim_batch)
+	bool claimed_externally = false;
+	//! Whether this thread has claimed a batch it has not exhausted yet
+	bool batch_claimed = false;
+	//! Written into by the exec callback when the scan requests no columns, as the function produces its rows through
+	//! its first column
+	unique_ptr<DataChunk> row_chunk;
 
 	// Requested partition columns as declared columns, fixed for the lifetime of the local state's pipeline.
 	const vector<column_t> &PartitionColumns(const OperatorPartitionInfo &partition_info,
@@ -115,12 +128,8 @@ private:
 
 class CV2TableBindInfo {
 public:
-	void *in_user_data = nullptr;
-	const vector<Value> *in_args = nullptr;
-
 	vector<LogicalType> out_column_types;
 	vector<Identifier> out_column_names;
-	duckdb_v2_opaque out_bind_data = {};
 	idx_t out_cardinality = 0;
 	bool out_cardinality_is_exact = false;
 	bool out_cardinality_set = false;
@@ -200,6 +209,23 @@ static auto Convert(duckdb_v2_table_function_progress_info_handle info) -> CV2Ta
 }
 static auto Convert(CV2TableProgressInfo *info) -> duckdb_v2_table_function_progress_info_handle {
 	return reinterpret_cast<duckdb_v2_table_function_progress_info_handle>(info);
+}
+
+class CV2TableClaimBatchInfo {
+public:
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	void *in_global_state = nullptr;
+	void *in_local_state = nullptr;
+
+	bool out_claimed = false;
+};
+
+static auto Convert(duckdb_v2_table_function_claim_batch_info_handle info) -> CV2TableClaimBatchInfo * {
+	return reinterpret_cast<CV2TableClaimBatchInfo *>(info);
+}
+static auto Convert(CV2TableClaimBatchInfo *info) -> duckdb_v2_table_function_claim_batch_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_claim_batch_info_handle>(info);
 }
 
 class CV2TableFilterPushdownInfo {
@@ -304,32 +330,76 @@ public:
 	duckdb_v2_table_function_filter_pushdown_callback_fn filter_pushdown_cb = nullptr;
 	duckdb_v2_table_function_partition_data_callback_fn partition_data_cb = nullptr;
 	duckdb_v2_table_function_partitioning_callback_fn partitioning_cb = nullptr;
+	duckdb_v2_table_function_claim_batch_callback_fn claim_batch_cb = nullptr;
+	duckdb_v2_table_function_get_bind_info_callback_fn get_bind_info_cb = nullptr;
 	shared_ptr<CV2UserData> user_data = nullptr;
 	bool projection_pushdown = false;
 
 	Identifier name;
 };
 
+//! What the "get bind info" callback describes a bound call with
+class CV2TableGetBindInfoInfo {
+public:
+	explicit CV2TableGetBindInfoInfo(const CV2TableFunctionData &bind_data_p) : bind_data(bind_data_p) {
+	}
+
+	void *in_user_data = nullptr;
+	void *in_bind_data = nullptr;
+	//! The bound call - its result columns are the columns identifiers are attached to
+	const CV2TableFunctionData &bind_data;
+
+	//! What the callback reports
+	BindInfo out_bind_info {ScanType::EXTERNAL};
+};
+
+static auto Convert(duckdb_v2_table_function_get_bind_info_info_handle info) -> CV2TableGetBindInfoInfo * {
+	return reinterpret_cast<CV2TableGetBindInfoInfo *>(info);
+}
+static auto Convert(CV2TableGetBindInfoInfo *info) -> duckdb_v2_table_function_get_bind_info_info_handle {
+	return reinterpret_cast<duckdb_v2_table_function_get_bind_info_info_handle>(info);
+}
+
+//! Asks the function to describe a bound call: e.g. the identifiers of its columns
+static auto CV2TableGetBindInfo(TableFunctionGetBindInfoInput &input) -> BindInfo {
+	if (!input.bind_data) {
+		return BindInfo(ScanType::EXTERNAL);
+	}
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+
+	CV2TableGetBindInfoInfo args(bind_data);
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	info.get_bind_info_cb(Convert(&args), Convert(&input.context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+
+	return std::move(args.out_bind_info);
+}
+
 static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, vector<LogicalType> &return_types,
                          vector<Identifier> &names) -> unique_ptr<FunctionData> {
 	const auto &info = input.info->Cast<CV2TableFunctionInfo>();
 
-	CV2TableBindInfo args = {};
-	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
 	// the binder places every argument in its signature slot, defaults included, so the call reads them as-is
-	args.in_args = &input.inputs;
+	CV2ConstantBindInfo bind_info(input.table_function, info.user_data ? info.user_data->GetData() : nullptr,
+	                              input.inputs, input.named_parameters);
+	CV2TableBindInfo args = {};
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
-	info.bind_cb(Convert(&args), Convert(&context), &err_ptr);
+	info.bind_cb(Convert(&bind_info), Convert(&args), Convert(&context), &err_ptr);
 
 	// Take ownership of whatever the callback set before reporting an error, so it is destroyed either way.
 	auto result = make_uniq<CV2TableFunctionData>();
 	result->info = &info;
-	if (args.out_bind_data.ptr) {
-		result->handle =
-		    make_shared_ptr<CV2UserData>(args.out_bind_data.ptr, args.out_bind_data.destroy, args.out_bind_data.equals);
-	}
+	result->handle = std::move(bind_info.out_bind_data);
 	result->cardinality = args.out_cardinality;
 	result->cardinality_is_exact = args.out_cardinality_is_exact;
 	result->cardinality_set = args.out_cardinality_set;
@@ -347,6 +417,7 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 	input.table_function.order_preservation_type = args.out_order_preservation;
 
 	result->column_types = args.out_column_types;
+	result->column_names = args.out_column_names;
 	return_types = std::move(args.out_column_types);
 	names = std::move(args.out_column_names);
 	return std::move(result);
@@ -357,6 +428,10 @@ static auto CV2TableBind(ClientContext &context, TableFunctionBindInput &input, 
 static auto CV2TableScanColumns(const CV2TableFunctionData &bind_data, const TableFunctionInitInput &input)
     -> vector<column_t> {
 	if (bind_data.info->projection_pushdown) {
+		if (input.column_ids.empty()) {
+			// the scan only produces rows (e.g. for count(*)) - the function produces them through its first column
+			return {0};
+		}
 		return input.column_ids;
 	}
 	vector<column_t> columns;
@@ -439,7 +514,65 @@ static auto CV2TableInitLocal(ExecutionContext &context, TableFunctionInitInput 
 	return std::move(result);
 }
 
+//! Calls the claim batch callback for the local state of the given input - returns whether a batch was claimed
+static auto CV2TableClaimNextBatch(ClientContext &context, TableFunctionInput &input) -> bool {
+	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
+	const auto &info = *bind_data.info;
+	auto &local_state = input.local_state->Cast<CV2TableLocalState>();
+
+	CV2TableClaimBatchInfo args = {};
+	args.in_user_data = info.user_data ? info.user_data->GetData() : nullptr;
+	args.in_bind_data = bind_data.handle ? bind_data.handle->GetData() : nullptr;
+	if (input.global_state) {
+		args.in_global_state = input.global_state->Cast<CV2TableGlobalState>().handle.GetData();
+	}
+	args.in_local_state = local_state.handle.GetData();
+
+	CV2ErrorInfo err = {};
+	auto err_ptr = Convert(&err);
+	info.claim_batch_cb(Convert(&args), Convert(&context), &err_ptr);
+
+	if (err.HasError()) {
+		err.ThrowAsException();
+	}
+	local_state.batch_claimed = args.out_claimed;
+	return args.out_claimed;
+}
+
+//! The caller claims the batches of this local state itself - every exec then scans the claimed batch only
+static auto CV2TableClaimBatch(ClientContext &context, TableFunctionInput &input) -> bool {
+	input.local_state->Cast<CV2TableLocalState>().claimed_externally = true;
+	return CV2TableClaimNextBatch(context, input);
+}
+
+static auto CV2TableExecBatch(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void;
+
 static auto CV2TableExec(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void {
+	const auto &info = *input.bind_data->Cast<CV2TableFunctionData>().info;
+	if (!info.claim_batch_cb) {
+		CV2TableExecBatch(context, input, output);
+		return;
+	}
+	auto &local_state = input.local_state->Cast<CV2TableLocalState>();
+	if (local_state.claimed_externally) {
+		// an empty chunk ends the batch, after which the caller claims the next one
+		CV2TableExecBatch(context, input, output);
+		return;
+	}
+	// nobody claims the batches for us - move on to the next batch whenever the current one is exhausted
+	while (true) {
+		if (!local_state.batch_claimed && !CV2TableClaimNextBatch(context, input)) {
+			return;
+		}
+		CV2TableExecBatch(context, input, output);
+		if (output.size() > 0) {
+			return;
+		}
+		local_state.batch_claimed = false;
+	}
+}
+
+static auto CV2TableExecBatch(ClientContext &context, TableFunctionInput &input, DataChunk &output) -> void {
 	const auto &bind_data = input.bind_data->Cast<CV2TableFunctionData>();
 	const auto &info = *bind_data.info;
 
@@ -451,8 +584,19 @@ static auto CV2TableExec(ClientContext &context, TableFunctionInput &input, Data
 		args.in_global_state = global_state.handle.GetData();
 		args.in_scan_columns = &global_state.scan_columns;
 	}
-	args.in_local_state = input.local_state->Cast<CV2TableLocalState>().handle.GetData();
-	args.output = &output;
+	auto &local_state = input.local_state->Cast<CV2TableLocalState>();
+	args.in_local_state = local_state.handle.GetData();
+	reference<DataChunk> target(output);
+	if (output.ColumnCount() == 0) {
+		// the scan requests no columns (e.g. for count(*)), only rows - the function writes them into its first column
+		if (!local_state.row_chunk) {
+			local_state.row_chunk = make_uniq<DataChunk>();
+			local_state.row_chunk->Initialize(context, {bind_data.column_types[0]});
+		}
+		local_state.row_chunk->Reset();
+		target = *local_state.row_chunk;
+	}
+	args.output = &target.get();
 
 	CV2ErrorInfo err = {};
 	auto err_ptr = Convert(&err);
@@ -465,7 +609,12 @@ static auto CV2TableExec(ClientContext &context, TableFunctionInput &input, Data
 	// The vector write API sizes per vector, while the engine reads the chunk's cardinality. Callers typically size
 	// only the first vector and write the rest through direct buffer writes, so take the first vector's size as the
 	// batch's row count and propagate it to the others. A table function always has at least one result column.
-	output.SetChildCardinality(output.data[0].size());
+	auto row_count = target.get().data[0].size();
+	if (output.ColumnCount() == 0) {
+		output.SetCardinalityUnsafe(row_count);
+		return;
+	}
+	output.SetChildCardinality(row_count);
 }
 
 //! An exact estimate also pins the maximum; otherwise only the estimate is known.
@@ -662,6 +811,9 @@ public:
 			function.get_partition_info = CV2TableGetPartitionInfo;
 		}
 		function.projection_pushdown = info.projection_pushdown;
+		if (info.get_bind_info_cb) {
+			function.get_bind_info = CV2TableGetBindInfo;
+		}
 
 		info.name = name;
 		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
@@ -717,6 +869,127 @@ static auto Convert(duckdb_v2_table_function_handle func) -> CV2TableFunction * 
 }
 static auto Convert(CV2TableFunction *func) -> duckdb_v2_table_function_handle {
 	return reinterpret_cast<duckdb_v2_table_function_handle>(func);
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Multi-file functions
+//----------------------------------------------------------------------------------------------------------------------
+class CV2MultiFileFunction {
+public:
+	void Register() {
+		if (name.empty()) {
+			throw InvalidInputException("Function name cannot be empty.");
+		}
+		if (single_file_function.empty()) {
+			throw InvalidInputException("The single-file function must be set for the multi-file function.");
+		}
+		TableFunctionMultiFileSettings settings;
+		settings.reader_type = reader_type;
+		if (!file_extension.empty()) {
+			settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, file_extension);
+		}
+		auto single_file = GetSingleFileFunction();
+		if (single_file.function == CV2TableExec && single_file.function_info) {
+			// the multi-file scan claims the batches of a C API function that scans one batch at a time
+			if (single_file.function_info->Cast<CV2TableFunctionInfo>().claim_batch_cb) {
+				settings.claim_batch = CV2TableClaimBatch;
+			}
+		}
+		auto function = TableFunctionMultiFileWrapper::CreateFunctionSet(std::move(single_file), name, settings);
+		RegisterToCatalog(std::move(function));
+	}
+
+	virtual ~CV2MultiFileFunction() = default;
+
+protected:
+	//! Looks up the single-file function in the catalog, and selects the overload to wrap from it
+	virtual TableFunction GetSingleFileFunction() = 0;
+	virtual void RegisterToCatalog(TableFunctionSet function) = 0;
+
+	//! The overload of the single-file function that takes the path of the file to read
+	TableFunction SelectSingleFileFunction(optional_ptr<CatalogEntry> entry) const {
+		if (!entry) {
+			throw InvalidInputException("Table function \"%s\" to read single files with does not exist.",
+			                            single_file_function);
+		}
+		for (auto &function : entry->Cast<TableFunctionCatalogEntry>().functions.functions) {
+			auto &signature = function->GetSignature();
+			if (signature.GetRequiredParameterCount() != 1 || !signature.GetParameter(0).AcceptsPosition()) {
+				continue;
+			}
+			auto &type = signature.GetParameter(0).GetType();
+			if (type == LogicalType::VARCHAR || type.id() == LogicalTypeId::ANY) {
+				return *function;
+			}
+		}
+		throw InvalidInputException(
+		    "Table function \"%s\" cannot read single files: it must take the file to read as its only positional "
+		    "parameter, of type ANY (or VARCHAR).",
+		    single_file_function);
+	}
+
+public:
+	Identifier name;
+	Identifier single_file_function;
+	string reader_type;
+	string file_extension;
+};
+
+class CV2ConnectionMultiFileFunction : public CV2MultiFileFunction {
+public:
+	explicit CV2ConnectionMultiFileFunction(Connection &connection) : connection(connection) {
+	}
+
+protected:
+	TableFunction GetSingleFileFunction() override {
+		auto &context = *connection.context;
+		TableFunction result;
+		context.RunFunctionInTransaction([&]() {
+			auto &catalog = Catalog::GetSystemCatalog(context);
+			auto entry = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, Identifier::DefaultSchema(),
+			                              single_file_function, OnEntryNotFound::RETURN_NULL);
+			result = SelectSingleFileFunction(entry);
+		});
+		return result;
+	}
+
+	void RegisterToCatalog(TableFunctionSet function) override {
+		auto &context = *connection.context;
+		context.RunFunctionInTransaction([&]() {
+			auto &catalog = Catalog::GetSystemCatalog(context);
+			CreateTableFunctionInfo tf_info(std::move(function));
+			tf_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
+			catalog.CreateTableFunction(context, tf_info);
+		});
+	}
+
+private:
+	Connection &connection;
+};
+
+class CV2ExtensionMultiFileFunction : public CV2MultiFileFunction {
+public:
+	explicit CV2ExtensionMultiFileFunction(ExtensionLoader &loader) : loader(loader) {
+	}
+
+protected:
+	TableFunction GetSingleFileFunction() override {
+		return SelectSingleFileFunction(loader.TryGetTableFunction(single_file_function));
+	}
+
+	void RegisterToCatalog(TableFunctionSet function) override {
+		loader.RegisterFunction(std::move(function));
+	}
+
+private:
+	ExtensionLoader &loader;
+};
+
+static auto Convert(duckdb_v2_multi_file_function_handle func) -> CV2MultiFileFunction * {
+	return reinterpret_cast<CV2MultiFileFunction *>(func);
+}
+static auto Convert(CV2MultiFileFunction *func) -> duckdb_v2_multi_file_function_handle {
+	return reinterpret_cast<duckdb_v2_multi_file_function_handle>(func);
 }
 
 } // namespace duckdb::capiv2
@@ -845,57 +1118,6 @@ duckdb_v2_table_function_set_partitioning_callback(duckdb_v2_table_function_hand
 	return WithErrorHandler(err, [&]() { Convert(function)->info.partitioning_cb = callback; });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_user_data(duckdb_v2_table_function_bind_info_handle info, void **data,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_bind_data(duckdb_v2_table_function_bind_info_handle info,
-                                                            duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(data);
-	return WithErrorHandler(err, [&]() { Convert(info)->out_bind_data = *data; });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_count(duckdb_v2_table_function_bind_info_handle info,
-                                                            idx_t *count, duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(count);
-	return WithErrorHandler(err, [&]() { *count = Convert(info)->in_args->size(); });
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_type(duckdb_v2_table_function_bind_info_handle info, idx_t index,
-                                                           duckdb_v2_logical_type_handle *type,
-                                                           duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(type);
-	*type = nullptr;
-	return WithErrorHandler(err, [&]() {
-		const auto &arguments = *Convert(info)->in_args;
-		if (index >= arguments.size()) {
-			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_table_function_bind_get_arg_type");
-		}
-		*type = Convert(new duckdb::LogicalType(arguments[index].type()));
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_bind_get_arg_value(duckdb_v2_table_function_bind_info_handle info, idx_t index,
-                                                            duckdb_v2_value_handle *value,
-                                                            duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(info);
-	DUCKDB_CHECK_ARG(value);
-	*value = nullptr;
-	return WithErrorHandler(err, [&]() {
-		const auto &arguments = *Convert(info)->in_args;
-		if (index >= arguments.size()) {
-			throw duckdb::InvalidInputException("Index out of bounds in duckdb_v2_table_function_bind_get_arg_value");
-		}
-		*value = Convert(new duckdb::Value(arguments[index]));
-	});
-}
-
 DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_function_bind_info_handle info,
                                                                 const duckdb_v2_identifier_t *name,
                                                                 duckdb_v2_logical_type_handle type,
@@ -904,7 +1126,8 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_result_column(duckdb_v2_table_
 	DUCKDB_CHECK_ARG(name);
 	DUCKDB_CHECK_ARG(type);
 	return WithErrorHandler(err, [&]() {
-		const auto &column_type = *Convert(type);
+		auto column_type_ref = Convert(type);
+		const auto &column_type = *column_type_ref;
 		// A result column carries data, so a wildcard or otherwise incomplete type has no meaning here.
 		if (!column_type.IsComplete()) {
 			throw duckdb::InvalidInputException("Result column type must be a fully defined concrete type");
@@ -1378,6 +1601,227 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_register(duckdb_v2_table_function_handl
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_destroy(duckdb_v2_table_function_handle *function) {
+	return WithErrorHandler(nullptr, [&]() {
+		if (!function) {
+			return;
+		}
+		if (*function) {
+			delete Convert(*function);
+			*function = nullptr;
+		}
+	});
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Batch claiming
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_set_claim_batch_callback(duckdb_v2_table_function_handle function,
+                                                  duckdb_v2_table_function_claim_batch_callback_fn callback,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.claim_batch_cb = callback; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_claim_batch_get_user_data(duckdb_v2_table_function_claim_batch_info_handle info, void **data,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_claim_batch_get_bind_data(duckdb_v2_table_function_claim_batch_info_handle info, void **data,
+                                                   duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_claim_batch_get_global_state(duckdb_v2_table_function_claim_batch_info_handle info,
+                                                      void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_global_state; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_claim_batch_get_local_state(duckdb_v2_table_function_claim_batch_info_handle info, void **data,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_local_state; });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(duckdb_v2_table_function_claim_batch_info_handle info,
+                                                                 bool claimed, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	return WithErrorHandler(err, [&]() { Convert(info)->out_claimed = claimed; });
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// File readers
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_set_get_bind_info_callback(duckdb_v2_table_function_handle function,
+                                                    duckdb_v2_table_function_get_bind_info_callback_fn callback,
+                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->info.get_bind_info_cb = callback; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_get_user_data(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                     void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_user_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_get_bind_data(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                     void **data, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(data);
+	return WithErrorHandler(err, [&]() { *data = Convert(info)->in_bind_data; });
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_set_column_identifier(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                             idx_t column_index, const idx_t *child_path,
+                                                             idx_t child_path_length, duckdb_v2_value_handle identifier,
+                                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(identifier);
+	return WithErrorHandler(err, [&]() {
+		auto &args = *Convert(info);
+		auto &bind_data = args.bind_data;
+		if (column_index >= bind_data.column_types.size()) {
+			throw duckdb::InvalidInputException(
+			    "Index out of bounds in duckdb_v2_table_function_get_bind_info_set_column_identifier: result column "
+			    "%llu has not been declared",
+			    column_index);
+		}
+		if (child_path_length > 0 && !child_path) {
+			throw duckdb::InvalidInputException("duckdb_v2_table_function_get_bind_info_set_column_identifier: the "
+			                                    "child path cannot be null unless it is empty");
+		}
+		const auto &value = *Convert(identifier);
+		const auto identifier_type = value.type().id();
+		if (value.IsNull() ||
+		    (identifier_type != duckdb::LogicalTypeId::INTEGER && identifier_type != duckdb::LogicalTypeId::VARCHAR)) {
+			throw duckdb::InvalidInputException("duckdb_v2_table_function_get_bind_info_set_column_identifier: an "
+			                                    "identifier must be a non-NULL INTEGER or VARCHAR, got %s",
+			                                    value.ToString());
+		}
+		duckdb::vector<duckdb::idx_t> path(child_path, child_path + child_path_length);
+		// verify the path addresses a nested field of the column, so a mistake is reported where it is made
+		auto definition = duckdb::MultiFileColumnDefinition::CreateNested(bind_data.column_names[column_index],
+		                                                                  bind_data.column_types[column_index]);
+		definition.ResolveChildPath(path);
+
+		auto &identifiers = args.out_bind_info.column_identifiers;
+		for (auto &entry : identifiers) {
+			if (entry.column_index == column_index && entry.child_path == path) {
+				entry.identifier = value;
+				return;
+			}
+		}
+		identifiers.push_back({column_index, std::move(path), value});
+	});
+}
+
+DUCKDB_V2_ERROR
+duckdb_v2_table_function_get_bind_info_set_option(duckdb_v2_table_function_get_bind_info_info_handle info,
+                                                  duckdb_v2_str *key, duckdb_v2_value_handle value,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(info);
+	DUCKDB_CHECK_ARG(key);
+	DUCKDB_CHECK_ARG(value);
+	return WithErrorHandler(
+	    err, [&]() { Convert(info)->out_bind_info.options[duckdb::string(Convert(*key))] = *Convert(value); });
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Multi-file functions
+//----------------------------------------------------------------------------------------------------------------------
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create_with_connection(duckdb_v2_connection_handle connection,
+                                                                     duckdb_v2_multi_file_function_handle *function,
+                                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(connection);
+	DUCKDB_CHECK_ARG(function);
+	*function = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &conn = *Convert(connection);
+		auto result = duckdb::make_uniq<CV2ConnectionMultiFileFunction>(conn);
+		*function = Convert(result.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create_with_extension(duckdb_v2_extension_handle extension,
+                                                                    duckdb_v2_multi_file_function_handle *function,
+                                                                    duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_ARG(function);
+	*function = nullptr;
+	return WithErrorHandler(err, [&]() {
+		auto &loader = GetExtensionLoader(extension);
+		auto result = duckdb::make_uniq<CV2ExtensionMultiFileFunction>(loader);
+		*function = Convert(result.release());
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_name(duckdb_v2_multi_file_function_handle function,
+                                                       duckdb_v2_str *name, duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(name);
+	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(Convert(*name)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_single_file_function(duckdb_v2_multi_file_function_handle function,
+                                                                       duckdb_v2_str *name,
+                                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(name);
+	return WithErrorHandler(err,
+	                        [&]() { Convert(function)->single_file_function = duckdb::Identifier(Convert(*name)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_reader_type(duckdb_v2_multi_file_function_handle function,
+                                                              duckdb_v2_str *reader_type,
+                                                              duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(reader_type);
+	return WithErrorHandler(err, [&]() { Convert(function)->reader_type = duckdb::string(Convert(*reader_type)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_file_extension(duckdb_v2_multi_file_function_handle function,
+                                                                 duckdb_v2_str *extension,
+                                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(extension);
+	return WithErrorHandler(err, [&]() {
+		auto file_extension = duckdb::string(Convert(*extension));
+		if (duckdb::StringUtil::StartsWith(file_extension, ".")) {
+			throw duckdb::InvalidInputException("The file extension \"%s\" must be given without a leading dot",
+			                                    file_extension);
+		}
+		Convert(function)->file_extension = std::move(file_extension);
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_register(duckdb_v2_multi_file_function_handle function,
+                                                       duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() { Convert(function)->Register(); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_destroy(duckdb_v2_multi_file_function_handle *function) {
 	return WithErrorHandler(nullptr, [&]() {
 		if (!function) {
 			return;

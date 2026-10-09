@@ -40,15 +40,19 @@ unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	constexpr idx_t map_index = MAP_INDEX;
 	D_ASSERT(map_index < arguments.size());
-	auto &cases = arguments[map_index];
-	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+	// the cases might have been cast to the argument type of the function
+	reference<const Expression> cases = *arguments[map_index];
+	if (BoundCastExpression::IsCast(cases.get())) {
+		cases = BoundCastExpression::Child(cases.get().Cast<BoundFunctionExpression>());
+	}
+	if (cases.get().GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
-	auto &func = cases->Cast<BoundFunctionExpression>();
-	if (func.Function().GetName() != "map" || !cases->IsFoldable()) {
+	auto &func = cases.get().Cast<BoundFunctionExpression>();
+	if (func.Function().GetName() != "map" || !cases.get().IsFoldable()) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
-	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
+	auto map_value = ExpressionExecutor::EvaluateScalar(context, cases.get());
 	auto values_type = MapType::ValueType(map_value.type());
 	return make_uniq<SwitchFunctionBindData>(values_type, map_index);
 }
@@ -123,9 +127,11 @@ unique_ptr<Expression> SwitchBindExpression(FunctionBindExpressionInput &input) 
 		auto then_type = values_unpacked[i]->GetReturnType();
 		if (!LogicalType::TryGetMaxLogicalType(input.context, function_data.return_type, then_type,
 		                                       function_data.return_type)) {
+			// LCOV_EXCL_START
 			throw BinderException(
 			    "Cannot mix values of type %s and %s in CASE expression - an explicit cast is required",
 			    function_data.return_type.ToString(), then_type.ToString());
+			// LCOV_EXCL_STOP
 		}
 		case_check.then_expr = std::move(values_unpacked[i]);
 		result->CaseChecksMutable().push_back(std::move(case_check));

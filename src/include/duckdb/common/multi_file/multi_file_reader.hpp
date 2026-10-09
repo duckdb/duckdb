@@ -101,7 +101,7 @@ public:
 	// Reserved field id used for the "_last_updated_sequence_number" field according to the iceberg spec
 	static constexpr int32_t LAST_UPDATED_SEQUENCE_NUMBER_ID = 2147483539;
 	//! The field of a file STRUCT that holds the path of the file - all other fields are open options
-	static constexpr const char *FILE_PATH_FIELD = "filename";
+	static constexpr const char *FILE_PATH_FIELD = OpenFileInfo::PATH_FIELD;
 
 public:
 	virtual ~MultiFileReader();
@@ -120,6 +120,10 @@ public:
 	enum class MultiFileParameters { ALL, ALLOW_EMPTY_ONLY };
 	DUCKDB_API static void AddParameters(TableFunction &table_function,
 	                                     MultiFileParameters which = MultiFileParameters::ALL);
+	//! Parse the value of the "schema" option - a MAP from field id (INTEGER) or name (VARCHAR) to a STRUCT(name,
+	//! type, default_value[, children]) describing a column
+	DUCKDB_API static vector<MultiFileColumnDefinition> ParseSchemaOption(ClientContext &context,
+	                                                                      const Value &schema_value);
 	//! Creates a table function set from a single reader function (including e.g. list parameters, etc)
 	DUCKDB_API static TableFunctionSet CreateFunctionSet(TableFunction table_function);
 
@@ -143,6 +147,9 @@ public:
 	               const FileGlobInput &glob_input = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
+	//! Parse an option of a COPY ... FROM that the multi-file reader handles itself
+	DUCKDB_API virtual bool ParseCopyOption(const Identifier &key, const vector<Value> &values,
+	                                        MultiFileOptions &options);
 	DUCKDB_API virtual bool ParseOption(const Identifier &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
@@ -154,7 +161,7 @@ public:
 	                                                                   MultiFileDynamicPushdownInfo &pushdown_info);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
-	//! directly.
+	//! directly. The default MultiFileReader binds when the "schema" option was given.
 	DUCKDB_API virtual bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
 	                             vector<Identifier> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required

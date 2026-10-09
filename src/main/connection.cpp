@@ -82,10 +82,12 @@ unique_ptr<QueryResult> Connection::Query(const string &query) {
 	return context->Query(query, QueryParameters());
 }
 
-unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, QueryResultMemoryType memory_type) {
-	QueryParameters query_parameters;
-	query_parameters.memory_type = memory_type;
-	return context->Query(std::move(statement), query_parameters);
+unique_ptr<QueryResult> Connection::Query(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return context->Query(std::move(statement), std::move(format));
+}
+
+unique_ptr<QueryResult> Connection::Query(const string &query, shared_ptr<ResultFormat> format) {
+	return context->Query(query, std::move(format));
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParameters &query_parameters) {
@@ -95,6 +97,14 @@ unique_ptr<QueryResult> Connection::Submit(const string &query, const QueryParam
 unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement,
                                            const QueryParameters &query_parameters) {
 	return context->Submit(std::move(statement), query_parameters);
+}
+
+unique_ptr<QueryResult> Connection::Submit(const string &query, shared_ptr<ResultFormat> format) {
+	return context->Submit(query, std::move(format));
+}
+
+unique_ptr<QueryResult> Connection::Submit(unique_ptr<SQLStatement> statement, shared_ptr<ResultFormat> format) {
+	return context->Submit(std::move(statement), std::move(format));
 }
 
 unique_ptr<QueryResult> Connection::Submit(const string &query, identifier_map_t<BoundParameterData> &named_values,
@@ -141,7 +151,6 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	auto named_params = ConvertParamListToMap(values);
 	QueryParameters parameters;
 	parameters.statement_args = named_params;
-	parameters.memory_type = QueryResultMemoryType::BUFFER_MANAGED;
 	parameters.result_eagerness = ResultEagerness::FORCED;
 	return context->Query(query, parameters);
 }
@@ -163,12 +172,18 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 	// Eager convenience over the lazy ClientContext::ExtractStatements iterator: drain the
 	// engine-facing statements into a vector.
 	auto &client_context = *context;
-	auto iterator = client_context.IterateStatements(query);
 	vector<unique_ptr<SQLStatement>> result;
-	while (iterator.Peek()) {
-		if (auto statement = iterator.GetStatement()) {
-			result.push_back(std::move(statement));
+	try {
+		auto iterator = client_context.IterateStatements(query);
+		while (iterator.Peek()) {
+			if (auto statement = iterator.GetStatement()) {
+				result.push_back(std::move(statement));
+			}
 		}
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		client_context.ProcessError(error, query);
+		error.Throw();
 	}
 	return result;
 }
@@ -290,7 +305,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	named_parameter_map_t options;
 	child_list_t<Value> column_list;
 	for (auto &column : columns) {
-		auto col_list = Parser::ParseColumnList(column, context->GetParserOptions());
+		auto col_list = Parser(*context).ParseColumnList(column);
 		if (col_list.LogicalColumnCount() != 1) {
 			throw ParserException("Expected a single column definition");
 		}

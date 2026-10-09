@@ -52,17 +52,17 @@ jobs:
     if: |
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false) &&
       (github.event.action != 'synchronize' || contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
-    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository == 'duckdb/duckdb' && 'namespace-profile-linux-x64;job.priority=2' || 'ubuntu-latest' }}
     outputs:
       duckdb_commit: ${{ steps.version.outputs.duckdb_commit }}
-      runner_linux_small: ${{ steps.runners.outputs.runner_linux_small }}
-      runner_linux_x64: ${{ steps.runners.outputs.runner_linux_x64 }}
-      runner_linux_22_x64: ${{ steps.runners.outputs.runner_linux_22_x64 }}
-      runner_linux_arm64: ${{ steps.runners.outputs.runner_linux_arm64 }}
-      runner_windows_2022_x64: ${{ steps.runners.outputs.runner_windows_2022_x64 }}
-      runner_macos_arm64: ${{ steps.runners.outputs.runner_macos_arm64 }}
-      runner_macos_14_arm64: ${{ steps.runners.outputs.runner_macos_14_arm64 }}
-      runners: ${{ steps.runners.outputs.runners }}
+      runner_linux_small: ${{ fromJSON(steps.selection.outputs.runners).linux_small }}
+      runner_linux_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_x64 }}
+      runner_linux_22_x64: ${{ fromJSON(steps.selection.outputs.runners).linux_22_x64 }}
+      runner_linux_arm64: ${{ fromJSON(steps.selection.outputs.runners).linux_arm64 }}
+      runner_windows_2022_x64: ${{ fromJSON(steps.selection.outputs.runners).windows_2022_x64 }}
+      runner_macos_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_arm64 }}
+      runner_macos_14_arm64: ${{ fromJSON(steps.selection.outputs.runners).macos_14_arm64 }}
+      runners: ${{ steps.selection.outputs.runners }}
       images: ${{ steps.config.outputs.images }}
       image_version: ${{ steps.config.outputs.image_version }}
       linux_release_matrix: ${{ steps.selection.outputs.linux_release_matrix }}
@@ -118,7 +118,7 @@ jobs:
           extension_allow_failure_archs=
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && -z "${{ inputs.duckdb_commit }}" && -z "$INPUT_VERSION" ]]; then
             alpha_args=(--alpha-run-number "${{ github.run_number }}")
-            extension_allow_failure_archs="windows_amd64_mingw;windows_arm64;linux_amd64_musl;linux_arm64_musl"
+            extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
           fi
           version_output="$(python3 scripts/ci/version.py \
             --duckdb-commit "$RESOLVED_COMMIT" \
@@ -148,11 +148,12 @@ jobs:
               - .github/**
             osx:
               - '.github/workflows/OSX.yml'
+              - scripts/lldb/**
               - tools/swift/**
             extensions:
               - .github/config/**
               - .github/patches/**
-              - extensions/**
+              - extension/**
             tests:
               - test/**/*.test
             tests_slow:
@@ -177,7 +178,8 @@ jobs:
             --skip-tests "$skip_tests" \
             --changed-keys "${{ steps.changed.outputs.changed_keys }}" \
             --reduced-ci-mode "${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && !inputs.run_all)) && 'enabled' || 'disabled' }}" \
-            --runners '${{ steps.runners.outputs.runners }}'
+            --runners '${{ steps.runners.outputs.runners }}' \
+            --runner-provider '${{ steps.runners.outputs.runner_provider }}'
 
       - name: Configure CI
         id: config
@@ -283,6 +285,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+        LINK_CORE_EXTENSIONS: 1
       with:
         build-type: relassert
         build: python3 scripts/ci/retry.py -- make relassert
@@ -468,7 +471,11 @@ jobs:
 
  extensions-deploy:
     name: Deploy extensions
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-deploy') }}
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.extensions-build.result == 'success' &&
+      contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-deploy')
     runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_x64 || 'ubuntu-latest' }}
     container:
       image: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:${{ needs.prepare.outputs.image_version }}
@@ -553,8 +560,7 @@ jobs:
           GEN: ninja
           EXTENSION_CONFIGS: './.github/config/rust_based_extensions.cmake;./.github/config/out_of_tree_extensions.cmake;./.github/config/in_tree_extensions.cmake'
           EXTENSION_TESTS_ONLY: 1
-          ENABLE_EXTENSION_AUTOLOADING: 1
-          ENABLE_EXTENSION_AUTOINSTALL: 1
+          DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
           DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
         with:
@@ -594,14 +600,14 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build
 
       - name: Extract linux release artifact
         if: ${{ steps.linux_release_artifact.outcome == 'success' }}
         run: |
           rm -rf build/release
-          tar -xzf build/release-artifact.tar.gz -C build
+          tar -xzf build/linux-release-build.tar.gz -C build
 
       - name: Install parser tools
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -696,8 +702,7 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         EXTENSION_CONFIGS: ${{ format('{0}/.github/config/{1}', github.workspace, matrix.config.extension_config) }}
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
+        DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
         BUILD_BENCHMARK: 1
         BUILD_JEMALLOC: ${{ matrix.config.build_jemalloc }}
         FORCE_WARN_UNUSED: 1
@@ -708,11 +713,16 @@ jobs:
       with:
         build: python3 scripts/ci/retry.py -- make release
         test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.run_smoke && 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' || 'true' }}
-        bundle: make release-artifact
-        upload-name: ${{ matrix.config.build_artifact }}
+        bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/${{ matrix.config.build_artifact }}.tar.gz
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}
         save-cache: ${{ matrix.config.save_vcpkg_cache && fromJson(needs.prepare.outputs.save_cache) }}
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: build/${{ matrix.config.build_artifact }}.tar.gz
+        if-no-files-found: error
+        archive: false
 
     - name: Checks
       shell: bash
@@ -771,7 +781,7 @@ jobs:
           assets+=(libduckdb-src.zip)
         fi
         if [[ "${{ matrix.config.publish_static }}" == "true" ]]; then
-          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/extension/*/lib*_extension.a"
+          make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
           assets+=(duckdb-static-libs-${{ matrix.config.artifact_suffix }}.tar.gz)
         fi
         if [[ "${{ matrix.config.is_canonical_build }}" == "true" ]]; then
@@ -898,13 +908,13 @@ jobs:
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
       with:
-        name: linux-release-build
+        name: linux-release-build.tar.gz
         path: build
 
     - name: Extract linux release artifact
       run: |
         rm -rf build/release
-        tar -xzf build/release-artifact.tar.gz -C build
+        tar -xzf build/linux-release-build.tar.gz -C build
 
     - name: Run all release unit tests
       run: make allunit T="--test-flags='--thread-stack-size 131072'"
@@ -949,15 +959,21 @@ jobs:
       uses: duckdb/duckdb-ci/build-duckdb@main
       env:
         EXTENSION_CONFIGS: '${{ github.workspace }}/.github/config/bundled_extensions.cmake'
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
+        DUCKDB_CAPABILITIES: 'httplib loadable_extensions'
         BUILD_BENCHMARK: 1
         FORCE_WARN_UNUSED: 1
       with:
         build: make
+        bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/${{ matrix.config.build_artifact }}.tar.gz
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: linux-cli-${{ matrix.config.cache_suffix }}
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: build/${{ matrix.config.build_artifact }}.tar.gz
+        if-no-files-found: error
+        archive: false
 
     - name: CLI check
       shell: bash
@@ -990,7 +1006,7 @@ jobs:
       run: |
         make cli-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} CLI_BINARY=build/release/duckdb
         make shared-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} SHARED_LIBRARIES="build/release/src/libduckdb.so*"
-        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/extension/*/lib*_extension.a"
+        make static-libs-release-artifact ARTIFACT_SUFFIX=${{ matrix.config.artifact_suffix }} STATIC_LIBRARIES="build/release/src/libduckdb_static.a build/release/src/libduckdb_shell.a build/release/src/main/http/libduckdb_httplib.a build/release/src/main/extension/libduckdb_loadable_extensions.a build/release/extension/*/lib*_extension.a"
         ./scripts/upload-assets-to-staging.sh github_release \
           duckdb-cli-${{ matrix.config.artifact_suffix }}.tar.gz \
           duckdb-shared-libs-${{ matrix.config.artifact_suffix }}.tar.gz \
@@ -1137,6 +1153,7 @@ jobs:
           REDUCE_SYMBOLS: 1
           EXTENSION_STATIC_BUILD: 0
           CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;parquet;autocomplete;httpfs"
+          LINK_CORE_EXTENSIONS: 1
           DISABLE_STRING_INLINE: 1
           DESTROY_UNPINNED_BLOCKS: 1
           ALTERNATIVE_VERIFY: 1
@@ -1319,13 +1336,13 @@ jobs:
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
       with:
-        name: linux-release-build
+        name: linux-release-build.tar.gz
         path: build
 
     - name: Extract linux release artifact
       run: |
         rm -rf build/release
-        tar -xzf build/release-artifact.tar.gz -C build
+        tar -xzf build/linux-release-build.tar.gz -C build
 
     - name: Test Configurations
       if: success() || failure()
@@ -1495,6 +1512,7 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.S3_DUCKDB_STAGING_ENDPOINT }}
           AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+          BRANCH: ${{ github.ref_name }}
           DUCKDB_COMMIT: ${{ needs.prepare.outputs.duckdb_commit }}
           DUCKDB_VERSION: ${{ needs.prepare.outputs.duckdb_version }}
           STAGED_VERSION: ${{ needs.prepare.outputs.staged_version }}
@@ -1521,6 +1539,18 @@ jobs:
             --header-upload "Cache-Control: no-cache" \
             "$pointer_file" \
             ":s3:duckdb-staging/latest_alpha_version.txt"
+
+          rclone copyto \
+            --s3-provider "$s3_provider" \
+            --s3-endpoint "$AWS_ENDPOINT_URL" \
+            --s3-access-key-id "$AWS_ACCESS_KEY_ID" \
+            --s3-secret-access-key "$AWS_SECRET_ACCESS_KEY" \
+            --s3-no-check-bucket \
+            --s3-no-head \
+            --header-upload "Content-Type: text/plain" \
+            --header-upload "Cache-Control: no-cache" \
+            "$pointer_file" \
+            ":s3:duckdb-staging/release/$BRANCH/latest_alpha_version.txt"
 
           target="${DUCKDB_COMMIT:0:10}"
           printf '%s\n' "$DUCKDB_VERSION" > "$pointer_file"

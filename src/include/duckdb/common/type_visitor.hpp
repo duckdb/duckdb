@@ -34,7 +34,7 @@ private:
 };
 
 inline idx_t TypeVisitor::PushChildren(const LogicalType &type, vector<reference<const LogicalType>> &worklist) {
-	if (!type.AuxInfo()) {
+	if (!type.HasParameters()) {
 		return 0;
 	}
 

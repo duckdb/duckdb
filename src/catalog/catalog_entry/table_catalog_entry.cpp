@@ -4,7 +4,7 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/parser/constraints/list.hpp"
@@ -232,7 +232,8 @@ DataTable &TableCatalogEntry::GetStorage() {
 // LCOV_EXCL_STOP
 
 void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
-                                     LogicalUpdate &update, physical_index_set_t &bound_columns) {
+                                     LogicalUpdate &update, physical_index_set_t &bound_columns,
+                                     bool reuse_projected_columns) {
 	if (bound_columns.size() <= 1) {
 		return;
 	}
@@ -255,15 +256,28 @@ void LogicalUpdate::BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, 
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.GetColumns().GetColumn(physical_id);
-			auto proj_ref = make_uniq<BoundColumnRefExpression>(
-			    column.Type(), ColumnBinding(get.table_index, ProjectionIndex(get.GetColumnIds().size())));
+			auto column_id = column.Logical().index;
+			auto get_index = reuse_projected_columns ? get.TryGetProjectionIndex(column_id) : ProjectionIndex();
+			if (!get_index.IsValid()) {
+				get_index = get.AddColumnId(column_id);
+			}
+			auto proj_ref =
+			    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(get.table_index, get_index));
 			auto proj_index = ColumnBinding::PushExpression(proj.expressions, std::move(proj_ref));
 			update.expressions.push_back(
 			    make_uniq<BoundColumnRefExpression>(column.Type(), ColumnBinding(proj.table_index, proj_index)));
-			get.AddColumnId(column.Logical().index);
 			update.columns.push_back(physical_id);
 		}
 	}
+}
+
+void LogicalUpdate::BindAllColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
+                                   LogicalUpdate &update, bool reuse_projected_columns) {
+	physical_index_set_t all_columns;
+	for (auto &column : table.GetColumns().Physical()) {
+		all_columns.insert(column.Physical());
+	}
+	BindExtraColumns(table, get, proj, update, all_columns, reuse_projected_columns);
 }
 
 vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo(const QueryContext &context,
@@ -295,11 +309,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 		}
 	}
 	if (update.return_chunk) {
-		physical_index_set_t all_columns;
-		for (auto &column : GetColumns().Physical()) {
-			all_columns.insert(column.Physical());
-		}
-		LogicalUpdate::BindExtraColumns(*this, get, proj, update, all_columns);
+		LogicalUpdate::BindAllColumns(*this, get, proj, update);
 	}
 	// for index updates we always turn any update into an insert and a delete
 	// we thus need all the columns to be available, hence we check if the update touches any index columns
@@ -328,11 +338,7 @@ void TableCatalogEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get, L
 	if (update.update_is_del_and_insert) {
 		// the update updates a column required by an index or requires returning the updated rows,
 		// push projections for all columns
-		physical_index_set_t all_columns;
-		for (auto &column : GetColumns().Physical()) {
-			all_columns.insert(column.Physical());
-		}
-		LogicalUpdate::BindExtraColumns(*this, get, proj, update, all_columns);
+		LogicalUpdate::BindAllColumns(*this, get, proj, update);
 	}
 }
 
