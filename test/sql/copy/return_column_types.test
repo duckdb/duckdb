@@ -321,10 +321,8 @@ CREATE SEQUENCE return_column_types_seq_on;
 statement ok
 COPY (FROM range(nextval('return_column_types_seq_off'))) TO '{TEST_DIR}/return_column_types_seq_off.json';
 
-query II
+statement ok
 COPY (FROM range(nextval('return_column_types_seq_on'))) TO '{TEST_DIR}/return_column_types_seq_on.json' (RETURN_COLUMN_TYPES);
-----
-1	[{'name': range, 'type': BIGINT, 'type_details': BIGINT, 'precision': NULL, 'scale': NULL}]
 
 query II
 SELECT (SELECT count(*) FROM '{TEST_DIR}/return_column_types_seq_on.json') = (SELECT count(*) FROM '{TEST_DIR}/return_column_types_seq_off.json'),

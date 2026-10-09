@@ -185,7 +185,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 }
 
 vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
-	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type, return_column_types).size();
+	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size() + (return_column_types ? 1 : 0);
 	vector<ColumnBinding> result;
 	for (auto return_col_idx : ProjectionIndex::GetIndexes(return_column_count)) {
 		result.emplace_back(table_index, return_col_idx);
