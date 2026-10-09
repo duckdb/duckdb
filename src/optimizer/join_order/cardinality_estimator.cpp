@@ -487,6 +487,15 @@ LeftJoinDenomInfo CardinalityEstimator::CalculateLeftJoinDenomInfo(Subgraph2Deno
 
 	auto &inner_numerator = set_manager.Union(*left.numerator_relations, *right.numerator_relations);
 	auto inner_denom = CalculateInnerJoinDenom(GetEffectiveDenom(left.denom) * GetEffectiveDenom(right.denom), filter);
+	auto composite_pair = predicate.GetCompositeJoinPair();
+	if (composite_pair) {
+		auto cap = GetJoinPairCap(*composite_pair);
+		CompositeJoinPairStats stats;
+		stats.RegisterDistinctCount(filter.GetDistinctCount());
+		if (stats.CanApplyCap(cap) && filter.GetDistinctCount() > 0 && cap > filter.GetDistinctCount()) {
+			inner_denom = inner_denom / filter.GetDistinctCount() * cap;
+		}
+	}
 	if (inner_denom <= 0) {
 		return LeftJoinDenomInfo(preserved_numerator, preserved_denom);
 	}
