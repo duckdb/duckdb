@@ -1514,6 +1514,11 @@ static int64_t InterpolateInt64(int64_t lo, double d, int64_t hi) {
 }
 
 template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const int64_t &hi) {
+	return InterpolateInt64(lo, d, hi);
+}
+
+template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
 	return dtime_t(InterpolateInt64(lo.value, d, hi.value));
 }
