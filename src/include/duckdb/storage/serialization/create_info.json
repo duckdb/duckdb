@@ -415,6 +415,12 @@
         "name": "last_value",
         "type": "optional<int64_t>",
         "version": "v2.0.0"
+      },
+      {
+        "id": 208,
+        "name": "exhausted",
+        "type": "bool",
+        "version": "v2.0.0"
       }
     ],
     "methods": {

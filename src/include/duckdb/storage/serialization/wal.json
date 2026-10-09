@@ -238,6 +238,12 @@
         "type": "QualifiedName",
         "version": "v2.0.0",
         "default": "QualifiedName()"
+      },
+      {
+        "id": 107,
+        "name": "exhausted",
+        "type": "bool",
+        "version": "v2.0.0"
       }
     ]
   },

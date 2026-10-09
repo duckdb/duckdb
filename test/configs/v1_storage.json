@@ -53,6 +53,12 @@
         "test/sql/sql_export/empty_aggregate_state.test",
         "test/sql/sql_export/mark_condition_shapes.test"
       ]
+    },
+    {
+      "reason": "Returning the int64 limit from a sequence requires v2.0.0 storage.",
+      "paths": [
+        "test/sql/catalog/sequence/sequence_int64_boundary.test"
+      ]
     }
   ]
 }
