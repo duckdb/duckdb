@@ -25,7 +25,8 @@ void MultiFileGlobalState::ReportBytesScannedOnScanStart(ClientContext &context,
 		return;
 	}
 	reader_data.bytes_scanned_reported = true;
-	if (!reader_data.reader) {
+	// a scan run outside the query plan (e.g. an extension reading its own metadata files) is not the query's scan
+	if (!reader_data.reader || !op) {
 		return;
 	}
 	auto &reader = *reader_data.reader;
