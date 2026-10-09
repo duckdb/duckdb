@@ -133,7 +133,7 @@ jobs:
     name: Bench ${{ matrix.name }}
     needs:
       - linux-base
-    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
+    runs-on: ${{ matrix.runner || fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
@@ -144,6 +144,7 @@ jobs:
             benchmark: .github/regression/ingestion.csv
           - name: Micro
             benchmark: .github/regression/micro.csv
+            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
           - name: Parser
             benchmark: .github/regression/parser.csv
           - name: H2OAI
@@ -152,8 +153,10 @@ jobs:
             benchmark: .github/regression/imdb.csv
           - name: CSV
             benchmark: .github/regression/csv.csv
+            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
           - name: RealNest
             benchmark: .github/regression/realnest.csv
+            runner: ubuntu-24.04 # Needs more memory than linux_small provides.
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
