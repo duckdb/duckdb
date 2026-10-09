@@ -104,6 +104,7 @@
       "reason": "FIXME: pivot aggregate count mismatch - the verification rewrite adds aggregates that break PIVOT detection",
       "paths": [
         "test/sql/pivot/pivot_case_insensitive.test",
+        "test/sql/pivot/pivot_empty_string_value.test",
         "test/sql/pivot/test_pivot_duplicate_aggregates.test",
         "test/sql/sql_export/pivot_list_results.test",
         "test/sql/sql_export/pivot_sql_export.test"
