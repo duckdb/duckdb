@@ -262,6 +262,12 @@ static void CopyJoinAfterOptimization(OptimizerExtensionInput &input, unique_ptr
 		REQUIRE_THROWS_WITH(plan->CopyPreservingBoundState(input.context),
 		                    Catch::Matchers::Contains("connected join dynamic filters"));
 		target = original_target;
+		auto &column = join->filter_pushdown->probe_info[0].columns[0].probe_column_index.column_index;
+		auto original_column = column;
+		column = ProjectionIndex();
+		REQUIRE_THROWS_WITH(plan->CopyPreservingBoundState(input.context),
+		                    Catch::Matchers::Contains("bound join filter target columns"));
+		column = original_column;
 		join->join_type = JoinType::LEFT;
 		REQUIRE_THROWS_WITH(plan->CopyPreservingBoundState(input.context),
 		                    Catch::Matchers::Contains("native INNER descriptors"));
@@ -271,7 +277,7 @@ static void CopyJoinAfterOptimization(OptimizerExtensionInput &input, unique_ptr
 		REQUIRE_THROWS_WITH(plan->CopyPreservingBoundState(input.context),
 		                    Catch::Matchers::Contains("unexecuted, connected"));
 		target->ClearFilters(identity);
-		probe.refused += 3;
+		probe.refused += 4;
 		// Refusal must leave the original graph reusable.
 		copy = plan->CopyPreservingBoundState(input.context);
 	}
@@ -509,7 +515,7 @@ TEST_CASE("Bound join copies refuse external populated and non-INNER filter grap
 	probe->enabled = true;
 	auto copy = connection.Query(query);
 	RequireSameResult(*original, *copy);
-	REQUIRE(probe->refused == 3);
+	REQUIRE(probe->refused == 4);
 }
 
 // Scan preservation deliberately retains the ordinary expression reconstruction contract.

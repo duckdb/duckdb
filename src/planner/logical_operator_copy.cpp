@@ -38,7 +38,8 @@ static bool ContainsScan(const LogicalOperator &op, const LogicalGet &scan) {
 }
 
 static bool IsScanBinding(const LogicalGet &scan, const ColumnBinding &binding) {
-	if (binding.table_index != scan.table_index || binding.column_index.GetIndex() >= scan.GetColumnIds().size()) {
+	if (binding.table_index != scan.table_index || !binding.column_index.IsValid() ||
+	    binding.column_index.GetIndex() >= scan.GetColumnIds().size()) {
 		return false;
 	}
 	if (scan.projection_ids.empty()) {
