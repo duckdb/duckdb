@@ -1,6 +1,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -828,31 +829,29 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		return true;
 	}
 	auto tables = GetTablesWithUnboundIndexes(db);
-	// Without a context the database is closing (shutdown or DETACH): opening a connection is not safe.
-	string error_message = "no client context is available";
+	// Without a context the database is closing (shutdown or DETACH): we do not bind its indexes.
+	string error_message = "the database is closing";
 	if (context.GetClientContext() && !tables.empty()) {
 		error_message = BindIndexes(db, tables, bind_all);
 	}
-	for (auto &table : tables) {
-		if (!table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
-			continue;
-		}
-		// Without WAL writes, skipping the checkpoint would lose all commits since the last one.
-		if (options.explicit_checkpoint || db.GetRecoveryMode() == RecoveryMode::NO_WAL_WRITES) {
-			throw InvalidInputException(
-			    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s",
-			    error_message);
-		}
-		// Keep the WAL: it is the only remaining record of the buffered operations.
-		DUCKDB_LOG_WARNING(db.GetDatabase(),
-		                   "Skipped the checkpoint of database \"%s\" and kept its write-ahead log: an index with "
-		                   "buffered write-ahead log operations cannot be bound, so these operations cannot be "
-		                   "persisted: %s",
-		                   db.GetName(), error_message);
-		return false;
+	auto has_buffered_replays = std::any_of(tables.begin(), tables.end(), [](const reference<DuckTableEntry> &table) {
+		return table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays();
+	});
+	if (!has_buffered_replays) {
+		buffered_index_replays = false;
+		return true;
 	}
-	buffered_index_replays = false;
-	return true;
+	if (options.explicit_checkpoint) {
+		throw InvalidInputException(
+		    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s", error_message);
+	}
+	// Keep the WAL: it is the only remaining record of the buffered operations.
+	DUCKDB_LOG_WARNING(db.GetDatabase(),
+	                   "Skipped the checkpoint of database \"%s\" and kept its write-ahead log: an index with "
+	                   "buffered write-ahead log operations cannot be bound, so these operations cannot be "
+	                   "persisted: %s",
+	                   db.GetName(), error_message);
+	return false;
 }
 
 void SingleFileStorageManager::CreateCheckpoint(QueryContext context, CheckpointOptions options) {
