@@ -26,6 +26,8 @@ public:
 	unique_ptr<Executor> executor;
 	//! The progress bar
 	unique_ptr<ProgressBar> progress_bar;
+	//! Whether the foreign keys of the rows appended by this statement have been verified already
+	bool foreign_keys_verified = false;
 
 public:
 	void SetOpenResult(BaseQueryResult &result) {
