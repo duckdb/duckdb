@@ -37,6 +37,21 @@ static bool ContainsScan(const LogicalOperator &op, const LogicalGet &scan) {
 	return false;
 }
 
+static bool IsScanBinding(const LogicalGet &scan, const ColumnBinding &binding) {
+	if (binding.table_index != scan.table_index || binding.column_index.GetIndex() >= scan.GetColumnIds().size()) {
+		return false;
+	}
+	if (scan.projection_ids.empty()) {
+		return true;
+	}
+	for (auto index : scan.projection_ids) {
+		if (index == binding.column_index) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void LogicalOperatorCopyState::ValidateJoin(const LogicalComparisonJoin &join) {
 	if (join.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN || join.join_type != JoinType::INNER ||
 	    join.children.size() != 2 || join.filter_pushdown->join_condition.empty()) {
@@ -100,13 +115,8 @@ void LogicalOperatorCopyState::Validate(const LogicalOperator &op) {
 				if (probe.dynamic_filters.get() != &entry.first.get()) {
 					continue;
 				}
-				auto bindings = filters.scan->GetColumnBindings();
 				for (auto &column : probe.columns) {
-					bool found = false;
-					for (auto &binding : bindings) {
-						found |= binding == column.probe_column_index;
-					}
-					if (!found) {
+					if (!IsScanBinding(*filters.scan, column.probe_column_index)) {
 						throw NotImplementedException("Bound plan copy requires bound join filter target columns");
 					}
 				}
@@ -241,6 +251,7 @@ unique_ptr<JoinFilterPushdownInfo> LogicalOperatorCopyState::CopyJoinFilters(con
 
 void LogicalOperatorCopyState::SerializeJoinExpressions(BinarySerializer &serializer) const {
 	// Private descriptors follow the same expression reconstruction as the copied join conditions.
+	// The descriptor map is unchanged between this walk and DeserializeJoinExpressions.
 	for (auto &join : join_filters) {
 		for (auto &expression : join.first.get().filter_pushdown->min_max_aggregates) {
 			serializer.Begin();
