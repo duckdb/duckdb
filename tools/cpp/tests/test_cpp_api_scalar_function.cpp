@@ -837,3 +837,41 @@ TEST_CASE("Stable C++API: scalar function parameter kinds lay out the argument l
 	        std::vector<int32_t> {0, 1, 4});
 	REQUIRE_FALSE(kind_probe.scale.has_value());
 }
+
+TEST_CASE("Stable C++API: scalar function overloads carry their own description and examples", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+	const auto integer = factory.ParseType("INTEGER");
+
+	auto one = ScalarFunction::Create(factory);
+	one.SetName("cpp_documented").SetExecCallback(PlusOneExec);
+	one.GetSignature().AddParameter("a", integer).SetReturnType(integer);
+	one.GetDocs()
+	    .SetDescription("Adds one.")
+	    .AddExample("Add one", "cpp_documented(41)")
+	    .AddExample("", "cpp_documented(-1)")
+	    .AddCategory("numeric")
+	    .AddCategory("example");
+	conn.Register(one);
+
+	auto two = ScalarFunction::Create(factory);
+	two.SetName("cpp_documented").SetExecCallback(PlusOneExec);
+	two.GetSignature().AddParameter("a", integer).AddParameter("b", integer).SetReturnType(integer);
+	two.GetDocs().SetDescription("Adds one, ignoring b.");
+	conn.Register(two);
+
+	auto result = conn.Execute(
+	    "SELECT description, array_to_string(examples, '|'), parameters::VARCHAR, array_to_string(categories, '|') "
+	    "FROM duckdb_functions() WHERE function_name = 'cpp_documented' ORDER BY len(parameters)");
+	auto chunk = result.FetchChunk();
+	REQUIRE(chunk.GetRowCount() == 2);
+	REQUIRE(chunk.GetVector(0).GetValue(0).ToText() == "Adds one.");
+	REQUIRE(chunk.GetVector(1).GetValue(0).ToText() == "cpp_documented(41)|cpp_documented(-1)");
+	REQUIRE(chunk.GetVector(2).GetValue(0).ToText() == "[a]");
+	REQUIRE(chunk.GetVector(0).GetValue(1).ToText() == "Adds one, ignoring b.");
+	REQUIRE(chunk.GetVector(1).GetValue(1).ToText() == "");
+	REQUIRE(chunk.GetVector(2).GetValue(1).ToText() == "[a, b]");
+	REQUIRE(chunk.GetVector(3).GetValue(0).ToText() == "numeric|example");
+	REQUIRE(chunk.GetVector(3).GetValue(1).ToText() == "");
+}

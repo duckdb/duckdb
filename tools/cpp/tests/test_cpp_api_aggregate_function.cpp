@@ -516,3 +516,32 @@ TEST_CASE("Stable C++API: aggregate function properties", "[cpp_api]") {
 	REQUIRE(CollectBigInts(conn.Execute("SELECT prop_sum(r::INTEGER) FROM range(1000) t(r)")) ==
 	        std::vector<int64_t> {1000LL * 999 / 2});
 }
+
+TEST_CASE("Stable C++API: aggregate function description and examples", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+
+	auto function = AggregateFunction::Create(factory);
+	function.SetName("cpp_documented_sum")
+	    .WithDocs([](FunctionDocs &docs) {
+		    docs.SetDescription("Sums a.").AddExample("Sum a column", "cpp_documented_sum(x)");
+	    })
+	    .WithSignature([&](FunctionSignature &sig) {
+		    sig.AddParameter("a", factory.ParseType("INTEGER")).SetReturnType(factory.ParseType("BIGINT"));
+	    })
+	    .SetSizeCallback(SumSize)
+	    .SetInitCallback(SumInit)
+	    .SetUpdateCallback(SumUpdate)
+	    .SetCombineCallback(SumCombine)
+	    .SetFinalizeCallback(SumFinalize)
+	    .SetDestroyCallback(SumDestroy);
+	conn.Register(function);
+
+	auto result = conn.Execute("SELECT description, array_to_string(examples, '|') FROM duckdb_functions() "
+	                           "WHERE function_name = 'cpp_documented_sum'");
+	auto chunk = result.FetchChunk();
+	REQUIRE(chunk.GetRowCount() == 1);
+	REQUIRE(chunk.GetVector(0).GetValue(0).ToText() == "Sums a.");
+	REQUIRE(chunk.GetVector(1).GetValue(0).ToText() == "cpp_documented_sum(x)");
+}

@@ -12,8 +12,54 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
 
 namespace duckdb::capiv2 {
+
+//! An example of calling a function, with an optional title.
+struct CV2FunctionExample {
+	string title;
+	string example;
+};
+
+//! The documentation of one overload, as `duckdb_functions()` reports it.
+class CV2FunctionDocs {
+public:
+	//! Adds this overload's description to `info`, matched to the overload by its parameter types; the parameter names
+	//! come from the signature itself. Adds nothing when no documentation was set.
+	void AddTo(const FunctionSignature &signature, CreateFunctionInfo &info) const {
+		if (description.empty() && examples.empty() && categories.empty()) {
+			return;
+		}
+		FunctionDescription result;
+		for (idx_t i = 0; i < signature.GetParameterCount(); i++) {
+			auto &parameter = signature.GetParameter(i);
+			if (parameter.IsVariadic()) {
+				continue;
+			}
+			result.parameter_types.push_back(parameter.GetType());
+		}
+		result.description = description;
+		for (auto &entry : examples) {
+			result.examples.push_back(entry.example);
+		}
+		result.categories = categories;
+		info.descriptions.push_back(std::move(result));
+	}
+
+public:
+	string description;
+	vector<CV2FunctionExample> examples;
+	vector<string> categories;
+};
+
+inline auto Convert(duckdb_v2_function_docs_handle docs) -> CV2FunctionDocs * {
+	return reinterpret_cast<CV2FunctionDocs *>(docs);
+}
+
+inline auto Convert(CV2FunctionDocs *docs) -> duckdb_v2_function_docs_handle {
+	return reinterpret_cast<duckdb_v2_function_docs_handle>(docs);
+}
 
 //! The part of a bind callback every function family shares: the arguments of the call site, the user data and the
 //! bind data. The arguments are one list: the positional arguments, then the named arguments

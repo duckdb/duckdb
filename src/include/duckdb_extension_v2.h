@@ -1258,6 +1258,20 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_option_supports_scope)
 	(duckdb_v2_option_handle option, DUCKDB_V2_SETTING_SCOPE scope, bool *out_supported,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_get_docs)
+	(duckdb_v2_aggregate_function_handle function, duckdb_v2_function_docs_handle *docs,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_function_docs_add_category)
+	(duckdb_v2_function_docs_handle docs, const duckdb_v2_str *category, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_function_docs_add_example)
+	(duckdb_v2_function_docs_handle docs, const duckdb_v2_str *title, const duckdb_v2_str *example,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_function_docs_set_description)
+	(duckdb_v2_function_docs_handle docs, const duckdb_v2_str *description, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_get_docs)
+	(duckdb_v2_scalar_function_handle function, duckdb_v2_function_docs_handle *docs, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_docs)
+	(duckdb_v2_table_function_handle function, duckdb_v2_function_docs_handle *docs, duckdb_v2_error_info_handle *err);
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
 	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
@@ -1902,6 +1916,12 @@ typedef struct {
 #define duckdb_v2_instance_log                     duckdb_ext_api.duckdb_v2_instance_log
 #define duckdb_v2_option_get_default_scope         duckdb_ext_api.duckdb_v2_option_get_default_scope
 #define duckdb_v2_option_supports_scope            duckdb_ext_api.duckdb_v2_option_supports_scope
+#define duckdb_v2_aggregate_function_get_docs      duckdb_ext_api.duckdb_v2_aggregate_function_get_docs
+#define duckdb_v2_function_docs_add_category       duckdb_ext_api.duckdb_v2_function_docs_add_category
+#define duckdb_v2_function_docs_add_example        duckdb_ext_api.duckdb_v2_function_docs_add_example
+#define duckdb_v2_function_docs_set_description    duckdb_ext_api.duckdb_v2_function_docs_set_description
+#define duckdb_v2_scalar_function_get_docs         duckdb_ext_api.duckdb_v2_scalar_function_get_docs
+#define duckdb_v2_table_function_get_docs          duckdb_ext_api.duckdb_v2_table_function_get_docs
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_connection_register_multi_file_function                                                              \
 	duckdb_ext_api.duckdb_v2_connection_register_multi_file_function

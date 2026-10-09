@@ -1056,3 +1056,43 @@ TEST_CASE("V2 function bind: null arguments", "[capi_v2][scalar_function]") {
 }
 
 } // namespace test_capi_v2
+
+namespace test_capi_v2 {
+
+TEST_CASE("V2 function docs: borrowed from the function, and argument validation", "[capi_v2][scalar_function]") {
+	EnvFixture fx;
+	duckdb_v2_scalar_function_handle function = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	duckdb_v2_function_docs_handle docs = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_get_docs(function, &docs, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(docs != nullptr);
+	// Borrowed: asking again gives the same documentation.
+	duckdb_v2_function_docs_handle again = nullptr;
+	REQUIRE(duckdb_v2_scalar_function_get_docs(function, &again, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(again == docs);
+
+	auto text = Convert("Adds one.");
+	auto title = Convert("Add one");
+	auto example = Convert("f(1)");
+	REQUIRE(duckdb_v2_function_docs_set_description(docs, &text, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, &title, &example, nullptr) == DUCKDB_V2_ERROR_NONE);
+	// The title is optional.
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, nullptr, &example, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto category = Convert("numeric");
+	REQUIRE(duckdb_v2_function_docs_add_category(docs, &category, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_function_docs_add_category(docs, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_category(nullptr, &category, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	auto malformed = duckdb_v2_str {nullptr, 3};
+	REQUIRE(duckdb_v2_scalar_function_get_docs(nullptr, &again, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_get_docs(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_set_description(nullptr, &text, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_set_description(docs, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, &title, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_example(docs, &malformed, &example, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_function_docs_add_example(nullptr, &title, &example, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	duckdb_v2_scalar_function_destroy(&function);
+}
+
+} // namespace test_capi_v2

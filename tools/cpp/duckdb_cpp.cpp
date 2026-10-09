@@ -140,6 +140,10 @@ struct HandleTraits<FunctionSignature> {
 	using handle = duckdb_v2_function_signature_handle;
 };
 template <>
+struct HandleTraits<FunctionDocs> {
+	using handle = duckdb_v2_function_docs_handle;
+};
+template <>
 struct HandleTraits<ScalarFunction> {
 	using handle = duckdb_v2_scalar_function_handle;
 };
@@ -2523,6 +2527,32 @@ FunctionSignature::~FunctionSignature() {
 	// The signature is borrowed from its function, so we don't destroy the handle here
 }
 
+FunctionDocs::FunctionDocs(void *impl) : detail::Handle<FunctionDocs>(impl) {
+}
+
+FunctionDocs::~FunctionDocs() {
+	// The documentation is borrowed from its function, so we don't destroy the handle here
+}
+
+auto FunctionDocs::SetDescription(std::string_view description) -> FunctionDocs & {
+	auto view = ToStr(description);
+	CheckedAPICall(duckdb_v2_function_docs_set_description, handle(), &view);
+	return *this;
+}
+
+auto FunctionDocs::AddExample(std::string_view title, std::string_view example) -> FunctionDocs & {
+	auto title_view = ToStr(title);
+	auto example_view = ToStr(example);
+	CheckedAPICall(duckdb_v2_function_docs_add_example, handle(), &title_view, &example_view);
+	return *this;
+}
+
+auto FunctionDocs::AddCategory(std::string_view category) -> FunctionDocs & {
+	auto view = ToStr(category);
+	CheckedAPICall(duckdb_v2_function_docs_add_category, handle(), &view);
+	return *this;
+}
+
 auto FunctionSignature::AddParameter(const std::string &name, const LogicalType &type, FunctionParameterKind kind)
     -> FunctionSignature & {
 	auto name_str = ToStr(name);
@@ -2782,6 +2812,12 @@ auto ScalarFunction::SetName(const std::string &name) & -> ScalarFunction & {
 	auto view = ToStr(name);
 	CheckedAPICall(duckdb_v2_scalar_function_set_name, handle(), &view);
 	return *this;
+}
+
+auto ScalarFunction::GetDocs() -> FunctionDocs {
+	duckdb_v2_function_docs_handle docs = nullptr;
+	CheckedAPICall(duckdb_v2_scalar_function_get_docs, handle(), &docs);
+	return detail::HandleFactory::Make<FunctionDocs>(docs);
 }
 
 auto ScalarFunction::GetSignature() -> FunctionSignature {
@@ -3078,6 +3114,12 @@ auto AggregateFunction::SetName(const std::string &name) & -> AggregateFunction 
 	auto view = ToStr(name);
 	CheckedAPICall(duckdb_v2_aggregate_function_set_name, handle(), &view);
 	return *this;
+}
+
+auto AggregateFunction::GetDocs() -> FunctionDocs {
+	duckdb_v2_function_docs_handle docs = nullptr;
+	CheckedAPICall(duckdb_v2_aggregate_function_get_docs, handle(), &docs);
+	return detail::HandleFactory::Make<FunctionDocs>(docs);
 }
 
 auto AggregateFunction::GetSignature() -> FunctionSignature {
@@ -3625,6 +3667,12 @@ auto TableFunction::SetName(const std::string &name) & -> TableFunction & {
 	auto view = ToStr(name);
 	CheckedAPICall(duckdb_v2_table_function_set_name, handle(), &view);
 	return *this;
+}
+
+auto TableFunction::GetDocs() -> FunctionDocs {
+	duckdb_v2_function_docs_handle docs = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_get_docs, handle(), &docs);
+	return detail::HandleFactory::Make<FunctionDocs>(docs);
 }
 
 auto TableFunction::GetSignature() -> FunctionSignature {

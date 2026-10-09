@@ -3194,6 +3194,90 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_arg_index(duckdb_v2_fun
 /* --- Struct definitions for function --- */
 
 /* ============================================================================
+ * MODULE: function docs
+ * ============================================================================ */
+
+/* --- Enums for function docs --- */
+
+/* --- Struct forward declarations for function docs --- */
+
+/* --- Types for function docs --- */
+
+/*!
+ * A borrowed opaque handle to the documentation of a function overload. Taken from the function it documents with
+ * `duckdb_v2_scalar_function_get_docs()`, `duckdb_v2_aggregate_function_get_docs()` or
+ * `duckdb_v2_table_function_get_docs()`, and valid for as long as that function handle is; the caller never destroys
+ * it.
+ */
+typedef struct _duckdb_v2_function_docs {
+	void *internal_ptr;
+} * duckdb_v2_function_docs_handle;
+
+/* --- Constants for function docs --- */
+
+/* --- Function pointer typedefs for function docs --- */
+
+/* --- Functions for function docs --- */
+
+/*!
+ * Sets the description of the function overload.
+ *
+ * The description is borrowed and copied. Calling this again replaces the previous description.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param docs The documentation to set the description of.
+ * @param description The description to set. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_docs_set_description(duckdb_v2_function_docs_handle docs,
+                                                                     const duckdb_v2_str *description,
+                                                                     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Adds an example of calling the function overload.
+ *
+ * The title and the example are borrowed and copied, and examples are reported in the order they were added.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param docs The documentation to add the example to.
+ * @param title Optional. The title of the example; NULL or an empty view for none. Borrowed and copied.
+ * @param example The example, e.g. a SQL expression calling the function. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_docs_add_example(duckdb_v2_function_docs_handle docs,
+                                                                 const duckdb_v2_str *title,
+                                                                 const duckdb_v2_str *example,
+                                                                 duckdb_v2_error_info_handle *err);
+
+/*!
+ * Adds a category the function overload belongs to, e.g. "string" or "aggregate".
+ *
+ * The category is borrowed and copied, and categories are reported in the order they were added.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param docs The documentation to add the category to.
+ * @param category The category. Borrowed and copied.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_docs_add_category(duckdb_v2_function_docs_handle docs,
+                                                                  const duckdb_v2_str *category,
+                                                                  duckdb_v2_error_info_handle *err);
+
+/* --- Struct definitions for function docs --- */
+
+/* ============================================================================
  * MODULE: function signature
  * ============================================================================ */
 
@@ -4794,6 +4878,26 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create(duckdb_v2_facto
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_set_name(duckdb_v2_aggregate_function_handle function,
                                                                    const duckdb_v2_identifier_t *name,
+                                                                   duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the documentation of the function so it can be filled in.
+ *
+ * Set a description with `duckdb_v2_function_docs_set_description()`, and add examples and categories with
+ * `duckdb_v2_function_docs_add_example()` and `duckdb_v2_function_docs_add_category()`. The documentation is modified
+ * in place, describes this overload only, and is registered with the function. Optional.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to get the documentation of.
+ * @param docs The returned documentation. Borrowed and valid for the lifetime of the function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_get_docs(duckdb_v2_aggregate_function_handle function,
+                                                                   duckdb_v2_function_docs_handle *docs,
                                                                    duckdb_v2_error_info_handle *err);
 
 /*!
@@ -8574,6 +8678,26 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_name(duckdb_v2_scalar
                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
+ * Returns the documentation of the function so it can be filled in.
+ *
+ * Set a description with `duckdb_v2_function_docs_set_description()`, and add examples and categories with
+ * `duckdb_v2_function_docs_add_example()` and `duckdb_v2_function_docs_add_category()`. The documentation is modified
+ * in place, describes this overload only, and is registered with the function. Optional.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to get the documentation of.
+ * @param docs The returned documentation. Borrowed and valid for the lifetime of the function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_get_docs(duckdb_v2_scalar_function_handle function,
+                                                                duckdb_v2_function_docs_handle *docs,
+                                                                duckdb_v2_error_info_handle *err);
+
+/*!
  * Returns the function's signature so it can be configured.
  *
  * Add parameters with `duckdb_v2_function_signature_add_parameter()` and set the return type with
@@ -11350,6 +11474,26 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_create(duckdb_v2_factory_h
  */
 DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handle function,
                                                                const duckdb_v2_identifier_t *name,
+                                                               duckdb_v2_error_info_handle *err);
+
+/*!
+ * Returns the documentation of the function so it can be filled in.
+ *
+ * Set a description with `duckdb_v2_function_docs_set_description()`, and add examples and categories with
+ * `duckdb_v2_function_docs_add_example()` and `duckdb_v2_function_docs_add_category()`. The documentation is modified
+ * in place, describes this overload only, and is registered with the function. Optional.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to get the documentation of.
+ * @param docs The returned documentation. Borrowed and valid for the lifetime of the function handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_docs(duckdb_v2_table_function_handle function,
+                                                               duckdb_v2_function_docs_handle *docs,
                                                                duckdb_v2_error_info_handle *err);
 
 /*!

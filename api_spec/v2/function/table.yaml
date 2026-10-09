@@ -297,6 +297,33 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+
+  table_function_get_docs:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Returns the documentation of the function so it can be filled in.
+
+      Set a description with `[[function_docs_set_description]]`, and add examples and categories with
+      `[[function_docs_add_example]]` and `[[function_docs_add_category]]`. The documentation is modified in place, describes this overload only, and is
+      registered with the function. Optional.
+    parameters:
+      function:
+        type: table_function
+        kind: IN
+        description: The function to get the documentation of.
+      docs:
+        type: function_docs
+        indirection: 1
+        kind: OUT
+        description: The returned documentation. Borrowed and valid for the lifetime of the function handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   table_function_get_signature:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-01" ]

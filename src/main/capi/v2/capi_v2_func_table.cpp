@@ -875,6 +875,7 @@ public:
 	//! The database it was created for: the only one it can be registered on.
 	DatabaseInstance &db;
 	FunctionSignature signature;
+	CV2FunctionDocs docs;
 	CV2TableFunctionInfo info;
 	Identifier name;
 };
@@ -989,6 +990,14 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_set_name(duckdb_v2_table_function_handl
 	DUCKDB_CHECK_ARG(function);
 	DUCKDB_CHECK_ARG(name);
 	return WithErrorHandler(err, [&]() { Convert(function)->name = duckdb::Identifier(ConvertIdentifierName(name)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_table_function_get_docs(duckdb_v2_table_function_handle function,
+                                                  duckdb_v2_function_docs_handle *docs,
+                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(function);
+	DUCKDB_CHECK_ARG(docs);
+	return WithErrorHandler(err, [&]() { *docs = Convert(&Convert(function)->docs); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_get_signature(duckdb_v2_table_function_handle function,
@@ -1560,10 +1569,13 @@ DUCKDB_V2_ERROR duckdb_v2_connection_register_table_function(duckdb_v2_connectio
 	return WithErrorHandler(err, [&]() {
 		auto &context = *Convert(conn)->context;
 		context.RunFunctionInTransaction([&]() {
-			auto info = duckdb::CreateTableFunctionInfo(Convert(function)->Build(*context.db));
+			auto &self = *Convert(function);
+			auto info = duckdb::CreateTableFunctionInfo(self.Build(*context.db));
+			self.docs.AddTo(self.signature, info);
 			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
 			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
-			catalog.CreateTableFunction(context, info);
+			// CreateFunction, unlike CreateTableFunction, adds the overloads to an existing function.
+			catalog.CreateFunction(context, info);
 		});
 	});
 }
@@ -1574,8 +1586,12 @@ DUCKDB_V2_ERROR duckdb_v2_extension_register_table_function(duckdb_v2_extension_
 	DUCKDB_CHECK_ARG(extension);
 	DUCKDB_CHECK_ARG(function);
 	return WithErrorHandler(err, [&]() {
+		auto &self = *Convert(function);
 		auto &loader = GetExtensionLoader(extension);
-		loader.RegisterFunction(Convert(function)->Build(loader.GetDatabaseInstance()));
+		duckdb::CreateTableFunctionInfo info(self.Build(loader.GetDatabaseInstance()));
+		self.docs.AddTo(self.signature, info);
+		info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+		loader.RegisterFunction(std::move(info));
 	});
 }
 
@@ -1772,7 +1788,8 @@ DUCKDB_V2_ERROR duckdb_v2_connection_register_multi_file_function(duckdb_v2_conn
 			                                    duckdb::OnEntryNotFound::RETURN_NULL);
 			duckdb::CreateTableFunctionInfo info(self.Build(*context.db, CopyTableFunctions(single_file)));
 			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
-			catalog.CreateTableFunction(context, info);
+			// CreateFunction, unlike CreateTableFunction, adds the overloads to an existing function.
+			catalog.CreateFunction(context, info);
 		});
 	});
 }

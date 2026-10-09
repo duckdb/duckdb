@@ -21,6 +21,7 @@ add_library_unity(
   capi_v2_func_aggregate.cpp
   capi_v2_func_cast.cpp
   capi_v2_func_copy.cpp
+  capi_v2_func_docs.cpp
   capi_v2_func_properties.cpp
   capi_v2_func_scalar.cpp
   capi_v2_func_signature.cpp

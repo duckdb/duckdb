@@ -3011,6 +3011,33 @@ private:
 	explicit FunctionSignature(void *impl);
 };
 
+/// The documentation of a function overload, as `duckdb_functions()` reports it.
+/// Borrowed from the function it was read from via `GetDocs`, and valid for as long as that function is.
+/// Setters mutate the function's documentation in place, and return the documentation so they chain.
+class FunctionDocs final : public detail::Handle<FunctionDocs> {
+	friend detail::HandleFactory;
+
+public:
+	FunctionDocs(FunctionDocs &&) noexcept = default;
+	FunctionDocs &operator=(FunctionDocs &&) noexcept = default;
+
+	~FunctionDocs() override;
+
+	/// Sets the description of the overload. Replaces any previous description.
+	auto SetDescription(std::string_view description) -> FunctionDocs &;
+
+	/// Adds an example of calling the overload, e.g. a SQL expression.
+	/// @param title The title of the example; empty for none.
+	/// @param example The example.
+	auto AddExample(std::string_view title, std::string_view example) -> FunctionDocs &;
+
+	/// Adds a category the overload belongs to, e.g. "string" or "aggregate".
+	auto AddCategory(std::string_view category) -> FunctionDocs &;
+
+private:
+	explicit FunctionDocs(void *impl);
+};
+
 /// The sizes of the four parts of a function call's argument list, which follow each other in this order.
 struct ArgumentCounts {
 	/// One argument per positional-only and standard parameter, in declaration order.
@@ -3197,6 +3224,16 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> ScalarFunction &;
+	/// The documentation of this overload, borrowed for in-place mutation.
+	auto GetDocs() -> FunctionDocs;
+
+	/// Calls `configure` with the documentation of this overload, borrowed for in-place mutation.
+	template <class F>
+	auto WithDocs(F &&configure) & -> ScalarFunction & {
+		auto docs = GetDocs();
+		configure(docs);
+		return *this;
+	}
 
 	/// The function's signature, borrowed for in-place mutation. Registration requires a return type that is either
 	/// a fully defined concrete type, or ANY combined with a bind callback that resolves it.
@@ -3450,6 +3487,16 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> AggregateFunction &;
+	/// The documentation of this overload, borrowed for in-place mutation.
+	auto GetDocs() -> FunctionDocs;
+
+	/// Calls `configure` with the documentation of this overload, borrowed for in-place mutation.
+	template <class F>
+	auto WithDocs(F &&configure) & -> AggregateFunction & {
+		auto docs = GetDocs();
+		configure(docs);
+		return *this;
+	}
 
 	/// The function's signature, borrowed for in-place mutation. Registration requires a return type that is either
 	/// a fully defined concrete type, or ANY combined with a bind callback that resolves it.
@@ -3963,6 +4010,16 @@ public:
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> TableFunction &;
+	/// The documentation of this overload, borrowed for in-place mutation.
+	auto GetDocs() -> FunctionDocs;
+
+	/// Calls `configure` with the documentation of this overload, borrowed for in-place mutation.
+	template <class F>
+	auto WithDocs(F &&configure) & -> TableFunction & {
+		auto docs = GetDocs();
+		configure(docs);
+		return *this;
+	}
 
 	/// The function's signature, borrowed for in-place mutation. A parameter without a default value becomes a
 	/// required positional argument, one with a default becomes a named argument the caller may omit. Registration

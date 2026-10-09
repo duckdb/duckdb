@@ -1117,3 +1117,33 @@ TEST_CASE("Stable C++API: table function partitioning requires partition data", 
 	REQUIRE_FALSE(ExplainContains(conn, "SELECT part_col, count(*) FROM cpp_info_cleared(2) GROUP BY part_col",
 	                              "Partitioned Aggregate"));
 }
+
+TEST_CASE("Stable C++API: table function overloads keep their descriptions", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto &factory = conn.GetFactory();
+
+	auto one = TableFunction::Create(factory);
+	one.SetName("cpp_documented_range").WithDocs([](FunctionDocs &docs) {
+		docs.SetDescription("Counts to n.").AddExample("Count to three", "FROM cpp_documented_range(3)");
+	});
+	one.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
+	one.SetBindCallback(RangeBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(RangeExec);
+	conn.Register(one);
+
+	// Adding an overload keeps the first one's description.
+	auto two = TableFunction::Create(factory);
+	two.SetName("cpp_documented_range");
+	two.GetDocs().SetDescription("Counts to n, as text.");
+	two.GetSignature().AddParameter("n", factory.ParseType("VARCHAR"));
+	two.SetBindCallback(RangeBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(RangeExec);
+	conn.Register(two);
+
+	auto result = conn.Execute("SELECT description, array_to_string(examples, '|') FROM duckdb_functions() "
+	                           "WHERE function_name = 'cpp_documented_range' ORDER BY parameter_types::VARCHAR");
+	auto chunk = result.FetchChunk();
+	REQUIRE(chunk.GetRowCount() == 2);
+	REQUIRE(chunk.GetVector(0).GetValue(0).ToText() == "Counts to n.");
+	REQUIRE(chunk.GetVector(1).GetValue(0).ToText() == "FROM cpp_documented_range(3)");
+	REQUIRE(chunk.GetVector(0).GetValue(1).ToText() == "Counts to n, as text.");
+}
