@@ -1,5 +1,5 @@
 # name: test/sql/aggregate/aggregates/test_quantile_cont_bounds.test
-# description: Test QUANTILE_CONT interpolation at timestamp bounds - the out-of-range float to int64 cast is UB (x86 yields INT64_MIN, ARM saturates) - and the .5 tie-break rule
+# description: Test exact temporal QUANTILE_CONT interpolation at integer bounds and half ties
 # group: [aggregates]
 
 require 64bit
@@ -20,16 +20,37 @@ SELECT quantile_cont(y, 0.5) FROM
 ----
 294247-01-10 04:00:54.775803
 
-# The delta between min and max overflows int64, so this exercises the long double
-# fallback path - the symmetric weights sum to the epoch exactly on every platform.
-# The most negative timestamps (below -9223372022400000000us) cannot be rendered as
-# strings (days x us/day underflows int64 in Timestamp::Convert), so the symmetric
-# pair stops at the last printable boundary.
+# The endpoint difference exceeds int64, but the midpoint is exactly the epoch.
 query T
 SELECT quantile_cont(y, 0.5) FROM
 	(VALUES (make_timestamp(-9223372022400000000::BIGINT)), (make_timestamp(9223372022400000000::BIGINT))) t(y);
 ----
 1970-01-01 00:00:00
+
+# Asymmetric endpoints retain half-microsecond ties even when the difference exceeds int64.
+query IIIIII
+SELECT epoch_us(quantile_cont(y, 0.25)), epoch_us(quantile_cont(y, 0.5)), epoch_us(quantile_cont(y, 0.75)),
+	epoch_us(quantile_cont(y, -0.25)), epoch_us(quantile_cont(y, -0.5)), epoch_us(quantile_cont(y, -0.75))
+FROM (VALUES (make_timestamp(-9223372022399999999::BIGINT)), (make_timestamp(9223372036854775803::BIGINT))) t(y);
+----
+-4611686007586306049	7227387902	4611686022041081852	4611686022041081852	7227387902	-4611686007586306049
+
+# Differences that fit in int64 can still lose precision when converted to double.
+query IIIIII
+SELECT epoch_us(quantile_cont(y, 0.25)), epoch_us(quantile_cont(y, 0.5)), epoch_us(quantile_cont(y, 0.75)),
+	epoch_us(quantile_cont(y, -0.25)), epoch_us(quantile_cont(y, -0.5)), epoch_us(quantile_cont(y, -0.75))
+FROM (VALUES (make_timestamp(1::BIGINT)), (make_timestamp(9223372036854775802::BIGINT))) t(y);
+----
+2305843009213693951	4611686018427387901	6917529027641081852	6917529027641081852	4611686018427387901	2305843009213693951
+
+# Endpoint weights and tiny positive weights preserve both bounds.
+query IIIIII
+SELECT epoch_us(quantile_cont(y, 0)), epoch_us(quantile_cont(y, 1)),
+	epoch_us(quantile_cont(y, 1e-40)), epoch_us(quantile_cont(y, -1e-40)),
+	epoch_us(quantile_cont(y, 5e-324)), epoch_us(quantile_cont(y, -5e-324))
+FROM (VALUES (make_timestamp(-9223372022399999999::BIGINT)), (make_timestamp(9223372036854775803::BIGINT))) t(y);
+----
+-9223372022399999999	9223372036854775803	-9223372022399999999	9223372036854775803	-9223372022399999999	9223372036854775803
 
 # Ordinary timestamp quantiles are unaffected
 query T
@@ -73,3 +94,16 @@ SELECT quantile_cont(y, 0.5) FROM
 	(VALUES (TIME '00:00:00.000001'), (TIME '00:00:00.000004')) t(y);
 ----
 00:00:00.000002
+
+# Fractions on either side of a half use nearest rounding for both temporal types.
+query II
+SELECT epoch_us(quantile_cont(y, 0.25)), epoch_us(quantile_cont(y, 0.75))
+FROM (VALUES (make_timestamp(0::BIGINT)), (make_timestamp(3::BIGINT))) t(y);
+----
+1	2
+
+query TT
+SELECT quantile_cont(y, 0.25), quantile_cont(y, 0.75)
+FROM (VALUES (TIME '00:00:00'), (TIME '00:00:00.000003')) t(y);
+----
+00:00:00.000001	00:00:00.000002

@@ -99,3 +99,148 @@ ORDER BY x;
 1	20
 2	30
 3	40
+
+# Positive fractional values round down for both BIGINT and INTEGER.
+query IIII
+WITH endpoints(g, a, b) AS (VALUES (0, 0::BIGINT, 3::BIGINT), (1, 3::BIGINT, 0::BIGINT)),
+data AS (
+	SELECT g, x, CASE WHEN x = 0 THEN a WHEN x = 4 THEN b ELSE NULL END AS y
+	FROM endpoints, (VALUES (0), (1), (3), (4)) positions(x)
+)
+SELECT g, x, fill(y ORDER BY x) OVER (PARTITION BY g),
+	fill(y::INTEGER ORDER BY x) OVER (PARTITION BY g)
+FROM data ORDER BY g, x;
+----
+0	0	0	0
+0	1	0	0
+0	3	2	2
+0	4	3	3
+1	0	3	3
+1	1	2	2
+1	3	0	0
+1	4	0	0
+
+# Negative fractional BIGINT values round down in either interpolation direction.
+query III
+WITH endpoints(g, a, b) AS (VALUES (0, -3::BIGINT, 0::BIGINT), (1, 0::BIGINT, -3::BIGINT)),
+data AS (
+	SELECT g, x, CASE WHEN x = 0 THEN a WHEN x = 4 THEN b ELSE NULL END AS y
+	FROM endpoints, (VALUES (0), (1), (3), (4)) positions(x)
+)
+SELECT g, x, fill(y ORDER BY x) OVER (PARTITION BY g)
+FROM data ORDER BY g, x;
+----
+0	0	-3
+0	1	-3
+0	3	-1
+0	4	0
+1	0	0
+1	1	-1
+1	3	-3
+1	4	-3
+
+# Fractional timestamps round to the earlier microsecond on either side of the epoch.
+query III
+WITH endpoints(g, a, b) AS (
+	VALUES (0, 10::BIGINT, 13::BIGINT), (1, 13::BIGINT, 10::BIGINT),
+		(2, -13::BIGINT, -10::BIGINT), (3, -10::BIGINT, -13::BIGINT)
+), data AS (
+	SELECT g, x, CASE WHEN x = 0 THEN make_timestamp(a) WHEN x = 4 THEN make_timestamp(b) ELSE NULL END AS y
+	FROM endpoints, (VALUES (0), (1), (3), (4)) positions(x)
+)
+SELECT g, x, epoch_us(fill(y ORDER BY x) OVER (PARTITION BY g))
+FROM data ORDER BY g, x;
+----
+0	0	10
+0	1	10
+0	3	12
+0	4	13
+1	0	13
+1	1	12
+1	3	10
+1	4	10
+2	0	-13
+2	1	-13
+2	3	-11
+2	4	-10
+3	0	-10
+3	1	-11
+3	3	-13
+3	4	-13
+
+# A timestamp span wider than BIGINT still floors fractional results exactly.
+query III
+WITH endpoints(g, a, b) AS (
+	VALUES (0, -9223372022399999999::BIGINT, 9223372036854775800::BIGINT),
+		(1, 9223372036854775800::BIGINT, -9223372022399999999::BIGINT)
+), data AS (
+	SELECT g, x, CASE WHEN x = 0 THEN make_timestamp(a) WHEN x = 4 THEN make_timestamp(b) ELSE NULL END AS y
+	FROM endpoints, (VALUES (0), (1), (3), (4)) positions(x)
+)
+SELECT g, x, epoch_us(fill(y ORDER BY x) OVER (PARTITION BY g))
+FROM data ORDER BY g, x;
+----
+0	0	-9223372022399999999
+0	1	-4611686007586306050
+0	3	4611686022041081850
+0	4	9223372036854775800
+1	0	9223372036854775800
+1	1	4611686022041081850
+1	3	-4611686007586306050
+1	4	-9223372022399999999
+
+# Identity interpolation preserves exact integers for thirds and sixths in either order.
+query IIIIII
+WITH data AS (
+	SELECT n, x, CASE WHEN x IN (0, n) THEN x ELSE NULL END AS y
+	FROM (VALUES (3), (6)) spans(n), range(7) positions(x)
+	WHERE x <= n
+)
+SELECT n, x, fill(y ORDER BY x) OVER (PARTITION BY n), fill(y ORDER BY x DESC) OVER (PARTITION BY n),
+	epoch_us(fill(make_timestamp(y) ORDER BY x) OVER (PARTITION BY n)),
+	epoch_us(fill(make_timestamp(y) ORDER BY x DESC) OVER (PARTITION BY n))
+FROM data ORDER BY n, x;
+----
+3	0	0	0	0	0
+3	1	1	1	1	1
+3	2	2	2	2	2
+3	3	3	3	3	3
+6	0	0	0	0	0
+6	1	1	1	1	1
+6	2	2	2	2	2
+6	3	3	3	3	3
+6	4	4	4	4	4
+6	5	5	5	5	5
+6	6	6	6	6	6
+
+# DOUBLE order keys preserve the same exact thirds and sixths.
+query IIII
+WITH data AS (
+	SELECT n, x, CASE WHEN x IN (0, n) THEN x ELSE NULL END AS y
+	FROM (VALUES (3), (6)) spans(n), range(7) positions(x)
+	WHERE x <= n
+)
+SELECT n, x, fill(y ORDER BY x::DOUBLE) OVER (PARTITION BY n),
+	fill(y ORDER BY x::DOUBLE DESC) OVER (PARTITION BY n)
+FROM data ORDER BY n, x;
+----
+3	0	0	0
+3	1	1	1
+3	2	2	2
+3	3	3	3
+6	0	0	0
+6	1	1	1
+6	2	2	2
+6	3	3	3
+6	4	4	4
+6	5	5	5
+6	6	6	6
+
+# A tiny positive ratio still rounds a decreasing fractional value down.
+query I
+SELECT filled FROM (
+	SELECT x, fill(y ORDER BY x) OVER () AS filled
+	FROM (VALUES (0::DOUBLE, 2::BIGINT), (1e-40::DOUBLE, NULL::BIGINT), (1::DOUBLE, 0::BIGINT)) t(x, y)
+) WHERE x = 1e-40;
+----
+1

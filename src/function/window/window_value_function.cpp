@@ -1276,8 +1276,17 @@ double LossyFillCast(uhugeint_t val) {
 	return d;
 }
 
+struct FillSlope {
+	double numerator;
+	double denominator;
+
+	double GetValue() const {
+		return numerator / denominator;
+	}
+};
+
 template <typename T>
-static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid) {
+static FillSlope FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid) {
 	//	Cast everything to doubles immediately so we can interpolate backwards (x < x0)
 	const auto x = LossyFillCast<double>(cursor.GetCell<T>(0, row_idx));
 	const auto x0 = LossyFillCast<double>(cursor.GetCell<T>(0, prev_valid));
@@ -1286,7 +1295,7 @@ static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_vali
 	auto den = (x1 - x0);
 	if (den == 0) {
 		// Duplicate X values, so pick the first.
-		return 0;
+		return {0, 1};
 	}
 	auto num = x - x0;
 	if (!std::isfinite(den)) {
@@ -1294,10 +1303,10 @@ static double FillSlopeFunc(WindowCursor &cursor, idx_t row_idx, idx_t prev_vali
 		num = x / scale - x0 / scale;
 		den = x1 / scale - x0 / scale;
 	}
-	return num / den;
+	return {num, den};
 }
 
-typedef double (*fill_slope_t)(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid);
+typedef FillSlope (*fill_slope_t)(WindowCursor &cursor, idx_t row_idx, idx_t prev_valid, idx_t next_valid);
 
 static fill_slope_t GetFillSlopeFunction(const LogicalType &type) {
 	switch (type.InternalType()) {
@@ -1382,22 +1391,25 @@ bool TryExtrapolateOperator::Operation(const uhugeint_t &lo, const double d, con
 	       Uhugeint::TryConvert(temp, result);
 }
 
-typedef void (*fill_interpolate_t)(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope);
+typedef void (*fill_interpolate_t)(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi,
+                                   const FillSlope &slope);
 
 template <typename T>
-static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi, double slope) {
+static void FillInterpolateFunc(Vector &result, idx_t i, WindowCursor &cursor, idx_t lo, idx_t hi,
+                                const FillSlope &slope) {
 	const auto y0 = cursor.GetCell<T>(0, lo);
 	const auto y1 = cursor.GetCell<T>(0, hi);
 	auto data = FlatVector::GetDataMutable<T>(result);
-	if (slope < 0 || slope > 1) {
-		if (TryExtrapolateOperator::Operation(y0, slope, y1, data[i])) {
+	const auto d = slope.GetValue();
+	if (d < 0 || d > 1) {
+		if (TryExtrapolateOperator::Operation(y0, d, y1, data[i])) {
 			FlatVector::SetNull(result, i, false);
 		}
 		return;
 	}
 
 	FlatVector::SetNull(result, i, false);
-	data[i] = InterpolateOperator::Operation<T>(y0, slope, y1);
+	data[i] = InterpolateOperator::Operation<T>(y0, slope.numerator, slope.denominator, y1);
 }
 
 static fill_interpolate_t GetFillInterpolateFunction(const LogicalType &type) {
