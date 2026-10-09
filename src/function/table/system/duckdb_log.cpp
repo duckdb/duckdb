@@ -4,22 +4,22 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/parser_options.hpp"
 #include "duckdb/logging/log_manager.hpp"
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 namespace duckdb {
 
 struct DuckDBLogData : public GlobalTableFunctionState {
-	explicit DuckDBLogData(shared_ptr<LogStorage> log_storage_p) : log_storage(std::move(log_storage_p)) {
-		scan_state = log_storage->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
-		log_storage->InitializeScan(*scan_state);
+	explicit DuckDBLogData(shared_ptr<LogSink> log_sink_p) : log_sink(std::move(log_sink_p)) {
+		scan_state = log_sink->CreateScanState(LoggingTargetTable::LOG_ENTRIES);
+		log_sink->InitializeScan(*scan_state);
 	}
-	DuckDBLogData() : log_storage(nullptr) {
+	DuckDBLogData() : log_sink(nullptr) {
 	}
 
-	//! The log storage we are scanning
-	shared_ptr<LogStorage> log_storage;
-	unique_ptr<LogStorageScanState> scan_state;
+	//! The log sink we are scanning
+	shared_ptr<LogSink> log_sink;
+	unique_ptr<LogSinkScanState> scan_state;
 };
 
 static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunctionBindInput &input,
@@ -44,20 +44,20 @@ static unique_ptr<FunctionData> DuckDBLogBind(ClientContext &context, TableFunct
 
 unique_ptr<GlobalTableFunctionState> DuckDBLogInit(ClientContext &context, TableFunctionInitInput &input) {
 	if (LogManager::Get(context).CanScan(LoggingTargetTable::LOG_ENTRIES)) {
-		return make_uniq<DuckDBLogData>(LogManager::Get(context).GetLogStorage());
+		return make_uniq<DuckDBLogData>(LogManager::Get(context).GetLogSink());
 	}
 	return make_uniq<DuckDBLogData>();
 }
 
 void DuckDBLogFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.global_state->Cast<DuckDBLogData>();
-	if (data.log_storage) {
-		data.log_storage->Scan(*data.scan_state, output);
+	if (data.log_sink) {
+		data.log_sink->Scan(*data.scan_state, output);
 	}
 }
 
 unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionBindInput &input) {
-	auto log_storage = LogManager::Get(context).GetLogStorage();
+	auto log_sink = LogManager::Get(context).GetLogSink();
 
 	bool denormalized_table = false;
 	auto denormalized_table_setting = input.named_parameters.find("denormalized_table");
@@ -70,12 +70,12 @@ unique_ptr<TableRef> DuckDBLogBindReplace(ClientContext &context, TableFunctionB
 
 	// Without join contexts we simply scan the LOG_ENTRIES tables
 	if (!denormalized_table) {
-		auto res = log_storage->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
+		auto res = log_sink->BindReplace(context, input, LoggingTargetTable::LOG_ENTRIES);
 		return res;
 	}
 
-	// If the storage can bind replace for LoggingTargetTable::ALL_LOGS, we use that since that will be most efficient
-	auto all_log_scan = log_storage->BindReplace(context, input, LoggingTargetTable::ALL_LOGS);
+	// If the sink can bind replace for LoggingTargetTable::ALL_LOGS, we use that since that will be most efficient
+	auto all_log_scan = log_sink->BindReplace(context, input, LoggingTargetTable::ALL_LOGS);
 	if (all_log_scan) {
 		return all_log_scan;
 	}

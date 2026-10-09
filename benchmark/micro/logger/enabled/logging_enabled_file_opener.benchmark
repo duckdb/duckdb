@@ -7,7 +7,7 @@ group logger
 
 load
 set enable_logging=true;
-set logging_storage='memory';
+set logging_sink='memory';
 set logging_level='debug'
 
 run
@@ -15,6 +15,6 @@ SELECT write_log('hello world', level := 'warning', scope := 'file_opener', log_
 
 cleanup
 set enable_logging=false;
-set logging_storage='stdout';
-set logging_storage='memory';
+set logging_sink='stdout';
+set logging_sink='memory';
 set enable_logging=true;
