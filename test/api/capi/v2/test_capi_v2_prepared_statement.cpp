@@ -433,7 +433,7 @@ TEST_CASE("V2: prepared_statement_create refuses while a result is live", "[capi
 
 	auto stmt = PsParseOne(fx.conn, "SELECT 1");
 	duckdb_v2_prepared_statement_handle prepared = nullptr;
-	// Preparing would run the engine's cleanup and cancel the live stream, so it refuses
+	// The engine refuses a prepare while a result is live, and the v2 layer refuses it
 	// before reaching the engine, leaving the statement intact.
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, nullptr) ==
 	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);

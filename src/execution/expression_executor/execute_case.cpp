@@ -92,6 +92,27 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 	}
 }
 
+static void FillNulls(ValidityMask &validity, const SelectionVector &sel, idx_t count) {
+	if (count == 0) {
+		return;
+	}
+	validity.EnsureWritable();
+	idx_t current_entry = sel.get_index(0) / ValidityMask::BITS_PER_VALUE;
+	validity_t invalid_bits = 0;
+	for (idx_t i = 0; i < count; i++) {
+		auto row_idx = sel.get_index(i);
+		D_ASSERT(row_idx < validity.Capacity());
+		auto entry_idx = row_idx / ValidityMask::BITS_PER_VALUE;
+		if (entry_idx != current_entry) {
+			validity.GetValidityEntryUnsafe(current_entry) &= ~invalid_bits;
+			current_entry = entry_idx;
+			invalid_bits = 0;
+		}
+		invalid_bits |= validity_t(1) << (row_idx % ValidityMask::BITS_PER_VALUE);
+	}
+	validity.GetValidityEntryUnsafe(current_entry) &= ~invalid_bits;
+}
+
 template <class T>
 void TemplatedFillLoop(const Vector &vector, Vector &result, const SelectionVector &sel, sel_t count) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -100,9 +121,7 @@ void TemplatedFillLoop(const Vector &vector, Vector &result, const SelectionVect
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto data = ConstantVector::GetData<T>(vector);
 		if (ConstantVector::IsNull(vector)) {
-			for (idx_t i = 0; i < count; i++) {
-				result_mask.SetInvalid(sel.get_index(i));
-			}
+			FillNulls(result_mask, sel, count);
 		} else {
 			for (idx_t i = 0; i < count; i++) {
 				res[sel.get_index(i)] = *data;
@@ -127,9 +146,7 @@ void ValidityFillLoop(const Vector &vector, Vector &result, const SelectionVecto
 	auto &result_mask = FlatVector::ValidityMutable(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(vector)) {
-			for (idx_t i = 0; i < count; i++) {
-				result_mask.SetInvalid(sel.get_index(i));
-			}
+			FillNulls(result_mask, sel, count);
 		}
 	} else {
 		auto entries = vector.Validity();

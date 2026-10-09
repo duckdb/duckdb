@@ -13,6 +13,7 @@ from grammar_types import (
     load_grammar_types,
     load_matcher_rule_overrides,
     load_collapsible_rules,
+    load_expression_depth_rules,
     load_packrat_memoized_rules,
 )
 from transformer_trampoline_config import (
@@ -97,6 +98,8 @@ PACKRAT_START_BLOCK = SEPARATOR + "\t// START GENERATED PACKRAT MEMOIZED RULES\n
 PACKRAT_END_BLOCK = SEPARATOR + "\t// END GENERATED PACKRAT MEMOIZED RULES\n" + SEPARATOR
 COLLAPSIBLE_START_BLOCK = SEPARATOR + "\t// START GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
 COLLAPSIBLE_END_BLOCK = SEPARATOR + "\t// END GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
+DEPTH_START_BLOCK = SEPARATOR + "\t// START GENERATED EXPRESSION DEPTH RULES\n" + SEPARATOR
+DEPTH_END_BLOCK = SEPARATOR + "\t// END GENERATED EXPRESSION DEPTH RULES\n" + SEPARATOR
 RESULT_TYPE_SEPARATOR = "//===--------------------------------------------------------------------===//\n"
 RESULT_TYPE_START_BLOCK = RESULT_TYPE_SEPARATOR + "// START GENERATED TRANSFORM RESULT TYPES\n" + RESULT_TYPE_SEPARATOR
 RESULT_TYPE_END_BLOCK = RESULT_TYPE_SEPARATOR + "// END GENERATED TRANSFORM RESULT TYPES\n" + RESULT_TYPE_SEPARATOR
@@ -1562,6 +1565,21 @@ def write_collapsible_rules(collapsible_rules):
     print(f"Updated {transformer_factory_cpp_path}")
 
 
+def write_expression_depth_rules(nesting_rules, chain_rules):
+    content = transformer_factory_cpp_path.read_text()
+    lines = [f'\tgrammar.SetExpressionDepth("{rule}", ExpressionDepthKind::NESTING);\n' for rule in nesting_rules]
+    lines += [f'\tgrammar.SetExpressionDepth("{rule}", ExpressionDepthKind::CHAIN);\n' for rule in chain_rules]
+    content = replace_generated_block(
+        content,
+        DEPTH_START_BLOCK,
+        DEPTH_END_BLOCK,
+        "".join(lines),
+        transformer_factory_cpp_path,
+    )
+    transformer_factory_cpp_path.write_text(content)
+    print(f"Updated {transformer_factory_cpp_path}")
+
+
 def generate_transform_result_types(rule_types, additional_result_types):
     result_types = sorted({info.cpp_type for info in rule_types.values()}.union(additional_result_types))
     lines = []
@@ -1612,6 +1630,7 @@ def main():
         collapsible_rules = load_collapsible_rules(grammar_types_file, emitter.emitted_ops_rules())
         write_packrat_memoized_rules(packrat_rules)
         write_collapsible_rules(collapsible_rules)
+        write_expression_depth_rules(*load_expression_depth_rules(grammar_types_file, all_rules.keys()))
     elif args.report:
         print(f"grammar files: {', '.join(grammar_files)}")
         print(emitter.emit_report())

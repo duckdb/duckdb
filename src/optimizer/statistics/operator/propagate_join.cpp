@@ -348,6 +348,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator> &child, unique_ptr<Expression> &expr,
                                                      const BaseStatistics &stats_before,
                                                      const BaseStatistics &stats_after) {
+	// Defer join-derived filters until after join ordering.
+	if (mode != StatisticsPropagationMode::FULL) {
+		return;
+	}
 	// Only do this for integral colref's that have stats
 	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF || !expr->GetReturnType().IsIntegral() ||
 	    !NumericStats::HasMinMax(stats_before) || !NumericStats::HasMinMax(stats_after)) {
