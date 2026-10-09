@@ -37,8 +37,8 @@ namespace duckdb {
 constexpr idx_t ArrayType::MAX_ARRAY_SIZE;
 const idx_t UnionType::MAX_UNION_MEMBERS;
 
-//! Computes the physical type of a type with the given id and info - returns false for an unknown id
-static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, PhysicalType &result) {
+//! Computes the physical type of a type with the given id and no parameters - returns false for an unknown id
+static bool TryGetBuiltinPhysicalType(LogicalTypeId id, PhysicalType &result) noexcept {
 	switch (id) {
 	case LogicalTypeId::BOOLEAN:
 		result = PhysicalType::BOOL;
@@ -91,26 +91,6 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 	case LogicalTypeId::DOUBLE:
 		result = PhysicalType::DOUBLE;
 		return true;
-	case LogicalTypeId::DECIMAL: {
-		if (info.type != LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
-			result = PhysicalType::INVALID;
-			return true;
-		}
-		auto width = info.Cast<DecimalTypeInfo>().width;
-		if (width <= Decimal::MAX_WIDTH_INT16) {
-			result = PhysicalType::INT16;
-		} else if (width <= Decimal::MAX_WIDTH_INT32) {
-			result = PhysicalType::INT32;
-		} else if (width <= Decimal::MAX_WIDTH_INT64) {
-			result = PhysicalType::INT64;
-		} else if (width <= Decimal::MAX_WIDTH_INT128) {
-			result = PhysicalType::INT128;
-		} else {
-			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
-			                        width, DecimalType::MaxWidth());
-		}
-		return true;
-	}
 	case LogicalTypeId::BIGNUM:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
@@ -137,31 +117,19 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 		result = PhysicalType::ARRAY;
 		return true;
 	case LogicalTypeId::POINTER:
-		// LCOV_EXCL_START
-		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
-			result = PhysicalType::UINT32;
-		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
-			result = PhysicalType::UINT64;
-		} else {
-			throw InternalException("Unsupported pointer size");
-		}
+		static_assert(sizeof(uintptr_t) == sizeof(uint32_t) || sizeof(uintptr_t) == sizeof(uint64_t),
+		              "Unsupported pointer size");
+		result = sizeof(uintptr_t) == sizeof(uint32_t) ? PhysicalType::UINT32 : PhysicalType::UINT64;
 		return true;
-		// LCOV_EXCL_STOP
 	case LogicalTypeId::VALIDITY:
 		result = PhysicalType::BIT;
 		return true;
-	case LogicalTypeId::ENUM: {
-		if (info.type != LogicalTypeInfoType::ENUM_TYPE_INFO) {
-			result = PhysicalType::INVALID;
-			return true;
-		}
-		result = EnumTypeInfo::DictType(info.Cast<EnumTypeInfo>().GetDictSize());
-		return true;
-	}
 	case LogicalTypeId::LAMBDA:
 		// a lambda has no value of its own - it occupies an argument slot that holds a constant placeholder
 		result = PhysicalType::UINT8;
 		return true;
+	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
@@ -179,44 +147,73 @@ static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, Ph
 	}
 }
 
+//! Computes the physical type of a type with the given id and info - returns false for an unknown id
+static bool TryGetPhysicalType(LogicalTypeId id, const LogicalTypeInfo &info, PhysicalType &result) {
+	switch (id) {
+	case LogicalTypeId::DECIMAL: {
+		if (info.type != LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
+			break;
+		}
+		auto width = info.Cast<DecimalTypeInfo>().width;
+		if (width <= Decimal::MAX_WIDTH_INT16) {
+			result = PhysicalType::INT16;
+		} else if (width <= Decimal::MAX_WIDTH_INT32) {
+			result = PhysicalType::INT32;
+		} else if (width <= Decimal::MAX_WIDTH_INT64) {
+			result = PhysicalType::INT64;
+		} else if (width <= Decimal::MAX_WIDTH_INT128) {
+			result = PhysicalType::INT128;
+		} else {
+			throw InternalException("Decimal has a width of %d which is bigger than the maximum supported width of %d",
+			                        width, DecimalType::MaxWidth());
+		}
+		return true;
+	}
+	case LogicalTypeId::ENUM:
+		if (info.type != LogicalTypeInfoType::ENUM_TYPE_INFO) {
+			break;
+		}
+		result = EnumTypeInfo::DictType(info.Cast<EnumTypeInfo>().GetDictSize());
+		return true;
+	default:
+		break;
+	}
+	return TryGetBuiltinPhysicalType(id, result);
+}
+
 namespace {
 
+constexpr idx_t BUILTIN_TYPE_INFO_COUNT = NumericLimits<uint8_t>::Maximum() + 1;
+
 struct BuiltinTypeInfos {
-	const LogicalTypeInfo *infos[NumericLimits<uint8_t>::Maximum() + 1] = {};
+	//! The info for each id - nullptr for an invalid id
+	const LogicalTypeInfo *infos[BUILTIN_TYPE_INFO_COUNT] = {};
+	//! The infos are created in place, so creating them never allocates
+	alignas(LogicalTypeInfo) char storage[BUILTIN_TYPE_INFO_COUNT][sizeof(LogicalTypeInfo)];
 };
-
-//! Set by the first GetBuiltinTypeInfo call, which every LogicalType constructor makes before the type exists.
-//! Constant-initialized, so reading it never runs (possibly throwing) initialization.
-const BuiltinTypeInfos *&BuiltinTypeInfosTable() noexcept {
-	static const BuiltinTypeInfos *table = nullptr;
-	return table;
-}
-
-//! The builtin info for the id of an existing type - cannot throw, as the table already exists
-const LogicalTypeInfo &ExistingBuiltinTypeInfo(LogicalTypeId id) noexcept {
-	return *BuiltinTypeInfosTable()->infos[static_cast<uint8_t>(id)];
-}
 
 } // namespace
 
-const LogicalTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
-	// intentionally leaked - types can still be destroyed during static destruction
-	static const auto *builtins = [] {
-		auto result = new BuiltinTypeInfos();
-		for (idx_t i = 0; i <= NumericLimits<uint8_t>::Maximum(); i++) {
+const LogicalTypeInfo *LogicalType::TryGetBuiltinTypeInfo(LogicalTypeId id) noexcept {
+	static const auto *builtins = []() noexcept {
+		// zero-initialized and never destroyed - types can still be destroyed during static destruction
+		static BuiltinTypeInfos result;
+		for (idx_t i = 0; i < BUILTIN_TYPE_INFO_COUNT; i++) {
 			auto builtin_id = static_cast<LogicalTypeId>(i);
-			auto info = make_uniq<LogicalTypeInfo>(LogicalTypeInfoType::INVALID_TYPE_INFO);
-			if (!TryGetPhysicalType(builtin_id, *info, info->physical_type)) {
-				continue;
+			auto &info = *new (result.storage[i]) LogicalTypeInfo(LogicalTypeInfoType::INVALID_TYPE_INFO);
+			if (TryGetBuiltinPhysicalType(builtin_id, info.physical_type)) {
+				info.id = builtin_id;
+				info.immortal = true;
+				result.infos[i] = &info;
 			}
-			info->id = builtin_id;
-			info->immortal = true;
-			result->infos[i] = info.release();
 		}
-		BuiltinTypeInfosTable() = result;
-		return result;
+		return &result;
 	}();
-	auto info = builtins->infos[static_cast<uint8_t>(id)];
+	return builtins->infos[static_cast<uint8_t>(id)];
+}
+
+const LogicalTypeInfo &LogicalType::GetBuiltinTypeInfo(LogicalTypeId id) {
+	auto info = TryGetBuiltinTypeInfo(id);
 	if (!info) {
 		throw InternalException("Invalid LogicalType %d", static_cast<uint8_t>(id));
 	}
@@ -249,12 +246,14 @@ LogicalType::LogicalType(LogicalTypeId id, unique_ptr<LogicalTypeInfo> type_info
 
 LogicalType::LogicalType(LogicalType &&other) noexcept : type_info_(other.type_info_) {
 	// the moved-from type keeps its id, but loses its parameters
-	other.type_info_ = ExistingBuiltinTypeInfo(type_info_.get().id);
+	// it may come from another copy of DuckDB (e.g. the host of a loadable extension that statically links its own
+	// copy), so this can be the first use of the builtins of this copy
+	other.type_info_ = *TryGetBuiltinTypeInfo(type_info_.get().id);
 }
 
 const LogicalTypeInfo &LogicalType::ReleaseTypeInfo() && {
 	auto &result = type_info_.get();
-	type_info_ = ExistingBuiltinTypeInfo(result.id);
+	type_info_ = *TryGetBuiltinTypeInfo(result.id);
 	return result;
 }
 
@@ -569,14 +568,9 @@ string LogicalType::ToString() const {
 			return "STRUCT";
 		}
 
-		auto is_unnamed = StructType::IsUnnamed(*this);
 		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
-			if (is_unnamed) {
-				ret += child_types[i].second.ToString();
-			} else {
-				ret += StringUtil::Format("%s %s", SQLIdentifier(child_types[i].first), child_types[i].second);
-			}
+			ret += StringUtil::Format("%s %s", SQLIdentifier(child_types[i].first), child_types[i].second);
 			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}
@@ -1428,14 +1422,25 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	}
 
 	// Convert unnamed (non-empty) STRUCTs back to TUPLE
-	if (id == LogicalTypeId::STRUCT && type_info && type_info->type == LogicalTypeInfoType::STRUCT_TYPE_INFO) {
-		auto &child_types = type_info->Cast<StructTypeInfo>().child_types;
-		if (!child_types.empty() && child_types[0].first.empty()) {
-			id = LogicalTypeId::TUPLE;
-		}
+	if (id == LogicalTypeId::STRUCT && type_info && type_info->type == LogicalTypeInfoType::STRUCT_TYPE_INFO &&
+	    StructType::AllUnnamed(type_info->Cast<StructTypeInfo>().child_types)) {
+		id = LogicalTypeId::TUPLE;
 	}
 
+	auto info_type = type_info ? type_info->type : LogicalTypeInfoType::INVALID_TYPE_INFO;
+	if (info_type == LogicalTypeInfoType::DECIMAL_TYPE_INFO) {
+		auto &decimal_info = type_info->Cast<DecimalTypeInfo>();
+		if (!Decimal::IsValidWidthScale(decimal_info.width, decimal_info.scale)) {
+			throw SerializationException("Failed to deserialize type: invalid DECIMAL(%d, %d)", decimal_info.width,
+			                             decimal_info.scale);
+		}
+	}
 	LogicalType result(id, std::move(type_info));
+	if (info_type != LogicalTypeInfoType::INVALID_TYPE_INFO && info_type != LogicalTypeInfoType::GENERIC_TYPE_INFO &&
+	    !result.HasParameters()) {
+		throw SerializationException("Failed to deserialize type %s: type info %s does not match the type",
+		                             EnumUtil::ToString(id), EnumUtil::ToString(info_type));
+	}
 	if (Geometry::IsSpatialGeometryType(result)) {
 		// This is a legacy geometry type, deserialize as geometry
 		return LogicalType::GEOMETRY();
@@ -1543,7 +1548,9 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 // List Type
 //===--------------------------------------------------------------------===//
 const LogicalType &ListType::GetChildType(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP);
+	if (type.id() != LogicalTypeId::LIST && type.id() != LogicalTypeId::MAP) {
+		throw InternalException("ListType::GetChildType called on a non-LIST type: %s", type.ToString());
+	}
 	auto &info = type.GetTypeInfo();
 	return info.Cast<ListTypeInfo>().child_type;
 }
@@ -1557,8 +1564,10 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 // Struct Type
 //===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::TUPLE ||
-	         type.id() == LogicalTypeId::UNION || type.id() == LogicalTypeId::VARIANT);
+	if (type.id() != LogicalTypeId::STRUCT && type.id() != LogicalTypeId::TUPLE && type.id() != LogicalTypeId::UNION &&
+	    type.id() != LogicalTypeId::VARIANT) {
+		throw InternalException("StructType::GetChildTypes called on a non-STRUCT type: %s", type.ToString());
+	}
 
 	auto &info = type.GetTypeInfo();
 	return info.Cast<StructTypeInfo>().child_types;
@@ -1591,17 +1600,26 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 }
 
 bool StructType::IsUnnamed(const LogicalType &type) {
-	if (type.id() == LogicalTypeId::TUPLE) {
-		return true;
-	}
-	auto &child_types = StructType::GetChildTypes(type);
-	if (child_types.empty()) {
+	return type.id() == LogicalTypeId::TUPLE;
+}
+
+bool StructType::AllUnnamed(const child_list_t<LogicalType> &children) {
+	if (children.empty()) {
 		return false;
 	}
-	return child_types[0].first.empty(); // NOLINT
+	for (auto &child : children) {
+		if (!child.first.empty()) {
+			return false;
+		}
+	}
+	return true;
 }
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
+	if (StructType::AllUnnamed(children)) {
+		// a struct without any member names is a TUPLE
+		return LogicalType::TUPLE(std::move(children));
+	}
 	auto info = make_uniq<StructTypeInfo>(std::move(children));
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }

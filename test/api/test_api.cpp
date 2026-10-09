@@ -37,6 +37,19 @@ TEST_CASE("Test StarExpression replace_list parameter", "[api]") {
 	REQUIRE(select_node.select_list[0]->HasParameter());
 }
 
+TEST_CASE("Test ExtractStatements with an explicit transaction", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(a INT)"));
+
+	// The ALTER expands into multiple statements, which must not be wrapped in their own transaction
+	auto stmts = con.ExtractStatements("BEGIN; ALTER TABLE t ADD COLUMN c INT DEFAULT 1 NOT NULL; COMMIT;");
+	REQUIRE(stmts.size() == 6);
+	for (auto &stmt : stmts) {
+		REQUIRE_NO_FAIL(con.Query(std::move(stmt)));
+	}
+}
+
 TEST_CASE("Test using connection after database is gone", "[api]") {
 	auto db = make_uniq<DuckDB>(nullptr);
 	auto conn = make_uniq<Connection>(*db);
@@ -968,4 +981,11 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		context.ClearInterrupt();
 		REQUIRE_NO_FAIL(con.Query("DROP TABLE suppress_test"));
 	}
+}
+
+TEST_CASE("Test ExtractStatements error location", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_THROWS_WITH(con.ExtractStatements("FROM (VALUES ('1', '2'), ('1'))"),
+	                    Catch::Matchers::Contains("LINE 1: FROM (VALUES ('1', '2'), ('1'))"));
 }
