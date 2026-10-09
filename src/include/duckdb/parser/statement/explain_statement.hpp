@@ -36,6 +36,7 @@ public:
 	unique_ptr<SQLStatement> Copy() const override;
 	string OptionsToString() const;
 	string ToString() const override;
+	string ToString(SQLRenderContext &context) const override;
 };
 
 } // namespace duckdb

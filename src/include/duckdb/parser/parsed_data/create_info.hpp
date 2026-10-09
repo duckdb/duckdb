@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/parser/sql_render_context.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/on_create_conflict.hpp"
@@ -97,9 +98,17 @@ public:
 	//! Returns a string like "CREATE (OR REPLACE) (TEMPORARY) <entry> (IF NOT EXISTS) " for TABLE/VIEW/TYPE/MACRO
 	DUCKDB_API string GetCreatePrefix(const string &entry) const;
 
+	//! Prefer ToString(context) to support context-aware rendering.
 	virtual string ToString() const {
 		throw NotImplementedException("ToString not supported for this type of CreateInfo: '%s'",
 		                              EnumUtil::ToString(info_type));
+	}
+	//! Probes return no SQL and report changes through the shared context.
+	virtual string ToString(SQLRenderContext &context) const {
+		if (context.probe_only) {
+			return string();
+		}
+		return ToString();
 	}
 
 protected:

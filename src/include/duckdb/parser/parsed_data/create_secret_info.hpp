@@ -19,6 +19,7 @@ namespace duckdb {
 struct CreateSecretInfo : public CreateInfo { // NOLINT: work-around bug in clang-tidy
 public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_SECRET_INFO;
+	static constexpr auto REDACTED_VALUE = "'redacted'";
 
 public:
 	explicit CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistType persist_type);
@@ -46,5 +47,6 @@ public:
 
 	unique_ptr<CreateInfo> Copy() const override;
 	string ToString() const override;
+	string ToString(SQLRenderContext &context) const override;
 };
 } // namespace duckdb

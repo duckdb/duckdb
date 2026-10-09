@@ -13,7 +13,12 @@ unique_ptr<SQLStatement> CreateStatement::Copy() const {
 }
 
 string CreateStatement::ToString() const {
-	return info->ToString();
+	SQLRenderContext context;
+	return ToString(context);
+}
+
+string CreateStatement::ToString(SQLRenderContext &context) const {
+	return info->ToString(context);
 }
 
 } // namespace duckdb

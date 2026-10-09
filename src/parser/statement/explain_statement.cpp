@@ -42,12 +42,21 @@ string ExplainStatement::OptionsToString() const {
 }
 
 string ExplainStatement::ToString() const {
+	SQLRenderContext context;
+	return ToString(context);
+}
+
+string ExplainStatement::ToString(SQLRenderContext &context) const {
+	auto statement_string = stmt->ToString(context);
+	if (context.probe_only) {
+		return string();
+	}
 	string result = "EXPLAIN";
 	auto options = OptionsToString();
 	if (!options.empty()) {
 		result += " " + options;
 	}
-	result += " " + stmt->ToString();
+	result += " " + statement_string;
 	return result;
 }
 

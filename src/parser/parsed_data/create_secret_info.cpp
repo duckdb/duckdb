@@ -36,6 +36,19 @@ unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 }
 
 string CreateSecretInfo::ToString() const {
+	SQLRenderContext context;
+	return ToString(context);
+}
+
+string CreateSecretInfo::ToString(SQLRenderContext &context) const {
+	const bool redact = context.mode == SQLRenderMode::REDACTED;
+	if (redact) {
+		context.changed = true;
+	}
+	if (context.probe_only) {
+		return string();
+	}
+
 	string result;
 	string create_type;
 	if (persist_type == SecretPersistType::PERSISTENT) {
@@ -52,25 +65,29 @@ string CreateSecretInfo::ToString() const {
 	}
 	string option_list;
 	if (provider) {
-		option_list += "PROVIDER " + provider->ToString();
+		option_list += "PROVIDER ";
+		option_list += redact ? REDACTED_VALUE : provider->ToString();
 	}
 	if (type) {
 		if (!option_list.empty()) {
 			option_list += ", ";
 		}
-		option_list += "TYPE " + type->ToString();
+		option_list += "TYPE ";
+		option_list += redact ? REDACTED_VALUE : type->ToString();
 	}
 	if (scope) {
 		if (!option_list.empty()) {
 			option_list += ", ";
 		}
-		option_list += "SCOPE " + scope->ToString();
+		option_list += "SCOPE ";
+		option_list += redact ? REDACTED_VALUE : scope->ToString();
 	}
 	for (auto &opt : options) {
 		if (!option_list.empty()) {
 			option_list += ", ";
 		}
-		option_list += opt.first + " " + opt.second->ToString();
+		option_list += opt.first + " ";
+		option_list += redact ? REDACTED_VALUE : opt.second->ToString();
 	}
 	result += "(" + option_list + ")";
 	return result;

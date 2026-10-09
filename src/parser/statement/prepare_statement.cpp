@@ -16,6 +16,15 @@ unique_ptr<SQLStatement> PrepareStatement::Copy() const {
 }
 
 string PrepareStatement::ToString() const {
+	SQLRenderContext context;
+	return ToString(context);
+}
+
+string PrepareStatement::ToString(SQLRenderContext &context) const {
+	auto statement_string = statement->ToString(context);
+	if (context.probe_only) {
+		return string();
+	}
 	string result = "";
 	result += "PREPARE";
 	result += " ";
@@ -23,7 +32,7 @@ string PrepareStatement::ToString() const {
 	result += " ";
 	result += "AS";
 	result += " ";
-	result += statement->ToString();
+	result += statement_string;
 	// NOTE: We expect SQLStatement->ToString() to always end in a ';' ^
 	return result;
 }
