@@ -4753,13 +4753,33 @@ TEST_CASE("ADBC - Commit reports a transaction that an earlier error rolled back
 	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
 	db.Query("INSERT INTO t VALUES (1)");
 
-	SECTION("a statement that failed") {
+	auto fail_statement = [&]() {
 		REQUIRE(db.Query("SELECT 'x'::INTEGER")->HasError());
-	}
-	SECTION("an open stream that fails while it is read into memory") {
+	};
+	auto fail_stream = [&]() {
 		db.QueryArrow("SELECT CASE WHEN i = 50000 THEN error('boom') ELSE i END FROM range(100000) t(i)");
+	};
+	bool enable_autocommit = false;
+	SECTION("a statement that failed, then commit") {
+		fail_statement();
 	}
-	REQUIRE(!SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+	SECTION("a statement that failed, then enabling autocommit") {
+		fail_statement();
+		enable_autocommit = true;
+	}
+	SECTION("an open stream that fails while it is read into memory, then commit") {
+		fail_stream();
+	}
+	SECTION("an open stream that fails while it is read into memory, then enabling autocommit") {
+		fail_stream();
+		enable_autocommit = true;
+	}
+	if (enable_autocommit) {
+		REQUIRE(!SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+		                                         ADBC_OPTION_VALUE_ENABLED, &db.adbc_error)));
+	} else {
+		REQUIRE(!SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+	}
 	REQUIRE(StringUtil::Contains(db.adbc_error.message, "rolled back after an earlier error"));
 	if (db.adbc_error.release) {
 		db.adbc_error.release(&db.adbc_error);
@@ -4767,10 +4787,13 @@ TEST_CASE("ADBC - Commit reports a transaction that an earlier error rolled back
 	auto count = observer.Query("SELECT count(*) FROM t");
 	REQUIRE(CHECK_COLUMN(count, 0, {0}));
 
-	// Manual commit mode goes on with a fresh transaction
-	REQUIRE(conn.HasActiveTransaction());
+	// The transaction ended either way: autocommit runs the next statement on its own, manual commit mode goes on
+	// with a fresh transaction
+	REQUIRE(conn.HasActiveTransaction() == !enable_autocommit);
 	db.Query("INSERT INTO t VALUES (2)");
-	REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+	if (!enable_autocommit) {
+		REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &db.adbc_error)));
+	}
 	count = observer.Query("SELECT count(*) FROM t");
 	REQUIRE(CHECK_COLUMN(count, 0, {1}));
 }

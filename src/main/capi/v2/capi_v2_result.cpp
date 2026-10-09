@@ -127,7 +127,7 @@ DUCKDB_V2_RESULT_STEP_STATUS ResultWrapperV2::HandleExecutionError(ErrorData err
 	handle.reset();
 	fragments.clear();
 	try {
-		RollbackIncompleteGroup();
+		AbandonIncompleteGroup();
 	} catch (...) {
 		// Best effort; never mask the original error.
 	}

@@ -2,6 +2,8 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/client_context_state.hpp"
+#include "duckdb/main/connection.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -1077,6 +1079,146 @@ TEST_CASE("V2: a statement that expands into a group is refused while another st
 	REQUIRE(Query(fx.conn, "SELECT c FROM t WHERE c IS NOT NULL", &filled) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(DrainRowCount(filled) == 1000);
 	duckdb_v2_result_destroy(&filled);
+}
+
+//! Executes through the Arrow entry point, destroying any result
+DUCKDB_V2_ERROR ExecuteArrow(duckdb_v2_connection_handle conn, const char *sql) {
+	duckdb_v2_statement_iterator_handle iter = nullptr;
+	REQUIRE(duckdb_v2_parse_sql(conn, sql, &iter, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_sql_statement_handle stmt = nullptr;
+	REQUIRE(duckdb_v2_statement_iterator_next(iter, &stmt, nullptr) == DUCKDB_V2_ERROR_NONE);
+	duckdb_v2_arrow_result_handle result = nullptr;
+	auto rc = duckdb_v2_statement_execute_arrow(conn, stmt, nullptr, nullptr, 0, 0, &result, nullptr);
+	if (result) {
+		duckdb_v2_arrow_result_destroy(&result);
+	}
+	duckdb_v2_sql_statement_destroy(&stmt);
+	duckdb_v2_statement_iterator_destroy(&iter);
+	return rc;
+}
+
+TEST_CASE("V2: a statement refused while another runs leaves the transaction intact", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t(i INTEGER)");
+	ExecSQL(fx.conn, "BEGIN");
+	ExecSQL(fx.conn, "INSERT INTO t VALUES (42)");
+
+	duckdb_v2_result_handle live = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM range(100000) t(i)", &live) == DUCKDB_V2_ERROR_NONE);
+	// A failing PRAGMA would invalidate the transaction while it is preprocessed: it is refused first
+	duckdb_v2_result_handle refused = nullptr;
+	REQUIRE(Query(fx.conn, "PRAGMA no_such_pragma", &refused) == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(ExecuteArrow(fx.conn, "PRAGMA no_such_pragma") == DUCKDB_V2_ERROR_RESOURCE_IN_USE);
+	REQUIRE(DrainRowCount(live) == 100000);
+	duckdb_v2_result_destroy(&live);
+
+	ExecSQL(fx.conn, "COMMIT");
+	duckdb_v2_result_handle rows = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM t", &rows) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(rows) == 1);
+	duckdb_v2_result_destroy(&rows);
+}
+
+//! Requests a cancellation while the statement is being planned, after the engine began the query
+class CancelWhilePlanning : public duckdb::ClientContextState {
+public:
+	explicit CancelWhilePlanning(duckdb_v2_connection_handle conn) : conn(conn) {
+	}
+	bool CanRequestRebind() override {
+		return true;
+	}
+	duckdb::RebindQueryInfo OnFinalizePrepare(duckdb::ClientContext &, duckdb::PreparedStatementData &,
+	                                          duckdb::PreparedStatementMode) override {
+		std::thread cancel([&] { duckdb_v2_connection_interrupt(conn, nullptr); });
+		cancel.join();
+		return duckdb::RebindQueryInfo::DO_NOT_REBIND;
+	}
+
+	duckdb_v2_connection_handle conn;
+};
+
+TEST_CASE("V2: a cancel requested while a statement is submitted cancels it", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	auto &con = *reinterpret_cast<duckdb::Connection *>(fx.conn);
+	con.context->registered_state->Insert("cancel_while_planning",
+	                                      duckdb::make_shared_ptr<CancelWhilePlanning>(fx.conn));
+	duckdb_v2_result_handle result = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT 42", &result) == DUCKDB_V2_ERROR_NONE);
+	con.context->registered_state->Remove("cancel_while_planning");
+
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+	REQUIRE(duckdb_v2_result_step(result, &chunk, &status, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(status == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED);
+	duckdb_v2_result_destroy(&result);
+}
+
+TEST_CASE("V2: destroying a finished expanded statement leaves a later transaction alone", "[capi_v2][query_result]") {
+	EnvFixture fx;
+	ExecSQL(fx.conn, "CREATE TABLE t(i INTEGER)");
+	ExecSQL(fx.conn, "INSERT INTO t VALUES (1)");
+	duckdb_v2_result_handle group = nullptr;
+	REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) == DUCKDB_V2_ERROR_NONE);
+	DrainRowCount(group);
+
+	ExecSQL(fx.conn, "BEGIN");
+	ExecSQL(fx.conn, "INSERT INTO t(i) VALUES (2)");
+	duckdb_v2_result_destroy(&group);
+	ExecSQL(fx.conn, "COMMIT");
+	duckdb_v2_result_handle rows = nullptr;
+	REQUIRE(Query(fx.conn, "SELECT i FROM t", &rows) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(DrainRowCount(rows) == 2);
+	duckdb_v2_result_destroy(&rows);
+}
+
+TEST_CASE("V2: an expanded statement abandoned at any step applies all or nothing", "[capi_v2][query_result]") {
+	bool explicit_transaction = false;
+	SECTION("autocommit") {
+	}
+	SECTION("inside a user transaction") {
+		explicit_transaction = true;
+	}
+	// Latched, so the assertion count does not depend on how many steps the statement takes
+	bool all_or_nothing = true;
+	bool finished = false;
+	for (idx_t steps = 0; !finished; steps++) {
+		EnvFixture fx;
+		ExecSQL(fx.conn, "SET threads=1");
+		ExecSQL(fx.conn, "CREATE TABLE t AS SELECT range i FROM range(10)");
+		if (explicit_transaction) {
+			ExecSQL(fx.conn, "BEGIN");
+		}
+		duckdb_v2_result_handle group = nullptr;
+		REQUIRE(Query(fx.conn, "ALTER TABLE t ADD COLUMN c DOUBLE DEFAULT random()", &group) == DUCKDB_V2_ERROR_NONE);
+		for (idx_t step = 0; step < steps && !finished; step++) {
+			duckdb_v2_data_chunk_handle chunk = nullptr;
+			auto status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+			duckdb_v2_result_step(group, &chunk, &status, nullptr);
+			duckdb_v2_data_chunk_destroy(&chunk);
+			finished = status == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED;
+		}
+		duckdb_v2_result_destroy(&group);
+		if (explicit_transaction) {
+			// An abandoned group invalidated the transaction, so this rolls it back
+			ExecSQL(fx.conn, "COMMIT");
+		}
+		duckdb_v2_result_handle column = nullptr;
+		REQUIRE(Query(fx.conn, "SELECT column_name FROM duckdb_columns() WHERE table_name = 't' AND column_name = 'c'",
+		              &column) == DUCKDB_V2_ERROR_NONE);
+		auto added = DrainRowCount(column) == 1;
+		duckdb_v2_result_destroy(&column);
+		if (added) {
+			duckdb_v2_result_handle unfilled = nullptr;
+			REQUIRE(Query(fx.conn, "SELECT i FROM t WHERE c IS NULL", &unfilled) == DUCKDB_V2_ERROR_NONE);
+			if (DrainRowCount(unfilled) != 0) {
+				all_or_nothing = false;
+			}
+			duckdb_v2_result_destroy(&unfilled);
+		} else if (finished) {
+			all_or_nothing = false;
+		}
+	}
+	REQUIRE(all_or_nothing);
 }
 
 TEST_CASE("V2: a statement that completed before its rows are read does not hold the connection",

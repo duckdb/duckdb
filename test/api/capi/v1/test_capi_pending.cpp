@@ -167,7 +167,9 @@ TEST_CASE("Test a statement is refused while a pending insert has not completed"
 		REQUIRE(refused->ErrorType() == DUCKDB_ERROR_RESOURCE_IN_USE);
 	}
 
-	REQUIRE_NO_FAIL(pending.Execute());
+	// Kept alive across the COMMIT, so that completing the insert, not destroying its result, frees the connection
+	auto completed = pending.Execute();
+	REQUIRE_NO_FAIL(*completed);
 	REQUIRE_NO_FAIL(tester.Query("COMMIT"));
 	auto result = tester.Query("SELECT count(*) FROM t");
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 1000000);

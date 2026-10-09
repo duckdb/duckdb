@@ -731,36 +731,39 @@ TEST_CASE("Every way a result ends frees the connection", "[api][query_result]")
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t(i BIGINT)"));
 	DrainWatchdog watchdog(con);
 
+	// Kept alive across the next statement, so that ending the result, not destroying it, frees the connection
+	unique_ptr<QueryResult> handle;
+	unique_ptr<QueryResultStream<>> stream;
 	SECTION("a stream drained to the end") {
-		QueryResultStream<> stream(Submit(con, "SELECT i FROM range(100000) t(i)"));
-		REQUIRE(DrainStream(stream)->RowCount() == 100000);
+		stream = make_uniq<QueryResultStream<>>(Submit(con, "SELECT i FROM range(100000) t(i)"));
+		REQUIRE(DrainStream(*stream)->RowCount() == 100000);
 	}
 	SECTION("a completed result") {
-		auto handle = Submit(con, "SELECT i FROM range(100000) t(i)");
+		handle = Submit(con, "SELECT i FROM range(100000) t(i)");
 		handle->Complete();
 		REQUIRE_NO_FAIL(*handle);
 	}
 	SECTION("a write stepped to FINISHED") {
-		auto handle = Submit(con, "INSERT INTO t SELECT i FROM range(100000) t(i)");
+		handle = Submit(con, "INSERT INTO t SELECT i FROM range(100000) t(i)");
 		REQUIRE(StepToEnd(*handle) == QueryResultState::FINISHED);
 	}
 	SECTION("a failure found while binding") {
-		auto handle = con.Submit("SELECT * FROM no_such_table");
+		handle = con.Submit("SELECT * FROM no_such_table");
 		REQUIRE(handle->HasError());
 	}
 	SECTION("a failure found while running") {
-		auto handle =
+		handle =
 		    Submit(con, "SELECT (CASE WHEN i = 90000 THEN 'boom' ELSE i::VARCHAR END)::INT FROM range(100000) t(i)");
 		handle->Complete();
 		REQUIRE(handle->HasError());
 	}
 	SECTION("a closed result") {
-		auto handle = Submit(con, "SELECT i FROM range(1000000) t(i)");
+		handle = Submit(con, "SELECT i FROM range(1000000) t(i)");
 		StepUnfinished(*handle);
 		handle->Close();
 	}
 	SECTION("a destroyed result") {
-		auto handle = Submit(con, "SELECT i FROM range(1000000) t(i)");
+		handle = Submit(con, "SELECT i FROM range(1000000) t(i)");
 		StepUnfinished(*handle);
 		handle.reset();
 	}
