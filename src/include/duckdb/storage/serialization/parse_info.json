@@ -168,6 +168,12 @@
         "name": "add_unique",
         "type": "bool",
         "property": "add_column_constraints.add_unique"
+      },
+      {
+        "id": 404,
+        "name": "add_primary_key",
+        "type": "bool",
+        "property": "add_column_constraints.add_primary_key"
       }
     ],
     "constructor": [
