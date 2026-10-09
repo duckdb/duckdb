@@ -217,7 +217,7 @@ TEST_CASE("Test the running total of bytes scanned for a row-oriented format", "
 	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == file_size);
 
 	// a query that fails part-way through the file has started scanning it, so it reports the file as well
-	REQUIRE_FAIL(con.Query("SELECT sum(CASE WHEN i = 90000 THEN error('boom') ELSE i END) FROM read_csv('" + path +
-	                       "')"));
+	REQUIRE_FAIL(
+	    con.Query("SELECT sum(CASE WHEN i = 90000 THEN error('boom') ELSE i END) FROM read_csv('" + path + "')"));
 	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == file_size);
 }
