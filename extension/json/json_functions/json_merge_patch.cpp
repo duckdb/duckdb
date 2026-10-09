@@ -36,6 +36,7 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 		if (nodes.orig) {
 			idx_t idx, max;
 			yyjson_mut_val *key, *orig_val;
+			// NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast): yyjson iteration macro
 			yyjson_mut_obj_foreach(nodes.orig, idx, max, key, orig_val) {
 				auto patch_val =
 				    yyjson_mut_obj_getn(nodes.patch, unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
@@ -49,6 +50,7 @@ static inline yyjson_mut_val *MergePatch(yyjson_mut_doc *doc, yyjson_mut_val *or
 		// Merge patch keys; null removes the key
 		idx_t idx, max;
 		yyjson_mut_val *key, *patch_val;
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast): yyjson iteration macro
 		yyjson_mut_obj_foreach(nodes.patch, idx, max, key, patch_val) {
 			if (unsafe_yyjson_is_null(patch_val)) {
 				continue;

@@ -224,6 +224,10 @@ void ParsedGrammar::SetTransformProcess(const string &rule_name, grammar_transfo
 	rule.collapsible = collapsible;
 }
 
+void ParsedGrammar::SetExpressionDepth(const string &rule_name, ExpressionDepthKind kind) {
+	GetMutableRule(rule_name).expression_depth = kind;
+}
+
 void ParsedGrammar::AddTerminalRuleOverride(const string &rule_name, terminal_rule_matcher_factory_t matcher_factory) {
 	if (!matcher_factory) {
 		throw InvalidInputException("Cannot add an empty terminal rule matcher factory for '%s'", rule_name);

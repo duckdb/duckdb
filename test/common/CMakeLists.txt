@@ -28,6 +28,7 @@ add_library_unity(
   test_scalar_executor.cpp
   test_logical_type_is_complete.cpp
   test_logical_type_immutable.cpp
+  test_type_visitor.cpp
   test_utf.cpp
   test_allocator_debug_info.cpp
   test_buffer_pool_reservation.cpp
@@ -36,8 +37,11 @@ add_library_unity(
   test_string_util.cpp
   test_substring_oob.cpp
   test_swar.cpp
+  test_aggregate_hll.cpp
+  test_radix_ht_sink.cpp
   test_utf8_codepoint_oob.cpp
   test_temporary_memory_manager.cpp
+  test_tuple_data_allocation.cpp
   test_versioning_utils.cpp
   test_value_to_sql_string.cpp
   test_value_to_expression.cpp

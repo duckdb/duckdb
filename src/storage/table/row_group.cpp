@@ -1266,6 +1266,9 @@ void RowGroup::RevertAppend(idx_t new_count) {
 	for (auto &column : GetColumns()) {
 		column->RevertAppend(UnsafeNumericCast<row_t>(new_count));
 	}
+	if (transient) {
+		*transient = SuballocationBlock();
+	}
 	SetCount(new_count);
 	Verify();
 }
@@ -1281,17 +1284,32 @@ void RowGroup::InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppend
 	append_state.row_group = row_group;
 	row_group.GetNode().InitializeAppendInternal(append_state);
 }
+
+void RowGroup::InitializeNextAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state) {
+	D_ASSERT(append_state.row_group);
+	auto &previous = append_state.row_group->GetNode();
+	auto &next = row_group.GetNode();
+	D_ASSERT(!RefersToSameObject(previous, next));
+	D_ASSERT(RefersToSameObject(previous.GetCollection(), next.GetCollection()));
+	D_ASSERT(!next.transient);
+	next.transient = std::move(previous.transient);
+	InitializeAppend(row_group, append_state);
+}
+
 void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 	if (!RefersToSameObject(append_state.row_group->GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeAppend mismatch - call RowGroupAppendState::InitializeAppend");
 	}
 	append_state.offset_in_row_group = this->count;
+	if (!transient) {
+		transient = make_uniq<SuballocationBlock>();
+	}
 	// for each column, initialize the append state
 	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		auto &state = append_state.states[i];
-		state.transient = &append_state.transient;
+		state.transient = transient.get();
 		col_data.InitializeAppend(state);
 	}
 }
