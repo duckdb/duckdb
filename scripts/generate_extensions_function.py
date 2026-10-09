@@ -50,6 +50,11 @@ EXTENSION_DEPENDENCIES = {
     'ducklake': [
         'parquet',
     ],
+    'glue': [
+        'avro',
+        'json',
+        'parquet',
+    ],
     'iceberg': [
         'avro',
         'parquet',
@@ -917,6 +922,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "icu",
     "inet",
     "json",
+    "legacy_parser",
     "motherduck",
     "mysql_scanner",
     "parquet",

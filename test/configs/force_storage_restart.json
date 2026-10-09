@@ -53,6 +53,7 @@
         "test/logging/offset_order_warning.test",
         "test/sql/types/decimal/decimal_values_warning.test",
         "test/sql/settings/deprecated_settings.test",
+        "test/sql/copy/copy_column_identifier_conversion.test",
         "test/sql/copy/parquet/multi_file/adaptive_filter_carryover.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",

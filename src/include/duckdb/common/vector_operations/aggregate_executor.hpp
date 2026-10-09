@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/bit_utils.hpp"
+#include "duckdb/common/bitset.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/smaller_binary.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -443,7 +445,35 @@ public:
 		}
 	}
 
-	template <bool CHECK_VALIDITY, class STATE_TYPE, class INPUT_TYPE, class OP>
+	template <class LOCAL_TYPE, class INPUT_TYPE, class OP>
+	static inline bool UpdateUnaryClusteredRange(const INPUT_TYPE *__restrict vals, LOCAL_TYPE &local, idx_t start,
+	                                             idx_t count, const ValidityMask &mask) {
+		bool saw_value = false;
+		const auto end = start + count;
+		while (start < end) {
+			const auto offset = start % ValidityMask::BITS_PER_VALUE;
+			const auto n = MinValue<idx_t>(end - start, ValidityMask::BITS_PER_VALUE - offset);
+			const auto range_mask = ValidityMask::EntryWithValidBits(n);
+			auto bits = (mask.GetValidityEntry(start / ValidityMask::BITS_PER_VALUE) >> offset) & range_mask;
+			if (bits == range_mask) {
+				saw_value = true;
+				for (idx_t i = start; i < start + n; i++) {
+					OP::template UpdateClusteredLocal<INPUT_TYPE>(local, vals[i]);
+				}
+			} else {
+				while (bits) {
+					const auto idx = start + CountZeros<validity_t>::Trailing(bits);
+					OP::template UpdateClusteredLocal<INPUT_TYPE>(local, vals[idx]);
+					bits &= bits - 1;
+					saw_value = true;
+				}
+			}
+			start += n;
+		}
+		return saw_value;
+	}
+
+	template <bool CHECK_VALIDITY, class STATE_TYPE, class INPUT_TYPE, class OP, bool SPARSE = false>
 	static void ExecuteUnaryClusteredOpt(const INPUT_TYPE *vals, const ClusteredAggr &clustered,
 	                                     const ValidityMask &validity, const SelectionVector *isel = nullptr,
 	                                     const sel_t *cluster_iter = nullptr) {
@@ -476,6 +506,15 @@ public:
 				local_type local;
 				OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
 				auto run_count = run.count;
+				if constexpr (SPARSE) {
+					if (run_count && (!run.sel || run.sel[run_count - 1] - run.sel[0] == run_count - 1)) {
+						const auto start = run.sel ? run.sel[0] : 0;
+						auto saw_value = UpdateUnaryClusteredRange<local_type, INPUT_TYPE, OP>(vals, local, start,
+						                                                                       run_count, validity);
+						OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
+						continue;
+					}
+				}
 				auto saw_value = UpdateUnaryClusteredOpt<CHECK_VALIDITY, local_type, INPUT_TYPE, OP>(
 				    vals, local, run_count, validity, run.sel);
 				OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
@@ -519,6 +558,24 @@ public:
 		}
 	}
 
+	static inline bool IsSparseClusteredInput(const ValidityMask &mask, idx_t count) {
+		const auto max_valid = count / 4;
+		idx_t valid_count = 0;
+		const auto full_entries = count / ValidityMask::BITS_PER_VALUE;
+		for (idx_t entry_idx = 0; entry_idx < full_entries; entry_idx++) {
+			valid_count += bitset<ValidityMask::BITS_PER_VALUE>(mask.GetValidityEntry(entry_idx)).count();
+			if (valid_count > max_valid) {
+				return false;
+			}
+		}
+		const auto tail_count = count % ValidityMask::BITS_PER_VALUE;
+		if (tail_count) {
+			const auto entry = mask.GetValidityEntry(full_entries) & ValidityMask::EntryWithValidBits(tail_count);
+			valid_count += bitset<ValidityMask::BITS_PER_VALUE>(entry).count();
+		}
+		return valid_count <= max_valid;
+	}
+
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static void ExecuteUnaryClusteredOpt(Vector &input, const ClusteredAggr &clustered, idx_t count) {
 		auto vals = FlatVector::GetData<INPUT_TYPE>(input);
@@ -531,6 +588,10 @@ public:
 			OP::template InitializeClusteredLocal<STATE_TYPE>(local, state);
 			auto saw_value = UpdateUnaryClusteredDispatch<local_type, INPUT_TYPE, OP>(vals, local, count, validity);
 			OP::template FlushClusteredLocal<STATE_TYPE>(state, local, saw_value);
+			return;
+		}
+		if (OP::IgnoreNull() && validity.CanHaveNull() && IsSparseClusteredInput(validity, count)) {
+			ExecuteUnaryClusteredOpt<true, STATE_TYPE, INPUT_TYPE, OP, true>(vals, clustered, validity);
 			return;
 		}
 		ExecuteUnaryClusteredDispatch<STATE_TYPE, INPUT_TYPE, OP>(vals, clustered, validity);

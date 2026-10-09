@@ -46,7 +46,7 @@
 # ---------------------------------------------------------------------------
 
 additional_transform_result_types:
-  - "unique_ptr<TransformResultValue>"
+  - "arena_ptr<TransformResultValue>"
   - "vector<Identifier>"
 
 SQLStatementList:
@@ -1839,6 +1839,34 @@ matcher_rule_overrides:
   AnyOperatorLiteral:
     allow_type_overlap: true
     matcher: all_operators
+
+# expression_depth_nesting_rules / expression_depth_chain_rules: see ParsedGrammar::SetExpressionDepth. While an
+# expression is transformed, every nesting rule on the transform stack counts one level and every chain rule
+# as many levels as it has repeated elements, so that max_expression_depth bounds the depth of the resulting
+# expression trees. Add a rule here when its repetitions nest the result one level each.
+expression_depth_nesting_rules:
+  - SingleExpression
+  - Type
+
+expression_depth_chain_rules:
+  - LambdaArrowExpression
+  - LogicalOrExpression
+  - LogicalAndExpression
+  - NotExpression
+  - IsExpressionContinuation
+  - IsDistinctFromExpression
+  - ComparisonExpression
+  - BetweenInLikeExpression
+  - InfixOtherOperatorExpression
+  - BitwiseExpression
+  - TildeExpression
+  - AdditiveExpression
+  - MultiplicativeExpression
+  - ExponentiationExpression
+  - CollateExpression
+  - AtTimeZoneExpression
+  - PrefixExpression
+  - IndirectionList
 
 # collapsible_rules: see ParsedGrammar::SetTransformProcess. Every rule below has a transformer that returns its
 # operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that stops being

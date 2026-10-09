@@ -636,9 +636,6 @@ typedef struct {
 	 duckdb_v2_value_handle value, DUCKDB_V2_FUNCTION_PARAMETER_KIND kind, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_function_signature_set_return_type)
 	(duckdb_v2_function_signature_handle sig, duckdb_v2_logical_type_handle type, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_bind_set_return_type)
-	(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
-	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create_with_connection)
 	(duckdb_v2_connection_handle connection, duckdb_v2_scalar_function_handle *function,
 	 duckdb_v2_error_info_handle *err);
@@ -1394,6 +1391,14 @@ typedef struct {
 	 const duckdb_v2_identifier_t *parameter_names, const duckdb_v2_value_handle *parameter_values,
 	 idx_t parameter_count, idx_t batch_size, duckdb_v2_arrow_result_handle *out_result,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_resolve_types_set_return_type)
+	(duckdb_v2_scalar_function_resolve_types_info_handle info, duckdb_v2_logical_type_handle return_type,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_resolve_types_callback)
+	(duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_resolve_types_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_bind_set_bind_data)
+	(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_to_statistics_callback_fn callback,
@@ -1427,12 +1432,6 @@ typedef struct {
 	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *reader_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_single_file_function)
 	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *name, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_add_file_metadata)
-	(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_result_column_identifier)
-	(duckdb_v2_table_function_bind_info_handle info, idx_t column_index, const idx_t *child_path,
-	 idx_t child_path_length, duckdb_v2_value_handle identifier, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_bind_data)
 	(duckdb_v2_table_function_claim_batch_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_claim_batch_get_global_state)
@@ -1445,6 +1444,19 @@ typedef struct {
 	(duckdb_v2_table_function_claim_batch_info_handle info, bool claimed, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_claim_batch_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_claim_batch_callback_fn callback,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_get_bind_data)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_get_user_data)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_set_column_identifier)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, idx_t column_index, const idx_t *child_path,
+	 idx_t child_path_length, duckdb_v2_value_handle identifier, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_get_bind_info_set_option)
+	(duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_get_bind_info_callback)
+	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_get_bind_info_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
@@ -1699,7 +1711,6 @@ typedef struct {
 #define duckdb_v2_context_log                            duckdb_ext_api.duckdb_v2_context_log
 #define duckdb_v2_function_signature_add_parameter       duckdb_ext_api.duckdb_v2_function_signature_add_parameter
 #define duckdb_v2_function_signature_set_return_type     duckdb_ext_api.duckdb_v2_function_signature_set_return_type
-#define duckdb_v2_scalar_function_bind_set_return_type   duckdb_ext_api.duckdb_v2_scalar_function_bind_set_return_type
 #define duckdb_v2_scalar_function_create_with_connection duckdb_ext_api.duckdb_v2_scalar_function_create_with_connection
 #define duckdb_v2_scalar_function_create_with_extension  duckdb_ext_api.duckdb_v2_scalar_function_create_with_extension
 #define duckdb_v2_scalar_function_destroy                duckdb_ext_api.duckdb_v2_scalar_function_destroy
@@ -2092,6 +2103,11 @@ typedef struct {
 #define duckdb_v2_arrow_result_wait                duckdb_ext_api.duckdb_v2_arrow_result_wait
 #define duckdb_v2_prepared_statement_execute_arrow duckdb_ext_api.duckdb_v2_prepared_statement_execute_arrow
 #define duckdb_v2_statement_execute_arrow          duckdb_ext_api.duckdb_v2_statement_execute_arrow
+#define duckdb_v2_scalar_function_resolve_types_set_return_type                                                        \
+	duckdb_ext_api.duckdb_v2_scalar_function_resolve_types_set_return_type
+#define duckdb_v2_scalar_function_set_resolve_types_callback                                                           \
+	duckdb_ext_api.duckdb_v2_scalar_function_set_resolve_types_callback
+#define duckdb_v2_scalar_function_bind_set_bind_data duckdb_ext_api.duckdb_v2_scalar_function_bind_set_bind_data
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_copy_to_set_statistics_callback duckdb_ext_api.duckdb_v2_copy_to_set_statistics_callback
 #endif
@@ -2141,13 +2157,6 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_multi_file_function_set_single_file_function
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_table_function_bind_add_file_metadata duckdb_ext_api.duckdb_v2_table_function_bind_add_file_metadata
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_table_function_bind_set_result_column_identifier                                                     \
-	duckdb_ext_api.duckdb_v2_table_function_bind_set_result_column_identifier
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_table_function_claim_batch_get_bind_data                                                             \
 	duckdb_ext_api.duckdb_v2_table_function_claim_batch_get_bind_data
 #endif
@@ -2169,6 +2178,26 @@ typedef struct {
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_table_function_set_claim_batch_callback                                                              \
 	duckdb_ext_api.duckdb_v2_table_function_set_claim_batch_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_get_bind_info_get_bind_data                                                           \
+	duckdb_ext_api.duckdb_v2_table_function_get_bind_info_get_bind_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_get_bind_info_get_user_data                                                           \
+	duckdb_ext_api.duckdb_v2_table_function_get_bind_info_get_user_data
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_get_bind_info_set_column_identifier                                                   \
+	duckdb_ext_api.duckdb_v2_table_function_get_bind_info_set_column_identifier
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_get_bind_info_set_option                                                              \
+	duckdb_ext_api.duckdb_v2_table_function_get_bind_info_set_option
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_table_function_set_get_bind_info_callback                                                            \
+	duckdb_ext_api.duckdb_v2_table_function_set_get_bind_info_callback
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

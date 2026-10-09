@@ -64,6 +64,33 @@ jobs:
       if: ${{ !inputs.skip_tests }}
       run: make unittest_release
 
+    # SQL navigation needs the query_break hook and locals that release builds optimize away.
+    - name: Build debug executable for LLDB
+      if: ${{ !inputs.skip_tests }}
+      timeout-minutes: 60
+      env:
+        DISABLE_SHELL: 1
+        # Debug enables extra conversion warnings; keep them non-fatal for the LLDB fixture build.
+        TREAT_WARNINGS_AS_ERRORS: 0
+        EXTRA_CMAKE_VARIABLES: -DTREAT_WARNINGS_AS_ERRORS=OFF
+      run: python3 scripts/ci/retry.py -- make debug
+
+    - name: LLDB helper tests
+      id: lldb-tests
+      if: ${{ !inputs.skip_tests }}
+      timeout-minutes: 5
+      run: |
+        python3 scripts/lldb/tests/run_tests.py --unittest build/debug/test/unittest \
+          --lldb "$(xcrun --find lldb)" \
+          --coverage-dir build/lldb-coverage
+
+    - name: Upload LLDB coverage
+      if: ${{ !cancelled() && steps.lldb-tests.outcome != 'skipped' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: lldb-coverage-osx
+        path: build/lldb-coverage
+
   xcode-release:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release

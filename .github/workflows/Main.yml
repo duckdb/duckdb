@@ -120,6 +120,10 @@ jobs:
             alpha_args=(--alpha-run-number "${{ github.run_number }}")
             extension_allow_failure_archs="windows_amd64_mingw;linux_amd64_musl;linux_arm64_musl"
           fi
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # clang-cl Windows extension builds are not yet stable, do not block PRs on them
+            extension_allow_failure_archs="windows_amd64"
+          fi
           version_output="$(python3 scripts/ci/version.py \
             --duckdb-commit "$RESOLVED_COMMIT" \
             --duckdb-version "$INPUT_VERSION" \
@@ -148,6 +152,7 @@ jobs:
               - .github/**
             osx:
               - '.github/workflows/OSX.yml'
+              - scripts/lldb/**
               - tools/swift/**
             extensions:
               - .github/config/**
@@ -451,6 +456,7 @@ jobs:
       exclude_archs: ${{ needs.prepare.outputs.extensions_extra_exclude_archs }}
       allow_failure_archs: ${{ needs.prepare.outputs.extension_allow_failure_archs }}
       vcpkg_commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
+      windows_vcpkg_toolchain: clang-cl
       reduced_ci_mode: ${{ needs.prepare.outputs.reduced_ci_mode }}
       skip_tests: ${{ fromJson(needs.prepare.outputs.skip_tests) }}
       save_cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
@@ -930,6 +936,7 @@ jobs:
     name: Linux Release (musl, ${{ matrix.config.name }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-musl') }}
     needs: prepare
+    continue-on-error: ${{ needs.prepare.outputs.staged_version != '' }}
     strategy:
       fail-fast: false
       matrix:

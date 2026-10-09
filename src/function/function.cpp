@@ -7,6 +7,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -578,13 +579,25 @@ bool FunctionSignature::Equal(const FunctionSignature &other) const {
 //----------------------------------------------------------------------------------------------------------------------
 // Bind Function Input
 //----------------------------------------------------------------------------------------------------------------------
+//! An unresolved parameter or an as-yet-unknown type (e.g. a macro/prepared argument), possibly cast to the argument
+//! type of the function
+static bool IsUnresolvedArgument(const Expression &expr) {
+	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+		return true;
+	}
+	if (BoundCastExpression::IsCast(expr)) {
+		return IsUnresolvedArgument(BoundCastExpression::Child(expr.Cast<BoundFunctionExpression>()));
+	}
+	return false;
+}
+
 Value BindFunctionInput::GetConstant(idx_t arg_idx, bool accept_null) const {
 	if (arg_idx >= arguments.size()) {
 		throw InternalException("%s: Argument index %llu is out of range", function.GetName(), arg_idx);
 	}
 	const auto &expr = *arguments[arg_idx];
-	// an unresolved parameter or an as-yet-unknown type (e.g. a macro/prepared argument) - defer binding
-	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	// defer binding until the argument is resolved
+	if (IsUnresolvedArgument(expr)) {
 		throw ParameterNotResolvedException();
 	}
 	// Use the argument name if available, otherwise use the argument index
@@ -618,7 +631,7 @@ optional<Value> BindFunctionInput::TryGetConstant(idx_t arg_idx) const {
 		return {};
 	}
 	const auto &expr = *arguments[arg_idx];
-	if (expr.HasParameter() || expr.GetReturnType().id() == LogicalTypeId::UNKNOWN) {
+	if (IsUnresolvedArgument(expr)) {
 		return {};
 	}
 	if (!expr.IsFoldable()) {
