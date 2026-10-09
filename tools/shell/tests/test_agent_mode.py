@@ -526,3 +526,59 @@ def test_agent_mode_environment_invalid(shell):
     result = test.run()
     result.check_stderr("ignoring DUCKDB_AGENT_MODE=maybe")
     assert "|---|" not in result.stdout
+
+def test_last_result_after_streamed_result(shell):
+    # the streamed rows are kept as the last result `_`
+    test = (
+        agent_shell(shell)
+        .statement("SELECT range AS r FROM range(30)")
+        .statement("SELECT count(*) AS cnt, max(r) AS mx FROM _")
+    )
+    result = test.run()
+    result.check_stdout("| 30 | 29 |")
+
+def test_last_result_after_stopped_result(shell):
+    # a query stopped early stays open: `_` fetches the rest of it
+    test = (
+        agent_shell(shell)
+        .statement("SELECT range AS r FROM range(300000)")
+        .statement("SELECT count(*) AS cnt, max(r) AS mx FROM _")
+    )
+    result = test.run()
+    result.check_stdout("first 20 of at least ")
+    result.check_stdout("| 300000 | 299999 |")
+
+def test_stopped_result_cancelled_by_next_query(shell):
+    # a statement that does not refer to `_` cancels the query that was stopped early
+    test = (
+        agent_shell(shell)
+        .statement("SELECT range AS r FROM range(300000)")
+        .statement("SELECT 42 AS answer")
+        .statement("SELECT count(*) AS cnt FROM _")
+    )
+    result = test.run()
+    assert "Error" not in result.stderr
+    result.check_stdout("| 1 |")
+
+def test_materialize_rows_sets_lookahead(shell):
+    # .materialize rows N replaces the lookahead, and .materialize reports the exact count
+    test = (
+        agent_shell(shell)
+        .statement(".materialize rows 1000")
+        .statement("SELECT range AS r FROM range(300000)")
+        .statement(".materialize")
+    )
+    result = test.run()
+    result.check_stdout("first 20 of at least 2048 rows")
+    result.check_stdout("300000 rows")
+
+def test_materialize_full_in_agent_mode(shell):
+    # .materialize full reads the whole result: the count is exact and hashed
+    test = (
+        agent_shell(shell)
+        .statement(".materialize full")
+        .statement("SELECT range AS r FROM range(300000)")
+    )
+    result = test.run()
+    result.check_stdout("first 20 and last 20 of 300000 rows")
+    result.check_stdout("hash ")

@@ -56,7 +56,15 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node/list.hpp"
+#include "duckdb/parser/statement/list.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/showref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -421,6 +429,8 @@ ShellState::~ShellState() {
 }
 
 void ShellState::Destroy() {
+	pending_result_stream.reset();
+	pending_result_input.reset();
 	db.reset();
 	conn.reset();
 	last_result.reset();
@@ -711,6 +721,8 @@ string ShellState::ModeToString(RenderMode mode) {
 		return "jsonlines";
 	case RenderMode::DUCKBOX:
 		return "duckbox";
+	case RenderMode::DUCKBOX_PREVIEW:
+		return "duckbox_preview";
 	}
 	return "invalid";
 }
@@ -961,7 +973,8 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 	auto renderer = GetRenderer();
 	unique_ptr<duckdb::QueryResult> result;
 	unique_ptr<duckdb::QueryResultStream<>> stream;
-	const bool render_materialized = renderer->RequireMaterializedResult();
+	// .materialize full fetches the whole result first, also for a mode that could stream it
+	const bool render_materialized = materialize == MaterializeMode::FULL || renderer->RequireMaterializedResult();
 	if (render_materialized) {
 		// we need to materialize the result prior to rendering
 		result = con.Query(std::move(statement), duckdb::ChunkFormat::BufferManaged());
@@ -1008,6 +1021,7 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		stream = duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(result));
 	} else {
 		last_result = std::move(result);
+		last_result_preview_cancelled = false;
 	}
 	// A bareword "SHOW name" is optimistically routed to the describe renderer, but it may have resolved to a setting
 	// value rather than a table describe. Only a describe-shaped result can be rendered in describe mode - fall back to
@@ -1023,7 +1037,135 @@ SuccessState ShellState::ExecuteStatement(unique_ptr<duckdb::SQLStatement> state
 		PrintDatabaseError(stream->GetError());
 		return SuccessState::FAILURE;
 	}
+	auto retained = renderer->TakeRetainedResult();
+	if (retained) {
+		if (stream && renderer->KeepStreamOpen()) {
+			// the query may still be reading the previous last result through `_` - keep it until the stream ends
+			pending_result_input = std::move(last_result);
+			pending_result_stream = std::move(stream);
+		}
+		last_result = std::move(retained);
+		last_result_preview_cancelled = false;
+	}
 	return render_state;
+}
+
+SuccessState ShellState::ResolvePendingResult(bool consume) {
+	if (!pending_result_stream) {
+		return SuccessState::SUCCESS;
+	}
+	// the stream must end before its input goes - it may still be reading it
+	auto input = std::move(pending_result_input);
+	auto stream = std::move(pending_result_stream);
+	if (!consume || !last_result) {
+		// nothing refers to the rest of the result (or the fetched rows were already released) - cancel the query.
+		// The fetched rows are only part of the result, so they are no longer available as `_`
+		stream->Close();
+		last_result.reset();
+		last_result_preview_cancelled = true;
+		return SuccessState::SUCCESS;
+	}
+	auto &collection = last_result->Collection();
+	while (!seenInterrupt) {
+		auto chunk = stream->Fetch();
+		if (!chunk) {
+			break;
+		}
+		collection.Append(*chunk);
+	}
+	if (seenInterrupt || stream->HasError()) {
+		// `_` would only hold part of the result - rather than silently using that, drop it
+		if (seenInterrupt) {
+			PrintF(PrintOutput::STDERR, "Interrupt\n");
+		} else {
+			PrintDatabaseError(stream->GetError());
+		}
+		stream->Close();
+		last_result.reset();
+		return SuccessState::FAILURE;
+	}
+	return SuccessState::SUCCESS;
+}
+
+static bool IsLastResultName(const duckdb::QualifiedName &name) {
+	return name.Catalog().empty() && name.Schema().empty() && name.Name().GetIdentifierName() == "_";
+}
+
+static bool QueryNodeReferencesLastResult(duckdb::QueryNode &node) {
+	bool found = false;
+	std::function<void(unique_ptr<duckdb::ParsedExpression> &)> expr_callback;
+	expr_callback = [&](unique_ptr<duckdb::ParsedExpression> &expr) {
+		if (!expr) {
+			return;
+		}
+		duckdb::ParsedExpressionIterator::VisitExpressionMutable<duckdb::SubqueryExpression>(
+		    *expr, [&](duckdb::SubqueryExpression &subquery) {
+			    found = found || QueryNodeReferencesLastResult(*subquery.SubqueryMutable()->node);
+			    duckdb::ParsedExpressionIterator::EnumerateChildren(subquery, expr_callback);
+		    });
+	};
+	auto ref_callback = [&](duckdb::TableRef &ref) {
+		if (ref.type == duckdb::TableReferenceType::BASE_TABLE) {
+			found = found || IsLastResultName(ref.Cast<duckdb::BaseTableRef>().GetQualifiedName());
+		} else if (ref.type == duckdb::TableReferenceType::SHOW_REF) {
+			auto &show_ref = ref.Cast<duckdb::ShowRef>();
+			found = found || IsLastResultName(show_ref.qualified_name);
+			if (show_ref.query) {
+				found = found || QueryNodeReferencesLastResult(*show_ref.query);
+			}
+		}
+	};
+	duckdb::ParsedExpressionIterator::EnumerateQueryNodeChildren(node, expr_callback, ref_callback);
+	return found;
+}
+
+static bool StatementReferencesLastResult(duckdb::SQLStatement &statement) {
+	switch (statement.type) {
+	case duckdb::StatementType::SELECT_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::SelectStatement>().node);
+	case duckdb::StatementType::INSERT_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::InsertStatement>().node);
+	case duckdb::StatementType::UPDATE_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::UpdateStatement>().node);
+	case duckdb::StatementType::DELETE_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::DeleteStatement>().node);
+	case duckdb::StatementType::MERGE_INTO_STATEMENT:
+		return QueryNodeReferencesLastResult(*statement.Cast<duckdb::MergeIntoStatement>().node);
+	case duckdb::StatementType::COPY_STATEMENT: {
+		auto &info = *statement.Cast<duckdb::CopyStatement>().info;
+		if (info.select_statement) {
+			return QueryNodeReferencesLastResult(*info.select_statement);
+		}
+		return !info.is_from && IsLastResultName(info.GetQualifiedName());
+	}
+	case duckdb::StatementType::CREATE_STATEMENT: {
+		auto &info = *statement.Cast<duckdb::CreateStatement>().info;
+		if (info.type == duckdb::CatalogType::TABLE_ENTRY) {
+			auto &query = info.Cast<duckdb::CreateTableInfo>().query;
+			return query && QueryNodeReferencesLastResult(*query->node);
+		}
+		if (info.type == duckdb::CatalogType::VIEW_ENTRY) {
+			auto &query = info.Cast<duckdb::CreateViewInfo>().query;
+			return query && QueryNodeReferencesLastResult(*query->node);
+		}
+		return false;
+	}
+	case duckdb::StatementType::EXPLAIN_STATEMENT:
+		return StatementReferencesLastResult(*statement.Cast<duckdb::ExplainStatement>().stmt);
+	case duckdb::StatementType::PREPARE_STATEMENT:
+		return StatementReferencesLastResult(*statement.Cast<duckdb::PrepareStatement>().statement);
+	default:
+		return false;
+	}
+}
+
+bool ShellState::ReferencesLastResult(duckdb::SQLStatement &statement) {
+	try {
+		return StatementReferencesLastResult(statement);
+	} catch (std::exception &) {
+		// a statement that cannot be traversed
+		return false;
+	}
 }
 
 /*
@@ -1091,12 +1233,19 @@ SuccessState ShellState::ExecuteSQL(const string &zSql) {
 				cMode = RenderMode::EXPLAIN;
 				SetupPrettyExplain(*statement);
 			}
-			if (mode == RenderMode::DUCKBOX && UseDescribeRenderMode(*statement, describe_table_name)) {
+			if ((mode == RenderMode::DUCKBOX || mode == RenderMode::DUCKBOX_PREVIEW) &&
+			    UseDescribeRenderMode(*statement, describe_table_name)) {
 				cMode = RenderMode::DESCRIBE;
 			}
 
 			if (agent_mode_active) {
 				PrintQueryEstimate(zStmtSql, *statement);
+			}
+
+			// the previous query may still be open (duckbox_preview) - executing this statement would cancel it, so
+			// first fetch the rest of it into `_` if this statement refers to `_`
+			if (ResolvePendingResult(ReferencesLastResult(*statement)) != SuccessState::SUCCESS) {
+				return SuccessState::FAILURE;
 			}
 
 			// Reset before bind; the `_` replacement scan sets it to true if it fires.
@@ -1804,6 +1953,8 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 		mode = RenderMode::BOX;
 	} else if (c2 == 'd' && strncmp(mode_str, "duckbox", n2) == 0) {
 		mode = RenderMode::DUCKBOX;
+	} else if (c2 == 'd' && strncmp(mode_str, "duckbox_preview", n2) == 0) {
+		mode = RenderMode::DUCKBOX_PREVIEW;
 	} else if (c2 == 'j' && strncmp(mode_str, "json", n2) == 0) {
 		mode = RenderMode::JSON;
 	} else if (c2 == 'l' && strncmp(mode_str, "latex", n2) == 0) {
@@ -1813,9 +1964,10 @@ bool ShellState::SetOutputMode(const string &mode_name, const char *tbl_name) {
 	} else if (c2 == 'j' && strncmp(mode_str, "jsonlines", n2) == 0) {
 		mode = RenderMode::JSONLINES;
 	} else {
-		PrintF(PrintOutput::STDERR, "Error: mode should be one of: "
-		                            "ascii box column csv duckbox html insert json jsonlines latex line "
-		                            "list markdown quote table tabs tcl trash \n");
+		PrintF(PrintOutput::STDERR,
+		       "Error: mode should be one of: "
+		       "ascii box column csv duckbox duckbox_preview html insert json jsonlines latex line "
+		       "list markdown quote table tabs tcl trash \n");
 		return false;
 	}
 	cMode = mode;
@@ -4001,6 +4153,8 @@ int RunShell(int argc, const char **argv) {
 	// before ResetOutput, which forgets that stdout was not a console
 	data.PrintExitHint(rc);
 	data.SetTableName(0);
+	data.pending_result_stream.reset();
+	data.pending_result_input.reset();
 	data.last_result.reset();
 	data.db.reset();
 	data.conn.reset();
