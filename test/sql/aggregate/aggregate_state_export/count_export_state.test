@@ -18,12 +18,12 @@ SELECT finalize(combine_aggr(s)) from (select COUNT(*) export_state AS s FROM ra
 15
 
 # COUNT retains one canonical state signature across concrete input types.
-statement ok
-CREATE VIEW nullable_counts AS SELECT g, count(v) EXPORT_STATE c, count(s) EXPORT_STATE t
-FROM (VALUES (0,1::BIGINT,'a'),(0,NULL,NULL),(0,1,'a'),(1,NULL,NULL),(2,2,'b')) input(g,v,s)
-GROUP BY g;
-
 query III rowsort
+WITH nullable_counts AS (
+    SELECT g, count(v) EXPORT_STATE c, count(s) EXPORT_STATE t
+    FROM (VALUES (0,1::BIGINT,'a'),(0,NULL,NULL),(0,1,'a'),(1,NULL,NULL),(2,2,'b')) input(g,v,s)
+    GROUP BY g
+)
 SELECT g, finalize(c), finalize(combine(c, to_aggregate_state(t::BIGINT, 'count', ['ANY'])))
 FROM nullable_counts;
 ----
@@ -32,6 +32,11 @@ FROM nullable_counts;
 2	1	2
 
 query ITT
+WITH nullable_counts AS (
+    SELECT g, count(v) EXPORT_STATE c, count(s) EXPORT_STATE t
+    FROM (VALUES (0,1::BIGINT,'a'),(0,NULL,NULL),(0,1,'a'),(1,NULL,NULL),(2,2,'b')) input(g,v,s)
+    GROUP BY g
+)
 SELECT finalize(combine_aggr(to_aggregate_state(c::BIGINT, 'count', ['any']))),
        typeof(combine_aggr(c)), typeof(finalize(combine_aggr(c))) FROM nullable_counts;
 ----
