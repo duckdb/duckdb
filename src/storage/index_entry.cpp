@@ -337,13 +337,9 @@ unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<Logica
 	return owned_index->Cast<UnboundIndex>().Bind(binder, table_types);
 }
 
-bool IndexEntry::AbortBind() {
+void IndexEntry::AbortBind() {
 	auto entry_lock = lock.GetExclusiveLock();
-	if (owned_index->Cast<UnboundIndex>().StorageReclaimed()) {
-		return false;
-	}
 	bind_state = IndexBindState::UNBOUND;
-	return true;
 }
 
 void IndexEntry::CommitBind(unique_ptr<BoundIndex> bound_index) {

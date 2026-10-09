@@ -452,14 +452,10 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 				physical_column_types.push_back(col.Type());
 			}
 			bound_idx = index_entry->Bind(idx_binder, physical_column_types);
-		} catch (std::exception &ex) {
+		} catch (std::exception &) {
 			// Reset the bind state, so that any other thread waiting for this bind can retry it.
-			if (index_entry->AbortBind()) {
-				throw;
-			}
-			// The bound index released the index's on-disk blocks when it was destroyed: it cannot be bound again.
-			ErrorData error(ex);
-			throw FatalException("Failed to bind index %s: %s", index_entry->GetName(), error.RawMessage());
+			index_entry->AbortBind();
+			throw;
 		}
 
 		// Commit the bound index to the index entry.

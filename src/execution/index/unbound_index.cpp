@@ -70,7 +70,14 @@ unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<Logi
 	auto bound_index = binder.BindIndex(*this);
 	storage_reclaimed = true;
 	if (HasBufferedReplays()) {
-		bound_index->ApplyBufferedReplays(physical_column_types, buffered_replays, mapped_column_ids);
+		try {
+			bound_index->ApplyBufferedReplays(physical_column_types, buffered_replays, mapped_column_ids);
+		} catch (std::exception &ex) {
+			// The bound index releases the on-disk blocks when it is destroyed: binding cannot be retried.
+			ErrorData error(ex);
+			throw FatalException("Failed to apply buffered replays to index %s: %s", GetIndexName(),
+			                     error.RawMessage());
+		}
 	}
 	return bound_index;
 }

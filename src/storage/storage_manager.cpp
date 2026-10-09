@@ -811,7 +811,7 @@ static string BindIndexes(AttachedDatabase &db, const vector<reference<DuckTable
 			info.BindIndexes(context);
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
-			if (Exception::InvalidatesDatabase(error.Type())) {
+			if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 				throw;
 			}
 			error_message = error.RawMessage();
@@ -828,7 +828,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		return true;
 	}
 	auto tables = GetTablesWithUnboundIndexes(db);
-	// Without a context we have no binding environment, e.g. on shutdown or during DETACH.
+	// Without a context the database is closing (shutdown or DETACH): opening a connection is not safe.
 	string error_message = "no client context is available";
 	if (context.GetClientContext() && !tables.empty()) {
 		error_message = BindIndexes(db, tables, bind_all);
