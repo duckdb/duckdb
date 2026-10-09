@@ -237,7 +237,8 @@ protected:
 	unique_ptr<CheckpointWriter> CreateCheckpointWriter(QueryContext context, CheckpointOptions options);
 
 private:
-	//! Binds the unbound indexes with buffered WAL replays, so that the checkpoint can persist them.
+	//! Binds the indexes with buffered WAL replays, so that the checkpoint can persist them, and for explicit
+	//! checkpoints also the other unbound indexes, so that their tables can be vacuumed.
 	//! Returns false if the checkpoint must be skipped, keeping the WAL as the only record of these operations.
 	bool BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options);
 };
