@@ -335,7 +335,7 @@ AsyncResult DuckDBReader::Scan(ClientContext &context, GlobalTableFunctionState 
 			// no columns are projected - scan the row ids and only emit the count
 			lstate.row_id_chunk.Reset();
 			scan_function.function(context, input, lstate.row_id_chunk);
-			chunk.SetCardinality(lstate.row_id_chunk.size());
+			chunk.SetChildCardinality(lstate.row_id_chunk.size());
 		} else {
 			scan_function.function(context, input, chunk);
 		}
