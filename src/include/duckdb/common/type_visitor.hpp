@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
+
+#include <algorithm>
 
 namespace duckdb {
 
@@ -83,8 +84,8 @@ inline LogicalType TypeVisitor::RebuildType(const VisitorFrame &frame, vector<Lo
 	case LogicalTypeId::UNION: {
 		auto children =
 		    type.id() == LogicalTypeId::UNION ? UnionType::CopyMemberTypes(type) : StructType::GetChildTypes(type);
-		for (auto &child : children) {
-			child.second = PopType(result_stack);
+		for (idx_t i = children.size(); i > 0; i--) {
+			children[i - 1].second = PopType(result_stack);
 		}
 		if (type.id() == LogicalTypeId::STRUCT) {
 			return LogicalType::STRUCT(std::move(children));
@@ -146,7 +147,8 @@ inline bool TypeVisitor::Contains(const LogicalType &type, F &&predicate) {
 		if (predicate(current)) {
 			return true;
 		}
-		PushChildren(current, worklist);
+		auto child_count = PushChildren(current, worklist);
+		std::reverse(worklist.end() - child_count, worklist.end());
 	}
 	return false;
 }
