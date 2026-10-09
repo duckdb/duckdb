@@ -14,24 +14,13 @@
 #include "duckdb/common/enums/subquery_type.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/parser/query_node/set_operation_node.hpp"
 #include "duckdb/parser/statement/merge_into_statement.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 namespace duckdb {
-
-unique_ptr<SQLStatement> PEGTransformerFactory::TransformStatement(PEGTransformer &transformer,
-                                                                   ParseResult &parse_result) {
-	auto &list_pr = parse_result.Cast<ListParseResult>();
-	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
-	auto result = transformer.Transform<unique_ptr<SQLStatement>>(choice_pr.GetResult());
-	if (!transformer.named_parameter_map.empty()) {
-		// Avoid overriding a previous move with nothing
-		result->named_param_map = transformer.named_parameter_map;
-	}
-	result->has_anonymous_parameters = transformer.has_anonymous_parameters;
-	return result;
-}
 
 static unique_ptr<SQLStatement> ExtractAndTransformStatement(PEGTransformer &transformer,
                                                              const TokenIterator &token_iterator, ParseResult &stmt_pr,
@@ -70,8 +59,7 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	idx_t max_token_index = token_iterator.Position();
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext match_context(suggestions, parse_result_allocator, process_allocator, max_token_index,
-	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, options.heap_based_parser,
-	                           &packrat_cache);
+	                           MatchMode::BUILD_PARSE_RESULT, options.identifier_case_mode, &packrat_cache);
 	MatchState state(token_iterator, match_context);
 	auto match_result = grammar.TopLevelStatementMatcher().MatchParseResult(state);
 	process_allocator.FreeAll();
@@ -123,71 +111,48 @@ unique_ptr<SQLStatement> PEGTransformerFactory::TransformTopLevelStatement(Token
 	return ExtractAndTransformStatement(transformer, token_iterator, stmt_opt.GetResult(), terminator_offset);
 }
 
-#define REGISTER_TRANSFORM(FUNCTION) Register(string(#FUNCTION).substr(9), &FUNCTION)
-
-void PEGTransformerFactory::RegisterCommon() {
-	// common.gram
-	REGISTER_TRANSFORM(TransformNumberLiteral);
-	REGISTER_TRANSFORM(TransformStringLiteral);
-	REGISTER_TRANSFORM(TransformIntervalToIntervalAsType);
-}
-
-void PEGTransformerFactory::RegisterCreateTable() {
-	// create_table.gram
-	REGISTER_TRANSFORM(TransformIdentifier);
-}
-
-void PEGTransformerFactory::RegisterExpression() {
-	// expression.gram
-	REGISTER_TRANSFORM(TransformPrefixExpression);
-	REGISTER_TRANSFORM(TransformOverClause);
-}
-
-void PEGTransformerFactory::RegisterPivot() {
-	// PivotStatement and UnpivotStatement measure parameter usage while transforming
-	// the source table, so their top-level wrappers remain manual.
-	REGISTER_TRANSFORM(TransformPivotStatement);
-	REGISTER_TRANSFORM(TransformUnpivotStatement);
-}
-
-void PEGTransformerFactory::RegisterSelect() {
-	// select.gram rules that remain manual after generated wrappers are registered.
-	Register("SelectStatementInternal", &TransformSelectStatementInternalRule);
-	REGISTER_TRANSFORM(TransformSimpleSelect);
-	REGISTER_TRANSFORM(TransformTableRef);
-	REGISTER_TRANSFORM(TransformWithClause);
-	REGISTER_TRANSFORM(TransformWindowDefinition);
-}
-
-void PEGTransformerFactory::RegisterKeywordsAndIdentifiers() {
-	Register("PragmaName", &TransformIdentifierOrKeyword);
-	Register("TypeName", &TransformIdentifierOrKeyword);
-	Register("PlainIdentifier", &TransformIdentifierOrKeyword);
-	Register("QuotedIdentifier", &TransformIdentifierOrKeyword);
-	Register("ReservedKeyword", &TransformIdentifierOrKeyword);
-	Register("UnreservedKeyword", &TransformIdentifierOrKeyword);
-	Register("ColumnNameKeyword", &TransformIdentifierOrKeyword);
-	Register("FuncNameKeyword", &TransformIdentifierOrKeyword);
-	Register("TypeNameKeyword", &TransformIdentifierOrKeyword);
-	Register("SettingName", &TransformIdentifierOrKeyword);
-}
-
 PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar(grammar_p) {
-	RegisterGenerated();
-	REGISTER_TRANSFORM(TransformStatement);
-	RegisterCommon();
-	RegisterCreateTable();
-	RegisterExpression();
-	RegisterPivot();
-	RegisterSelect();
-	RegisterKeywordsAndIdentifiers();
+	case_insensitive_set_t collapsible_rules;
+	//===--------------------------------------------------------------------===//
+	// START GENERATED COLLAPSIBLE RULES
+	//===--------------------------------------------------------------------===//
+	collapsible_rules.insert("Expression");
+	collapsible_rules.insert("ColumnDefaultExpr");
+	collapsible_rules.insert("LambdaArrowExpression");
+	collapsible_rules.insert("LogicalOrExpression");
+	collapsible_rules.insert("ColDefOrExpr");
+	collapsible_rules.insert("LogicalAndExpression");
+	collapsible_rules.insert("ColDefAndExpr");
+	collapsible_rules.insert("LogicalNotExpression");
+	collapsible_rules.insert("IsExpression");
+	collapsible_rules.insert("IsDistinctFromExpression");
+	collapsible_rules.insert("ComparisonExpression");
+	collapsible_rules.insert("BetweenInLikeExpression");
+	collapsible_rules.insert("OtherOperatorExpression");
+	collapsible_rules.insert("InfixOtherOperatorExpression");
+	collapsible_rules.insert("BitwiseExpression");
+	collapsible_rules.insert("AdditiveExpression");
+	collapsible_rules.insert("MultiplicativeExpression");
+	collapsible_rules.insert("ExponentiationExpression");
+	collapsible_rules.insert("CollateExpression");
+	collapsible_rules.insert("AtTimeZoneExpression");
+	collapsible_rules.insert("PrefixExpression");
+	collapsible_rules.insert("BaseExpression");
+	collapsible_rules.insert("SelectSetOpChain");
+	collapsible_rules.insert("IntersectChain");
+	collapsible_rules.insert("TableRef");
+	//===--------------------------------------------------------------------===//
+	// END GENERATED COLLAPSIBLE RULES
+	//===--------------------------------------------------------------------===//
+
 	for (auto &entry : GeneratedTransformFrameOps()) {
 		auto process_info = entry.second;
 		grammar.SetTransformProcess(
 		    entry.first,
 		    [process_info](PEGTransformer &transformer, ParseResult &parse_result) -> unique_ptr<TransformProcess> {
 			    return make_uniq<GeneratedTransformProcess>(transformer, TransformInput {parse_result}, *process_info);
-		    });
+		    },
+		    collapsible_rules.count(entry.first) > 0);
 	}
 }
 
@@ -222,10 +187,19 @@ bool PEGTransformerFactory::ExpressionIsEmptyStar(const ParsedExpression &expr) 
 		return false;
 	}
 	auto &star = expr.Cast<StarExpression>();
-	if (!star.IsColumns() && star.ExcludeList().empty() && star.ReplaceList().empty()) {
-		return true;
+	if (star.IsColumns()) {
+		return false;
 	}
-	return false;
+	if (!star.ExcludeList().empty()) {
+		return false;
+	}
+	if (!star.ReplaceList().empty()) {
+		return false;
+	}
+	if (!star.RenameList().empty()) {
+		return false;
+	}
+	return true;
 }
 
 QualifiedName PEGTransformerFactory::StringToQualifiedName(vector<string> input) {
@@ -291,6 +265,27 @@ LogicalType PEGTransformerFactory::GetIntervalTargetType(DatePartSpecifier date_
 	default:
 		throw InternalException("Unsupported interval post-fix");
 	}
+}
+
+LogicalType PEGTransformerFactory::ApplyColumnCollation(const optional<LogicalType> &type,
+                                                        unique_ptr<ParsedExpression> collation) {
+	if (!type) {
+		throw ParserException("Specify the VARCHAR type to set a collation");
+	}
+	if (!type->IsUnbound()) {
+		throw InternalException("Expected only unbound types here");
+	}
+	auto &expr = UnboundType::GetTypeExpression(*type);
+	if (expr->GetExpressionClass() != ExpressionClass::TYPE) {
+		throw InternalException("Expected a type expression");
+	}
+	auto &type_expr = expr->Cast<TypeExpression>();
+	if (DefaultTypeGenerator::GetDefaultType(type_expr.GetTypeName()) != LogicalTypeId::VARCHAR) {
+		throw ParserException("Only VARCHAR columns can have collations!");
+	}
+	vector<unique_ptr<ParsedExpression>> type_children;
+	type_children.push_back(std::move(collation));
+	return LogicalType::UNBOUND(make_uniq<TypeExpression>(Identifier("VARCHAR"), std::move(type_children)));
 }
 
 } // namespace duckdb

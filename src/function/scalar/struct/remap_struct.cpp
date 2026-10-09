@@ -335,6 +335,11 @@ struct RemapEntry {
 		RemapEntry remap;
 		remap.index = entry->second.index;
 		remap.target_type = target_entry->second.type;
+		if (source_type.id() == LogicalTypeId::SQLNULL && struct_val.IsNull()) {
+			// NULL can be cast directly to a nested type without remapping its children.
+			result.emplace(remap_target, std::move(remap));
+			return;
+		}
 		if (source_is_nested || target_is_nested || !struct_val.IsNull()) {
 			if (source_type.id() != target_type.id()) {
 				throw BinderException("Can't change source type (%s) to target type (%s), type conversion not allowed",
@@ -492,36 +497,22 @@ struct RemapEntry {
 			}
 		}
 
+		child_list_t<LogicalType> source_children;
 		switch (type.id()) {
-		case LogicalTypeId::STRUCT: {
-			auto &source_children = StructType::GetChildTypes(type);
-			return LogicalType::STRUCT(RemapCastChildren(source_children, remap_map, source_name_map));
-		}
-		case LogicalTypeId::LIST: {
-			auto &child_type = ListType::GetChildType(type);
-
-			child_list_t<LogicalType> source_children;
-			source_children.emplace_back("list", child_type);
-
-			auto new_source_children = RemapCastChildren(source_children, remap_map, source_name_map);
-			D_ASSERT(new_source_children.size() == 1);
-			return LogicalType::LIST(new_source_children[0].second);
-		}
-		case LogicalTypeId::MAP: {
-			auto &key_type = MapType::KeyType(type);
-			auto &value_type = MapType::ValueType(type);
-
-			child_list_t<LogicalType> source_children;
-			source_children.emplace_back("key", key_type);
-			source_children.emplace_back("value", value_type);
-
-			auto new_source_children = RemapCastChildren(source_children, remap_map, source_name_map);
-			D_ASSERT(new_source_children.size() == 2);
-			return LogicalType::MAP(new_source_children[0].second, new_source_children[1].second);
-		}
+		case LogicalTypeId::STRUCT:
+			source_children = StructType::GetChildTypes(type);
+			break;
+		case LogicalTypeId::LIST:
+			source_children.emplace_back("list", ListType::GetChildType(type));
+			break;
+		case LogicalTypeId::MAP:
+			source_children.emplace_back("key", MapType::KeyType(type));
+			source_children.emplace_back("value", MapType::ValueType(type));
+			break;
 		default:
 			throw BinderException("Can't RemapCast for type '%s'", type.ToString());
 		}
+		return LogicalType::ConstructNestedType(type, RemapCastChildren(source_children, remap_map, source_name_map));
 	}
 };
 

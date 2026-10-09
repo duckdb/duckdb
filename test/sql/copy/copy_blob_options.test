@@ -1,0 +1,24 @@
+# name: test/sql/copy/copy_blob_options.test
+# description: Test scalar and list-valued BLOB copy options
+# group: [copy]
+
+statement ok
+COPY (SELECT 'duck'::BLOB) TO '{TEST_DIR}/blob_list_compression.gz'
+    (FORMAT BLOB, COMPRESSION ['gzip']);
+
+query I
+SELECT size > 4 FROM read_blob('{TEST_DIR}/blob_list_compression.gz');
+----
+true
+
+statement error
+COPY (SELECT 'duck'::BLOB) TO '{TEST_DIR}/blob_bad_compression.gz'
+    (FORMAT BLOB, COMPRESSION ['gzip', 'zstd']);
+----
+expects a single argument
+
+statement error
+COPY (SELECT 'duck'::BLOB) TO '{TEST_DIR}/blob_numeric_compression'
+    (FORMAT BLOB, COMPRESSION 42);
+----
+expects a string argument

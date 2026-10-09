@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_size.hpp"
@@ -151,27 +152,73 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		}
 	}
 
-	// Use columns from the input chunk - they were passed through from the scan
-	// return_columns maps storage_idx -> chunk_idx
-	// For RETURNING: all columns have valid indices
-	// For index-only: only indexed columns have valid indices (sparse mapping)
-	D_ASSERT(!return_columns.empty() && "return_columns should always be populated for RETURNING or unique indexes");
-	for (idx_t i = 0; i < table.ColumnCount(); i++) {
-		if (return_columns[i] != DConstants::INVALID_INDEX) {
-			// Column was passed through from the scan
-			l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
+	// Plans serialized by pre-v2.0 clients carry no `return_columns` and do not pass the needed columns
+	// through the scan, so fetch them by row id instead.
+	const bool fetch_by_row_id = return_columns.empty();
+	DataChunk fetch_chunk;
+	if (fetch_by_row_id) {
+		vector<StorageIndex> column_ids;
+		if (return_chunk) {
+			for (idx_t i = 0; i < table.ColumnCount(); i++) {
+				column_ids.emplace_back(i);
+			}
 		} else {
-			// Column not in scan (sparse mapping for index-only case) - use NULL placeholder
-			l_state.delete_chunk.data[i].Reference(Value(types[i]), count_t(chunk.size()));
+			auto indexed_columns = table.GetDataTableInfo()->GetIndexes().GetUniqueIndexColumns();
+			vector<column_t> sorted_columns(indexed_columns.begin(), indexed_columns.end());
+			std::sort(sorted_columns.begin(), sorted_columns.end());
+			for (auto col : sorted_columns) {
+				column_ids.emplace_back(col);
+			}
+		}
+		vector<LogicalType> column_types;
+		for (auto &col : column_ids) {
+			column_types.push_back(types[col.GetPrimaryIndex()]);
+		}
+		// Also fetch the row ids, since Fetch skips rows that are no longer visible.
+		column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		column_types.push_back(LogicalType::ROW_TYPE);
+
+		delete_row_ids.Flatten();
+		fetch_chunk.Initialize(Allocator::Get(context.client), column_types, delete_count);
+		ColumnFetchState fetch_state;
+		table.Fetch(DuckTransaction::Get(context.client, table.db), fetch_chunk, column_ids, delete_row_ids,
+		            delete_count, fetch_state);
+		delete_count = fetch_chunk.size();
+		if (delete_count == 0) {
+			return SinkResultType::NEED_MORE_INPUT;
+		}
+		delete_row_ids.Reference(fetch_chunk.data.back());
+
+		idx_t fetch_idx = 0;
+		for (idx_t i = 0; i < table.ColumnCount(); i++) {
+			if (fetch_idx + 1 < column_ids.size() && column_ids[fetch_idx].GetPrimaryIndex() == i) {
+				l_state.delete_chunk.data[i].Reference(fetch_chunk.data[fetch_idx++]);
+			} else {
+				l_state.delete_chunk.data[i].Reference(Value(types[i]), count_t(delete_count));
+			}
+		}
+	} else {
+		// Use columns from the input chunk - they were passed through from the scan
+		// return_columns maps storage_idx -> chunk_idx
+		// For RETURNING: all columns have valid indices
+		// For index-only: only indexed columns have valid indices (sparse mapping)
+		for (idx_t i = 0; i < table.ColumnCount(); i++) {
+			if (return_columns[i] != DConstants::INVALID_INDEX) {
+				// Column was passed through from the scan
+				l_state.delete_chunk.data[i].Reference(chunk.data[return_columns[i]]);
+			} else {
+				// Column not in scan (sparse mapping for index-only case) - use NULL placeholder
+				l_state.delete_chunk.data[i].Reference(Value(types[i]), count_t(chunk.size()));
+			}
 		}
 	}
 	// Add virtual columns (e.g., rowid) after table columns
 	for (idx_t i = table.ColumnCount(); i < l_state.delete_chunk.ColumnCount(); i++) {
-		l_state.delete_chunk.data[i].Reference(row_ids);
+		l_state.delete_chunk.data[i].Reference(fetch_by_row_id ? delete_row_ids : row_ids);
 	}
 
-	// Slice down to the claimed rows (RETURNING only)
-	if (return_chunk && delete_count != chunk.size()) {
+	// Slice down to the claimed rows (RETURNING only); fetched rows are already limited to them
+	if (return_chunk && !fetch_by_row_id && delete_count != chunk.size()) {
 		l_state.delete_chunk.Slice(delete_sel, delete_count);
 	}
 
@@ -224,12 +271,13 @@ unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 class DeleteSourceState : public GlobalSourceState {
 public:
-	explicit DeleteSourceState(const PhysicalDelete &op) {
+	explicit DeleteSourceState(const PhysicalDelete &op) : total_rows(1), rows_scanned(0) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<DeleteGlobalState>();
 			g.return_collection.InitializeScan(global_scan_state);
 			max_threads = MaxValue<idx_t>(g.return_collection.ChunkCount(), 1);
+			total_rows = g.return_collection.Count();
 		} else {
 			max_threads = 1;
 		}
@@ -241,6 +289,8 @@ public:
 
 	ColumnDataParallelScanState global_scan_state;
 	idx_t max_threads;
+	idx_t total_rows;
+	atomic<idx_t> rows_scanned;
 };
 
 class DeleteLocalSourceState : public LocalSourceState {
@@ -256,17 +306,27 @@ unique_ptr<LocalSourceState> PhysicalDelete::GetLocalSourceState(ExecutionContex
 	return make_uniq<DeleteLocalSourceState>();
 }
 
+ProgressData PhysicalDelete::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	auto &state = gstate.Cast<DeleteSourceState>();
+	ProgressData progress;
+	progress.total = double(MaxValue<idx_t>(state.total_rows, 1));
+	progress.done = state.total_rows == 0 ? 1.0 : double(state.rows_scanned.load(std::memory_order_relaxed));
+	return progress;
+}
+
 SourceResultType PhysicalDelete::GetDataInternal(ExecutionContext &context, DataChunk &chunk,
                                                  OperatorSourceInput &input) const {
 	auto &state = input.global_state.Cast<DeleteSourceState>();
 	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (!return_chunk) {
 		chunk.data[0].Append(Value::BIGINT(NumericCast<int64_t>(g.deleted_count.load())));
+		state.rows_scanned.store(1, std::memory_order_relaxed);
 		return SourceResultType::FINISHED;
 	}
 
 	auto &lstate = input.local_state.Cast<DeleteLocalSourceState>();
 	g.return_collection.Scan(state.global_scan_state, lstate.local_scan_state, chunk);
+	state.rows_scanned.fetch_add(chunk.size(), std::memory_order_relaxed);
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 

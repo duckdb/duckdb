@@ -6,7 +6,7 @@
 
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "reader/variant_column_reader.hpp"
-#include "reader/variant/parquet_variant_iterator.hpp"
+#include "duckdb/common/types/variant/parquet_variant_iterator.hpp"
 #include "column_reader.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
@@ -241,13 +241,17 @@ bool VariantColumnReader::TypedValueLayoutToType(const LogicalType &typed_value,
 		return true;
 	}
 	auto type_id = typed_value.id();
-	if (type_id == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(type_id)) {
 		//! OBJECT (...)
 		auto &object_fields = StructType::GetChildTypes(typed_value);
 		child_list_t<LogicalType> children;
 		for (auto &object_field : object_fields) {
 			auto &name = object_field.first;
 			auto &field = object_field.second;
+			if (name.empty()) {
+				//! An empty key can't be a STRUCT member name
+				return false;
+			}
 			//! <name>: {
 			//! 	value: BLOB,
 			//! 	typed_value: <type>

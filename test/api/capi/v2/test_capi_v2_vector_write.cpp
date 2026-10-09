@@ -21,6 +21,25 @@
 
 namespace test_capi_v2 {
 
+TEST_CASE("V2: UTF-8 validation reports input errors", "[capi_v2][vector_write]") {
+	duckdb_v2_error_info_handle error = nullptr;
+	duckdb_v2_str text_str = {nullptr, 0};
+	REQUIRE(duckdb_v2_validate_utf8(&text_str, &error) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(error == nullptr);
+	auto text_str2 = Convert("🦆");
+	REQUIRE(duckdb_v2_validate_utf8(&text_str2, &error) == DUCKDB_V2_ERROR_NONE);
+	const std::string embedded_nul("a\0b", 3);
+	auto embedded_nul_str = Convert(embedded_nul);
+	REQUIRE(duckdb_v2_validate_utf8(&embedded_nul_str, &error) == DUCKDB_V2_ERROR_NONE);
+	auto text_str3 = Convert("\xFF");
+	REQUIRE(duckdb_v2_validate_utf8(&text_str3, &error) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(error != nullptr);
+	duckdb_v2_error_info_destroy(&error);
+	duckdb_v2_str text_str4 = {nullptr, 1};
+	REQUIRE(duckdb_v2_validate_utf8(&text_str4, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_validate_utf8(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+}
+
 // These tests almost always assume a vector is 2048 rows to write into, so only run them if that is the case
 #if (STANDARD_VECTOR_SIZE == DEFAULT_STANDARD_VECTOR_SIZE)
 
@@ -145,6 +164,45 @@ TEST_CASE("V2: vector_set_size auto-reserves", "[capi_v2][vector_write]") {
 	void *raw = nullptr;
 	REQUIRE(duckdb_v2_vector_get_data_mutable(vec, &raw, nullptr) == DUCKDB_V2_ERROR_NONE);
 	static_cast<int32_t *>(raw)[4999] = 42;
+
+	REQUIRE(duckdb_v2_data_chunk_destroy(&chunk) == DUCKDB_V2_ERROR_NONE);
+}
+
+// ---------------------------------------------------------------------------
+// vector_reference
+// ---------------------------------------------------------------------------
+
+TEST_CASE("V2: vector_reference rejects a type mismatch", "[capi_v2][vector_write]") {
+	EnvFixture fx;
+	auto int_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
+	auto bigint_type = MakeType(fx.conn, DUCKDB_V2_LOGICAL_TYPE_ID_BIGINT);
+	duckdb_v2_logical_type_handle types[2] = {int_type, bigint_type};
+
+	duckdb_v2_data_chunk_handle chunk = nullptr;
+	auto rc = duckdb_v2_data_chunk_create(types, 2, &chunk, nullptr);
+	duckdb_v2_logical_type_destroy(&int_type);
+	duckdb_v2_logical_type_destroy(&bigint_type);
+	REQUIRE(rc == DUCKDB_V2_ERROR_NONE);
+
+	duckdb_v2_vector_handle int_vec = nullptr;
+	duckdb_v2_vector_handle bigint_vec = nullptr;
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &int_vec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 1, &bigint_vec, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(int_vec, 3, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(bigint_vec, 5, nullptr) == DUCKDB_V2_ERROR_NONE);
+
+	REQUIRE(duckdb_v2_vector_reference(nullptr, int_vec, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_vector_reference(int_vec, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+
+	duckdb_v2_error_info_handle err = nullptr;
+	REQUIRE(duckdb_v2_vector_reference(bigint_vec, int_vec, &err) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(err != nullptr);
+	REQUIRE(duckdb_v2_error_info_destroy(&err) == DUCKDB_V2_ERROR_NONE);
+
+	// The rejected call left the vector untouched.
+	idx_t size = 0;
+	REQUIRE(duckdb_v2_vector_get_size(bigint_vec, &size, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(size == 5);
 
 	REQUIRE(duckdb_v2_data_chunk_destroy(&chunk) == DUCKDB_V2_ERROR_NONE);
 }
@@ -1008,13 +1066,15 @@ TEST_CASE("V2: MAP write via child vectors", "[capi_v2][vector_write]") {
 	REQUIRE(duckdb_v2_data_chunk_get_vector(chunk, 0, &vec, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_vector_set_size(vec, 1, nullptr) == DUCKDB_V2_ERROR_NONE);
 
+	// sizing the entries STRUCT sizes both the keys and the values
+	duckdb_v2_vector_handle kv = nullptr;
+	REQUIRE(duckdb_v2_vector_get_child(vec, 0, &kv, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_set_size(kv, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
+
 	duckdb_v2_vector_handle keys = nullptr;
 	duckdb_v2_vector_handle values = nullptr;
-	REQUIRE(duckdb_v2_vector_get_child(vec, 0, &keys, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vector_get_child(vec, 1, &values, nullptr) == DUCKDB_V2_ERROR_NONE);
-
-	REQUIRE(duckdb_v2_vector_set_size(keys, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_vector_set_size(values, 2, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_get_child(kv, 0, &keys, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_vector_get_child(kv, 1, &values, nullptr) == DUCKDB_V2_ERROR_NONE);
 
 	void *keys_raw = nullptr;
 	REQUIRE(duckdb_v2_vector_get_data_mutable(keys, &keys_raw, nullptr) == DUCKDB_V2_ERROR_NONE);
@@ -1032,6 +1092,12 @@ TEST_CASE("V2: MAP write via child vectors", "[capi_v2][vector_write]") {
 	REQUIRE(duckdb_v2_vector_get_view(keys, &key_view, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(static_cast<const int32_t *>(key_view.data)[0] == 1);
 	REQUIRE(static_cast<const int32_t *>(key_view.data)[1] == 2);
+
+	duckdb_v2_value_handle cell = nullptr;
+	REQUIRE(duckdb_v2_vector_get_value(vec, 0, &cell, nullptr) == DUCKDB_V2_ERROR_NONE);
+	auto rendered = Render(cell);
+	duckdb_v2_value_destroy(&cell);
+	REQUIRE(rendered == "{1=one, 2=two}");
 
 	REQUIRE(duckdb_v2_data_chunk_destroy(&chunk) == DUCKDB_V2_ERROR_NONE);
 }

@@ -9,6 +9,8 @@ namespace duckdb {
 bool IsAscii(const char *input, idx_t n);
 //! Returns the index of the first byte with the high bit set, or n if all bytes are ASCII
 idx_t FirstNonAscii(const char *input, idx_t n);
+//! Decodes one codepoint and returns its length - throws an InternalException on invalid UTF-8
+idx_t DecodeCodepoint(const char *input, idx_t size, int32_t &codepoint);
 idx_t LowerLength(const char *input_data, idx_t input_length);
 void LowerCase(const char *input_data, idx_t input_length, char *result_data);
 idx_t FindStrInStr(const string_t &haystack_s, const string_t &needle_s);

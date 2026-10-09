@@ -105,7 +105,7 @@ struct GatedDatabase {
 idx_t ScalarValue(Connection &con, const string &query) {
 	auto result = con.Query(query);
 	REQUIRE_NO_FAIL(*result);
-	return result->GetValue(0, 0).GetValue<idx_t>();
+	return result->Collection().GetValue(0, 0).GetValue<idx_t>();
 }
 
 } // namespace

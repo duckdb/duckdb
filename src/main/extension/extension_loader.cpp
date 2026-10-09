@@ -313,7 +313,7 @@ void ExtensionLoader::AddFunctionOverload(ScalarFunctionSet functions) { // NOLI
 
 void ExtensionLoader::AddFunctionOverload(TableFunctionSet functions) { // NOLINT
 	auto &table_function = GetTableFunction(functions.name);
-	functions.ApplyToFunctions([&](TableFunction &function) { function.name = functions.name; });
+	functions.ApplyToFunctions([&](TableFunction &function) { table_function.FinalizeFunction(function); });
 	for (auto &function : functions.functions) {
 		table_function.functions.AddFunction(std::move(function));
 	}

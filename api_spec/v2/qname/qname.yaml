@@ -38,13 +38,17 @@ functions:
 
       Applies the engine's qualified-name rules: dots separate parts, and a double-quoted part may contain dots and
       doubled interior quotes. More than three parts and an unterminated quote are rejected with the parser's own
-      error; text without at least one non-empty part is rejected with `ERROR_INPUT_INVALID`. When the parts are
-      already separate, build the name with `[[qname_create]]` rather than joining them and parsing the result.
+      error. Invalid UTF-8 and text without at least one non-empty part are rejected with `ERROR_INPUT_INVALID`.
+      When the parts are already separate, build the name with `[[qname_create]]` rather than joining them and parsing
+      the result.
     role: constructor
     belongs_to: qname
     parameters:
       text:
         type: str
+        indirection: 1
+        const: true
+        kind: IN
         description: The name text to parse. Borrowed for the call only.
       name:
         type: qname
@@ -74,6 +78,7 @@ functions:
         type: identifier
         indirection: 1
         const: true
+        kind: IN
         description: An array of `part_count` non-empty identifier views, outermost first.
       part_count:
         type: idx

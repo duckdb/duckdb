@@ -40,7 +40,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 	}
 	if (root.CaseChecksMutable().empty()) {
 		// no case checks left: return the ELSE expression
-		return std::move(root.ElseMutable());
+		return Expression::PreserveReturnType(root.GetReturnType(), std::move(root.ElseMutable()));
 	}
 	return nullptr;
 }

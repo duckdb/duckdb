@@ -99,6 +99,14 @@ private:
 	unique_ptr<PipelineBuildStateData> data;
 };
 
+//! Progress of a pipeline, split into the source and the (sink-adjusted) pipeline progress
+struct PipelineProgress {
+	//! Progress as reported by the source, before normalization
+	ProgressData source;
+	//! Progress of the pipeline: the normalized source progress, adjusted by the sink
+	ProgressData pipeline;
+};
+
 //! The Pipeline class represents an execution pipeline starting at a
 class Pipeline : public enable_shared_from_this<Pipeline> {
 	friend class Executor;
@@ -154,6 +162,8 @@ public:
 
 	//! Returns query progress
 	bool GetProgress(ProgressData &progress_data);
+	//! Returns the progress of the source and of the pipeline separately
+	void GetDetailedProgress(PipelineProgress &progress);
 
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
 	vector<reference<PhysicalOperator>> GetOperators();
@@ -194,6 +204,10 @@ public:
 
 	//! Updates the batch index of a pipeline (and returns the new minimum batch index)
 	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
+
+private:
+	//! Tells the progress verifier (if any) that a new run of this pipeline starts
+	void NotifyProgressReset();
 
 private:
 	//! Whether or not the pipeline has been readied

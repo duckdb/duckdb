@@ -124,13 +124,13 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractMicrosecond(Calendar *calendar, const uint64_t micros) {
-		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + micros;
+		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + NumericCast<int64_t>(micros);
 	}
 
 	static double ExtractEpoch(Calendar *calendar, const uint64_t micros) {
 		// the milliseconds carry the fraction of a second, so the division has to keep it
 		auto result = double(calendar->GetTime()) / double(Interval::MSECS_PER_SEC);
-		result += micros / double(Interval::MICROS_PER_SEC);
+		result += static_cast<double>(micros) / double(Interval::MICROS_PER_SEC);
 		return result;
 	}
 
@@ -162,7 +162,7 @@ struct ICUDatePart : public ICUDateFunc {
 		frac *= Interval::MICROS_PER_MINUTE;
 		frac += ExtractMicrosecond(calendar, micros);
 
-		double result = frac;
+		double result = static_cast<double>(frac);
 		result /= Interval::MICROS_PER_DAY;
 		result += days;
 
@@ -347,12 +347,12 @@ struct ICUDatePart : public ICUDateFunc {
 		using bigints_t = vector<part_bigint_t>;
 		using doubles_t = vector<part_double_t>;
 
-		BindStructData(ClientContext &context, part_codes_t &&part_codes_p)
-		    : BindData(context), part_codes(part_codes_p) {
+		BindStructData(ClientContext &context, part_codes_t part_codes_p)
+		    : BindData(context), part_codes(std::move(part_codes_p)) {
 			InitFactories();
 		}
-		BindStructData(const string &tz_setting_p, const string &cal_setting_p, part_codes_t &&part_codes_p)
-		    : BindData(tz_setting_p, cal_setting_p), part_codes(part_codes_p) {
+		BindStructData(const string &tz_setting_p, const string &cal_setting_p, part_codes_t part_codes_p)
+		    : BindData(tz_setting_p, cal_setting_p), part_codes(std::move(part_codes_p)) {
 			InitFactories();
 		}
 		BindStructData(const BindStructData &other)
@@ -575,6 +575,7 @@ struct ICUDatePart : public ICUDateFunc {
 	                                      ArgProperties unary_arg0_props = {}) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_tz_t, RESULT_TYPE>(LogicalType::TIMESTAMP_TZ, result_type));
+		set.SetFallible();
 		set.SetUnaryArgProperties(unary_arg0_props);
 		loader.RegisterFunction(set);
 	}
@@ -624,6 +625,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddLastDayFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetLastDayFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -644,6 +646,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddMonthNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetMonthNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 
@@ -664,6 +667,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void AddDayNameFunctions(const Identifier &name, ExtensionLoader &loader) {
 		ScalarFunctionSet set {name};
 		set.AddFunction(GetDayNameFunction<timestamp_tz_t>(LogicalType::TIMESTAMP_TZ));
+		set.SetFallible();
 		loader.RegisterFunction(set);
 	}
 };
