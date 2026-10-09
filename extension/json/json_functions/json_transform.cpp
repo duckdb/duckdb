@@ -6,7 +6,6 @@
 #include "duckdb/common/vector/string_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "json_transform.hpp"
-#include "json_structure.hpp"
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/error_data.hpp"
@@ -69,10 +68,8 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 }
 
 static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context, const idx_t depth) {
-	if (depth > JSONStructure::MAX_STRUCTURE_DEPTH) {
-		throw BinderException("JSON structure is nested more than %llu levels deep, which is more than json_transform "
-		                      "supports",
-		                      JSONStructure::MAX_STRUCTURE_DEPTH);
+	if (depth >= JSONCommon::MAX_RECURSION_DEPTH) {
+		throw BinderException("JSON structure exceeds maximum recursion depth of %d", JSONCommon::MAX_RECURSION_DEPTH);
 	}
 	switch (yyjson_get_tag(val)) {
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:

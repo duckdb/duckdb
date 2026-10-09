@@ -10,12 +10,12 @@ PRAGMA enable_verification
 statement error
 SELECT json_transform('1', repeat('{"a":', 6000) || '"VARCHAR"' || repeat('}', 6000));
 ----
-<REGEX>:Binder Error.*nested more than.*
+<REGEX>:Binder Error.*maximum recursion depth.*
 
 statement error
 SELECT json_transform('1', repeat('[', 6000) || '"VARCHAR"' || repeat(']', 6000));
 ----
-<REGEX>:Binder Error.*nested more than.*
+<REGEX>:Binder Error.*maximum recursion depth.*
 
 # nesting within the limit keeps working
 query I
