@@ -67,9 +67,13 @@ unique_ptr<BoundFunctionExpression> BindBuiltinScalarFunction(ClientContext &con
 		arguments.emplace_back(Identifier(), std::move(child));
 	}
 
+	// Callers rewrite an expression INTO this call and require a bound call back, so the bind must not fold the call
+	// away (the DEFAULT_NULL_HANDLING shortcut replaces a call whose argument is known to be NULL with a NULL
+	// constant). The arguments can be NULL legitimately: e.g. the statistics propagator wraps a comparison whose
+	// outcome is known into constant_or_null(..., left, right) where left may have been reduced to a NULL constant.
 	ErrorData error;
 	FunctionBinder function_binder(context);
-	auto expr = function_binder.BindScalarFunction(entry, std::move(arguments), error);
+	auto expr = function_binder.BindScalarFunctionWithoutFolding(entry, std::move(arguments), error);
 	if (!expr) {
 		error.Throw();
 	}

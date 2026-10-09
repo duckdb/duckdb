@@ -870,6 +870,20 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
                                                           vector<pair<Identifier, unique_ptr<Expression>>> arguments,
                                                           ErrorData &error, bool is_operator,
                                                           optional_ptr<Binder> binder) {
+	return BindScalarFunctionInternal(func, std::move(arguments), error, is_operator, binder, true);
+}
+
+unique_ptr<Expression>
+FunctionBinder::BindScalarFunctionWithoutFolding(const ScalarFunctionCatalogEntry &func,
+                                                 vector<pair<Identifier, unique_ptr<Expression>>> arguments,
+                                                 ErrorData &error) {
+	return BindScalarFunctionInternal(func, std::move(arguments), error, false, nullptr, false);
+}
+
+unique_ptr<Expression>
+FunctionBinder::BindScalarFunctionInternal(const ScalarFunctionCatalogEntry &func,
+                                           vector<pair<Identifier, unique_ptr<Expression>>> arguments, ErrorData &error,
+                                           bool is_operator, optional_ptr<Binder> binder, bool fold_constants) {
 	// select the best matching overload (this may name positional arguments by their alias for functions that opt
 	// into implicit argument naming, e.g. struct_pack/row)
 	auto best_function = BindFunctionFromArguments(func.name, func.functions, arguments, error);
@@ -887,7 +901,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const ScalarFunctionCa
 	// If any of the parameters are NULL, the function will just be replaced with a NULL constant.
 	// Untyped NULLs never go through type resolution. For typed NULL constants, the types of the function are resolved
 	// if that is the only way to determine the return type - the bind callback is not invoked for these.
-	if (bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
+	if (fold_constants && bound_function.GetNullHandling() == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		const auto &return_type = bound_function.GetReturnType();
 		if (HasUntypedNullArgument(regular_args, keyword_args)) {
 			return make_uniq<BoundConstantExpression>(Value(NullReturnType(return_type)));
