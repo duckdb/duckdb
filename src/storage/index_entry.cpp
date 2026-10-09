@@ -337,11 +337,6 @@ unique_ptr<BoundIndex> IndexEntry::Bind(IndexBinder &binder, const vector<Logica
 	return owned_index->Cast<UnboundIndex>().Bind(binder, table_types);
 }
 
-void IndexEntry::AbortBind() {
-	auto entry_lock = lock.GetExclusiveLock();
-	bind_state = IndexBindState::UNBOUND;
-}
-
 void IndexEntry::CommitBind(unique_ptr<BoundIndex> bound_index) {
 	auto entry_lock = lock.GetExclusiveLock();
 	owned_index = std::move(bound_index);

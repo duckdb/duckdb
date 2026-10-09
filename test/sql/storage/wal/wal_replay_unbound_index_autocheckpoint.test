@@ -27,9 +27,6 @@ INSERT INTO t SELECT i, 'k' || i FROM range(500) r(i)
 restart
 
 statement ok
-PRAGMA disable_checkpoint_on_shutdown
-
-statement ok
 SET debug_skip_checkpoint_on_commit=false
 
 statement ok

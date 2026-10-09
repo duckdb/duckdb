@@ -781,7 +781,7 @@ static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDat
 			}
 		});
 	});
-	// Check the indexes outside the catalog scan: binding takes catalog locks while holding index locks.
+	// Don't take index locks inside the catalog scan: concurrent binds take them in the opposite order.
 	vector<reference<DuckTableEntry>> result;
 	for (auto &table : tables) {
 		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasUnbound()) {

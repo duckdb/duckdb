@@ -454,7 +454,8 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 			bound_idx = index_entry->Bind(idx_binder, physical_column_types);
 		} catch (std::exception &) {
 			// Reset the bind state, so that any other thread waiting for this bind can retry it.
-			index_entry->AbortBind();
+			lock.lock();
+			index_entry->SetBindState(IndexBindState::UNBOUND);
 			throw;
 		}
 

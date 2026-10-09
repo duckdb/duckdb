@@ -140,8 +140,6 @@ public:
 	unique_ptr<BoundIndex> Bind(IndexBinder &binder, const vector<LogicalType> &table_types);
 	//! Replaces the unbound physical index with its bound representation.
 	void CommitBind(unique_ptr<BoundIndex> bound_index);
-	//! Resets a failed bind so that binding can be retried.
-	void AbortBind();
 	//! Verifies that rows can be appended to the bound physical index.
 	void VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,
 	                  optional_ptr<ConflictManager> manager);
