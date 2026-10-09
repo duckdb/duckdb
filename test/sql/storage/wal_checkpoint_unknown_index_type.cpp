@@ -72,7 +72,8 @@ TEST_CASE("Checkpoint buffered replays of an index type that is not loaded", "[s
 		auto result = con.Query("SELECT sum(b) FROM big");
 		REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(5000050000)}));
 
-		// Once the index type is loaded, the checkpoint persists the buffered replays.
+		// A failed bind can be retried: once the index type is loaded, the checkpoint persists the buffered replays.
+		REQUIRE(con.Query("CHECKPOINT")->HasError());
 		RegisterTestIndexType(db);
 		REQUIRE_NO_FAIL(con.Query("CHECKPOINT"));
 		RequireWALEmpty(con, true);
