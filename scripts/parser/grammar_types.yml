@@ -1170,6 +1170,9 @@ Bool:
     - Materialized
     - SampleUnit
     - DropBehavior
+    - TruncateOptions
+    - TruncateAliasOptions
+    - TruncateDropBehavior
     - CascadeDropBehavior
     - RestrictDropBehavior
     - AnyOrAll

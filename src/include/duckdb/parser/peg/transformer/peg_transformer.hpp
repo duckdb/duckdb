@@ -1960,6 +1960,17 @@ public:
 	static void InitializeTruncateStatementTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTruncateStatementTrampoline(PEGTransformer &transformer,
 	                                                                           GeneratedTransformProcess &process);
+	static void InitializeTruncateOptionsTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeTruncateOptionsTrampoline(PEGTransformer &transformer,
+	                                                                         GeneratedTransformProcess &process);
+	static void InitializeTruncateAliasOptionsTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeTruncateAliasOptionsTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
+	static void InitializeTruncateDropBehaviorTrampoline(PEGTransformer &transformer,
+	                                                     GeneratedTransformProcess &process);
+	static arena_ptr<TransformResultValue> FinalizeTruncateDropBehaviorTrampoline(PEGTransformer &transformer,
+	                                                                              GeneratedTransformProcess &process);
 	static void InitializeTargetOptAliasTrampoline(PEGTransformer &transformer, GeneratedTransformProcess &process);
 	static arena_ptr<TransformResultValue> FinalizeTargetOptAliasTrampoline(PEGTransformer &transformer,
 	                                                                        GeneratedTransformProcess &process);
@@ -4729,7 +4740,10 @@ public:
 	                         optional<vector<unique_ptr<ParsedExpression>>> returning_clause);
 	static unique_ptr<SQLStatement> TransformTruncateStatement(PEGTransformer &transformer, const bool &has_result,
 	                                                           unique_ptr<BaseTableRef> base_table_name,
-	                                                           optional<bool> drop_behavior);
+	                                                           optional<bool> truncate_options);
+	static bool TransformTruncateAliasOptions(PEGTransformer &transformer, const Identifier &target_alias,
+	                                          optional<bool> truncate_drop_behavior);
+	static bool TransformTruncateDropBehavior(PEGTransformer &transformer, const bool &drop_behavior);
 	static unique_ptr<BaseTableRef> TransformTargetOptAlias(PEGTransformer &transformer,
 	                                                        unique_ptr<BaseTableRef> base_table_name,
 	                                                        const optional<Identifier> &target_alias);

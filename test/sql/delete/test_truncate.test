@@ -65,9 +65,35 @@ SELECT COUNT(*) FROM a;
 statement ok
 INSERT INTO a VALUES (42);
 
-# CASCADE and RESTRICT are accepted and ignored
-statement ok
+# CASCADE and RESTRICT are not supported
+statement error
 TRUNCATE a CASCADE
+----
+Not implemented Error: TRUNCATE ... CASCADE is not implemented
+
+statement error
+TRUNCATE TABLE a RESTRICT
+----
+Not implemented Error: TRUNCATE ... RESTRICT is not implemented
+
+statement error
+TRUNCATE TABLE a ignored_alias CASCADE
+----
+Not implemented Error: TRUNCATE ... CASCADE is not implemented
+
+statement error
+TRUNCATE a AS ignored_alias RESTRICT
+----
+Not implemented Error: TRUNCATE ... RESTRICT is not implemented
+
+query I
+SELECT COUNT(*) FROM a;
+----
+1
+
+# a quoted alias is not a drop behavior
+statement ok
+TRUNCATE a "cascade"
 
 query I
 SELECT COUNT(*) FROM a;
@@ -78,32 +104,9 @@ statement ok
 INSERT INTO a VALUES (42);
 
 statement ok
-TRUNCATE TABLE a ignored_alias RESTRICT
+TRUNCATE a AS restrict
 
 query I
 SELECT COUNT(*) FROM a;
 ----
 0
-
-# CASCADE does not truncate referencing tables
-statement ok
-CREATE TABLE pk(i INTEGER PRIMARY KEY);
-
-statement ok
-CREATE TABLE fk(i INTEGER REFERENCES pk(i));
-
-statement ok
-INSERT INTO pk VALUES (1);
-
-statement ok
-INSERT INTO fk VALUES (1);
-
-statement error
-TRUNCATE pk CASCADE
-----
-Violates foreign key constraint
-
-query I
-SELECT COUNT(*) FROM fk;
-----
-1

@@ -1121,6 +1121,15 @@ static const TransformFrameOps DELETE_STATEMENT_OPS = {"DeleteStatement",
 static const TransformFrameOps TRUNCATE_STATEMENT_OPS = {"TruncateStatement",
                                                          &PEGTransformerFactory::InitializeTruncateStatementTrampoline,
                                                          &PEGTransformerFactory::FinalizeTruncateStatementTrampoline};
+static const TransformFrameOps TRUNCATE_OPTIONS_OPS = {"TruncateOptions",
+                                                       &PEGTransformerFactory::InitializeTruncateOptionsTrampoline,
+                                                       &PEGTransformerFactory::FinalizeTruncateOptionsTrampoline};
+static const TransformFrameOps TRUNCATE_ALIAS_OPTIONS_OPS = {
+    "TruncateAliasOptions", &PEGTransformerFactory::InitializeTruncateAliasOptionsTrampoline,
+    &PEGTransformerFactory::FinalizeTruncateAliasOptionsTrampoline};
+static const TransformFrameOps TRUNCATE_DROP_BEHAVIOR_OPS = {
+    "TruncateDropBehavior", &PEGTransformerFactory::InitializeTruncateDropBehaviorTrampoline,
+    &PEGTransformerFactory::FinalizeTruncateDropBehaviorTrampoline};
 static const TransformFrameOps TARGET_OPT_ALIAS_OPS = {"TargetOptAlias",
                                                        &PEGTransformerFactory::InitializeTargetOptAliasTrampoline,
                                                        &PEGTransformerFactory::FinalizeTargetOptAliasTrampoline};
@@ -3451,6 +3460,9 @@ const case_insensitive_map_t<const TransformFrameOps *> &PEGTransformerFactory::
 	    {"DeallocatePrepare", &DEALLOCATE_PREPARE_OPS},
 	    {"DeleteStatement", &DELETE_STATEMENT_OPS},
 	    {"TruncateStatement", &TRUNCATE_STATEMENT_OPS},
+	    {"TruncateOptions", &TRUNCATE_OPTIONS_OPS},
+	    {"TruncateAliasOptions", &TRUNCATE_ALIAS_OPTIONS_OPS},
+	    {"TruncateDropBehavior", &TRUNCATE_DROP_BEHAVIOR_OPS},
 	    {"TargetOptAlias", &TARGET_OPT_ALIAS_OPS},
 	    {"TargetAlias", &TARGET_ALIAS_OPS},
 	    {"DeleteUsingClause", &DELETE_USING_CLAUSE_OPS},
@@ -11706,11 +11718,11 @@ void PEGTransformerFactory::InitializeTruncateStatementTrampoline(PEGTransformer
                                                                   GeneratedTransformProcess &process) {
 	auto &list_pr = process.parse_result.Cast<ListParseResult>();
 	process.ReserveChildSlots(2);
-	auto &drop_behavior_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
-	if (drop_behavior_opt.HasResult()) {
-		process.PushChild({transformer.GetRule("DropBehavior"), drop_behavior_opt.GetResult()}, 1);
+	auto &truncate_options_opt = list_pr.GetChild(3).Cast<OptionalParseResult>();
+	if (truncate_options_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("TruncateOptions"), truncate_options_opt.GetResult()}, 1);
 	}
-	process.PushChild({transformer.GetRule("TargetOptAlias"), list_pr.GetChild(2)}, 0);
+	process.PushChild({transformer.GetRule("BaseTableName"), list_pr.GetChild(2)}, 0);
 }
 
 arena_ptr<TransformResultValue>
@@ -11720,13 +11732,72 @@ PEGTransformerFactory::FinalizeTruncateStatementTrampoline(PEGTransformer &trans
 	bool has_result {};
 	auto &has_result_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
 	has_result = has_result_opt.HasResult();
-	auto target_opt_alias = process.TakeResult<unique_ptr<BaseTableRef>>(0);
-	optional<bool> drop_behavior {};
+	auto base_table_name = process.TakeResult<unique_ptr<BaseTableRef>>(0);
+	optional<bool> truncate_options {};
 	if (process.child_results[1]) {
-		drop_behavior = process.TakeResult<bool>(1);
+		truncate_options = process.TakeResult<bool>(1);
 	}
-	auto result = TransformTruncateStatement(transformer, has_result, std::move(target_opt_alias), drop_behavior);
+	auto result = TransformTruncateStatement(transformer, has_result, std::move(base_table_name), truncate_options);
 	return transformer.MakeResult<unique_ptr<SQLStatement>>(std::move(result));
+}
+
+void PEGTransformerFactory::InitializeTruncateOptionsTrampoline(PEGTransformer &transformer,
+                                                                GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	auto &choice_pr = list_pr.Child<ChoiceParseResult>(0);
+	auto &choice_result = choice_pr.GetResult();
+	process.ReserveChildSlots(1);
+	auto child_rule = choice_result.GetRule();
+	auto has_transform_process = child_rule && child_rule->transform_process;
+	if (!has_transform_process) {
+		throw InternalException("No transform process registered for rule '%s'", choice_result.Name());
+	}
+	process.PushChild({*child_rule, choice_result}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTruncateOptionsTrampoline(PEGTransformer &transformer,
+                                                         GeneratedTransformProcess &process) {
+	auto result = process.TakeResult<bool>(0);
+	return transformer.MakeResult<bool>(result);
+}
+
+void PEGTransformerFactory::InitializeTruncateAliasOptionsTrampoline(PEGTransformer &transformer,
+                                                                     GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(2);
+	auto &truncate_drop_behavior_opt = list_pr.GetChild(1).Cast<OptionalParseResult>();
+	if (truncate_drop_behavior_opt.HasResult()) {
+		process.PushChild({transformer.GetRule("TruncateDropBehavior"), truncate_drop_behavior_opt.GetResult()}, 1);
+	}
+	process.PushChild({transformer.GetRule("TargetAlias"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTruncateAliasOptionsTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto target_alias = process.TakeResult<Identifier>(0);
+	optional<bool> truncate_drop_behavior {};
+	if (process.child_results[1]) {
+		truncate_drop_behavior = process.TakeResult<bool>(1);
+	}
+	auto result = TransformTruncateAliasOptions(transformer, target_alias, truncate_drop_behavior);
+	return transformer.MakeResult<bool>(result);
+}
+
+void PEGTransformerFactory::InitializeTruncateDropBehaviorTrampoline(PEGTransformer &transformer,
+                                                                     GeneratedTransformProcess &process) {
+	auto &list_pr = process.parse_result.Cast<ListParseResult>();
+	process.ReserveChildSlots(1);
+	process.PushChild({transformer.GetRule("DropBehavior"), list_pr.GetChild(0)}, 0);
+}
+
+arena_ptr<TransformResultValue>
+PEGTransformerFactory::FinalizeTruncateDropBehaviorTrampoline(PEGTransformer &transformer,
+                                                              GeneratedTransformProcess &process) {
+	auto drop_behavior = process.TakeResult<bool>(0);
+	auto result = TransformTruncateDropBehavior(transformer, drop_behavior);
+	return transformer.MakeResult<bool>(result);
 }
 
 void PEGTransformerFactory::InitializeTargetOptAliasTrampoline(PEGTransformer &transformer,
