@@ -43,6 +43,7 @@ class FileOpener;
 class LogicalOperator;
 class PreparedStatement;
 class PreparedStatementData;
+class SelectStatement;
 class StreamQueryResult;
 class StatementIterator;
 class Relation;
@@ -284,6 +285,8 @@ private:
 	//! Issues a query to the database and returns a Pending Query Result
 	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
 	                                                    const PendingQueryParameters &parameters, bool verify = true);
+	void ResolveAtClauseSubqueries(ClientContextLock &lock, SelectStatement &statement,
+	                               const PendingQueryParameters &parameters, bool verify);
 	unique_ptr<QueryResult> ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query);
 
 	//! Parse statements from a query
