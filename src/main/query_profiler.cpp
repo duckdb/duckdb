@@ -476,6 +476,7 @@ void OperatorMetrics::MergeInternal(const OperatorMetrics &other) {
 	rows_scanned += other.rows_scanned;
 	row_groups_scanned += other.row_groups_scanned;
 	bytes_scanned += other.bytes_scanned;
+	bytes_scanned_reported = bytes_scanned_reported || other.bytes_scanned_reported;
 	if (other.system_peak_buffer_manager_memory > system_peak_buffer_manager_memory) {
 		system_peak_buffer_manager_memory = other.system_peak_buffer_manager_memory;
 	}
@@ -766,7 +767,8 @@ profiler_metrics_t OperatorMetrics::GetMetrics(const GatheredMetrics &info) cons
 	if (info.MetricIsTracked<MetricOperatorRowGroupsScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
 		result["row_groups_scanned"] = Value::UBIGINT(row_groups_scanned);
 	}
-	if (info.MetricIsTracked<MetricOperatorBytesScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN) {
+	if (info.MetricIsTracked<MetricOperatorBytesScanned>() && operator_type == PhysicalOperatorType::TABLE_SCAN &&
+	    bytes_scanned_reported) {
 		result["bytes_scanned"] = Value::UBIGINT(bytes_scanned);
 	}
 	if (info.MetricIsTracked<MetricOperatorTotalRowGroupsToScan>() &&

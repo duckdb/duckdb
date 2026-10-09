@@ -181,3 +181,17 @@ query II
 EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM regular_scan
 ----
 analyzed_plan	<REGEX>:[\s\S]*"total_bytes_scanned": [1-9][\s\S]*
+
+# a scan that does not count its bytes leaves the metric out rather than reporting 0
+statement ok
+CREATE TABLE native AS SELECT range AS i FROM range(2048);
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM native
+----
+analyzed_plan	<!REGEX>:[\s\S]*"bytes_scanned"[\s\S]*
+
+query II
+EXPLAIN ANALYZE (FORMAT json) SELECT sum(i) FROM '{TEST_DIR}/bytes_scanned_1.parquet'
+----
+analyzed_plan	<REGEX>:[\s\S]*"bytes_scanned": [1-9][\s\S]*

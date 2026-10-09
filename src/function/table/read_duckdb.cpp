@@ -18,6 +18,11 @@ namespace duckdb {
 struct DuckDBMultiFileInfo : MultiFileReaderInterface {
 	static unique_ptr<MultiFileReaderInterface> CreateInterface(ClientContext &context);
 
+	//! read_duckdb doesn't count the blocks it reads
+	bool ReportsBytesScanned() const override {
+		return false;
+	}
+
 	unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                    optional_ptr<TableFunctionInfo> info) override;
 	bool ParseCopyOption(ClientContext &context, const Identifier &key, const vector<Value> &values,
