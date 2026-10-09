@@ -21,8 +21,7 @@ class MetadataWriter;
 
 struct PartialBlockForIndex : public PartialBlock {
 public:
-	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
-	                     const shared_ptr<BlockHandle> &block_handle);
+	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager, BufferHandle buffer_handle);
 	~PartialBlockForIndex() override {};
 
 public:
@@ -53,6 +52,11 @@ public:
 
 	~FixedSizeBuffer();
 
+public:
+	bool IsEmpty() const {
+		return segment_count == 0;
+	}
+
 private:
 	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory.
 	//! DEPRECATED. Use segment handles.
@@ -77,9 +81,10 @@ private:
 		return block_pointer.IsValid();
 	}
 
-	//! Serializes a buffer, if dirty or not on disk.
-	void Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
-	               const idx_t bitmask_offset);
+	//! Constructs a new FixedSizeBuffer based on the live FixedSizeBuffer, which is prepared for
+	//! serialization without affecting the in-memory buffer.
+	unique_ptr<FixedSizeBuffer> Persist(PartialBlockManager &partial_block_manager, const idx_t available_segments,
+	                                    const idx_t segment_size, const idx_t bitmask_offset);
 
 	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();
@@ -89,6 +94,7 @@ private:
 	void FreeSegment(const idx_t offset, const idx_t available_segments);
 	//! Sets the allocation size, if dirty
 	void SetAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
+	idx_t GetNewAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
 
 private:
 	//! Block manager of the database instance

@@ -14,11 +14,23 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 namespace duckdb {
 
 class AttachedDatabase;
 class TableIOManager;
+class TableIndexWriter;
+
+//! Describes how an index participates in a checkpoint.
+//!
+//! Indexes which persist their representation to storage can support either of the two modes. When
+//! an index supports DEFERRED mode, we are able to colocate buffers of distinct indexes. This mode is
+//! only supported if the index supports parallel mutations while checkpointing, as well as
+//! the creation of a shadow index which represents the index at the start of the checkpoint, but with
+//! a different physical backing. The default mode is IMMEDIATE, and writes each index into separate buffers.
+//! Bound indexes using DEFERRED mode must support checkpoint delta indexes.
+enum class IndexCheckpointMode : uint8_t { IMMEDIATE, DEFERRED };
 
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
@@ -56,6 +68,14 @@ public:
 
 	//! The index constraint type
 	virtual IndexConstraintType GetConstraintType() const = 0;
+
+	//! Returns how this index participates in a checkpoint.
+	virtual IndexCheckpointMode GetCheckpointMode() const {
+		return IndexCheckpointMode::IMMEDIATE;
+	}
+
+	//! Checkpoint an index, based on the mode supported by the index flushing may be deferred.
+	virtual CheckpointedIndex Checkpoint(PartialBlockManager &partial_block_manager, const StorageVersion version);
 
 	//! Returns unique flag
 	bool IsUnique() const {

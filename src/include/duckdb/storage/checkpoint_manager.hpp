@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
+#include "duckdb/storage/checkpoint/table_index_writer.hpp"
 
 namespace duckdb {
 
@@ -135,6 +136,7 @@ public:
 };
 
 class SingleFileCheckpointWriter final : public CheckpointWriter {
+	friend class SingleFileTableIndexWriter;
 	friend class SingleFileRowGroupWriter;
 	friend class SingleFileTableDataWriter;
 
@@ -149,6 +151,8 @@ public:
 	unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
+	//! Make a partial block scope for an index that persists immediately.
+	PartialBlockManager CreateIsolatedIndexPartialBlockManager();
 	CheckpointOptions GetCheckpointOptions() const {
 		return options;
 	}
@@ -168,6 +172,8 @@ private:
 	//! Because this is single-file storage, we can share partial blocks across
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
+	//! Need to have a separate partial block manager for indexes due to different block shapes.
+	PartialBlockManager index_partial_block_manager;
 	//! Checkpoint type
 	CheckpointOptions options;
 	//! Block usage count for verification purposes
