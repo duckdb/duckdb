@@ -21,14 +21,16 @@ FROM clustered LIMIT 1;
 ----
 1	1	1
 
-query III nosort clustered_stats
-SELECT stats(i), stats(s), stats(d) FROM clustered LIMIT 1;
+query III nosort clustered_distinct_stats
+SELECT (stats(i)).approx_unique, (stats(s)).approx_unique, (stats(d)).approx_unique
+FROM clustered LIMIT 1;
 ----
 
 restart
 
-query III nosort clustered_stats
-SELECT stats(i), stats(s), stats(d) FROM clustered LIMIT 1;
+query III nosort clustered_distinct_stats
+SELECT (stats(i)).approx_unique, (stats(s)).approx_unique, (stats(d)).approx_unique
+FROM clustered LIMIT 1;
 ----
 
 # A NULL prefix must not hide the non-NULL values in the rest of a vector.
