@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
+#include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -44,6 +45,7 @@ class LogicalOperator;
 class PreparedStatement;
 class PreparedStatementData;
 class StatementIterator;
+class StatementPreprocessor;
 class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
@@ -233,9 +235,11 @@ public:
 	//! Preprocess a peel of parse-facing statements into engine-facing ones (PRAGMA reparse,
 	//! MULTI_STATEMENT unpack, transaction wrapping), replacing `buffer` in place. Acquires the
 	//! context lock internally when `lock` is null (callers that do not already hold it, e.g. the
-	//! shell). Drives StatementIterator's preprocessing.
+	//! shell). Drives StatementIterator's preprocessing. Pass a `preprocessor` to carry state, such as
+	//! an explicit BEGIN, across multiple calls for the same query.
 	DUCKDB_API void PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
-	                                     optional_ptr<ClientContextLock> lock = nullptr);
+	                                     optional_ptr<ClientContextLock> lock = nullptr,
+	                                     optional_ptr<StatementPreprocessor> preprocessor = nullptr);
 
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
@@ -276,6 +280,10 @@ public:
 	const string &GetCurrentQuery();
 
 	connection_t GetConnectionId() const;
+
+	ConnectionType GetConnectionType() const {
+		return connection_type;
+	}
 
 	//! Fetch the set of tables names of the query.
 	//! Returns the fully qualified, escaped table names, if qualified is set to true,
@@ -377,6 +385,8 @@ private:
 	QueryProgress query_progress;
 	//! The connection corresponding to this client context
 	connection_t connection_id;
+	//! Type of connection (USER or INTERNAL)
+	ConnectionType connection_type = ConnectionType::USER;
 	//! Routing target for SQL execution while CONNECT-ed (CONNECT/DISCONNECT). When is_connected is
 	//! true and connected_to_database can be locked, the chokepoint dispatches non-control SQL via
 	//! `Catalog::RemoteExecute(string)` and wraps the returned TableRef into a SelectStatement.

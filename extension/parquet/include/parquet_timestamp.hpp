@@ -30,6 +30,8 @@ timestamp_t ParquetTimestampMsToTimestamp(const int64_t &raw_ts);
 timestamp_ns_t ParquetTimestampNsToTimestampNs(const int64_t &raw_ns);
 
 date_t ParquetIntToDate(const int32_t &raw_date);
+//! Whether a raw TIME value is within a day, given the number of units in a day
+bool ParquetTimeIsValid(const int64_t &raw, const int64_t day);
 dtime_t ParquetMsIntToTime(const int32_t &raw_millis);
 dtime_t ParquetIntToTime(const int64_t &raw_micros);
 
