@@ -201,7 +201,7 @@ void StorageManager::SetWALSize(idx_t size) {
 	wal_size = size;
 }
 
-void StorageManager::SetBufferedIndexReplays() {
+void StorageManager::MarkBufferedIndexReplays() {
 	buffered_index_replays = true;
 }
 
@@ -769,7 +769,6 @@ unique_ptr<CheckpointWriter> SingleFileStorageManager::CreateCheckpointWriter(Qu
 	return make_uniq<SingleFileCheckpointWriter>(context, db, *block_manager, options);
 }
 
-//! Returns the tables of the database that have an unbound index.
 static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDatabase &db) {
 	vector<reference<DuckTableEntry>> tables;
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
@@ -790,7 +789,7 @@ static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDat
 	return result;
 }
 
-//! Binds the indexes of a table, rethrowing errors that invalidate the database.
+//! Rethrows errors that invalidate the database, returns any other error.
 static ErrorData TryBindIndexes(DataTableInfo &info, ClientContext &context) {
 	try {
 		info.BindIndexes(context);
@@ -813,7 +812,6 @@ static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) 
 	return false;
 }
 
-//! Binds the indexes with buffered WAL replays, returning the first error.
 static ErrorData BindIndexesWithBufferedReplays(ClientContext &context,
                                                 const vector<reference<DuckTableEntry>> &tables) {
 	for (auto &table : tables) {
@@ -869,7 +867,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 	}
 	buffered_index_replays = false;
 	if (options.explicit_checkpoint) {
-		// Best effort: bind the remaining indexes, so that the checkpoint can vacuum their tables.
+		// Best effort: the checkpoint can only vacuum tables whose indexes are bound.
 		for (auto &table : tables) {
 			TryBindIndexes(*table.get().GetStorage().GetDataTableInfo(), bind_context);
 		}
@@ -904,8 +902,7 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 	auto wal_size = GetWALSize();
 	auto should_checkpoint =
 	    wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT;
-	// Bind indexes with buffered WAL replays before we write anything: binding can fail, and the checkpoint
-	// invalidates the database on any failure once it has started.
+	// Binding can fail: bind before the checkpoint starts, as any failure after that invalidates the database.
 	if (should_checkpoint && BindIndexesForCheckpoint(context, options)) {
 		try {
 			// Start timing the checkpoint.

@@ -86,7 +86,7 @@ void UnboundIndex::BufferChunk(DataChunk &table_chunk, Vector &row_ids, const Bu
 	D_ASSERT(!column_ids.empty());
 
 	// A checkpoint must bind this index before it can persist these operations.
-	db.GetStorageManager().SetBufferedIndexReplays();
+	db.GetStorageManager().MarkBufferedIndexReplays();
 
 	// table_chunk is in physical table layout: data[j] holds the data of physical column j.
 	// Reference this index's own columns directly by their physical offset.

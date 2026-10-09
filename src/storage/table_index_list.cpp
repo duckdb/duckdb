@@ -379,6 +379,27 @@ shared_ptr<IndexEntry> TableIndexList::FindEntry(const IndexEntry &index) const 
 	return nullptr;
 }
 
+static unique_ptr<BoundIndex> BindIndexEntry(ClientContext &context, DuckTableEntry &table, IndexEntry &index_entry,
+                                             const vector<string> &column_names,
+                                             const vector<LogicalType> &column_types) {
+	// Create a binder to bind this index.
+	auto binder = Binder::CreateBinder(context);
+
+	// Add the table to the binder.
+	vector<ColumnIndex> dummy_column_ids;
+	binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), StringsToIdentifiers(column_names), column_types,
+	                                  dummy_column_ids, table);
+
+	// Create an IndexBinder to bind the index
+	IndexBinder idx_binder(*binder, context);
+
+	vector<LogicalType> physical_column_types;
+	for (auto &col : table.GetColumns().Physical()) {
+		physical_column_types.push_back(col.Type());
+	}
+	return index_entry.Bind(idx_binder, physical_column_types);
+}
+
 void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, const optional<string> &index_type) {
 	{
 		// Early-out, if we have no unbound indexes.
@@ -436,22 +457,7 @@ void TableIndexList::Bind(ClientContext &context, DataTableInfo &table_info, con
 		// Apply any outstanding buffered replays and replace the unbound index with a bound index.
 		unique_ptr<BoundIndex> bound_idx;
 		try {
-			// Create a binder to bind this index.
-			auto binder = Binder::CreateBinder(context);
-
-			// Add the table to the binder.
-			vector<ColumnIndex> dummy_column_ids;
-			binder->bind_context.AddBaseTable(TableIndex(0), Identifier(), StringsToIdentifiers(column_names),
-			                                  column_types, dummy_column_ids, table);
-
-			// Create an IndexBinder to bind the index
-			IndexBinder idx_binder(*binder, context);
-
-			vector<LogicalType> physical_column_types;
-			for (auto &col : table.GetColumns().Physical()) {
-				physical_column_types.push_back(col.Type());
-			}
-			bound_idx = index_entry->Bind(idx_binder, physical_column_types);
+			bound_idx = BindIndexEntry(context, table, *index_entry, column_names, column_types);
 		} catch (std::exception &) {
 			// Reset the bind state, so that any other thread waiting for this bind can retry it.
 			lock.lock();
