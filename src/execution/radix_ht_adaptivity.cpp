@@ -34,7 +34,7 @@ bool RadixHTAdaptivity::TryGrow(RadixHTGlobalSinkState &gstate, RadixHTLocalSink
 	const auto current_size = ht.GetSizeInBytes();
 	const auto table_size = next_capacity * sizeof(ht_entry_t);
 	// Grow only when repeated tuple materialization outweighs the larger pointer table.
-	if (static_cast<double>(materialized_count - hll_count) * ht.GetLayout().GetRowWidth() <
+	if (static_cast<double>(materialized_count - hll_count) * static_cast<double>(ht.GetLayout().GetRowWidth()) <
 	    GROWTH_DUPLICATE_BYTES_FACTOR * static_cast<double>(table_size)) {
 		return false;
 	}
@@ -88,7 +88,8 @@ void RadixHTAdaptivity::MaybeSkipLookups(RadixHTGlobalSinkState &gstate, RadixHT
 
 	const auto cycle_input = adaptivity.GetCycleInputCount();
 	D_ASSERT(cycle_input >= ht.Count());
-	const auto reduction = cycle_input ? static_cast<double>(cycle_input - ht.Count()) / cycle_input : 0;
+	const auto reduction =
+	    cycle_input ? static_cast<double>(cycle_input - ht.Count()) / static_cast<double>(cycle_input) : 0;
 	if (reduction < MINIMUM_SMALL_TABLE_REDUCTION) {
 		ht.SkipLookups();
 	}
