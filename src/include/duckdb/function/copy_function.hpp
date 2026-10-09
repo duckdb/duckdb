@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
@@ -168,7 +169,7 @@ typedef optional_idx (*copy_default_batch_size_t)();
 typedef optional_idx (*copy_default_batch_size_bytes_t)();
 typedef idx_t (*copy_file_size_bytes_t)(GlobalFunctionData &gstate);
 
-typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
+typedef optional_idx (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
 typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, FunctionData &bind_data,
                                                  GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics);

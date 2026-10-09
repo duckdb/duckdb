@@ -167,7 +167,8 @@ bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const i
 				// we make an exception if the first over-value is null
 				bool is_value_null = false;
 				for (idx_t i = 0; i < null_str_count; i++) {
-					is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+					is_value_null =
+					    is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
 				}
 				error = !is_value_null;
 			}
@@ -248,7 +249,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, idx_t size, bool
 			// we make an exception if the first over-value is null
 			bool is_value_null = false;
 			for (idx_t i = 0; i < null_str_count; i++) {
-				is_value_null = is_value_null || IsValueNull(null_str_ptr[i], value_ptr, size);
+				is_value_null =
+				    is_value_null || (size == null_str_size[i] && IsValueNull(null_str_ptr[i], value_ptr, size));
 			}
 			error = !is_value_null;
 		}
@@ -596,7 +598,7 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos,
                                                 const char *value_ptr, const idx_t length, const bool empty) {
 	if (result.escaped) {
-		if (result.projecting_columns) {
+		if (result.projecting_columns && result.cur_col_id < result.number_of_columns) {
 			if (!result.projected_columns[result.cur_col_id]) {
 				result.cur_col_id++;
 				result.escaped = false;
@@ -747,7 +749,10 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
-			if (!StringValueScanner::CanDirectlyCast(result.csv_file_scan->file_types[col_idx], result.icu_loaded)) {
+			// the file types are those of the projected columns
+			auto &file_types = result.csv_file_scan->file_types;
+			if (cur_error.chunk_idx < file_types.size() &&
+			    !StringValueScanner::CanDirectlyCast(file_types[cur_error.chunk_idx], result.icu_loaded)) {
 				result.number_of_rows--;
 			}
 			break;
@@ -1770,42 +1775,16 @@ bool StringValueScanner::SkipUntilState(CSVState initial_state, CSVState until_s
 	current_state.Initialize(initial_state);
 	bool first_column = true;
 	const idx_t to_pos = current_iterator.GetEndPos();
+	skipper.SetBuffer(*cur_buffer_handle);
 	while (current_iterator.pos.buffer_pos < to_pos) {
 		state_machine_strict->Transition(current_state, buffer_handle_ptr[current_iterator.pos.buffer_pos++]);
 		if (current_state.IsState(CSVState::STANDARD) || current_state.IsState(CSVState::STANDARD_NEWLINE)) {
-			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
-				uint64_t value = Load<uint64_t>(
-				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
-				if (SwarWord::MaybeZeroBytes((value ^ state_machine_strict->transition_array.delimiter) &
-				                             (value ^ state_machine_strict->transition_array.new_line) &
-				                             (value ^ state_machine_strict->transition_array.carriage_return) &
-				                             (value ^ state_machine_strict->transition_array.comment))) {
-					break;
-				}
-				current_iterator.pos.buffer_pos += 8;
-			}
-			while (state_machine_strict->transition_array
-			           .skip_standard[static_cast<uint8_t>(buffer_handle_ptr[current_iterator.pos.buffer_pos])] &&
-			       current_iterator.pos.buffer_pos < to_pos - 1) {
-				current_iterator.pos.buffer_pos++;
-			}
+			skipper.SkipToStop(state_machine_strict->transition_array.skip_standard, to_pos,
+			                   current_iterator.pos.buffer_pos);
 		}
 		if (current_state.IsState(CSVState::QUOTED)) {
-			while (current_iterator.pos.buffer_pos + 8 < to_pos) {
-				uint64_t value = Load<uint64_t>(
-				    reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[current_iterator.pos.buffer_pos]));
-				if (SwarWord::MaybeZeroBytes((value ^ state_machine_strict->transition_array.quote) &
-				                             (value ^ state_machine_strict->transition_array.escape))) {
-					break;
-				}
-				current_iterator.pos.buffer_pos += 8;
-			}
-
-			while (state_machine_strict->transition_array
-			           .skip_quoted[static_cast<uint8_t>(buffer_handle_ptr[current_iterator.pos.buffer_pos])] &&
-			       current_iterator.pos.buffer_pos < to_pos - 1) {
-				current_iterator.pos.buffer_pos++;
-			}
+			skipper.SkipToStop(state_machine_strict->transition_array.skip_quoted, to_pos,
+			                   current_iterator.pos.buffer_pos);
 		}
 		if ((current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
 		     current_state.IsState(CSVState::RECORD_SEPARATOR)) &&

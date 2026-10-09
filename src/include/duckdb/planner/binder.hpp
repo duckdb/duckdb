@@ -19,6 +19,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/tableref/delimgetref.hpp"
 #include "duckdb/parser/tokens.hpp"
@@ -44,6 +45,7 @@ class BoundResultModifier;
 class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
+struct ExternalResourceOptions;
 class LimitModifier;
 class OrderBinder;
 class TableCatalogEntry;
@@ -58,7 +60,9 @@ class LogicalVacuum;
 
 class ColumnList;
 class ExternalDependency;
+class FunctionSignature;
 class TableFunction;
+class BoundTableFunction;
 class TableStorageInfo;
 class BoundConstraint;
 class AtClause;
@@ -239,6 +243,12 @@ public:
 	unordered_map<TableIndex, LogicalOperator *> recursive_ctes;
 
 public:
+	//! Whether the expression is COUNT(tbl.*)
+	static bool IsQualifiedCountStar(const ParsedExpression &expr);
+	//! Rewrites COUNT(tbl.*) into a COUNT that skips the rows NULL-extended by an outer join, or returns nullptr
+	unique_ptr<ParsedExpression> TryRewriteQualifiedCountStar(const ParsedExpression &expr);
+
+public:
 	DUCKDB_API BoundStatement Bind(SQLStatement &statement);
 	DUCKDB_API BoundStatement Bind(QueryNode &node);
 
@@ -300,9 +310,6 @@ public:
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateTriggerInfo(CreateTriggerInfo &info);
 
-	//! Check usage, and cast named parameters to their types
-	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
-	                                QueryErrorContext &error_context, const Identifier &func_name);
 	unique_ptr<BoundPragmaInfo> BindPragma(PragmaInfo &info, QueryErrorContext error_context);
 
 	BoundStatement Bind(TableRef &ref);
@@ -399,7 +406,8 @@ public:
 	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
 	                                  optional_ptr<duckdb_re2::RE2> regex);
 
-	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes);
+	unique_ptr<LogicalOperator> UnionOperators(vector<unique_ptr<LogicalOperator>> nodes, idx_t column_count = 1,
+	                                           TableIndex table_index = TableIndex());
 
 	void SetSearchPath(Catalog &catalog, const Identifier &schema);
 
@@ -483,6 +491,13 @@ private:
 	BoundStatement Bind(ConnectStatement &stmt);
 	BoundStatement Bind(DisconnectStatement &stmt);
 	BoundStatement Bind(ExternalResourceStatement &stmt);
+	//! Bind + constant-fold a single EXTERNAL RESOURCE expression (a create param, or the REGISTER handle).
+	Value BindExternalResourceValue(unique_ptr<ParsedExpression> &expr);
+	//! Bind + constant-fold the create params of an EXTERNAL RESOURCE statement or clause.
+	void BindExternalResourceParams(case_insensitive_map_t<unique_ptr<ParsedExpression>> &parsed_params,
+	                                unordered_map<string, Value> &params);
+	//! Bind the `ATTACH/CONNECT TO EXTERNAL RESOURCE ...` clause. Shared by ATTACH and CONNECT.
+	void BindExternalResource(ExternalResourceOptions &external_resource);
 
 	//! Resolves the base table for DROP TRIGGER, stamps catalog/schema onto stmt.info,
 	//! and registers the catalog modification. IF EXISTS only guards the trigger, not the table.
@@ -579,13 +594,14 @@ private:
 	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
-	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
-	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
-	                                 BoundStatement &subquery, ErrorData &error);
+	                                 vector<unique_ptr<ParsedExpression>> &expressions,
+	                                 vector<unique_ptr<Expression>> &positional_arguments,
+	                                 vector<pair<Identifier, unique_ptr<Expression>>> &named_arguments,
+	                                 BoundStatement &subquery, bool &table_in_out, ErrorData &error);
 	void BindTableInTableOutFunction(vector<unique_ptr<ParsedExpression>> &expressions, BoundStatement &subquery);
 	BoundStatement BindTableFunction(TableFunction &function, vector<Value> parameters);
-	BoundStatement BindTableFunctionInternal(TableFunction &table_function, const TableFunctionRef &ref,
-	                                         vector<Value> parameters, named_parameter_map_t named_parameters,
+	BoundStatement BindTableFunctionInternal(BoundTableFunction &table_function, const TableFunctionRef &ref,
+	                                         vector<Value> parameters, named_argument_map_t named_parameters,
 	                                         vector<LogicalType> input_table_types,
 	                                         vector<Identifier> input_table_names,
 	                                         optional_ptr<unique_ptr<LogicalOperator>> input_plan);
@@ -594,7 +610,8 @@ private:
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);
-	void BindCopyOptions(CopyInfo &info);
+	void BindCopyFormat(CopyInfo &info);
+	void BindCopyOptions(CopyInfo &info, const CopyFunction &function);
 	identifier_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);

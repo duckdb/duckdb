@@ -1,4 +1,5 @@
 #include "catch.hpp"
+#include <type_traits>
 #include "test_helpers.hpp"
 
 #include "duckdb/main/settings.hpp"
@@ -6,23 +7,497 @@
 #include "duckdb/parser/grammar_extension.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/peg/compiled_grammar.hpp"
+#include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
 #include "duckdb/parser/peg/matcher/identifier_matcher.hpp"
+#include "duckdb/parser/peg/matcher/choice_matcher.hpp"
 #include "duckdb/parser/peg/matcher/keyword_matcher.hpp"
+#include "duckdb/parser/peg/matcher/list.hpp"
 #include "duckdb/parser/peg/matcher/list_matcher.hpp"
 #include "duckdb/parser/peg/matcher_stack.hpp"
+#include "duckdb/parser/peg/matcher_factory.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
+#include "duckdb/parser/peg/tokenizer/parser_tokenizer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
 using namespace duckdb;
 
+struct LiteralChoiceTestResult {
+	bool success;
+	idx_t position;
+	idx_t max_position;
+	string tree;
+};
+
+static compiled_rules_map_t CompileTestProgramRule(const ParsedGrammar &grammar) {
+	compiled_rules_map_t rules;
+	auto rule = grammar.GetRule("Program");
+	if (!rule) {
+		throw InternalException("Test grammar is missing the Program rule");
+	}
+	rules.emplace(rule->name, make_uniq<CompiledGrammarRule>(rule->name, rule->transform_process, rule->collapsible));
+	return rules;
+}
+
+static vector<MatcherSuggestion> GetLiteralChoiceSuggestions(const Matcher &matcher) {
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_position = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_position);
+	MatchState state(iterator, context);
+	matcher.AddSuggestion(state);
+	return suggestions;
+}
+
+TEST_CASE("Literal choice dispatch retains autocomplete metadata", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	auto grammar = ParsedGrammar::Parse("Program <- 'TABLE' / '(' / '.' / 'table'");
+	auto rules = CompileTestProgramRule(grammar);
+	MatcherAllocator allocator;
+	MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
+	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
+	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
+	vector<reference<Matcher>> children = choice.matchers;
+	ChoiceMatcher sequential(std::move(children));
+	auto actual = GetLiteralChoiceSuggestions(choice);
+	auto expected = GetLiteralChoiceSuggestions(sequential);
+	REQUIRE(actual.size() == 3);
+	REQUIRE(actual.size() == expected.size());
+	for (idx_t i = 0; i < actual.size(); i++) {
+		REQUIRE(actual[i].type == expected[i].type);
+		REQUIRE(actual[i].keyword.candidate == expected[i].keyword.candidate);
+		REQUIRE(actual[i].keyword.score_bonus == expected[i].keyword.score_bonus);
+		REQUIRE(actual[i].keyword.extra_char == expected[i].keyword.extra_char);
+		REQUIRE(actual[i].keyword.candidate_type == expected[i].keyword.candidate_type);
+	}
+}
+
+static LiteralChoiceTestResult MatchLiteralChoiceTest(const Matcher &matcher, const string &text, MatchMode mode) {
+	vector<MatcherToken> tokens;
+	if (!text.empty()) {
+		tokens.emplace_back(text, 0, TokenType::KEYWORD);
+	}
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache packrat(packrat_allocator);
+	idx_t max_position = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_position, mode,
+	                     IdentifierCaseMode::PRESERVE_CASE, &packrat);
+	MatchState state(iterator, context);
+	auto result = matcher.MatchParseResult(state);
+	return {result.IsSuccess(), state.token_iterator.Position(), max_position,
+	        result.HasParseResult() ? result.GetParseResult()->ToString() : string()};
+}
+
+TEST_CASE("Literal choice dispatch preserves ordered choice results", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM' / 'select' / 'WHERE' / '('");
+	auto rules = CompileTestProgramRule(grammar);
+	MatcherAllocator allocator;
+	MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
+	auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
+	auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
+	vector<reference<Matcher>> children = choice.matchers;
+	ChoiceMatcher sequential(std::move(children));
+	auto &table = compiled->GetKeywordHelper().GetLiteralTable();
+	REQUIRE(choice.matchers[0].get().Cast<KeywordMatcher>().GetDispatchLiteral(table).IsValid());
+	for (auto &text : vector<string> {"WHERE", "unknown_literal"}) {
+		vector<MatcherToken> tokens {MatcherToken(text, 0, TokenType::KEYWORD)};
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator parse_results;
+		idx_t max_position = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, parse_results, process_allocator, max_position);
+		MatchState state(iterator, context);
+		auto process = choice.StartMatch(state);
+		auto step = process->Resume(nullopt);
+		if (text == "WHERE") {
+			REQUIRE(step.GetChild());
+			REQUIRE(&step.GetChild()->matcher == &choice.matchers[3].get());
+		} else {
+			REQUIRE_FALSE(step.GetChild());
+			REQUIRE_FALSE(step.GetResult().IsSuccess());
+		}
+	}
+	for (auto mode : {MatchMode::BUILD_PARSE_RESULT, MatchMode::RECOGNIZE_ONLY}) {
+		for (auto &text : vector<string> {"select", "FROM", "where", "(", "unknown_literal", ""}) {
+			auto actual = MatchLiteralChoiceTest(choice, text, mode);
+			auto expected = MatchLiteralChoiceTest(sequential, text, mode);
+			REQUIRE(actual.success == expected.success);
+			REQUIRE(actual.position == expected.position);
+			REQUIRE(actual.max_position == expected.max_position);
+			REQUIRE(actual.tree == expected.tree);
+		}
+	}
+}
+
+class DispatchOverrideKeywordMatcher final : public KeywordMatcher {
+public:
+	DispatchOverrideKeywordMatcher(const string &keyword, const KeywordInfo &info, const PEGKeywordHelper &helper,
+	                               idx_t &calls_p)
+	    : KeywordMatcher(keyword, info, helper), calls(calls_p), accepts_from(keyword == "SELECT") {
+	}
+
+	MatcherResult MatchAtomic(MatchState &state) const override {
+		calls++;
+		auto token = state.token_iterator.Current();
+		if (accepts_from && token && StringUtil::CIEquals(token->text, "FROM")) {
+			state.token_iterator.Advance();
+			return MatcherResult::Success();
+		}
+		return KeywordMatcher::MatchAtomic(state);
+	}
+
+private:
+	idx_t &calls;
+	bool accepts_from;
+};
+
+class DispatchOverrideMatcherFactory final : public MatcherFactory {
+public:
+	DispatchOverrideMatcherFactory(MatcherAllocator &allocator, const ParsedGrammar &grammar,
+	                               const compiled_rules_map_t &rules, const PEGKeywordHelper &helper_p, idx_t &calls_p)
+	    : MatcherFactory(allocator, grammar, rules, helper_p, {}), helper(helper_p), calls(calls_p) {
+	}
+
+private:
+	unique_ptr<KeywordMatcher> CreateKeyword(const string &keyword, const KeywordInfo &info) const override {
+		return make_uniq<DispatchOverrideKeywordMatcher>(keyword, info, helper, calls);
+	}
+
+	const PEGKeywordHelper &helper;
+	idx_t &calls;
+};
+
+TEST_CASE("Literal dispatch does not assume custom keyword matcher semantics", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	auto grammar = ParsedGrammar::Parse("Program <- 'SELECT' / 'FROM'");
+	auto rules = CompileTestProgramRule(grammar);
+	MatcherAllocator allocator;
+	idx_t calls = 0;
+	DispatchOverrideMatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), calls);
+	auto &root = factory.CreateRootMatcher("Program");
+	auto result = MatchLiteralChoiceTest(root, "FROM", MatchMode::RECOGNIZE_ONLY);
+	REQUIRE(result.success);
+	REQUIRE(result.position == 1);
+	REQUIRE(calls == 1);
+}
+
+TEST_CASE("Literal dispatch leaves mixed and unregistered alternatives unchanged", "[api][grammar_extension]") {
+	auto compiled = CompiledGrammar::Create();
+	for (auto &definition : vector<string> {"Program <- 'SELECT' / ('FROM' 'WHERE')",
+	                                        "Program <- 'SELECT' / 'unregistered_dispatch_word'"}) {
+		auto grammar = ParsedGrammar::Parse(definition);
+		auto rules = CompileTestProgramRule(grammar);
+		MatcherAllocator allocator;
+		MatcherFactory factory(allocator, grammar, rules, compiled->GetKeywordHelper(), {});
+		auto &root = factory.CreateRootMatcher("Program").Cast<ListMatcher>();
+		auto &choice = root.matchers[0].get().Cast<ChoiceMatcher>();
+		vector<reference<Matcher>> children = choice.matchers;
+		ChoiceMatcher sequential(std::move(children));
+		for (auto &text : vector<string> {"SELECT", "FROM", "unregistered_dispatch_word", "missing"}) {
+			auto actual = MatchLiteralChoiceTest(choice, text, MatchMode::BUILD_PARSE_RESULT);
+			auto expected = MatchLiteralChoiceTest(sequential, text, MatchMode::BUILD_PARSE_RESULT);
+			REQUIRE(actual.success == expected.success);
+			REQUIRE(actual.position == expected.position);
+			REQUIRE(actual.max_position == expected.max_position);
+			REQUIRE(actual.tree == expected.tree);
+		}
+	}
+}
+
+TEST_CASE("Keyword category masks require explicit conversions and valid IDs", "[api][grammar_extension]") {
+	static_assert(!std::is_convertible<uint8_t, keyword_categories_t>::value, "Category masks must be explicit");
+	static_assert(!std::is_convertible<keyword_categories_t, uint8_t>::value, "Category masks must stay opaque");
+	static_assert(!std::is_assignable<keyword_categories_t &, uint8_t>::value, "Raw masks must be explicit");
+	constexpr auto first = keyword_categories_t::CreateCategory(0);
+	constexpr auto last = keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID - 1);
+	static_assert(sizeof(keyword_categories_t) == sizeof(uint8_t), "Category masks must remain compact");
+	REQUIRE(static_cast<uint8_t>(first) == 1);
+	REQUIRE(static_cast<uint8_t>(last) == 128);
+	REQUIRE(keyword_categories_t(static_cast<uint8_t>(first)) == first);
+	REQUIRE((first & last) == keyword_categories_t());
+	REQUIRE(((first | last) & first) == first);
+	REQUIRE(first != keyword_categories_t());
+	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(keyword_categories_t::MAX_CATEGORY_ID),
+	                  InvalidInputException);
+	REQUIRE_THROWS_AS(keyword_categories_t::CreateCategory(256), InvalidInputException);
+}
+
+TEST_CASE("Literal IDs and opaque flags are independent", "[api][grammar_extension]") {
+	REQUIRE(sizeof(LiteralInfo) == sizeof(uint32_t));
+	REQUIRE(sizeof(LiteralInfo().LiteralId()) == sizeof(uint16_t));
+	LiteralInfo missing;
+	REQUIRE(missing.LiteralId() == 0);
+	REQUIRE_FALSE(missing.IsKeyword());
+	REQUIRE_FALSE(missing.HasAnyFlags(~keyword_categories_t()));
+	LiteralInfo original(LiteralInfo::MAX_LITERAL_ID);
+	REQUIRE(original.LiteralId() == 65535);
+	REQUIRE_FALSE(original.IsKeyword());
+	LiteralInfo accumulated(LiteralInfo::MAX_LITERAL_ID);
+	keyword_categories_t expected_flags;
+	for (idx_t id = 0; id < keyword_categories_t::MAX_CATEGORY_ID; id++) {
+		auto flag = keyword_categories_t::CreateCategory(id);
+		LiteralInfo literal(LiteralInfo::MAX_LITERAL_ID, flag);
+		REQUIRE(literal.HasAnyFlags(flag));
+		REQUIRE_FALSE(literal.HasAnyFlags(~flag));
+		REQUIRE_FALSE(literal.HasAnyFlags(keyword_categories_t()));
+		REQUIRE(literal.IsKeyword());
+		REQUIRE(literal.LiteralId() == original.LiteralId());
+		REQUIRE_FALSE(literal == original);
+		LiteralInfo copy(literal);
+		REQUIRE(copy == literal);
+		LiteralInfo unassigned;
+		unassigned.AddCategories(flag);
+		REQUIRE(unassigned.LiteralId() == 0);
+		REQUIRE(unassigned.IsKeyword());
+		REQUIRE(unassigned.CategoryFlags() == flag);
+		accumulated.AddCategories(flag);
+		expected_flags |= flag;
+		REQUIRE(accumulated.LiteralId() == LiteralInfo::MAX_LITERAL_ID);
+		REQUIRE(accumulated.CategoryFlags() == expected_flags);
+		LiteralInfo before(accumulated);
+		accumulated.AddCategories(flag);
+		accumulated.AddCategories(keyword_categories_t());
+		REQUIRE(accumulated == before);
+	}
+}
+
+TEST_CASE("Default keyword categories decode independently of literal IDs", "[api][grammar_extension]") {
+	DefaultKeywordMaps maps;
+	vector<KeywordCategory> expected;
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(LiteralInfo()).empty());
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(LiteralInfo(LiteralInfo::MAX_LITERAL_ID)).empty());
+	vector<pair<KeywordCategory, reference<case_insensitive_set_t>>> categories {
+	    {KeywordCategory::KEYWORD_RESERVED, maps.reserved_keyword_map},
+	    {KeywordCategory::KEYWORD_UNRESERVED, maps.unreserved_keyword_map},
+	    {KeywordCategory::KEYWORD_TYPE_FUNC, maps.typefunc_keyword_map},
+	    {KeywordCategory::KEYWORD_COL_NAME, maps.colname_keyword_map},
+	    {KeywordCategory::KEYWORD_TYPE_NAME, maps.typename_keyword_map}};
+	for (auto &category : categories) {
+		category.second.get().insert("overlapping");
+		expected.push_back(category.first);
+		auto single_word = "category_" + to_string(expected.size());
+		category.second.get().insert(single_word);
+		REQUIRE(DefaultKeywordMaps::GetKeywordCategories(maps.LookupKeyword(single_word)) ==
+		        vector<KeywordCategory> {category.first});
+		for (auto id : {uint16_t(0), uint16_t(1), LiteralInfo::MAX_LITERAL_ID}) {
+			auto info = maps.LookupKeyword("OVERLAPPING", id);
+			REQUIRE(info.LiteralId() == id);
+			REQUIRE(DefaultKeywordMaps::GetKeywordCategories(info) == expected);
+		}
+	}
+}
+
+TEST_CASE("Grammar literal IDs reject overflow", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- '('");
+	case_insensitive_map_t<LiteralInfo> keywords;
+	const auto flags = keyword_categories_t::CreateCategory(6) | keyword_categories_t::CreateCategory(7);
+	for (idx_t i = 1; i < LiteralInfo::MAX_LITERAL_ID; i++) {
+		keywords.emplace("literal_limit_" + to_string(i), LiteralInfo(0, flags));
+	}
+	GrammarLiteralTable table(grammar, keywords);
+	idx_t max_id = table.Lookup("(").LiteralId();
+	for (auto &entry : keywords) {
+		auto info = table.Lookup(entry.first);
+		REQUIRE(info.LiteralId() != 0);
+		REQUIRE(info.HasAnyFlags(keyword_categories_t::CreateCategory(6)));
+		REQUIRE(info.HasAnyFlags(keyword_categories_t::CreateCategory(7)));
+		max_id = MaxValue<idx_t>(max_id, info.LiteralId());
+	}
+	REQUIRE(max_id == LiteralInfo::MAX_LITERAL_ID);
+	keywords.emplace("one_literal_too_many", LiteralInfo());
+	REQUIRE_THROWS_WITH(GrammarLiteralTable(grammar, keywords),
+	                    Catch::Matchers::Contains("Grammar has too many distinct literals"));
+}
+
+TEST_CASE("Grammar literal IDs include category-only words and overlapping categories", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SELECT' / 'select' / '('");
+	DefaultKeywordMaps categories;
+	categories.reserved_keyword_map.insert("SELECT");
+	categories.typefunc_keyword_map.insert("category_only");
+	categories.typename_keyword_map.insert("CATEGORY_ONLY");
+	GrammarLiteralTable table(grammar, categories.ToLiteralMap());
+	REQUIRE(sizeof(LiteralInfo) == sizeof(uint32_t));
+	REQUIRE(table.Lookup("select") == table.Lookup("SELECT"));
+	REQUIRE(table.Lookup("SELECT").LiteralId() != 0);
+	REQUIRE(table.Lookup("SELECT").IsKeyword());
+	REQUIRE(table.Lookup("(").LiteralId() != 0);
+	REQUIRE_FALSE(table.Lookup("(").IsKeyword());
+	REQUIRE(table.Lookup("category_only").LiteralId() != 0);
+	vector<KeywordCategory> expected {KeywordCategory::KEYWORD_TYPE_FUNC, KeywordCategory::KEYWORD_TYPE_NAME};
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("category_only")) == expected);
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("SELECT")) ==
+	        vector<KeywordCategory> {KeywordCategory::KEYWORD_RESERVED});
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("(")).empty());
+	REQUIRE(DefaultKeywordMaps::GetKeywordCategories(table.Lookup("missing")).empty());
+	REQUIRE(table.Lookup("missing").LiteralId() == 0);
+	REQUIRE_FALSE(table.Lookup("missing").IsKeyword());
+}
+
+TEST_CASE("Grammar literal tables preserve dialect-defined flags", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SHARED' / 'shared' / 'plain'");
+	const keyword_categories_t first_flag = keyword_categories_t::CreateCategory(6);
+	const keyword_categories_t second_flag = keyword_categories_t::CreateCategory(7);
+	case_insensitive_map_t<LiteralInfo> keywords;
+	keywords.emplace("shared", LiteralInfo(0, first_flag | second_flag));
+	keywords.emplace("category_only", LiteralInfo(0, second_flag));
+	GrammarLiteralTable table(grammar, keywords);
+
+	auto shared = table.Lookup("SHARED");
+	auto category_only = table.Lookup("CATEGORY_ONLY");
+	auto plain = table.Lookup("plain");
+	REQUIRE(shared == table.Lookup("shared"));
+	REQUIRE(shared.LiteralId() != 0);
+	REQUIRE(category_only.LiteralId() != 0);
+	REQUIRE(plain.LiteralId() != 0);
+	REQUIRE(shared.LiteralId() != category_only.LiteralId());
+	REQUIRE(shared.LiteralId() != plain.LiteralId());
+	REQUIRE(category_only.LiteralId() != plain.LiteralId());
+	REQUIRE(shared.HasAnyFlags(first_flag));
+	REQUIRE(shared.HasAnyFlags(second_flag));
+	REQUIRE(category_only.HasAnyFlags(second_flag));
+	REQUIRE_FALSE(category_only.HasAnyFlags(first_flag));
+	REQUIRE_FALSE(plain.IsKeyword());
+	REQUIRE_FALSE(plain.HasAnyFlags(first_flag | second_flag));
+	REQUIRE(table.Lookup("missing") == LiteralInfo());
+}
+
+TEST_CASE("Token literal caches follow grammar identity and token edits", "[api][grammar_extension]") {
+	auto grammar = ParsedGrammar::Parse("LiteralTest <- 'SELECT'");
+	DefaultKeywordMaps first_categories;
+	first_categories.reserved_keyword_map.insert("SELECT");
+	DefaultKeywordMaps second_categories;
+	second_categories.unreserved_keyword_map.insert("SELECT");
+	second_categories.typename_keyword_map.insert("extension_word");
+	GrammarLiteralTable first(grammar, first_categories.ToLiteralMap());
+	optional<GrammarLiteralTable> second;
+	second.emplace(grammar, second_categories.ToLiteralMap());
+	vector<MatcherToken> tokens {MatcherToken("select", 0, TokenType::KEYWORD),
+	                             MatcherToken("extension_word", 7, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	REQUIRE(iterator.CurrentLiteralInfo(first) == first.Lookup("SELECT"));
+	TokenIterator branch(iterator);
+	branch.Advance();
+	branch.SetPreviousTokenType(TokenType::COLUMN_NAME);
+	REQUIRE(iterator.CurrentLiteralInfo(first) == first.Lookup("SELECT"));
+	REQUIRE(iterator.CurrentLiteralInfo(*second) == second->Lookup("SELECT"));
+	REQUIRE_FALSE(iterator.CurrentLiteralInfo(*second) == first.Lookup("SELECT"));
+	REQUIRE(branch.CurrentLiteralInfo(first).LiteralId() == 0);
+	REQUIRE(branch.CurrentLiteralInfo(*second) == second->Lookup("extension_word"));
+	REQUIRE(branch.CurrentLiteralInfo(first).LiteralId() == 0);
+	iterator.CurrentLiteralInfo(*second);
+	auto old_cache_id = second->CacheId();
+	second.reset();
+	second.emplace(grammar, first_categories.ToLiteralMap());
+	REQUIRE(second->CacheId() != old_cache_id);
+	REQUIRE(iterator.CurrentLiteralInfo(*second) == first.Lookup("SELECT"));
+	tokens[0] = MatcherToken("extension_word", 0, TokenType::IDENTIFIER);
+	TokenIterator edited(tokens);
+	REQUIRE(edited.CurrentLiteralInfo(*second).LiteralId() == 0);
+	branch.Advance();
+	REQUIRE(branch.CurrentLiteralInfo(first).LiteralId() == 0);
+}
+
+class LiteralTestKeywordHelper final : public PEGKeywordHelper {
+public:
+	explicit LiteralTestKeywordHelper(bool allow_identifier = false)
+	    : literal_table(ParsedGrammar::Parse("LiteralTest <- 'custom_word'"), BuildKeywords(allow_identifier)) {
+	}
+	const GrammarLiteralTable &GetLiteralTable() const override {
+		return literal_table;
+	}
+	keyword_categories_t GetIdentifierMask(SuggestionState type) const override {
+		return DefaultKeywordMaps::GetIdentifierMask(type);
+	}
+	vector<ParserKeyword> KeywordList() const override {
+		return {};
+	}
+
+private:
+	static case_insensitive_map_t<LiteralInfo> BuildKeywords(bool allow_identifier) {
+		DefaultKeywordMaps maps;
+		if (allow_identifier) {
+			maps.unreserved_keyword_map.insert("custom_word");
+		} else {
+			maps.reserved_keyword_map.insert("custom_word");
+		}
+		return maps.ToLiteralMap();
+	}
+
+	GrammarLiteralTable literal_table;
+};
+
+static bool MatchLiteralTestToken(const Matcher &matcher, const string &text) {
+	vector<MatcherToken> tokens {MatcherToken(text, 0, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	return matcher.MatchParseResult(state).IsSuccess();
+}
+
+TEST_CASE("Custom keyword helpers and standalone literal matchers keep their semantics", "[api][grammar_extension]") {
+	LiteralTestKeywordHelper helper;
+	REQUIRE(helper.GetLiteralTable().Lookup("custom_word").LiteralId() != 0);
+	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	REQUIRE_FALSE(MatchLiteralTestToken(identifier, "CUSTOM_WORD"));
+	LiteralTestKeywordHelper permissive_helper(true);
+	IdentifierMatcher permissive_identifier(SuggestionState::SUGGEST_COLUMN_NAME, permissive_helper);
+	REQUIRE(MatchLiteralTestToken(permissive_identifier, "CUSTOM_WORD"));
+	KeywordMatcher standalone("custom_word", KeywordInfo());
+	KeywordMatcher custom_helper("custom_word", KeywordInfo(), helper);
+	REQUIRE(MatchLiteralTestToken(standalone, "CUSTOM_WORD"));
+	REQUIRE(MatchLiteralTestToken(custom_helper, "CUSTOM_WORD"));
+	REQUIRE_FALSE(MatchLiteralTestToken(custom_helper, "another_word"));
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	KeywordMatcher unregistered("unregistered_literal_test_word", KeywordInfo(), grammar->GetKeywordHelper());
+	REQUIRE(MatchLiteralTestToken(unregistered, "UNREGISTERED_LITERAL_TEST_WORD"));
+	REQUIRE_FALSE(MatchLiteralTestToken(unregistered, "another_word"));
+}
+
+struct RegisteredTransformResult {
+	idx_t value;
+};
+
+namespace duckdb {
+DUCKDB_REGISTER_TRANSFORM_RESULT_TYPE("duckdb.test.RegisteredTransformResult", ::RegisteredTransformResult);
+} // namespace duckdb
+
+TEST_CASE("Transform result types use stable registered names", "[api][grammar_extension]") {
+	TypedTransformResult<RegisteredTransformResult> result({42});
+	auto copied_type_name = string(TransformResultTypeName<RegisteredTransformResult>());
+
+	REQUIRE(result.GetValuePointer(copied_type_name.c_str()) == &result.value);
+	REQUIRE(TryGetTransformResult<RegisteredTransformResult>(result) == &result.value);
+	REQUIRE(TryGetTransformResult<bool>(result) == nullptr);
+}
+
 class GrammarExtensionTestValueTransformProcess final : public TransformProcess {
 public:
-	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
-		D_ASSERT(!child_result);
-		return TransformStep::Complete(make_uniq<TypedTransformResult<bool>>(true));
+	explicit GrammarExtensionTestValueTransformProcess(PEGTransformer &transformer_p) : transformer(transformer_p) {
 	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		return TransformStep::Complete(transformer.MakeResult<bool>(true));
+	}
+
+private:
+	PEGTransformer &transformer;
 };
 
 class GrammarExtensionTestTransformProcess final : public TransformProcess {
@@ -31,7 +506,7 @@ public:
 	    : transformer(transformer_p), parse_result(parse_result_p) {
 	}
 
-	TransformStep Resume(unique_ptr<TransformResultValue> child_result) override {
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
 		if (!child_result) {
 			auto &list = parse_result.Cast<ListParseResult>();
 			return TransformStep::Child({transformer.GetRule("GrammarExtensionTestValue"), list.GetChild(0)});
@@ -39,11 +514,10 @@ public:
 		D_ASSERT(TryGetTransformResult<bool>(*child_result));
 		auto statement = make_uniq<SelectStatement>();
 		auto select_node = make_uniq<SelectNode>();
-		select_node->select_list.push_back(make_uniq<ConstantExpression>(Value::INTEGER(42)));
+		select_node->select_list.push_back(ConstantExpression::Integer(42));
 		select_node->from_table = make_uniq<EmptyTableRef>();
 		statement->node = std::move(select_node);
-		return TransformStep::Complete(
-		    make_uniq<TypedTransformResult<unique_ptr<SelectStatement>>>(std::move(statement)));
+		return TransformStep::Complete(transformer.MakeResult<unique_ptr<SelectStatement>>(std::move(statement)));
 	}
 
 private:
@@ -51,13 +525,13 @@ private:
 	ParseResult &parse_result;
 };
 
-static unique_ptr<TransformProcess> StartGrammarExtensionTestValueTransform(PEGTransformer &, ParseResult &) {
-	return make_uniq<GrammarExtensionTestValueTransformProcess>();
+static arena_ptr<TransformProcess> StartGrammarExtensionTestValueTransform(PEGTransformer &transformer, ParseResult &) {
+	return transformer.MakeProcess<GrammarExtensionTestValueTransformProcess>(transformer);
 }
 
-static unique_ptr<TransformProcess> StartGrammarExtensionTestTransform(PEGTransformer &transformer,
-                                                                       ParseResult &parse_result) {
-	return make_uniq<GrammarExtensionTestTransformProcess>(transformer, parse_result);
+static arena_ptr<TransformProcess> StartGrammarExtensionTestTransform(PEGTransformer &transformer,
+                                                                      ParseResult &parse_result) {
+	return transformer.MakeProcess<GrammarExtensionTestTransformProcess>(transformer, parse_result);
 }
 
 class GrammarExtensionTestMatchProcess final : public MatchProcess {
@@ -119,7 +593,8 @@ public:
 		changes.push_back(GrammarChange::AddChoice("UnreservedKeyword", "'ANSWER'"));
 		changes.push_back(GrammarChange::AddTerminalRuleOverride(
 		    "GrammarExtensionTestValue", [](const PEGKeywordHelper &keyword_helper) {
-			    if (!keyword_helper.KeywordCategoryType("ANSWER", PEGKeywordCategory::KEYWORD_UNRESERVED)) {
+			    if (DefaultKeywordMaps::GetKeywordCategory(keyword_helper.LookupKeyword("ANSWER")) !=
+			        KeywordCategory::KEYWORD_UNRESERVED) {
 				    throw InternalException("Parser change keyword is missing from the compiled keyword helper");
 			    }
 			    return make_uniq<GrammarExtensionTestMatcher>();
@@ -155,10 +630,33 @@ static void ActivateGrammarExtensionTestSyntax(Connection &con) {
 	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['extension_test_value', 'extension_test_atom']"));
 }
 
+TEST_CASE("Literal caches respect active grammar extensions", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto base = CompiledGrammar::Get(*con.context);
+	auto &base_table = base->GetKeywordHelper().GetLiteralTable();
+	vector<MatcherToken> tokens {MatcherToken("answer", 0, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	REQUIRE(iterator.CurrentLiteralInfo(base_table).LiteralId() == 0);
+	RegisterGrammarExtensionTestSyntax(*db.instance);
+	ActivateGrammarExtensionTestSyntax(con);
+	auto extended = CompiledGrammar::Get(*con.context);
+	auto &extended_table = extended->GetKeywordHelper().GetLiteralTable();
+	REQUIRE(extended_table.CacheId() != base_table.CacheId());
+	REQUIRE(iterator.CurrentLiteralInfo(extended_table)
+	            .HasAnyFlags(DefaultKeywordMaps::GetIdentifierMask(SuggestionState::SUGGEST_COLUMN_NAME)));
+	REQUIRE(iterator.CurrentLiteralInfo(base_table).LiteralId() == 0);
+	KeywordMatcher keyword("ANSWER", KeywordInfo(), extended->GetKeywordHelper());
+	REQUIRE(MatchLiteralTestToken(keyword, "answer"));
+	REQUIRE_FALSE(MatchLiteralTestToken(keyword, "missing"));
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = []"));
+	REQUIRE(CompiledGrammar::Get(*con.context) == base);
+}
+
 static void CheckGrammarExtensionTestSyntax(Connection &con) {
 	auto result = con.Query("ANSWER");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->GetValue(0, 0) == Value::INTEGER(42));
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(42));
 }
 
 TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_extension]") {
@@ -166,10 +664,68 @@ TEST_CASE("Grammar extensions apply in registration order", "[api][grammar_exten
 	RegisterGrammarExtensionTestSyntax(*db.instance);
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
-	REQUIRE_NO_FAIL(*con.Query("SET heap_based_parser = false"));
 	CheckGrammarExtensionTestSyntax(con);
-	REQUIRE_NO_FAIL(*con.Query("SET heap_based_parser = true"));
-	CheckGrammarExtensionTestSyntax(con);
+}
+
+class ConstantSevenTransformProcess final : public TransformProcess {
+public:
+	explicit ConstantSevenTransformProcess(PEGTransformer &transformer_p) : transformer(transformer_p) {
+	}
+
+	TransformStep Resume(arena_ptr<TransformResultValue> child_result) override {
+		D_ASSERT(!child_result);
+		return TransformStep::Complete(
+		    transformer.MakeResult<unique_ptr<ParsedExpression>>(ConstantExpression::Integer(7)));
+	}
+
+private:
+	PEGTransformer &transformer;
+};
+
+static arena_ptr<TransformProcess> StartConstantSevenTransform(PEGTransformer &transformer, ParseResult &) {
+	return transformer.MakeProcess<ConstantSevenTransformProcess>(transformer);
+}
+
+//! Replaces the transform of a rule the default grammar marks as collapsible with one that does not forward its
+//! operand
+class OverrideAdditiveExpressionTransform final : public GrammarExtension {
+public:
+	OverrideAdditiveExpressionTransform(const string &name, bool collapsible_p)
+	    : GrammarExtension(name, "OverrideAdditiveExpressionTransform"), collapsible(collapsible_p) {
+	}
+
+	vector<GrammarChange> GetChanges() const override {
+		vector<GrammarChange> changes;
+		changes.push_back(
+		    GrammarChange::SetTransformProcess("AdditiveExpression", StartConstantSevenTransform, collapsible));
+		return changes;
+	}
+
+private:
+	bool collapsible;
+};
+
+TEST_CASE("Overriding a transform opts its rule out of collapsing", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	GrammarExtension::Register(*db.instance, make_shared_ptr<OverrideAdditiveExpressionTransform>("seven", false));
+	GrammarExtension::Register(*db.instance,
+	                           make_shared_ptr<OverrideAdditiveExpressionTransform>("collapsible_seven", true));
+	// separate connections, because once an extension is active it also rewrites the literals of a later SET
+	Connection con(db);
+	REQUIRE_NO_FAIL(*con.Query("SET active_grammar_extensions = ['seven']"));
+	auto result = con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
+
+	// the extension promised the collapse is safe, so an operand without a tail skips its transform
+	Connection collapsible_con(db);
+	REQUIRE_NO_FAIL(*collapsible_con.Query("SET active_grammar_extensions = ['collapsible_seven']"));
+	result = collapsible_con.Query("SELECT 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(1));
+	result = collapsible_con.Query("SELECT 1 + 1");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Collection().GetValue(0, 0) == Value::INTEGER(7));
 }
 
 struct MatchProcessLifetimeState {
@@ -216,8 +772,9 @@ public:
 			return MatchStep::Complete(MatcherResult::Failure());
 		}
 		if (lifetime.create_result) {
+			arena_vector<reference<ParseResult>> no_children(child_state.context.process_allocator);
 			return MatchStep::Complete(child_state.AllocateParseResult<ListParseResult>(
-			    vector<reference<ParseResult>>(), string("nested result"), optional_idx()));
+			    child_state.context.allocator.MakeChildren(no_children), &matcher, optional_idx()));
 		}
 		return MatchStep::Complete(MatcherResult::Success());
 	}
@@ -235,6 +792,7 @@ class NestedTestMatcher final : public Matcher {
 public:
 	explicit NestedTestMatcher(MatchProcessLifetimeState &lifetime_p)
 	    : Matcher(MatcherType::LIST), lifetime(lifetime_p) {
+		SetName("nested result");
 	}
 
 	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
@@ -253,7 +811,7 @@ private:
 	MatchProcessLifetimeState &lifetime;
 };
 
-TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
+TEST_CASE("Matcher stack vector growth preserves custom process lifetimes", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -278,7 +836,7 @@ TEST_CASE("Heap matcher vector growth preserves custom process lifetimes", "[api
 			auto result = stack.Execute({matcher, state});
 			REQUIRE(result.IsSuccess());
 			REQUIRE(result.HasParseResult());
-			REQUIRE(result.GetParseResult()->name == "nested result");
+			REQUIRE(result.GetParseResult()->Name() == "nested result");
 			REQUIRE(lifetime.active == 0);
 			REQUIRE(lifetime.state_valid);
 			REQUIRE(lifetime.started == depth);
@@ -380,6 +938,7 @@ private:
 class ArenaNestedTestMatcher final : public ListMatcher {
 public:
 	explicit ArenaNestedTestMatcher(MatchProcessLifetimeState &lifetime_p) : lifetime(lifetime_p) {
+		SetName("nested result");
 	}
 
 	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
@@ -394,36 +953,33 @@ private:
 };
 
 TEST_CASE("MatchState allocates processes through its shared context", "[api][grammar_extension]") {
-	for (bool heap : {false, true}) {
-		vector<MatcherToken> tokens;
-		TokenIterator iterator(tokens);
-		vector<MatcherSuggestion> suggestions;
-		ParseResultAllocator parse_results;
-		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-		idx_t max_token_index = 0;
-		MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
-		context.use_heap_based_parser = heap;
-		MatchState state(iterator, context);
-		MatchState child_state(state);
-		MatchProcessLifetimeState lifetime;
-		lifetime.depth = 3;
-		ArenaNestedTestMatcher matcher(lifetime);
-		auto parent = state.Make<ArenaNestedTestMatchProcess<9000>>(matcher, state, lifetime);
-		auto parent_bytes = process_allocator.SizeInBytes();
-		REQUIRE(parent_bytes >= sizeof(ArenaNestedTestMatchProcess<9000>));
-		REQUIRE(&child_state.context.process_allocator == &process_allocator);
-		REQUIRE(matcher.MatchParseResult(child_state).IsSuccess());
-		REQUIRE(process_allocator.SizeInBytes() > parent_bytes);
-		REQUIRE(lifetime.active == 1);
-		parent.reset();
-		REQUIRE(lifetime.active == 0);
-		REQUIRE(lifetime.storage_valid);
-		REQUIRE(lifetime.state_valid);
-		REQUIRE(lifetime.destroyed == vector<idx_t> {3, 2, 1});
-	}
+	vector<MatcherToken> tokens;
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator parse_results;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	idx_t max_token_index = 0;
+	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	MatchState child_state(state);
+	MatchProcessLifetimeState lifetime;
+	lifetime.depth = 3;
+	ArenaNestedTestMatcher matcher(lifetime);
+	auto parent = state.Make<ArenaNestedTestMatchProcess<9000>>(matcher, state, lifetime);
+	auto parent_bytes = process_allocator.SizeInBytes();
+	REQUIRE(parent_bytes >= sizeof(ArenaNestedTestMatchProcess<9000>));
+	REQUIRE(&child_state.context.process_allocator == &process_allocator);
+	REQUIRE(matcher.MatchParseResult(child_state).IsSuccess());
+	REQUIRE(process_allocator.SizeInBytes() > parent_bytes);
+	REQUIRE(lifetime.active == 1);
+	parent.reset();
+	REQUIRE(lifetime.active == 0);
+	REQUIRE(lifetime.storage_valid);
+	REQUIRE(lifetime.state_valid);
+	REQUIRE(lifetime.destroyed == vector<idx_t> {3, 2, 1});
 }
 
-TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[api][grammar_extension]") {
+TEST_CASE("Matcher driver preserves overrides on derived built-in matchers", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -435,19 +991,245 @@ TEST_CASE("Matcher drivers preserve overrides on derived built-in matchers", "[a
 	MatchProcessLifetimeState lifetime;
 	lifetime.depth = 130;
 	DerivedListTestMatcher matcher(lifetime);
-	SECTION("Heap driver") {
-		context.use_heap_based_parser = true;
-	}
-	SECTION("Recursive driver") {
-		context.use_heap_based_parser = false;
-	}
 	REQUIRE(matcher.MatchParseResult(state).IsSuccess());
 	REQUIRE(lifetime.started == lifetime.depth);
 	REQUIRE(lifetime.active == 0);
 	REQUIRE(lifetime.destroyed.size() == lifetime.depth);
 }
 
-TEST_CASE("Heap matcher supports variable-sized aligned arena processes", "[api][grammar_extension]") {
+class DerivedChoiceTestMatcher final : public ChoiceMatcher {
+public:
+	DerivedChoiceTestMatcher() : child("ANSWER", KeywordInfo()) {
+	}
+
+	arena_ptr<MatchProcess> StartMatch(MatchState &state) const override {
+		return state.Make<GrammarExtensionTestMatchProcess>(child, state);
+	}
+
+private:
+	KeywordMatcher child;
+};
+
+TEST_CASE("FIRST sets do not assume built-in semantics for derived matchers", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	DerivedChoiceTestMatcher derived;
+	ListMatcher list;
+	list.SetStructural();
+	list.matchers.push_back(derived);
+	ComputeFirstSets(list, grammar->GetKeywordHelper().GetLiteralTable());
+
+	vector<MatcherToken> tokens {MatcherToken("answer", 0, TokenType::IDENTIFIER)};
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	REQUIRE(list.MatchParseResult(state).IsSuccess());
+}
+
+static vector<MatcherToken> TokenizeFirstSetTestInput(const CompiledGrammar &grammar, const string &sql) {
+	vector<MatcherToken> tokens;
+	ParserTokenizerBehavior behavior(sql, tokens);
+	grammar.GetTokenizer().TokenizeInput(behavior);
+	return tokens;
+}
+
+TEST_CASE("Tokenizer assigns FIRST set token classes", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto token_class = [&](const string &sql) {
+		auto tokens = TokenizeFirstSetTestInput(*grammar, sql);
+		REQUIRE(tokens.size() == 2);
+		return tokens[0].token_class;
+	};
+	const uint8_t generic_operator = MatcherTokenClass::OPERATOR | MatcherTokenClass::GENERIC_OPERATOR;
+	const uint8_t string_literal = MatcherTokenClass::STRING | MatcherTokenClass::WORD;
+
+	REQUIRE(token_class("select") == MatcherTokenClass::WORD);
+	REQUIRE(token_class("some_column") == MatcherTokenClass::WORD);
+	REQUIRE(token_class("\"quoted name\"") == MatcherTokenClass::WORD);
+	// string literals are accepted in identifier positions
+	REQUIRE(token_class("'str'") == string_literal);
+	REQUIRE(token_class("E'str'") == string_literal);
+	REQUIRE(token_class("$$str$$") == string_literal);
+	REQUIRE(token_class("42") == MatcherTokenClass::NUMBER);
+	REQUIRE(token_class(".5") == MatcherTokenClass::NUMBER);
+	REQUIRE(token_class("1e10") == MatcherTokenClass::NUMBER);
+	REQUIRE(token_class("+") == generic_operator);
+	REQUIRE(token_class("||") == generic_operator);
+	REQUIRE(token_class("(") == generic_operator);
+	// operators with their own precedence level are not generic operators
+	REQUIRE(token_class("<=") == MatcherTokenClass::OPERATOR);
+	REQUIRE(token_class("=") == MatcherTokenClass::OPERATOR);
+	// terminators and the end of input are only matched as literals
+	auto tokens = TokenizeFirstSetTestInput(*grammar, ";");
+	REQUIRE(tokens.size() == 2);
+	REQUIRE(tokens[0].type == TokenType::TERMINATOR);
+	REQUIRE(tokens[0].token_class == 0);
+	REQUIRE(tokens[1].type == TokenType::END_OF_INPUT);
+	REQUIRE(tokens[1].token_class == 0);
+	// re-typing a matched token does not change its class
+	tokens = TokenizeFirstSetTestInput(*grammar, "'path'");
+	TokenIterator iterator(tokens);
+	iterator.Advance();
+	iterator.SetPreviousTokenType(TokenType::TABLE_NAME);
+	REQUIRE(tokens[0].token_class == string_literal);
+}
+
+//! Checks MightMatch against the expectation, and that a rejected matcher indeed fails to match
+static void CheckFirstSet(const CompiledGrammar &grammar, const Matcher &matcher, const string &sql, bool expected) {
+	INFO("Matcher " << matcher.ToString() << " on input \"" << sql << "\"");
+	auto tokens = TokenizeFirstSetTestInput(grammar, sql);
+	TokenIterator iterator(tokens);
+	vector<MatcherSuggestion> suggestions;
+	ParseResultAllocator allocator;
+	idx_t max_token_index = 0;
+	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+	MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+	MatchState state(iterator, context);
+	auto might_match = matcher.first_set.MightMatch(state);
+	REQUIRE(might_match == expected);
+	if (!might_match) {
+		REQUIRE_FALSE(matcher.MatchParseResult(state).IsSuccess());
+	}
+}
+
+TEST_CASE("FIRST sets only reject tokens a matcher cannot start with", "[api][grammar_extension]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto grammar = CompiledGrammar::Get(*con.context);
+	auto &helper = grammar->GetKeywordHelper();
+
+	// keyword matchers created by the factory are matched by literal id
+	auto keyword_grammar = ParsedGrammar::Parse("Program <- 'SELECT'");
+	auto keyword_rules = CompileTestProgramRule(keyword_grammar);
+	MatcherAllocator matcher_allocator;
+	MatcherFactory factory(matcher_allocator, keyword_grammar, keyword_rules, helper, {});
+	auto &select = factory.CreateRootMatcher("Program").Cast<ListMatcher>().matchers[0].get();
+	REQUIRE(select.Type() == MatcherType::KEYWORD);
+	// other keyword matchers can have their own semantics
+	KeywordMatcher custom_keyword("SELECT", KeywordInfo(), helper);
+	IdentifierMatcher identifier(SuggestionState::SUGGEST_COLUMN_NAME, helper);
+	NumberLiteralMatcher number;
+	StringLiteralMatcher string_literal;
+	OperatorMatcher generic_operator;
+	OperatorMatcher any_operator(OperatorMatcherMode::ALL_OPERATORS);
+	ArithmeticOperatorMatcher arithmetic_operator;
+	GrammarExtensionTestMatcher custom;
+
+	// SELECT / NUMBER
+	ChoiceMatcher choice({select, number});
+	// NUMBER? IDENTIFIER
+	OptionalMatcher optional_number(number);
+	ListMatcher optional_prefix({optional_number, identifier});
+	// NUMBER?
+	ListMatcher nullable_list({optional_number});
+	// STRING*
+	RepeatMatcher repeat(string_literal);
+	// (SELECT / NUMBER) IDENTIFIER: the identifier is not part of the FIRST set
+	ListMatcher sequence({choice, identifier});
+	// custom matchers provide no information
+	ListMatcher custom_list({custom, number});
+	// a list that is not known to run the built-in list semantics
+	ListMatcher unmarked_list({number});
+	ListMatcher uncomputed_list({number});
+
+	ChoiceMatcher root({choice, optional_prefix, nullable_list, repeat, sequence, custom_list, unmarked_list,
+	                    identifier, string_literal, generic_operator, any_operator, arithmetic_operator,
+	                    custom_keyword});
+	for (auto matcher : vector<reference<Matcher>> {choice, optional_number, optional_prefix, nullable_list, repeat,
+	                                                sequence, custom_list, root}) {
+		matcher.get().SetStructural();
+	}
+	ComputeFirstSets(root, helper.GetLiteralTable());
+
+	SECTION("Atomic matchers") {
+		CheckFirstSet(*grammar, identifier, "some_column", true);
+		CheckFirstSet(*grammar, identifier, "\"quoted name\"", true);
+		CheckFirstSet(*grammar, identifier, "'path'", true);
+		CheckFirstSet(*grammar, identifier, "42", false);
+		CheckFirstSet(*grammar, identifier, "+", false);
+		CheckFirstSet(*grammar, identifier, ";", false);
+		CheckFirstSet(*grammar, identifier, "", false);
+
+		CheckFirstSet(*grammar, string_literal, "'str'", true);
+		CheckFirstSet(*grammar, string_literal, "E'str'", true);
+		CheckFirstSet(*grammar, string_literal, "$$str$$", true);
+		CheckFirstSet(*grammar, string_literal, "some_column", false);
+		CheckFirstSet(*grammar, string_literal, "42", false);
+
+		CheckFirstSet(*grammar, generic_operator, "+", true);
+		CheckFirstSet(*grammar, generic_operator, "<=", false);
+		CheckFirstSet(*grammar, generic_operator, "some_column", false);
+		CheckFirstSet(*grammar, any_operator, "+", true);
+		CheckFirstSet(*grammar, any_operator, "<=", true);
+		CheckFirstSet(*grammar, any_operator, "42", false);
+		CheckFirstSet(*grammar, arithmetic_operator, "*", true);
+		CheckFirstSet(*grammar, arithmetic_operator, "'str'", false);
+	}
+	SECTION("Choices merge the FIRST sets of their alternatives") {
+		CheckFirstSet(*grammar, choice, "select", true);
+		CheckFirstSet(*grammar, choice, "SELECT", true);
+		CheckFirstSet(*grammar, choice, "42", true);
+		CheckFirstSet(*grammar, choice, "from", false);
+		CheckFirstSet(*grammar, choice, "some_column", false);
+		CheckFirstSet(*grammar, choice, "'str'", false);
+		CheckFirstSet(*grammar, choice, "+", false);
+		CheckFirstSet(*grammar, choice, "", false);
+	}
+	SECTION("Lists look past nullable elements only") {
+		CheckFirstSet(*grammar, optional_prefix, "42 some_column", true);
+		CheckFirstSet(*grammar, optional_prefix, "some_column", true);
+		CheckFirstSet(*grammar, optional_prefix, "+", false);
+		CheckFirstSet(*grammar, sequence, "select some_column", true);
+		CheckFirstSet(*grammar, sequence, "42 some_column", true);
+		CheckFirstSet(*grammar, sequence, "some_column", false);
+	}
+	SECTION("Nullable matchers are never rejected") {
+		REQUIRE(optional_number.first_set.nullable);
+		REQUIRE(nullable_list.first_set.nullable);
+		REQUIRE_FALSE(optional_prefix.first_set.nullable);
+		CheckFirstSet(*grammar, optional_number, "+", true);
+		CheckFirstSet(*grammar, nullable_list, "+", true);
+		CheckFirstSet(*grammar, nullable_list, "", true);
+	}
+	SECTION("Repeats start like their element") {
+		REQUIRE_FALSE(repeat.first_set.nullable);
+		CheckFirstSet(*grammar, repeat, "'a' 'b'", true);
+		CheckFirstSet(*grammar, repeat, "some_column", false);
+	}
+	SECTION("Matchers without FIRST set information are never rejected") {
+		REQUIRE(custom_keyword.first_set.any);
+		CheckFirstSet(*grammar, custom_keyword, "+", true);
+		REQUIRE(custom_list.first_set.any);
+		CheckFirstSet(*grammar, custom_list, "+", true);
+		REQUIRE(unmarked_list.first_set.any);
+		CheckFirstSet(*grammar, unmarked_list, "+", true);
+		REQUIRE(root.first_set.any);
+		CheckFirstSet(*grammar, root, ";", true);
+		REQUIRE_FALSE(uncomputed_list.first_set.computed);
+		CheckFirstSet(*grammar, uncomputed_list, "+", true);
+	}
+	SECTION("Nothing can start past the last token") {
+		vector<MatcherToken> tokens;
+		TokenIterator iterator(tokens);
+		vector<MatcherSuggestion> suggestions;
+		ParseResultAllocator allocator;
+		idx_t max_token_index = 0;
+		ArenaAllocator process_allocator(Allocator::DefaultAllocator());
+		MatchContext context(suggestions, allocator, process_allocator, max_token_index);
+		MatchState state(iterator, context);
+		REQUIRE_FALSE(choice.first_set.MightMatch(state));
+		REQUIRE(nullable_list.first_set.MightMatch(state));
+	}
+}
+
+TEST_CASE("Matcher stack supports variable-sized aligned arena processes", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
@@ -512,59 +1294,13 @@ TEST_CASE("Heap matcher supports variable-sized aligned arena processes", "[api]
 	}
 }
 
-TEST_CASE("Recursive matcher preserves arena process storage and unwinds safely", "[api][grammar_extension]") {
-	vector<MatcherToken> tokens;
-	TokenIterator iterator(tokens);
-	vector<MatcherSuggestion> suggestions;
-	ParseResultAllocator parse_results;
-	idx_t max_token_index = 0;
-	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
-	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
-	context.use_heap_based_parser = false;
-	MatchState state(iterator, context);
-	MatchProcessLifetimeState lifetime;
-	lifetime.depth = 130;
-	lifetime.destroyed.reserve(lifetime.depth);
-	ArenaNestedTestMatcher matcher(lifetime);
-
-	SECTION("Siblings preserve storage while their parent remains alive") {
-		lifetime.root_children = 2;
-	}
-	SECTION("Failed matches destroy every process") {
-		lifetime.fail_at_leaf = true;
-	}
-	SECTION("Resume exceptions unwind children before parents") {
-		lifetime.throw_at_leaf = true;
-	}
-	SECTION("Constructor exceptions unwind children before parents") {
-		lifetime.throw_in_constructor = true;
-	}
-
-	if (lifetime.throw_at_leaf || lifetime.throw_in_constructor) {
-		REQUIRE_THROWS_AS(matcher.MatchParseResult(state), InvalidInputException);
-	} else {
-		REQUIRE(matcher.MatchParseResult(state).IsSuccess() == !lifetime.fail_at_leaf);
-	}
-	auto child_count = lifetime.depth - 1;
-	REQUIRE(lifetime.active == 0);
-	REQUIRE(lifetime.storage_valid);
-	REQUIRE(lifetime.state_valid);
-	REQUIRE(lifetime.started == 1 + lifetime.root_children * child_count);
-	REQUIRE(lifetime.destroyed.size() == lifetime.started);
-	for (idx_t sibling = 0; sibling < lifetime.root_children; sibling++) {
-		for (idx_t i = 0; i < child_count; i++) {
-			REQUIRE(lifetime.destroyed[sibling * child_count + i] == lifetime.depth - i);
-		}
-	}
-	REQUIRE(lifetime.destroyed.back() == 1);
-}
-
 TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extension]") {
 	vector<MatcherToken> tokens;
 	TokenIterator iterator(tokens);
 	vector<MatcherSuggestion> suggestions;
 	ParseResultAllocator parse_results;
-	ParserPackratCache cache;
+	ArenaAllocator packrat_allocator(Allocator::DefaultAllocator());
+	ParserPackratCache cache(packrat_allocator);
 	idx_t max_token_index = 0;
 	ArenaAllocator process_allocator(Allocator::DefaultAllocator());
 	MatchContext context(suggestions, parse_results, process_allocator, max_token_index);
@@ -604,7 +1340,7 @@ TEST_CASE("Packrat results outlive reset process arenas", "[api][grammar_extensi
 	REQUIRE(lifetime.state_valid);
 	if (cached.IsSuccess()) {
 		REQUIRE(cached.HasParseResult());
-		REQUIRE(cached.GetParseResult()->name == "nested result");
+		REQUIRE(cached.GetParseResult()->Name() == "nested result");
 	}
 }
 
@@ -734,7 +1470,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	Connection con(db);
 	REQUIRE_NO_FAIL(*con.Query("SELECT 1"));
 	auto base_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE_FALSE(base_grammar->HasGrammarChanges());
 	REQUIRE(base_grammar == CompiledGrammar::Get(*con.context));
 
 	RegisterGrammarExtensionTestSyntax(*db.instance);
@@ -742,7 +1477,6 @@ TEST_CASE("The parser cache only holds the base grammar", "[api][grammar_extensi
 	ActivateGrammarExtensionTestSyntax(con);
 	CheckGrammarExtensionTestSyntax(con);
 	auto extension_grammar = CompiledGrammar::Get(*con.context);
-	REQUIRE(extension_grammar->HasGrammarChanges());
 	REQUIRE(extension_grammar == CompiledGrammar::Get(*con.context));
 }
 
@@ -768,7 +1502,14 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	Connection con(db);
 	ActivateGrammarExtensionTestSyntax(con);
 
-	auto options = con.context->GetParserOptions();
+	Parser context_parser(*con.context);
+	REQUIRE_NOTHROW(context_parser.ParseQuery("ANSWER"));
+	REQUIRE(context_parser.statements.size() == 1);
+	auto &context_select = context_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
+	REQUIRE(context_select.select_list[0]->GetExpressionClass() == ExpressionClass::CONSTANT);
+
+	auto options = ParserOptions::Builtin();
+	options.compiled_grammar = CompiledGrammar::Get(*con.context);
 	REQUIRE(options.compiled_grammar == CompiledGrammar::Get(*con.context));
 	options.extensions = nullptr;
 
@@ -776,9 +1517,13 @@ TEST_CASE("Parser options retain their compiled grammar", "[api][grammar_extensi
 	REQUIRE_NOTHROW(parser.ParseQuery("ANSWER"));
 	REQUIRE(parser.statements.size() == 1);
 
-	Parser base_parser;
-	REQUIRE_NOTHROW(base_parser.ParseQuery("SELECT 42"));
+	auto base_parser = Parser::GetBuiltinParser();
+	REQUIRE_NOTHROW(base_parser.ParseQuery("ANSWER"));
 	REQUIRE(base_parser.statements.size() == 1);
+	auto &base_select = base_parser.statements[0]->Cast<SelectStatement>().node->Cast<SelectNode>();
+	// Without the extension, ANSWER is a table name in a FROM-first query.
+	REQUIRE(base_select.select_list[0]->GetExpressionClass() == ExpressionClass::STAR);
+	REQUIRE(base_select.from_table->type == TableReferenceType::BASE_TABLE);
 }
 
 class AddInvalidGrammarExtensionTestRule final : public GrammarExtension {
@@ -802,6 +1547,6 @@ TEST_CASE("Invalid Grammar extensions fail grammar compilation", "[api][grammar_
 	auto result = con.Query("SET active_grammar_extensions = ['invalid_grammar_extension']");
 	REQUIRE_FAIL(result);
 	CheckGrammarExtensionTestSyntax(con);
-	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->GetValue(0, 0);
+	auto setting = con.Query("SELECT current_setting('active_grammar_extensions')")->Collection().GetValue(0, 0);
 	REQUIRE(ListValue::GetChildren(setting).size() == 2);
 }

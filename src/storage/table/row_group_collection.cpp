@@ -3,6 +3,7 @@
 #include "duckdb/transaction/commit_state.hpp"
 
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/thread.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -310,7 +311,6 @@ void RowGroupCollection::InitializeScan(const QueryContext &context, CollectionS
                                         optional_ptr<TableFilterSet> table_filters) {
 	state.row_groups = GetRowGroups();
 	auto row_group = state.GetRootSegment();
-	D_ASSERT(row_group);
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.Initialize(context, GetTypes());
 	while (row_group && !row_group->GetNode().InitializeScan(state, *row_group)) {
@@ -339,14 +339,14 @@ void RowGroupCollection::InitializeScanWithOffset(const QueryContext &context, C
 
 bool RowGroupCollection::InitializeScanInRowGroup(ClientContext &context, CollectionScanState &state,
                                                   RowGroupCollection &collection, SegmentNode<RowGroup> &row_group,
-                                                  idx_t vector_index, idx_t max_row) {
+                                                  idx_t vector_index, idx_t max_row, bool initialize_columns) {
 	state.max_row = max_row;
 	state.row_groups = collection.GetRowGroups();
 	if (state.column_scans.empty()) {
 		// initialize the scan state
 		state.Initialize(context, collection.GetTypes());
 	}
-	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index);
+	return row_group.GetNode().InitializeScanWithOffset(state, row_group, vector_index, initialize_columns);
 }
 
 void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
@@ -357,14 +357,25 @@ void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &sta
 	state.max_row = state.row_groups->GetBaseRowId() + next_row_id.load();
 	state.batch_index = 0;
 	state.processed_rows = 0;
+	state.skipped_rows = 0;
+	if (state.reorderer) {
+		// row groups pruned by the reorderer are never scanned
+		idx_t total_rows = 0;
+		for (auto &row_group : state.row_groups->SegmentNodes()) {
+			total_rows += row_group.GetNode().count;
+		}
+		auto scan_rows = state.reorderer->ScanRowCount();
+		state.skipped_rows = total_rows > scan_rows ? total_rows - scan_rows : 0;
+	}
 }
 
-bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
-                                          CollectionScanState &scan_state) {
+optional_idx RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
+                                                  CollectionScanState &scan_state, bool initialize_columns) {
 	AssignSharedPointer(scan_state.row_groups, state.row_groups);
 	while (true) {
 		idx_t vector_index;
 		idx_t max_row;
+		idx_t assignment_rows;
 		optional_ptr<RowGroupCollection> collection;
 		optional_ptr<SegmentNode<RowGroup>> row_group;
 		{
@@ -392,39 +403,42 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 					state.vector_index = 0;
 				}
 			} else {
-				state.processed_rows += current_row_group.count;
 				vector_index = 0;
 				max_row = row_start + current_row_group.count;
 				state.AssignRowGroup(state.GetNextRowGroup(*state.row_groups, *row_group).get());
 			}
 			max_row = MinValue<idx_t>(max_row, state.max_row);
+			const idx_t assignment_start = row_start + vector_index * STANDARD_VECTOR_SIZE;
+			assignment_rows = max_row > assignment_start ? max_row - assignment_start : 0;
+			state.processed_rows += assignment_rows;
 			scan_state.batch_index = ++state.batch_index;
 			if (!state.row_number_base.IsValid() && scan_state.row_number_base.IsValid()) {
 				state.row_number_base = scan_state.row_number_base.GetIndex();
 			}
 			if (state.row_number_base.IsValid()) {
-				// if we are scanning the row_number virtual column - shift the base based on the number of visible rows
-				// (i.e. non-deleted rows) for the current transaction
+				// Reserve numbers only for visible rows in this assignment, which may be part of a row group.
 				scan_state.row_number_base = state.row_number_base.GetIndex();
 				auto &tx = DuckTransaction::Get(context, GetAttached());
-				state.row_number_base = state.row_number_base.GetIndex() + current_row_group.GetVisibleRowCount(tx);
+				state.row_number_base = state.row_number_base.GetIndex() +
+				                        current_row_group.GetVisibleRowCount(tx, vector_index, assignment_rows);
 			}
 		}
 		D_ASSERT(collection);
 		D_ASSERT(row_group);
 
 		// initialize the scan for this row group
-		bool need_to_scan =
-		    InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index, max_row);
+		bool need_to_scan = InitializeScanInRowGroup(context, scan_state, *collection, *row_group, vector_index,
+		                                             max_row, initialize_columns);
 		if (!need_to_scan) {
 			// skip this row group
+			state.skipped_rows.fetch_add(assignment_rows, std::memory_order_relaxed);
 			continue;
 		}
-		return true;
+		return assignment_rows;
 	}
 	lock_guard<mutex> l(state.lock);
 	scan_state.batch_index = state.batch_index;
-	return false;
+	return optional_idx();
 }
 
 //===--------------------------------------------------------------------===//
@@ -710,7 +724,7 @@ optional_idx RowGroupCollection::Append(DataChunk &chunk, TableAppendState &stat
 		AppendRowGroup(l, next_start);
 		// set up the append state for this row_group
 		auto last_row_group = state.row_groups->GetLastSegment(l);
-		RowGroup::InitializeAppend(*last_row_group, state.row_group_append_state);
+		RowGroup::InitializeNextAppend(*last_row_group, state.row_group_append_state);
 		state.row_group_start = next_start;
 	}
 	state.current_row += row_t(total_append_count);
@@ -1083,6 +1097,18 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, DuckTableEntr
 //===--------------------------------------------------------------------===//
 // Checkpoint State
 //===--------------------------------------------------------------------===//
+struct VacuumState {
+	bool can_vacuum_deletes = true;
+	bool can_change_row_ids = false;
+	//! How vacuum handles the table's indexes when it changes rowids.
+	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::KEEP_ROW_IDS;
+	//! The indexes to remap, populated only when index_strategy == REMAP.
+	vector<shared_ptr<IndexEntry>> remap_indexes;
+	idx_t row_start = 0;
+	idx_t next_vacuum_idx = 0;
+	vector<optional_idx> row_group_counts;
+};
+
 struct CollectionCheckpointState {
 	CollectionCheckpointState(RowGroupCollection &collection, TableDataWriter &writer, TableStatistics &global_stats,
 	                          RowGroupSegmentTree &row_groups)
@@ -1095,11 +1121,19 @@ struct CollectionCheckpointState {
 		overridden_segments.resize(segment_count);
 	}
 
+	~CollectionCheckpointState() {
+		// the tasks reference this state, so join here rather than relying on the executor's own destructor
+		// doing it after the members declared below it are already gone
+		executor->CancelAndDrain();
+	}
+
 	RowGroupCollection &collection;
 	TableDataWriter &writer;
 	unique_ptr<TaskExecutor> executor;
 	vector<unique_ptr<RowGroupWriter>> writers;
 	vector<RowGroupWriteData> write_data;
+	//! Owned here so that no task can outlive it, the destructor above joins before anything is torn down
+	VacuumState vacuum_state;
 	TableStatistics &global_stats;
 	RowGroupSegmentTree &row_groups;
 
@@ -1285,18 +1319,6 @@ private:
 	DataChunk append_chunk;
 };
 
-struct VacuumState {
-	bool can_vacuum_deletes = true;
-	bool can_change_row_ids = false;
-	//! How vacuum handles the table's indexes when it changes rowids.
-	VacuumIndexStrategy index_strategy = VacuumIndexStrategy::KEEP_ROW_IDS;
-	//! The indexes to remap, populated only when index_strategy == REMAP.
-	vector<shared_ptr<IndexEntry>> remap_indexes;
-	idx_t row_start = 0;
-	idx_t next_vacuum_idx = 0;
-	vector<optional_idx> row_group_counts;
-};
-
 class VacuumTask : public BaseCheckpointTask {
 public:
 	VacuumTask(CollectionCheckpointState &checkpoint_state, VacuumState &vacuum_state, idx_t segment_idx,
@@ -1401,8 +1423,8 @@ public:
 
 						// move to the next row group
 						current_append_idx++;
-						RowGroup::InitializeAppend(*new_row_groups[current_append_idx],
-						                           append_state.row_group_append_state);
+						RowGroup::InitializeNextAppend(*new_row_groups[current_append_idx],
+						                               append_state.row_group_append_state);
 						// slice chunk for the next append
 						append_chunk.Slice(append_count, remaining);
 					}
@@ -1711,12 +1733,12 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 
 	CollectionCheckpointState checkpoint_state(*this, writer, global_stats, *row_groups);
 
-	VacuumState vacuum_state;
+	auto &vacuum_state = checkpoint_state.vacuum_state;
 	InitializeVacuumState(checkpoint_state, vacuum_state, writer.GetRowGroupCount());
 
 	auto &transaction_manager = DuckTransactionManager::Get(GetAttached());
 	auto lowest_visibility_bound = transaction_manager.LowestVisibilityBound();
-	try {
+	{
 		// schedule tasks
 		idx_t total_vacuum_tasks = 0;
 		auto max_vacuum_tasks = Settings::Get<MaxVacuumTasksSetting>(writer.GetDatabase());
@@ -1750,14 +1772,14 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 			}
 			vacuum_state.row_start += row_group.count;
 		}
-	} catch (const std::exception &e) {
-		ErrorData error(e);
-		checkpoint_state.executor->PushError(std::move(error));
-		checkpoint_state.executor->WorkOnTasks(); // ensure all tasks have completed first before rethrowing
-		throw;
 	}
 	// all tasks have been successfully scheduled - execute tasks until we are done
 	checkpoint_state.executor->WorkOnTasks();
+
+	auto scan_sleep_ms = Settings::Get<DebugCheckpointScanSleepMsSetting>(writer.GetDatabase());
+	if (scan_sleep_ms > 0) {
+		ThreadUtil::SleepMs(scan_sleep_ms);
+	}
 
 	// no errors - finalize the row groups
 	// if the table already exists on disk - check if all row groups have stayed the same

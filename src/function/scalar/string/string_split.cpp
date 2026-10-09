@@ -14,6 +14,8 @@ namespace duckdb {
 namespace {
 
 struct RegularStringSplit {
+	static constexpr bool VERIFY_UTF8 = false;
+
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		match_size = delim_size;
@@ -25,6 +27,9 @@ struct RegularStringSplit {
 };
 
 struct ConstantRegexpStringSplit {
+	//! \C can split a multi-byte character
+	static constexpr bool VERIFY_UTF8 = true;
+
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		D_ASSERT(data);
@@ -39,6 +44,8 @@ struct ConstantRegexpStringSplit {
 };
 
 struct RegexpStringSplit {
+	static constexpr bool VERIFY_UTF8 = true;
+
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		duckdb_re2::RE2 regex(duckdb_re2::StringPiece(delim_data, delim_size));
@@ -111,6 +118,9 @@ void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result
 		}
 		StringSplitter::Split<OP>(
 		    input_entry.GetValue(), delim_entry.GetValue(), data, [&](const char *split_data, idx_t split_size) {
+			    if (OP::VERIFY_UTF8) {
+				    regexp_util::VerifyUTF8Result(split_data, split_size);
+			    }
 			    list.WriteElement().WriteStringRef(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
 		    });
 	}
@@ -140,7 +150,10 @@ void StringSplitRegexFunction(DataChunk &args, ExpressionState &state, Vector &r
 ScalarFunction StringSplitFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
-	ScalarFunction string_split({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction);
+	ScalarFunction string_split({}, varchar_list_type, StringSplitFunction);
+	string_split.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("separator", LogicalType::VARCHAR);
 	string_split.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	return string_split;
 }
@@ -148,12 +161,13 @@ ScalarFunction StringSplitFun::GetFunction() {
 ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet regexp_split;
-	ScalarFunction regex_fun({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitRegexFunction,
-	                         RegexpMatchesBind, nullptr, RegexInitLocalState, LogicalType::INVALID,
-	                         FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction regex_fun({}, varchar_list_type, StringSplitRegexFunction, RegexpMatchesBind, nullptr,
+	                         RegexInitLocalState, LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                         FunctionNullHandling::SPECIAL_HANDLING);
+	regex_fun.GetSignature().AddParameter("string", LogicalType::VARCHAR).AddParameter("regex", LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	// regexp options
-	regex_fun.GetSignature().AddParameter(LogicalType::VARCHAR);
+	regex_fun.GetSignature().AddParameter("options", LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	regexp_split.SetFallible();
 	return regexp_split;

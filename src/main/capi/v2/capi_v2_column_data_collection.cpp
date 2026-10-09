@@ -6,14 +6,6 @@
 namespace duckdb {
 namespace capiv2 {
 
-static auto Convert(ColumnDataCollection *cdc) -> duckdb_v2_column_data_collection_handle {
-	return reinterpret_cast<duckdb_v2_column_data_collection_handle>(cdc);
-}
-
-static auto Convert(duckdb_v2_column_data_collection_handle cdc) -> ColumnDataCollection * {
-	return reinterpret_cast<ColumnDataCollection *>(cdc);
-}
-
 static auto Convert(ColumnDataAppendState *state) -> duckdb_v2_column_data_collection_append_state_handle {
 	return reinterpret_cast<duckdb_v2_column_data_collection_append_state_handle>(state);
 }
@@ -51,7 +43,8 @@ static void CreateColumnDataCollection(ClientContext &context, const duckdb_v2_l
 		if (!types_array[i]) {
 			throw InvalidInputException("null logical type at index %llu", i);
 		}
-		const auto &type = *Convert(types_array[i]);
+		auto type_ref = Convert(types_array[i]);
+		const auto &type = *type_ref;
 		// ANY is a signature wildcard with no physical layout; a collection
 		// allocates storage, so reject it (mirrors data_chunk_create).
 		if (TypeVisitor::Contains(type, LogicalTypeId::ANY)) {

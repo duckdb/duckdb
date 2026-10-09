@@ -10,6 +10,7 @@
 
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -81,13 +82,15 @@ class HTTPLogType : public LogType {
 public:
 	static constexpr const char *NAME = "HTTP";
 	static constexpr LogLevel LEVEL = LogLevel::LOG_DEBUG;
+	static constexpr auto REDACTED_VALUE = "redacted";
 
 	//! Construct the log types
 	HTTPLogType();
 
 	static LogicalType GetLogType();
 
-	static string ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response);
+	static string ConstructLogMessage(BaseRequest &request, optional_ptr<HTTPResponse> response,
+	                                  bool redact_http_logs = true);
 
 	// FIXME: HTTPLogType should be structured probably
 	static string ConstructLogMessage(const string &str) {
@@ -198,6 +201,19 @@ public:
 	static LogicalType GetLogType();
 
 	static string ConstructLogMessage(const string &pool, idx_t task_count);
+};
+
+class ProgressVerificationLogType : public LogType {
+public:
+	static constexpr const char *NAME = "ProgressVerification";
+	static constexpr LogLevel LEVEL = LogLevel::LOG_INFO;
+
+	ProgressVerificationLogType();
+
+	static LogicalType GetLogType();
+
+	static string ConstructLogMessage(const string &invariant, const string &operator_name, const string &pipeline,
+	                                  const string &detail);
 };
 
 class ExternalResourceLogType : public LogType {

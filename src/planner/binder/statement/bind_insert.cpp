@@ -52,7 +52,7 @@ unique_ptr<ParsedExpression> ExpandDefaultExpression(const ColumnDefinition &col
 	if (column.HasDefaultValue()) {
 		return column.DefaultValue().Copy();
 	} else {
-		return make_uniq<ConstantExpression>(Value(column.Type()));
+		return ConstantExpression::FromValue(Value(column.Type()));
 	}
 }
 
@@ -507,7 +507,7 @@ unique_ptr<MergeIntoStatement> Binder::GenerateMergeInto(InsertQueryNode &node, 
 					if (column.HasDefaultValue()) {
 						expr = column.DefaultValue().Copy();
 					} else {
-						expr = make_uniq<ConstantExpression>(Value(column.Type()));
+						expr = ConstantExpression::FromValue(Value(column.Type()));
 					}
 				} else {
 					// column is specified - add a reference to it
@@ -620,14 +620,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 		auto merge_into = GenerateMergeInto(node, table);
 		return Bind(*merge_into);
 	}
-	if (table.temporary) {
-		// Temporary inserts still need a catalog dependency so prepared statements are rebound if the table is dropped.
-		GetStatementProperties().RegisterDBRead(table.catalog, context);
-	} else {
-		// inserting into a non-temporary table: alters underlying database
-		DatabaseModificationType modification_type = DatabaseModificationType::INSERT_DATA;
-		GetStatementProperties().RegisterDBModify(table.catalog, context, modification_type);
-	}
+	GetStatementProperties().RegisterDBModify(table.catalog, context, DatabaseModificationType::INSERT_DATA);
 
 	auto insert = make_uniq<LogicalInsert>(table, GenerateTableIndex());
 
@@ -719,7 +712,7 @@ BoundStatement Binder::BindNode(InsertQueryNode &node) {
 	result.plan = std::move(insert);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::CHANGED_ROWS;
 	return result;
 }

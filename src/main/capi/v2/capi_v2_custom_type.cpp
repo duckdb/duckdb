@@ -1,4 +1,5 @@
 #include "duckdb/main/capi_v2/capi_v2_internal.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb::capiv2 {
@@ -111,11 +112,11 @@ DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_extension(duckdb_v2_extension_
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_custom_type_set_name(duckdb_v2_custom_type_handle type, duckdb_v2_identifier_t name,
+DUCKDB_V2_ERROR duckdb_v2_custom_type_set_name(duckdb_v2_custom_type_handle type, const duckdb_v2_identifier_t *name,
                                                duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(type);
 	DUCKDB_CHECK_ARG(name);
-	return WithErrorHandler(err, [&]() { Convert(type)->name = duckdb::Identifier(Convert(name)); });
+	return WithErrorHandler(err, [&]() { Convert(type)->name = duckdb::Identifier(ConvertIdentifierName(name)); });
 }
 
 DUCKDB_V2_ERROR duckdb_v2_custom_type_set_base_type(duckdb_v2_custom_type_handle type,
@@ -123,7 +124,10 @@ DUCKDB_V2_ERROR duckdb_v2_custom_type_set_base_type(duckdb_v2_custom_type_handle
                                                     duckdb_v2_error_info_handle *err) {
 	DUCKDB_CHECK_ARG(type);
 	DUCKDB_CHECK_ARG(base_type);
-	return WithErrorHandler(err, [&]() { Convert(type)->base_type = *Convert(base_type); });
+	return WithErrorHandler(err, [&]() {
+		auto base = Convert(base_type);
+		Convert(type)->base_type = *base;
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_custom_type_register(duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err) {

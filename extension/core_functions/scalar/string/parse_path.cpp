@@ -1,4 +1,5 @@
 #include "duckdb/common/vector/flat_vector.hpp"
+#include "duckdb/common/vector/vector_iterator.hpp"
 #include "core_functions/scalar/string_functions.hpp"
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/local_file_system.hpp"
@@ -228,33 +229,35 @@ static void ParseDirpathFunction(DataChunk &args, ExpressionState &state, Vector
 
 static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 1 || args.ColumnCount() == 2);
-	UnifiedVectorFormat input_data;
-	args.data[0].ToUnifiedFormat(input_data);
-	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
-
-	// set the separator
-	string input_sep = "default";
-	if (args.ColumnCount() == 2) {
-		UnifiedVectorFormat sep_data;
-		args.data[1].ToUnifiedFormat(sep_data);
-		if (sep_data.validity.RowIsValid(0)) {
-			input_sep = UnifiedVectorFormat::GetData<string_t>(sep_data)->GetString();
-		}
+	auto inputs = args.data[0].Values<string_t>();
+	Vector default_separator(string_t("default"), count_t(args.size()));
+	const auto &separator = args.ColumnCount() == 2 ? args.data[1] : default_separator;
+	auto separator_values = separator.Values<string_t>();
+	const auto constant_separator = separator.GetVectorType() == VectorType::CONSTANT_VECTOR;
+	auto read_separator = [&](idx_t row_idx) {
+		auto entry = separator_values[row_idx];
+		return GetSeparator(entry.IsValid() ? entry.GetValue() : string_t("default"));
+	};
+	string sep;
+	if (constant_separator) {
+		sep = read_separator(0);
 	}
-	const string sep = GetSeparator(input_sep);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto list_writer = FlatVector::Writer<VectorListType<string_t>>(result, args.size());
 	for (idx_t i = 0; i < args.size(); i++) {
-		auto input_idx = input_data.sel->get_index(i);
-		if (!input_data.validity.RowIsValid(input_idx)) {
+		auto input = inputs[i];
+		if (!input.IsValid()) {
 			list_writer.WriteNull();
 			continue;
 		}
+		if (!constant_separator) {
+			sep = read_separator(i);
+		}
 		auto list = list_writer.WriteDynamicList();
-		SplitPath(inputs[input_idx], sep, [&](const char *split_data, idx_t split_size) {
+		SplitPath(input.GetValue(), sep, [&](const char *split_data, idx_t split_size) {
 			list.WriteElement().WriteValue(string_t(split_data, UnsafeNumericCast<uint32_t>(split_size)));
 		});
 	}
@@ -262,52 +265,73 @@ static void ParsePathFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 ScalarFunctionSet ParseDirnameFun::GetFunctions() {
 	ScalarFunctionSet parse_dirname;
-	ScalarFunction func({LogicalType::VARCHAR}, LogicalType::VARCHAR, TrimPathFunction<true>, nullptr, nullptr, nullptr,
+	ScalarFunction func({}, LogicalType::VARCHAR, TrimPathFunction<true>, nullptr, nullptr, nullptr,
 	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	func.GetSignature().AddParameter("path", LogicalType::VARCHAR);
 	parse_dirname.AddFunction(func);
 	// separator options
-	func.GetSignature().AddParameter(LogicalType::VARCHAR);
+	func.GetSignature().AddParameter("separator", LogicalType::VARCHAR);
 	parse_dirname.AddFunction(func);
 	return parse_dirname;
 }
 
 ScalarFunctionSet ParseDirpathFun::GetFunctions() {
 	ScalarFunctionSet parse_dirpath;
-	ScalarFunction func({LogicalType::VARCHAR}, LogicalType::VARCHAR, ParseDirpathFunction, nullptr, nullptr, nullptr,
-	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction func({}, LogicalType::VARCHAR, ParseDirpathFunction, nullptr, nullptr, nullptr, LogicalType::INVALID,
+	                    FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	func.GetSignature().AddParameter("path", LogicalType::VARCHAR);
 	parse_dirpath.AddFunction(func);
 	// separator options
-	func.GetSignature().AddParameter(LogicalType::VARCHAR);
+	func.GetSignature().AddParameter("separator", LogicalType::VARCHAR);
 	parse_dirpath.AddFunction(func);
 	return parse_dirpath;
 }
 
 ScalarFunctionSet ParseFilenameFun::GetFunctions() {
 	ScalarFunctionSet parse_filename;
-	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, TrimPathFunction<false>,
-	                                          nullptr, nullptr, nullptr, LogicalType::INVALID,
-	                                          FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                          TrimPathFunction<false>, nullptr, nullptr, nullptr, LogicalType::INVALID,
-	                                          FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN}, LogicalType::VARCHAR,
-	                                          TrimPathFunction<false>, nullptr, nullptr, nullptr, LogicalType::INVALID,
-	                                          FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING));
-	parse_filename.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BOOLEAN, LogicalType::VARCHAR},
-	                                          LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
-	                                          LogicalType::INVALID, FunctionStability::CONSISTENT,
-	                                          FunctionNullHandling::SPECIAL_HANDLING));
+
+	ScalarFunction base({}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
+	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	base.GetSignature().AddParameter("string", LogicalType::VARCHAR);
+	parse_filename.AddFunction(base);
+
+	ScalarFunction with_separator({}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
+	                              LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                              FunctionNullHandling::SPECIAL_HANDLING);
+	with_separator.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("separator", LogicalType::VARCHAR);
+	parse_filename.AddFunction(with_separator);
+
+	ScalarFunction with_trim({}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
+	                         LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                         FunctionNullHandling::SPECIAL_HANDLING);
+	with_trim.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("trim_extension", LogicalType::BOOLEAN);
+	parse_filename.AddFunction(with_trim);
+
+	ScalarFunction with_trim_and_separator({}, LogicalType::VARCHAR, TrimPathFunction<false>, nullptr, nullptr, nullptr,
+	                                       LogicalType::INVALID, FunctionStability::CONSISTENT,
+	                                       FunctionNullHandling::SPECIAL_HANDLING);
+	with_trim_and_separator.GetSignature()
+	    .AddParameter("string", LogicalType::VARCHAR)
+	    .AddParameter("trim_extension", LogicalType::BOOLEAN)
+	    .AddParameter("separator", LogicalType::VARCHAR);
+	parse_filename.AddFunction(with_trim_and_separator);
+
 	return parse_filename;
 }
 
 ScalarFunctionSet ParsePathFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet parse_path;
-	ScalarFunction func({LogicalType::VARCHAR}, varchar_list_type, ParsePathFunction, nullptr, nullptr, nullptr,
-	                    LogicalType::INVALID, FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	ScalarFunction func({}, varchar_list_type, ParsePathFunction, nullptr, nullptr, nullptr, LogicalType::INVALID,
+	                    FunctionStability::CONSISTENT, FunctionNullHandling::SPECIAL_HANDLING);
+	func.GetSignature().AddParameter("path", LogicalType::VARCHAR);
 	parse_path.AddFunction(func);
 	// separator options
-	func.GetSignature().AddParameter(LogicalType::VARCHAR);
+	func.GetSignature().AddParameter("separator", LogicalType::VARCHAR);
 	parse_path.AddFunction(func);
 	return parse_path;
 }

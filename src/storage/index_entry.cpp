@@ -18,7 +18,8 @@
 
 namespace duckdb {
 
-IndexEntry::IndexEntry(unique_ptr<Index> index_p) : owned_index(std::move(index_p)) {
+IndexEntry::IndexEntry(unique_ptr<Index> index_p, idx_t index_oid_p)
+    : index_oid(index_oid_p), owned_index(std::move(index_p)) {
 	if (owned_index->IsBound()) {
 		bind_state = IndexBindState::BOUND;
 	} else {
@@ -114,8 +115,8 @@ void IndexEntry::InitializeLocalIndexes(TableIndexList &delete_indexes, TableInd
 	}
 
 	auto constraint_type = bound_index.GetConstraintType();
-	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
-	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type));
+	delete_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid);
+	append_indexes.AddIndex(bound_index.CreateEmptyCopy(constraint_type), index_oid);
 }
 
 void IndexEntry::AppendToDeleteIndexes(DataChunk &chunk, Vector &row_ids) {
@@ -315,6 +316,14 @@ string IndexEntry::GetIndexType() const {
 	return owned_index->GetIndexType();
 }
 
+bool IndexEntry::HasBufferedReplays() const {
+	auto entry_lock = lock.GetSharedLock();
+	if (!owned_index || owned_index->IsBound()) {
+		return false;
+	}
+	return owned_index->Cast<UnboundIndex>().HasBufferedReplays();
+}
+
 void IndexEntry::Retire() {
 	auto entry_lock = lock.GetExclusiveLock();
 	deltas.Reset();
@@ -353,6 +362,10 @@ void IndexEntry::VerifyAppend(const shared_ptr<IndexEntry> &delete_entry, DataCh
 		}
 	}
 	bound_index.VerifyAppend(chunk, index_append_info, manager);
+	if (auto delta = deltas.Find(IndexDeltaType::ADDED_DATA_DURING_CHECKPOINT)) {
+		// rows committed while a checkpoint runs are only in this delta
+		delta->VerifyAppend(chunk, index_append_info, manager);
+	}
 }
 
 void IndexEntry::VerifyForeignKey(const shared_ptr<IndexEntry> &delete_entry, DataChunk &chunk,

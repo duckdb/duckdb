@@ -339,13 +339,12 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	// If this ALTER produced a new DuckTableEntry, refresh the LocalTableStorage's table_entry
 	// pointer so that commit-time Flush pushes an AppendInfo referencing the current DuckTableEntry.
 	if (transaction.context && value->type == CatalogType::TABLE_ENTRY) {
-		auto &tce = value->Cast<TableCatalogEntry>();
-		if (tce.IsDuckTable()) {
-			auto &new_entry = tce.Cast<DuckTableEntry>();
-			auto &new_storage = new_entry.GetStorage();
+		auto new_entry = value->Cast<TableCatalogEntry>().TryGetDuckTableEntry();
+		if (new_entry) {
+			auto &new_storage = new_entry->GetStorage();
 			auto lstorage = LocalStorage::Get(*transaction.context, new_storage.db).GetStorage(new_storage);
 			if (lstorage) {
-				lstorage->table_entry = &new_entry;
+				lstorage->table_entry = new_entry;
 			}
 		}
 	}
@@ -365,7 +364,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 	// Preserve the oid across the alter: an altered entry is the same logical object as before
 	value->oid = entry->oid;
 
-	if (!(value->name == entry->name)) {
+	if (value->name != entry->name) {
 		if (!RenameEntryInternal(transaction, *entry, value->name, alter_info, read_lock)) {
 			return false;
 		}
@@ -390,6 +389,11 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const Identifier &na
 		// if we don't have a transaction this alter is non-transactional
 		// in that case we are able to just directly destroy the child (if there is any)
 		entry_to_destroy = new_entry->TakeChild();
+	}
+
+	// Update shared entry state only after the alter is installed and rollbackable.
+	if (new_entry->name != entry->name) {
+		new_entry->SetAsRoot();
 	}
 
 	read_lock.unlock();

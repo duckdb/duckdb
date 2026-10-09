@@ -49,7 +49,7 @@
 #include "duckdb/parser/expression/type_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/logical_type_info.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
@@ -1187,7 +1187,7 @@ RemotePushdownOptimizer::TryConstantFold(unique_ptr<ParsedExpression> &expr) {
 		// evaluating the expression raises an error (e.g. an out-of-range error)
 		return ConstantFoldResult::FOLD_ERROR;
 	}
-	auto folded = make_uniq<ConstantExpression>(std::move(fold_result));
+	auto folded = ConstantExpression::FromValue(fold_result);
 	// preserve the name DuckDB would generate for the original expression
 	folded->SetAlias(expr->GetAlias().empty() ? Identifier(expr->ToString()) : expr->GetAlias());
 	folded->SetQueryLocation(expr->GetQueryLocation());
@@ -1360,15 +1360,16 @@ void RemotePushdownOptimizer::StripCatalogName(TableRef &ref, const Identifier &
 void RemotePushdownOptimizer::StripCatalogName(ParsedExpression &expr, const Identifier &catalog_name) {
 	if (expr.GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		auto &col_ref = expr.Cast<ColumnRefExpression>();
-		// Strip catalog prefix from qualified column references, normalising to exactly table.col (2 parts).
+		// Strip the catalog prefix from qualified column references, keeping everything after it.
 		// Require at least 3 names: a 2-part ref like "rpc.field" is either table.col or struct-column.field —
 		// not catalog-qualified — so stripping would be wrong.
-		// For 3-part  catalog.table.col        → table.col   (one level stripped)
-		// For 4-part  catalog.schema.table.col → table.col   (catalog + schema stripped)
+		// For 3-part  catalog.table.col        → table.col
+		// For 4-part  catalog.schema.table.col → schema.table.col
+		// Only the catalog is dropped: the parser keeps arbitrarily deep refs in a single ColumnRef, so trailing
+		// names may be struct fields (catalog.table.s.a.b → table.s.a.b) and must be preserved.
 		if (col_ref.ColumnNames().size() >= 3 && col_ref.ColumnNames()[0] == catalog_name) {
-			Identifier table_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 2];
-			Identifier col_name = col_ref.ColumnNames()[col_ref.ColumnNames().size() - 1];
-			col_ref.ColumnNamesMutable() = {std::move(table_name), std::move(col_name)};
+			auto &names = col_ref.ColumnNamesMutable();
+			names.erase(names.begin());
 		}
 		return;
 	}

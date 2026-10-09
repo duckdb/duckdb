@@ -131,12 +131,13 @@ struct QuantileOperation {
 //! update callback is handed it along with the input and simply does not read it
 template <class STATE, class RESULT_TYPE, class OP>
 AggregateFunction QuantileBufferingAggregate(const LogicalType &input_type, const LogicalType &result_type) {
-	AggregateFunction fun({input_type}, result_type, AggregateFunction::StateSize<STATE>,
+	AggregateFunction fun({}, result_type, AggregateFunction::StateSize<STATE>,
 	                      AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
 	                      ListUpdateFunction<true>, ListCombineFunction<OP>,
 	                      AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
 	                      FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                      AggregateFunction::NoBind(), AggregateFunction::StateDestroy<STATE, OP>);
+	fun.GetSignature().AddParameter("x", input_type);
 	fun.SetInitLocalStateFinalizeCallback(FlattenedQuantileValues<typename STATE::InputType>::Init);
 	return fun;
 }
@@ -160,22 +161,8 @@ struct WindowQuantileState {
 	unique_ptr<SkipListType> s;
 	mutable vector<SkipType> skips;
 
-	// Windowed MAD indirection
-	idx_t count;
-	vector<idx_t> m;
-
 	using IncludedType = QuantileIncluded<INPUT_TYPE>;
 	using CursorType = QuantileCursor<INPUT_TYPE>;
-
-	WindowQuantileState() : count(0) {
-	}
-
-	inline void SetCount(size_t count_p) {
-		count = count_p;
-		if (count >= m.size()) {
-			m.resize(count);
-		}
-	}
 
 	inline SkipListType &GetSkipList(bool reset = false) {
 		if (reset || !s) {
@@ -237,6 +224,15 @@ struct WindowQuantileState {
 
 	bool HasTree() const {
 		return qst.get();
+	}
+
+	INPUT_TYPE SkipNth(idx_t n) const {
+		D_ASSERT(s);
+		try {
+			return s->at(n).second;
+		} catch (const duckdb_skiplistlib::skip_list::IndexError &idx_err) {
+			throw InternalException(idx_err.message());
+		}
 	}
 
 	template <typename RESULT_TYPE, bool DISCRETE>
@@ -397,6 +393,8 @@ AggregateStateLayout QuantileStateLayout(AggregateLayoutInput &input) {
 	}
 	layout.total_state_size = AlignValue<idx_t>(sizeof(STATE));
 	layout.field = BuildStateField<STATE_FIELD>();
+	// NULL inputs are never buffered, so the finalize assumes all values are valid
+	layout.field.reject_null_elements = true;
 	AggregateStateField::PopulateListFunctions(layout.type, layout.field);
 	if (function.GetArguments().size() == 2) {
 		// the quantile parameter must be a constant at bind time (BindQuantile folds it into the bind data) -

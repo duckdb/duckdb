@@ -394,12 +394,12 @@ TEST_CASE("V2: a prepared statement outlives its connection", "[capi_v2][prepare
 	PsSeedTable(fx.conn);
 
 	duckdb_v2_connection_handle other = nullptr;
-	REQUIRE(duckdb_v2_connect(fx.db, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_create(fx.instance, &other, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto prepared = PsPrepare(other, "SELECT x FROM t ORDER BY x");
 	REQUIRE(prepared != nullptr);
 
 	// The handle keeps the session alive, the same guarantee an undrained result carries.
-	duckdb_v2_disconnect(&other);
+	duckdb_v2_connection_destroy(&other);
 	REQUIRE(other == nullptr);
 	REQUIRE(PsExecuteWith(fx.conn, prepared, {}) == std::vector<int64_t> {1, 2, 3, 4});
 
@@ -433,7 +433,7 @@ TEST_CASE("V2: prepared_statement_create refuses while a result is live", "[capi
 
 	auto stmt = PsParseOne(fx.conn, "SELECT 1");
 	duckdb_v2_prepared_statement_handle prepared = nullptr;
-	// Preparing would run the engine's cleanup and cancel the live stream, so it refuses
+	// The engine refuses a prepare while a result is live, and the v2 layer refuses it
 	// before reaching the engine, leaving the statement intact.
 	REQUIRE(duckdb_v2_prepared_statement_create(fx.conn, stmt, false, &prepared, nullptr) ==
 	        DUCKDB_V2_ERROR_RESOURCE_IN_USE);
