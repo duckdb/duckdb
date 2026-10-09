@@ -113,6 +113,18 @@ bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &r
 		for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++, mult /= 10) {
 			if (mult > 0) {
 				micros += (buf[pos] - '0') * mult;
+			} else {
+				break;
+			}
+		}
+		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
+			const int32_t first_discarded = buf[pos++] - '0';
+			bool discarded_tail_nonzero = false;
+			for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
+				discarded_tail_nonzero |= buf[pos] != '0';
+			}
+			if (first_discarded > 5 || (first_discarded == 5 && (discarded_tail_nonzero || (micros & 1)))) {
+				micros++;
 			}
 		}
 		if (nanos) {
