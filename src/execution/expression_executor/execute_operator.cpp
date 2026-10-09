@@ -61,39 +61,42 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		auto &in_state = state->Cast<InExpressionState>();
 		if (in_state.value_set) {
 			in_state.value_set->Probe(left, count, expression_type == ExpressionType::COMPARE_NOT_IN, result);
-			return;
-		}
+		} else {
+			// init result to false
+			Vector intermediate(LogicalType::BOOLEAN);
+			intermediate.Reference(Value::BOOLEAN(false), count_t(count));
 
-		// init result to false
-		Vector intermediate(LogicalType::BOOLEAN);
-		intermediate.Reference(Value::BOOLEAN(false), count_t(count));
+			// in rhs is a list of constants
+			// for every child, OR the result of the comparison with the left
+			// to get the overall result.
+			for (idx_t child = 1; child < expr.GetChildren().size(); child++) {
+				Vector vector_to_check(expr.GetChildren()[child]->GetReturnType());
+				Vector comp_res(LogicalType::BOOLEAN);
 
-		// in rhs is a list of constants
-		// for every child, OR the result of the comparison with the left
-		// to get the overall result.
-		for (idx_t child = 1; child < expr.GetChildren().size(); child++) {
-			Vector vector_to_check(expr.GetChildren()[child]->GetReturnType());
-			Vector comp_res(LogicalType::BOOLEAN);
+				Execute(*expr.GetChildren()[child], state->child_states[child].get(), sel, count, vector_to_check);
+				VectorOperations::Equals(left, vector_to_check, comp_res);
 
-			Execute(*expr.GetChildren()[child], state->child_states[child].get(), sel, count, vector_to_check);
-			VectorOperations::Equals(left, vector_to_check, comp_res);
-
-			if (child == 1) {
-				// first child: move to result
-				intermediate.Reference(comp_res);
+				if (child == 1) {
+					// first child: move to result
+					intermediate.Reference(comp_res);
+				} else {
+					// otherwise OR together
+					Vector new_result(LogicalType::BOOLEAN);
+					VectorOperations::Or(intermediate, comp_res, new_result);
+					intermediate.Reference(new_result);
+				}
+			}
+			if (expression_type == ExpressionType::COMPARE_NOT_IN) {
+				// NOT IN: invert result
+				VectorOperations::Not(intermediate, result);
 			} else {
-				// otherwise OR together
-				Vector new_result(LogicalType::BOOLEAN);
-				VectorOperations::Or(intermediate, comp_res, new_result);
-				intermediate.Reference(new_result);
+				// directly use the result
+				result.Reference(intermediate);
 			}
 		}
-		if (expression_type == ExpressionType::COMPARE_NOT_IN) {
-			// NOT IN: invert result
-			VectorOperations::Not(intermediate, result);
-		} else {
-			// directly use the result
-			result.Reference(intermediate);
+		// A single flat row is the constant result of scalar evaluation
+		if (!sel && count == 1 && result.GetVectorType() == VectorType::FLAT_VECTOR) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_COALESCE) {
 		SelectionVector sel_a(count);
