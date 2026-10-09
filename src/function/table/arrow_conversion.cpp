@@ -65,9 +65,10 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, idx_t chunk_o
 			//! just memcpy nullmask
 			memcpy((void *)mask.GetData(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes);
 		} else {
-			//! need to re-align nullmask
-			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
-			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes + 1);
+			//! need to re-align nullmask - only the bytes that hold the bits of the rows are guaranteed to exist
+			vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1, 0);
+			auto n_source_bytes = (bit_offset % 8 + size + 8 - 1) / 8;
+			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_source_bytes);
 			ShiftRight(temp_nullmask.data(), NumericCast<int>(n_bitmask_bytes + 1),
 			           NumericCast<int>(bit_offset % 8ull)); //! why this has to be a right shift is a mystery to me
 			memcpy((void *)mask.GetData(), data_ptr_cast(temp_nullmask.data()), n_bitmask_bytes);
@@ -1430,7 +1431,8 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, const
 }
 
 static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_mask) {
-	if (array.null_count > 0) {
+	// a null count of -1 means that the number of nulls is unknown
+	if (array.null_count != 0) {
 		return true;
 	}
 	if (!parent_mask) {

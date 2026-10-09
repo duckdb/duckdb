@@ -33,6 +33,9 @@
     "class": "SelectNode",
     "base": "QueryNode",
     "enum": "SELECT_NODE",
+    "includes": [
+      "duckdb/parser/tableref/emptytableref.hpp"
+    ],
     "members": [
       {
         "id": 200,
@@ -83,6 +86,9 @@
       }
     ],
     "finalize_deserialization": [
+      "if (!result->from_table) {",
+      "\tresult->from_table = make_uniq<EmptyTableRef>();",
+      "}",
       "for (auto &grouping_set : result->groups.grouping_sets) {",
       "\tfor (auto &group_index : grouping_set) {",
       "\t\tif (!group_index.IsValid() || group_index.GetIndex() >= result->groups.group_expressions.size()) {",

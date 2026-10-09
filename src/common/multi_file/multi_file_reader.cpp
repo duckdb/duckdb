@@ -112,53 +112,64 @@ void MultiFileReader::AddParameters(TableFunction &table_function, MultiFilePara
 	}
 }
 
-OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
-	if (input.IsNull()) {
-		throw ParserException("%s reader cannot take NULL input as parameter", function_name);
-	}
-	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		return OpenFileInfo(StringValue::Get(input));
-	}
-	if (input.type().id() == LogicalTypeId::VARIANT) {
-		// a VARIANT lets every file carry its own set of open options - unpack it to its logical value
-		// a variant never unpacks to another variant, so this recurses at most once
-		return ParseFileEntry(VariantValue::GetValue(input));
-	}
-	if (input.type().id() != LogicalTypeId::STRUCT) {
-		throw ParserException("%s reader can only take a list of strings, structs or variants as a parameter",
-		                      function_name);
-	}
-	// a file specified as a struct holds the path in the "filename" field - every other field is an open option
-	auto &child_types = StructType::GetChildTypes(input.type());
-	auto &children = StructValue::GetChildren(input);
-	OpenFileInfo result;
-	auto extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
-	bool found_path = false;
-	for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
-		auto &name = child_types[child_idx].first;
-		auto &child = children[child_idx];
-		if (name == MultiFileReader::FILE_PATH_FIELD) {
-			if (child.IsNull() || child.type().id() != LogicalTypeId::VARCHAR) {
-				throw ParserException("%s reader requires the \"%s\" field of a file struct to be a non-NULL VARCHAR",
-				                      function_name, MultiFileReader::FILE_PATH_FIELD);
-			}
-			result.path = StringValue::Get(child);
-			found_path = true;
-			continue;
+MultiFileColumnDefinition MultiFileColumnDefinition::CreateNested(const Identifier &name, const LogicalType &type) {
+	MultiFileColumnDefinition result(name, type);
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+		for (auto &child : StructType::GetChildTypes(type)) {
+			result.children.push_back(CreateNested(child.first, child.second));
 		}
-		if (child.IsNull()) {
-			// a NULL option is an option that was not specified - a list of structs is typed by unifying the
-			// structs of its entries, which fills the options an entry did not specify with NULL
-			continue;
+		break;
+	case LogicalTypeId::LIST:
+		result.children.push_back(CreateNested(Identifier("list"), ListType::GetChildType(type)));
+		break;
+	case LogicalTypeId::ARRAY:
+		result.children.push_back(CreateNested(Identifier("list"), ArrayType::GetChildType(type)));
+		break;
+	case LogicalTypeId::MAP: {
+		// the multi-file reader expects the entries of a MAP as a "key_value" STRUCT of the keys and the values
+		MultiFileColumnDefinition key_value(Identifier("key_value"), ListType::GetChildType(type));
+		key_value.children.push_back(CreateNested(Identifier("key"), MapType::KeyType(type)));
+		key_value.children.push_back(CreateNested(Identifier("value"), MapType::ValueType(type)));
+		result.children.push_back(std::move(key_value));
+		break;
+	}
+	case LogicalTypeId::UNION:
+		for (idx_t i = 0; i < UnionType::GetMemberCount(type); i++) {
+			result.children.push_back(
+			    CreateNested(UnionType::GetMemberName(type, i), UnionType::GetMemberType(type, i)));
 		}
-		extended_info->options[name.GetIdentifierName()] = child;
+		break;
+	default:
+		break;
 	}
-	if (!found_path) {
-		throw ParserException("%s reader requires a file struct to have a \"%s\" field holding the path of the file",
-		                      function_name, MultiFileReader::FILE_PATH_FIELD);
-	}
-	result.extended_info = std::move(extended_info);
 	return result;
+}
+
+MultiFileColumnDefinition &MultiFileColumnDefinition::ResolveChildPath(const vector<idx_t> &child_path) {
+	reference<MultiFileColumnDefinition> current(*this);
+	for (auto child_index : child_path) {
+		auto &definition = current.get();
+		if (definition.type.id() == LogicalTypeId::MAP) {
+			// the keys and the values are the children of the "key_value" entry
+			if (child_index > 1) {
+				throw InvalidInputException("A MAP has two children: its keys (0) and its values (1), not %llu",
+				                            child_index);
+			}
+			current = definition.children[0].children[child_index];
+			continue;
+		}
+		if (child_index >= definition.children.size()) {
+			throw InvalidInputException("Child index %llu is out of range for a field of type %s", child_index,
+			                            definition.type.ToString());
+		}
+		current = definition.children[child_index];
+	}
+	return current.get();
+}
+
+OpenFileInfo MultiFileReader::ParseFileEntry(const Value &input) {
+	return OpenFileInfo::FromValue(input, function_name);
 }
 
 vector<OpenFileInfo> MultiFileReader::ParseFileList(const Value &input) {

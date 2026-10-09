@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/identifier.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 
@@ -46,7 +47,17 @@ struct OpenFileInfo {
 	string path;
 	shared_ptr<ExtendedOpenFileInfo> extended_info;
 
+	//! The field of a file struct that holds the path of the file
+	static constexpr const char *PATH_FIELD = "filename";
+
 public:
+	//! The file a value specifies: a VARCHAR path, or a STRUCT holding the path in its "filename" field and the
+	//! options to open the file with in its other fields (a VARIANT holding either is unpacked). Errors name the
+	//! function that was given the file
+	DUCKDB_API static OpenFileInfo FromValue(const Value &input, const Identifier &function_name);
+	//! The inverse of FromValue: the path as a VARCHAR when there are no options, a file struct otherwise
+	DUCKDB_API Value ToValue() const;
+
 	bool operator<(const OpenFileInfo &rhs) const {
 		return path < rhs.path;
 	}

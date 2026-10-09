@@ -613,7 +613,8 @@ private:
 
 	BoundStatement BindCopyTo(CopyStatement &stmt, const CopyFunction &function, CopyToType copy_to_type);
 	BoundStatement BindCopyFrom(CopyStatement &stmt, const CopyFunction &function);
-	void BindCopyOptions(CopyInfo &info);
+	void BindCopyFormat(CopyInfo &info);
+	void BindCopyOptions(CopyInfo &info, const CopyFunction &function);
 	identifier_map_t<CopyOption> GetFullCopyOptionsList(const CopyFunction &function, CopyOptionMode mode);
 
 	void PrepareModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
