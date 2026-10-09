@@ -34,7 +34,9 @@ static unique_ptr<FunctionData> StructExtractBind(BindScalarFunctionInput &input
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(StructType::IsStruct(child_type));
+	if (!StructType::IsStruct(child_type)) {
+		throw BinderException("struct_extract can only be used on a STRUCT, not on %s", child_type.ToString());
+	}
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw BinderException("Can't extract something from an empty struct");
@@ -90,7 +92,9 @@ static unique_ptr<FunctionData> StructExtractBindInternal(BindScalarFunctionInpu
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
-	D_ASSERT(StructType::IsStruct(child_type));
+	if (!StructType::IsStruct(child_type)) {
+		throw BinderException("struct_extract can only be used on a STRUCT, not on %s", child_type.ToString());
+	}
 	auto &struct_children = StructType::GetChildTypes(child_type);
 	if (struct_children.empty()) {
 		throw BinderException("Can't extract something from an empty struct");
