@@ -133,7 +133,7 @@ jobs:
     name: Bench ${{ matrix.name }}
     needs:
       - linux-base
-    runs-on: ${{ matrix.runner || fromJSON(inputs.runners).linux_small }}
+    runs-on: ${{ fromJSON(inputs.runners).linux_small }}
     container:
       image: ${{ fromJson(inputs.images).manylinux_amd64_main }}
     strategy:
@@ -144,7 +144,6 @@ jobs:
             benchmark: .github/regression/ingestion.csv
           - name: Micro
             benchmark: .github/regression/micro.csv
-            runner: ubuntu-24.04 # Requires more than the 8 GiB provided by linux_small.
           - name: Parser
             benchmark: .github/regression/parser.csv
           - name: H2OAI
@@ -153,10 +152,8 @@ jobs:
             benchmark: .github/regression/imdb.csv
           - name: CSV
             benchmark: .github/regression/csv.csv
-            runner: ubuntu-24.04 # Requires more than the 8 GiB provided by linux_small.
           - name: RealNest
             benchmark: .github/regression/realnest.csv
-            runner: ubuntu-24.04 # Requires more than the 8 GiB provided by linux_small.
             data_setup: |
               mkdir -p duckdb_benchmark_data
               python3 scripts/ci/retry.py -- wget -q https://blobs.duckdb.org/data/realnest/realnest.duckdb --output-document=duckdb_benchmark_data/real_nest.duckdb
@@ -204,6 +201,7 @@ jobs:
             --benchmarks "${{ matrix.benchmark }}" \
             --verbose \
             --early-stop \
+            --memory-limit 7GiB \
             --threads 2
 
   regression-bench-tpc:
@@ -269,6 +267,7 @@ jobs:
             --verbose \
             --early-stop \
             --disable-timeout \
+            --memory-limit 7GiB \
             --benchmark-argument sf=${{ matrix.sf }} \
             --threads ${{ matrix.threads }}
 
@@ -319,7 +318,14 @@ jobs:
 
       - name: Run regression benchmark
         run: |
-          python scripts/regression/test_runner.py --old build/base/release/benchmark/benchmark_runner --new build/current/release/benchmark/benchmark_runner --benchmarks benchmark/fivetran/benchmark_list.csv --verbose --early-stop --threads 2
+          python scripts/regression/test_runner.py \
+            --old build/base/release/benchmark/benchmark_runner \
+            --new build/current/release/benchmark/benchmark_runner \
+            --benchmarks benchmark/fivetran/benchmark_list.csv \
+            --verbose \
+            --early-stop \
+            --memory-limit 7GiB \
+            --threads 2
 
   regression-test-storage:
     name: Storage Size Regression Test
