@@ -103,7 +103,7 @@ DUCKDB_V2_ERROR duckdb_v2_connection_interrupt(duckdb_v2_connection_handle conn,
 	return WithErrorHandler(err, [&]() {
 		// Record that the cancellation was user-initiated.
 		auto &context = *Convert(conn)->context;
-		GetBusySlot(context)->cancel_requested.store(true);
+		GetBusySlot(context)->cancel_requests.fetch_add(1);
 
 		// ClientContext::Interrupt is an atomic store; safe to call from any thread
 		context.Interrupt();

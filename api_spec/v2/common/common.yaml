@@ -96,10 +96,10 @@ handles:
       step from one thread at a time.
 
       A result is a cursor on the connection's execution, not a box of data.
-      While it is live — not finished, cancelled, errored, or destroyed — the
-      connection refuses new queries with ERROR_RESOURCE_IN_USE, and the
-      query's transaction stays open, deferring version cleanup and
-      checkpointing, so drain or destroy it promptly. Side-effecting statements
+      While its statement runs — at most until it is finished, cancelled,
+      errored, or destroyed — the connection refuses new queries with
+      ERROR_RESOURCE_IN_USE, and the query's transaction stays open, deferring
+      version cleanup and checkpointing, so drain or destroy it promptly. Side-effecting statements
       (PRAGMA, ALTER, ...) take effect only once the result is drained. Always
       destroy via `[[result_destroy]]`, which is safe even on a partially consumed
       stream.

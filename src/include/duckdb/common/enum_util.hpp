@@ -154,6 +154,8 @@ enum class CompressionValidity : uint8_t;
 
 enum class ConflictManagerMode : uint8_t;
 
+enum class ConnectionType : uint8_t;
+
 enum class ConstraintType : uint8_t;
 
 enum class CoordinateReferenceSystemType : uint8_t;
@@ -219,6 +221,8 @@ enum class ExplainType : uint8_t;
 enum class ExponentType : uint8_t;
 
 enum class ExpressionClass : uint8_t;
+
+enum class ExpressionDepthKind : uint8_t;
 
 enum class ExpressionTailType : uint8_t;
 
@@ -851,6 +855,9 @@ template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
+const char* EnumUtil::ToChars<ConnectionType>(ConnectionType value);
+
+template<>
 const char* EnumUtil::ToChars<ConstraintType>(ConstraintType value);
 
 template<>
@@ -948,6 +955,9 @@ const char* EnumUtil::ToChars<ExponentType>(ExponentType value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionClass>(ExpressionClass value);
+
+template<>
+const char* EnumUtil::ToChars<ExpressionDepthKind>(ExpressionDepthKind value);
 
 template<>
 const char* EnumUtil::ToChars<ExpressionTailType>(ExpressionTailType value);
@@ -1803,6 +1813,9 @@ template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
+ConnectionType EnumUtil::FromString<ConnectionType>(const char *value);
+
+template<>
 ConstraintType EnumUtil::FromString<ConstraintType>(const char *value);
 
 template<>
@@ -1900,6 +1913,9 @@ ExponentType EnumUtil::FromString<ExponentType>(const char *value);
 
 template<>
 ExpressionClass EnumUtil::FromString<ExpressionClass>(const char *value);
+
+template<>
+ExpressionDepthKind EnumUtil::FromString<ExpressionDepthKind>(const char *value);
 
 template<>
 ExpressionTailType EnumUtil::FromString<ExpressionTailType>(const char *value);

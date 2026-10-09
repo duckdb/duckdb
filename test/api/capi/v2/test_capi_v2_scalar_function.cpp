@@ -319,7 +319,11 @@ DUCKDB_V2_LOGICAL_TYPE_ID GetArgTypeId(duckdb_v2_function_bind_info_handle info,
 void PhaseProbeResolveTypes(duckdb_v2_function_bind_info_handle info,
                             duckdb_v2_scalar_function_resolve_types_info_handle, duckdb_v2_context_handle,
                             duckdb_v2_error_info_handle *err) {
-	phase_probe.resolve_arg_type = GetArgTypeId(info, err);
+	const auto arg_type = GetArgTypeId(info, err);
+	// Plan verification can rebind the function with already-cast arguments.
+	if (phase_probe.resolve_arg_type == DUCKDB_V2_LOGICAL_TYPE_ID_INVALID) {
+		phase_probe.resolve_arg_type = arg_type;
+	}
 	duckdb_v2_opaque bind_data = {&bind_marker, nullptr, nullptr};
 	phase_probe.resolve_set_bind_data_rc = duckdb_v2_function_bind_set_bind_data(info, &bind_data, nullptr);
 }

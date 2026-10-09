@@ -252,6 +252,31 @@ unique_ptr<T> ClientContext::ErrorResult(ErrorData error, const string &query) {
 	return make_uniq<T>(std::move(error));
 }
 
+bool ClientContext::OpenResultHoldsConnection(ClientContextLock &) {
+	// A query no result holds (one whose begin failed), or whose result a collector built so that nothing can end
+	// it, is abandoned instead
+	return active_query && active_query->HasOpenResult() && !active_query->collector_built_result;
+}
+
+template <class T>
+unique_ptr<T> ClientContext::InitialCleanup(ClientContextLock &lock) {
+	if (OpenResultHoldsConnection(lock)) {
+		// The statement never ran, so no invalidation policy applies to the open result's transaction
+		auto error = ErrorData(ResourceInUseException(OPEN_RESULT_ERROR));
+		ProcessError(error, string());
+		return make_uniq<T>(std::move(error));
+	}
+	AbandonActiveQuery(lock);
+	return nullptr;
+}
+
+void ClientContext::VerifyNoOpenResult() {
+	auto lock = LockContext();
+	if (OpenResultHoldsConnection(*lock)) {
+		throw ResourceInUseException(OPEN_RESULT_ERROR);
+	}
+}
+
 Logger &ClientContext::GetLogger() const {
 	return *logger;
 }
@@ -418,8 +443,8 @@ StatementIterator ClientContext::IterateStatements(const string &query) {
 	return StatementIterator(ParseIterator(*this, query));
 }
 
-void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer,
-                                         optional_ptr<ClientContextLock> lock) {
+void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffer, optional_ptr<ClientContextLock> lock,
+                                         optional_ptr<StatementPreprocessor> preprocessor) {
 	// Acquire our own lock if the caller doesn't hold one (e.g. the shell); own_lock keeps it alive
 	// for the duration of the preprocess pass.
 	unique_ptr<ClientContextLock> own_lock;
@@ -427,10 +452,14 @@ void ClientContext::PreprocessStatements(vector<unique_ptr<SQLStatement>> &buffe
 		own_lock = LockContext();
 		lock = own_lock.get();
 	}
-	StatementPreprocessor preprocessor(*this);
+	unique_ptr<StatementPreprocessor> own_preprocessor;
+	if (!preprocessor) {
+		own_preprocessor = make_uniq<StatementPreprocessor>(*this);
+		preprocessor = own_preprocessor.get();
+	}
 	const CurrentTransactionState transaction_state =
 	    transaction.HasActiveTransaction() ? IN_ACTIVE_TRANSACTION : NOT_IN_ACTIVE_TRANSACTION;
-	preprocessor.Preprocess(*lock, buffer, transaction_state);
+	preprocessor->Preprocess(*lock, buffer, transaction_state);
 }
 
 vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientContextLock &lock, const string &query) {
@@ -537,7 +566,9 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(unique_ptr<SQLStatement> st
 
 	// Try to prepare.
 	try {
-		InitialCleanup(*lock);
+		if (auto refusal = InitialCleanup<PreparedStatement>(*lock)) {
+			return refusal;
+		}
 		return PrepareInternal(*lock, std::move(statement));
 	} catch (std::exception &ex) {
 		return ErrorResult<PreparedStatement>(ErrorData(ex), query);
@@ -592,7 +623,9 @@ unique_ptr<PreparedStatement> ClientContext::Prepare(const string &query) {
 	auto lock = LockContext();
 	// prepare the query
 	try {
-		InitialCleanup(*lock);
+		if (auto refusal = InitialCleanup<PreparedStatement>(*lock)) {
+			return refusal;
+		}
 
 		// first parse the query
 		auto statements = ParseStatementsInternal(*lock, query);
@@ -750,7 +783,9 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 	auto lock = LockContext();
 	parameters.result_eagerness = ResultEagerness::FORCED;
 	try {
-		InitialCleanup(*lock);
+		if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+			return refusal;
+		}
 	} catch (std::exception &ex) {
 		return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
 	}
@@ -766,9 +801,10 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, QueryParameters query_parameters) {
 	auto lock = LockContext();
-	// The lazy path bypasses ParseStatementsInternal → InitialCleanup, so clear leftover query state
-	// (interrupt flag, etc.) ourselves.
-	InitialCleanup(*lock);
+	// The lazy path drives its own parse iterator, so it clears leftover query state (interrupt flag, etc.) itself
+	if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+		return refusal;
+	}
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query);
 	// ParseIterator's constructor runs UTF-8 validation / Unicode-space strip and can throw — route
@@ -879,7 +915,9 @@ unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement,
 unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
-		InitialCleanup(*lock);
+		if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+			return refusal;
+		}
 
 		auto statements = ParseStatementsInternal(*lock, query);
 		if (statements.empty()) {
@@ -900,7 +938,9 @@ unique_ptr<QueryResult> ClientContext::Submit(const string &query, const QueryPa
 unique_ptr<QueryResult> ClientContext::Submit(unique_ptr<SQLStatement> statement, const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
-		InitialCleanup(*lock);
+		if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+			return refusal;
+		}
 
 		return SubmitInternal(*lock, std::move(statement), parameters, true);
 	} catch (std::exception &ex) {
@@ -933,7 +973,9 @@ unique_ptr<QueryResult> ClientContext::RunInternalStatement(unique_ptr<SQLStatem
                                                             const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
-		InitialCleanup(*lock);
+		if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+			return refusal;
+		}
 	} catch (std::exception &ex) {
 		return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
 	}
@@ -946,7 +988,9 @@ unique_ptr<QueryResult> ClientContext::SubmitInternalStatement(unique_ptr<SQLSta
                                                                const QueryParameters &parameters) {
 	auto lock = LockContext();
 	try {
-		InitialCleanup(*lock);
+		if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+			return refusal;
+		}
 	} catch (std::exception &ex) {
 		return ErrorResult<QueryResult>(ErrorData(ex), statement->query);
 	}
@@ -1002,7 +1046,7 @@ void ClientContext::InterruptCheck() const {
 
 void ClientContext::CancelTransaction() {
 	auto lock = LockContext();
-	InitialCleanup(*lock);
+	AbandonActiveQuery(*lock);
 }
 
 void ClientContext::EnableProfiling() {
@@ -1093,7 +1137,9 @@ void ClientContext::RunTransactionStatementInternal(const TransactionInfo &info)
 
 void ClientContext::RunTransactionStatement(const TransactionInfo &info) {
 	auto lock = LockContext();
-	InitialCleanup(*lock);
+	if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+		refusal->ThrowError();
+	}
 	if (is_connected) {
 		auto statement = make_uniq<TransactionStatement>(info.Copy());
 		statement->query = info.ToString();
@@ -1243,7 +1289,9 @@ unordered_set<string> ClientContext::GetTableNames(const string &query, const bo
 
 unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, const shared_ptr<Relation> &relation,
                                                       const QueryParameters &query_parameters) {
-	InitialCleanup(lock);
+	if (auto refusal = InitialCleanup<QueryResult>(lock)) {
+		return refusal;
+	}
 
 #ifdef DEBUG
 	// run the ToString method of any relation we run, mostly to ensure it doesn't crash
@@ -1264,7 +1312,9 @@ unique_ptr<QueryResult> ClientContext::Submit(const shared_ptr<Relation> &relati
 unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
 	auto lock = LockContext();
 	auto &expected_columns = relation->Columns();
-	InitialCleanup(*lock);
+	if (auto refusal = InitialCleanup<QueryResult>(*lock)) {
+		return refusal;
+	}
 
 	auto relation_stmt = make_uniq<RelationStatement>(relation);
 	QueryParameters parameters;

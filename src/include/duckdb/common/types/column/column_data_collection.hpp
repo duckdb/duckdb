@@ -23,6 +23,7 @@ class ColumnDataRowCollection;
 
 //! The ColumnDataCollection represents a set of (buffer-managed) data stored in columnar format
 //! It is efficient to read and scan
+//! A collection with no columns still stores row counts.
 class ColumnDataCollection {
 public:
 	//! Constructs an in-memory column data collection from an allocator

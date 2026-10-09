@@ -645,18 +645,30 @@ DUCKDB_V2_ERROR WithErrorHandler(duckdb_v2_error_info_handle *err, T callback) n
 //----------------------------------------------------------------------------------------------------------------------
 
 struct ConnectionBusySlotV2 : public ClientContextState {
+	//! The result of a statement that expands into a group, until it finishes. Between two statements of a group
+	//! the engine has no statement open, but the group's transaction is still running
 	std::atomic<void *> owner {nullptr};
-	// True once the consumer called `connection_interrupt` for the active result.
-	// This flag is how we distinguish a consumer cancellation (-> CANCELLED status) from an DuckDB-initiated interrupt
-	// that shares the INTERRUPT exception type, e.g. a `max_execution_time` timeout (-> error).
-	// The DuckDB's internal interrupt_state is not suitable for this, it is set to stop sibling tasks on any error.
-	// Reset when a new query claims the slot.
-	std::atomic<bool> cancel_requested {false};
+	// The number of `connection_interrupt` calls. A result records it when its statement starts, and an INTERRUPT
+	// error is a consumer cancellation (-> CANCELLED status) only if it moved since: a DuckDB-initiated interrupt,
+	// e.g. a `max_execution_time` timeout, shares the INTERRUPT exception type (-> error). The DuckDB's internal
+	// interrupt_state is not suitable for this, it is set to stop sibling tasks on any error.
+	std::atomic<idx_t> cancel_requests {0};
 };
 
 inline shared_ptr<ConnectionBusySlotV2> GetBusySlot(ClientContext &context) {
 	constexpr auto BUSY_SLOT_STATE_KEY = "v2_connection_busy_slot";
 	return context.registered_state->GetOrCreate<ConnectionBusySlotV2>(BUSY_SLOT_STATE_KEY);
+}
+
+//! The engine's refusal, raised for a group that holds the connection between two of its statements
+inline void ThrowConnectionInUse() {
+	throw ResourceInUseException(ClientContext::OPEN_RESULT_ERROR);
+}
+
+inline void ThrowIfGroupRunning(ConnectionBusySlotV2 &slot) {
+	if (slot.owner.load() != nullptr) {
+		ThrowConnectionInUse();
+	}
 }
 
 //----------------------------------------------------------------------------------------------------------------------

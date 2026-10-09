@@ -126,13 +126,24 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
                                        CurrentTransactionState transaction_context_state) {
 	// Quick check: do we need preprocessing at all?
 	bool needs_preprocessing = false;
+	// Only PRAGMA and multi-statements touch the catalog and need a transaction.
+	bool needs_transaction = false;
 	for (auto &stmt : statements) {
 		if (stmt->type == StatementType::PRAGMA_STATEMENT || stmt->type == StatementType::MULTI_STATEMENT) {
 			needs_preprocessing = true;
-			break;
+			needs_transaction = true;
+		} else if (stmt->type == StatementType::TRANSACTION_STATEMENT) {
+			needs_preprocessing = true;
 		}
 	}
 	if (!needs_preprocessing) {
+		return;
+	}
+	if (!needs_transaction) {
+		// Transaction statements only update chained_transaction_state. Wrapping them in a transaction would start a
+		// throwaway autocommit transaction for a BEGIN (consuming a transaction id), and would make a ROLLBACK of an
+		// aborted transaction fail.
+		PreprocessInternal(lock, statements, transaction_context_state);
 		return;
 	}
 
@@ -142,7 +153,6 @@ void StatementPreprocessor::Preprocess(ClientContextLock &lock, vector<unique_pt
 
 void StatementPreprocessor::PreprocessInternal(ClientContextLock &lock, vector<unique_ptr<SQLStatement>> &statements,
                                                const CurrentTransactionState transaction_context_state) {
-	CurrentTransactionState chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
 		auto query = statements[i]->query;
