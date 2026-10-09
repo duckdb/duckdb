@@ -86,6 +86,8 @@ Slow tests should use `.test_slow` extension instead of `.test`.
 
 Do not add `PRAGMA enable_verification` to tests - it should no longer be used in new tests.
 
+Do not loop over `enable_optimizer` (or similar settings) in tests - tests are already run with optimizers disabled through the `configs/disable_optimizer.json` config.
+
 ## Code Formatting
 
 ```bash
