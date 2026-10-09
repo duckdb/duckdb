@@ -49,6 +49,12 @@
         "test/sql/sql_export/empty_aggregate_state.test",
         "test/sql/sql_export/mark_condition_shapes.test"
       ]
+    },
+    {
+      "reason": "String min/max statistics use the legacy format below v2.0.0, so MIN/MAX over VARCHAR columns are not folded.",
+      "paths": [
+        "test/optimizer/aggregate_fold_bail_paths.test"
+      ]
     }
   ]
 }

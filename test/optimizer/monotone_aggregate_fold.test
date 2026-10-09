@@ -1,0 +1,394 @@
+# name: test/optimizer/monotone_aggregate_fold.test
+# description: Fold MIN/MAX over monotone functions of a column from the column's min/max statistics
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# Alternative verify disables eager aggregate execution
+require no_alternative_verify
+
+statement ok
+SET storage_compatibility_version='latest';
+
+statement ok
+ATTACH '{TEST_DIR}/monotone_fold.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+# 4 row groups spanning 2000-01-01 + 0..8191 days, i.e. 2000 up to mid 2022
+statement ok
+CREATE TABLE t_ts AS (SELECT i, TIMESTAMP '2000-01-01' + INTERVAL (i) DAY AS ts,
+                      (DATE '2000-01-01' + i::INTEGER) AS d FROM range(8192) _(i));
+
+# every timestamp sits in March 2020: the fixed day/month/quarter domains do not describe the data
+statement ok
+CREATE TABLE t_mid (ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_mid SELECT TIMESTAMP '2020-03-10' + INTERVAL (i % 5) DAY FROM range(4096) _(i);
+
+# 100 consecutive hours: the hour domain [0,24] is wider than the attained maximum
+statement ok
+CREATE TABLE t_hour (ts TIMESTAMP);
+
+statement ok
+INSERT INTO t_hour SELECT TIMESTAMP '2020-03-10' + INTERVAL (i) HOUR FROM range(100) _(i);
+
+# two independent columns: `+`/`-` are monotone in each argument, but not in the pair
+statement ok
+CREATE TABLE t_multi AS (SELECT i, (10000 - i) AS k FROM range(8192) _(i));
+
+# year() is annotated monotone for the INTERVAL overload as well, but intervals are not ordered
+statement ok
+CREATE TABLE t_iv (iv INTERVAL);
+
+statement ok
+INSERT INTO t_iv SELECT INTERVAL (i) DAY FROM range(2048) _(i);
+
+# a deleted interior row makes that partition a bound: other exact partitions still supply the
+# global year extrema, so the bound is dominated and the fold goes through
+statement ok
+CREATE TABLE t_del AS (SELECT i, TIMESTAMP '2000-01-01' + INTERVAL (i) DAY AS ts FROM range(8192) _(i));
+
+statement ok
+DELETE FROM t_del WHERE i = 4000;
+
+# deleting the row that holds the global maximum leaves that partition's mapped bound undominated,
+# so MAX must keep scanning (MIN still folds - the short end is untouched)
+statement ok
+CREATE TABLE t_del_max AS (SELECT i, TIMESTAMP '2000-01-01' + INTERVAL (i) DAY AS ts FROM range(8192) _(i));
+
+statement ok
+DELETE FROM t_del_max WHERE i = 8191;
+
+# NaN sorts above every finite value: evaluating only -min would report -1 for MAX(-x)
+statement ok
+CREATE TABLE t_nan (x DOUBLE);
+
+statement ok
+INSERT INTO t_nan VALUES (1), ('NaN');
+
+# INT64_MIN overflows under unary minus: evaluating only -max would hide the error for MIN(-x)
+statement ok
+CREATE TABLE t_neg (x BIGINT);
+
+statement ok
+INSERT INTO t_neg VALUES (-9223372036854775808), (1);
+
+# Work-around for unsetting version info
+statement ok
+ATTACH '{TEST_DIR}/monotone_fold_tmp.duckdb' AS tmp
+
+statement ok
+USE tmp
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/monotone_fold.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp
+
+# an ascending function maps the minimum to the minimum and the maximum to the maximum
+query II
+EXPLAIN SELECT max(year(ts)), min(year(ts)) FROM t_ts
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(year(ts)), min(year(ts)) FROM t_ts
+----
+2022	2000
+
+query I
+SELECT max(year(d)) FROM t_ts
+----
+2022
+
+# a function with a constant argument next to the column maps its endpoints as well
+query II
+EXPLAIN SELECT max(date_trunc('month', ts)) FROM t_ts
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(date_trunc('month', ts)) FROM t_ts
+----
+2022-06-01 00:00:00
+
+# a fallible function is folded too: the endpoint is an actual value, so evaluating it at plan time
+# cannot fail where execution would have succeeded
+query II
+EXPLAIN SELECT max(epoch(ts)) FROM t_ts
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(epoch(ts)) FROM t_ts
+----
+1654387200.0
+
+# mixed with count_star and a plain min
+query II
+EXPLAIN SELECT count(*), max(year(ts)), min(i) FROM t_ts
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*), max(year(ts)), min(i) FROM t_ts
+----
+8192	2022	0
+
+# a descending function swaps the endpoints: MAX reads the column minimum
+query II
+EXPLAIN SELECT max(-i), min(-i) FROM t_ts
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(-i), min(-i) FROM t_ts
+----
+0	-8191
+
+# a filter that prunes whole row groups leaves only exact partitions
+query II
+EXPLAIN SELECT max(year(ts)) FROM t_ts WHERE i >= 2048 AND i < 6144
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(year(ts)) FROM t_ts WHERE i >= 2048 AND i < 6144
+----
+2016
+
+# a filter that only cuts a partition leaves it a bound over the surviving rows: the column maximum
+# is no longer attained, so mapping it would report a year the filter removed
+query II
+EXPLAIN SELECT max(year(ts)) FROM t_ts WHERE i < 8000
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(year(ts)) FROM t_ts WHERE i < 8000
+----
+2021
+
+query II
+EXPLAIN SELECT min(year(ts)) FROM t_ts WHERE i > 100
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(year(ts)) FROM t_ts WHERE i > 100
+----
+2000
+
+# month/day/quarter/week are not monotone over an arbitrary range and carry no annotation: the fold
+# must not resort to their fixed [1,12] / [1,31] / [1,4] domains
+query II
+EXPLAIN SELECT max(month(ts)) FROM t_mid
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(month(ts)) FROM t_mid
+----
+3
+
+query II
+EXPLAIN SELECT max(dayofmonth(ts)) FROM t_mid
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(dayofmonth(ts)) FROM t_mid
+----
+14
+
+query II
+EXPLAIN SELECT max(quarter(ts)) FROM t_mid
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(quarter(ts)) FROM t_mid
+----
+1
+
+query II
+EXPLAIN SELECT max(day(ts)) FROM t_mid
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(day(ts)) FROM t_mid
+----
+14
+
+query II
+EXPLAIN SELECT max(week(ts)) FROM t_mid
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(week(ts)) FROM t_mid
+----
+11
+
+# the hour domain is [0,24] but the data only reaches 23
+query II
+EXPLAIN SELECT max(hour(ts)), min(hour(ts)) FROM t_hour
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(hour(ts)), min(hour(ts)) FROM t_hour
+----
+23	0
+
+# two column arguments: f(min, min) is not attained by any single row, so the fold must not apply
+query II
+EXPLAIN SELECT max(i + k) FROM t_multi
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(i + k) FROM t_multi
+----
+10000
+
+query II
+EXPLAIN SELECT min(k - i) FROM t_multi
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(k - i) FROM t_multi
+----
+-6382
+
+# multiplication carries no monotonicity annotation: its direction depends on the sign of the other
+# argument, so `i * -1` must not be read as an increasing function of i
+query II
+EXPLAIN SELECT max(i * -1), min(i * -1) FROM t_multi
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(i * -1), min(i * -1) FROM t_multi
+----
+0	-8191
+
+# the remainder has no monotone relationship to its argument either
+query II
+EXPLAIN SELECT max(i % 100) FROM t_multi
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(i % 100) FROM t_multi
+----
+99
+
+# intervals are not totally ordered, so "monotone in the interval argument" has no min/max meaning
+query II
+EXPLAIN SELECT max(year(iv)) FROM t_iv
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(year(iv)) FROM t_iv
+----
+0
+
+# an interior delete only bounds that partition: the exact partitions still attain 2000 and 2022,
+# so their mapped years dominate the bound and both aggregates fold
+query II
+EXPLAIN SELECT max(year(ts)), min(year(ts)) FROM t_del
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(year(ts)), min(year(ts)) FROM t_del
+----
+2022	2000
+
+# deleting the global maximum: the inexact partition's mapped bound (2022) is not dominated by the
+# exact candidate (~2016), so MAX is vetoed; MIN still folds because that end is exact
+query II
+EXPLAIN SELECT max(year(ts)) FROM t_del_max
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(year(ts)) FROM t_del_max
+----
+2022
+
+query II
+EXPLAIN SELECT min(year(ts)) FROM t_del_max
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(year(ts)) FROM t_del_max
+----
+2000
+
+# both endpoints must be usable: NaN at the column maximum makes -max = NaN, so the fold must not
+# report -min as MAX(-x). MIN still scans (NaN at an endpoint is unusable) and returns -1, since
+# DuckDB orders NaN above every finite value.
+query II
+EXPLAIN SELECT max(-x) FROM t_nan
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(-x) FROM t_nan
+----
+NaN
+
+query II
+EXPLAIN SELECT min(-x) FROM t_nan
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT min(-x) FROM t_nan
+----
+-1.0
+
+# both endpoints must be defined: -INT64_MIN overflows, so evaluating only -max must not fold MIN(-x)
+# into -1
+query II
+EXPLAIN SELECT min(-x) FROM t_neg
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+EXPLAIN SELECT max(-x) FROM t_neg
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+statement error
+SELECT min(-x) FROM t_neg
+----
+<REGEX>:.*Overflow in negation.*
+
+# the plain column aggregates keep folding
+query II
+EXPLAIN SELECT max(ts), min(ts) FROM t_ts
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT max(ts), min(ts) FROM t_ts
+----
+2022-06-05 00:00:00	2000-01-01 00:00:00

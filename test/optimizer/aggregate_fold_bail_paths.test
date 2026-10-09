@@ -1,0 +1,247 @@
+# name: test/optimizer/aggregate_fold_bail_paths.test
+# description: Lock the bail (no-rewrite) behavior of eager count/min/max execution over partition statistics
+# group: [optimizer]
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing': 'upper'};
+
+# Alternative verify disables eager aggregate execution
+require no_alternative_verify
+
+statement ok
+ATTACH '{TEST_DIR}/eager_agg_bail.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+CREATE TABLE t AS (SELECT * FROM range(8192) _(i), LATERAL (select (i*2) as j));
+
+statement ok
+CREATE TABLE t_gen (i INTEGER, g INTEGER GENERATED ALWAYS AS (i * 2))
+
+statement ok
+INSERT INTO t_gen SELECT i FROM range(2048) _(i)
+
+# only long strings: the inlined string statistics keep a 12-byte prefix, so min/max become truncated bounds
+statement ok
+CREATE TABLE tlong (s VARCHAR)
+
+statement ok
+INSERT INTO tlong SELECT 'x' || repeat('y', 40) || i::VARCHAR FROM range(2048) _(i)
+
+# control table for the truncated-string case: all values are short, statistics stay exact
+statement ok
+CREATE TABLE tshort (s VARCHAR)
+
+statement ok
+INSERT INTO tshort SELECT 'a' || i::VARCHAR FROM range(2048) _(i)
+
+# control for the generated-column cases: an ordinary added column has usable statistics
+statement ok
+CREATE TABLE t_added (i INTEGER, c INTEGER)
+
+statement ok
+INSERT INTO t_added SELECT i, i FROM range(2048) _(i)
+
+statement ok
+CREATE TABLE t_empty (i INTEGER)
+
+statement ok
+COPY (SELECT i FROM range(4096) _(i)) TO '{TEST_DIR}/bail_paths_tmp.csv' (FORMAT CSV)
+
+# Work-around for unsetting version info
+statement ok
+ATTACH '{TEST_DIR}/eager_agg_bail_tmp.duckdb' AS tmp
+
+statement ok
+USE tmp
+
+statement ok
+DETACH db
+
+statement ok
+ATTACH '{TEST_DIR}/eager_agg_bail.duckdb' AS db (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE db
+
+statement ok
+DETACH tmp
+
+# control: the rewrite happens on the plain table
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# an aggregate outside the recognized set (min/max/count_star) is not rewritten
+query II
+EXPLAIN SELECT sum(i) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# a projection computing a monotone function of the column folds through the mapped endpoints:
+# max(i + 1) = max(i) + 1
+query II
+EXPLAIN SELECT max(x) FROM (SELECT i+1 AS x FROM t)
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(x) FROM (SELECT i+1 AS x FROM t)
+----
+8192
+
+# a projection computing an expression with no monotonicity annotation has no column to chase
+query II
+EXPLAIN SELECT max(x) FROM (SELECT i % 100 AS x FROM t)
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(x) FROM (SELECT i % 100 AS x FROM t)
+----
+99
+
+# the projection casts to VARCHAR: the cast does not preserve the order of the statistics
+query II
+EXPLAIN SELECT max(x) FROM (SELECT i::VARCHAR AS x FROM t)
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# control: a widening integral cast through the projection is safe and folds
+query II
+EXPLAIN SELECT max(x) FROM (SELECT i::BIGINT AS x FROM t)
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(x) FROM (SELECT i::BIGINT AS x FROM t)
+----
+8191
+
+# control: a direct widening integral cast folds
+query II
+EXPLAIN SELECT min(i::BIGINT), max(i::BIGINT) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT min(i::BIGINT), max(i::BIGINT) FROM t
+----
+0	8191
+
+# the child is a LIMIT, not a table scan
+query II
+EXPLAIN SELECT max(i) FROM (SELECT i FROM t LIMIT 5)
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# a table sample operator sits between the aggregate and the scan
+query II
+EXPLAIN SELECT max(i) FROM t TABLESAMPLE reservoir(10%)
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# a sample attached to the scan itself means the statistics do not describe the rows that will be read
+query II
+EXPLAIN SELECT max(i) FROM t USING SAMPLE 10 PERCENT (system)
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# a generated column has no storage index, so no statistics can be consulted
+query II
+EXPLAIN SELECT max(g) FROM t_gen
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(g) FROM t_gen
+----
+4094
+
+# a filter on a generated column cannot be resolved to statistics either - the control below folds
+query II
+EXPLAIN SELECT count(*) FROM t_gen WHERE g > 100
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT count(*) FROM t_gen WHERE g > 100
+----
+1997
+
+# control: an ordinary column participates in the same filter and folds
+query II
+EXPLAIN SELECT max(c) FROM t_added
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query I
+SELECT max(c) FROM t_added
+----
+2047
+
+# an empty table has no partitions: an aggregate over it is not rewritten
+query II
+EXPLAIN SELECT count(*), min(i), max(i) FROM t_empty
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*), min(i), max(i) FROM t_empty
+----
+0	NULL	NULL
+
+# a csv scan does not expose partition statistics
+query II
+EXPLAIN SELECT max(i) FROM read_csv('{TEST_DIR}/bail_paths_tmp.csv')
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# truncated string statistics are a bound, not an exact value - not foldable
+query II
+EXPLAIN SELECT min(s), max(s) FROM tlong
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+# control: short strings keep exact statistics and fold
+query II
+EXPLAIN SELECT min(s), max(s) FROM tshort
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query II
+SELECT min(s), max(s) FROM tshort
+----
+a0	a999
+
+# control: a row-group-aligned filter still folds
+query II
+EXPLAIN SELECT count(*), max(i), min(i) FROM t WHERE i >= 2048
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
+
+query III
+SELECT count(*), max(i), min(i) FROM t WHERE i >= 2048
+----
+6144	8191	2048
+
+# aggregates in state export mode cannot be replaced by constants
+statement ok
+SET debug_verify_aggregate_state_export=true;
+
+query II
+EXPLAIN SELECT max(i) FROM t
+----
+physical_plan	<REGEX>:.*UNGROUPED_AGGREGATE.*
+
+statement ok
+SET debug_verify_aggregate_state_export=false;
+
+# control: folding returns after the setting is unset
+query II
+EXPLAIN SELECT max(i) FROM t
+----
+physical_plan	<!REGEX>:.*UNGROUPED_AGGREGATE.*
