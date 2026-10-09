@@ -59,3 +59,24 @@ query I
 SELECT count(*) FROM nullable_arrays WHERE a[4] IS NULL;
 ----
 3
+
+# An all-NULL list or index makes extraction NULL for the entire row group.
+statement ok
+CREATE TABLE nullable_list_extract AS
+SELECT CASE WHEN i < 2048 THEN NULL ELSE [i] END AS nullable_l
+FROM range(6144) tbl(i)
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM nullable_list_extract WHERE list_extract(nullable_l, 1) IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 2 / 3.*
+
+statement ok
+CREATE TABLE all_null_list_index AS
+SELECT [i] AS l, NULL::BIGINT AS idx
+FROM range(6144) tbl(i)
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM all_null_list_index WHERE list_extract(l, idx) IS NOT NULL;
+----
+analyzed_plan	<REGEX>:.*Empty Result.*

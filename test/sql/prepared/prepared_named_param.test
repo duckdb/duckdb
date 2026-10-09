@@ -14,6 +14,11 @@ execute q123(param := 5, 3)
 ----
 Not implemented Error: Mixing named parameters and positional parameters is not supported yet
 
+statement error
+execute q123(5, other_name := 3)
+----
+Not implemented Error: Mixing named parameters and positional parameters is not supported yet
+
 statement ok
 prepare q01 as select $1, ?, $2;
 
@@ -31,3 +36,12 @@ statement error
 execute q01(a, 2, 0)
 ----
 Invalid Input Error: Only scalar parameters, named parameters or NULL supported for EXECUTE
+
+# missing named parameters must be reported in declaration order, not hash order
+statement ok
+prepare q03 as select $aa, $bb, $cc, $dd, $ee;
+
+statement error
+execute q03(aa := 1, bb := 2);
+----
+Invalid Input Error: Values were not provided for the following parameters: cc, dd, ee

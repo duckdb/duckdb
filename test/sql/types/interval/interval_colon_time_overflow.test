@@ -1,0 +1,47 @@
+# name: test/sql/types/interval/interval_colon_time_overflow.test
+# description: Colon-separated time terms in interval parsing should use checked arithmetic
+# group: [interval]
+
+# Issue #25071: unchecked int64 overflow when adding a colon-time term
+
+statement error
+SELECT '9223372036854775807 microseconds 999999999:00:00'::INTERVAL;
+----
+<REGEX>:.*interval value is out of range.*
+
+statement error
+SELECT INTERVAL '9223372036854775807 microseconds 999999999:00:00';
+----
+<REGEX>:.*interval value is out of range.*
+
+statement error
+SELECT INTERVAL '-9223372036854775807 microseconds -999999999:00:00';
+----
+<REGEX>:.*interval value is out of range.*
+
+# adding a negative time term to the minimum interval is fine
+query I
+SELECT INTERVAL '-9223372036854775807 microseconds -1 microseconds -00:00:00';
+----
+-2562047788:00:54.775808
+
+# the sign of a time term applies to that term only (PostgreSQL semantics)
+query I
+SELECT INTERVAL '1 hour -00:30:00';
+----
+00:30:00
+
+query I
+SELECT INTERVAL '1 day -01:00:00';
+----
+1 day -01:00:00
+
+query I
+SELECT INTERVAL '-00:30:00';
+----
+-00:30:00
+
+query I
+SELECT INTERVAL '999999999:00:00';
+----
+999999999:00:00

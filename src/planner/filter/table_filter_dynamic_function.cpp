@@ -46,6 +46,11 @@ bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value
 
 FilterPropagateResult DynamicFilterData::CheckStatistics(const BaseStatistics &stats, ExpressionType comparison_type,
                                                          const Value &constant) {
+	if (!stats.CanHaveNoNull()) {
+		return comparison_type == ExpressionType::COMPARE_DISTINCT_FROM ? FilterPropagateResult::FILTER_ALWAYS_TRUE
+		                                                                : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:
@@ -128,6 +133,7 @@ static idx_t DynamicFilterSelect(DataChunk &args, ExpressionState &state, option
 
 ScalarFunction DynamicFilterScalarFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction func(NAME, {input_type}, LogicalType::BOOLEAN, nullptr, TableFilterFunctions::Bind);
+	func.GetSignature().GetParameter(0).SetName("col");
 	func.SetSelectCallback(DynamicFilterSelect);
 	func.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	func.SetFilterPruneCallback(DynamicFilterScalarFun::FilterPrune);

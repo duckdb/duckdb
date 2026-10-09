@@ -354,23 +354,23 @@ TEST_CASE("Test split quoted strings", "[string_util]") {
 }
 
 TEST_CASE("Test RTrim preserves trailing UTF-8", "[string_util]") {
-	string value = u8"abcé";
+	string value = "abcé";
 	StringUtil::RTrim(value);
-	REQUIRE(value == u8"abcé");
+	REQUIRE(value == "abcé");
 
-	value = u8"abcé   ";
+	value = "abcé   ";
 	StringUtil::RTrim(value);
-	REQUIRE(value == u8"abcé");
+	REQUIRE(value == "abcé");
 }
 
 TEST_CASE("Test custom RTrim preserves UTF-8 paths", "[string_util]") {
-	string path = u8"/tmp/café";
+	string path = "/tmp/café";
 	StringUtil::RTrim(path, "/");
-	REQUIRE(path == u8"/tmp/café");
+	REQUIRE(path == "/tmp/café");
 
-	path = u8"/tmp/café///";
+	path = "/tmp/café///";
 	StringUtil::RTrim(path, "/");
-	REQUIRE(path == u8"/tmp/café");
+	REQUIRE(path == "/tmp/café");
 }
 
 TEST_CASE("Test path utilities", "[string_util]") {
@@ -431,6 +431,14 @@ TEST_CASE("Test path utilities", "[string_util]") {
 		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\test.txt\\"));
 		REQUIRE("/tmp" == StringUtil::GetFilePath("/tmp//test.txt"));
 		REQUIRE("\\tmp" == StringUtil::GetFilePath("\\tmp\\\\test.txt"));
+	}
+
+	SECTION("Replace file name") {
+		REQUIRE("/usr/local/bin/other.cpp" == StringUtil::ReplaceFileName("/usr/local/bin/test.cpp", "other.cpp"));
+		REQUIRE("tmp\\other.txt" == StringUtil::ReplaceFileName("tmp\\test.txt", "other.txt"));
+		REQUIRE("other.txt" == StringUtil::ReplaceFileName("test.txt", "other.txt"));
+		REQUIRE("s3://bucket/other.csv" == StringUtil::ReplaceFileName("s3://bucket/test.csv", "other.csv"));
+		REQUIRE("opfs://other.csv" == StringUtil::ReplaceFileName("opfs://test.csv", "other.csv"));
 	}
 }
 

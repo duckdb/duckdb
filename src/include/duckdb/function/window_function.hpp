@@ -21,6 +21,12 @@ class LocalSinkState;
 class WindowCollection;
 class BoundWindowFunction;
 
+class WindowExecutorStreamingState : public LocalSourceState {
+public:
+	//! The constant offset
+	int64_t offset = 0;
+};
+
 //	Column indexes of the bounds chunk
 enum WindowBounds : uint8_t {
 	PARTITION_BEGIN,
@@ -131,12 +137,12 @@ typedef void (*window_evaluate_function_t)(ExecutionContext &context, DataChunk 
 typedef bool (*window_canstream_function_t)(ClientContext &client, const BoundWindowExpression &wexpr, idx_t max_delta);
 
 //! Constructs a thread local state for the streaming function
-typedef unique_ptr<LocalSourceState> (*window_streaming_state_function_t)(ClientContext &client, DataChunk &input,
-                                                                          const BoundWindowExpression &wexpr);
+typedef unique_ptr<WindowExecutorStreamingState> (*window_streaming_state_function_t)(
+    ClientContext &client, DataChunk &input, const BoundWindowExpression &wexpr);
 
 //! Evaluates the next chunk of the streaming function
 typedef void (*window_stream_function_t)(ExecutionContext &context, DataChunk &input, DataChunk &delayed,
-                                         idx_t delayed_capacity, Vector &result, LocalSourceState &lstate);
+                                         idx_t delayed_capacity, Vector &result, WindowExecutorStreamingState &lstate);
 
 //! Serialization of the binding data (if any)
 typedef void (*window_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
@@ -372,9 +378,39 @@ public:
 	const shared_ptr<const WindowFunction> &GetDefinition() const {
 		return definition;
 	}
-	//! Restore the definition after the bound function has been replaced wholesale
+	//! The number of arguments that were received by the standard and positional-only parameters, they come first
+	idx_t GetStandardArgumentCount() const {
+		return BoundSimpleFunction::GetStandardArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "*args", they directly follow the standard parameters
+	idx_t GetVarArgsCount() const {
+		return BoundSimpleFunction::GetVarArgsCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by the keyword-only parameters, they follow "*args"
+	idx_t GetKeywordOnlyArgumentCount() const {
+		return BoundSimpleFunction::GetKeywordOnlyArgumentCount(definition->GetSignature());
+	}
+	//! The number of arguments that were received by "**kwargs", they are the last arguments
+	idx_t GetKwargsCount() const {
+		return BoundSimpleFunction::GetKwargsCount(definition->GetSignature());
+	}
+	//! The kind of the parameter that received the argument at the given index
+	FunctionParameterKind GetArgumentParameterKind(idx_t argument_index) const {
+		return BoundSimpleFunction::GetArgumentParameterKind(definition->GetSignature(), argument_index);
+	}
+	const vector<LogicalType> &GetLogicalArguments() const {
+		return logical_arguments;
+	}
+	const LogicalType &GetLogicalReturnType() const {
+		return logical_return_type;
+	}
+	//! Restore the definition after the bound function has been replaced wholesale, together with the
+	//! qualification it carries - the replacement is a specialized implementation, not a different function
 	void SetDefinition(shared_ptr<const WindowFunction> definition_p) {
 		definition = std::move(definition_p);
+		if (definition) {
+			qualified_name = definition->GetQualifiedName().WithName(GetName());
+		}
 	}
 
 public:
@@ -422,20 +458,31 @@ public:
 		return GetCanStreamCallback()(client, wexpr, max_delta);
 	}
 
-	unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                               const BoundWindowExpression &wexpr) const {
+	unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                           const BoundWindowExpression &wexpr) const {
 		D_ASSERT(HasStreamingStateCallback());
 		return GetStreamingStateCallback()(client, input, wexpr);
 	}
 
 	void GetStreamingData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                      Vector &result, LocalSourceState &lstate) const {
+	                      Vector &result, WindowExecutorStreamingState &lstate) const {
 		D_ASSERT(HasStreamingDataCallback());
 		GetStreamingDataCallback()(context, input, delayed, delayed_capacity, result, lstate);
 	}
 
 private:
+	void SetLogicalArguments(vector<LogicalType> arguments_p) {
+		logical_arguments = std::move(arguments_p);
+	}
+	void SetLogicalReturnType(LogicalType return_type_p) {
+		logical_return_type = std::move(return_type_p);
+	}
 	shared_ptr<const WindowFunction> definition;
+	vector<LogicalType> logical_arguments;
+	LogicalType logical_return_type;
+
+	friend class FunctionBinder;
+	friend class FunctionSerializer;
 };
 
 } // namespace duckdb

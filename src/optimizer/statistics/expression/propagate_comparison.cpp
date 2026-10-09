@@ -132,6 +132,7 @@ FilterPropagateResult StatisticsPropagator::PropagateComparison(const BaseStatis
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::INTERVAL:
 		break;
 	default:
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
@@ -167,14 +168,14 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateComparison(BoundFuncti
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(left));
 		children.push_back(std::move(right));
-		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(true));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(context, std::move(children), Value::BOOLEAN(true));
 		return nullptr;
 	}
 	case FilterPropagateResult::FILTER_FALSE_OR_NULL: {
 		vector<unique_ptr<Expression>> children;
 		children.push_back(std::move(left));
 		children.push_back(std::move(right));
-		expr_ptr = ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
+		expr_ptr = ExpressionRewriter::ConstantOrNull(context, std::move(children), Value::BOOLEAN(false));
 		return nullptr;
 	}
 	default:

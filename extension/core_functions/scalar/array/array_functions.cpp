@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &input) {
+static void ArrayGenericBinaryResolveTypes(ResolveScalarFunctionTypesInput &input) {
 	auto &context = input.GetClientContext();
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
@@ -17,7 +17,7 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 		bound_function.GetArguments()[0] = rhs_type;
 		bound_function.GetArguments()[1] = lhs_type;
 		bound_function.SetReturnType(LogicalType::UNKNOWN);
-		return nullptr;
+		return;
 	}
 
 	bound_function.GetArguments()[0] = lhs_type.IsUnknown() ? rhs_type : lhs_type;
@@ -56,8 +56,6 @@ static unique_ptr<FunctionData> ArrayGenericBinaryBind(BindScalarFunctionInput &
 	// The important part is just that we resolve the size of the input arrays
 	bound_function.GetArguments()[0] = LogicalType::ARRAY(common_type, lhs_size);
 	bound_function.GetArguments()[1] = LogicalType::ARRAY(common_type, rhs_size);
-
-	return nullptr;
 }
 
 //------------------------------------------------------------------------------
@@ -213,6 +211,10 @@ static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInpu
 	const auto &lhs_stats = input.child_stats[0];
 	const auto &rhs_stats = input.child_stats[1];
 	auto new_stats = NumericStats::CreateUnknown(input.expr.GetReturnType());
+	new_stats.CombineValidity(lhs_stats, rhs_stats);
+	if (!lhs_stats.CanHaveNoNull() || !rhs_stats.CanHaveNoNull()) {
+		new_stats.Set(StatsInfo::CANNOT_HAVE_VALID_VALUES);
+	}
 
 	auto &lhs_child_stats = ArrayStats::GetChildStats(lhs_stats);
 	auto &rhs_child_stats = ArrayStats::GetChildStats(rhs_stats);
@@ -227,9 +229,6 @@ static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInpu
 	// If the child has no nulls, we won't throw.
 	input.expr.FunctionMutable().GetProperties().SetErrorMode(FunctionErrors::CANNOT_ERROR);
 
-	// Forward the validity
-	new_stats.CombineValidity(lhs_stats, rhs_stats);
-
 	return new_stats.ToUnique();
 }
 
@@ -241,21 +240,27 @@ static auto ArrayGenericFoldStats(ClientContext &context, FunctionStatisticsInpu
 // extension.
 
 template <class OP>
-static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
-	const auto array = LogicalType::ARRAY(type, optional_idx());
-	if (type.id() == LogicalTypeId::FLOAT) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<float, OP>, ArrayGenericBinaryBind,
-		                        ArrayGenericFoldStats);
-		function.SetFallible();
-		set.AddFunction(function);
-	} else if (type.id() == LogicalTypeId::DOUBLE) {
-		ScalarFunction function({array, array}, type, ArrayGenericFold<double, OP>, ArrayGenericBinaryBind,
-		                        ArrayGenericFoldStats);
-		function.SetFallible();
-		set.AddFunction(function);
-	} else {
+static scalar_function_t GetArrayFoldFunction(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::FLOAT:
+		return ArrayGenericFold<float, OP>;
+	case LogicalTypeId::DOUBLE:
+		return ArrayGenericFold<double, OP>;
+	default:
 		throw NotImplementedException("Array function not implemented for type %s", type.ToString());
 	}
+}
+
+template <class OP>
+static void AddArrayFoldFunction(ScalarFunctionSet &set, const LogicalType &type) {
+	ScalarFunction func({}, type, GetArrayFoldFunction<OP>(type), nullptr, ArrayGenericFoldStats);
+	func.SetResolveTypesCallback(ArrayGenericBinaryResolveTypes);
+	auto array = LogicalType::ARRAY(type, optional_idx());
+
+	func.SetFallible();
+	func.GetSignature().AddParameter("array1", array).AddParameter("array2", array);
+
+	set.AddFunction(func);
 }
 
 ScalarFunctionSet ArrayDistanceFun::GetFunctions() {
@@ -303,11 +308,17 @@ ScalarFunctionSet ArrayCrossProductFun::GetFunctions() {
 
 	auto float_array = LogicalType::ARRAY(LogicalType::FLOAT, 3);
 	auto double_array = LogicalType::ARRAY(LogicalType::DOUBLE, 3);
-	set.AddFunction(
-	    ScalarFunction({float_array, float_array}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>));
-	set.AddFunction(
-	    ScalarFunction({double_array, double_array}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>));
+
+	ScalarFunction float_fun({}, float_array, ArrayFixedCombine<float, CrossProductOp, 3>);
+	float_fun.GetSignature().AddParameter("array1", float_array).AddParameter("array2", float_array);
+	set.AddFunction(float_fun);
+
+	ScalarFunction double_fun({}, double_array, ArrayFixedCombine<double, CrossProductOp, 3>);
+	double_fun.GetSignature().AddParameter("array1", double_array).AddParameter("array2", double_array);
+	set.AddFunction(double_fun);
+
 	set.SetFallible();
+
 	return set;
 }
 

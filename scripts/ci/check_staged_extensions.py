@@ -44,8 +44,8 @@ def cli_asset_name(system: str | None = None, machine: str | None = None) -> str
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Smoke test staged extension install/load with staged CLI.")
-    parser.add_argument("--git-sha", required=True, help="Full git SHA used for the staged build.")
-    parser.add_argument("--version", default="", help="Optional staged version directory.")
+    parser.add_argument("--duckdb-commit", required=True, help="Full DuckDB commit used for the staged build.")
+    parser.add_argument("--duckdb-version", default="", help="Optional staged DuckDB version directory.")
     parser.add_argument("--asset-base-url", default=DEFAULT_ASSET_BASE_URL)
     parser.add_argument(
         "--extensions",
@@ -55,12 +55,12 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def cli_asset_url(asset_base_url: str, git_sha: str, version: str) -> str:
-    short_sha = git_sha[:10]
+def cli_asset_url(asset_base_url: str, duckdb_commit: str, duckdb_version: str) -> str:
+    short_sha = duckdb_commit[:10]
     base = asset_base_url.rstrip("/")
     asset_name = cli_asset_name()
-    if version:
-        return f"{base}/{short_sha}/{version}/duckdb/duckdb/github_release/{asset_name}"
+    if duckdb_version:
+        return f"{base}/{short_sha}/{duckdb_version}/duckdb/duckdb/github_release/{asset_name}"
     return f"{base}/{short_sha}/duckdb/duckdb/github_release/{asset_name}"
 
 
@@ -192,7 +192,7 @@ def check_extension(duckdb: Path, extension: str, root: Path) -> tuple[bool, boo
 
 def main() -> int:
     args = parse_args()
-    url = cli_asset_url(args.asset_base_url, args.git_sha, args.version)
+    url = cli_asset_url(args.asset_base_url, args.duckdb_commit, args.duckdb_version)
 
     with tempfile.TemporaryDirectory(prefix="duckdb-staged-extensions-") as temp_dir:
         root = Path(temp_dir)

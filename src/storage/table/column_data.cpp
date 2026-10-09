@@ -268,10 +268,11 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 		throw InternalException("ColumnData::SelectVector should be able to fetch everything from one segment");
 	}
 	if (state.scan_options && state.scan_options->force_fetch_row) {
+		auto start = state.GetPositionInSegment();
 		for (idx_t i = 0; i < sel_count; i++) {
 			auto source_idx = sel.get_index(i);
 			ColumnFetchState fetch_state;
-			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + source_idx), result, i);
+			current.FetchRow(fetch_state, UnsafeNumericCast<row_t>(start + source_idx), result, i);
 		}
 	} else {
 		current.Select(state, target_count, result, sel, sel_count);
@@ -446,16 +447,9 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 	checked_segment = IsDirectNullCheckFilter(filter) && !state.child_states.empty() && state.child_states[0].current
 	                      ? state.child_states[0].current
 	                      : state.current;
-	FilterPropagateResult prune_result;
-	{
-		lock_guard<mutex> l(stats_lock);
-		auto &segment_stats = checked_segment->GetNode().GetStatsMutable();
-		auto context = state.context.GetClientContext();
-		prune_result =
-		    context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
-		if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
-			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
-		}
+	auto prune_result = CheckSegmentStatistics(state.context.GetClientContext(), *checked_segment, expr_filter);
+	if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
 	auto update_stats = GetUpdateStatistics();
 	if (!update_stats) {
@@ -470,6 +464,47 @@ FilterPropagateResult ColumnData::CheckZonemap(ColumnScanState &state, TableFilt
 		return prune_result;
 	}
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+}
+
+FilterPropagateResult ColumnData::CheckSegmentStatistics(optional_ptr<ClientContext> context,
+                                                         SegmentNode<ColumnSegment> &segment,
+                                                         ExpressionFilter &expr_filter) {
+	lock_guard<mutex> l(stats_lock);
+	auto &segment_stats = segment.GetNode().GetStatsMutable();
+	return context ? expr_filter.CheckStatistics(*context, segment_stats) : expr_filter.CheckStatistics(segment_stats);
+}
+
+idx_t ColumnData::ZonemapScanEnd(optional_ptr<ClientContext> context, idx_t start_row, idx_t end_row,
+                                 TableFilter &filter) {
+	if (!data.GetRootSegment() || IsDirectNullCheckFilter(filter)) {
+		// columns without segments of their own have no zonemaps, null checks are judged on the validity child
+		return end_row;
+	}
+	auto &expr_filter = ExpressionFilter::GetExpressionFilter(filter, "ColumnData::ZonemapScanEnd");
+	auto update_stats = GetUpdateStatistics();
+	if (update_stats) {
+		auto update_result =
+		    context ? expr_filter.CheckStatistics(*context, *update_stats) : expr_filter.CheckStatistics(*update_stats);
+		if (update_result != FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			// updated rows can pass the filter anywhere in the column
+			return end_row;
+		}
+	}
+	// a vector is only skipped when it lies entirely inside a rejected segment
+	idx_t scan_end = start_row;
+	for (auto segment = data.GetSegment(start_row); segment; segment = data.GetNextSegment(*segment)) {
+		const idx_t segment_start = segment->GetRowStart();
+		if (segment_start >= end_row) {
+			break;
+		}
+		const idx_t segment_end = MinValue<idx_t>(segment_start + segment->GetNode().count, end_row);
+		const auto prune_result = CheckSegmentStatistics(context, *segment, expr_filter);
+		const bool straddles_vector = segment_end < end_row && segment_end % STANDARD_VECTOR_SIZE != 0;
+		if (prune_result != FilterPropagateResult::FILTER_ALWAYS_FALSE || straddles_vector) {
+			scan_end = AlignValue<idx_t, STANDARD_VECTOR_SIZE>(segment_end);
+		}
+	}
+	return MinValue<idx_t>(scan_end, end_row);
 }
 
 FilterPropagateResult ColumnData::CheckZonemap(optional_ptr<ClientContext> context, const StorageIndex &index,
@@ -837,7 +872,7 @@ void ColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, 
 	if (state.scan_options && state.scan_options->force_fetch_row) {
 		for (idx_t i = 0; i < count; i++) {
 			ColumnFetchState fetch_state;
-			fetch_state.row_group = state.parent->row_group;
+			fetch_state.row_group = state.parent->GetRowGroup();
 			segment.FetchRow(fetch_state, UnsafeNumericCast<row_t>(state.offset_in_column + i), scan_vector, i);
 		}
 	} else {
@@ -897,10 +932,7 @@ void ColumnData::InitializeColumn(PersistentColumnData &column_data, BaseStatist
 		target_stats.Merge(data_pointer.statistics);
 
 		// create a persistent segment
-		auto segment = ColumnSegment::CreatePersistentSegment(
-		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset,
-		    data_pointer.tuple_count, data_pointer.compression_type, std::move(data_pointer.statistics),
-		    std::move(data_pointer.segment_state));
+		auto segment = ColumnSegment::CreatePersistentSegment(GetDatabase(), block_manager, data_pointer);
 
 		auto l = data.Lock();
 		AppendSegment(l, std::move(segment));
@@ -1007,7 +1039,10 @@ static PersistentColumnData GetPersistentColumnDataType(Deserializer &deserializ
 	}
 	case ExtraPersistentColumnDataType::GEOMETRY: {
 		const auto &geometry_data = extra_data->Cast<GeometryPersistentColumnData>();
-		PersistentColumnData result(Geometry::GetVectorizedType(geometry_data.storage_type));
+		// WKB is stored as the column's own type, which may carry type parameters (e.g., a CRS)
+		PersistentColumnData result(geometry_data.storage_type == GeometryStorageType::WKB
+		                                ? deserializer.Get<const LogicalType &>()
+		                                : Geometry::GetVectorizedType(geometry_data.storage_type));
 		result.extra_data = std::move(extra_data);
 		return result;
 	}
@@ -1034,8 +1069,7 @@ PersistentColumnData PersistentColumnData::Deserialize(Deserializer &deserialize
 
 	// TODO: This is ugly
 	if (result.extra_data && result.extra_data->GetType() == ExtraPersistentColumnDataType::GEOMETRY) {
-		auto &geo_data = result.extra_data->Cast<GeometryPersistentColumnData>();
-		auto actual_type = Geometry::GetVectorizedType(geo_data.storage_type);
+		const auto &actual_type = type;
 
 		// We need to set the actual type in scope, as when we deserialize "data_pointers" we use it to detect
 		// the type of the statistics.

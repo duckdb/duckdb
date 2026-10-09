@@ -1,0 +1,22 @@
+# name: test/sql/aggregate/aggregates/test_reservoir_quantile_decimal.test
+# description: Test reservoir_quantile with DECIMAL types
+# group: [aggregates]
+
+statement ok
+SET debug_verify_serializer = true;
+
+statement ok
+CREATE TABLE decimals(d DECIMAL(10,2));
+
+statement ok
+INSERT INTO decimals VALUES (1.10), (2.20), (3.30), (4.40), (5.50), (6.60), (7.70), (8.80), (9.90), (10.00);
+
+query TT
+SELECT reservoir_quantile(d, 0.5), typeof(reservoir_quantile(d, 0.5)) FROM decimals;
+----
+5.50	DECIMAL(10,2)
+
+query TT
+SELECT reservoir_quantile(d, [0.1, 0.5, 0.9]), typeof(reservoir_quantile(d, [0.1, 0.5, 0.9])) FROM decimals;
+----
+[1.10, 5.50, 9.90]	DECIMAL(10,2)[]

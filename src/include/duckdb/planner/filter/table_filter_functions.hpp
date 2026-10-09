@@ -71,6 +71,11 @@ unique_ptr<Expression> CreateSelectivityOptionalFilterExpression(unique_ptr<Expr
                                                                  float selectivity_threshold, idx_t n_vectors_to_check);
 unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
                                                      const LogicalType &target_type);
+//! Variant that evaluates the dynamic filter on top of a custom input expression (e.g. a cast chain over
+//! the raw scan column). The input must return `target_type`. When `input` is nullptr, a
+//! BoundReferenceExpression(0) placeholder in `target_type` is used instead.
+unique_ptr<Expression> CreateDynamicFilterExpression(shared_ptr<DynamicFilterData> filter_data,
+                                                     const LogicalType &target_type, unique_ptr<Expression> input);
 
 //! Bind function that prevents user access to internal tablefilter functions
 struct TableFilterFunctions {

@@ -12,13 +12,17 @@ CastFunctionSet &TypeManager::GetCastFunctions() {
 	return *cast_functions;
 }
 
-static LogicalType TransformStringToUnboundType(const string &str) {
+const CastFunctionSet &TypeManager::GetCastFunctions() const {
+	return *cast_functions;
+}
+
+static LogicalType TransformStringToUnboundType(const string &str, ClientContext &context) {
 	if (StringUtil::Lower(str) == "null") {
 		return LogicalType::SQLNULL;
 	}
 	ColumnList column_list;
 	try {
-		column_list = Parser::ParseColumnList("dummy " + str);
+		column_list = Parser(context).ParseColumnList("dummy " + str);
 	} catch (const std::runtime_error &e) {
 		const vector<string> suggested_types {"BIGINT",
 		                                      "INT8",
@@ -82,7 +86,7 @@ static LogicalType TransformStringToUnboundType(const string &str) {
 // This has to be called with a level of indirection (through "parse_function") in order to avoid being included in
 // extensions that statically link the core DuckDB library.
 static LogicalType ParseLogicalTypeInternal(const string &type_str, ClientContext &context) {
-	auto type = TransformStringToUnboundType(type_str);
+	auto type = TransformStringToUnboundType(type_str, context);
 	if (type.IsUnbound()) {
 		if (!context.transaction.HasActiveTransaction()) {
 			throw InternalException(

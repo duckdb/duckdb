@@ -48,12 +48,14 @@ public:
 	}
 };
 
-unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &arguments = input.GetArguments();
-	if (arguments[0]->GetReturnType().id() != LogicalTypeId::BOOLEAN) {
+void CurrentSchemasResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	if (input.GetArgumentType(0).id() != LogicalTypeId::BOOLEAN) {
 		throw BinderException("current_schemas requires a boolean input");
 	}
+}
+
+unique_ptr<FunctionData> CurrentSchemasBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
 	Value schema_value = input.GetConstant(0);
 	Value result_val;
 	if (schema_value.IsNull()) {
@@ -126,15 +128,18 @@ ScalarFunction CurrentDatabaseFun::GetFunction() {
 
 ScalarFunction CurrentSchemasFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
-	ScalarFunction current_schemas({{"include_implicit", LogicalType::BOOLEAN}}, varchar_list_type,
-	                               CurrentSchemasFunction, CurrentSchemasBind);
+	ScalarFunction current_schemas({}, varchar_list_type, CurrentSchemasFunction, CurrentSchemasBind);
+	current_schemas.GetSignature().AddParameter("include_implicit", LogicalType::BOOLEAN);
+	current_schemas.SetResolveTypesCallback(CurrentSchemasResolveTypes);
 	current_schemas.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return current_schemas;
 }
 
 ScalarFunction InSearchPathFun::GetFunction() {
-	ScalarFunction in_search_path({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                              InSearchPathFunction);
+	ScalarFunction in_search_path({}, LogicalType::BOOLEAN, InSearchPathFunction);
+	in_search_path.GetSignature()
+	    .AddParameter("database_name", LogicalType::VARCHAR)
+	    .AddParameter("schema_name", LogicalType::VARCHAR);
 	in_search_path.SetStability(FunctionStability::CONSISTENT_WITHIN_QUERY);
 	return in_search_path;
 }

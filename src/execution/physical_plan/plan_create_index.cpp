@@ -95,14 +95,17 @@ static PhysicalOperator &AddSort(PhysicalPlanGenerator &plan, LogicalCreateIndex
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// Early-out, if the index already exists.
-	auto &schema = op.table.schema;
-	auto entry =
-	    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->GetIndexName());
-	if (entry) {
-		if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
-			throw CatalogException("Index with name %s already exists!", op.info->GetIndexName());
+	// ALTER TABLE ADD PRIMARY KEY / UNIQUE creates a constraint index, which has no catalog entry.
+	if (!op.alter_table_info) {
+		auto &schema = op.table.schema;
+		auto entry =
+		    schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, op.info->GetIndexName());
+		if (entry) {
+			if (op.info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
+				throw CatalogException("Index with name %s already exists!", op.info->GetIndexName());
+			}
+			return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
 		}
-		return Make<PhysicalDummyScan>(op.types, op.estimated_cardinality);
 	}
 
 	if (!op.table.IsDuckTable()) {
@@ -152,8 +155,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 		need_sort = index_type->build_sort(sort_input);
 	}
 
-	// Determine if this is a fresh index creation or an ALTER TABLE ADD INDEX
-	auto need_filter = op.alter_table_info == nullptr;
+	// CREATE INDEX and ALTER ADD UNIQUE skip NULL keys. ALTER ADD PRIMARY KEY must see NULLs to reject them.
+	const auto is_add_primary_key = op.alter_table_info && op.info->constraint_type == IndexConstraintType::PRIMARY;
+	auto need_filter = !is_add_primary_key;
 
 	// Construct the plan
 	auto plan = &scan;

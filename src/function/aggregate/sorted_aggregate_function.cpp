@@ -131,12 +131,13 @@ struct SortedAggregateBindData : public FunctionData {
 			                    make_uniq<BoundReferenceExpression>(buffered_types[entry.column],
 			                                                        UnsafeNumericCast<idx_t>(entry.column + 1)));
 		}
-		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
+		sort = make_shared_ptr<Sort>(context, orders, sort_types, scan_cols);
 	}
 
 	SortedAggregateBindData(const SortedAggregateBindData &other)
-	    : context(other.context), function(other.function), sort_types(other.sort_types), scan_cols(other.scan_cols),
-	      scan_types(other.scan_types), buffered_cols(other.buffered_cols), buffered_types(other.buffered_types),
+	    : FunctionData(other), context(other.context), function(other.function), sort_types(other.sort_types),
+	      scan_cols(other.scan_cols), scan_types(other.scan_types), sort(other.sort),
+	      buffered_cols(other.buffered_cols), buffered_types(other.buffered_types),
 	      buffered_struct_type(other.buffered_struct_type), buffered_funcs(other.buffered_funcs),
 	      sorted_on_args(other.sorted_on_args), threshold(other.threshold) {
 		if (other.bind_info) {
@@ -145,8 +146,6 @@ struct SortedAggregateBindData : public FunctionData {
 		for (auto &order : other.orders) {
 			orders.emplace_back(order.Copy());
 		}
-
-		sort = make_uniq<Sort>(context, orders, sort_types, scan_cols);
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
@@ -188,8 +187,8 @@ struct SortedAggregateBindData : public FunctionData {
 	vector<column_t> scan_cols;
 	//! The types of the sunk columns
 	vector<LogicalType> scan_types;
-	//! The shared sort specification
-	unique_ptr<Sort> sort;
+	//! The immutable shared sort specification
+	shared_ptr<const Sort> sort;
 
 	//! The mapping from inputs to buffered columns
 	vector<column_t> buffered_cols;
@@ -556,6 +555,21 @@ pair<AggregateFunction, unique_ptr<FunctionData>>
 FunctionBinder::BindSortedAggregateState(ClientContext &context, const BoundAggregateFunction &inner_function,
                                          unique_ptr<FunctionData> inner_bind_info, const LogicalType &buffer_struct,
                                          const vector<SortedAggregateStateOrder> &orders, idx_t argument_count) {
+	// the leading buffered columns are passed to the inner aggregate as-is - they must have its argument types
+	auto &buffer_columns = StructType::GetChildTypes(buffer_struct);
+	auto &inner_arguments = inner_function.GetArguments();
+	if (argument_count != inner_arguments.size() || argument_count > buffer_columns.size()) {
+		throw BinderException("Aggregate state for \"%s\" has %llu state columns, expected at least %llu",
+		                      inner_function.GetName(), (uint64_t)buffer_columns.size(),
+		                      (uint64_t)inner_arguments.size());
+	}
+	for (idx_t i = 0; i < argument_count; i++) {
+		if (inner_arguments[i].IsComplete() && buffer_columns[i].second != inner_arguments[i]) {
+			throw BinderException("Aggregate state for \"%s\" has state column %llu of type %s, expected %s",
+			                      inner_function.GetName(), (uint64_t)i, buffer_columns[i].second.ToString(),
+			                      inner_arguments[i].ToString());
+		}
+	}
 	const auto null_handling = inner_function.GetProperties().GetNullHandling();
 	auto bind_data = make_uniq<SortedAggregateBindData>(context, inner_function, std::move(inner_bind_info),
 	                                                    buffer_struct, orders, argument_count);

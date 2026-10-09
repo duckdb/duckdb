@@ -135,7 +135,7 @@ struct WindowPeerExecutor : public WindowExecutor {
 		return true;
 	}
 	static void StreamData(ExecutionContext &context, DataChunk &input, DataChunk &delayed, idx_t delayed_capacity,
-	                       Vector &result, LocalSourceState &state) {
+	                       Vector &result, WindowExecutorStreamingState &state) {
 		state.Cast<WindowPeerStreamingState>().Evaluate(result);
 	}
 };
@@ -166,8 +166,8 @@ struct WindowRankExecutor : public WindowPeerExecutor {
 	                    idx_t row_idx, OperatorSinkInput &sink);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowPeerStreamingState>(Value((int64_t)1));
 	}
 };
@@ -257,8 +257,8 @@ struct WindowDenseRankExecutor : public WindowPeerExecutor {
 	                    idx_t row_idx, OperatorSinkInput &sink);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowPeerStreamingState>(Value((int64_t)1));
 	}
 };
@@ -368,8 +368,8 @@ struct WindowPercentRankExecutor : public WindowPeerExecutor {
 	                    idx_t row_idx, OperatorSinkInput &sink);
 
 	//! Streaming APIs
-	static unique_ptr<LocalSourceState> GetStreamingState(ClientContext &client, DataChunk &input,
-	                                                      const BoundWindowExpression &wexpr) {
+	static unique_ptr<WindowExecutorStreamingState> GetStreamingState(ClientContext &client, DataChunk &input,
+	                                                                  const BoundWindowExpression &wexpr) {
 		return make_uniq<WindowPeerStreamingState>(Value((double)0));
 	}
 };

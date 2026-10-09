@@ -213,22 +213,25 @@ template <class T>
 struct AlpRDDecompression {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	static void Decompress(uint8_t *left_encoded, uint8_t *right_encoded, const uint16_t *left_parts_dict,
-	                       EXACT_TYPE *output, idx_t values_count, uint16_t exceptions_count,
-	                       const uint16_t *exceptions, const uint16_t *exceptions_positions, uint8_t left_bit_width,
-	                       uint8_t right_bit_width) {
-		uint16_t left_decoded[AlpRDConstants::ALP_VECTOR_SIZE] = {0};
+	static void Decompress(const_data_ptr_t left_encoded, const_data_ptr_t right_encoded,
+	                       const AlpRDConstants::DICTIONARY_ELEMENT_TYPE *left_parts_dict, EXACT_TYPE *output,
+	                       idx_t values_count, AlpRDConstants::EXCEPTIONS_COUNT_TYPE exceptions_count,
+	                       const AlpRDConstants::EXCEPTION_TYPE *exceptions,
+	                       const AlpRDConstants::EXCEPTION_POSITION_TYPE *exceptions_positions,
+	                       AlpRDConstants::BIT_WIDTH_TYPE left_bit_width,
+	                       AlpRDConstants::BIT_WIDTH_TYPE right_bit_width) {
+		AlpRDConstants::DICTIONARY_ELEMENT_TYPE left_decoded[AlpRDConstants::ALP_VECTOR_SIZE] = {0};
 		EXACT_TYPE right_decoded[AlpRDConstants::ALP_VECTOR_SIZE] = {0};
 
 		// Bitunpacking left and right parts
-		BitpackingPrimitives::UnPackBuffer<uint16_t>(data_ptr_cast(left_decoded), left_encoded, values_count,
-		                                             left_bit_width);
+		BitpackingPrimitives::UnPackBuffer<AlpRDConstants::DICTIONARY_ELEMENT_TYPE>(
+		    data_ptr_cast(left_decoded), left_encoded, values_count, left_bit_width);
 		BitpackingPrimitives::UnPackBuffer<EXACT_TYPE>(data_ptr_cast(right_decoded), right_encoded, values_count,
 		                                               right_bit_width);
 
 		// Decoding
 		for (idx_t i = 0; i < values_count; i++) {
-			uint16_t left = left_parts_dict[left_decoded[i]];
+			AlpRDConstants::DICTIONARY_ELEMENT_TYPE left = left_parts_dict[left_decoded[i]];
 			EXACT_TYPE right = right_decoded[i];
 			output[i] = (static_cast<EXACT_TYPE>(left) << right_bit_width) | right;
 		}
@@ -236,7 +239,7 @@ struct AlpRDDecompression {
 		// Exceptions Patching (exceptions only occur in left parts)
 		for (idx_t i = 0; i < exceptions_count; i++) {
 			EXACT_TYPE right = right_decoded[exceptions_positions[i]];
-			uint16_t left = exceptions[i];
+			AlpRDConstants::EXCEPTION_TYPE left = exceptions[i];
 			output[exceptions_positions[i]] = (static_cast<EXACT_TYPE>(left) << right_bit_width) | right;
 		}
 	}

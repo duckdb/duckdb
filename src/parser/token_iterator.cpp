@@ -10,12 +10,19 @@ TokenIterator::TokenIterator(unique_ptr<vector<MatcherToken>> owned_tokens_p)
 	if (!owned_tokens) {
 		throw InternalException("Cannot construct an owning TokenIterator without tokens");
 	}
+	for (auto &token : tokens) {
+		token.ResetLiteralInfo();
+	}
 }
 
 TokenIterator::TokenIterator(vector<MatcherToken> &tokens_p) : tokens(tokens_p) {
+	// A new root can receive tokens edited since an earlier match.
+	for (auto &token : tokens) {
+		token.ResetLiteralInfo();
+	}
 }
 
-TokenIterator::TokenIterator(TokenIterator &other) : tokens(other.tokens), position(other.position) {
+TokenIterator::TokenIterator(const TokenIterator &other) : tokens(other.tokens), position(other.position) {
 }
 
 TokenIterator::TokenIterator(TokenIterator &&other) noexcept

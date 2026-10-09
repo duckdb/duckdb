@@ -29,6 +29,8 @@ class BlockHandle;
 
 using BlockLock = unique_lock<mutex>;
 
+enum class CanUnloadResult : uint8_t { CAN_UNLOAD, ALREADY_UNLOADED, PINNED, NO_TEMP_DIRECTORY };
+
 class BlockMemory : public enable_shared_from_this<BlockMemory> {
 public:
 	BlockMemory(BufferManager &buffer_manager, block_id_t block_id_p, MemoryTag tag_p, idx_t block_alloc_size);
@@ -150,6 +152,13 @@ public:
 	bool MustWriteToTemporaryFile() const {
 		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
 	}
+	//! Returns true, if the buffer can be loaded again after it was destroyed, i.e., it is backed
+	//! by its disk block or kept alive in a temporary file. False for buffers that are destroyed
+	//! upon eviction/unpin - including replaced persistent handles whose disk block may be
+	//! rewritten in place and must not be read through them again.
+	bool CanReload() const {
+		return destroy_buffer_upon == DestroyBufferUpon::BLOCK;
+	}
 	//! Returns the memory usage.
 	idx_t GetMemoryUsage() const {
 		return memory_usage;
@@ -202,10 +211,10 @@ public:
 	void ChangeMemoryUsage(BlockLock &l, int64_t delta);
 	void ConvertToPersistent(BlockLock &l, BlockHandle &new_block, unique_ptr<FileBuffer> new_buffer);
 	void ResizeBuffer(BlockLock &l, idx_t block_size, idx_t block_header_size, int64_t memory_delta);
-	//! Returns whether the block can be unloaded or not.
+	//! Returns whether the block can be unloaded or the reason why it cannot be unloaded.
 	//! The state here can change if the block lock is held.
 	//! However, this method does not hold the block lock.
-	bool CanUnload() const;
+	CanUnloadResult CanUnload() const;
 	unique_ptr<FileBuffer> UnloadAndTakeBlock(BlockLock &l, QueryContext context = QueryContext());
 	void Unload(BlockLock &l, QueryContext context = QueryContext());
 

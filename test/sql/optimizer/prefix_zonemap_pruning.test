@@ -105,7 +105,7 @@ SELECT count(*) FROM prefix_truncated WHERE NOT starts_with(s, 'ppppppppppppp');
 ----
 0
 
-# NULL rows produce NULL rather than false, so a nullable column is not pruned.
+# NULL rows do not satisfy the negated predicate, so true-or-NULL can be pruned.
 statement ok
 CREATE TABLE prefix_nullable AS
 SELECT i::INTEGER AS i, CASE WHEN i % 100 = 50 THEN NULL ELSE lpad(i::VARCHAR, 6, '0') END AS s
@@ -114,12 +114,32 @@ FROM range(6144) r(i);
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM prefix_nullable WHERE NOT starts_with(s, '00');
 ----
-analyzed_plan	<REGEX>:.*Row Groups Scanned: 3 / 3.*
+analyzed_plan	<REGEX>:.*Empty Result.*
 
 query I
 SELECT count(*) FROM prefix_nullable WHERE NOT starts_with(s, '00');
 ----
 0
+
+# A nullable constant group produces true-or-NULL, so its negation cannot match any rows.
+statement ok
+CREATE TABLE prefix_nullable_mixed AS
+SELECT CASE
+           WHEN range < 2048 THEN CASE WHEN range % 2 = 0 THEN 'abc' ELSE NULL END
+           WHEN range < 4096 THEN 'zzz'
+           ELSE 'abc'
+       END::VARCHAR AS s
+FROM range(6144)
+
+query I
+SELECT count(*) FROM prefix_nullable_mixed WHERE NOT prefix(s, 'a')
+----
+2048
+
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM prefix_nullable_mixed WHERE NOT prefix(s, 'a')
+----
+analyzed_plan	<REGEX>:.*Row Groups Scanned: 1 / 3.*
 
 # Multi-byte needles within the stored prefix bytes are provable.
 statement ok

@@ -9,6 +9,8 @@ namespace duckdb {
 
 namespace {
 
+static constexpr int64_t MAX_APPROX_K = 1000000;
+
 struct ApproxTopKString {
 	ApproxTopKString() : str(UINT32_C(0)), hash(0) {
 	}
@@ -47,7 +49,7 @@ struct ApproxTopKValue {
 	//! Allocated data
 	char *dataptr = nullptr;
 	uint32_t size = 0;
-	uint32_t capacity = 0;
+	idx_t capacity = 0;
 };
 
 struct InternalApproxTopKState {
@@ -69,6 +71,9 @@ struct InternalApproxTopKState {
 		D_ASSERT(values.empty());
 		D_ASSERT(lookup_map.empty());
 		k = kval;
+		if (k > MAX_APPROX_K) {
+			throw InvalidInputException("Requested 'k' (%d) is bigger than accepted max (%d)", kval, MAX_APPROX_K);
+		}
 		capacity = kval * MONITORED_VALUES_RATIO;
 		stored_values = make_unsafe_uniq_array_uninitialized<ApproxTopKValue>(capacity);
 		values.reserve(capacity);
@@ -89,7 +94,7 @@ struct InternalApproxTopKState {
 		value.size = UnsafeNumericCast<uint32_t>(input.str.GetSize());
 		if (value.size > value.capacity) {
 			// need to re-allocate for this value
-			value.capacity = UnsafeNumericCast<uint32_t>(NextPowerOfTwo(value.size));
+			value.capacity = NextPowerOfTwo(value.size);
 			value.dataptr = char_ptr_cast(allocator.Allocate(value.capacity));
 		}
 		// copy over the data
@@ -165,7 +170,6 @@ struct InternalApproxTopKState {
 				D_ASSERT(val.count <= values[k - 1].get().count);
 			}
 		}
-		// verify lookup map does not contain extra entries
 		D_ASSERT(lookup_map.size() == values.size());
 #endif
 	}
@@ -528,8 +532,19 @@ void ApproxTopKImportState(AggregateImportInputData &input) {
 			const auto &str_val = value_strings[sel_idx];
 			ApproxTopKString topk_string(str_val, Hash(str_val));
 			InternalApproxTopKState::CopyValue(val, topk_string, allocator);
-			target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val)));
+			const bool inserted =
+			    target.lookup_map.insert(make_pair(val.str_val, reference<ApproxTopKValue>(val))).second;
+			if (!inserted) {
+				throw InvalidInputException("Invalid approx_top_k state - the state values must be unique");
+			}
 			val.count = count_data[idx];
+			if (val.count == 0) {
+				throw InvalidInputException("Invalid approx_top_k state - the state values must have a count > 0");
+			}
+			if (value_idx > 0 && val.count > target.values[value_idx - 1].get().count) {
+				throw InvalidInputException(
+				    "Invalid approx_top_k state - the state values must be ordered by descending count");
+			}
 		}
 		for (idx_t filter_idx = 0; filter_idx < filter_entries[i].length; filter_idx++) {
 			target.filter[filter_idx] = filter_data[filter_entries[i].offset + filter_idx];
@@ -566,11 +581,11 @@ unique_ptr<FunctionData> ApproxTopKBind(BindAggregateFunctionInput &input) {
 AggregateFunction ApproxTopKFun::GetFunction() {
 	using STATE = ApproxTopKState;
 	using OP = ApproxTopKOperation;
-	auto fun = AggregateFunction("approx_top_k", {LogicalTypeId::ANY, LogicalType::BIGINT},
-	                             LogicalType::LIST(LogicalType::ANY), AggregateFunction::StateSize<STATE>,
-	                             AggregateFunction::StateInitialize<STATE, OP>, ApproxTopKUpdate,
-	                             AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize, nullptr,
-	                             ApproxTopKBind, AggregateFunction::StateDestroy<STATE, OP>);
+	auto fun = AggregateFunction("approx_top_k", {}, LogicalType::LIST(LogicalType::ANY),
+	                             AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	                             ApproxTopKUpdate, AggregateFunction::StateCombine<STATE, OP>, ApproxTopKFinalize,
+	                             nullptr, ApproxTopKBind, AggregateFunction::StateDestroy<STATE, OP>);
+	fun.GetSignature().AddParameter("val", LogicalTypeId::ANY).AddParameter("k", LogicalType::BIGINT);
 	fun.SetStateExportCallbacks(ApproxTopKGetStateType, ApproxTopKExportState<HistogramGenericFunctor>,
 	                            ApproxTopKImportState<HistogramGenericFunctor>);
 	return fun;

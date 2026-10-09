@@ -1,0 +1,91 @@
+# name: test/optimizer/statistics/statistics_removed_filter_column_pruning.test
+# description: Statistics propagation prunes columns whose only reference was a removed expression
+# group: [statistics]
+
+require json
+
+# the second pruning pass runs on a plan that already carries projection maps
+statement ok
+SET debug_verify_column_bindings=true;
+
+statement ok
+CREATE TABLE t AS SELECT i AS positive_ints, repeat('x', 100) || i AS never_null_text, i % 7 AS small_ints FROM range(2000) t(i);
+
+# one row, so its statistics are exact and every t.positive_ints exceeds negative_int
+statement ok
+CREATE TABLE one_row AS SELECT -1 AS negative_int, 3 AS small_int;
+
+# EXPLAIN cannot see a dangling column: a column read only for a filter is projected out of the scan immediately,
+# so it appears in neither Projections nor Filters. Count the scan's read set from the serialized plan.
+statement ok
+CREATE MACRO scan_columns(q) AS (
+    SELECT CASE
+        WHEN json_extract_string(plan, '$.error') = 'true'
+            THEN error('plan serialization failed: ' || json_extract_string(plan, '$.error_message'))
+        ELSE len(regexp_extract_all(plan, '"index_type":"FULL_READ"'))
+    END
+    FROM (SELECT json_serialize_plan(q::VARCHAR, optimize := true) AS plan)
+);
+
+# filters proved always true are removed and their columns with them, once as table filters in the scan (propagate_get)
+# and once with pushdown off, where they stay above the scan in a filter (propagate_filter, propagate_conjunction)
+foreach disabled_opt '' 'filter_pushdown'
+
+statement ok
+SET disabled_optimizers to {disabled_opt}
+
+query IIIIII
+SELECT scan_columns('SELECT small_ints FROM t'),
+       scan_columns('SELECT small_ints FROM t WHERE never_null_text IS NOT NULL'),
+       scan_columns('SELECT small_ints FROM t WHERE positive_ints >= 0'),
+       scan_columns('SELECT small_ints FROM t WHERE positive_ints > 500'),
+       scan_columns('SELECT small_ints FROM t WHERE positive_ints > 500 AND never_null_text IS NOT NULL'),
+       scan_columns('SELECT small_ints FROM t WHERE positive_ints > 500 OR never_null_text IS NOT NULL')
+----
+1	1	1	2	2	1
+
+endloop
+
+statement ok
+SET disabled_optimizers='';
+
+# a COALESCE argument after one that cannot be NULL is dropped (propagate_operator)
+query I
+SELECT scan_columns('SELECT coalesce(small_ints, length(never_null_text)) FROM t')
+----
+1
+
+# an always true join condition is removed and its columns with it, for every join type (propagate_join):
+# only small_ints and small_int remain
+query IIIIII
+SELECT scan_columns('SELECT t.small_ints FROM t JOIN       one_row ON t.small_ints = one_row.small_int AND t.positive_ints > one_row.negative_int'),
+       scan_columns('SELECT t.small_ints FROM t LEFT JOIN  one_row ON t.small_ints = one_row.small_int AND t.positive_ints > one_row.negative_int'),
+       scan_columns('SELECT t.small_ints FROM t RIGHT JOIN one_row ON t.small_ints = one_row.small_int AND t.positive_ints > one_row.negative_int'),
+       scan_columns('SELECT t.small_ints FROM t FULL JOIN  one_row ON t.small_ints = one_row.small_int AND t.positive_ints > one_row.negative_int'),
+       scan_columns('SELECT t.small_ints FROM t SEMI JOIN  one_row ON t.small_ints = one_row.small_int AND t.positive_ints > one_row.negative_int'),
+       scan_columns('SELECT t.small_ints FROM t ANTI JOIN  one_row ON t.small_ints = one_row.small_int AND t.positive_ints > one_row.negative_int')
+----
+2	2	2	2	2	2
+
+# results are unaffected by the optimizers
+foreach disabled_opt '' 'statistics_propagation' 'unused_columns' 'column_lifetime'
+
+statement ok
+SET disabled_optimizers to {disabled_opt}
+
+query I
+SELECT sum(small_ints) FROM t WHERE never_null_text IS NOT NULL AND positive_ints > 500
+----
+4498
+
+query II
+SELECT count(*), sum(t.small_ints) FROM t JOIN one_row ON t.small_ints = one_row.small_int AND t.positive_ints > one_row.negative_int
+----
+286	858
+
+query II
+SELECT count(*), sum(a.small_ints) FROM t a LEFT JOIN t b ON a.positive_ints = b.positive_ints WHERE b.never_null_text IS NOT NULL AND b.small_ints > 3
+----
+856	4279
+
+endloop

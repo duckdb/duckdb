@@ -24,6 +24,8 @@ struct ExtensionLoadOptions {
 	//! The repository named in the FROM clause the extension is loaded from (e.g. LOAD httpfs FROM core). Empty for a
 	//! bare LOAD, which only resolves core and community extensions
 	string repository;
+	//! Set for an autoload: only core extensions are autoloadable, so only the core keys are trusted
+	bool core_only = false;
 };
 
 } // namespace duckdb

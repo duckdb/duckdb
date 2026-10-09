@@ -503,6 +503,14 @@ FileMetadata FileSystem::Stats(FileHandle &handle) {
 	return metadata;
 }
 
+optional<FileMetadata> FileSystem::GetStatsIfExists(const OpenFileInfo &file, optional_ptr<FileOpener> opener) {
+	auto handle = OpenFile(file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS, opener);
+	if (!handle) {
+		return nullopt;
+	}
+	return Stats(*handle);
+}
+
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
@@ -573,11 +581,11 @@ bool FileSystem::IsDirectory(const OpenFileInfo &info) {
 	if (!info.extended_info) {
 		return false;
 	}
-	auto entry = info.extended_info->options.find("type");
-	if (entry == info.extended_info->options.end()) {
+	string type;
+	if (!info.extended_info->TryGetOption("type", type)) {
 		return false;
 	}
-	return StringValue::Get(entry->second) == "directory";
+	return type == "directory";
 }
 
 bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,

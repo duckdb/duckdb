@@ -1,3 +1,4 @@
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector/flat_vector.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
@@ -8,6 +9,28 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
+
+[[noreturn]] static void ThrowListOffsetOutOfRange() {
+	throw DataCorruptionException("Corrupted LIST column: offset exceeds the child column count");
+}
+
+[[noreturn]] static void ThrowListOffsetsOutOfOrder() {
+	throw DataCorruptionException("Corrupted LIST column: later offset is smaller than the preceding offset");
+}
+
+static void ValidateListOffset(idx_t offset, idx_t child_count) {
+	if (offset > child_count) {
+		ThrowListOffsetOutOfRange();
+	}
+}
+
+static idx_t GetListLength(idx_t start_offset, idx_t end_offset, idx_t child_count) {
+	if (end_offset < start_offset) {
+		ThrowListOffsetsOutOfOrder();
+	}
+	ValidateListOffset(end_offset, child_count);
+	return end_offset - start_offset;
+}
 
 ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, LogicalType type_p,
                                ColumnDataType data_type, optional_ptr<ColumnData> parent)
@@ -58,14 +81,19 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 uint64_t ListColumnData::FetchListOffset(idx_t row_idx) {
+	if (row_idx >= count) {
+		throw DataCorruptionException("Corrupted database: list offset row ID is out of range");
+	}
 	auto segment = data.GetSegment(row_idx);
 	ColumnFetchState fetch_state;
 	Vector result(LogicalType::UBIGINT, 1);
 	auto index_in_segment = UnsafeNumericCast<row_t>(row_idx - segment->GetRowStart());
 	segment->GetNode().FetchRow(fetch_state, index_in_segment, result, 0U);
+	auto offset = FlatVector::GetData<uint64_t>(result)[0];
+	ValidateListOffset(offset, child_column->GetMaxEntry());
 
 	// initialize the child scan with the required offset
-	return FlatVector::GetData<uint64_t>(result)[0];
+	return offset;
 }
 
 void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
@@ -81,7 +109,6 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto child_offset = FetchListOffset(row_idx - 1);
-	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
 		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
 	}
@@ -109,21 +136,20 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	validity->ScanCount(state.child_states[0], result, count);
 
 	auto data = offset_vector.Values<uint64_t>();
-	auto last_entry = data[scan_count - 1].GetValueUnsafe();
-
 	// shift all offsets so they are 0 at the first entry
 	auto result_data = FlatVector::Writer<list_entry_t>(result, scan_count);
-	auto base_offset = state.last_offset;
+	auto previous_offset = state.last_offset;
 	idx_t current_offset = 0;
+	auto child_count = child_column->GetMaxEntry();
 	for (idx_t i = 0; i < scan_count; i++) {
 		auto offset = data[i].GetValueUnsafe();
-		auto length = offset - current_offset - base_offset;
+		auto length = GetListLength(previous_offset, offset, child_count);
 		result_data.WriteValue(list_entry_t(current_offset, length));
 		current_offset += length;
+		previous_offset = offset;
 	}
 
-	D_ASSERT(last_entry >= base_offset);
-	idx_t child_scan_count = last_entry - base_offset;
+	idx_t child_scan_count = current_offset;
 	ListVector::Reserve(result, child_scan_count);
 
 	if (child_scan_count > 0) {
@@ -135,7 +161,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 		}
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
-	state.last_offset = last_entry;
+	state.last_offset = previous_offset;
 
 	ListVector::SetListSize(result, child_scan_count);
 	return scan_count;
@@ -156,7 +182,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	offset_vector.ToUnifiedFormat(offsets);
 	auto data = UnifiedVectorFormat::GetData<uint64_t>(offsets);
 	auto last_entry = data[offsets.sel->get_index(scan_count - 1)];
-	idx_t child_scan_count = last_entry - state.last_offset;
+	idx_t child_scan_count = GetListLength(state.last_offset, last_entry, child_column->GetMaxEntry());
 	if (child_scan_count == 0) {
 		return;
 	}
@@ -298,14 +324,15 @@ void ListColumnData::FetchRows(TransactionData transaction, ColumnFetchState &st
 		const auto row_id = offsets[sel.get_index(idx)];
 		auto start_offset = row_id == 0 ? 0 : FetchListOffset(row_id - 1);
 		auto end_offset = FetchListOffset(row_id);
+		auto length = GetListLength(start_offset, end_offset, child_column->GetMaxEntry());
 		auto result_idx = result_offset + idx;
 		auto &list_entry = list_data[result_idx];
 		// set the list entry offset to the size of the current list
 		list_entry.offset = ListVector::GetListSize(result);
-		list_entry.length = end_offset - start_offset;
+		list_entry.length = length;
 		if (!validity_mask.RowIsValid(result_idx)) {
 			// the list is NULL! no need to fetch the child
-			D_ASSERT(list_entry.length == 0);
+			list_entry.length = 0;
 			continue;
 		}
 

@@ -74,14 +74,13 @@ public:
 	typedef void (*merge_update_function_t)(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
 	                                        UnifiedVectorFormat &update, row_t *ids, idx_t count,
 	                                        const SelectionVector &sel, idx_t row_group_start);
-	typedef void (*fetch_update_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
-	                                        Vector &result);
+	typedef void (*fetch_update_function_t)(const SnapshotView &view, UpdateInfo &info, Vector &result);
 	typedef void (*fetch_committed_function_t)(UpdateInfo &info, Vector &result);
 	typedef void (*fetch_committed_range_function_t)(UpdateInfo &info, idx_t start, idx_t end, idx_t result_offset,
 	                                                 Vector &result);
-	typedef void (*fetch_rows_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo &info,
-	                                      const idx_t *offsets, const SelectionVector &sel, idx_t fetch_offset,
-	                                      idx_t count, idx_t vector_offset, Vector &result, idx_t result_offset);
+	typedef void (*fetch_rows_function_t)(const SnapshotView &view, UpdateInfo &info, const idx_t *offsets,
+	                                      const SelectionVector &sel, idx_t fetch_offset, idx_t count,
+	                                      idx_t vector_offset, Vector &result, idx_t result_offset);
 	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
 	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats,
 	                                              UnifiedVectorFormat &update, idx_t count, SelectionVector &sel);

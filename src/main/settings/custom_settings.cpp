@@ -15,6 +15,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -26,6 +27,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/http/http_transport_manager.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_callback_manager.hpp"
@@ -44,7 +46,10 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/function/variant/variant_shredding.hpp"
+#include "duckdb/storage/statistics/variant_stats.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/parser/peg/dialect_extension.hpp"
+#include "duckdb/parser/grammar_extension.hpp"
 
 #include "mbedtls_wrapper.hpp"
 
@@ -66,6 +71,34 @@ static DatabaseInstance &GetDB(DatabaseInstance *db) {
 		throw InvalidInputException("Cannot change/set %s before the database is started", T::Name);
 	}
 	return *db;
+}
+
+//! Parse a memory limit that may also be given as a percentage. The base is only computed when a
+//! percentage is actually given, since obtaining it can be expensive or unavailable.
+template <class BASE>
+static idx_t ParseMemoryLimitOrPercentage(const string &input, BASE &&get_base) {
+	if (input.empty() || input.back() != '%') {
+		return DBConfig::ParseMemoryLimit(input);
+	}
+	double percentage;
+	if (!TryDoubleCast(input.c_str(), input.size() - 1, percentage, false) || percentage < 0 || percentage > 100) {
+		throw InvalidInputException("Unable to parse valid percentage (input: %s)", input);
+	}
+	auto result = percentage * static_cast<double>(get_base()) / 100.0;
+	if (result >= static_cast<double>(NumericLimits<idx_t>::Maximum())) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return LossyNumericCast<idx_t>(result);
+}
+
+//! The available system memory. The config's filesystem is not set until the database starts, but
+//! options can be configured before that, so fall back to a temporary local filesystem.
+static idx_t GetAvailableSystemMemory(DBConfig &config) {
+	if (config.file_system) {
+		return DBConfig::GetSystemAvailableMemory(*config.file_system);
+	}
+	auto local_fs = FileSystem::CreateLocal();
+	return DBConfig::GetSystemAvailableMemory(*local_fs);
 }
 
 } // namespace
@@ -117,15 +150,16 @@ Value AllocatorBulkDeallocationFlushThresholdSetting::GetSetting(const ClientCon
 //===----------------------------------------------------------------------===//
 // Delta Only Variant Legacy Encoding
 //===----------------------------------------------------------------------===//
-void DeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+void DebugDeltaOnlyVariantEncodingEnabledSetting::SetGlobal(DatabaseInstance *db, DBConfig &config,
+                                                            const Value &input) {
 	throw InvalidInputException("This setting is not adjustable by a user");
 }
 
-void DeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+void DebugDeltaOnlyVariantEncodingEnabledSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	throw InvalidInputException("This setting is not adjustable by a user");
 }
 
-Value DeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
+Value DebugDeltaOnlyVariantEncodingEnabledSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BOOLEAN(config.options.variant_legacy_encoding);
 }
@@ -290,7 +324,7 @@ void AllowedDirectoriesSetting::ResetGlobal(DatabaseInstance *db, DBConfig &conf
 Value AllowedDirectoriesSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<Value> allowed_directories;
-	for (auto &dir : config.options.allowed_directories) {
+	for (auto &dir : config.GetAllowedDirectories()) {
 		allowed_directories.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_directories));
@@ -324,7 +358,7 @@ void AllowedPathsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	vector<Value> allowed_paths;
-	for (auto &dir : config.options.allowed_paths) {
+	for (auto &dir : config.GetAllowedPaths()) {
 		allowed_paths.emplace_back(dir);
 	}
 	return Value::LIST(LogicalType::VARCHAR, std::move(allowed_paths));
@@ -334,18 +368,7 @@ Value AllowedPathsSetting::GetSetting(const ClientContext &context) {
 // Block Allocator Memory
 //===----------------------------------------------------------------------===//
 void BlockAllocatorMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	const auto input_string = input.ToString();
-	idx_t size;
-	if (!input_string.empty() && input_string.back() == '%') {
-		double percentage;
-		if (!TryDoubleCast(input_string.c_str(), input_string.size() - 1, percentage, false) || percentage < 0 ||
-		    percentage > 100) {
-			throw InvalidInputException("Unable to parse valid percentage (input: %s)", input_string);
-		}
-		size = LossyNumericCast<idx_t>(percentage) * config.options.maximum_memory / 100;
-	} else {
-		size = DBConfig::ParseMemoryLimit(input_string);
-	}
+	const auto size = ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return config.options.maximum_memory; });
 	if (db) {
 		BlockAllocator::Get(*db).Resize(size);
 	}
@@ -376,25 +399,6 @@ void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &confi
 Value CheckpointThresholdSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.options.checkpoint_wal_size));
-}
-
-//===----------------------------------------------------------------------===//
-// Configure Profiling
-//===----------------------------------------------------------------------===//
-void ConfigureProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
-	throw InvalidInputException(
-	    "configure_profiling (and its aliases configure_metrics, custom_profiling_settings) is deprecated. "
-	    "Use SET tracked_metrics = '...' instead. "
-	    "For example: SET tracked_metrics = '*' to track all metrics, "
-	    "or SET tracked_metrics = ['query.total_time', 'operator.*'] to track specific metrics.");
-}
-
-void ConfigureProfilingSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).tracked_metrics = ClientConfig().tracked_metrics;
-}
-
-Value ConfigureProfilingSetting::GetSetting(const ClientContext &context) {
-	return TrackedMetricsSetting::GetSetting(context);
 }
 
 //===----------------------------------------------------------------------===//
@@ -524,6 +528,7 @@ void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig
 		case CompressionType::COMPRESSION_CONSTANT:
 		case CompressionType::COMPRESSION_EMPTY:
 		case CompressionType::COMPRESSION_UNCOMPRESSED:
+		case CompressionType::ENUM_SIZE:
 			throw InvalidInputException("Compression method %s cannot be disabled", param);
 		default:
 			break;
@@ -661,26 +666,27 @@ void EnableExternalFileCacheSetting::OnSet(SettingCallbackInfo &info, Value &inp
 //===----------------------------------------------------------------------===//
 // External File Cache Block Sizes
 //===----------------------------------------------------------------------===//
-void ExternalFileCacheLocalBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+static void ValidateExternalFileCacheBlockSize(const char *name, const Value &input) {
 	const auto bytes = input.GetValue<uint64_t>();
 	if (bytes == 0) {
-		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
+		throw InvalidInputException("Invalid option for %s: value must be positive", string(name));
 	}
 	if (!IsPowerOfTwo(bytes)) {
-		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
+		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(name),
 		                            bytes);
 	}
 }
 
-void ExternalFileCacheRemoteBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
-	const auto bytes = input.GetValue<uint64_t>();
-	if (bytes == 0) {
-		throw InvalidInputException("Invalid option for %s: value must be positive", string(Name));
-	}
-	if (!IsPowerOfTwo(bytes)) {
-		throw InvalidInputException("Invalid option for %s: block size must be a power of two, got %llu", string(Name),
-		                            bytes);
-	}
+void ExternalFileCacheLocalMaxBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	ValidateExternalFileCacheBlockSize(Name, input);
+}
+
+void ExternalFileCacheRemoteMaxBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	ValidateExternalFileCacheBlockSize(Name, input);
+}
+
+void ExternalFileCacheRemoteMinBlockSizeSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	ValidateExternalFileCacheBlockSize(Name, input);
 }
 
 //===----------------------------------------------------------------------===//
@@ -724,9 +730,6 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 				                            "or STRUCT (for OBJECT Variant values), not %s",
 				                            type.ToString());
 			}
-			if (type.id() == LogicalTypeId::STRUCT && StructType::IsUnnamed(type)) {
-				throw InvalidInputException("STRUCT types in the shredding can not be empty");
-			}
 			return false;
 		}
 		switch (type.id()) {
@@ -768,9 +771,7 @@ void ForceVariantShredding::SetGlobal(DatabaseInstance *_, DBConfig &config, con
 		return false;
 	});
 
-	auto shredding_type = TypeVisitor::VisitReplace(logical_type, [](const LogicalType &type) {
-		return LogicalType::STRUCT({{"typed_value", type}, {"untyped_value_index", LogicalType::UINTEGER}});
-	});
+	auto shredding_type = VariantStats::GetShreddingType(logical_type);
 	force_variant_shredding =
 	    LogicalType::STRUCT({{"unshredded", VariantShredding::GetUnshreddedType()}, {"shredded", shredding_type}});
 }
@@ -955,6 +956,12 @@ Value EnableProfilingSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar Print
 //===----------------------------------------------------------------------===//
 void EnableProgressBarPrintSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("enable_progress_bar_print setting cannot be NULL");
+	}
+	if (input.type().id() != LogicalTypeId::BOOLEAN) {
+		throw InvalidInputException("enable_progress_bar_print setting must be a boolean value");
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	config.print_progress_bar = input.GetValue<bool>();
@@ -974,6 +981,12 @@ Value EnableProgressBarPrintSetting::GetSetting(const ClientContext &context) {
 // Enable Progress Bar
 //===----------------------------------------------------------------------===//
 bool EnableProgressBarSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("enable_progress_bar setting cannot be NULL");
+	}
+	if (input.type().id() != LogicalTypeId::BOOLEAN) {
+		throw InvalidInputException("enable_progress_bar setting must be a boolean value");
+	}
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
 	return true;
@@ -1051,7 +1064,9 @@ void HomeDirectorySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 void ForceMbedtlsUnsafeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.force_mbedtls = input.GetValue<bool>();
 
-	if (!config.options.force_mbedtls) {
+	// db is null when the option is set on a DBConfig before the database is opened (e.g. duckdb_set_config),
+	// in which case nothing is attached yet
+	if (!config.options.force_mbedtls && db) {
 		// check if there are attached databases encrypted that are not read only
 		bool encrypted_db_attached = false;
 		for (auto &database : db->GetDatabaseManager().GetDatabases()) {
@@ -1139,17 +1154,24 @@ void LogQueryPathSetting::OnSet(SettingCallbackInfo &info, Value &input) {
 // Max Memory
 //===----------------------------------------------------------------------===//
 void MaxMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
+	// a percentage is relative to the system memory, since resolving it against maximum_memory would be circular
+	auto maximum_memory =
+	    ParseMemoryLimitOrPercentage(input.ToString(), [&]() { return GetAvailableSystemMemory(config); });
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(maximum_memory);
 	}
+	config.options.maximum_memory = maximum_memory;
 }
 
 void MaxMemorySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	auto old_memory = config.options.maximum_memory;
 	config.SetDefaultMaxMemory();
+	auto new_memory = config.options.maximum_memory;
+	config.options.maximum_memory = old_memory;
 	if (db) {
-		BufferManager::GetBufferManager(*db).SetMemoryLimit(config.options.maximum_memory);
+		BufferManager::GetBufferManager(*db).SetMemoryLimit(new_memory);
 	}
+	config.options.maximum_memory = new_memory;
 }
 
 Value MaxMemorySetting::GetSetting(const ClientContext &context) {
@@ -1543,19 +1565,19 @@ Value StandardVectorSizeSetting::GetSetting(const ClientContext &) {
 //===----------------------------------------------------------------------===//
 // Streaming Buffer Size
 //===----------------------------------------------------------------------===//
-void StreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {
+void MaxStreamingBufferSizeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto &config = ClientConfig::GetConfig(context);
-	config.streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
+	config.max_streaming_buffer_size = DBConfig::ParseMemoryLimit(input.ToString());
 }
 
-void StreamingBufferSizeSetting::ResetLocal(ClientContext &context) {
+void MaxStreamingBufferSizeSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.SetDefaultStreamingBufferSize();
 }
 
-Value StreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
+Value MaxStreamingBufferSizeSetting::GetSetting(const ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
-	return Value(StringUtil::BytesToHumanReadableString(config.streaming_buffer_size));
+	return Value(StringUtil::BytesToHumanReadableString(config.max_streaming_buffer_size));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1664,6 +1686,13 @@ Value ThreadsSetting::GetSetting(const ClientContext &context) {
 	return Value::BIGINT(NumericCast<int64_t>(config.options.maximum_threads));
 }
 
+static void ResizeAutomaticHTTPClientPool(optional_ptr<DatabaseInstance> db, DBConfig &config) {
+	if (!db || config.options.http_client_pool_capacity != DConstants::INVALID_INDEX) {
+		return;
+	}
+	config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config));
+}
+
 //===----------------------------------------------------------------------===//
 // Async Threads
 //===----------------------------------------------------------------------===//
@@ -1680,6 +1709,7 @@ void AsyncThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}
 	config.options.async_threads = new_async_threads;
+	ResizeAutomaticHTTPClientPool(db, config);
 }
 
 void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
@@ -1688,11 +1718,40 @@ void AsyncThreadsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 		TaskScheduler::GetScheduler(*db).SetAsyncThreads(new_async_threads);
 	}
 	config.options.async_threads = new_async_threads;
+	ResizeAutomaticHTTPClientPool(db, config);
 }
 
 Value AsyncThreadsSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(NumericCast<int64_t>(config.options.async_threads));
+}
+
+void HTTPClientPoolCapacitySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("http_client_pool_capacity must be a positive integer");
+	}
+	auto new_val = input.GetValue<int64_t>();
+	if (new_val <= 0) {
+		throw InvalidInputException(
+		    "http_client_pool_capacity must be a positive integer, RESET it to return to the automatic value");
+	}
+	auto new_capacity = NumericCast<idx_t>(new_val);
+	if (db) {
+		config.GetHTTPTransportManager().SetCapacity(new_capacity);
+	}
+	config.options.http_client_pool_capacity = new_capacity;
+}
+
+void HTTPClientPoolCapacitySetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (db) {
+		config.GetHTTPTransportManager().SetCapacity(HTTPTransportManager::AutomaticCapacity(config));
+	}
+	config.options.http_client_pool_capacity = DConstants::INVALID_INDEX;
+}
+
+Value HTTPClientPoolCapacitySetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BIGINT(NumericCast<int64_t>(config.GetHTTPTransportManager().GetCapacity()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -1737,22 +1796,216 @@ Value WriteBufferRowGroupMemoryLimitSetting::GetSetting(const ClientContext &con
 void CurrentTransactionInvalidationPolicySetting::OnSet(SettingCallbackInfo &info, Value &input) {
 	if (!info.context) {
 		throw InvalidInputException(
-		    "current_transaction_invalidaton_policy can only be set when there is an active client context");
+		    "current_transaction_invalidation_policy can only be set when there is an active client context");
 	}
 	info.context->transaction.SetInvalidationPolicy(
 	    EnumUtil::FromString<TransactionInvalidationPolicy>(input.GetValue<string>()));
 }
 
-void CurrentDialectSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+void CurrentDialectSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (!OnLocalSet(context, input)) {
+		return;
+	}
+	auto &client_config = ClientConfig::GetConfig(context);
+	auto &config = DatabaseInstance::GetDatabase(context).config;
+
 	if (input.IsNull()) {
-		throw InvalidInputException("current_dialect setting cannot be NULL");
+		client_config.current_dialect = std::nullopt;
+		return;
 	}
 	auto dialect_name = input.GetValue<string>();
-	if (!info.config.GetCallbackManager().HasDialectExtension(dialect_name)) {
+
+	auto dialect_extension_p = config.GetCallbackManager().GetDialectExtension(dialect_name);
+	if (!dialect_extension_p) {
 		throw InvalidInputException("Dialect \"%s\" is not installed", dialect_name);
 	}
-	if (info.db) {
-		info.db->GetParserCache().Invalidate();
+	auto &dialect_extension = *dialect_extension_p;
+	//! The grammar gets lazily compiled, load it if it wasn't compiled yet
+	(void)dialect_extension.GetCompiledGrammar(context);
+	client_config.current_dialect = dialect_name;
+	auto &compatibility_mode = dialect_extension.GetCompatibilityMode();
+	if (compatibility_mode) {
+		Settings::Set<DialectCompatibilityModeSetting>(context, SetScope::LOCAL,
+		                                               Value(EnumUtil::ToString(*compatibility_mode)));
 	}
+}
+
+void CurrentDialectSetting::ResetLocal(ClientContext &context) {
+	if (!OnLocalReset(context)) {
+		return;
+	}
+	ClientConfig::GetConfig(context).current_dialect = std::nullopt;
+}
+
+bool CurrentDialectSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	return true;
+}
+
+bool CurrentDialectSetting::OnLocalReset(ClientContext &context) {
+	return true;
+}
+
+Value CurrentDialectSetting::GetSetting(const ClientContext &context) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	if (client_config.current_dialect) {
+		return Value(*client_config.current_dialect);
+	}
+	return Value();
+}
+
+void ActiveGrammarExtensionsSetting::SetLocal(ClientContext &context, const Value &input) {
+	if (!OnLocalSet(context, input)) {
+		return;
+	}
+	auto &client_config = ClientConfig::GetConfig(context);
+
+	if (input.IsNull()) {
+		client_config.active_grammar_extensions.clear();
+		client_config.cached_grammar.reset();
+		return;
+	}
+
+	auto &config = DatabaseInstance::GetDatabase(context).config;
+	auto &callback_manager = config.GetCallbackManager();
+	case_insensitive_set_t distinct_names;
+	vector<string> selected_extensions;
+	if (input.type().id() != LogicalTypeId::LIST) {
+		throw InvalidInputException("'active_grammar_extensions' setting value should be of type VARCHAR[], not %s",
+		                            input.type().ToString());
+	}
+	auto &list_input = ListValue::GetChildren(input);
+	for (auto &val : list_input) {
+		if (val.type().id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("'active_grammar_extensions' list values should be of type VARCHAR, not %s",
+			                            val.type().ToString());
+		}
+		auto val_str = val.GetValue<string>();
+		if (!distinct_names.insert(val_str).second) {
+			throw InvalidInputException("'active_grammar_extensions' list contains duplicate value '%s'", val_str);
+		}
+		selected_extensions.emplace_back(std::move(val_str));
+	}
+
+	vector<string> missing;
+	for (auto &ext : selected_extensions) {
+		auto extension = callback_manager.FindGrammarExtension(ext);
+		if (!extension) {
+			missing.push_back(ext);
+		}
+	}
+	if (!missing.empty()) {
+		auto missing_list = StringUtil::Join(missing, ",");
+		throw InvalidInputException("Can't set 'active_grammar_extensions', the following extensions don't exist: %s",
+		                            missing_list);
+	}
+	if (selected_extensions.empty()) {
+		client_config.active_grammar_extensions.clear();
+		client_config.cached_grammar.reset();
+		return;
+	}
+
+	auto compiled_grammar = CompiledGrammar::Create(context, selected_extensions);
+	client_config.active_grammar_extensions = std::move(selected_extensions);
+	client_config.cached_grammar = std::move(compiled_grammar);
+}
+
+void ActiveGrammarExtensionsSetting::ResetLocal(ClientContext &context) {
+	if (!OnLocalReset(context)) {
+		return;
+	}
+	auto &client_config = ClientConfig::GetConfig(context);
+	client_config.active_grammar_extensions.clear();
+	client_config.cached_grammar.reset();
+}
+
+bool ActiveGrammarExtensionsSetting::OnLocalSet(ClientContext &context, const Value &input) {
+	return true;
+}
+
+bool ActiveGrammarExtensionsSetting::OnLocalReset(ClientContext &context) {
+	return true;
+}
+
+Value ActiveGrammarExtensionsSetting::GetSetting(const ClientContext &context) {
+	auto &client_config = ClientConfig::GetConfig(context);
+	auto &active_extensions = client_config.active_grammar_extensions;
+	vector<Value> values;
+	for (auto &extension : active_extensions) {
+		values.push_back(extension);
+	}
+	return Value::LIST(LogicalType::VARCHAR, std::move(values));
+}
+
+//===----------------------------------------------------------------------===//
+// Deprecated Settings
+//===----------------------------------------------------------------------===//
+//! Settings below are still honored, but are scheduled for removal. Setting one emits a deprecation warning;
+//! resetting it back to its default does not.
+static void WarnDeprecatedSetting(SettingCallbackInfo &info, const char *name) {
+	if (info.is_reset) {
+		return;
+	}
+	auto message = StringUtil::Format("The '%s' setting is deprecated and will be removed in a future release.", name);
+	if (info.context) {
+		DUCKDB_LOG_WARNING(*info.context, message);
+	} else if (info.db) {
+		DUCKDB_LOG_WARNING(*info.db, message);
+	}
+}
+
+void DelimJoinAsCteSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, DelimJoinAsCteSetting::Name);
+}
+
+void EnableObjectCacheSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, EnableObjectCacheSetting::Name);
+}
+
+void ErrorOnDivisionByZeroSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ErrorOnDivisionByZeroSetting::Name);
+}
+
+void ExperimentalMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ExperimentalMetadataReuseSetting::Name);
+}
+
+void ForceColumnMetadataReuseSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ForceColumnMetadataReuseSetting::Name);
+}
+
+void LegacyDisableNullTypeSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, LegacyDisableNullTypeSetting::Name);
+}
+
+void LegacyMetricsFormatSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, LegacyMetricsFormatSetting::Name);
+}
+
+void ProduceArrowStringViewSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ProduceArrowStringViewSetting::Name);
+}
+
+void ExtensionDirectorySetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, ExtensionDirectorySetting::Name);
+}
+
+void OldImplicitCastingSetting::OnSet(SettingCallbackInfo &info, Value &) {
+	WarnDeprecatedSetting(info, OldImplicitCastingSetting::Name);
+}
+
+void RegexMatchOperatorSemanticsSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("regex_match_operator_semantics setting cannot be NULL");
+	}
+	EnumUtil::FromString<RegexMatchOperatorSemantics>(StringValue::Get(input));
+	WarnDeprecatedSetting(info, RegexMatchOperatorSemanticsSetting::Name);
+}
+
+void TableFunctionIdentifierConversionSetting::OnSet(SettingCallbackInfo &info, Value &input) {
+	if (input.IsNull()) {
+		throw InvalidInputException("table_function_identifier_conversion setting cannot be NULL");
+	}
+	EnumUtil::FromString<TableFunctionIdentifierConversion>(StringValue::Get(input));
+	WarnDeprecatedSetting(info, TableFunctionIdentifierConversionSetting::Name);
 }
 } // namespace duckdb

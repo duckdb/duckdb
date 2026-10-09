@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/parser/peg/keyword_helper.hpp"
+#include "duckdb/parser/peg/keyword_helper/default_keyword_maps.hpp"
 
 namespace duckdb {
 
@@ -12,22 +13,19 @@ public:
 	static const DuckDBKeywordHelper &Instance();
 
 public:
-	bool KeywordCategoryType(const std::string &text, const PEGKeywordCategory type) const override;
-	bool IsKeyword(const string &text) const override;
+	keyword_categories_t GetIdentifierMask(SuggestionState type) const override;
+	KeywordCategory GetKeywordCategory(const string &text) const;
 	vector<ParserKeyword> KeywordList() const override;
+	const GrammarLiteralTable &GetLiteralTable() const override {
+		return literal_table;
+	}
 
 private:
-	void InitializeKeywordMaps();
+	static DefaultKeywordMaps InitializeKeywordMaps();
 
 private:
-	case_insensitive_set_t reserved_keyword_map;
-	case_insensitive_set_t unreserved_keyword_map;
-	case_insensitive_set_t colname_keyword_map;
-	case_insensitive_set_t typefunc_keyword_map;
-	case_insensitive_set_t typename_keyword_map;
-
-private:
-	bool initialized;
+	DefaultKeywordMaps keyword_maps;
+	GrammarLiteralTable literal_table;
 };
 
 } // namespace duckdb

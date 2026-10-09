@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/parser/statement/copy_database_statement.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
@@ -127,7 +128,7 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	result.plan = std::move(plan);
 
 	auto &properties = GetStatementProperties();
-	properties.output_type = QueryResultOutputType::FORCE_MATERIALIZED;
+	properties.result_eagerness = ResultEagerness::FORCED;
 	properties.return_type = StatementReturnType::NOTHING;
 
 	DatabaseModificationType modification;

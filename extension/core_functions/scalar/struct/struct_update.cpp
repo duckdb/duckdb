@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/vector/map_vector.hpp"
 #include "duckdb/common/vector/struct_vector.hpp"
 #include "core_functions/scalar/struct_functions.hpp"
@@ -71,15 +72,10 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	auto incoming_children = identifier_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(arguments.size(), true);
 
-	// Validate incoming arguments and record names
+	// Record the names of the fields that are updated
+	auto &names = *input.GetArgumentNames();
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
-		auto &child = arguments[arg_idx];
-		if (child->GetAlias().empty()) {
-			throw BinderException("Need named argument for struct update, e.g., a := b");
-		} else if (incoming_children.find(child->GetAlias()) != incoming_children.end()) {
-			throw InvalidInputException("Duplicate named argument provided for %s", child->GetAlias().c_str());
-		}
-		incoming_children.emplace(child->GetAlias(), arg_idx);
+		incoming_children.emplace(names[arg_idx], arg_idx);
 	}
 
 	for (idx_t field_idx = 0; field_idx < existing_children.size(); field_idx++) {
@@ -91,8 +87,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 		} else {
 			// Update the struct with the new data of the same name
 			auto arg_idx = update->second;
-			auto &new_child = arguments[arg_idx];
-			new_children.emplace_back(make_pair(new_child->GetAlias(), new_child->GetReturnType()));
+			new_children.emplace_back(make_pair(names[arg_idx], arguments[arg_idx]->GetReturnType()));
 			is_new_field[arg_idx] = false;
 		}
 	}
@@ -100,8 +95,7 @@ static unique_ptr<FunctionData> StructUpdateBind(BindScalarFunctionInput &input)
 	// Loop through the additional arguments (name/value pairs)
 	for (idx_t arg_idx = 1; arg_idx < arguments.size(); arg_idx++) {
 		if (is_new_field[arg_idx]) {
-			auto &child = arguments[arg_idx];
-			new_children.emplace_back(make_pair(child->GetAlias(), child->GetReturnType()));
+			new_children.emplace_back(make_pair(names[arg_idx], arguments[arg_idx]->GetReturnType()));
 		}
 	}
 
@@ -116,6 +110,7 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 	auto incoming_children = identifier_tree_t<idx_t>();
 	auto is_new_field = vector<bool>(expr.GetChildren().size(), true);
 	auto new_stats = StructStats::CreateUnknown(expr.GetReturnType());
+	new_stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 
 	for (idx_t arg_idx = 1; arg_idx < expr.GetChildren().size(); arg_idx++) {
 		auto &new_child = expr.GetChildren()[arg_idx];
@@ -146,10 +141,25 @@ static unique_ptr<BaseStatistics> StructUpdateStats(ClientContext &context, Func
 	return new_stats.ToUnique();
 }
 
+static unique_ptr<ParsedExpression> StructUpdateUnbind(FunctionUnbindInput &input) {
+	vector<FunctionArgument> arguments;
+	for (idx_t i = 0; i < input.children.size(); i++) {
+		auto name = i == 0 ? Identifier() : input.expression.GetChildren()[i]->GetAlias();
+		if (i > 0 && name.empty()) {
+			return nullptr;
+		}
+		arguments.emplace_back(std::move(name), std::move(input.children[i]));
+	}
+	return make_uniq<FunctionExpression>(input.expression.Function().GetDefinition()->GetQualifiedName(),
+	                                     std::move(arguments));
+}
+
 ScalarFunction StructUpdateFun::GetFunction() {
 	ScalarFunction fun({}, LogicalTypeId::STRUCT, StructUpdateFunction, StructUpdateBind, StructUpdateStats);
 	fun.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
-	fun.SetVarArgs(LogicalType::ANY);
+	fun.GetSignature().AddParameter("struct", LogicalType::ANY).AddKwargs("kwargs", LogicalType::ANY);
+	fun.GetProperties().SetRequiresExpressionNames(true);
+	fun.SetUnbindCallback(StructUpdateUnbind);
 	fun.SetSerializeCallback(VariableReturnBindData::Serialize);
 	fun.SetDeserializeCallback(VariableReturnBindData::Deserialize);
 	return fun;

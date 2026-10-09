@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/arena_containers/arena_ptr.hpp"
+#include "duckdb/common/arena_containers/arena_vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/identifier.hpp"
 #include "duckdb/common/vector.hpp"
@@ -20,6 +22,7 @@
 #include "duckdb/parser/peg/tokenizer/tokenizer.hpp"
 #include "duckdb/parser/peg/parsed_grammar.hpp"
 #include "duckdb/parser/peg/transformer/parse_result.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -27,6 +30,7 @@ class PEGTransformerFactory;
 class ParseResultAllocator;
 class Matcher;
 class MatcherAllocator;
+class MatchProcess;
 
 enum class SuggestionState : uint8_t {
 	SUGGEST_KEYWORD,
@@ -143,51 +147,62 @@ struct MatcherSuggestion {
 	char extra_char = '\0';
 };
 
-struct MatchState {
-	MatchState(TokenIterator &token_iterator_p, vector<MatcherSuggestion> &suggestions, ParseResultAllocator &allocator,
-	           idx_t &max_token_index, MatchMode mode_p = MatchMode::BUILD_PARSE_RESULT,
-	           IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
-	           ParserPackratCache *packrat_cache_p = nullptr)
-	    : token_iterator(token_iterator_p), suggestions(suggestions), allocator(allocator),
-	      max_token_index(max_token_index), identifier_case_mode(identifier_case_mode_p),
+struct MatchContext {
+	MatchContext(vector<MatcherSuggestion> &suggestions_p, ParseResultAllocator &allocator_p,
+	             ArenaAllocator &process_allocator_p, idx_t &max_token_index_p,
+	             MatchMode mode_p = MatchMode::BUILD_PARSE_RESULT,
+	             IdentifierCaseMode identifier_case_mode_p = IdentifierCaseMode::PRESERVE_CASE,
+	             ParserPackratCache *packrat_cache_p = nullptr)
+	    : suggestions(suggestions_p), allocator(allocator_p), process_allocator(process_allocator_p),
+	      max_token_index(max_token_index_p), identifier_case_mode(identifier_case_mode_p),
 	      packrat_cache(packrat_cache_p), mode(mode_p) {
 	}
-	MatchState(MatchState &state)
-	    : token_iterator(state.token_iterator), suggestions(state.suggestions), allocator(state.allocator),
-	      max_token_index(state.max_token_index), identifier_case_mode(state.identifier_case_mode),
-	      packrat_cache(state.packrat_cache), mode(state.mode), rule(state.rule) {
+
+	vector<MatcherSuggestion> &suggestions;
+	ParseResultAllocator &allocator;
+	ArenaAllocator &process_allocator;
+	idx_t &max_token_index;
+	IdentifierCaseMode identifier_case_mode;
+	ParserPackratCache *packrat_cache;
+	MatchMode mode;
+};
+
+struct MatchState {
+	MatchState(TokenIterator &token_iterator_p, MatchContext &context_p)
+	    : token_iterator(token_iterator_p), context(context_p) {
+	}
+	MatchState(const MatchState &state)
+	    : token_iterator(state.token_iterator), context(state.context), rule(state.rule) {
 	}
 
 	TokenIterator token_iterator;
-	vector<MatcherSuggestion> &suggestions;
-	reference_set_t<const Matcher> added_suggestions;
-	ParseResultAllocator &allocator;
-	idx_t &max_token_index;
-	IdentifierCaseMode identifier_case_mode = IdentifierCaseMode::PRESERVE_CASE;
-	ParserPackratCache *packrat_cache;
-	MatchMode mode;
+	MatchContext &context;
+	unique_ptr<reference_set_t<const Matcher>> added_suggestions;
 	optional_ptr<const CompiledGrammarRule> rule;
 
 	bool BuildParseResult() const {
-		return mode == MatchMode::BUILD_PARSE_RESULT;
+		return context.mode == MatchMode::BUILD_PARSE_RESULT;
 	}
 
 	template <class RESULT, class... ARGS>
 	MatcherResult AllocateParseResult(ARGS &&... args);
 
+	template <class PROCESS, class... ARGS>
+	arena_ptr<MatchProcess> Make(ARGS &&... args);
+
 	void UpdateMaxTokenIndex() {
-		if (token_iterator.Position() > max_token_index) {
-			max_token_index = token_iterator.Position();
+		if (token_iterator.Position() > context.max_token_index) {
+			context.max_token_index = token_iterator.Position();
 		}
 	}
 
 	idx_t GetMaxTokenIndex() const {
-		return max_token_index;
+		return context.max_token_index;
 	}
 
 	//! Fold a non-quoted identifier in-place according to the configured case mode
 	void FoldIdentifier(string &text) const {
-		switch (identifier_case_mode) {
+		switch (context.identifier_case_mode) {
 		case IdentifierCaseMode::LOWERCASE:
 			text = StringUtil::Lower(text);
 			break;
@@ -202,6 +217,40 @@ struct MatchState {
 	void AddSuggestion(MatcherSuggestion suggestion);
 };
 
+//! Input to start a Matcher execution
+struct MatchInput {
+	const Matcher &matcher;
+	MatchState &state;
+};
+
+//! Essentially a std::variant<MatchInput, MatcherResult>
+//! Produced by a MatchProcess::Resume call, controlling the next step in the execution
+class MatchStep {
+public:
+	static MatchStep Child(MatchInput input);
+	static MatchStep Complete(MatcherResult result);
+
+	optional<MatchInput> GetChild();
+	MatcherResult GetResult() const;
+
+private:
+	MatchStep(optional<MatchInput> child_p, optional<MatcherResult> result_p)
+	    : child(std::move(child_p)), result(result_p) {
+	}
+
+private:
+	optional<MatchInput> child;
+	optional<MatcherResult> result;
+};
+
+class MatchProcess {
+public:
+	virtual ~MatchProcess() = default;
+
+	//! Resume matching, optionally with the result of the previously requested child.
+	virtual MatchStep Resume(optional<MatcherResult> child_result) = 0;
+};
+
 enum class MatcherType {
 	KEYWORD,
 	LIST,
@@ -212,18 +261,48 @@ enum class MatcherType {
 	STRING_LITERAL,
 	NUMBER_LITERAL,
 	OPERATOR,
-	END_OF_INPUT
+	END_OF_INPUT,
+	CUSTOM
+};
+
+//! Over-approximation of the tokens a matcher can start with (its FIRST set), computed once per grammar. Lets the
+//! matcher skip sub-matchers that certainly cannot match at the current token.
+struct MatcherFirstSet {
+	bool computed = false;
+	//! the matcher can succeed without consuming a token
+	bool nullable = false;
+	//! no information: never skip
+	bool any = false;
+	//! MatcherTokenClass bits
+	uint8_t class_mask = 0;
+	//! bitset over grammar literal ids (keywords and symbols)
+	vector<uint64_t> literals;
+	optional_ptr<const GrammarLiteralTable> table;
+
+	bool HasLiteral(idx_t literal_id) const {
+		auto word = literal_id / 64;
+		return word < literals.size() && (literals[word] >> (literal_id % 64)) & 1;
+	}
+	DUCKDB_API void AddLiteral(idx_t literal_id);
+	//! Merge other into this set, returns whether anything changed
+	DUCKDB_API bool Merge(const MatcherFirstSet &other);
+	//! False only if the matcher certainly cannot match at the current token
+	DUCKDB_API bool MightMatch(MatchState &state) const;
 };
 
 class Matcher {
 public:
-	explicit Matcher(MatcherType type) : type(type) {
+	explicit Matcher(MatcherType type = MatcherType::CUSTOM) : type(type) {
 	}
 	virtual ~Matcher() = default;
 
 	//! Match and construct the parse result
 	MatcherResult MatchParseResult(MatchState &state) const;
-	virtual MatcherResult MatchParseResultInternal(MatchState &state) const = 0;
+	//! Create matcher-local state with state.Make<PROCESS>() for either execution driver.
+	virtual arena_ptr<MatchProcess> StartMatch(MatchState &state) const = 0;
+	virtual bool IsAtomic() const {
+		return false;
+	}
 	virtual SuggestionType AddSuggestion(MatchState &state) const;
 	virtual SuggestionType AddSuggestionInternal(MatchState &state) const = 0;
 	virtual string ToString() const = 0;
@@ -245,7 +324,12 @@ public:
 	bool HasName() const {
 		return !name.empty();
 	}
-	string GetName() const;
+	//! The stored name, which lives as long as the grammar and can therefore be referenced by a parse result
+	const string &GetName() const {
+		return name;
+	}
+	//! The name to print for this matcher, which for an unnamed one renders the grammar it matches
+	string GetPrintName() const;
 	optional_idx GetPackratId() const {
 		return packrat_id;
 	}
@@ -254,6 +338,20 @@ public:
 	}
 	bool IsPackratMemoized() const {
 		return packrat_memoized;
+	}
+	//! See ParsedGrammar::SetTransformProcess
+	void SetCollapsible() {
+		collapsible = true;
+	}
+	bool IsCollapsible() const {
+		return collapsible;
+	}
+	//! The matcher runs the built-in implementation of its type (set by MatcherFactory, never for derived matchers)
+	void SetStructural() {
+		structural = true;
+	}
+	bool IsStructural() const {
+		return structural;
 	}
 
 public:
@@ -273,13 +371,37 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
+public:
+	MatcherFirstSet first_set;
+
 protected:
 	friend class MatcherAllocator;
 	MatcherType type;
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	bool collapsible = false;
+	bool structural = false;
 	optional_ptr<const CompiledGrammarRule> rule;
+};
+
+//! Compute the FIRST sets of all matchers reachable from root
+DUCKDB_API void ComputeFirstSets(Matcher &root, const GrammarLiteralTable &table);
+
+class AtomicMatcher : public Matcher {
+public:
+	explicit AtomicMatcher(MatcherType type) : Matcher(type) {
+	}
+
+	bool IsAtomic() const final {
+		return true;
+	}
+	DUCKDB_API arena_ptr<MatchProcess> StartMatch(MatchState &state) const final;
+	virtual MatcherResult MatchAtomic(MatchState &state) const = 0;
+	//! Describes the tokens this matcher can start with; the default (no information) never skips the matcher
+	virtual void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const {
+		first_set.any = true;
+	}
 };
 
 class KeywordInfo {
@@ -305,21 +427,67 @@ private:
 
 class ParseResultAllocator {
 public:
-	optional_ptr<ParseResult> Allocate(unique_ptr<ParseResult> parse_result);
+	ParseResultAllocator();
+	~ParseResultAllocator();
+
+	template <class RESULT, class... ARGS>
+	optional_ptr<ParseResult> Make(ARGS &&... args) {
+		static_assert(std::is_base_of<ParseResult, RESULT>::value, "Expected a parse result");
+		auto result = arena.Make<RESULT>(std::forward<ARGS>(args)...);
+		if (ParseResultNeedsDestructor<RESULT>::value) {
+			// held by an owner before growing the list, so the result is still destroyed if the growth throws
+			arena_ptr<ParseResult> owned(result);
+			pending_destructors.push_back(std::move(owned));
+		}
+		return optional_ptr<ParseResult>(result);
+	}
+
+	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to
+	unsafe_array_ptr<reference<ParseResult>> MakeChildren(const arena_vector<reference<ParseResult>> &children) {
+		auto count = children.size();
+		arena.AlignNext();
+		// an empty set still takes an address from the arena, which costs nothing and keeps the span non-null
+		auto target =
+		    reinterpret_cast<reference<ParseResult> *>(arena.Allocate(count * sizeof(reference<ParseResult>)));
+		if (count > 0) {
+			memcpy(static_cast<void *>(target), static_cast<const void *>(children.data()),
+			       count * sizeof(reference<ParseResult>));
+		}
+		return unsafe_array_ptr<reference<ParseResult>>(target, count);
+	}
 
 private:
-	vector<unique_ptr<ParseResult>> parse_results;
+	ArenaAllocator arena;
+	//! Dropping the arena reclaims the memory of every result at once but calls no destructors, so a result that
+	//! owns something has to be destroyed before that happens. An `arena_ptr` destroys what it points at without
+	//! freeing it, which is all these are here for. Only the node types that `ParseResultNeedsDestructor` selects end
+	//! up in the list, and nothing ever reads it.
+	arena_vector<arena_ptr<ParseResult>> pending_destructors;
 };
+
+template <class PROCESS, class... ARGS>
+arena_ptr<MatchProcess> MatchState::Make(ARGS &&... args) {
+	static_assert(std::is_base_of<MatchProcess, PROCESS>::value, "Expected a matcher process");
+	return arena_ptr<MatchProcess>(context.process_allocator.Make<PROCESS>(std::forward<ARGS>(args)...));
+}
+
+void ParseResult::SetNameFrom(const CompiledGrammarRule &rule_p) {
+	name = &rule_p.name;
+}
+
+void ParseResult::SetNameFrom(const Matcher &matcher_p) {
+	name = &matcher_p.GetName();
+}
 
 template <class RESULT, class... ARGS>
 MatcherResult MatchState::AllocateParseResult(ARGS &&... args) {
 	if (!BuildParseResult()) {
 		return MatcherResult::Success();
 	}
-	auto result = allocator.Allocate(make_uniq<RESULT>(std::forward<ARGS>(args)...));
+	auto result = context.allocator.Make<RESULT>(std::forward<ARGS>(args)...);
 	if (rule) {
 		result->SetRule(*rule);
-		result->name = rule->name;
+		result->SetNameFrom(*rule);
 	}
 	return MatcherResult::Success(result);
 }

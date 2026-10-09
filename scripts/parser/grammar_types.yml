@@ -1,7 +1,7 @@
 # grammar_types.yml
 #
 # Maps grammar rules to their expected C++ return types, grouped by type category.
-# Used by scripts/parser/generate_transformer.py to generate typed transformer wrappers.
+# Used by scripts/parser/generate_transformer_trampoline.py to generate typed transformer wrappers.
 #
 # Structure:
 #   <CategoryName>:
@@ -34,6 +34,9 @@
 # transformer generator should treat only `identifier` and `reserved_identifier`
 # entries as direct IdentifierParseResult-producing rules.
 #
+# additional_transform_result_types: result types used by transformer infrastructure
+# rather than as the declared return type of a grammar rule.
+#
 # packrat_memoized_rules: named grammar rules that should use packrat
 # memoization in MatchParseResult. Keep this selective because cache lookup and
 # parse-result sharing are only worthwhile for rules with repeated backtracking.
@@ -41,6 +44,10 @@
 # ---------------------------------------------------------------------------
 # unique_ptr<T> categories
 # ---------------------------------------------------------------------------
+
+additional_transform_result_types:
+  - "arena_ptr<TransformResultValue>"
+  - "vector<Identifier>"
 
 SQLStatementList:
   type: "vector<unique_ptr<SQLStatement>>"
@@ -102,6 +109,8 @@ SQLStatement:
     - UseStatement
     - VacuumStatement
     - PragmaAssignOrFunction
+    - AttachToExternalResource
+    - ConnectToExternalResource
     - ExternalResourceStatement
     - CreateExternalResourceStmt
     - RegisterExternalResourceStmt
@@ -216,7 +225,9 @@ AlterTableInfo:
   by_value: true
   rules:
     - AlterTableOptions
+    - AlterSchemaOptions
     - AddColumn
+    - DropConstraint
     - DropColumn
     - SetPartitionedBy
     - ResetPartitionedBy
@@ -352,6 +363,7 @@ ResultModifier:
     - OffsetLimitClause
     - LimitOffsetClause
     - OffsetFetchClause
+    - FetchOffsetClause
     - FetchOnlyClause
 
 AtClause:
@@ -390,7 +402,7 @@ Expression:
     - IsDistinctFromExpression
     - ComparisonExpression
     - BetweenInLikeExpression
-    - BetweenInLikeOpExpression
+    - BetweenLikeOpExpression
     - InClause
     - InExpression
     - InContainsExpression
@@ -400,7 +412,10 @@ Expression:
     - LikeClause
     - EscapeClause
     - OtherOperatorExpression
+    - InfixOtherOperatorExpression
+    - CustomPrefixExpression
     - BitwiseExpression
+    - TildeExpression
     - AdditiveExpression
     - MultiplicativeExpression
     - ExponentiationExpression
@@ -542,6 +557,7 @@ ColumnRefExpression:
   by_value: true
   rules:
     - NestedColumnName
+    - NestedSchemaTableColumnName
     - CatalogReservedSchemaTableColumnName
     - SchemaReservedTableColumnName
     - TableReservedColumnName
@@ -704,6 +720,8 @@ StringList:
     - ColumnList
     - NameList
     - DottedIdentifier
+    - CommentTarget
+    - CommentStringLiteralIdentifier
     - ColumnAliases
     - TriggerColumnList
     - RepositoryPublicKey
@@ -713,6 +731,17 @@ StringList:
     - UnpivotHeader
     - UnpivotHeaderSingle
     - UnpivotHeaderList
+    - OptionalParensNameList
+    - ParenthesizedNameList
+    - BareNameList
+
+ExternalResourceOptionsPtr:
+  type: "unique_ptr<ExternalResourceOptions>"
+  by_value: true
+  rules:
+    - ExternalResourceSource
+    - ExternalResourceCreateClause
+    - ExternalResourceReferenceClause
 
 GenericCopyOptionList:
   type: "vector<GenericCopyOption>"
@@ -805,6 +834,8 @@ LimitPercentResult:
     - LimitLiteralPercent
     - LimitExpression
     - FetchClause
+    - FetchClauseWithoutValue
+    - FetchClauseWithValue
     - FetchValue
     - OffsetClause
     - OffsetValue
@@ -1014,13 +1045,14 @@ String:
     - StringLiteral
     - DropOrSet
     - SequenceName
-    - DottedIdentifierString
+    - DottedColLabel
     - DotColLabel
     - ColLabel
     - UnreservedKeyword
     - ColumnNameKeyword
     - FuncNameKeyword
     - TypeNameKeyword
+    - TypeFuncKeyword
     - IndexName
     - Identifier
     - ExportSource
@@ -1041,11 +1073,7 @@ String:
     - QualifiedOperator
     - QualifiedOperatorContents
     - ColIdDot
-    - AnyOp
-    - StringOperator
-    - JsonOperator
-    - InetOperator
-    - ListOperator
+    - AnyOperatorLiteral
     - BitOperator
     - Term
     - Factor
@@ -1117,6 +1145,9 @@ Bool:
     - WithNoData
     - CommitAction
     - PreserveOrDelete
+    - Generated
+    - GeneratedAlways
+    - GeneratedByDefault
     - GeneratedColumnType
     - VirtualGeneratedColumn
     - StoredGeneratedColumn
@@ -1541,6 +1572,7 @@ RelOptionMap:
   by_value: true
   rules:
     - WithList
+    - WithOptionList
     - RelOptionOrOids
     - RelOptionList
     - Oids
@@ -1592,6 +1624,8 @@ overrides:
     type: "ConstraintColumnDefinition"
     by_value: true
   KeyActions: "KeyActions"
+  UpdateFirstKeyActions: "KeyActions"
+  DeleteFirstKeyActions: "KeyActions"
   GeneratedColumn:
     type: "GeneratedColumnDefinition"
     by_value: true
@@ -1608,7 +1642,28 @@ overrides:
   ComparisonExpressionTail:
     type: "ComparisonExpressionTail"
     by_value: true
-  BetweenInLikeOp:
+  IsExpressionTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsExpressionContinuation:
+    type: "vector<IsExpressionTail>"
+    by_value: true
+  IsTestTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsDistinctTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsComparisonTail:
+    type: "IsExpressionTail"
+    by_value: true
+  IsOtherOperatorTail:
+    type: "IsExpressionTail"
+    by_value: true
+  BetweenLikeOp:
+    type: "BetweenInLikeOperator"
+    by_value: true
+  InPredicate:
     type: "BetweenInLikeOperator"
     by_value: true
   OtherOperator:
@@ -1673,13 +1728,16 @@ IdentifierType:
     - AnalyzeKeyword
     - ColId
     - ColIdOrString
+    - UsingColumnName
     - ColLabelOrString
     - ColLabelIdentifier
     - StringLiteralIdentifier
     - TypeFuncName
     - IdentifierColId
+    - CopyFileNameSuffix
     - ReservedIdentifierOrStringLiteral
     - AttachAlias
+    - TargetAlias
     - CollationName
     - IndexType
     - RelOptionName
@@ -1778,30 +1836,48 @@ matcher_rule_overrides:
   OperatorLiteral:
     allow_type_overlap: true
     matcher: operator
+  AnyOperatorLiteral:
+    allow_type_overlap: true
+    matcher: all_operators
 
-packrat_memoized_rules:
+# collapsible_rules: see ParsedGrammar::SetTransformProcess. Every rule below has a transformer that returns its
+# operand unchanged when the rest of the rule matched nothing. Take a rule out of this list if that stops being
+# true. The flag is attached to the default transform, so an extension that replaces the transform of
+# one of these rules does not inherit it.
+collapsible_rules:
   - Expression
+  - ColumnDefaultExpr
   - LambdaArrowExpression
   - LogicalOrExpression
+  - ColDefOrExpr
   - LogicalAndExpression
+  - ColDefAndExpr
   - LogicalNotExpression
   - IsExpression
+  - IsDistinctFromExpression
   - ComparisonExpression
+  - BetweenInLikeExpression
+  - OtherOperatorExpression
+  - InfixOtherOperatorExpression
   - BitwiseExpression
   - AdditiveExpression
   - MultiplicativeExpression
   - ExponentiationExpression
-  - PrefixExpression
   - CollateExpression
   - AtTimeZoneExpression
-  - SingleExpression
+  - PrefixExpression
   - BaseExpression
-  - ParensExpression
-  - ParenthesisExpression
+  - SelectSetOpChain
+  - IntersectChain
+  - TableRef
+
+packrat_memoized_rules:
+  - Expression
   - Identifier
   - ColId
-  - ColumnReference
-  - FunctionExpression
+  - CatalogQualification
+  - SchemaQualification
+  - ReservedSchemaQualification
 
 # ---------------------------------------------------------------------------
 # excluded_rules: no transformer stub generated, no semantic value extracted
@@ -1809,6 +1885,8 @@ packrat_memoized_rules:
 # ---------------------------------------------------------------------------
 
 excluded_rules:
+  # Syntax only: the 'EXTERNAL' 'RESOURCE' keyword pair, shared by every singular form.
+  - ExternalResourceKeyword
   # Suggestion-only: exists so autocomplete offers the special SHOW forms as keywords; parsing of e.g.
   # "SHOW databases" resolves through ShowSettingName (the identifier), which the transformer special-cases.
   - ShowSpecialForm
@@ -1835,8 +1913,6 @@ excluded_rules:
   - CharacterType
   - IntervalNumber
   - AtTimeZoneOperator
-  - Generated
-  - AlwaysOrByDefault
   - ConstraintNameClause
   - UsingSample
   - TableSample
