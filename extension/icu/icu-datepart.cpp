@@ -702,8 +702,8 @@ void RegisterICUDatePartFunctions(ExtensionLoader &loader) {
 	ICUDatePart::AddUnaryPartCodeFunctions<double>("julian", loader, LogicalType::DOUBLE);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader, LogicalType::BIGINT,
-	                                       ArgProperties().NonDecreasing()); //  ISO year and week
+	// yearweek subtracts the week for ISO year <= 0, so it is not monotone across that range
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", loader, LogicalType::BIGINT);
 
 	//  register various aliases
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", loader);
