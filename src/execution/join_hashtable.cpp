@@ -179,9 +179,9 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 		}
 	}
 
-	if (bloom_filter.IsInitialized() && other.bloom_filter.IsInitialized()) {
-		bloom_filter.Merge(other.bloom_filter);
-	}
+	// every thread-local table shares this operator's filter - a different one here would mean its rows
+	// never reached the filter that gets published
+	D_ASSERT(!other.bloom_filter || bloom_filter.get() == other.bloom_filter.get());
 
 	sink_collection->Combine(*other.sink_collection);
 
@@ -699,8 +699,8 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
 	Hash(keys, *current_sel, added_count, hash_values);
-	if (bloom_filter.IsInitialized()) {
-		bloom_filter.InsertHashes(hash_values);
+	if (bloom_filter) {
+		bloom_filter->InsertHashes(hash_values, *current_sel, added_count);
 	}
 
 	// Re-reference and ToUnifiedFormat the hash column after computing it
@@ -985,10 +985,6 @@ static void InsertHashesLoop(unsafe_optional_ptr<atomic<ht_entry_t>> entries, Ve
 
 void JoinHashTable::InsertHashes(Vector &hashes_v, TupleDataChunkState &chunk_state, InsertState &insert_state,
                                  bool parallel) {
-	// Insert Hashes into the BF
-	if (bloom_filter.IsInitialized()) {
-		bloom_filter.InsertHashes(hashes_v);
-	}
 	auto atomic_entries = GetAtomicEntries();
 	auto &row_locations = chunk_state.row_locations;
 	if (parallel) {
@@ -1054,11 +1050,6 @@ void JoinHashTable::AllocatePointerTable() {
 		throw InternalException("Hashtable capacity exceeds 48-bit limit (2^48 - 1)");
 	}
 
-	if (should_build_bloom_filter && !bloom_filter.IsInitialized()) {
-		bloom_filter_init_count = MaxValue<idx_t>(Count(), 1);
-		bloom_filter.Initialize(context, bloom_filter_init_count);
-	}
-
 	if (hash_map.get()) {
 		// There is already a hash map
 		auto current_capacity = hash_map.GetSize() / sizeof(ht_entry_t);
@@ -1080,28 +1071,6 @@ void JoinHashTable::AllocatePointerTable() {
 	DUCKDB_LOG(context, PhysicalOperatorLogType, op, "JoinHashTable", "Build",
 	           {{"rows", to_string(data_collection->Count())},
 	            {"size", to_string(data_collection->SizeInBytes() + hash_map.GetSize())}});
-}
-
-void JoinHashTable::PrepareBloomFilterForFinalize() {
-	if (!should_build_bloom_filter) {
-		return;
-	}
-
-	// Finalize scans every build tuple and inserts its hash into the bloom filter.
-	// Make sure any existing filter has enough sectors for the actual build count.
-	const auto build_count = Count();
-	const auto actual_init_count = MaxValue<idx_t>(build_count, 1);
-	if (bloom_filter.IsInitialized()) {
-		const auto current_sectors = BloomFilter::GetNumberOfSectors(bloom_filter_init_count);
-		const auto required_sectors = BloomFilter::GetNumberOfSectors(actual_init_count);
-		if (current_sectors >= required_sectors) {
-			return;
-		}
-	}
-
-	bloom_filter.Reset();
-	bloom_filter_init_count = actual_init_count;
-	bloom_filter.Initialize(context, bloom_filter_init_count);
 }
 
 void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
@@ -2581,9 +2550,7 @@ void JoinHashTable::ResetForNewIterationSinglePartition() {
 	chains_longer_than_one.store(false, std::memory_order_relaxed);
 	total_probe_matches = 0;
 	load_factor = DEFAULT_LOAD_FACTOR;
-	should_build_bloom_filter = false;
-	bloom_filter.Reset();
-	bloom_filter_init_count = 0;
+	bloom_filter.reset();
 	prefix_range_filter.reset();
 	should_build_prefix_range_filter = false;
 	ResetMarkJoinInfo(*this);
