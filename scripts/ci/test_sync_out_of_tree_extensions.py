@@ -234,34 +234,67 @@ class ExtensionSyncTest(unittest.TestCase):
             sync.parse_cmake_file(config)
 
     @unittest.skipUnless(MAKE, 'Make is required for build command tests')
-    def test_make_new_mode_replaces_legacy_manifest_step_and_passes_config_directory(self):
+    def test_make_extension_selectors_enable_new_mode(self):
         os.environ.update(PATH=os.defpath, USE_MERGED_VCPKG_MANIFEST='1', VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
-        for new_mode in (False, True):
-            with self.subTest(new_mode=new_mode):
-                os.environ['DUCKDB_NEW_EXTENSION_BUILD'] = '1' if new_mode else ''
+
+        selectors = [
+            ['DUCKDB_EXTENSIONS=httpfs'],
+            ['BUILD_EXTENSIONS=httpfs'],
+            ['CORE_EXTENSIONS=httpfs'],
+            ['BUILD_HTTPFS=1'],
+            ['BUILD_ALL_EXT=1'],
+            ['BUILD_ALL_IT_EXT=1'],
+            ['BUILD_ALL_OOT_EXT=1'],
+            ['EXTENSION_CONFIGS=/project/project.cmake'],
+        ]
+        for selector in selectors:
+            with self.subTest(selector=selector):
                 commands = subprocess.check_output(
-                    [
-                        MAKE,
-                        '-Bn',
-                        'reldebug',
-                        'BUILD_EXTENSIONS=httpfs',
-                        'EXTENSION_CONFIG_BASE_DIR=/project/custom configs',
-                        'EXTENSION_CONFIGS=/project/project.cmake',
-                    ],
+                    [MAKE, '-Bn', 'reldebug', 'EXTENSION_CONFIG_BASE_DIR=/project/custom configs'] + selector,
                     cwd=REPO_ROOT,
                     text=True,
                     stderr=subprocess.STDOUT,
                 )
-                self.assertIn('-DEXTENSION_CONFIG_BASE_DIR="/project/custom configs"', commands)
-                self.assertIn('-DDUCKDB_EXTENSION_CONFIGS="/project/project.cmake"', commands)
-                if new_mode:
-                    self.assertIn('--extension-config-base-dir "/project/custom configs"', commands)
+                self.assertIn('sync_out_of_tree_extensions.py', commands)
+                self.assertIn('--extension-config-base-dir "/project/custom configs"', commands)
+                self.assertNotIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
+                self.assertNotIn('build/extension_configuration', commands)
+                if selector[0].startswith('EXTENSION_CONFIGS='):
                     self.assertIn('--extension-configs "/project/project.cmake"', commands)
-                    self.assertNotIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
-                    self.assertNotIn('build/extension_configuration', commands)
-                else:
-                    self.assertIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
-                    self.assertNotIn('sync_out_of_tree_extensions.py', commands)
+                    self.assertIn('-DDUCKDB_EXTENSION_CONFIGS="/project/project.cmake"', commands)
+
+    @unittest.skipUnless(MAKE, 'Make is required for build command tests')
+    def test_make_new_mode_override_and_explicit_activation(self):
+        os.environ.update(PATH=os.defpath, USE_MERGED_VCPKG_MANIFEST='1', VCPKG_TOOLCHAIN_PATH='/unused/vcpkg.cmake')
+        base_command = [
+            MAKE,
+            '-Bn',
+            'reldebug',
+            'BUILD_EXTENSIONS=httpfs',
+            'EXTENSION_CONFIG_BASE_DIR=/project/custom configs',
+            'EXTENSION_CONFIGS=/project/project.cmake',
+        ]
+
+        commands = subprocess.check_output(
+            base_command + ['DUCKDB_NEW_EXTENSION_BUILD=0'],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+        self.assertIn('-DEXTENSION_CONFIG_BASE_DIR="/project/custom configs"', commands)
+        self.assertIn('-DDUCKDB_EXTENSION_CONFIGS="/project/project.cmake"', commands)
+        self.assertIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
+        self.assertNotIn('sync_out_of_tree_extensions.py', commands)
+
+        commands = subprocess.check_output(
+            [MAKE, '-Bn', 'reldebug', 'DUCKDB_NEW_EXTENSION_BUILD=1'],
+            cwd=REPO_ROOT,
+            text=True,
+            stderr=subprocess.STDOUT,
+        )
+        self.assertIn('sync_out_of_tree_extensions.py', commands)
+        self.assertNotIn('-DEXTENSION_CONFIG_BUILD=TRUE', commands)
+        self.assertNotIn('build/extension_configuration', commands)
 
     @unittest.skipUnless(CMAKE, 'CMake is required for configuration integration tests')
     def test_cmake_and_sync_use_the_same_project_configuration(self):
@@ -353,6 +386,82 @@ class ExtensionSyncTest(unittest.TestCase):
             any(call.args[0][1] in ('clone', 'fetch', 'checkout', 'submodule') for call in commands.call_args_list)
         )
         self.assertEqual(git(checkout, 'rev-parse', 'HEAD'), revision)
+
+    def test_sync_commits_and_exports_patches_inside_submodules(self):
+        os.environ.update(
+            PATH=os.defpath,
+            GIT_ALLOW_PROTOCOL='file',
+            GIT_CONFIG_NOSYSTEM='1',
+            GIT_CONFIG_GLOBAL=os.devnull,
+            GIT_AUTHOR_NAME='Extension Sync Test',
+            GIT_AUTHOR_EMAIL='test@example.com',
+            GIT_COMMITTER_NAME='Extension Sync Test',
+            GIT_COMMITTER_EMAIL='test@example.com',
+        )
+
+        def git(repo, *args):
+            return subprocess.check_output(['git', '-C', str(repo), *args], stderr=subprocess.PIPE, text=True).strip()
+
+        def repo(name):
+            directory = self.root / name
+            directory.mkdir()
+            git(directory, 'init')
+            git(directory, 'config', 'user.name', 'Extension Sync Test')
+            git(directory, 'config', 'user.email', 'test@example.com')
+            (directory / 'source.txt').write_text('original\n')
+            git(directory, 'add', '.')
+            git(directory, 'commit', '-m', 'Initial source')
+            return directory
+
+        library = repo('library')
+        extension = repo('extension')
+        git(extension, 'submodule', 'add', str(library), 'third_party/library')
+        git(extension, 'commit', '-am', 'Add library')
+        revision = git(extension, 'rev-parse', 'HEAD')
+
+        patch_name = '0001-update-library.patch'
+        patch_dir = self.root / '.github' / 'patches' / 'extensions' / 'example'
+        patch_dir.mkdir(parents=True)
+        patch_file = patch_dir / patch_name
+        patch_file.write_text(
+            '''diff --git a/third_party/library/source.txt b/third_party/library/source.txt
+index 4b48dee..92efc5d 100644
+--- a/third_party/library/source.txt
++++ b/third_party/library/source.txt
+@@ -1 +1 @@
+-original
++patched
+'''
+        )
+        descriptor = self.parse(
+            f'duckdb_extension_load(example GIT_URL "{extension}" GIT_TAG "{revision}" '
+            'SUBMODULES "third_party/library" APPLY_PATCHES)'
+        )[0]
+        external_dir = self.root / 'external'
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            sync.sync_extension(descriptor, external_dir, self.root)
+        checkout = external_dir / 'example'
+        self.assertEqual((checkout / 'third_party/library/source.txt').read_text(), 'patched\n')
+        self.assertEqual(git(checkout, 'status', '--porcelain'), '')
+        self.assertEqual(git(checkout, 'log', '-1', '--format=%s'), patch_name)
+        self.assertEqual(git(checkout / 'third_party/library', 'log', '-1', '--format=%s'), patch_name)
+
+        with patch.object(sync, 'run_cmd', wraps=sync.run_cmd) as commands, contextlib.redirect_stdout(io.StringIO()):
+            sync.sync_extension(descriptor, external_dir, self.root)
+        self.assertFalse(
+            any(call.args[0][1] in ('clone', 'fetch', 'checkout', 'submodule') for call in commands.call_args_list)
+        )
+
+        os.environ['EXPORT_EXTENSION_PATCHES'] = '1'
+        with contextlib.redirect_stdout(io.StringIO()):
+            sync.sync_extension(descriptor, external_dir, self.root)
+        exported = patch_file.read_text()
+        self.assertIn('diff --git a/third_party/library/source.txt b/third_party/library/source.txt', exported)
+        self.assertNotIn('Submodule third_party/library', exported)
+        git(checkout, 'reset', '--hard', revision)
+        git(checkout, 'submodule', 'update', '--force')
+        git(checkout, 'apply', '--check', str(patch_file))
 
 
 if __name__ == '__main__':

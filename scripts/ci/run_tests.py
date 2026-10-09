@@ -2027,14 +2027,14 @@ def run_single_config(
             rerun_round = rerun_idx + 1
             if rerun_idx < fast_extra_runs and fast_tests:
                 print(f"stabilization rerun {rerun_round}/{fast_extra_runs} for fast tests", file=output)
-                fast_batches = list(chunked(fast_tests, computed_batch_size))
+                fast_batches = list(chunked(fast_tests, compute_batch_size(len(fast_tests), config)))
                 fast_result = run_test_batches(fast_batches, len(fast_tests))
                 if fast_result.returncode != 0:
                     stabilization_failed = True
                     stabilization_failed_test_names.extend(fast_result.failed_test_names)
             if rerun_idx < slow_extra_runs and slow_tests:
                 print(f"stabilization rerun {rerun_round}/{slow_extra_runs} for slow tests", file=output)
-                slow_batches = list(chunked(slow_tests, computed_batch_size))
+                slow_batches = list(chunked(slow_tests, compute_batch_size(len(slow_tests), config)))
                 slow_result = run_test_batches(slow_batches, len(slow_tests))
                 if slow_result.returncode != 0:
                     stabilization_failed = True

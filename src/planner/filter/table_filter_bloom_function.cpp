@@ -11,6 +11,7 @@
 
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/vector/constant_vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
@@ -148,18 +149,48 @@ bool BloomFilterFunctionData::Equals(const FunctionData &other_p) const {
 	       key_column_name == other.key_column_name && key_type == other.key_type;
 }
 
-static idx_t SelectBloomFilter(Vector &input, const BloomFilterFunctionData &func_data, SelectionVector &result_sel,
-                               idx_t count) {
-	D_ASSERT(func_data.filter);
-	Vector hashes(LogicalType::HASH, count);
-	VectorOperations::Hash(input, hashes, count);
-	hashes.Flatten();
+struct BloomFilterLocalState : public SelectivityTrackingLocalState {
+	BloomFilterLocalState(idx_t n_vectors_to_check, float selectivity_threshold)
+	    : SelectivityTrackingLocalState(n_vectors_to_check, selectivity_threshold), hashes(LogicalType::HASH) {
+	}
 
+	void Prepare(idx_t count) {
+		if (count <= capacity) {
+			return;
+		}
+		hashes.Initialize(VectorDataInitialization::UNINITIALIZED, count);
+		bloom_sel.Initialize(count);
+		capacity = count;
+	}
+
+	Vector hashes;
+	SelectionVector bloom_sel;
+	SelectionVector result_sel;
+	idx_t capacity = 0;
+};
+
+static idx_t SelectBloomFilter(Vector &input, const BloomFilterFunctionData &func_data, BloomFilterLocalState &state,
+                               SelectionVector &result_sel, idx_t count) {
+	D_ASSERT(func_data.filter);
+	state.Prepare(count);
+	auto &hashes = state.hashes;
+	VectorOperations::Hash(input, hashes, count);
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(input_data);
+	auto &bloom_sel = input_data.validity.CannotHaveNull() ? result_sel : state.bloom_sel;
+	idx_t bloom_count;
+	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		bloom_count = func_data.filter->LookupOne(*ConstantVector::GetData<hash_t>(hashes)) ? count : 0;
+		for (idx_t i = 0; i < bloom_count; i++) {
+			bloom_sel.set_index(i, i);
+		}
+	} else {
+		bloom_count = func_data.filter->LookupHashes(hashes, bloom_sel, count);
+	}
 
-	SelectionVector bloom_sel(count);
-	const auto bloom_count = func_data.filter->LookupHashes(hashes, bloom_sel, count);
+	if (input_data.validity.CannotHaveNull()) {
+		return bloom_count;
+	}
 
 	idx_t result_count = 0;
 	idx_t bloom_idx = 0;
@@ -188,7 +219,7 @@ BloomFilterInitLocalState(ExpressionState &state, const BoundFunctionExpression 
 	if (!data.filter) {
 		return nullptr;
 	}
-	return InitSelectivityTrackingLocalState(data.n_vectors_to_check, data.selectivity_threshold);
+	return make_uniq<BloomFilterLocalState>(data.n_vectors_to_check, data.selectivity_threshold);
 }
 
 static idx_t BloomFilterSelect(DataChunk &args, ExpressionState &state, optional_ptr<const SelectionVector> sel,
@@ -196,23 +227,22 @@ static idx_t BloomFilterSelect(DataChunk &args, ExpressionState &state, optional
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &func_data = func_expr.BindInfo()->Cast<BloomFilterFunctionData>();
 	auto local_state_ptr = ExecuteFunctionState::GetFunctionState(state);
-	auto tracking_state = local_state_ptr ? &local_state_ptr->Cast<SelectivityTrackingLocalState>() : nullptr;
-
 	auto count = args.size();
 	if (!func_data.filter) {
 		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
-	if (tracking_state && !tracking_state->IsActive()) {
-		tracking_state->Update(0, 0);
+	D_ASSERT(local_state_ptr);
+	auto &local_state = local_state_ptr->Cast<BloomFilterLocalState>();
+	if (func_data.n_vectors_to_check != 0 && !local_state.IsActive()) {
+		local_state.Update(0, 0);
 		return SetAllTrueSelection(count, sel, true_sel, false_sel);
 	}
 
-	SelectionVector temp_true(count);
-	auto result_true_sel = (!true_sel || (sel && true_sel.get() == sel.get())) ? &temp_true : true_sel.get();
-	auto approved_count = SelectBloomFilter(args.data[0], func_data, *result_true_sel, count);
-	approved_count = TranslateSelection(count, sel, *result_true_sel, approved_count, true_sel, false_sel);
-	if (tracking_state) {
-		tracking_state->Update(approved_count, count);
+	auto &result_true_sel = GetFilterResultSelection(count, sel, true_sel, local_state.result_sel);
+	auto approved_count = SelectBloomFilter(args.data[0], func_data, local_state, result_true_sel, count);
+	approved_count = TranslateSelection(count, sel, result_true_sel, approved_count, true_sel, false_sel);
+	if (func_data.n_vectors_to_check != 0) {
+		local_state.Update(approved_count, count);
 	}
 	return approved_count;
 }
