@@ -50,7 +50,7 @@ namespace {
 //! context to lend (startup, static linking, autoloading). Rolls back unless the load finished.
 class CAPIV2LoadScope {
 public:
-	explicit CAPIV2LoadScope(DatabaseInstance &db) : con(db) {
+	explicit CAPIV2LoadScope(DatabaseInstance &db) : con(Connection::CreateInternal(db)) {
 		con.BeginTransaction();
 	}
 

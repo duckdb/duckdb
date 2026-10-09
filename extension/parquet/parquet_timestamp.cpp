@@ -77,15 +77,29 @@ static T ParquetWrapTime(const T &raw, const T day) {
 	return modulus + (modulus < 0) * day;
 }
 
+bool ParquetTimeIsValid(const int64_t &raw, const int64_t day) {
+	return raw >= 0 && raw <= day;
+}
+
+template <typename T>
+static void CheckParquetTime(const T &raw, const int64_t day) {
+	if (!ParquetTimeIsValid(raw, day)) {
+		throw InvalidInputException("Invalid TIME value %d in Parquet file - TIME values must be within a day", raw);
+	}
+}
+
 dtime_t ParquetMsIntToTime(const int32_t &raw_millis) {
+	CheckParquetTime(raw_millis, Interval::MSECS_PER_SEC * Interval::SECS_PER_DAY);
 	return Time::FromTimeMs(raw_millis);
 }
 
 dtime_t ParquetIntToTime(const int64_t &raw_micros) {
+	CheckParquetTime(raw_micros, Interval::MICROS_PER_DAY);
 	return dtime_t(raw_micros);
 }
 
 dtime_ns_t ParquetIntToTimeNs(const int64_t &raw_nanos) {
+	CheckParquetTime(raw_nanos, Interval::NANOS_PER_DAY);
 	return dtime_ns_t(raw_nanos);
 }
 

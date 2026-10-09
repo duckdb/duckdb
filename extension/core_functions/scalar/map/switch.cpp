@@ -40,15 +40,19 @@ unique_ptr<FunctionData> SwitchBindReturnType(BindScalarFunctionInput &input) {
 	auto &arguments = input.GetArguments();
 	constexpr idx_t map_index = MAP_INDEX;
 	D_ASSERT(map_index < arguments.size());
-	auto &cases = arguments[map_index];
-	if (cases->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+	// the cases might have been cast to the argument type of the function
+	reference<const Expression> cases = *arguments[map_index];
+	if (BoundCastExpression::IsCast(cases.get())) {
+		cases = BoundCastExpression::Child(cases.get().Cast<BoundFunctionExpression>());
+	}
+	if (cases.get().GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
-	auto &func = cases->Cast<BoundFunctionExpression>();
-	if (func.Function().GetName() != "map" || !cases->IsFoldable()) {
+	auto &func = cases.get().Cast<BoundFunctionExpression>();
+	if (func.Function().GetName() != "map" || !cases.get().IsFoldable()) {
 		throw BinderException("SWITCH expected a constant map for the cases");
 	}
-	auto map_value = ExpressionExecutor::EvaluateScalar(context, *cases);
+	auto map_value = ExpressionExecutor::EvaluateScalar(context, cases.get());
 	auto values_type = MapType::ValueType(map_value.type());
 	return make_uniq<SwitchFunctionBindData>(values_type, map_index);
 }

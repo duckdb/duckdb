@@ -187,3 +187,58 @@ TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
 	auto empty = fs.CreateOpenOptions();
 	REQUIRE_THROWS_MATCHES(fs.OpenFile(path, empty), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
+
+TEST_CASE("Stable C++API: opening a file specified as a file struct", "[cpp_api]") {
+	auto db = Instance(":memory:");
+	auto conn = db.Connect();
+	auto fs = conn.GetFileSystem();
+	auto path = duckdb::TestCreatePath("cpp_fs_file_struct.bin");
+	{
+		auto file = fs.OpenFile(path, {FileFlags::WRITE, FileFlags::FILE_CREATE_NEW});
+		WriteAll(file, "hello world");
+	}
+
+	auto file_struct = [&](Value option) {
+		std::vector<std::pair<std::string, Value>> fields;
+		fields.emplace_back("filename", Value::Create(conn.GetFactory(), varchar_t(path)));
+		fields.emplace_back("validate_external_file_cache", std::move(option));
+		return Value::CreateStruct(conn.GetFactory(), fields);
+	};
+	auto open = [&](const Value &file) {
+		auto options = fs.CreateOpenOptions();
+		options.SetFlag(FileFlags::READ).SetFlag(FileFlags::EXTERNAL_FILE_CACHE).SetValues(file);
+		return fs.OpenFile(GetFilePath(file), options);
+	};
+	auto read = [&](const Value &file) {
+		auto handle = open(file);
+		return ReadAll(handle, 32);
+	};
+
+	// a path carries no options
+	auto plain = Value::Create(conn.GetFactory(), varchar_t(path));
+	REQUIRE(GetFilePath(plain) == path);
+	REQUIRE(read(plain) == "hello world");
+
+	// the other fields of a file struct are the options to open the file with - the external file cache reads this
+	// one, and rejects a value that is not a BOOLEAN
+	auto valid = file_struct(Value::Create(conn.GetFactory(), false));
+	REQUIRE(GetFilePath(valid) == path);
+	REQUIRE(read(valid) == "hello world");
+	REQUIRE_THROWS_WITH(open(file_struct(Value::Create(conn.GetFactory(), varchar_t("notabool")))),
+	                    Catch::Contains("validate_external_file_cache"));
+	// an option set to NULL was not specified
+	auto null_option = file_struct(Value::CreateNull(conn.GetFactory(), conn.GetFactory().ParseType("BOOLEAN")));
+	REQUIRE(read(null_option) == "hello world");
+
+	// refusals
+	REQUIRE_THROWS_MATCHES(GetFilePath(Value::Create(conn.GetFactory(), int32_t(42))), Exception,
+	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(GetFilePath(Value::CreateNull(conn.GetFactory(), conn.GetFactory().ParseType("VARCHAR"))),
+	                       Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	std::vector<std::pair<std::string, Value>> no_path;
+	no_path.emplace_back("file_size", Value::Create(conn.GetFactory(), uint64_t(42)));
+	auto no_path_struct = Value::CreateStruct(conn.GetFactory(), no_path);
+	REQUIRE_THROWS_MATCHES(GetFilePath(no_path_struct), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	auto options = fs.CreateOpenOptions();
+	REQUIRE_THROWS_MATCHES(options.SetValues(no_path_struct), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+}

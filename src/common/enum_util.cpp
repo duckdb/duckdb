@@ -26,6 +26,7 @@
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/enums/checkpoint_on_detach.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
+#include "duckdb/common/enums/connection_type.hpp"
 #include "duckdb/common/enums/copy_overwrite_mode.hpp"
 #include "duckdb/common/enums/cte_materialize.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -1487,6 +1488,24 @@ ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value)
 	return static_cast<ConflictManagerMode>(StringUtil::StringToEnum(GetConflictManagerModeValues(), 2, "ConflictManagerMode", value));
 }
 
+const StringUtil::EnumStringLiteral *GetConnectionTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ConnectionType::USER), "USER" },
+		{ static_cast<uint32_t>(ConnectionType::INTERNAL), "INTERNAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ConnectionType>(ConnectionType value) {
+	return StringUtil::EnumToString(GetConnectionTypeValues(), 2, "ConnectionType", static_cast<uint32_t>(value));
+}
+
+template<>
+ConnectionType EnumUtil::FromString<ConnectionType>(const char *value) {
+	return static_cast<ConnectionType>(StringUtil::StringToEnum(GetConnectionTypeValues(), 2, "ConnectionType", value));
+}
+
 const StringUtil::EnumStringLiteral *GetConstraintTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(ConstraintType::INVALID), "INVALID" },
@@ -2466,6 +2485,25 @@ const char* EnumUtil::ToChars<ExtensionUpdateResultTag>(ExtensionUpdateResultTag
 template<>
 ExtensionUpdateResultTag EnumUtil::FromString<ExtensionUpdateResultTag>(const char *value) {
 	return static_cast<ExtensionUpdateResultTag>(StringUtil::StringToEnum(GetExtensionUpdateResultTagValues(), 8, "ExtensionUpdateResultTag", value));
+}
+
+const StringUtil::EnumStringLiteral *GetExternalFileCacheRequestSizingValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::AUTO), "AUTO" },
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::GRID), "GRID" },
+		{ static_cast<uint32_t>(ExternalFileCacheRequestSizing::EXACT), "EXACT" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ExternalFileCacheRequestSizing>(ExternalFileCacheRequestSizing value) {
+	return StringUtil::EnumToString(GetExternalFileCacheRequestSizingValues(), 3, "ExternalFileCacheRequestSizing", static_cast<uint32_t>(value));
+}
+
+template<>
+ExternalFileCacheRequestSizing EnumUtil::FromString<ExternalFileCacheRequestSizing>(const char *value) {
+	return static_cast<ExternalFileCacheRequestSizing>(StringUtil::StringToEnum(GetExternalFileCacheRequestSizingValues(), 3, "ExternalFileCacheRequestSizing", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExternalResourceOperationValues() {

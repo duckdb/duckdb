@@ -84,6 +84,8 @@ public:
 
 public:
 	void *in_user_data;
+	//! Whether the bind data is set through this handle - scalar functions set it through their own bind info
+	bool can_set_bind_data = true;
 	//! The bind data the callback set, or nullptr
 	shared_ptr<CV2UserData> out_bind_data;
 

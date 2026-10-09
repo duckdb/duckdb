@@ -36,7 +36,8 @@ add_library_unity(
   test_capi_v2_value.cpp
   test_capi_v2_vector_write.cpp)
 # The tests cover the whole surface, the unstable functions included.
-target_compile_definitions(test_sql_capi_v2 PRIVATE DUCKDB_V2_API_ALLOW_UNSTABLE=1)
+target_compile_definitions(test_sql_capi_v2
+                           PRIVATE DUCKDB_V2_API_ALLOW_UNSTABLE=1)
 
 # The extension itself is built on its own: the entrypoint macro claims fixed
 # names, so it cannot share a unity TU.

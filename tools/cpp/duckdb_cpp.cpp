@@ -136,6 +136,10 @@ struct HandleTraits<ArrowExporter> {
 	using handle = duckdb_v2_arrow_exporter_handle;
 };
 template <>
+struct HandleTraits<ArrowResult> {
+	using handle = duckdb_v2_arrow_result_handle;
+};
+template <>
 struct HandleTraits<FunctionSignature> {
 	using handle = duckdb_v2_function_signature_handle;
 };
@@ -325,6 +329,62 @@ private:
 	std::vector<duckdb_v2_identifier_t> name_views;
 	std::vector<duckdb_v2_value_handle> value_handles;
 };
+
+// Splits statement parameters into the C API's parallel arrays; a NamedParam
+// with an empty name crosses as the positional {NULL, 0} view. The arrays
+// borrow from the parameters, so this must outlive the call it feeds.
+class ParameterArrays {
+public:
+	// A null pointer with a nonzero count produces no handles, so the C API reports the null argument.
+	ParameterArrays(const Value *parameters, idx_t parameter_count) {
+		if (!parameters) {
+			return;
+		}
+		value_handles.reserve(parameter_count);
+		for (idx_t i = 0; i < parameter_count; i++) {
+			value_handles.push_back(parameters[i].handle());
+		}
+	}
+	ParameterArrays(const NamedParam *parameters, idx_t parameter_count) {
+		if (!parameters) {
+			return;
+		}
+		name_views.reserve(parameter_count);
+		value_handles.reserve(parameter_count);
+		for (idx_t i = 0; i < parameter_count; i++) {
+			name_views.push_back(parameters[i].name.empty() ? duckdb_v2_identifier_t {nullptr, 0}
+			                                                : ToStr(parameters[i].name));
+			value_handles.push_back(parameters[i].value.handle());
+		}
+	}
+
+	auto names() const -> const duckdb_v2_identifier_t * {
+		return name_views.empty() ? nullptr : name_views.data();
+	}
+	auto values() const -> const duckdb_v2_value_handle * {
+		return value_handles.empty() ? nullptr : value_handles.data();
+	}
+
+private:
+	std::vector<duckdb_v2_identifier_t> name_views;
+	std::vector<duckdb_v2_value_handle> value_handles;
+};
+
+auto ExecuteStatementArrow(duckdb_v2_connection_handle conn, duckdb_v2_sql_statement_handle statement,
+                           const ParameterArrays &split, idx_t parameter_count, ArrowFormat format) -> ArrowResult {
+	duckdb_v2_arrow_result_handle result = nullptr;
+	CheckedAPICall(duckdb_v2_statement_execute_arrow, conn, statement, split.names(), split.values(), parameter_count,
+	               format.batch_size, &result);
+	return detail::HandleFactory::Make<ArrowResult>(result);
+}
+
+auto ExecutePreparedArrow(duckdb_v2_prepared_statement_handle prepared, const ParameterArrays &split,
+                          idx_t parameter_count, ArrowFormat format) -> ArrowResult {
+	duckdb_v2_arrow_result_handle result = nullptr;
+	CheckedAPICall(duckdb_v2_prepared_statement_execute_arrow, prepared, split.names(), split.values(), parameter_count,
+	               format.batch_size, &result);
+	return detail::HandleFactory::Make<ArrowResult>(result);
+}
 
 // Runs the C API's two-call text protocol: a null buffer reports the length,
 // then a buffer with room for the terminator receives the text. The library
@@ -779,31 +839,18 @@ auto Connection::Tokenize(std::string_view sql) const -> TokenList {
 auto Connection::Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count) -> QueryResult {
 	// Borrowed, not consumed: pass the handle without releasing it, so the
 	// caller's SqlStatement keeps ownership and can be executed again.
-	std::vector<duckdb_v2_value_handle> values;
-	values.reserve(parameter_count);
-	for (idx_t i = 0; i < parameter_count; i++) {
-		values.push_back(parameters[i].handle());
-	}
+	ParameterArrays split(parameters, parameter_count);
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), nullptr,
-	               parameter_count ? values.data() : nullptr, parameter_count, &result);
+	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), split.names(), split.values(),
+	               parameter_count, &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
 
 auto Connection::Execute(const SqlStatement &statement, const std::vector<NamedParam> &parameters) -> QueryResult {
-	// Split into the C API's parallel arrays; an empty name crosses as the positional
-	// {NULL, 0} view (mirrors Factory::CreateType).
-	std::vector<duckdb_v2_identifier_t> names;
-	std::vector<duckdb_v2_value_handle> values;
-	names.reserve(parameters.size());
-	values.reserve(parameters.size());
-	for (const auto &param : parameters) {
-		names.push_back(param.name.empty() ? duckdb_v2_identifier_t {nullptr, 0} : ToStr(param.name));
-		values.push_back(param.value.handle());
-	}
+	ParameterArrays split(parameters.data(), parameters.size());
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), names.empty() ? nullptr : names.data(),
-	               values.empty() ? nullptr : values.data(), static_cast<idx_t>(parameters.size()), &result);
+	CheckedAPICall(duckdb_v2_statement_execute, handle(), statement.handle(), split.names(), split.values(),
+	               static_cast<idx_t>(parameters.size()), &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
 
@@ -818,6 +865,24 @@ auto Connection::Execute(const std::string &sql) -> QueryResult {
 		throw InvalidInputException("Execute expects exactly one statement; use ParseSQL for multi-statement input");
 	}
 	return Execute(statement);
+}
+
+auto Connection::Execute(const SqlStatement &statement, const Value *parameters, idx_t parameter_count,
+                         ArrowFormat format) -> ArrowResult {
+	// Borrowed, not consumed: pass the handle without releasing it, so the
+	// caller's SqlStatement keeps ownership and can be executed again.
+	return ExecuteStatementArrow(handle(), statement.handle(), ParameterArrays(parameters, parameter_count),
+	                             parameter_count, format);
+}
+
+auto Connection::ExecuteArrowNamed(const SqlStatement &statement, const NamedParam *parameters, idx_t parameter_count,
+                                   ArrowFormat format) -> ArrowResult {
+	return ExecuteStatementArrow(handle(), statement.handle(), ParameterArrays(parameters, parameter_count),
+	                             parameter_count, format);
+}
+
+auto Connection::Execute(const SqlStatement &statement, ArrowFormat format) -> ArrowResult {
+	return Execute(statement, nullptr, 0, format);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -841,36 +906,36 @@ auto Connection::Prepare(const SqlStatement &statement, bool require_cacheable) 
 }
 
 auto PreparedStatement::Execute(const Value *parameters, idx_t parameter_count) -> QueryResult {
-	std::vector<duckdb_v2_value_handle> values;
-	values.reserve(parameter_count);
-	for (idx_t i = 0; i < parameter_count; i++) {
-		values.push_back(parameters[i].handle());
-	}
+	ParameterArrays split(parameters, parameter_count);
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), nullptr, parameter_count ? values.data() : nullptr,
-	               parameter_count, &result);
+	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), split.names(), split.values(), parameter_count,
+	               &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
 
 auto PreparedStatement::Execute(const std::vector<NamedParam> &parameters) -> QueryResult {
-	// Split into the C API's parallel arrays; an empty name crosses as the positional
-	// {NULL, 0} view (mirrors Connection::Execute).
-	std::vector<duckdb_v2_identifier_t> names;
-	std::vector<duckdb_v2_value_handle> values;
-	names.reserve(parameters.size());
-	values.reserve(parameters.size());
-	for (const auto &param : parameters) {
-		names.push_back(param.name.empty() ? duckdb_v2_identifier_t {nullptr, 0} : ToStr(param.name));
-		values.push_back(param.value.handle());
-	}
+	ParameterArrays split(parameters.data(), parameters.size());
 	duckdb_v2_result_handle result = nullptr;
-	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), names.empty() ? nullptr : names.data(),
-	               values.empty() ? nullptr : values.data(), static_cast<idx_t>(parameters.size()), &result);
+	CheckedAPICall(duckdb_v2_prepared_statement_execute, handle(), split.names(), split.values(),
+	               static_cast<idx_t>(parameters.size()), &result);
 	return detail::HandleFactory::Make<QueryResult>(result);
 }
 
 auto PreparedStatement::Execute() -> QueryResult {
 	return Execute(nullptr, 0);
+}
+
+auto PreparedStatement::Execute(const Value *parameters, idx_t parameter_count, ArrowFormat format) -> ArrowResult {
+	return ExecutePreparedArrow(handle(), ParameterArrays(parameters, parameter_count), parameter_count, format);
+}
+
+auto PreparedStatement::ExecuteArrowNamed(const NamedParam *parameters, idx_t parameter_count, ArrowFormat format)
+    -> ArrowResult {
+	return ExecutePreparedArrow(handle(), ParameterArrays(parameters, parameter_count), parameter_count, format);
+}
+
+auto PreparedStatement::Execute(ArrowFormat format) -> ArrowResult {
+	return Execute(nullptr, 0, format);
 }
 
 auto PreparedStatement::ReusesPlan() const -> bool {
@@ -2307,11 +2372,11 @@ auto QueryResult::GetSchema() const -> Schema {
 }
 
 // ResultType mirrors DUCKDB_V2_RESULT_TYPE numerically; every member is pinned.
-static_assert(static_cast<uint8_t>(QueryResult::ResultType::QUERY_RESULT) == DUCKDB_V2_RESULT_TYPE_QUERY_RESULT,
+static_assert(static_cast<uint8_t>(ResultType::QUERY_RESULT) == DUCKDB_V2_RESULT_TYPE_QUERY_RESULT,
               "ResultType must mirror DUCKDB_V2_RESULT_TYPE");
-static_assert(static_cast<uint8_t>(QueryResult::ResultType::CHANGED_ROWS) == DUCKDB_V2_RESULT_TYPE_CHANGED_ROWS,
+static_assert(static_cast<uint8_t>(ResultType::CHANGED_ROWS) == DUCKDB_V2_RESULT_TYPE_CHANGED_ROWS,
               "ResultType must mirror DUCKDB_V2_RESULT_TYPE");
-static_assert(static_cast<uint8_t>(QueryResult::ResultType::NOTHING) == DUCKDB_V2_RESULT_TYPE_NOTHING,
+static_assert(static_cast<uint8_t>(ResultType::NOTHING) == DUCKDB_V2_RESULT_TYPE_NOTHING,
               "ResultType must mirror DUCKDB_V2_RESULT_TYPE");
 
 // StatementType mirrors DUCKDB_V2_STATEMENT_TYPE numerically; every member is pinned.
@@ -2368,13 +2433,13 @@ auto QueryResult::GetStatementType() const -> StatementType {
 
 // StepStatus mirrors DUCKDB_V2_RESULT_STEP_STATUS numerically; trip here if
 // either side is renumbered.
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::WAITING) == DUCKDB_V2_RESULT_STEP_STATUS_WAITING,
+static_assert(static_cast<uint8_t>(StepStatus::WAITING) == DUCKDB_V2_RESULT_STEP_STATUS_WAITING,
               "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::CHUNK) == DUCKDB_V2_RESULT_STEP_STATUS_CHUNK,
+static_assert(static_cast<uint8_t>(StepStatus::CHUNK) == DUCKDB_V2_RESULT_STEP_STATUS_CHUNK,
               "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::FINISHED) == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED,
+static_assert(static_cast<uint8_t>(StepStatus::FINISHED) == DUCKDB_V2_RESULT_STEP_STATUS_FINISHED,
               "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
-static_assert(static_cast<uint8_t>(QueryResult::StepStatus::CANCELLED) == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED,
+static_assert(static_cast<uint8_t>(StepStatus::CANCELLED) == DUCKDB_V2_RESULT_STEP_STATUS_CANCELLED,
               "StepStatus must mirror DUCKDB_V2_RESULT_STEP_STATUS");
 
 auto QueryResult::Step() -> StepResult {
@@ -2420,6 +2485,67 @@ auto QueryResult::RenderBox(idx_t max_rows, idx_t max_width, idx_t max_col_width
 	CheckedAPICall(duckdb_v2_result_render_box, &raw, max_rows, max_width, max_col_width, &null_value_str, render_mode,
 	               limit, sink, &out);
 	return out;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// Arrow Result
+//----------------------------------------------------------------------------------------------------------------------
+
+ArrowResult::ArrowResult(void *impl) : detail::Handle<ArrowResult>(impl) {
+}
+
+ArrowResult::~ArrowResult() {
+	auto _h = handle();
+	duckdb_v2_arrow_result_destroy(&_h);
+}
+
+auto ArrowResult::GetSchema(ArrowSchema &out) const -> void {
+	out.release = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_result_get_schema, handle(), &out);
+}
+
+auto ArrowResult::GetResultType() const -> ResultType {
+	DUCKDB_V2_RESULT_TYPE type = DUCKDB_V2_RESULT_TYPE_QUERY_RESULT;
+	CheckedAPICall(duckdb_v2_arrow_result_get_result_type, handle(), &type);
+	return static_cast<ResultType>(type);
+}
+
+auto ArrowResult::GetStatementType() const -> StatementType {
+	DUCKDB_V2_STATEMENT_TYPE type = DUCKDB_V2_STATEMENT_TYPE_INVALID;
+	CheckedAPICall(duckdb_v2_arrow_result_get_statement_type, handle(), &type);
+	return static_cast<StatementType>(type);
+}
+
+auto ArrowResult::Step(ArrowArray &out) -> StepStatus {
+	out.release = nullptr;
+	DUCKDB_V2_RESULT_STEP_STATUS status = DUCKDB_V2_RESULT_STEP_STATUS_WAITING;
+	CheckedAPICall(duckdb_v2_arrow_result_step, handle(), &out, &status);
+	return static_cast<StepStatus>(status);
+}
+
+auto ArrowResult::Wait() -> void {
+	CheckedAPICall(duckdb_v2_arrow_result_wait, handle());
+}
+
+auto ArrowResult::FetchArray(ArrowArray &out) -> bool {
+	out.release = nullptr;
+	CheckedAPICall(duckdb_v2_arrow_result_fetch_array, handle(), &out);
+	// A released array marks end-of-stream.
+	return out.release != nullptr;
+}
+
+auto ArrowResult::Drain() -> idx_t {
+	idx_t rows_changed = 0;
+	CheckedAPICall(duckdb_v2_arrow_result_drain, handle(), &rows_changed);
+	return rows_changed;
+}
+
+auto ArrowResult::ToArrowStream(ArrowArrayStream &out) -> void {
+	out.release = nullptr;
+	auto raw = handle();
+	CheckedAPICall(duckdb_v2_arrow_result_to_arrow_c_stream, &raw, &out);
+	// The stream owns the result now; detach without destroying it. A failed conversion threw above and left it here.
+	release();
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2497,6 +2623,7 @@ ArrowExporter::~ArrowExporter() {
 }
 
 auto ArrowExporter::GetSchema(ArrowSchema &out) const -> void {
+	out.release = nullptr;
 	CheckedAPICall(duckdb_v2_arrow_exporter_get_schema, handle(), &out);
 }
 
@@ -2512,6 +2639,7 @@ auto ArrowExporter::Flush() -> void {
 }
 
 auto ArrowExporter::NextArray(ArrowArray &out) -> bool {
+	out.release = nullptr;
 	CheckedAPICall(duckdb_v2_arrow_exporter_next_array, handle(), &out);
 	return out.release != nullptr;
 }
@@ -2750,20 +2878,23 @@ namespace {
 // slot so the trampolines can find it; the user's own slot (SetUserData) rides
 // inside it. Owned by the registered function, freed at engine teardown.
 struct ScalarFunctionInfo {
+	ScalarFunction::ResolveTypesCallback resolve_types_callback = nullptr;
 	ScalarFunction::BindCallback bind_callback = nullptr;
 	ScalarFunction::InitCallback init_callback = nullptr;
 	ScalarFunction::ExecCallback exec_callback = nullptr;
 	detail::UserData user_data;
 
-	ScalarFunctionInfo(ScalarFunction::BindCallback bind_callback, ScalarFunction::InitCallback init_callback,
+	ScalarFunctionInfo(ScalarFunction::ResolveTypesCallback resolve_types_callback,
+	                   ScalarFunction::BindCallback bind_callback, ScalarFunction::InitCallback init_callback,
 	                   ScalarFunction::ExecCallback exec_callback, detail::UserData user_data)
-	    : bind_callback(bind_callback), init_callback(init_callback), exec_callback(exec_callback),
-	      user_data(std::move(user_data)) {
+	    : resolve_types_callback(resolve_types_callback), bind_callback(bind_callback), init_callback(init_callback),
+	      exec_callback(exec_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const ScalarFunctionInfo &other) const {
-		return bind_callback == other.bind_callback && init_callback == other.init_callback &&
-		       exec_callback == other.exec_callback && user_data.get() == other.user_data.get();
+		return resolve_types_callback == other.resolve_types_callback && bind_callback == other.bind_callback &&
+		       init_callback == other.init_callback && exec_callback == other.exec_callback &&
+		       user_data.get() == other.user_data.get();
 	}
 };
 
@@ -2828,6 +2959,34 @@ auto ScalarFunction::GetSignature() -> FunctionSignature {
 
 auto ScalarFunction::SetUserDataInternal(void *data, void (*destructor)(void *)) -> void {
 	user_data = detail::UserData(data, destructor);
+}
+
+auto ScalarFunction::SetResolveTypesCallback(ResolveTypesCallback callback) & -> ScalarFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_scalar_function_set_resolve_types_callback, handle(), nullptr);
+		resolve_types_callback = nullptr;
+		return *this;
+	}
+
+	// The C-side callback is one shared trampoline; the user's callback is looked
+	// up through the info table riding the user_data slot (set by Register).
+	static auto trampoline = [](duckdb_v2_function_bind_info_handle info,
+	                            duckdb_v2_scalar_function_resolve_types_info_handle result,
+	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_function_bind_get_user_data, info, &user_data);
+			const auto &function = *static_cast<ScalarFunctionInfo *>(user_data);
+
+			auto input = detail::HandleFactory::Make<ResolveTypesInput>(
+			    static_cast<void *>(info), static_cast<void *>(result), static_cast<void *>(context));
+			function.resolve_types_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_scalar_function_set_resolve_types_callback, handle(), trampoline);
+	resolve_types_callback = callback;
+	return *this;
 }
 
 auto ScalarFunction::SetBindCallback(BindCallback callback) & -> ScalarFunction & {
@@ -2935,8 +3094,8 @@ auto ScalarFunction::SetCollationHandling(FunctionCollationHandling value) & -> 
 auto ScalarFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
-	auto info = std::unique_ptr<ScalarFunctionInfo>(
-	    new ScalarFunctionInfo(bind_callback, init_callback, exec_callback, std::move(user_data)));
+	auto info = std::unique_ptr<ScalarFunctionInfo>(new ScalarFunctionInfo(
+	    resolve_types_callback, bind_callback, init_callback, exec_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<ScalarFunctionInfo>,
 	                         detail::TypedEquals<ScalarFunctionInfo>};
 	CheckedAPICall(duckdb_v2_scalar_function_set_user_data, handle(), &opaque);
@@ -2944,14 +3103,26 @@ auto ScalarFunction::PrepareRegistration() -> void {
 	info.release(); // NOLINT(bugprone-unused-return-value)
 }
 
-void *ScalarFunction::BindInput::GetUserDataInternal() const {
+void *ScalarFunction::ResolveTypesInput::GetUserDataInternal() const {
 	const auto &function = *static_cast<const ScalarFunctionInfo *>(GetFunctionInfo());
 	return RequireUserData(function.user_data);
 }
 
-auto ScalarFunction::BindInput::SetReturnType(const LogicalType &type) -> void {
-	CheckedAPICall(duckdb_v2_scalar_function_bind_set_return_type,
-	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(result), type.handle());
+auto ScalarFunction::ResolveTypesInput::SetReturnType(const LogicalType &type) -> void {
+	CheckedAPICall(duckdb_v2_scalar_function_resolve_types_set_return_type,
+	               static_cast<duckdb_v2_scalar_function_resolve_types_info_handle>(result), type.handle());
+}
+
+void ScalarFunction::BindInput::SetBindDataInternal(void *data, bool (*equals)(void *a, void *b),
+                                                    void (*destructor)(void *)) {
+	duckdb_v2_opaque opaque {data, destructor, equals};
+	CheckedAPICall(duckdb_v2_scalar_function_bind_set_bind_data,
+	               static_cast<duckdb_v2_scalar_function_bind_info_handle>(result), &opaque);
+}
+
+void *ScalarFunction::BindInput::GetUserDataInternal() const {
+	const auto &function = *static_cast<const ScalarFunctionInfo *>(GetFunctionInfo());
+	return RequireUserData(function.user_data);
 }
 
 void *ScalarFunction::InitInput::GetBindDataInternal() const {
@@ -3585,6 +3756,7 @@ struct TableFunctionInfo {
 	TableFunction::PartitionDataCallback partition_data_callback = nullptr;
 	TableFunction::PartitioningCallback partitioning_callback = nullptr;
 	TableFunction::ClaimBatchCallback claim_batch_callback = nullptr;
+	TableFunction::GetBindInfoCallback get_bind_info_callback = nullptr;
 	detail::UserData user_data;
 
 	TableFunctionInfo(TableFunction::BindCallback bind_callback, TableFunction::InitGlobalCallback init_global_callback,
@@ -3593,12 +3765,13 @@ struct TableFunctionInfo {
 	                  TableFunction::FilterPushdownCallback filter_pushdown_callback,
 	                  TableFunction::PartitionDataCallback partition_data_callback,
 	                  TableFunction::PartitioningCallback partitioning_callback,
-	                  TableFunction::ClaimBatchCallback claim_batch_callback, detail::UserData user_data)
+	                  TableFunction::ClaimBatchCallback claim_batch_callback,
+	                  TableFunction::GetBindInfoCallback get_bind_info_callback, detail::UserData user_data)
 	    : bind_callback(bind_callback), init_global_callback(init_global_callback),
 	      init_local_callback(init_local_callback), exec_callback(exec_callback), progress_callback(progress_callback),
 	      filter_pushdown_callback(filter_pushdown_callback), partition_data_callback(partition_data_callback),
 	      partitioning_callback(partitioning_callback), claim_batch_callback(claim_batch_callback),
-	      user_data(std::move(user_data)) {
+	      get_bind_info_callback(get_bind_info_callback), user_data(std::move(user_data)) {
 	}
 
 	bool operator==(const TableFunctionInfo &other) const {
@@ -3608,7 +3781,8 @@ struct TableFunctionInfo {
 		       filter_pushdown_callback == other.filter_pushdown_callback &&
 		       partition_data_callback == other.partition_data_callback &&
 		       partitioning_callback == other.partitioning_callback &&
-		       claim_batch_callback == other.claim_batch_callback && user_data.get() == other.user_data.get();
+		       claim_batch_callback == other.claim_batch_callback &&
+		       get_bind_info_callback == other.get_bind_info_callback && user_data.get() == other.user_data.get();
 	}
 };
 
@@ -3913,6 +4087,31 @@ auto TableFunction::SetClaimBatchCallback(ClaimBatchCallback callback) & -> Tabl
 	return *this;
 }
 
+auto TableFunction::SetGetBindInfoCallback(GetBindInfoCallback callback) & -> TableFunction & {
+	if (!callback) {
+		CheckedAPICall(duckdb_v2_table_function_set_get_bind_info_callback, handle(), nullptr);
+		get_bind_info_callback = nullptr;
+		return *this;
+	}
+
+	static auto trampoline = [](duckdb_v2_table_function_get_bind_info_info_handle info,
+	                            duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+		WithExceptionGuard(err, [&]() {
+			void *user_data = nullptr;
+			CheckedAPICall(duckdb_v2_table_function_get_bind_info_get_user_data, info, &user_data);
+			const auto &function = *static_cast<TableFunctionInfo *>(user_data);
+
+			auto input =
+			    detail::HandleFactory::Make<GetBindInfoInput>(static_cast<void *>(info), static_cast<void *>(context));
+			function.get_bind_info_callback(input);
+		});
+	};
+
+	CheckedAPICall(duckdb_v2_table_function_set_get_bind_info_callback, handle(), trampoline);
+	get_bind_info_callback = callback;
+	return *this;
+}
+
 auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 	CheckedAPICall(duckdb_v2_table_function_set_projection_pushdown, handle(), enable);
 	return *this;
@@ -3921,10 +4120,10 @@ auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 auto TableFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
-	auto info = std::unique_ptr<TableFunctionInfo>(
-	    new TableFunctionInfo(bind_callback, init_global_callback, init_local_callback, exec_callback,
-	                          progress_callback, filter_pushdown_callback, partition_data_callback,
-	                          partitioning_callback, claim_batch_callback, std::move(user_data)));
+	auto info = std::unique_ptr<TableFunctionInfo>(new TableFunctionInfo(
+	    bind_callback, init_global_callback, init_local_callback, exec_callback, progress_callback,
+	    filter_pushdown_callback, partition_data_callback, partitioning_callback, claim_batch_callback,
+	    get_bind_info_callback, std::move(user_data)));
 	duckdb_v2_opaque opaque {info.get(), detail::TypedDelete<TableFunctionInfo>,
 	                         detail::TypedEquals<TableFunctionInfo>};
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
@@ -3959,25 +4158,6 @@ auto TableFunction::BindInput::SetOrderPreservation(OrderPreservation order) -> 
 	CheckedAPICall(duckdb_v2_table_function_bind_set_order_preservation,
 	               static_cast<duckdb_v2_table_function_bind_info_handle>(result),
 	               static_cast<DUCKDB_V2_ORDER_PRESERVATION>(order));
-}
-
-auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void {
-	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index,
-	               static_cast<const idx_t *>(nullptr), static_cast<idx_t>(0), identifier.handle());
-}
-
-auto TableFunction::BindInput::SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path,
-                                                   const Value &identifier) -> void {
-	CheckedAPICall(duckdb_v2_table_function_bind_set_result_column_identifier,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), column_index, child_path.data(),
-	               static_cast<idx_t>(child_path.size()), identifier.handle());
-}
-
-auto TableFunction::BindInput::AddFileMetadata(const std::string &key, const Value &value) -> void {
-	auto view = ToStr(key);
-	CheckedAPICall(duckdb_v2_table_function_bind_add_file_metadata,
-	               static_cast<duckdb_v2_table_function_bind_info_handle>(result), &view, value.handle());
 }
 
 void TableFunction::InitGlobalInput::SetGlobalStateInternal(void *data, void (*destructor)(void *)) {
@@ -4365,7 +4545,45 @@ auto TableFunction::ClaimBatchInput::SetClaimed(bool claimed) -> void {
 	               static_cast<duckdb_v2_table_function_claim_batch_info_handle>(args), claimed);
 }
 
+void *TableFunction::GetBindInfoInput::GetBindDataInternal() const {
+	void *bind_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_get_bind_data,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &bind_data);
+	return RequireTableBindData(bind_data);
+}
+
+void *TableFunction::GetBindInfoInput::GetUserDataInternal() const {
+	void *user_data = nullptr;
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_get_user_data,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &user_data);
+	const auto &function = *static_cast<const TableFunctionInfo *>(user_data);
+	return RequireTableUserData(function.user_data);
+}
+
+auto TableFunction::GetBindInfoInput::SetColumnIdentifier(idx_t column_index, const Value &identifier) -> void {
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_set_column_identifier,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), column_index,
+	               static_cast<const idx_t *>(nullptr), static_cast<idx_t>(0), identifier.handle());
+}
+
+auto TableFunction::GetBindInfoInput::SetColumnIdentifier(idx_t column_index, const std::vector<idx_t> &child_path,
+                                                          const Value &identifier) -> void {
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_set_column_identifier,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), column_index,
+	               child_path.data(), static_cast<idx_t>(child_path.size()), identifier.handle());
+}
+
+auto TableFunction::GetBindInfoInput::SetOption(const std::string &key, const Value &value) -> void {
+	auto view = ToStr(key);
+	CheckedAPICall(duckdb_v2_table_function_get_bind_info_set_option,
+	               static_cast<duckdb_v2_table_function_get_bind_info_info_handle>(args), &view, value.handle());
+}
+
 auto TableFunction::ClaimBatchInput::GetContext() -> Context & {
+	return context;
+}
+
+auto TableFunction::GetBindInfoInput::GetContext() -> Context & {
 	return context;
 }
 
@@ -5620,6 +5838,67 @@ auto FileOpenOptions::SetFlag(FileFlags flag) & -> FileOpenOptions & {
 auto FileOpenOptions::SetValue(std::string_view name, const Value &value) & -> FileOpenOptions & {
 	auto name_str = ToStr(name);
 	CheckedAPICall(duckdb_v2_file_open_options_set_value, handle(), &name_str, value.handle());
+	return *this;
+}
+
+namespace {
+
+//! The field of a file struct that holds the path of the file - every other field is an option to open it with
+constexpr const char *FILE_PATH_FIELD = "filename";
+
+//! Throws unless the file is a VARCHAR path or a STRUCT, and returns its type
+auto GetFileType(const Value &file) -> LogicalType {
+	if (file.IsNull()) {
+		throw InvalidInputException("A file cannot be NULL");
+	}
+	auto type = file.GetLogicalType();
+	if (type.GetTypeId() != LogicalTypeId::VARCHAR && type.GetTypeId() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("A file must be a VARCHAR path or a STRUCT with a \"filename\" field, not " +
+		                            type.ToText());
+	}
+	return type;
+}
+
+} // namespace
+
+auto GetFilePath(const Value &file) -> std::string {
+	auto type = GetFileType(file);
+	if (type.GetTypeId() == LogicalTypeId::VARCHAR) {
+		return std::string(file.Get<varchar_t>().view());
+	}
+	for (idx_t i = 0; i < type.GetStructChildCount(); i++) {
+		if (type.GetStructChildName(i) != FILE_PATH_FIELD) {
+			continue;
+		}
+		auto path = file.GetChild(i);
+		if (path.IsNull() || path.GetLogicalType().GetTypeId() != LogicalTypeId::VARCHAR) {
+			break;
+		}
+		return std::string(path.Get<varchar_t>().view());
+	}
+	throw InvalidInputException("A file struct must have a non-NULL VARCHAR \"filename\" field holding the path of "
+	                            "the file");
+}
+
+auto FileOpenOptions::SetValues(const Value &file) & -> FileOpenOptions & {
+	auto type = GetFileType(file);
+	if (type.GetTypeId() == LogicalTypeId::VARCHAR) {
+		return *this;
+	}
+	// validates the path field, so that an invalid file is reported however it is used
+	GetFilePath(file);
+	for (idx_t i = 0; i < type.GetStructChildCount(); i++) {
+		auto name = type.GetStructChildName(i);
+		if (name == FILE_PATH_FIELD) {
+			continue;
+		}
+		auto option = file.GetChild(i);
+		if (option.IsNull()) {
+			// a NULL option is an option that was not specified
+			continue;
+		}
+		SetValue(name, option);
+	}
 	return *this;
 }
 

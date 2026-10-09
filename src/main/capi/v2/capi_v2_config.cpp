@@ -9,7 +9,7 @@ namespace capiv2 {
 
 DUCKDB_V2_SETTING_SCOPE CV2InstanceConfig::ReadValue(std::string_view name, Value &result) {
 	// Legacy options are read through a client context; a fresh one has no SESSION settings to shadow GLOBAL.
-	Connection connection(instance.GetDatabase());
+	auto connection = Connection::CreateInternal(*instance.GetDatabase().instance);
 	CV2OptionSource(*connection.context).ReadValue(name, result);
 	return DUCKDB_V2_SETTING_SCOPE_GLOBAL;
 }
@@ -18,7 +18,7 @@ void CV2InstanceConfig::Write(const Identifier &name, const Value &value, DUCKDB
 	if (scope == DUCKDB_V2_SETTING_SCOPE_SESSION) {
 		throw InvalidInputException("an instance has no SESSION scope: write the option through a connection");
 	}
-	Connection connection(instance.GetDatabase());
+	auto connection = Connection::CreateInternal(*instance.GetDatabase().instance);
 	PhysicalSet::SetVariable(*connection.context, name, SetScope::GLOBAL, value);
 }
 

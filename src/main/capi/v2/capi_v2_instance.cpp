@@ -31,7 +31,7 @@ void CV2InstanceFactory::WithTransaction(const std::function<void(ClientContext 
 //! their statement's transaction.
 template <class T>
 static void WithTransaction(DuckDB &database, T action) {
-	Connection connection(database);
+	auto connection = Connection::CreateInternal(*database.instance);
 	connection.BeginTransaction();
 	try {
 		action(*connection.context);
