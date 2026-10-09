@@ -1696,7 +1696,9 @@ optional<FileMetadata> LocalFileSystem::GetStatsIfExists(const OpenFileInfo &fil
 	                              OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
 	if (raw_handle == INVALID_HANDLE_VALUE) {
 		auto error_code = GetLastError();
-		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND) {
+		if (error_code == ERROR_FILE_NOT_FOUND || error_code == ERROR_PATH_NOT_FOUND ||
+		    // Keep the same behavior with unix, for glob chars in filepath, treat as not found instead of throwing.
+		    (error_code == ERROR_INVALID_NAME && HasGlob(path_p))) {
 			return nullopt;
 		}
 		SetLastError(error_code);
@@ -2112,18 +2114,36 @@ static bool IsSymbolicLink(const string &path) {
 vector<OpenFileInfo> LocalFileSystem::FetchFileWithoutGlob(const string &path, optional_ptr<FileOpener> opener,
                                                            bool absolute_path) {
 	vector<OpenFileInfo> result;
-	if (FileExists(path, opener) || IsPipe(path, opener)) {
-		result.emplace_back(path);
-	} else if (!absolute_path) {
+	auto add_file = [&](const string &file_path) {
+		OpenFileInfo file(file_path);
+		auto file_metadata = GetStatsIfExists(file, opener);
+		if (!file_metadata) {
+			return false;
+		}
+		switch (file_metadata->file_type) {
+		case FileType::FILE_TYPE_REGULAR:
+		case FileType::FILE_TYPE_FIFO:
+		case FileType::FILE_TYPE_CHARDEV:
+			break;
+		default:
+			return false;
+		}
+		file.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();
+		FillFileOptions(*file_metadata, file.extended_info->options);
+		result.push_back(std::move(file));
+		return true;
+	};
+	if (add_file(path)) {
+		return result;
+	}
+	if (!absolute_path) {
 		Value value;
 		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (FileExists(joined_path, opener) || IsPipe(joined_path, opener)) {
-					result.emplace_back(joined_path);
-				}
+				add_file(joined_path);
 			}
 		}
 	}
