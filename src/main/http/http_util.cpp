@@ -18,6 +18,10 @@ namespace duckdb {
 HTTPParams::~HTTPParams() {
 }
 
+bool HTTPParams::ShouldRedactLogs() const {
+	return !db || Settings::Get<RedactHttpLogsSetting>(*db);
+}
+
 idx_t HTTPParams::GetTransportReuseDomain() const {
 	return transport_reuse_domain;
 }
@@ -250,7 +254,7 @@ void HTTPUtil::LogRequest(BaseRequest &request, optional_ptr<HTTPResponse> respo
 	if (!request.params.logger || !request.params.logger->ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL)) {
 		return;
 	}
-	auto log_string = HTTPLogType::ConstructLogMessage(request, response);
+	auto log_string = HTTPLogType::ConstructLogMessage(request, response, request.params.ShouldRedactLogs());
 	request.params.logger->WriteLog(HTTPLogType::NAME, HTTPLogType::LEVEL, log_string);
 }
 
@@ -448,7 +452,7 @@ HTTPUtil::RunRequestWithRetry(const std::function<unique_ptr<HTTPResponse>(void)
 }
 
 void HTTPParams::Initialize(optional_ptr<FileOpener> opener) {
-	auto db = FileOpener::TryGetDatabase(opener);
+	db = FileOpener::TryGetDatabase(opener);
 	if (db) {
 		auto &http_proxy_setting = db->config.options.http_proxy;
 		if (!http_proxy_setting.empty()) {
