@@ -123,15 +123,7 @@ TEST_CASE("Test abandoning an unfinished pending insert inside a transaction inv
 		REQUIRE(state != DUCKDB_PENDING_ERROR);
 		REQUIRE(!duckdb_pending_execution_is_finished(state));
 	}
-	SECTION("by destroying the pending result") {
-		pending.reset();
-	}
-	SECTION("by preparing another statement on the connection") {
-		CAPIPrepared other;
-		REQUIRE(other.Prepare(tester, "SELECT 42"));
-	}
-	SECTION("by running another query on the connection") {
-	}
+	pending.reset();
 
 	auto next = tester.Query("SELECT 42");
 	REQUIRE(next->HasError());
@@ -139,6 +131,48 @@ TEST_CASE("Test abandoning an unfinished pending insert inside a transaction inv
 	REQUIRE_NO_FAIL(tester.Query("ROLLBACK"));
 	auto result = tester.Query("SELECT count(*) FROM t");
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+}
+
+TEST_CASE("Test a statement is refused while a pending insert has not completed", "[capi]") {
+	CAPITester tester;
+	CAPIPrepared prepared;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE t(i BIGINT)"));
+	REQUIRE(prepared.Prepare(tester, "INSERT INTO t SELECT i FROM range(1000000) t(i)"));
+	REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
+
+	CAPIPending pending;
+	REQUIRE(pending.Pending(prepared));
+	for (idx_t step = 0; step < 5; step++) {
+		auto state = pending.ExecuteTask();
+		REQUIRE(state != DUCKDB_PENDING_ERROR);
+		REQUIRE(!duckdb_pending_execution_is_finished(state));
+	}
+	SECTION("preparing another statement") {
+		duckdb_prepared_statement other;
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT 42", &other) == DuckDBError);
+		REQUIRE(string(duckdb_prepare_error(other)).find("connection has an open result") != string::npos);
+		duckdb_destroy_prepare(&other);
+	}
+	SECTION("running another query") {
+		auto refused = tester.Query("SELECT 42");
+		REQUIRE(refused->HasError());
+		REQUIRE(refused->ErrorType() == DUCKDB_ERROR_RESOURCE_IN_USE);
+	}
+	SECTION("committing") {
+		auto refused = tester.Query("COMMIT");
+		REQUIRE(refused->HasError());
+		REQUIRE(refused->ErrorType() == DUCKDB_ERROR_RESOURCE_IN_USE);
+	}
+
+	// Kept alive across the COMMIT, so that completing the insert, not destroying its result, frees the connection
+	auto completed = pending.Execute();
+	REQUIRE_NO_FAIL(*completed);
+	REQUIRE_NO_FAIL(tester.Query("COMMIT"));
+	auto result = tester.Query("SELECT count(*) FROM t");
+	REQUIRE(result->Fetch<int64_t>(0, 0) == 1000000);
 }
 
 TEST_CASE("Test a zero-row streaming pending query stepped to ready has completed", "[capi]") {

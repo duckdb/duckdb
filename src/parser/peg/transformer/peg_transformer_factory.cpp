@@ -157,6 +157,32 @@ PEGTransformerFactory::PEGTransformerFactory(ParsedGrammar &grammar_p) : grammar
 		    },
 		    collapsible_rules.count(entry.first) > 0);
 	}
+	//===--------------------------------------------------------------------===//
+	// START GENERATED EXPRESSION DEPTH RULES
+	//===--------------------------------------------------------------------===//
+	grammar.SetExpressionDepth("SingleExpression", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("Type", ExpressionDepthKind::NESTING);
+	grammar.SetExpressionDepth("LambdaArrowExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("LogicalOrExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("LogicalAndExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("NotExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("IsExpressionContinuation", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("IsDistinctFromExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("ComparisonExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("BetweenInLikeExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("InfixOtherOperatorExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("BitwiseExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("TildeExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("AdditiveExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("MultiplicativeExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("ExponentiationExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("CollateExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("AtTimeZoneExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("PrefixExpression", ExpressionDepthKind::CHAIN);
+	grammar.SetExpressionDepth("IndirectionList", ExpressionDepthKind::CHAIN);
+	//===--------------------------------------------------------------------===//
+	// END GENERATED EXPRESSION DEPTH RULES
+	//===--------------------------------------------------------------------===//
 }
 
 void PEGTransformerFactory::RegisterDefaultTransforms(ParsedGrammar &grammar) {

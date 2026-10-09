@@ -32,6 +32,15 @@ using terminal_rule_overrides_t = case_insensitive_map_t<unique_ptr<Matcher>>;
 using terminal_rule_matcher_factory_t = std::function<unique_ptr<Matcher>(const PEGKeywordHelper &)>;
 using terminal_rule_override_callback_t = std::function<void(const PEGKeywordHelper &, terminal_rule_overrides_t &)>;
 
+//! How a rule contributes to the expression depth while it is transformed (see ParsedGrammar::SetExpressionDepth)
+enum class ExpressionDepthKind : uint8_t {
+	NONE,
+	//! one level: the rule nests an expression or type
+	NESTING,
+	//! one level per repeated element: the rule's repetitions nest its result, like operator chains
+	CHAIN
+};
+
 struct ParsedGrammarRule {
 	ParsedGrammarRule(string name_p, PEGRule recipe_p) : name(std::move(name_p)), recipe(std::move(recipe_p)) {
 	}
@@ -41,6 +50,8 @@ struct ParsedGrammarRule {
 	grammar_transform_process_function_t transform_process;
 	//! See ParsedGrammar::SetTransformProcess
 	bool collapsible = false;
+	//! See ParsedGrammar::SetExpressionDepth
+	ExpressionDepthKind expression_depth = ExpressionDepthKind::NONE;
 };
 
 //! Mutable, owning representation of a PEG grammar before matcher compilation.
@@ -73,6 +84,9 @@ public:
 	//! transform clears that promise unless the caller repeats it, since it is a property of the transform.
 	DUCKDB_API void SetTransformProcess(const string &rule_name, grammar_transform_process_function_t transform_process,
 	                                    bool collapsible = false);
+	//! Declares how transforming the rule nests the resulting expression, so that max_expression_depth can be enforced
+	//! while transforming: the depth of the expression trees is bounded by the levels of the rules on the stack
+	DUCKDB_API void SetExpressionDepth(const string &rule_name, ExpressionDepthKind kind);
 	DUCKDB_API void AddTerminalRuleOverride(const string &rule_name, terminal_rule_matcher_factory_t matcher_factory);
 
 private:
@@ -101,8 +115,9 @@ private:
 //! Immutable semantic data referenced directly by matchers and parse results.
 struct CompiledGrammarRule {
 	CompiledGrammarRule(string name_p, grammar_transform_process_function_t transform_process_p,
-	                    bool collapsible_p = false)
-	    : name(std::move(name_p)), transform_process(std::move(transform_process_p)), collapsible(collapsible_p) {
+	                    bool collapsible_p = false, ExpressionDepthKind expression_depth_p = ExpressionDepthKind::NONE)
+	    : name(std::move(name_p)), transform_process(std::move(transform_process_p)), collapsible(collapsible_p),
+	      expression_depth(expression_depth_p) {
 	}
 
 	arena_ptr<TransformProcess> StartTransform(PEGTransformer &transformer, ParseResult &parse_result) const;
@@ -111,6 +126,8 @@ struct CompiledGrammarRule {
 	grammar_transform_process_function_t transform_process;
 	//! See ParsedGrammar::SetTransformProcess
 	bool collapsible;
+	//! See ParsedGrammar::SetExpressionDepth
+	ExpressionDepthKind expression_depth;
 };
 
 } // namespace duckdb

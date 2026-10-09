@@ -1415,6 +1415,18 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, A
 			auto existing_name = existing_pk->ToString();
 			throw CatalogException("table %s can have only one primary key: %s", name, existing_name);
 		}
+
+		// Constraint index names are not unique, detect a duplicate constraint by its kind and columns.
+		for (const auto &constraint : GetConstraints()) {
+			if (constraint->type != ConstraintType::UNIQUE) {
+				continue;
+			}
+			auto &existing = constraint->Cast<UniqueConstraint>();
+			if (existing.is_primary_key == unique.is_primary_key &&
+			    existing.GetLogicalIndexes(columns) == unique.GetLogicalIndexes(columns)) {
+				throw CatalogException("table %s already has the constraint %s", name, existing.ToString());
+			}
+		}
 		table_info.constraints.push_back(info.constraint->Copy());
 
 	} else {

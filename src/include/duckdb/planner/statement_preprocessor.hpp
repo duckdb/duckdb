@@ -30,6 +30,9 @@ public:
 
 private:
 	ClientContext &context;
+	//! Transaction state implied by explicit transaction statements seen so far. Kept across Preprocess calls,
+	//! because statements may all be preprocessed before any of them is executed.
+	CurrentTransactionState chained_transaction_state = NOT_IN_ACTIVE_TRANSACTION;
 
 private:
 	//! Handles a pragma statement, determines whether the statement needs reparsing, if it does, it returns the
