@@ -61,10 +61,6 @@ struct UpdateInfo {
 	bool AppliesToTransaction(const SnapshotView &view) {
 		// these tuples are either committed outside this transaction's snapshot or not committed yet, use
 		// tuples stored in this version
-		if (version_number == MAX_COMMIT_ID) {
-			// dummy transaction number for the root element - should always match
-			return true;
-		}
 		return !view.Sees(version_number.load());
 	}
 
@@ -72,9 +68,8 @@ struct UpdateInfo {
 	//! transaction in-order of newest to oldest
 	template <class T>
 	static void UpdatesForTransaction(UpdateInfo &current, const SnapshotView &view, T &&callback) {
-		if (current.AppliesToTransaction(view)) {
-			callback(current);
-		}
+		// the root holds the newest values and applies to every reader
+		callback(current);
 		auto update_ptr = current.next;
 		while (update_ptr.IsSet()) {
 			auto pin = update_ptr.Pin();
