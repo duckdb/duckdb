@@ -620,6 +620,20 @@ FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+static bool TryPushdownDenseInFilter(TableFilterSet &table_filters, const BoundColumnRefExpression &column,
+                                     vector<Value> &values) {
+	if (values.empty() || !FilterCombiner::IsDenseRange(values)) {
+		return false;
+	}
+	// IsDenseRange sorts the values and only accepts consecutive integers.
+	auto lower_bound = CreateComparisonExpression(column, ExpressionType::COMPARE_GREATERTHANOREQUALTO, values.front());
+	auto upper_bound =
+	    CreateComparisonExpression(column, ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(values.back()));
+	table_filters.PushFilter(column.Binding().column_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
+	table_filters.PushFilter(column.Binding().column_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	return true;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_filters,
                                                          const vector<ColumnIndex> &column_ids, Expression &expr) {
 	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
@@ -671,15 +685,7 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 		D_ASSERT(!const_value_expr.GetValue().IsNull());
 		in_list.push_back(const_value_expr.GetValue());
 	}
-	if (type.IsIntegral() && IsDenseRange(in_list)) {
-		// dense range! turn this into x >= min AND x <= max
-		// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
-		auto lower_bound = CreateComparisonExpression(
-		    *func.GetChildren()[0], ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(in_list.front()));
-		auto upper_bound = CreateComparisonExpression(*func.GetChildren()[0], ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		                                              std::move(in_list.back()));
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(lower_bound)));
-		table_filters.PushFilter(proj_index, make_uniq<ExpressionFilter>(std::move(upper_bound)));
+	if (TryPushdownDenseInFilter(table_filters, column_ref, in_list)) {
 		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	// if this is not a dense range we can push an optional filter for zone-map pruning
@@ -704,6 +710,9 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	}
 	ProjectionIndex proj_id;
 	LogicalType col_type = LogicalType::INVALID;
+	optional_ptr<const BoundColumnRefExpression> equality_column;
+	vector<Value> equality_values;
+	bool only_equalities = true;
 	for (idx_t i = 0; i < conj.GetChildren().size(); i++) {
 		auto &child = conj.GetChildren()[i];
 		if (!BoundComparisonExpression::IsComparison(*child)) {
@@ -736,6 +745,11 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 		}
 
 		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+		only_equalities &= comparison_type == ExpressionType::COMPARE_EQUAL;
+		if (comparison_type == ExpressionType::COMPARE_EQUAL && !const_val->GetValue().IsNull()) {
+			equality_column = column_ref;
+			equality_values.push_back(const_val->GetValue());
+		}
 		if (const_val->GetValue().IsNull()) {
 			switch (comparison_type) {
 			case ExpressionType::COMPARE_DISTINCT_FROM: {
@@ -759,6 +773,10 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			conj_filter->GetChildrenMutable().push_back(
 			    CreateComparisonExpression(*column_ref, comparison_type, const_val->GetValue()));
 		}
+	}
+	if (only_equalities && equality_column &&
+	    TryPushdownDenseInFilter(table_filters, *equality_column, equality_values)) {
+		return FilterPushdownResult::PUSHED_DOWN_FULLY;
 	}
 	table_filters.PushFilter(proj_id, CreateOptionalExpressionFilter(std::move(conj_filter), col_type));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
