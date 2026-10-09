@@ -233,6 +233,9 @@ public:
 	//! Returns true if the function name is an alias for the UNNEST function
 	static bool IsUnnestFunction(const Identifier &function_name);
 
+	//! Continues the expression depth of the binder this one binds a nested expression for
+	void ContinueStackDepth(const ExpressionBinder &parent);
+
 private:
 	//! Current stack depth
 	idx_t stack_depth = DConstants::INVALID_INDEX;
