@@ -1282,4 +1282,42 @@ TEST_CASE("Extension downloads without an HTTP client", "[http_transport_manager
 	TestDeleteDirectory(extension_directory);
 }
 
+TEST_CASE("HTTP transport manager enforces enable_external_access", "[http_transport_manager]") {
+	auto provider = make_shared_ptr<MockHTTPUtil>(HTTPTransportReusePolicy::EPHEMERAL);
+
+	// with external access enabled (the default), the request goes through to the provider
+	{
+		DuckDB db(nullptr);
+		db.instance->config.SetHTTPUtil(provider);
+		auto &manager = db.instance->config.GetHTTPTransportManager();
+		auto session = manager.CreateSession(*db.instance, "https://example.com/");
+		REQUIRE(RunManagedRequest(session, session.Parameters(), "https://example.com/"));
+	}
+
+	// with external access disabled, the request is rejected before it is sent, even though it does not go through
+	// the file system
+	{
+		DuckDB db(nullptr);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("SET enable_external_access=false"));
+		db.instance->config.SetHTTPUtil(provider);
+		auto &manager = db.instance->config.GetHTTPTransportManager();
+		auto session = manager.CreateSession(*db.instance, "https://example.com/");
+		CHECK_THROWS_AS(RunManagedRequest(session, session.Parameters(), "https://example.com/"), PermissionException);
+	}
+
+	// a caller that performs its own access control (e.g. extension installation) can skip the check
+	{
+		DuckDB db(nullptr);
+		Connection con(db);
+		REQUIRE_NO_FAIL(con.Query("SET enable_external_access=false"));
+		db.instance->config.SetHTTPUtil(provider);
+		auto &manager = db.instance->config.GetHTTPTransportManager();
+		auto session = manager.CreateSession(*db.instance, "https://example.com/");
+		auto &params = session.Parameters();
+		params.skip_external_access_check = true;
+		REQUIRE(RunManagedRequest(session, params, "https://example.com/"));
+	}
+}
+
 } // namespace duckdb
