@@ -149,7 +149,8 @@ void JSONScan::AddReadJSONParameters(TableFunction &table_function) {
 		    .Add("timestamp_format", LogicalType::VARCHAR)
 		    .Add("records", LogicalType::ANY)
 		    .Add("array", LogicalType::BOOLEAN)
-		    .Add("maximum_sample_files", LogicalType::BIGINT);
+		    .Add("maximum_sample_files", LogicalType::BIGINT)
+		    .Add("case_insensitive_keys", LogicalType::BOOLEAN);
 	});
 }
 
@@ -346,6 +347,10 @@ bool JSONScan::ParseOption(ClientContext &context, const Identifier &key, const 
 		options.convert_strings_to_integers = BooleanValue::Get(value);
 		return true;
 	}
+	if (key == "case_insensitive_keys") {
+		options.case_insensitive_keys = BooleanValue::Get(value);
+		return true;
+	}
 	return false;
 }
 
@@ -363,6 +368,11 @@ void JSONScan::BindSchema(ClientContext &context, JSONScanData &json_data, Multi
 	// Specifying column names overrides auto-detect
 	if (!return_types.empty()) {
 		options.auto_detect = false;
+	}
+	// a detected schema has a column per spelling of a key, which would then match each other's keys
+	if (options.case_insensitive_keys && return_types.empty()) {
+		throw BinderException("read_json \"case_insensitive_keys\" requires the columns to be specified through the "
+		                      "\"columns\" parameter.");
 	}
 
 	if (!options.auto_detect) {
@@ -411,6 +421,7 @@ void JSONScan::FinalizeBind(JSONScanData &json_data, vector<Identifier> &names) 
 	transform_options.error_duplicate_key = !options.ignore_errors;
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
+	transform_options.case_insensitive_keys = options.case_insensitive_keys;
 	transform_options.date_format_map = json_data.date_format_map.get();
 	transform_options.delay_error = true;
 

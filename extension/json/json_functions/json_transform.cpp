@@ -470,25 +470,17 @@ static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	return true;
 }
 
-bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
-                                    const vector<string> &names, const vector<Vector *> &result_vectors,
-                                    JSONTransformOptions &options,
-                                    optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key) {
-	if (column_indices && column_indices->empty()) {
-		column_indices = nullptr;
-	}
-	D_ASSERT(alc);
-	D_ASSERT(names.size() == result_vectors.size());
-	D_ASSERT(!column_indices || column_indices->size() == names.size());
+//! Assigns the values of each object's keys to the columns; templated on the key map so that the exact match keeps
+//! its own hash and equality
+template <class KEY_MAP>
+static bool AssignObjectValues(yyjson_val *objects[], yyjson_alc *alc, const idx_t count, const vector<string> &names,
+                               vector<yyjson_val **> &nested_vals, JSONTransformOptions &options,
+                               bool error_unknown_key) {
 	const idx_t column_count = names.size();
-
 	// Build hash map from key to column index so we don't have to linearly search using the key
-	json_key_map_t<idx_t> key_map;
-	vector<yyjson_val **> nested_vals;
-	nested_vals.reserve(column_count);
+	KEY_MAP key_map;
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		key_map.insert({{names[col_idx].c_str(), names[col_idx].length()}, col_idx});
-		nested_vals.push_back(JSONCommon::AllocateArray<yyjson_val *>(alc, count));
 	}
 
 	idx_t found_key_count;
@@ -571,6 +563,33 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 			}
 		}
 	}
+
+	return success;
+}
+
+bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count,
+                                    const vector<string> &names, const vector<Vector *> &result_vectors,
+                                    JSONTransformOptions &options,
+                                    optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key) {
+	if (column_indices && column_indices->empty()) {
+		column_indices = nullptr;
+	}
+	D_ASSERT(alc);
+	D_ASSERT(names.size() == result_vectors.size());
+	D_ASSERT(!column_indices || column_indices->size() == names.size());
+	const idx_t column_count = names.size();
+
+	vector<yyjson_val **> nested_vals;
+	nested_vals.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		nested_vals.push_back(JSONCommon::AllocateArray<yyjson_val *>(alc, count));
+	}
+
+	bool success = options.case_insensitive_keys
+	                   ? AssignObjectValues<json_key_ci_map_t<idx_t>>(objects, alc, count, names, nested_vals, options,
+	                                                                  error_unknown_key)
+	                   : AssignObjectValues<json_key_map_t<idx_t>>(objects, alc, count, names, nested_vals, options,
+	                                                               error_unknown_key);
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		auto child_column_index = column_indices ? &(*column_indices)[col_idx] : nullptr;
