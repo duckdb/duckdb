@@ -38,28 +38,56 @@ ORDER BY x;
 2	18446744073709551615
 
 # TIMESTAMP near the maximum finite value - fill binds TIMESTAMP as its INT64 physical type,
-# and the double midpoint of two near-max values rounds up to 2^63. The cast back must clamp
-# (to the +infinity sentinel) instead of overflowing: x86 cvttsd2si would produce INT64_MIN
-# (-infinity), ARM fcvtzs saturates to INT64_MAX (infinity) - after the fix both agree.
+# and the offset-first interpolation keeps the midpoint exact instead of rounding both
+# endpoints up to 2^63 in double and clamping to the +infinity sentinel.
 query II
 SELECT x, fill(y ORDER BY x) OVER () FROM
 	(VALUES (0::BIGINT, make_timestamp(9223372036854775806::BIGINT)), (1::BIGINT, NULL::TIMESTAMP), (2::BIGINT, make_timestamp(9223372036854775806::BIGINT))) t(x,y)
 ORDER BY x;
 ----
 0	294247-01-10 04:00:54.775806
-1	infinity
+1	294247-01-10 04:00:54.775806
 2	294247-01-10 04:00:54.775806
 
-# Interpolation between two distinct large timestamps: both round to 2^63 in double,
-# so the interpolated value clamps to the +infinity sentinel on every platform
+# Interpolation between two distinct large timestamps: the int64 offset (6) is exact,
+# so the midpoint is 3µs past the lower endpoint
 query II
 SELECT x, fill(y ORDER BY x) OVER () FROM
 	(VALUES (0::BIGINT, make_timestamp(9223372036854775800::BIGINT)), (1::BIGINT, NULL::TIMESTAMP), (2::BIGINT, make_timestamp(9223372036854775806::BIGINT))) t(x,y)
 ORDER BY x;
 ----
 0	294247-01-10 04:00:54.7758
-1	infinity
+1	294247-01-10 04:00:54.775803
 2	294247-01-10 04:00:54.775806
+
+# Fractional midpoints round to the earlier microsecond on either side of the epoch
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, make_timestamp(-15::BIGINT)), (1::BIGINT, NULL::TIMESTAMP), (2::BIGINT, make_timestamp(-10::BIGINT))) t(x,y)
+ORDER BY x;
+----
+0	1969-12-31 23:59:59.999985
+1	1969-12-31 23:59:59.999987
+2	1969-12-31 23:59:59.99999
+
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, make_timestamp(10::BIGINT)), (1::BIGINT, NULL::TIMESTAMP), (2::BIGINT, make_timestamp(15::BIGINT))) t(x,y)
+ORDER BY x;
+----
+0	1970-01-01 00:00:00.00001
+1	1970-01-01 00:00:00.000012
+2	1970-01-01 00:00:00.000015
+
+# BIGINT midpoints round down as well - they previously truncated toward zero
+query II
+SELECT x, fill(y ORDER BY x) OVER () FROM
+	(VALUES (0::BIGINT, -15::BIGINT), (1::BIGINT, NULL::BIGINT), (2::BIGINT, -10::BIGINT)) t(x,y)
+ORDER BY x;
+----
+0	-15
+1	-13
+2	-10
 
 # Ordinary interpolation is unaffected
 query II

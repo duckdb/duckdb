@@ -22,7 +22,7 @@ struct InterpolateOperator {
 		const auto result = static_cast<double>(lo) + delta * d;
 		// casting an out-of-range double to an integer is UB and platform-dependent
 		// (x86 cvttsd2si yields the integer indefinite value, ARM fcvtzs saturates) - clamp first.
-		// for int64/uint64 the bound rounds up to exactly 2^63/2^64 in double, so every
+		// for uint64 the bound rounds up to exactly 2^64 in double, so every
 		// representable-in-double in-range value still passes through unchanged.
 		if (result >= static_cast<double>(NumericLimits<TARGET_TYPE>::Maximum())) {
 			return NumericLimits<TARGET_TYPE>::Maximum();
@@ -36,6 +36,8 @@ struct InterpolateOperator {
 
 template <>
 double InterpolateOperator::Operation(const double &lo, const double d, const double &hi);
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const int64_t &hi);
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi);
 template <>
