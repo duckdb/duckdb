@@ -946,6 +946,8 @@ unique_ptr<QueryResult> ClientContext::SubmitInternalStatement(unique_ptr<SQLSta
 
 unique_ptr<QueryResult> ClientContext::SubmitInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement,
                                                       const QueryParameters &parameters, bool verify) {
+	// before anything that can fail, so a failed statement never reports the previous one's total
+	QueryProfiler::Get(*this).ResetBytesScanned();
 	if (verify) {
 		try {
 			StatementVerification(lock, statement, parameters);
