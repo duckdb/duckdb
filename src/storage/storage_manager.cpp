@@ -828,6 +828,7 @@ static ErrorData BindIndexesWithBufferedReplays(ClientContext &context,
 }
 
 bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options) {
+	// Without buffered replays, only explicit checkpoints bind indexes: to vacuum their tables.
 	if (!buffered_index_replays && !options.explicit_checkpoint) {
 		return true;
 	}
@@ -836,21 +837,25 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		buffered_index_replays = false;
 		return true;
 	}
+
+	// The database is closing (shutdown or DETACH): we do not bind, so skip if anything is still buffered.
 	if (!context.GetClientContext()) {
-		// The database is closing (shutdown or DETACH): we do not bind, so skip if anything is still buffered.
 		buffered_index_replays = HasBufferedReplays(tables);
 		return !buffered_index_replays;
 	}
+
 	auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 	if (checkpoint_sleep_ms > 0) {
 		ThreadUtil::SleepMs(checkpoint_sleep_ms);
 	}
+
 	// Bind in a new transaction: read-only transactions do not take start_transaction_lock.
 	Connection con(db.GetDatabase());
 	auto &bind_context = *con.context;
 	bind_context.transaction.BeginTransaction();
 	bind_context.transaction.SetReadOnly();
 
+	// Indexes with buffered replays must be bound, otherwise the checkpoint would lose these operations.
 	auto error = BindIndexesWithBufferedReplays(bind_context, tables);
 	if (error.HasError()) {
 		if (options.explicit_checkpoint) {
@@ -866,8 +871,9 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		return false;
 	}
 	buffered_index_replays = false;
+
+	// Best effort: the checkpoint can only vacuum tables whose indexes are bound.
 	if (options.explicit_checkpoint) {
-		// Best effort: the checkpoint can only vacuum tables whose indexes are bound.
 		for (auto &table : tables) {
 			TryBindIndexes(*table.get().GetStorage().GetDataTableInfo(), bind_context);
 		}
