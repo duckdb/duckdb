@@ -121,11 +121,19 @@ static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const LogicalOperator &op) {
-	return make_uniq<RenderTreeNode>(op.GetName(), op.ParamsToString());
+	auto result = make_uniq<RenderTreeNode>(op.GetName(), op.ParamsToString());
+	if (!HidesChildren(op)) {
+		result->sub_plans = op.GetExplainSubPlans();
+	}
+	return result;
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const PhysicalOperator &op) {
-	return make_uniq<RenderTreeNode>(op.GetName(), op.ParamsToString());
+	auto result = make_uniq<RenderTreeNode>(op.GetName(), op.ParamsToString());
+	if (!HidesChildren(op)) {
+		result->sub_plans = op.GetExplainSubPlans();
+	}
+	return result;
 }
 
 static unique_ptr<RenderTreeNode> CreateNode(const PipelineRenderNode &op) {
@@ -234,6 +242,11 @@ void RenderTree::SanitizeKeyNames() {
 			new_map.insert(make_pair(key, value));
 		}
 		nodes[i]->extra_text = std::move(new_map);
+		for (auto &sub_plan : nodes[i]->sub_plans) {
+			if (sub_plan.tree) {
+				sub_plan.tree->SanitizeKeyNames();
+			}
+		}
 	}
 }
 
