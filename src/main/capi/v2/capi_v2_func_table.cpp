@@ -771,6 +771,7 @@ static auto CV2TableGetPartitionInfo(ClientContext &context, TableFunctionPartit
 class CV2TableFunction {
 public:
 	void Register() {
+		CheckCanRegister();
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -823,6 +824,9 @@ public:
 	}
 
 	virtual ~CV2TableFunction() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterToCatalog(TableFunction function) = 0;
 
 public:
@@ -834,6 +838,11 @@ public:
 class CV2ConnectionTableFunction : public CV2TableFunction {
 public:
 	explicit CV2ConnectionTableFunction(Connection &connection) : connection(connection) {
+	}
+
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a table function");
 	}
 
 	void RegisterToCatalog(TableFunction function) override {
@@ -877,6 +886,7 @@ static auto Convert(CV2TableFunction *func) -> duckdb_v2_table_function_handle {
 class CV2MultiFileFunction {
 public:
 	void Register() {
+		CheckCanRegister();
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -902,6 +912,8 @@ public:
 	virtual ~CV2MultiFileFunction() = default;
 
 protected:
+	virtual void CheckCanRegister() {
+	}
 	//! Looks up the single-file function in the catalog, and selects the overload to wrap from it
 	virtual TableFunction GetSingleFileFunction() = 0;
 	virtual void RegisterToCatalog(TableFunctionSet function) = 0;
@@ -941,6 +953,11 @@ public:
 	}
 
 protected:
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a multi-file function");
+	}
+
 	TableFunction GetSingleFileFunction() override {
 		auto &context = *connection.context;
 		TableFunction result;

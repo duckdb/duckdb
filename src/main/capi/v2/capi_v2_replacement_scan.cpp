@@ -125,21 +125,25 @@ static auto CV2ReplacementScanTrampoline(ClientContext &context, ReplacementScan
 class CV2ReplacementScan {
 public:
 	void Register() {
+		CheckCanRegister();
 		if (!info.callback) {
 			throw InvalidInputException("Callback must be set for the replacement scan.");
 		}
 		if (registered) {
 			throw InvalidInputException("The replacement scan is already registered.");
 		}
-		registered = true;
-
 		auto data = make_uniq<CV2ReplacementScanData>();
 		data->callback = info.callback;
 		data->user_data = info.user_data;
 		RegisterScan(ReplacementScan(CV2ReplacementScanTrampoline, std::move(data)));
+
+		registered = true;
 	}
 
 	virtual ~CV2ReplacementScan() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterScan(ReplacementScan scan) = 0;
 
 public:
@@ -150,6 +154,11 @@ public:
 class CV2ConnectionReplacementScan : public CV2ReplacementScan {
 public:
 	explicit CV2ConnectionReplacementScan(Connection &connection) : connection(connection) {
+	}
+
+	void CheckCanRegister() override {
+		// Binding a later fragment of a live result reads this list, so refuse while one is live.
+		ThrowIfConnectionBusy(*connection.context, "registering a replacement scan");
 	}
 
 	void RegisterScan(ReplacementScan scan) override {

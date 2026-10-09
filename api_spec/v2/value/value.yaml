@@ -2964,6 +2964,8 @@ functions:
       The elements are borrowed and copied in, and a NULL element becomes a
       typed NULL. The type is rebuilt from its child, so an alias on the outer
       LIST type is not preserved; value_cast is the alias-preserving path.
+
+      A failure here leaves a live result on the connection unaffected.
     role: constructor
     belongs_to: value
     parameters:
@@ -3046,6 +3048,8 @@ functions:
 
       The elements are borrowed and copied in, and a NULL element becomes a
       typed NULL.
+
+      A failure here leaves a live result on the connection unaffected.
     role: constructor
     belongs_to: value
     parameters:
@@ -3302,6 +3306,8 @@ functions:
 
       Keys and values are borrowed and copied in, and the two arrays must be
       the same length. Keys must be non-NULL and unique; both are enforced.
+
+      A failure here leaves a live result on the connection unaffected.
     role: constructor
     belongs_to: value
     parameters:
@@ -3425,6 +3431,8 @@ functions:
 
       The input value and target type are borrowed. The returned value is
       caller-owned; destroy it via value_destroy.
+
+      A failure here leaves a live result on the connection unaffected.
     role: method
     belongs_to: value
     parameters:

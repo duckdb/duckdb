@@ -319,6 +319,7 @@ public:
 	}
 
 	void Register() {
+		CheckCanRegister();
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -376,6 +377,9 @@ public:
 	}
 
 	virtual ~CV2AggregateFunction() = default;
+	//! Refuses before Register() consumes any state, so a refused handle can be registered again.
+	virtual void CheckCanRegister() {
+	}
 	virtual void RegisterToCatalog(AggregateFunction function) = 0;
 
 public:
@@ -388,6 +392,11 @@ public:
 class CV2ConnectionAggregateFunction : public CV2AggregateFunction {
 public:
 	explicit CV2ConnectionAggregateFunction(Connection &connection) : connection(connection) {
+	}
+
+	void CheckCanRegister() override {
+		// Registering while a result is live would run in its transaction, where a failure aborts that query.
+		ThrowIfConnectionBusy(*connection.context, "registering a aggregate function");
 	}
 
 	void RegisterToCatalog(AggregateFunction function) override {
