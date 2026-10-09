@@ -13,6 +13,13 @@ SELECT (i % 1000)::INTEGER k, (i % 7)::INTEGER v FROM range(100000) r(i);
 statement ok
 CHECKPOINT;
 
+# Full-column statistics keep the estimate independent of vector-size sampling.
+statement ok
+ANALYZE range_dimension;
+
+statement ok
+ANALYZE range_fact;
+
 # The multi-binding OR enables early statistics simplification. The join's domain estimate already
 # accounts for the unmatched dimension keys; an inferred k <= 999 must not add another selectivity.
 query II

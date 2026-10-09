@@ -1296,9 +1296,9 @@ public:
 		}
 	}
 
-	static BindInfo MultiFileGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
+	static BindInfo MultiFileGetBindInfo(TableFunctionGetBindInfoInput &input) {
 		BindInfo bind_info(ScanType::EXTERNAL);
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
 		for (const auto &file : bind_data.file_list->GetDisplayFileList()) {
