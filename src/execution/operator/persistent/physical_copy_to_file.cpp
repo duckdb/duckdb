@@ -3864,9 +3864,6 @@ void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_f
 }
 
 string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &tmp_file_path) {
-	auto &fs = FileSystem::GetFileSystem(context);
-
-	auto path = StringUtil::GetFilePath(tmp_file_path);
 	auto base = StringUtil::GetFileName(tmp_file_path);
 
 	auto prefix = base.find("tmp_");
@@ -3874,7 +3871,7 @@ string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &t
 		base = base.substr(4);
 	}
 
-	return fs.JoinPath(path, base);
+	return StringUtil::ReplaceFileName(tmp_file_path, base);
 }
 
 void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, CopyToFileInfo &info) {

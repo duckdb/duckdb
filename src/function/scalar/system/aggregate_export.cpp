@@ -136,9 +136,13 @@ void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &
 	auto &layout = local_state.layout;
 
 	auto count = input.size();
+	// initialize the states - fields that are NULL in the input are not written by the deserialization
+	AggregateStateInput state_input(bind_data.aggr, bind_data.bind_data.get());
 	auto state_vec_writer = FlatVector::Writer<data_ptr_t>(local_state.addresses, count);
 	for (idx_t i = 0; i < count; i++) {
-		state_vec_writer.WriteValue(local_state.state_buffer.get() + i * layout.total_state_size);
+		data_ptr_t state_ptr = local_state.state_buffer.get() + i * layout.total_state_size;
+		bind_data.aggr.GetStateInitCallback()(state_input, &state_ptr, 1);
+		state_vec_writer.WriteValue(state_ptr);
 	}
 
 	AggregateStateSerialization::DeserializeStates(bind_data.aggr, layout, input.data[0], count,
@@ -702,7 +706,9 @@ void ParseOrderBys(const Value &order_value, idx_t column_count, vector<SortedAg
 	}
 }
 
-unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
+//! Binds the exported aggregate from the constant arguments, and resolves the state / return types from it
+template <class INPUT>
+unique_ptr<FunctionData> BindToAggregateState(INPUT &input) {
 	auto &bound_function = input.GetBoundFunction();
 	auto &arguments = input.GetArguments();
 	auto &context = input.GetClientContext();
@@ -753,8 +759,20 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 			throw BinderException("to_aggregate_state: an ordered aggregate state value must be a LIST of STRUCTs (the "
 			                      "buffer of values), e.g. [{'v0': ...}, ...]");
 		}
-		const auto buffer_struct = ListType::GetChildType(state_type);
-		const idx_t column_count = StructType::GetChildTypes(buffer_struct).size();
+		auto buffer_columns = StructType::GetChildTypes(ListType::GetChildType(state_type));
+		const idx_t column_count = buffer_columns.size();
+		// the leading buffered columns are the aggregate's arguments - cast them to the argument types
+		auto &aggr_arguments = aggr.GetArguments();
+		if (aggr_arguments.size() > column_count) {
+			throw BinderException("to_aggregate_state: argument count %llu exceeds the number of state columns (%llu)",
+			                      (uint64_t)aggr_arguments.size(), (uint64_t)column_count);
+		}
+		for (idx_t i = 0; i < aggr_arguments.size(); i++) {
+			if (aggr_arguments[i].IsComplete()) {
+				buffer_columns[i].second = aggr_arguments[i];
+			}
+		}
+		const auto buffer_struct = LogicalType::STRUCT(std::move(buffer_columns));
 		vector<SortedAggregateStateOrder> orders;
 		auto order_value = input.GetConstant(4);
 		ParseOrderBys(order_value, column_count, orders);
@@ -771,6 +789,14 @@ unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
 	bound_function.GetArguments()[0] = state_layout;
 	bound_function.SetReturnType(CreateAggregateStateType(aggr, bind_data->bind_data.get()));
 	return std::move(bind_data);
+}
+
+void ToAggregateStateResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	BindToAggregateState(input);
+}
+
+unique_ptr<FunctionData> ToAggregateStateBind(BindScalarFunctionInput &input) {
+	return BindToAggregateState(input);
 }
 
 void ToAggregateStateFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -924,6 +950,7 @@ ScalarFunctionSet ToAggregateStateFun::GetFunctions() {
 		}
 		ScalarFunction function("to_aggregate_state", arguments, LogicalTypeId::ANY, ToAggregateStateFunction,
 		                        ToAggregateStateBind);
+		function.SetResolveTypesCallback(ToAggregateStateResolveTypes);
 		auto &sig = function.GetSignature();
 		sig.GetParameter(0).SetName("data");
 		sig.GetParameter(1).SetName("name");
