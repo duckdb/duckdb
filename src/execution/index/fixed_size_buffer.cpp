@@ -17,7 +17,8 @@ PartialBlockForIndex::PartialBlockForIndex(PartialBlockState state, BlockManager
 
 void PartialBlockForIndex::Flush(QueryContext context, const idx_t free_space_left) {
 	FlushInternal(free_space_left);
-	block_handle = block_manager.ConvertToPersistent(context, state.block_id, std::move(block_handle));
+	block_handle = block_manager.ConvertToPersistent(context, state.block_id, std::move(block_handle),
+	                                                 ConvertToPersistentMode::DESTRUCTIVE, MemoryTag::ART_INDEX);
 	Clear();
 }
 
@@ -62,7 +63,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
     : block_manager(block_manager), readers(0), segment_count(segment_count), allocation_size(allocation_size),
       dirty(false), vacuum(false), loaded(false), block_pointer(block_pointer) {
 	D_ASSERT(block_pointer.IsValid());
-	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
+	block_handle = block_manager.RegisterBlock(block_pointer.block_id, MemoryTag::ART_INDEX);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 }
 
@@ -140,7 +141,7 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 	// Register the partial block and the block handle.
 	partial_block_manager.RegisterPartialBlock(std::move(allocation));
 
-	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
+	block_handle = block_manager.RegisterBlock(block_pointer.block_id, MemoryTag::ART_INDEX);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 
 	// We persisted any changes, so the fixed-size buffer is no longer dirty.
