@@ -60,6 +60,10 @@ SELECT count(*) FROM (
 ----
 0
 
+# Bound WAL replay when the test configuration restarts after every statement.
+statement ok
+CHECKPOINT;
+
 endloop
 
 endloop
