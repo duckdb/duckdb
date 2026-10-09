@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/outer_join_simplification.hpp"
 
+#include "duckdb/optimizer/constraint_propagation/constraint_propagator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
@@ -8,6 +9,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/optimizer/constraint_propagation/queries.hpp"
 
 namespace duckdb {
 
@@ -20,6 +22,17 @@ OuterJoinSimplification::OuterJoinSimplification() {
 
 OuterJoinSimplification::OuterJoinSimplification(column_binding_set_t required_columns_p)
     : required_columns(std::move(required_columns_p)), initialized_required_columns(true) {
+}
+OuterJoinSimplification::OuterJoinSimplification(ConstraintPropagator &propagator_p) : propagator(&propagator_p) {
+}
+
+unique_ptr<LogicalOperator> OuterJoinSimplification::Optimize(unique_ptr<LogicalOperator> op) {
+	ConstraintPropagator propagator;
+	propagator.Analyze(*op);
+
+	OuterJoinSimplification simplification(propagator);
+	simplification.VisitOperator(*op);
+	return op;
 }
 
 //===--------------------------------------------------------------------===//
@@ -264,6 +277,46 @@ void OuterJoinSimplification::SimplifyOuterJoinType(LogicalComparisonJoin &join)
 	}
 }
 
+//===----------------------------------------------------------------------===//
+// Constraint-Driven Join Simplification
+//===----------------------------------------------------------------------===//
+
+bool OuterJoinSimplification::TrySimplifyByCoverage(LogicalComparisonJoin &join) {
+	if (!propagator) {
+		return false;
+	}
+	switch (join.join_type) {
+	case JoinType::LEFT:
+		if (JoinCoverage(*propagator, join, 0)) {
+			join.join_type = JoinType::INNER;
+			return true;
+		}
+		return false;
+	case JoinType::RIGHT:
+		if (JoinCoverage(*propagator, join, 1)) {
+			join.join_type = JoinType::INNER;
+			return true;
+		}
+		return false;
+	case JoinType::OUTER: {
+		bool covers0 = JoinCoverage(*propagator, join, 0);
+		bool covers1 = JoinCoverage(*propagator, join, 1);
+		if (covers0 && covers1) {
+			join.join_type = JoinType::INNER;
+		} else if (covers0) {
+			join.join_type = JoinType::RIGHT;
+		} else if (covers1) {
+			join.join_type = JoinType::LEFT;
+		} else {
+			return false;
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Operator Visitors
 //===--------------------------------------------------------------------===//
@@ -305,6 +358,11 @@ void OuterJoinSimplification::VisitOuterJoin(LogicalComparisonJoin &join, Logica
 		AddRequiredColumns(join.conditions);
 		EraseNullRequiredColumns(*join.children[1]);
 		VisitOperatorChildren(op);
+		return;
+	}
+
+	if (TrySimplifyByCoverage(join)) {
+		VisitOperator(op);
 		return;
 	}
 
@@ -403,6 +461,7 @@ void OuterJoinSimplification::VisitAggregate(LogicalAggregate &aggregate, Logica
 		AddColumnReferences(*expr, child_required_columns);
 	}
 	OuterJoinSimplification child_simplification(std::move(child_required_columns));
+	child_simplification.propagator = propagator;
 	child_simplification.VisitOperator(*op.children[0]);
 }
 
@@ -413,6 +472,7 @@ void OuterJoinSimplification::VisitUnsupportedOperator(LogicalOperator &op) {
 			child_required_columns.insert(binding);
 		}
 		OuterJoinSimplification outer_join_simplification(std::move(child_required_columns));
+		outer_join_simplification.propagator = propagator;
 		outer_join_simplification.VisitOperator(*child);
 	}
 }

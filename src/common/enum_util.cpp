@@ -173,6 +173,7 @@
 #include "duckdb/optimizer/aggregate_rewrite.hpp"
 #include "duckdb/optimizer/build_probe_side_optimizer.hpp"
 #include "duckdb/optimizer/compressed_materialization.hpp"
+#include "duckdb/optimizer/constraint_propagation/constraint_facts.hpp"
 #include "duckdb/optimizer/join_order/join_order_operator.hpp"
 #include "duckdb/optimizer/relation_statistics/relation_statistics.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
@@ -5865,6 +5866,25 @@ const char* EnumUtil::ToChars<ShowType>(ShowType value) {
 template<>
 ShowType EnumUtil::FromString<ShowType>(const char *value) {
 	return static_cast<ShowType>(StringUtil::StringToEnum(GetShowTypeValues(), 5, "ShowType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSideMultiplicityValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SideMultiplicity::UNKNOWN), "UNKNOWN" },
+		{ static_cast<uint32_t>(SideMultiplicity::AT_MOST_ONE), "AT_MOST_ONE" },
+		{ static_cast<uint32_t>(SideMultiplicity::EXACTLY_ONE), "EXACTLY_ONE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SideMultiplicity>(SideMultiplicity value) {
+	return StringUtil::EnumToString(GetSideMultiplicityValues(), 3, "SideMultiplicity", static_cast<uint32_t>(value));
+}
+
+template<>
+SideMultiplicity EnumUtil::FromString<SideMultiplicity>(const char *value) {
+	return static_cast<SideMultiplicity>(StringUtil::StringToEnum(GetSideMultiplicityValues(), 3, "SideMultiplicity", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSimplifiedTokenTypeValues() {
