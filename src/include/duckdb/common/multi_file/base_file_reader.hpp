@@ -39,6 +39,19 @@ public:
 	vector<ColumnIndex> column_indexes;
 };
 
+//! How a reader reports the bytes a scan of its file scans - operator.bytes_scanned of the scan, and
+//! query.total_bytes_scanned of the query. Every reader reports them; what is counted depends on the format
+enum class BytesScannedReporting : uint8_t {
+	//! The reader counts the bytes it reads as it reads them, through the metrics of its scan. A columnar format
+	//! reads only the column chunks of the projected columns: the Parquet reader counts their compressed size per
+	//! row group
+	COUNTED_BY_READER,
+	//! The stored (compressed) size of the file is reported when its scan starts, by the multi-file scan
+	//! (MultiFileGlobalState::ReportBytesScannedOnScanStart). A row-oriented format has no column layout to read
+	//! part of, so a scan reads the file whole: CSV, JSON, Avro
+	STORED_FILE_SIZE
+};
+
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
 //! interface
 class BaseFileReader : public enable_shared_from_this<BaseFileReader> {
@@ -115,6 +128,13 @@ public:
 	DUCKDB_API virtual double GetProgressInFile(ClientContext &context);
 	//! Get reader metadata, if available
 	DUCKDB_API virtual InsertionOrderPreservingMap<Value> GetMetadata() const;
+	//! How this reader reports the bytes a scan of its file scans - see BytesScannedReporting. Every reader reports
+	//! them; what is counted depends on the format
+	DUCKDB_API virtual BytesScannedReporting GetBytesScannedReporting() const;
+	//! The size of the file as it is stored (compressed), if known: what a reader with BytesScannedReporting::
+	//! STORED_FILE_SIZE reports as the bytes scanned. By default this is the size the file list reported in the
+	//! extended info of the file - a reader that has the file open should report the size of its handle instead
+	DUCKDB_API virtual optional_idx GetStoredFileSize() const;
 
 	virtual string GetReaderType() const = 0;
 

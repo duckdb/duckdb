@@ -201,3 +201,23 @@ TEST_CASE("Test the running total of bytes scanned after a failed query", "[api]
 	REQUIRE_FAIL(con.Query(std::move(missing_parameter[0])));
 	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == 0);
 }
+
+TEST_CASE("Test the running total of bytes scanned for a row-oriented format", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto path = TestCreatePath("bytes_scanned_row_oriented.csv");
+	REQUIRE_NO_FAIL(con.Query("COPY (SELECT range AS i FROM range(100000)) TO '" + path + "' (HEADER)"));
+	auto sizes = con.Query("SELECT size::UBIGINT FROM read_blob('" + path + "')");
+	REQUIRE_NO_FAIL(*sizes);
+	auto file_size = sizes->Collection().GetValue(0, 0).GetValue<uint64_t>();
+	REQUIRE(file_size > 0);
+
+	// CSV is row-oriented: a scan reads the file whole and reports its stored size, tracked with profiling disabled
+	REQUIRE_NO_FAIL(con.Query("SELECT sum(i) FROM read_csv('" + path + "')"));
+	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == file_size);
+
+	// a query that fails part-way through the file has started scanning it, so it reports the file as well
+	REQUIRE_FAIL(con.Query("SELECT sum(CASE WHEN i = 90000 THEN error('boom') ELSE i END) FROM read_csv('" + path +
+	                       "')"));
+	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == file_size);
+}

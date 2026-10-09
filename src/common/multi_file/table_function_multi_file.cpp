@@ -358,6 +358,22 @@ InsertionOrderPreservingMap<Value> TableFunctionFileReader::GetMetadata() const 
 	return metadata;
 }
 
+BytesScannedReporting TableFunctionFileReader::GetBytesScannedReporting() const {
+	return settings.bytes_scanned_reporting;
+}
+
+optional_idx TableFunctionFileReader::GetStoredFileSize() const {
+	if (settings.file_size && global_state) {
+		// the wrapped function has the file open - the size of its handle is the size of the file as stored
+		TableFunctionInput input(bind_data.get(), nullptr, global_state.get());
+		auto file_size = settings.file_size(input);
+		if (file_size.IsValid()) {
+			return file_size;
+		}
+	}
+	return BaseFileReader::GetStoredFileSize();
+}
+
 //===--------------------------------------------------------------------===//
 // Interface
 //===--------------------------------------------------------------------===//

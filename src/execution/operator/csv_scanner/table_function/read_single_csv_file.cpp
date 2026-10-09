@@ -392,6 +392,17 @@ static bool ReadSingleCSVFileSupportsReadAhead(optional_ptr<const FunctionData> 
 	       csv_data.buffer_manager->file_handle->HasKnownBufferRanges();
 }
 
+//! The size of the file as stored: what a CSV scan reports as its bytes scanned - CSV is row-oriented, there is no
+//! column layout to read part of, so a scan reads the file whole
+static optional_idx ReadSingleCSVFileSize(const TableFunctionInput &input) {
+	auto &gstate = input.global_state->Cast<ReadSingleCSVFileGlobalState>();
+	if (!gstate.file_scan) {
+		return optional_idx();
+	}
+	// the size of the handle the file was opened with - the compressed size for a compressed file
+	return gstate.file_scan->file_size;
+}
+
 //! Load the buffers of the claimed part of the file that are not in memory yet
 static AsyncResult ReadSingleCSVFileScheduleIO(ClientContext &context, TableFunctionInput &input) {
 	auto &lstate = input.local_state->Cast<ReadSingleCSVFileLocalState>();
@@ -498,6 +509,9 @@ TableFunction ReadCSVTableFunction::GetMultiFileFunction(Identifier name) {
 	settings.finish_batch = ReadSingleCSVFileFinishBatch;
 	settings.supports_read_ahead = ReadSingleCSVFileSupportsReadAhead;
 	settings.schedule_io = ReadSingleCSVFileScheduleIO;
+	// CSV is row-oriented: a scan reads the file whole, and reports its stored size as the bytes scanned
+	settings.bytes_scanned_reporting = BytesScannedReporting::STORED_FILE_SIZE;
+	settings.file_size = ReadSingleCSVFileSize;
 	// the scanner converts to the types the scan asks for while parsing, rather than casting its output
 	settings.supports_cast_map = true;
 	return TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name), std::move(settings));

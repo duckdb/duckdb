@@ -366,6 +366,11 @@ public:
 	string GetReaderType() const override {
 		return "Parquet";
 	}
+	//! Parquet is columnar: only the column chunks of the projected columns are read, and their compressed size is
+	//! counted per row group as they are read (InitializeScan)
+	BytesScannedReporting GetBytesScannedReporting() const override {
+		return BytesScannedReporting::COUNTED_BY_READER;
+	}
 
 	shared_ptr<BaseUnionData> GetUnionData(idx_t file_idx) override;
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, const Identifier &name) override;

@@ -90,6 +90,11 @@ public:
 	~DuckDBReader() override;
 
 public:
+	//! Only the blocks of the table that is read are read from the database file, so its stored size is not what the
+	//! scan scans - what it does read is for the reader to count (it does not yet)
+	BytesScannedReporting GetBytesScannedReporting() const override {
+		return BytesScannedReporting::COUNTED_BY_READER;
+	}
 	bool TryInitializeScan(ClientContext &context, GlobalTableFunctionState &gstate,
 	                       LocalTableFunctionState &lstate) override;
 	AsyncResult Scan(ClientContext &context, GlobalTableFunctionState &global_state,
