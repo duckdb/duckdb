@@ -902,6 +902,12 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 	return num_threads * num_partitions * size_per_partition;
 }
 
+static idx_t GetMaxHTSizeForExternalFinalize(TemporaryMemoryState &temporary_memory_state,
+                                             const idx_t probe_side_requirement) {
+	const auto reservation = temporary_memory_state.GetReservationForMemoryLimit();
+	return reservation > probe_side_requirement ? reservation - probe_side_requirement : 0;
+}
+
 void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const {
 	auto &gstate = global_state.Cast<HashJoinGlobalSinkState>();
 	// If no Sink chunk ever arrived, the layout was never published. Fall back to a default layout
@@ -1244,7 +1250,8 @@ public:
 		auto partition_multiplier =
 		    RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits() - sink.initial_radix_bits);
 		auto thread_memory = 2 * blocks_per_vector * partition_multiplier * block_size;
-		auto repartition_threads = MaxValue<idx_t>(sink.temporary_memory_state->GetReservation() / thread_memory, 1);
+		auto repartition_threads =
+		    MaxValue<idx_t>(sink.temporary_memory_state->GetReservationForMemoryLimit() / thread_memory, 1);
 
 		if (repartition_threads < local_hts.size()) {
 			// Limit the number of threads working on repartitioning based on our memory reservation
@@ -1285,9 +1292,8 @@ public:
 		                                                   sink.probe_side_requirement);
 		sink.temporary_memory_state->UpdateReservation(executor.context);
 
-		D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
-		                                         sink.probe_side_requirement);
+		sink.hash_table->PrepareExternalFinalize(
+		    GetMaxHTSizeForExternalFinalize(*sink.temporary_memory_state, sink.probe_side_requirement));
 		sink.ScheduleFinalize(*pipeline, *this);
 	}
 };
@@ -1831,7 +1837,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	auto &ht = *sink.hash_table;
 
 	sink.temporary_memory_state->UpdateReservation(context);
-	sink.external = sink.temporary_memory_state->GetReservation() < sink.total_size;
+	auto reservation = sink.temporary_memory_state->GetReservationForMemoryLimit();
+	sink.external = reservation < sink.total_size;
 	if (sink.external) {
 		// For external join we reduce the load factor, this may even prevent the external join altogether
 		ht.load_factor = JoinHashTable::EXTERNAL_LOAD_FACTOR;
@@ -1841,7 +1848,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		idx_t temp_total_size =
 		    ht.GetTotalSize(sink.local_hash_tables, temp_max_partition_size, temp_max_partition_count);
 
-		if (temp_total_size < sink.temporary_memory_state->GetReservation()) {
+		reservation = sink.temporary_memory_state->GetReservationForMemoryLimit();
+		if (temp_total_size < reservation) {
 			// We prevented the external join by reducing the load factor. Update the state accordingly
 			sink.temporary_memory_state->SetMinimumReservation(temp_total_size);
 			sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, temp_total_size);
@@ -1866,12 +1874,10 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
 		const auto very_very_skewed = // No point in repartitioning if it's this skewed
 		    static_cast<double>(max_partition_ht_size) >= 0.8 * static_cast<double>(sink.total_size);
-		if (!very_very_skewed &&
-		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
+		if (!very_very_skewed && (max_partition_ht_size + sink.probe_side_requirement) >= reservation) {
 			// We have to repartition
 			const auto radix_bits_before = ht.GetRadixBits();
-			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
-			                           sink.max_partition_count);
+			ht.SetRepartitionRadixBits(reservation, sink.max_partition_size, sink.max_partition_count);
 			DUCKDB_LOG(context, PhysicalOperatorLogType, *this, "PhysicalHashJoin", "Repartition",
 			           {{"partitions_before", to_string(RadixPartitioning::NumberOfPartitions(radix_bits_before))},
 			            {"partitions_after", to_string(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()))}});
@@ -1890,9 +1896,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 				                                 sink.global_filter_state.get());
 			}
 			ht.PrepareBloomFilterForFinalize();
-			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
-			                                         sink.probe_side_requirement);
+			sink.hash_table->PrepareExternalFinalize(
+			    GetMaxHTSizeForExternalFinalize(*sink.temporary_memory_state, sink.probe_side_requirement));
 			sink.ScheduleFinalize(pipeline, event);
 		}
 		sink.finalized = true;
@@ -2384,9 +2389,8 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	                                                                                    sink.probe_side_requirement);
 
 	// Try to put the next partitions in the block collection of the HT
-	D_ASSERT(!sink.external || sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
-	if (!sink.external ||
-	    !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() - sink.probe_side_requirement)) {
+	const auto max_ht_size = GetMaxHTSizeForExternalFinalize(*sink.temporary_memory_state, sink.probe_side_requirement);
+	if (!sink.external || !ht.PrepareExternalFinalize(max_ht_size)) {
 		global_stage = HashJoinSourceStage::DONE;
 		sink.temporary_memory_state->SetZero();
 		return;
