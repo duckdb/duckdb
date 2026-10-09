@@ -185,11 +185,10 @@ enum class CopyFunctionReturnType : uint8_t {
 	CHANGED_ROWS_AND_FILE_LIST = 1,
 	WRITTEN_FILE_STATISTICS = 2
 };
-//! The result columns of a COPY TO; RETURN_COLUMN_TYPES adds the "columns" column last
-vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type, bool return_column_types);
-vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type, bool return_column_types);
-//! The "columns" value of RETURN_COLUMN_TYPES: the name of each copied column and its type as DESCRIBE spells it
-Value GetCopyColumnTypes(const vector<Identifier> &names, const vector<LogicalType> &types);
+vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
+vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
+//! The type of the "columns" column that RETURN_COLUMN_TYPES adds last to the COPY TO result
+LogicalType GetCopyColumnTypesLogicalType();
 
 struct CopyFunctionFileStatistics {
 	idx_t row_count = 0;

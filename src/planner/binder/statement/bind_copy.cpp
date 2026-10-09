@@ -668,8 +668,12 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, const CopyFunction &funct
 	}
 
 	BoundStatement result;
-	result.names = GetCopyFunctionReturnNames(copy->return_type, copy->return_column_types);
-	result.types = GetCopyFunctionReturnLogicalTypes(copy->return_type, copy->return_column_types);
+	result.names = GetCopyFunctionReturnNames(copy->return_type);
+	result.types = GetCopyFunctionReturnLogicalTypes(copy->return_type);
+	if (copy->return_column_types) {
+		result.names.emplace_back("columns");
+		result.types.push_back(GetCopyColumnTypesLogicalType());
+	}
 	result.plan = std::move(copy);
 
 	return result;

@@ -4818,6 +4818,30 @@ string PhysicalCopyToFile::GetNonTmpFile(ClientContext &context, const string &t
 	return StringUtil::ReplaceFileName(tmp_file_path, base);
 }
 
+//! The "columns" value of RETURN_COLUMN_TYPES: the name of each copied column and its type as DESCRIBE spells it
+static Value GetCopyColumnTypes(const vector<Identifier> &names, const vector<LogicalType> &types) {
+	D_ASSERT(names.size() == types.size());
+	vector<Value> columns;
+	for (idx_t column_index = 0; column_index < types.size(); column_index++) {
+		auto &type = types[column_index];
+		Value precision(LogicalType::INTEGER);
+		Value scale(LogicalType::INTEGER);
+		if (type.id() == LogicalTypeId::DECIMAL) {
+			precision = Value::INTEGER(DecimalType::GetWidth(type));
+			scale = Value::INTEGER(DecimalType::GetScale(type));
+		}
+		child_list_t<Value> column;
+		column.emplace_back("name", Value(names[column_index].GetIdentifierName()));
+		// The type without its parameters, so a LIST and an ARRAY stay distinct; an alias such as JSON keeps its name
+		column.emplace_back("type", Value(type.HasAlias() ? type.GetAlias() : LogicalTypeIdToString(type.id())));
+		column.emplace_back("type_details", Value(type.ToString()));
+		column.emplace_back("precision", std::move(precision));
+		column.emplace_back("scale", std::move(scale));
+		columns.push_back(Value::STRUCT(std::move(column)));
+	}
+	return Value::LIST(ListType::GetChildType(GetCopyColumnTypesLogicalType()), std::move(columns));
+}
+
 void PhysicalCopyToFile::ReturnColumnTypes(DataChunk &chunk, const vector<Identifier> &query_names,
                                            const vector<LogicalType> &query_types) {
 	auto column_types = GetCopyColumnTypes(query_names, query_types);
@@ -4865,7 +4889,7 @@ void PhysicalCopyToFile::ReturnNoFileStatistics(DataChunk &chunk) {
 	chunk.data[1].Append(Value::UBIGINT(0));
 	// file size bytes, footer size bytes, column statistics, partition keys and extra info are NULL
 	auto statistics_column_count =
-	    GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS, false).size();
+	    GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS).size();
 	for (idx_t col_idx = 2; col_idx < statistics_column_count; col_idx++) {
 		chunk.data[col_idx].Append(Value(chunk.data[col_idx].GetType()));
 	}

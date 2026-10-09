@@ -81,7 +81,10 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types = GetCopyFunctionReturnLogicalTypes(return_type, return_column_types);
+		types = GetCopyFunctionReturnLogicalTypes(return_type);
+		if (return_column_types) {
+			types.push_back(GetCopyColumnTypesLogicalType());
+		}
 	}
 };
 } // namespace duckdb

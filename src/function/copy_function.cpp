@@ -18,7 +18,7 @@ CopyOption::CopyOption() : type(LogicalType::ANY), mode(CopyOptionMode::READ_WRI
 CopyOption::CopyOption(LogicalType type_p, CopyOptionMode mode_p) : type(std::move(type_p)), mode(mode_p) {
 }
 
-static LogicalType GetCopyColumnTypesLogicalType() {
+LogicalType GetCopyColumnTypesLogicalType() {
 	child_list_t<LogicalType> children;
 	children.emplace_back("name", LogicalType::VARCHAR);
 	children.emplace_back("type", LogicalType::VARCHAR);
@@ -28,30 +28,7 @@ static LogicalType GetCopyColumnTypesLogicalType() {
 	return LogicalType::LIST(LogicalType::STRUCT(std::move(children)));
 }
 
-Value GetCopyColumnTypes(const vector<Identifier> &names, const vector<LogicalType> &types) {
-	D_ASSERT(names.size() == types.size());
-	vector<Value> columns;
-	for (idx_t column_index = 0; column_index < types.size(); column_index++) {
-		auto &type = types[column_index];
-		Value precision(LogicalType::INTEGER);
-		Value scale(LogicalType::INTEGER);
-		if (type.id() == LogicalTypeId::DECIMAL) {
-			precision = Value::INTEGER(DecimalType::GetWidth(type));
-			scale = Value::INTEGER(DecimalType::GetScale(type));
-		}
-		child_list_t<Value> column;
-		column.emplace_back("name", Value(names[column_index].GetIdentifierName()));
-		// The type without its parameters, so a LIST and an ARRAY stay distinct; an alias such as JSON keeps its name
-		column.emplace_back("type", Value(type.HasAlias() ? type.GetAlias() : LogicalTypeIdToString(type.id())));
-		column.emplace_back("type_details", Value(type.ToString()));
-		column.emplace_back("precision", std::move(precision));
-		column.emplace_back("scale", std::move(scale));
-		columns.push_back(Value::STRUCT(std::move(column)));
-	}
-	return Value::LIST(ListType::GetChildType(GetCopyColumnTypesLogicalType()), std::move(columns));
-}
-
-static vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type) {
+vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type) {
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		return {"Count"};
@@ -65,7 +42,7 @@ static vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType retu
 	}
 }
 
-static vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type) {
+vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type) {
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		return {LogicalType::BIGINT};
@@ -89,22 +66,6 @@ static vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnT
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}
-}
-
-vector<Identifier> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type, bool return_column_types) {
-	auto names = GetCopyFunctionReturnNames(return_type);
-	if (return_column_types) {
-		names.emplace_back("columns");
-	}
-	return names;
-}
-
-vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type, bool return_column_types) {
-	auto types = GetCopyFunctionReturnLogicalTypes(return_type);
-	if (return_column_types) {
-		types.push_back(GetCopyColumnTypesLogicalType());
-	}
-	return types;
 }
 
 CopyFunctionBatchAnalyzer::CopyFunctionBatchAnalyzer(const idx_t &current_batch_size,
