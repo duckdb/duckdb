@@ -24,6 +24,10 @@
 #include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/reference_map.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/execution/operator/scan/physical_dummy_scan.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
 
 using namespace duckdb;
 
@@ -114,6 +118,165 @@ struct CopyTestData : TableFunctionData {
 		return make_uniq<CopyTestData>(value, copyable);
 	}
 };
+
+struct JoinCopyProbe : OptimizerExtensionInfo {
+	bool enabled = false;
+	bool refusals = false;
+	idx_t shared_sets = 0;
+	idx_t min_max_only = 0;
+	idx_t multiple_targets = 0;
+	idx_t casts = 0;
+	idx_t refused = 0;
+};
+
+struct JoinCopySet {
+	optional_ptr<DynamicTableFilterSet> copy;
+	idx_t producers = 0;
+	idx_t scans = 0;
+};
+using join_copy_sets_t = reference_map_t<DynamicTableFilterSet, JoinCopySet>;
+
+static void CheckJoinCopies(LogicalOperator &original, LogicalOperator &copy, join_copy_sets_t &sets,
+                            JoinCopyProbe &probe) {
+	REQUIRE(original.type == copy.type);
+	REQUIRE(original.children.size() == copy.children.size());
+	auto check_set = [&](DynamicTableFilterSet &source, DynamicTableFilterSet &target, bool scan) {
+		REQUIRE(&source != &target);
+		REQUIRE_FALSE(source.HasFilters());
+		REQUIRE_FALSE(target.HasFilters());
+		auto &entry = sets[source];
+		if (entry.copy) {
+			REQUIRE(entry.copy.get() == &target);
+		} else {
+			entry.copy = target;
+		}
+		scan ? entry.scans++ : entry.producers++;
+	};
+	if (original.type == LogicalOperatorType::LOGICAL_GET) {
+		auto &lhs = original.Cast<LogicalGet>();
+		auto &rhs = copy.Cast<LogicalGet>();
+		if (lhs.dynamic_filters) {
+			REQUIRE(rhs.dynamic_filters);
+			check_set(*lhs.dynamic_filters, *rhs.dynamic_filters, true);
+		}
+	}
+	if (original.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &lhs = original.Cast<LogicalComparisonJoin>();
+		auto &rhs = copy.Cast<LogicalComparisonJoin>();
+		if (lhs.filter_pushdown) {
+			REQUIRE(rhs.filter_pushdown);
+			REQUIRE(lhs.filter_pushdown.get() != rhs.filter_pushdown.get());
+			auto &a = *lhs.filter_pushdown;
+			auto &b = *rhs.filter_pushdown;
+			REQUIRE(a.join_condition == b.join_condition);
+			REQUIRE(a.probe_info.size() == b.probe_info.size());
+			REQUIRE(a.min_max_aggregates.size() == b.min_max_aggregates.size());
+			if (a.probe_info.empty()) {
+				REQUIRE_FALSE(b.build_side_has_filter);
+				probe.min_max_only++;
+			} else {
+				REQUIRE(a.build_side_has_filter == b.build_side_has_filter);
+			}
+			probe.multiple_targets += a.probe_info.size() > 1;
+			for (idx_t i = 0; i < a.min_max_aggregates.size(); i++) {
+				REQUIRE(a.min_max_aggregates[i].get() != b.min_max_aggregates[i].get());
+				REQUIRE(a.min_max_aggregates[i]->Equals(*b.min_max_aggregates[i]));
+			}
+			for (idx_t i = 0; i < a.probe_info.size(); i++) {
+				auto &left = a.probe_info[i];
+				auto &right = b.probe_info[i];
+				check_set(*left.dynamic_filters, *right.dynamic_filters, false);
+				REQUIRE(left.columns.size() == right.columns.size());
+				for (idx_t j = 0; j < left.columns.size(); j++) {
+					auto &lc = left.columns[j];
+					auto &rc = right.columns[j];
+					REQUIRE(lc.join_filter_idx == rc.join_filter_idx);
+					REQUIRE(lc.probe_column_index == rc.probe_column_index);
+					REQUIRE(lc.storage_type == rc.storage_type);
+					REQUIRE(lc.mode == rc.mode);
+					REQUIRE(lc.runtime_filter_casts.size() == rc.runtime_filter_casts.size());
+					probe.casts += lc.runtime_filter_casts.size();
+					for (idx_t k = 0; k < lc.runtime_filter_casts.size(); k++) {
+						REQUIRE(lc.runtime_filter_casts[k].target_type == rc.runtime_filter_casts[k].target_type);
+						REQUIRE(lc.runtime_filter_casts[k].mode == rc.runtime_filter_casts[k].mode);
+					}
+				}
+			}
+		}
+	}
+	for (idx_t i = 0; i < original.children.size(); i++) {
+		CheckJoinCopies(*original.children[i], *copy.children[i], sets, probe);
+	}
+}
+
+static optional_ptr<LogicalComparisonJoin> FindJoinProducer(LogicalOperator &op) {
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.filter_pushdown && !join.filter_pushdown->probe_info.empty()) {
+			return join;
+		}
+	}
+	for (auto &child : op.children) {
+		auto found = FindJoinProducer(*child);
+		if (found) {
+			return found;
+		}
+	}
+	return nullptr;
+}
+
+static void CopyJoinAfterOptimization(OptimizerExtensionInput &input, unique_ptr<LogicalOperator> &plan) {
+	auto &probe = static_cast<JoinCopyProbe &>(*input.info);
+	if (!probe.enabled) {
+		return;
+	}
+	auto copy = plan->CopyPreservingBoundState(input.context);
+	auto sibling = plan->CopyPreservingBoundState(input.context);
+	auto repeated = copy->CopyPreservingBoundState(input.context);
+	join_copy_sets_t sets, siblings, repeats;
+	CheckJoinCopies(*plan, *copy, sets, probe);
+	CheckJoinCopies(*plan, *sibling, siblings, probe);
+	CheckJoinCopies(*copy, *repeated, repeats, probe);
+	PhysicalPlan physical(Allocator::Get(input.context));
+	auto &identity = physical.Make<PhysicalDummyScan>(vector<LogicalType> {LogicalType::BIGINT}, 1);
+	for (auto &entry : sets) {
+		REQUIRE(entry.second.scans == 1);
+		REQUIRE(entry.second.producers > 0);
+		probe.shared_sets += entry.second.producers > 1;
+		auto &target = *entry.second.copy;
+		target.PushFilter(identity, ProjectionIndex(0),
+		                  ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::BIGINT(7)));
+		REQUIRE(target.HasFilters());
+		REQUIRE_FALSE(entry.first.get().HasFilters());
+		REQUIRE_FALSE(siblings.at(entry.first).copy->HasFilters());
+		REQUIRE_FALSE(repeats.at(target).copy->HasFilters());
+		target.ClearFilters(identity);
+		REQUIRE_FALSE(target.HasFilters());
+	}
+	if (probe.refusals) {
+		auto join = FindJoinProducer(*plan);
+		REQUIRE(join);
+		auto &target = join->filter_pushdown->probe_info[0].dynamic_filters;
+		auto original_target = target;
+		target = make_shared_ptr<DynamicTableFilterSet>();
+		REQUIRE_THROWS_WITH(plan->CopyPreservingBoundState(input.context),
+		                    Catch::Matchers::Contains("connected join dynamic filters"));
+		target = original_target;
+		join->join_type = JoinType::LEFT;
+		REQUIRE_THROWS_WITH(plan->CopyPreservingBoundState(input.context),
+		                    Catch::Matchers::Contains("native INNER descriptors"));
+		join->join_type = JoinType::INNER;
+		target->PushFilter(identity, ProjectionIndex(0),
+		                   ExpressionFilter::CreateComparisonFilter(ExpressionType::COMPARE_EQUAL, Value::BIGINT(7)));
+		REQUIRE_THROWS_WITH(plan->CopyPreservingBoundState(input.context),
+		                    Catch::Matchers::Contains("unexecuted, connected"));
+		target->ClearFilters(identity);
+		probe.refused += 3;
+		// Refusal must leave the original graph reusable.
+		copy = plan->CopyPreservingBoundState(input.context);
+	}
+	plan = std::move(copy);
+}
 
 } // namespace
 
@@ -224,7 +387,7 @@ TEST_CASE("Bound plan copy bypasses table-function rebinding and rejects noncopy
 		REQUIRE_THROWS_WITH(root.CopyPreservingBoundState(context),
 		                    Catch::Matchers::Contains("process-local bind input"));
 	}
-	SECTION("Runtime dynamic filter sets are outside the preserving contract") {
+	SECTION("Unconnected runtime dynamic filter sets are outside the preserving contract") {
 		root.children[0]->Cast<LogicalGet>().dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
 		REQUIRE_THROWS_WITH(root.CopyPreservingBoundState(context), Catch::Matchers::Contains("dynamic filters"));
 	}
@@ -272,7 +435,7 @@ TEST_CASE("Bound plan copy bypasses table-function rebinding and rejects noncopy
 		top_n.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(0)));
 		REQUIRE_THROWS_WITH(top_n.CopyPreservingBoundState(context), Catch::Matchers::Contains("shared top-N filters"));
 	}
-	SECTION("Shared join filter state is rejected") {
+	SECTION("Incomplete join filter state is rejected") {
 		LogicalComparisonJoin join(JoinType::INNER);
 		join.filter_pushdown = make_uniq<JoinFilterPushdownInfo>();
 		join.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(0)));
@@ -285,6 +448,68 @@ TEST_CASE("Bound plan copy bypasses table-function rebinding and rejects noncopy
 		                    Catch::Matchers::Contains("does not support operator"));
 	}
 	connection.Rollback();
+}
+
+// SQL cannot invoke this API or observe whether two producers alias the same copy-local set.
+TEST_CASE("Bound join copies preserve filter graph aliasing and isolate runtime state",
+          "[optimizer][bound_plan_copy]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	auto directory = TestCreatePath("bound_join_copy");
+	REQUIRE_NO_FAIL(connection.Query("COPY (SELECT i::INTEGER k,i v FROM range(12) r(i)) TO " +
+	                                 Value(directory + ".parquet").ToSQLString() + " (FORMAT PARQUET)"));
+	const auto source = "read_parquet(" + Value(directory + ".parquet").ToSQLString() + ")";
+	auto probe = make_shared_ptr<JoinCopyProbe>();
+	OptimizerExtension extension;
+	extension.optimizer_info = probe;
+	extension.optimize_function = CopyJoinAfterOptimization;
+	OptimizerExtension::Register(DBConfig::GetConfig(*db.instance), std::move(extension));
+	// Fix the topology for the shared-set assertion. Join-filter pushdown remains enabled.
+	REQUIRE_NO_FAIL(connection.Query("SET disabled_optimizers='join_order,build_side_probe_side'"));
+	vector<string> queries {
+	    "SELECT l.k,l.v,r.v FROM " + source + " l JOIN " + source + " r ON l.k=r.k ORDER BY ALL",
+	    "SELECT l.k,l.v,r.v,s.v FROM " + source + " l JOIN " + source + " r ON l.k=r.k JOIN " + source +
+	        " s ON l.k=s.k ORDER BY ALL",
+	    "SELECT l.k,r.v FROM (SELECT * FROM " + source + " UNION ALL SELECT * FROM " + source + ") l JOIN " + source +
+	        " r ON l.k=r.k ORDER BY ALL",
+	    "SELECT l.k,r.v FROM (SELECT * FROM " + source + " LIMIT 4) l JOIN " + source + " r ON l.k=r.k ORDER BY ALL",
+	    "SELECT l.k,r.v FROM " + source + " l JOIN " + source + " r ON l.k::BIGINT=r.k::BIGINT ORDER BY ALL"};
+	for (auto &query : queries) {
+		CAPTURE(query);
+		probe->enabled = false;
+		auto original = connection.Query(query);
+		REQUIRE_NO_FAIL(*original);
+		probe->enabled = true;
+		auto copy = connection.Query(query);
+		RequireSameResult(*original, *copy);
+	}
+	REQUIRE(probe->shared_sets > 0);
+	REQUIRE(probe->multiple_targets > 0);
+	REQUIRE(probe->min_max_only > 0);
+	REQUIRE(probe->casts > 0);
+}
+
+// Populated physical-identity maps and broken logical endpoints are not constructible through SQL.
+TEST_CASE("Bound join copies refuse external populated and non-INNER filter graphs", "[optimizer][bound_plan_copy]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	auto path = TestCreatePath("bound_join_copy_refusal.parquet");
+	REQUIRE_NO_FAIL(
+	    connection.Query("COPY (SELECT i k FROM range(8) r(i)) TO " + Value(path).ToSQLString() + " (FORMAT PARQUET)"));
+	auto probe = make_shared_ptr<JoinCopyProbe>();
+	probe->refusals = true;
+	OptimizerExtension extension;
+	extension.optimizer_info = probe;
+	extension.optimize_function = CopyJoinAfterOptimization;
+	OptimizerExtension::Register(DBConfig::GetConfig(*db.instance), std::move(extension));
+	auto source = "read_parquet(" + Value(path).ToSQLString() + ")";
+	auto query = "SELECT l.k FROM " + source + " l JOIN " + source + " r ON l.k=r.k ORDER BY ALL";
+	auto original = connection.Query(query);
+	REQUIRE_NO_FAIL(*original);
+	probe->enabled = true;
+	auto copy = connection.Query(query);
+	RequireSameResult(*original, *copy);
+	REQUIRE(probe->refused == 3);
 }
 
 // Scan preservation deliberately retains the ordinary expression reconstruction contract.

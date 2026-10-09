@@ -296,6 +296,9 @@ static unique_ptr<LogicalOperator> CopyLogicalOperator(const LogicalOperator &op
 		serializer.Begin();
 		op.Serialize(serializer);
 		serializer.End();
+		if (copy_state) {
+			copy_state->SerializeJoinExpressions(serializer);
+		}
 	} catch (NotImplementedException &ex) {
 		ErrorData error(ex);
 		if (copy_state) {
@@ -315,8 +318,9 @@ static unique_ptr<LogicalOperator> CopyLogicalOperator(const LogicalOperator &op
 	}
 	auto result = deserializer.Deserialize<LogicalOperator>();
 	if (copy_state) {
+		copy_state->DeserializeJoinExpressions(deserializer);
+		copy_state->CopyAnnotations(op, *result);
 		copy_state->VerifyConsumed();
-		LogicalOperatorCopyState::CopyCardinality(op, *result);
 	}
 	return result;
 }
@@ -326,8 +330,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::CopyPreservingBoundState(ClientContext &context) const {
-	LogicalOperatorCopyState::Validate(*this);
 	LogicalOperatorCopyState state;
+	state.Validate(*this);
 	return CopyLogicalOperator(*this, context, state);
 }
 
