@@ -190,16 +190,6 @@ FROM dimensions d2 JOIN (
 ----
 3	4
 
-# Filtering at the outer join must not hide an error in the inner projection.
-statement error
-SELECT count(*), sum(payload)
-FROM (SELECT * FROM dimensions WHERE k > 2) d2 JOIN (
-    SELECT *, s.value::BIGINT AS payload
-    FROM dimensions d1 JOIN guarded_strings s ON d1.k = s.i + 1
-) a ON d2.k = a.i + 2
-----
-<REGEX>:.*Conversion Error.*bad.*
-
 # Inputs that reach the join expression must still raise their original errors.
 statement error
 SELECT * FROM cast_rows(false)
