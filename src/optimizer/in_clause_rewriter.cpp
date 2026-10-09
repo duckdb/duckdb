@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/in_clause_rewriter.hpp"
+#include "duckdb/execution/in_value_set.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
@@ -6,9 +7,10 @@
 
 namespace duckdb {
 
-bool InClauseRewriter::UsesHashLookup(const BoundOperatorExpression &expr) {
+//! Large constant lists are kept as IN: the executor probes a lookup set or compares them one by one
+static bool KeepInExpression(const BoundOperatorExpression &expr) {
 	auto &children = expr.GetChildren();
-	if (children.size() < IN_CLAUSE_REWRITE_THRESHOLD) {
+	if (children.size() <= InValueSet::MIN_VALUE_COUNT) {
 		return false;
 	}
 	for (idx_t child_idx = 1; child_idx < children.size(); child_idx++) {
@@ -23,7 +25,7 @@ bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 	    (expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
 	     expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) &&
-	    UsesHashLookup(expr.Cast<BoundOperatorExpression>())) {
+	    KeepInExpression(expr.Cast<BoundOperatorExpression>())) {
 		return true;
 	}
 	bool result = false;
@@ -66,8 +68,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 		    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
 		    std::move(expr.GetChildrenMutable()[0]), std::move(expr.GetChildrenMutable()[1]));
 	}
-	if (UsesHashLookup(expr)) {
-		// many constant children: keep the IN, it is evaluated with a hash lookup
+	if (KeepInExpression(expr)) {
 		return nullptr;
 	}
 	// low amount of children or not all scalar

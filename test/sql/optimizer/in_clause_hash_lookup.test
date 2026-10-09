@@ -115,11 +115,60 @@ SELECT bool_and((bo IN (true, true, true, true, true)) = bo) FROM vals;
 ----
 true
 
-# nested types fall back to pairwise comparison
+# nested types are looked up by their sort key
 query I
 SELECT bool_and((l IN ([0], [1], [5], [6], [7])) = (l = [0] OR l = [1] OR l = [5] OR l = [6] OR l = [7])) FROM vals;
 ----
 true
+
+statement ok
+CREATE TABLE nested AS SELECT
+	CASE WHEN i % 13 = 0 THEN NULL ELSE [i % 7, CASE WHEN i % 5 = 0 THEN NULL ELSE i % 3 END] END AS l,
+	[CASE i % 4 WHEN 0 THEN -0.0 WHEN 1 THEN 'nan'::DOUBLE ELSE i % 3 END] AS d,
+	{'a': i % 4, 'b': CASE WHEN i % 6 = 0 THEN NULL ELSE 's' || (i % 3) END} AS st,
+	[i % 3, i % 2]::INT[2] AS arr,
+	[[i % 2], [i % 3]] AS ll
+FROM range(3000) t(i);
+
+# NULLs nested inside values compare equal
+query I
+SELECT bool_and((l IN ([1, 1], [2, NULL], [3, 0], [0, 2], [6, NULL], [5, 1])) IS NOT DISTINCT FROM (l = [1, 1] OR l = [2, NULL] OR l = [3, 0] OR l = [0, 2] OR l = [6, NULL] OR l = [5, 1])) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((l NOT IN ([1, 1], [2, NULL], [3, 0], [0, 2], [6, NULL], NULL)) IS NOT DISTINCT FROM (l <> [1, 1] AND l <> [2, NULL] AND l <> [3, 0] AND l <> [0, 2] AND l <> [6, NULL] AND l <> NULL)) FROM nested;
+----
+true
+
+# NaN equals NaN and -0.0 equals 0.0
+query I
+SELECT bool_and((d IN ([0.0], ['nan'::DOUBLE], [5.0], [6.0], [7.0], [8.0])) IS NOT DISTINCT FROM (d = [0.0] OR d = ['nan'::DOUBLE] OR d = [5.0] OR d = [6.0] OR d = [7.0] OR d = [8.0])) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((st IN ({'a': 1, 'b': 's1'}, {'a': 0, 'b': NULL}, {'a': 2, 'b': 's2'}, {'a': 3, 'b': 's0'}, {'a': 9, 'b': 'x'}, {'a': 2, 'b': NULL})) IS NOT DISTINCT FROM (st = {'a': 1, 'b': 's1'} OR st = {'a': 0, 'b': NULL} OR st = {'a': 2, 'b': 's2'} OR st = {'a': 3, 'b': 's0'} OR st = {'a': 9, 'b': 'x'} OR st = {'a': 2, 'b': NULL})) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((arr IN ([0, 0]::INT[2], [1, 1]::INT[2], [2, 0]::INT[2], [5, 5]::INT[2], [6, 6]::INT[2], [7, 7]::INT[2])) IS NOT DISTINCT FROM (arr = [0, 0]::INT[2] OR arr = [1, 1]::INT[2] OR arr = [2, 0]::INT[2] OR arr = [5, 5]::INT[2] OR arr = [6, 6]::INT[2] OR arr = [7, 7]::INT[2])) FROM nested;
+----
+true
+
+query I
+SELECT bool_and((ll IN ([[0], [0]], [[1], [2]], [[0], [1]], [[5], [5]], [[6], [6]], [[7], [7]])) IS NOT DISTINCT FROM (ll = [[0], [0]] OR ll = [[1], [2]] OR ll = [[0], [1]] OR ll = [[5], [5]] OR ll = [[6], [6]] OR ll = [[7], [7]])) FROM nested;
+----
+true
+
+# sort keys do not normalize intervals or apply collations, these fall back to pairwise comparison
+query III
+SELECT [INTERVAL 30 DAY] IN ([INTERVAL 1 MONTH], [INTERVAL 1 DAY], [INTERVAL 2 DAY], [INTERVAL 3 DAY], [INTERVAL 4 DAY]),
+	['A' COLLATE NOCASE] IN (['a'], ['b'], ['c'], ['d'], ['e']),
+	NULL::INT[] IN ([1], [2], [3], [4], [5]);
+----
+true	true	NULL
 
 # enums and uuids
 statement ok
@@ -147,6 +196,27 @@ query I
 SELECT count(*) FROM vals WHERE false AND i IN (1, 2, 3, 4, 5, 6);
 ----
 0
+
+# large IN lists used as a filter
+query I
+SELECT (SELECT count(*) FROM vals WHERE i IN (1, 5, 9, 13, 17, 21, 1000)) = (SELECT count(*) FROM vals WHERE i = 1 OR i = 5 OR i = 9 OR i = 13 OR i = 17 OR i = 21 OR i = 1000);
+----
+true
+
+query I
+SELECT (SELECT count(*) FROM vals WHERE i IN (1, 5, 9, 13, 17, NULL)) = (SELECT count(*) FROM vals WHERE i = 1 OR i = 5 OR i = 9 OR i = 13 OR i = 17);
+----
+true
+
+query I
+SELECT (SELECT count(*) FROM vals WHERE i NOT IN (1, 5, 9, 13, 17, 21)) = (SELECT count(*) FROM vals WHERE i <> 1 AND i <> 5 AND i <> 9 AND i <> 13 AND i <> 17 AND i <> 21);
+----
+true
+
+query I
+SELECT (SELECT count(*) FROM vals WHERE s IN ('s1', 's5', 'a fairly long string value 3', 's22', 's', 'x')) = (SELECT count(*) FROM vals WHERE s = 's1' OR s = 's5' OR s = 'a fairly long string value 3' OR s = 's22' OR s = 's' OR s = 'x');
+----
+true
 
 # dictionary compressed input
 load __TEST_DIR__/in_clause_hash_lookup.db

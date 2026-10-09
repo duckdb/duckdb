@@ -15,11 +15,7 @@ namespace duckdb {
 
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
-	//! Minimum number of children (including the probe expression) to evaluate an IN with a hash lookup
-	static constexpr idx_t IN_CLAUSE_REWRITE_THRESHOLD = 6;
-	//! Whether the IN is evaluated with a hash lookup of its constant values
-	static bool UsesHashLookup(const BoundOperatorExpression &expr);
-	//! Whether the expression contains an IN that is evaluated with a hash lookup
+	//! Whether the expression contains a large constant IN that is kept as an IN
 	static bool HasRewritableInClause(const Expression &expr);
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
