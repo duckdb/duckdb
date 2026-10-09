@@ -2212,6 +2212,8 @@ public:
 	//! For probe synchronization
 	atomic<idx_t> probe_chunk_count;
 	atomic<idx_t> probe_chunk_done;
+	//! Last reported progress, also used while partition masks are being updated
+	MonotonicProgress external_progress;
 
 	//! To determine the number of threads
 	idx_t probe_count;
@@ -2236,6 +2238,7 @@ private:
 		build_chunks_per_thread = DConstants::INVALID_INDEX;
 		probe_chunk_count = 0;
 		probe_chunk_done = 0;
+		external_progress.Reset();
 		probe_count = op.children[0].get().estimated_cardinality;
 		parallel_scan_chunk_count = context.config.verify_parallelism ? 1 : 120;
 		full_outer_chunk_idx = DConstants::INVALID_INDEX;
@@ -2705,10 +2708,15 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 	}
 
 	const auto &ht = *sink.hash_table;
-	const auto num_partitions = static_cast<double>(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()));
+	res.total = static_cast<double>(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()));
+
+	// Progress holds the executor lock, which workers may acquire while holding this lock.
+	if (!gstate.lock.try_lock()) {
+		return gstate.external_progress.Update(res);
+	}
+	annotated_lock_guard<annotated_mutex> guard(gstate.lock, std::adopt_lock);
 
 	res.done = static_cast<double>(ht.FinishedPartitionCount());
-	res.total = num_partitions;
 
 	const auto probe_chunk_done = static_cast<double>(gstate.probe_chunk_done);
 	const auto probe_chunk_count = static_cast<double>(gstate.probe_chunk_count);
@@ -2721,7 +2729,7 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 		res.done += probe_progress;
 	}
 
-	return res;
+	return gstate.external_progress.Update(res);
 }
 
 InsertionOrderPreservingMap<string> PhysicalHashJoin::ParamsToString() const {
