@@ -52,3 +52,52 @@ SELECT a, CASE WHEN a>11 THEN CAST(a AS VARCHAR) ELSE CAST(b AS VARCHAR) END FRO
 12	12
 13	13
 
+# NULLIF(expr, expr) is always NULL and should be simplified to a constant
+query I
+SELECT NULLIF(a, a) FROM test3;
+----
+NULL
+NULL
+NULL
+
+# The constant NULL should enable row-group pruning
+query I
+SELECT count(*) FROM test3 WHERE NULLIF(a, a) IS NOT NULL;
+----
+0
+
+# NULLIF with NULL values in the column
+statement ok
+CREATE TABLE with_nulls (x INTEGER);
+
+statement ok
+INSERT INTO with_nulls VALUES (1), (NULL), (3);
+
+query I
+SELECT NULLIF(x, x) FROM with_nulls;
+----
+NULL
+NULL
+NULL
+
+# a = a is simplified to constant_or_null(true, a), making NULLIF(a, a) always NULL
+query I
+SELECT a = a FROM test3;
+----
+true
+true
+true
+
+query I
+SELECT x = x FROM with_nulls;
+----
+true
+NULL
+true
+
+# NULLIF(expr, expr) with volatile expressions should not be simplified
+query I
+SELECT NULLIF(random(), random()) IS NULL OR NULLIF(random(), random()) IS NOT NULL;
+----
+true
+
