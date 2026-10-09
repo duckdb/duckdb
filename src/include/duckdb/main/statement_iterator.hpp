@@ -18,6 +18,7 @@ namespace duckdb {
 class ClientContext;
 class ClientContextLock;
 class SQLStatement;
+class StatementPreprocessor;
 
 //! Iterator over the engine-facing statements of a query.
 //!
@@ -83,6 +84,9 @@ private:
 	//! one-at-a-time across GetStatement calls before pulling + preprocessing the next peel.
 	vector<unique_ptr<SQLStatement>> buffer;
 	idx_t buffer_cursor = 0;
+	//! Shared across all peels, so a peel is preprocessed knowing about an explicit BEGIN in an earlier
+	//! peel, even when the caller hasn't executed that BEGIN yet.
+	unique_ptr<StatementPreprocessor> preprocessor;
 };
 
 } // namespace duckdb
