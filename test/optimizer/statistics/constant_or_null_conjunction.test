@@ -18,12 +18,12 @@ PRAGMA explain_output = OPTIMIZED_ONLY;
 query II
 EXPLAIN SELECT count(*) FROM quantities WHERE q BETWEEN 1 AND 20;
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query II
 EXPLAIN SELECT count(*) FROM quantities WHERE q BETWEEN 81 AND 100;
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query II
 SELECT (SELECT count(*) FROM quantities WHERE q BETWEEN 1 AND 20),
@@ -35,7 +35,7 @@ SELECT (SELECT count(*) FROM quantities WHERE q BETWEEN 1 AND 20),
 query II
 EXPLAIN SELECT count(*) FROM quantities WHERE q <= 20 AND constant_or_null(true, q);
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query I
 SELECT count(*) FROM quantities WHERE constant_or_null(true, q) AND q <= 20;
@@ -49,12 +49,12 @@ SET disabled_optimizers='filter_pushdown';
 query II
 EXPLAIN SELECT count(*) FROM quantities WHERE q >= 1 AND q <= 20;
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query II
 EXPLAIN SELECT count(*) FROM quantities WHERE q <= 20 AND q >= 1;
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query I
 SELECT count(*) FROM quantities WHERE q >= 1 AND q <= 20;
@@ -76,7 +76,7 @@ CHECKPOINT;
 query II
 EXPLAIN SELECT constant_or_null(true, x, y) AND x <= 20 AND y = 1 FROM pairs;
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query III
 SELECT count(*) FILTER (WHERE p), count(*) FILTER (WHERE NOT p), count(*) FILTER (WHERE p IS NULL)
@@ -93,7 +93,7 @@ FROM (SELECT NOT (constant_or_null(true, x, y) AND x <= 20 AND y = 1) AS p FROM 
 query II
 EXPLAIN SELECT constant_or_null(true, x, y) AND x <= 20 FROM pairs;
 ----
-logical_opt	<REGEX>:.*constant_or_null.*
+logical_opt	<REGEX>:.*constant_or_null\(.*
 
 query I
 SELECT count(*) FROM pairs WHERE constant_or_null(true, x, y) AND x <= 20;
@@ -104,12 +104,12 @@ SELECT count(*) FROM pairs WHERE constant_or_null(true, x, y) AND x <= 20;
 query II
 EXPLAIN SELECT constant_or_null(true, q) AND (q <= 20 OR q >= 81) FROM quantities;
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query II
 EXPLAIN SELECT constant_or_null(true, q) AND (q <= 20 OR q IS NULL) FROM quantities;
 ----
-logical_opt	<REGEX>:.*constant_or_null.*
+logical_opt	<REGEX>:.*constant_or_null\(.*
 
 query I
 SELECT count(*) FROM quantities WHERE constant_or_null(true, q) AND (q <= 20 OR q IS NULL);
@@ -120,7 +120,7 @@ SELECT count(*) FROM quantities WHERE constant_or_null(true, q) AND (q <= 20 OR 
 query II
 EXPLAIN SELECT constant_or_null(true, q) AND q IS DISTINCT FROM 20 FROM quantities;
 ----
-logical_opt	<REGEX>:.*constant_or_null.*
+logical_opt	<REGEX>:.*constant_or_null\(.*
 
 query I
 SELECT count(*) FROM quantities WHERE constant_or_null(true, q) AND q IS DISTINCT FROM 20;
@@ -131,7 +131,7 @@ SELECT count(*) FROM quantities WHERE constant_or_null(true, q) AND q IS DISTINC
 query II
 EXPLAIN SELECT constant_or_null(true, CASE WHEN q < 10 THEN NULL ELSE q END) AND q <= 20 FROM quantities;
 ----
-logical_opt	<REGEX>:.*constant_or_null.*
+logical_opt	<REGEX>:.*constant_or_null\(.*
 
 query I
 SELECT count(*) FROM quantities
@@ -178,7 +178,7 @@ EXPLAIN SELECT constant_or_null(true, s) AND s IS NOT NULL,
                constant_or_null(true, l) AND l IS NOT NULL,
                constant_or_null(true, r) AND r IS NOT NULL FROM nested_inputs;
 ----
-logical_opt	<!REGEX>:.*constant_or_null.*
+logical_opt	<!REGEX>:.*constant_or_null\(.*
 
 query III
 SELECT count_if(constant_or_null(true, s) AND s IS NOT NULL),
@@ -238,7 +238,7 @@ SET disabled_optimizers='statistics_propagation';
 query II
 EXPLAIN SELECT constant_or_null(true, q) AND q <= 20 FROM quantities;
 ----
-logical_opt	<REGEX>:.*constant_or_null.*
+logical_opt	<REGEX>:.*constant_or_null\(.*
 
 query I
 SELECT count(*) FROM quantities WHERE q BETWEEN 1 AND 20;

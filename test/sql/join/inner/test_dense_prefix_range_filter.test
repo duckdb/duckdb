@@ -117,15 +117,33 @@ PRAGMA verify_parallelism;
 statement ok
 SET perfect_ht_threshold=0;
 
+foreach external false true
+
+statement ok
+SET debug_force_external={external};
+
+skipif external=true
 query II
 EXPLAIN ANALYZE SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
 ----
 analyzed_plan	<REGEX>:(?s).*IN.*PRF.*\(k\).*
 
+# External joins cannot publish a prefix range filter across build partitions.
+skipif external=false
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
+----
+analyzed_plan	<REGEX>:(?s).*IN.*BF.*\(k\).*
+
 query I
 SELECT count(*) FROM probe p JOIN build b ON p.k=b.k;
 ----
 1100002
+
+endloop
+
+statement ok
+RESET debug_force_external;
 
 # Persisted nullable RLE requires row filtering; a preceding predicate leaves a partial selection.
 statement ok
