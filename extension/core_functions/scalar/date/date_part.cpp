@@ -2725,6 +2725,7 @@ ScalarFunctionSet JulianDayFun::GetFunctions() {
 	ScalarFunction ts_fun({}, LogicalType::DOUBLE, ts_func, nullptr, ts_stats);
 	ts_fun.GetSignature().AddParameter("ts", LogicalType::TIMESTAMP);
 	operator_set.AddFunction(ts_fun);
+	operator_set.SetUnaryArgProperties(ArgProperties().NonDecreasing());
 
 	return operator_set;
 }

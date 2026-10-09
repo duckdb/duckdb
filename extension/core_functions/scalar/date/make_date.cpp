@@ -173,6 +173,8 @@ ScalarFunction MakeTimeFun::GetFunction() {
 	    .AddParameter("minute", LogicalType::BIGINT)
 	    .AddParameter("seconds", LogicalType::DOUBLE);
 	function.SetFallible();
+	function.SetArgProperties(0, ArgProperties().StrictlyIncreasing());
+	function.SetArgProperties(1, ArgProperties().StrictlyIncreasing());
 	return function;
 }
 
