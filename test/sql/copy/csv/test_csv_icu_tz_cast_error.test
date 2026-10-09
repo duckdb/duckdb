@@ -1,0 +1,195 @@
+# name: test/sql/copy/csv/test_csv_icu_tz_cast_error.test
+# description: With ICU loaded, CSV conversion failures to TIMESTAMPTZ and TIMETZ raise errors instead of loading NULL
+# group: [csv]
+
+require icu
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET TimeZone = 'UTC';
+
+statement ok
+COPY (SELECT * FROM (VALUES ('2020-01-01 10:00:00+02'), ('not-a-time')) t(v)) TO '__TEST_DIR__/tz_bad.csv' (HEADER);
+
+statement ok
+COPY (SELECT * FROM (VALUES ('10:00:00+02'), ('not-a-time')) t(v)) TO '__TEST_DIR__/timetz_bad.csv' (HEADER);
+
+statement ok
+COPY (SELECT * FROM (VALUES ('4714-11-23 23:00-02 BC')) t(v)) TO '__TEST_DIR__/tz_bc.csv' (HEADER);
+
+statement ok
+COPY (SELECT * FROM (VALUES ('2020-01-01 10:00:00+02'), ('2020-01-01 10:00 Mars/Olympus')) t(v)) TO '__TEST_DIR__/tz_name_bad.csv' (HEADER);
+
+statement ok
+COPY (SELECT * FROM (VALUES ('2020-01-01 00:00:00'),('2020-01-01 10:00:00+02'), (NULL), ('2020-06-01 12:00:00 Europe/Amsterdam')) t(v)) TO '__TEST_DIR__/tz_good.csv' (HEADER);
+
+# The engine cast rejects the same inputs
+statement error
+SELECT CAST('not-a-time' AS TIMESTAMPTZ);
+----
+invalid timestamp field format
+
+statement error
+SELECT CAST('not-a-time' AS TIMETZ);
+----
+Conversion Error
+
+statement error
+SELECT CAST('4714-11-23 23:00-02 BC' AS TIMESTAMPTZ);
+----
+Conversion Error
+
+statement error
+SELECT CAST('2020-01-01 10:00 Mars/Olympus' AS TIMESTAMPTZ);
+----
+Unknown TimeZone 'Mars/Olympus'
+
+query III
+SELECT TRY_CAST('not-a-time' AS TIMESTAMPTZ), TRY_CAST('not-a-time' AS TIMETZ), TRY_CAST('2020-01-01 10:00 Mars/Olympus' AS TIMESTAMPTZ);
+----
+NULL	NULL	NULL
+
+# read_csv with explicit columns
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true);
+----
+Could not convert string "not-a-time" to 'TIMESTAMP WITH TIME ZONE'
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/timetz_bad.csv', columns={'v': 'TIMETZ'}, header=true);
+----
+Could not convert string "not-a-time" to 'TIME WITH TIME ZONE'
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true, strict_mode=true, ignore_errors=false);
+----
+Could not convert string "not-a-time" to 'TIMESTAMP WITH TIME ZONE'
+
+# The error points at the failing line, not the first line of the chunk
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true);
+----
+CSV Error on Line: 3
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_bad.csv', columns={'v': 'TIMESTAMPTZ_NS'}, header=true);
+----
+Could not convert string "not-a-time"
+
+# Out-of-range values that the engine cast rejects
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_bc.csv', columns={'v': 'TIMESTAMPTZ'}, header=true);
+----
+Could not convert string "4714-11-23 23:00-02 BC" to 'TIMESTAMP WITH TIME ZONE'
+
+# Unknown time zone names that the engine cast rejects
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_name_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true);
+----
+Could not convert string "2020-01-01 10:00 Mars/Olympus" to 'TIMESTAMP WITH TIME ZONE'
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/tz_name_bad.csv', columns={'v': 'TIMESTAMPTZ_NS'}, header=true);
+----
+Could not convert string "2020-01-01 10:00 Mars/Olympus"
+
+query I
+SELECT * FROM read_csv('__TEST_DIR__/tz_name_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true, ignore_errors=true);
+----
+2020-01-01 08:00:00+00
+
+# read_csv_auto with types
+statement error
+SELECT * FROM read_csv_auto('__TEST_DIR__/tz_bad.csv', types={'v': 'TIMESTAMPTZ'});
+----
+Could not convert string "not-a-time" to 'TIMESTAMP WITH TIME ZONE'
+
+statement error
+SELECT * FROM read_csv_auto('__TEST_DIR__/timetz_bad.csv', types={'v': 'TIMETZ'});
+----
+Could not convert string "not-a-time" to 'TIME WITH TIME ZONE'
+
+# COPY FROM and INSERT ... SELECT into typed tables
+statement ok
+CREATE TABLE tstz(v TIMESTAMPTZ);
+
+statement ok
+CREATE TABLE ttz(v TIMETZ);
+
+statement error
+COPY tstz FROM '__TEST_DIR__/tz_bad.csv';
+----
+Could not convert string "not-a-time" to 'TIMESTAMP WITH TIME ZONE'
+
+statement error
+COPY ttz FROM '__TEST_DIR__/timetz_bad.csv';
+----
+Could not convert string "not-a-time" to 'TIME WITH TIME ZONE'
+
+statement error
+COPY tstz FROM '__TEST_DIR__/tz_bc.csv';
+----
+Could not convert string "4714-11-23 23:00-02 BC" to 'TIMESTAMP WITH TIME ZONE'
+
+statement error
+INSERT INTO tstz SELECT * FROM read_csv('__TEST_DIR__/tz_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true);
+----
+Could not convert string "not-a-time" to 'TIMESTAMP WITH TIME ZONE'
+
+query I
+SELECT count(*) FROM tstz;
+----
+0
+
+query I
+SELECT count(*) FROM ttz;
+----
+0
+
+# ignore_errors skips the failing row instead of loading NULL
+query I
+SELECT * FROM read_csv('__TEST_DIR__/tz_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true, ignore_errors=true);
+----
+2020-01-01 08:00:00+00
+
+query I
+SELECT * FROM read_csv('__TEST_DIR__/timetz_bad.csv', columns={'v': 'TIMETZ'}, header=true, ignore_errors=true);
+----
+10:00:00+02
+
+# store_rejects records the failing rows
+statement ok
+SELECT * FROM read_csv('__TEST_DIR__/tz_bad.csv', columns={'v': 'TIMESTAMPTZ'}, header=true, store_rejects=true);
+
+query III
+SELECT DISTINCT line, column_name, error_message FROM reject_errors;
+----
+3	v	Error when converting column "v". Could not convert string "not-a-time" to 'TIMESTAMP WITH TIME ZONE'
+
+# Valid values, SQL NULLs, time zone names and naive timestamps still load
+statement ok
+COPY tstz FROM '__TEST_DIR__/tz_good.csv';
+
+query I
+SELECT v FROM tstz ORDER BY v NULLS LAST;
+----
+2020-01-01 00:00:00+00
+2020-01-01 08:00:00+00
+2020-06-01 10:00:00+00
+NULL
+
+# Type sniffing of a TIMESTAMPTZ column is unchanged
+query I
+SELECT typeof(v) FROM read_csv('__TEST_DIR__/tz_bad.csv', header=true) LIMIT 1;
+----
+VARCHAR
+
+statement ok
+COPY (SELECT * FROM (VALUES ('2020-01-01 10:00:00+02'), ('2021-01-01 10:00:00+02')) t(v)) TO '__TEST_DIR__/tz_sniff.csv' (HEADER);
+
+query I
+SELECT typeof(v) FROM read_csv('__TEST_DIR__/tz_sniff.csv', header=true) LIMIT 1;
+----
+TIMESTAMP WITH TIME ZONE
