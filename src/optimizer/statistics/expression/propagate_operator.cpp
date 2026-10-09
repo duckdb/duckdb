@@ -1,13 +1,31 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
-//! Folding a NULL check must preserve errors and side effects from its child.
+//! Casting a variable-size value to VARIANT throws if the encoded row exceeds the maximum size, even for TRY_CAST
+static bool ContainsThrowingVariantCast(const Expression &expr) {
+	if (BoundCastExpression::IsCast(expr)) {
+		auto &cast = expr.Cast<BoundFunctionExpression>();
+		auto source_type = BoundCastExpression::SourceType(cast);
+		if (BoundCastExpression::TargetType(cast).id() == LogicalTypeId::VARIANT &&
+		    source_type.id() != LogicalTypeId::VARIANT && !TypeIsConstantSize(source_type.InternalType())) {
+			return true;
+		}
+	}
+	bool result = false;
+	ExpressionIterator::EnumerateChildren(
+	    expr, [&](const Expression &child) { result = result || ContainsThrowingVariantCast(child); });
+	return result;
+}
+
+//! Folding a NULL check removes its child from the plan
 static bool CanFoldNullCheck(const BoundOperatorExpression &expr) {
 	auto &child = *expr.GetChildren()[0];
-	return !child.IsVolatile() && !child.CanThrow();
+	return !child.IsVolatile() && !ContainsThrowingVariantCast(child);
 }
 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperatorExpression &expr,

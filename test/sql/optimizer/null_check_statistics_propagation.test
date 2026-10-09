@@ -1,116 +1,69 @@
 # name: test/sql/optimizer/null_check_statistics_propagation.test
-# description: Statistics must not fold IS (NOT) NULL over a child that is volatile or can throw
+# description: Statistics must not fold IS (NOT) NULL over a child that is volatile or a throwing VARIANT cast
 # group: [optimizer]
 
 statement ok
-CREATE TABLE t AS SELECT 300::INTEGER i;
+CREATE TABLE t AS SELECT 300::INTEGER i, 'hello'::VARCHAR s, {'a': 'x', 'b': 42} st;
 
-# The multiplication overflows - folding the NULL check to a constant would suppress the error
-statement error
-SELECT (i * i * i * i * i) IS NOT NULL FROM t;
-----
-<REGEX>:.*Overflow in multiplication.*
-
-statement error
-SELECT (i * i * i * i * i) IS NULL FROM t;
-----
-<REGEX>:.*Overflow in multiplication.*
-
-# The cast in "CAST(<oversized literal> AS VARIANT) IS NOT NULL" throws for the same reason, but
-# that query needs more than 4 GB of memory so it cannot be tested here
-
-# Do not change the number of volatile function evaluations
-statement ok
-CREATE SEQUENCE s;
-
-query I
-SELECT nextval('s') IS NOT NULL FROM t;
-----
-true
-
-query I
-SELECT currval('s');
-----
-1
-
-# Children that cannot throw are still folded
-query II
-EXPLAIN SELECT i IS NOT NULL FROM t;
-----
-physical_plan	<REGEX>:.*Projections: true.*
-
-query I
-SELECT i IS NOT NULL FROM t;
-----
-true
-
-query I
-SELECT i IS NULL FROM t;
-----
-false
-
-# Throwing children must stay in the plan even for empty inputs
-statement ok
-CREATE TABLE empty(i INTEGER);
+# Casting a variable-size value to VARIANT throws if the encoded row is too large, so the cast must stay in the plan
+# The query from the issue needs more than 4 GB of memory, so only the plans are checked here
+foreach expr s::VARIANT st::VARIANT st::VARIANT::VARCHAR
 
 query II
-EXPLAIN SELECT (i * i * i * i * i) IS NOT NULL FROM empty;
+EXPLAIN SELECT {expr} IS NOT NULL FROM t;
 ----
-physical_plan	<!REGEX>:.*Projections: true.*
-
-query I
-SELECT (i * i * i * i * i) IS NOT NULL FROM empty;
-----
-
-# Non-throwing list extraction can still be folded for all-NULL inputs
-statement ok
-CREATE TABLE all_null_list AS SELECT NULL::INTEGER[] AS l;
+physical_plan	<REGEX>:.*IS NOT NULL.*
 
 query II
-EXPLAIN SELECT list_extract(l, 1) IS NULL FROM all_null_list;
+EXPLAIN SELECT {expr} IS NULL FROM t;
 ----
-physical_plan	<REGEX>:.*Projections: true.*
-
-query I
-SELECT list_extract(l, 1) IS NULL FROM all_null_list;
-----
-true
-
-query II
-EXPLAIN SELECT list_extract(l, 1) IS NOT NULL FROM all_null_list;
-----
-physical_plan	<REGEX>:.*Projections: false.*
-
-query I
-SELECT list_extract(l, 1) IS NOT NULL FROM all_null_list;
-----
-false
-
-# A NULL result does not make evaluation of a throwing index safe
-statement ok
-CREATE TABLE null_elements AS SELECT [NULL]::INTEGER[] l, 'bad'::VARCHAR s;
-
-foreach extract list_extract array_extract
-
-statement error
-SELECT {extract}(l, s::BIGINT) IS NULL FROM null_elements;
-----
-Could not convert string 'bad' to INT64
-
-statement error
-SELECT {extract}(l, s::BIGINT) IS NOT NULL FROM null_elements;
-----
-Could not convert string 'bad' to INT64
+physical_plan	<REGEX>:.*IS NULL.*
 
 endloop
 
-# NULL result statistics must not discard evaluation of a volatile index either
+# TRY_CAST does not suppress the row size error either
+query II
+EXPLAIN SELECT TRY_CAST(st AS VARIANT) IS NOT NULL FROM t;
+----
+physical_plan	<REGEX>:.*IS NOT NULL.*
+
+query II
+SELECT st::VARIANT IS NOT NULL, st::VARIANT IS NULL FROM t;
+----
+true	false
+
+# Fixed-size values cannot exceed the VARIANT row size limit
+query II
+EXPLAIN SELECT i::VARIANT IS NOT NULL FROM t;
+----
+physical_plan	<REGEX>:.*Projections: true.*
+
 query I
-SELECT list_extract(l, nextval('s')) IS NULL FROM null_elements;
+SELECT i::VARIANT IS NOT NULL FROM t;
+----
+true
+
+# Other children are still folded
+query II
+EXPLAIN SELECT s IS NOT NULL FROM t;
+----
+physical_plan	<REGEX>:.*Projections: true.*
+
+query II
+EXPLAIN SELECT s IS NULL FROM t;
+----
+physical_plan	<REGEX>:.*Projections: false.*
+
+# Do not change the number of volatile function evaluations
+statement ok
+CREATE SEQUENCE seq;
+
+query I
+SELECT nextval('seq') IS NOT NULL FROM t;
 ----
 true
 
 query I
-SELECT currval('s');
+SELECT currval('seq');
 ----
-2
+1

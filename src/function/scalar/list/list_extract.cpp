@@ -179,6 +179,7 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	sfun.GetSignature().GetParameter(0).SetName("string");
 	sfun.GetSignature().GetParameter(1).SetName("index");
 
+	lfun.SetFallible();
 	list_extract_set.AddFunction(lfun);
 	list_extract_set.AddFunction(sfun);
 	return list_extract_set;
