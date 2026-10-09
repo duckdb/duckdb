@@ -8,12 +8,12 @@
 
 #pragma once
 
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
 struct TypeVisitor {
-	static constexpr idx_t MAX_TYPE_RECURSION_DEPTH = 1000;
 	template <class F>
 	static bool Contains(const LogicalType &type, F &&predicate);
 
@@ -23,145 +23,112 @@ struct TypeVisitor {
 	static LogicalType VisitReplace(const LogicalType &type, F &&func);
 
 private:
-	template <class F>
-	static LogicalType VisitReplaceInternal(const LogicalType &type, F &&func);
+	struct VisitorFrame {
+		LogicalType original_type;
+		idx_t expected_children_count;
+	};
 
-	template <class F>
-	static bool ContainsInternal(const LogicalType &type, F &&predicate);
+	static idx_t PushChildren(const LogicalType &type, vector<reference<const LogicalType>> &worklist);
+	static LogicalType PopType(vector<LogicalType> &result_stack);
+	static LogicalType RebuildType(const VisitorFrame &frame, vector<LogicalType> &result_stack);
 };
 
-struct VisitorFrame {
-	LogicalType original_type;
-	idx_t expected_children_count;
-};
+inline idx_t TypeVisitor::PushChildren(const LogicalType &type, vector<reference<const LogicalType>> &worklist) {
+	if (!type.AuxInfo()) {
+		return 0;
+	}
+
+	auto initial_size = worklist.size();
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
+		for (const auto &child : StructType::GetChildTypes(type)) {
+			worklist.push_back(child.second);
+		}
+		break;
+	case LogicalTypeId::UNION:
+		for (idx_t i = 0; i < UnionType::GetMemberCount(type); i++) {
+			worklist.push_back(UnionType::GetMemberType(type, i));
+		}
+		break;
+	case LogicalTypeId::MAP:
+		worklist.push_back(MapType::KeyType(type));
+		worklist.push_back(MapType::ValueType(type));
+		break;
+	case LogicalTypeId::LIST:
+		worklist.push_back(ListType::GetChildType(type));
+		break;
+	case LogicalTypeId::ARRAY:
+		worklist.push_back(ArrayType::GetChildType(type));
+		break;
+	default:
+		break;
+	}
+	return worklist.size() - initial_size;
+}
+
+inline LogicalType TypeVisitor::PopType(vector<LogicalType> &result_stack) {
+	auto type = std::move(result_stack.back());
+	result_stack.pop_back();
+	return type;
+}
+
+inline LogicalType TypeVisitor::RebuildType(const VisitorFrame &frame, vector<LogicalType> &result_stack) {
+	D_ASSERT(frame.expected_children_count > 0);
+	D_ASSERT(result_stack.size() >= frame.expected_children_count);
+	const auto &type = frame.original_type;
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::TUPLE:
+	case LogicalTypeId::UNION: {
+		auto children =
+		    type.id() == LogicalTypeId::UNION ? UnionType::CopyMemberTypes(type) : StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			child.second = PopType(result_stack);
+		}
+		if (type.id() == LogicalTypeId::STRUCT) {
+			return LogicalType::STRUCT(std::move(children));
+		}
+		if (type.id() == LogicalTypeId::TUPLE) {
+			return LogicalType::TUPLE(std::move(children));
+		}
+		return LogicalType::UNION(std::move(children));
+	}
+	case LogicalTypeId::MAP: {
+		auto value_type = PopType(result_stack);
+		auto key_type = PopType(result_stack);
+		return LogicalType::MAP(std::move(key_type), std::move(value_type));
+	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(PopType(result_stack));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(PopType(result_stack), ArrayType::GetSize(type));
+	default:
+		throw InternalException("Cannot rebuild children of a non-nested type");
+	}
+}
 
 template <class F>
 inline LogicalType TypeVisitor::VisitReplace(const LogicalType &type, F &&func) {
-	return VisitReplaceInternal(type, func);
-}
+	vector<VisitorFrame> postfix_stack;
+	vector<reference<const LogicalType>> worklist {type};
 
-template <typename F>
-inline LogicalType TypeVisitor::VisitReplaceInternal(const LogicalType &type, F &&func) {
-	std::vector<VisitorFrame> postfix_stack;
-	std::vector<LogicalType> worklist;
-	worklist.push_back(type);
-
-	// Phase 1: Post-order expansion via Worklist
 	while (!worklist.empty()) {
-		LogicalType current = std::move(worklist.back());
+		const auto &current = worklist.back().get();
 		worklist.pop_back();
-
-		if (!current.AuxInfo()) {
-			postfix_stack.push_back({std::move(current), 0});
-			continue;
-		}
-		switch (current.id()) {
-		case LogicalTypeId::STRUCT:
-		case LogicalTypeId::TUPLE: {
-			auto children = StructType::GetChildTypes(current);
-			idx_t child_count = children.size();
-			postfix_stack.push_back({std::move(current), child_count});
-			for (auto &child : children) {
-				worklist.push_back(std::move(child.second));
-			}
-			break;
-		}
-		case LogicalTypeId::UNION: {
-			auto children = UnionType::CopyMemberTypes(current);
-			idx_t child_count = children.size();
-
-			for (auto &child : children) {
-				worklist.push_back(std::move(child.second));
-			}
-			postfix_stack.push_back({std::move(current), child_count});
-			break;
-		}
-		case LogicalTypeId::MAP: {
-			worklist.push_back(MapType::KeyType(current));
-			worklist.push_back(MapType::ValueType(current));
-			postfix_stack.push_back({std::move(current), 2});
-			break;
-		}
-		case LogicalTypeId::LIST: {
-			worklist.push_back(ListType::GetChildType(current));
-			postfix_stack.push_back({std::move(current), 1});
-			break;
-		}
-		case LogicalTypeId::ARRAY: {
-			worklist.push_back(ArrayType::GetChildType(current));
-			postfix_stack.push_back({std::move(current), 1});
-			break;
-		}
-		default:
-			postfix_stack.push_back({std::move(current), 0});
-			break;
-		}
+		auto child_count = PushChildren(current, worklist);
+		postfix_stack.push_back({current, child_count});
 	}
 
-	// Phase 2: Post-order evaluation & Reconstruction using result_stack
-	std::vector<LogicalType> result_stack;
-
+	vector<LogicalType> result_stack;
 	while (!postfix_stack.empty()) {
 		auto frame = std::move(postfix_stack.back());
 		postfix_stack.pop_back();
 
 		if (frame.expected_children_count == 0) {
 			result_stack.push_back(func(frame.original_type));
-			continue;
-		}
-
-		switch (frame.original_type.id()) {
-		case LogicalTypeId::STRUCT: {
-			auto children = StructType::GetChildTypes(frame.original_type);
-			for (idx_t i = 0; i < frame.expected_children_count; ++i) {
-				children[i].second = std::move(result_stack.back());
-				result_stack.pop_back();
-			}
-			result_stack.push_back(func(LogicalType::STRUCT(std::move(children))));
-			break;
-		}
-		case LogicalTypeId::TUPLE: {
-			auto children = StructType::GetChildTypes(frame.original_type);
-			for (idx_t i = 0; i < frame.expected_children_count; ++i) {
-				children[i].second = std::move(result_stack.back());
-				result_stack.pop_back();
-			}
-			result_stack.push_back(func(LogicalType::TUPLE(std::move(children))));
-			break;
-		}
-		case LogicalTypeId::UNION: {
-			auto children = UnionType::CopyMemberTypes(frame.original_type);
-			for (idx_t i = 0; i < frame.expected_children_count; ++i) {
-				children[i].second = std::move(result_stack.back());
-				result_stack.pop_back();
-			}
-			result_stack.push_back(func(LogicalType::UNION(std::move(children))));
-			break;
-		}
-		case LogicalTypeId::MAP: {
-			auto value_type = std::move(result_stack.back());
-			result_stack.pop_back();
-			auto key_type = std::move(result_stack.back());
-			result_stack.pop_back();
-			result_stack.push_back(func(LogicalType::MAP(std::move(key_type), std::move(value_type))));
-			break;
-		}
-		case LogicalTypeId::LIST: {
-			auto child_type = std::move(result_stack.back());
-			result_stack.pop_back();
-			result_stack.push_back(func(LogicalType::LIST(std::move(child_type))));
-			break;
-		}
-		case LogicalTypeId::ARRAY: {
-			auto child_type = std::move(result_stack.back());
-			result_stack.pop_back();
-			idx_t array_size = ArrayType::GetSize(frame.original_type);
-			result_stack.push_back(func(LogicalType::ARRAY(std::move(child_type), array_size)));
-			break;
-		}
-		default:
-			result_stack.push_back(func(std::move(frame.original_type)));
-			break;
+		} else {
+			result_stack.push_back(func(RebuildType(frame, result_stack)));
 		}
 	}
 	D_ASSERT(result_stack.size() == 1);
@@ -170,60 +137,17 @@ inline LogicalType TypeVisitor::VisitReplaceInternal(const LogicalType &type, F 
 
 template <class F>
 inline bool TypeVisitor::Contains(const LogicalType &type, F &&predicate) {
-	return ContainsInternal(type, predicate);
-}
-
-template <class F>
-inline bool TypeVisitor::ContainsInternal(const LogicalType &root_type, F &&predicate) {
-	std::vector<reference<const LogicalType>> worklist;
-	worklist.push_back(root_type);
+	vector<reference<const LogicalType>> worklist {type};
 
 	while (!worklist.empty()) {
-		const auto &type = worklist.back().get();
+		const auto &current = worklist.back().get();
 		worklist.pop_back();
 
-		if (predicate(type)) {
+		if (predicate(current)) {
 			return true;
 		}
-
-		if (!type.AuxInfo()) {
-			continue;
-		}
-
-		switch (type.id()) {
-		case LogicalTypeId::STRUCT:
-		case LogicalTypeId::TUPLE: {
-			const auto &children = StructType::GetChildTypes(type);
-			for (const auto &child : children) {
-				worklist.push_back(child.second);
-			}
-			break;
-		}
-		case LogicalTypeId::UNION: {
-			const auto member_count = UnionType::GetMemberCount(type);
-			for (idx_t i = 0; i < member_count; ++i) {
-				worklist.push_back(UnionType::GetMemberType(type, i));
-			}
-			break;
-		}
-		case LogicalTypeId::LIST: {
-			worklist.push_back(ListType::GetChildType(type));
-			break;
-		}
-		case LogicalTypeId::ARRAY: {
-			worklist.push_back(ArrayType::GetChildType(type));
-			break;
-		}
-		case LogicalTypeId::MAP: {
-			worklist.push_back(MapType::KeyType(type));
-			worklist.push_back(MapType::ValueType(type));
-			break;
-		}
-		default:
-			break;
-		}
+		PushChildren(current, worklist);
 	}
-
 	return false;
 }
 
