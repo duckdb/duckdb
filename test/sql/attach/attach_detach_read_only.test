@@ -1,0 +1,41 @@
+# name: test/sql/attach/attach_detach_read_only.test
+# description: DETACH of a read-only attach after copying rows out (github #25223 / #23374)
+# group: [attach]
+
+statement ok
+ATTACH '{TEST_DIR}/attach_detach_ro_src.duckdb' AS src
+
+statement ok
+CREATE TABLE src.prepared_data AS SELECT i FROM range(100) t(i)
+
+statement ok
+DETACH src
+
+statement ok
+CREATE TABLE data(i BIGINT)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ATTACH '{TEST_DIR}/attach_detach_ro_src.duckdb' AS src (READ_ONLY)
+
+statement ok
+INSERT INTO data SELECT i FROM src.prepared_data
+
+statement ok
+DETACH src
+
+statement ok
+COMMIT
+
+query I
+SELECT count(*) FROM data
+----
+100
+
+# alias is gone after COMMIT
+statement error
+SELECT * FROM src.prepared_data
+----
+does not exist
