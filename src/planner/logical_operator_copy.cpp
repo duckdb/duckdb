@@ -7,13 +7,19 @@
 
 namespace duckdb {
 
-static void CheckCopyFilter(const TableFilter &filter) {
-	auto &expression = *ExpressionFilter::GetExpressionFilter(filter, "bound plan copy").expr;
+static void CheckCopyExpression(const Expression &expression) {
 	for (auto name : {DynamicFilterScalarFun::NAME, BloomFilterScalarFun::NAME, PrefixRangeScalarFun::NAME}) {
 		if (ExpressionFilter::ContainsInternalFunction(expression, name)) {
 			throw NotImplementedException("Bound plan copy does not support shared dynamic filter state");
 		}
 	}
+}
+
+static void CheckCopyFilter(const TableFilter &filter) {
+	if (filter.filter_type != TableFilterType::EXPRESSION_FILTER) {
+		throw NotImplementedException("Bound plan copy does not support non-expression table filters");
+	}
+	CheckCopyExpression(*ExpressionFilter::GetExpressionFilter(filter, "bound plan copy").expr);
 }
 
 void LogicalOperatorCopyState::Validate(const LogicalOperator &op) {
@@ -69,6 +75,8 @@ void LogicalOperatorCopyState::Validate(const LogicalOperator &op) {
 	default:
 		throw NotImplementedException("Bound plan copy does not support operator %s", op.GetName());
 	}
+	LogicalOperatorVisitor::EnumerateExpressions(
+	    op, [](const unique_ptr<Expression> *expression) { CheckCopyExpression(**expression); });
 	for (auto &child : op.children) {
 		Validate(*child);
 	}

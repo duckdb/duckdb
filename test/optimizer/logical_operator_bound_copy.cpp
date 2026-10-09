@@ -1,6 +1,10 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_states.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -12,6 +16,14 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/filter/dynamic_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/table_filter_functions.hpp"
+#include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_sample.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 using namespace duckdb;
 
@@ -21,6 +33,8 @@ struct BoundCopyProbe : OptimizerExtensionInfo {
 	bool enabled = false;
 	idx_t copies = 1;
 	idx_t copied_scans = 0;
+	idx_t pruned_scans = 0;
+	idx_t scans_with_normal_filters = 0;
 };
 
 static void CheckScanCopies(LogicalOperator &original, LogicalOperator &copy, BoundCopyProbe &probe) {
@@ -40,11 +54,21 @@ static void CheckScanCopies(LogicalOperator &original, LogicalOperator &copy, Bo
 		REQUIRE(left.GetColumnIds() == right.GetColumnIds());
 		REQUIRE(left.projection_ids == right.projection_ids);
 		REQUIRE(left.table_filters.Equals(right.table_filters));
+		REQUIRE(left.bind_data->Cast<MultiFileBindData>().file_list.get() !=
+		        right.bind_data->Cast<MultiFileBindData>().file_list.get());
 		auto left_files = left.bind_data->Cast<MultiFileBindData>().file_list->GetAllFiles();
 		auto right_files = right.bind_data->Cast<MultiFileBindData>().file_list->GetAllFiles();
 		REQUIRE(left_files.size() == right_files.size());
 		for (idx_t i = 0; i < left_files.size(); i++) {
 			REQUIRE(left_files[i].path == right_files[i].path);
+		}
+		if (left.extra_info.total_files.IsValid() && left.extra_info.total_files.GetIndex() > left_files.size()) {
+			REQUIRE(left.extra_info.file_filter_expressions);
+			REQUIRE_FALSE(left.extra_info.file_filter_expressions->empty());
+			probe.pruned_scans++;
+		}
+		if (left.table_filters.HasFilters()) {
+			probe.scans_with_normal_filters++;
 		}
 		probe.copied_scans++;
 	}
@@ -119,7 +143,7 @@ TEST_CASE("Bound plan copies execute the original pruned Hive file set", "[optim
 		CAPTURE(query);
 		probe->enabled = false;
 		auto original = connection.Query(query);
-		REQUIRE_NO_FAIL(original);
+		REQUIRE_NO_FAIL(*original);
 		for (idx_t copies : {idx_t(1), idx_t(3)}) {
 			probe->enabled = true;
 			probe->copies = copies;
@@ -128,6 +152,8 @@ TEST_CASE("Bound plan copies execute the original pruned Hive file set", "[optim
 		}
 	}
 	REQUIRE(probe->copied_scans > 0);
+	REQUIRE(probe->pruned_scans > 0);
+	REQUIRE(probe->scans_with_normal_filters > 0);
 }
 
 TEST_CASE("Bound plan copy bypasses table-function rebinding and rejects noncopyable state",
@@ -202,5 +228,107 @@ TEST_CASE("Bound plan copy bypasses table-function rebinding and rejects noncopy
 		root.children[0]->Cast<LogicalGet>().dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
 		REQUIRE_THROWS_WITH(root.CopyPreservingBoundState(context), Catch::Matchers::Contains("dynamic filters"));
 	}
+	SECTION("Shared dynamic state inside operator expressions is rejected") {
+		root.expressions.push_back(CreateDynamicFilterExpression(
+		    make_shared_ptr<DynamicFilterData>(ExpressionType::COMPARE_LESSTHAN, Value::BIGINT(7)),
+		    LogicalType::BIGINT));
+		REQUIRE_THROWS_WITH(root.CopyPreservingBoundState(context),
+		                    Catch::Matchers::Contains("shared dynamic filter state"));
+	}
+	SECTION("Shared dynamic state in aggregate FILTER and ORDER BY children is rejected") {
+		for (bool in_filter : {true, false}) {
+			auto dynamic = CreateDynamicFilterExpression(
+			    make_shared_ptr<DynamicFilterData>(ExpressionType::COMPARE_LESSTHAN, Value::BIGINT(7)),
+			    LogicalType::BIGINT);
+			AggregateFunction function("bound_copy_aggregate", {}, LogicalType::BIGINT, nullptr, nullptr, nullptr,
+			                           nullptr, nullptr);
+			auto aggregate =
+			    make_uniq<BoundAggregateExpression>(BoundAggregateFunction(function), vector<unique_ptr<Expression>> {},
+			                                        nullptr, nullptr, AggregateType::NON_DISTINCT);
+			if (in_filter) {
+				aggregate->GetFilterMutable() = std::move(dynamic);
+			} else {
+				aggregate->GetOrderBysMutable() = make_uniq<BoundOrderModifier>();
+				aggregate->GetOrderBysMutable()->orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST,
+				                                                     std::move(dynamic));
+			}
+			vector<unique_ptr<Expression>> expressions;
+			expressions.push_back(std::move(aggregate));
+			LogicalAggregate aggregate_root(TableIndex(10), TableIndex(11), std::move(expressions));
+			aggregate_root.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(9)));
+			REQUIRE_THROWS_WITH(aggregate_root.CopyPreservingBoundState(context),
+			                    Catch::Matchers::Contains("shared dynamic filter state"));
+		}
+	}
+	SECTION("Non-expression table filters are explicitly outside the contract") {
+		root.children[0]->Cast<LogicalGet>().table_filters.SetFilterByColumnIndex(ProjectionIndex(0),
+		                                                                          make_uniq<LegacyIsNullFilter>());
+		REQUIRE_THROWS_WITH(root.CopyPreservingBoundState(context),
+		                    Catch::Matchers::Contains("non-expression table filters"));
+	}
+	SECTION("Shared top-N filter state is rejected") {
+		LogicalTopN top_n(vector<BoundOrderByNode> {}, 1, 0);
+		top_n.dynamic_filter = make_shared_ptr<DynamicFilterData>(ExpressionType::COMPARE_LESSTHAN, Value::BIGINT(7));
+		top_n.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(0)));
+		REQUIRE_THROWS_WITH(top_n.CopyPreservingBoundState(context), Catch::Matchers::Contains("shared top-N filters"));
+	}
+	SECTION("Shared join filter state is rejected") {
+		LogicalComparisonJoin join(JoinType::INNER);
+		join.filter_pushdown = make_uniq<JoinFilterPushdownInfo>();
+		join.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(0)));
+		join.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(1)));
+		REQUIRE_THROWS_WITH(join.CopyPreservingBoundState(context), Catch::Matchers::Contains("shared join filters"));
+	}
+	SECTION("Operators outside the bounded inventory are rejected") {
+		LogicalSample sample(make_uniq<SampleOptions>(), make_uniq<LogicalDummyScan>(TableIndex(0)));
+		REQUIRE_THROWS_WITH(sample.CopyPreservingBoundState(context),
+		                    Catch::Matchers::Contains("does not support operator"));
+	}
+	connection.Rollback();
+}
+
+// Scan preservation deliberately retains the ordinary expression reconstruction contract.
+// A FunctionData::Copy-only payload is not carried through logical expression serialization.
+TEST_CASE("Scan-preserving copies retain ordinary expression reconstruction", "[optimizer][bound_plan_copy]") {
+	struct BoundCopyExpressionData : FunctionData {
+		explicit BoundCopyExpressionData(int64_t value_p) : value(value_p) {
+		}
+		int64_t value;
+		unique_ptr<FunctionData> Copy() const override {
+			return make_uniq<BoundCopyExpressionData>(value);
+		}
+		bool Equals(const FunctionData &other) const override {
+			return value == other.Cast<BoundCopyExpressionData>().value;
+		}
+	};
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto &context = *connection.context;
+	ScalarFunction function("bound_copy_expression_test", vector<LogicalType> {}, LogicalType::BIGINT,
+	                        [](DataChunk &, ExpressionState &state, Vector &result) {
+		                        const auto &call = state.expr.Cast<BoundFunctionExpression>();
+		                        result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		                        ConstantVector::SetNull(result, false);
+		                        ConstantVector::GetData<int64_t>(result)[0] =
+		                            call.BindInfo()->Cast<BoundCopyExpressionData>().value;
+	                        });
+	function.SetBindCallback(
+	    [](BindScalarFunctionInput &) -> unique_ptr<FunctionData> { return make_uniq<BoundCopyExpressionData>(7); });
+	CreateScalarFunctionInfo info(function);
+	Catalog::GetSystemCatalog(context).CreateFunction(context, info);
+	vector<unique_ptr<Expression>> expressions;
+	expressions.push_back(make_uniq<BoundFunctionExpression>(
+	    BoundScalarFunction(function), vector<unique_ptr<Expression>> {}, make_uniq<BoundCopyExpressionData>(42)));
+	LogicalProjection root(TableIndex(1), std::move(expressions));
+	root.children.push_back(make_uniq<LogicalDummyScan>(TableIndex(0)));
+	root.ResolveOperatorTypes();
+	auto expression_copy = root.expressions[0]->Copy();
+	auto preserving = root.CopyPreservingBoundState(context);
+	auto ordinary = root.Copy(context);
+	REQUIRE(ExpressionExecutor::EvaluateScalar(context, *root.expressions[0]) == Value::BIGINT(42));
+	REQUIRE(ExpressionExecutor::EvaluateScalar(context, *expression_copy) == Value::BIGINT(42));
+	REQUIRE(ExpressionExecutor::EvaluateScalar(context, *preserving->expressions[0]) == Value::BIGINT(7));
+	REQUIRE(ExpressionExecutor::EvaluateScalar(context, *ordinary->expressions[0]) == Value::BIGINT(7));
 	connection.Rollback();
 }

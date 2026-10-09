@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+// Field 220 is reserved for the in-process bound-copy scan slot. It is never persisted.
+static constexpr field_id_t BOUND_COPY_SCAN_FIELD_ID = 220;
+
 static void ConvertLegacyTableFilters(LogicalGet &get) {
 	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> converted_filters;
 	for (auto &entry : get.table_filters) {
@@ -354,7 +357,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
 	if (copy_state) {
-		serializer.WriteProperty(220, "bound_copy_scan", copy_state->CopyScan(*this));
+		serializer.WriteProperty(BOUND_COPY_SCAN_FIELD_ID, "bound_copy_scan", copy_state->CopyScan(*this));
 	} else {
 		FunctionSerializer::Serialize(serializer, function, bind_data.get());
 	}
@@ -393,7 +396,8 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	bool has_serialize = false;
 	unique_ptr<FunctionData> bind_data;
 	if (copy_state) {
-		copied_scan = copy_state->TakeScan(deserializer.ReadProperty<idx_t>(220, "bound_copy_scan"));
+		copied_scan =
+		    copy_state->TakeScan(deserializer.ReadProperty<idx_t>(BOUND_COPY_SCAN_FIELD_ID, "bound_copy_scan"));
 		result->function = copied_scan->function;
 		bind_data = std::move(copied_scan->bind_data);
 	} else {
