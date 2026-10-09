@@ -791,9 +791,9 @@ static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDat
 	return result;
 }
 
-//! Binds the indexes of the given tables in a separate read-only transaction: the caller's may be finished, and
-//! read-only skips start_transaction_lock. Returns the last error, if an index could not be bound.
-static string BindIndexes(AttachedDatabase &db, const vector<reference<DuckTableEntry>> &tables, bool bind_all) {
+//! Binds the indexes of the given tables in a new transaction. Returns the last bind error, if any.
+//! Errors that invalidate the database (fatal, data corruption, internal) are thrown instead.
+static string TryBindIndexes(AttachedDatabase &db, const vector<reference<DuckTableEntry>> &tables, bool bind_all) {
 	auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 	if (checkpoint_sleep_ms > 0) {
 		ThreadUtil::SleepMs(checkpoint_sleep_ms);
@@ -801,6 +801,7 @@ static string BindIndexes(AttachedDatabase &db, const vector<reference<DuckTable
 	Connection con(db.GetDatabase());
 	auto &context = *con.context;
 	context.transaction.BeginTransaction();
+	// Read-only transactions do not take start_transaction_lock, which FORCE CHECKPOINT holds while waiting.
 	context.transaction.SetReadOnly();
 	string error_message;
 	for (auto &table : tables) {
@@ -832,7 +833,7 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 	// Without a context the database is closing (shutdown or DETACH): we do not bind its indexes.
 	string error_message = "the database is closing";
 	if (context.GetClientContext() && !tables.empty()) {
-		error_message = BindIndexes(db, tables, bind_all);
+		error_message = TryBindIndexes(db, tables, bind_all);
 	}
 	auto has_buffered_replays = std::any_of(tables.begin(), tables.end(), [](const reference<DuckTableEntry> &table) {
 		return table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays();
