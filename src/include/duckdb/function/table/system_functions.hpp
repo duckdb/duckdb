@@ -13,6 +13,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
+class LogSink;
 
 struct PragmaCollations {
 	static void RegisterFunction(BuiltinFunctions &set);
@@ -147,6 +148,11 @@ struct DuckDBKeywordsFun {
 
 struct DuckDBLogFun {
 	static void RegisterFunction(BuiltinFunctions &set);
+
+	//! The value of the sink parameter, or an empty string if it was not given
+	static string GetSinkName(TableFunctionBindInput &input);
+	//! The registered log sink with this name, or the log sink if the name is empty
+	static shared_ptr<LogSink> GetLogSink(ClientContext &context, const string &sink_name);
 };
 
 struct DuckDBLogContextFun {

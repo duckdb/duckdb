@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/logging/log_sink.hpp"
 #include "duckdb/logging/logging.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -171,6 +172,72 @@ static unique_ptr<FunctionData> BindTruncateLogs(ClientContext &context, TableFu
 	return make_uniq<EnableLoggingBindData>();
 }
 
+class LogSinkNameBindData : public TableFunctionData {
+public:
+	explicit LogSinkNameBindData(string name_p) : name(std::move(name_p)) {
+	}
+
+	string name;
+};
+
+static unique_ptr<FunctionData> BindLogSinkName(ClientContext &context, TableFunctionBindInput &input,
+                                                vector<LogicalType> &return_types, vector<Identifier> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw InvalidInputException("The log sink name cannot be NULL");
+	}
+	auto name = input.inputs[0].GetValue<string>();
+	if (name.empty()) {
+		throw InvalidInputException("The log sink name cannot be empty");
+	}
+
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+
+	return make_uniq<LogSinkNameBindData>(std::move(name));
+}
+
+//! Enable a log sink, registering a new one first if no sink with this name is registered
+static void EnableLogSink(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto &bind_data = data.bind_data->Cast<LogSinkNameBindData>();
+	auto &db = *context.db;
+	auto &log_manager = db.GetLogManager();
+
+	if (!log_manager.GetRegisteredLogSink(bind_data.name)) {
+		auto sink_name = StringUtil::Lower(bind_data.name);
+		if (sink_name == LogConfig::FILE_STORAGE_NAME) {
+			throw InvalidInputException(
+			    "Cannot enable the 'file' log sink with enable_log_sink because it requires a path");
+		}
+		shared_ptr<LogSink> sink;
+		if (sink_name == LogConfig::STDOUT_STORAGE_NAME) {
+			sink = make_shared_ptr<StdOutLogSink>(db);
+		} else {
+			sink = make_shared_ptr<InMemoryLogSink>(db);
+		}
+		// if another connection registered this name in the meantime, its sink is enabled instead
+		log_manager.RegisterLogSink(bind_data.name, sink);
+	}
+	log_manager.EnableLogSink(bind_data.name);
+}
+
+static void DisableLogSink(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	auto &bind_data = data.bind_data->Cast<LogSinkNameBindData>();
+	context.db->GetLogManager().DisableLogSink(bind_data.name);
+}
+
+//! Flush all enabled log sinks
+static void FlushLogs(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
+	context.db->GetLogManager().Flush();
+}
+
+static unique_ptr<FunctionData> BindFlushLogs(ClientContext &context, TableFunctionBindInput &input,
+                                              vector<LogicalType> &return_types, vector<Identifier> &names) {
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+
+	return make_uniq<EnableLoggingBindData>();
+}
+
 void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 	auto enable_fun = TableFunction("enable_logging", {}, EnableLogging, BindEnableLogging, nullptr, nullptr);
 
@@ -192,6 +259,17 @@ void EnableLoggingFun::RegisterFunction(BuiltinFunctions &set) {
 
 	auto truncate_fun = TableFunction("truncate_duckdb_logs", {}, TruncateLogs, BindTruncateLogs, nullptr, nullptr);
 	set.AddFunction(truncate_fun);
+
+	auto enable_sink_fun =
+	    TableFunction("enable_log_sink", {LogicalType::VARCHAR}, EnableLogSink, BindLogSinkName, nullptr, nullptr);
+	set.AddFunction(enable_sink_fun);
+
+	auto disable_sink_fun =
+	    TableFunction("disable_log_sink", {LogicalType::VARCHAR}, DisableLogSink, BindLogSinkName, nullptr, nullptr);
+	set.AddFunction(disable_sink_fun);
+
+	auto flush_fun = TableFunction("flush_logs", {}, FlushLogs, BindFlushLogs, nullptr, nullptr);
+	set.AddFunction(flush_fun);
 }
 
 } // namespace duckdb
