@@ -65,6 +65,8 @@ private:
 	unique_ptr<Connection> checkpoint_connection;
 	optional_ptr<ClientContext> checkpoint_context;
 	optional_ptr<DuckTransaction> checkpoint_transaction;
+	//! Whether GetCheckpointTransaction registered an active checkpoint that Commit has not reset yet
+	bool active = false;
 };
 
 class CheckpointWriter {
