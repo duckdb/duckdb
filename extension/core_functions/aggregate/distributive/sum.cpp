@@ -312,7 +312,7 @@ AggregateFunction GetSumAggregateNoOverflowDecimal() {
 	AggregateFunction aggr({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                       FunctionNullHandling::DEFAULT_NULL_HANDLING, AggregateFunction::NoClusterUpdate(),
 	                       SumNoOverflowBind);
-	aggr.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	aggr.GetSignature().AddPositionalOnly("arg", LogicalTypeId::DECIMAL);
 	aggr.SetSerializeCallback(SumNoOverflowSerialize);
 	aggr.SetDeserializeCallback(SumNoOverflowDeserialize);
 	return aggr;
@@ -527,7 +527,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	// decimal
 	AggregateFunction decimal_sum({}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                              FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr, BindDecimalSum);
-	decimal_sum.GetSignature().AddParameter("arg", LogicalTypeId::DECIMAL);
+	decimal_sum.GetSignature().AddPositionalOnly("arg", LogicalTypeId::DECIMAL);
 	sum.AddFunction(decimal_sum);
 	sum.AddFunction(GetSumAggregate(PhysicalType::BOOL));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
