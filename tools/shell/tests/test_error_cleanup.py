@@ -1,12 +1,19 @@
+import os
 import subprocess
 from pathlib import Path
 
 import pytest
 
 
-def run_shell(shell, database, arguments, stdin=""):
+def run_shell(shell, database, arguments, stdin="", init_file=None):
     return subprocess.run(
-        [shell, "-no-init", "-batch", *([str(database)] if database else []), *arguments],
+        [
+            shell,
+            *(["-init", str(init_file)] if init_file else ["-no-init"]),
+            "-batch",
+            *([str(database)] if database else []),
+            *arguments,
+        ],
         input=stdin,
         text=True,
         capture_output=True,
@@ -18,6 +25,80 @@ def assert_checkpointed(database):
     # Check before reopening: recovery would otherwise hide the skipped destructor.
     assert database.is_file()
     assert not Path(str(database) + ".wal").exists()
+
+
+@pytest.mark.parametrize("mode", ["-c", "-cmd", "-f", "stdin", "nested-read", "init", "positional"])
+@pytest.mark.parametrize("bail", ["on", "off"])
+@pytest.mark.parametrize("exit_code", [2, 17])
+def test_explicit_nonzero_exit_cleans_up_and_stops_all_input(shell, tmp_path, mode, bail, exit_code):
+    database = tmp_path / "explicit_exit.duckdb"
+    setup = "SET wal_autocheckpoint='1TB'; CREATE TABLE saved AS SELECT 42 AS value;"
+    after_exit = "INSERT INTO saved VALUES (99); SELECT 'SHOULD_NOT_RUN';"
+    exit_command = f".exit {exit_code}"
+    arguments = ["-cmd", f".bail {bail}", "-cmd", setup]
+    stdin = after_exit + "\n"
+    init_file = None
+    if mode in ("-c", "-cmd"):
+        arguments += [mode, exit_command, "-cmd", after_exit]
+    elif mode == "positional":
+        arguments += [exit_command, after_exit]
+    elif mode == "stdin":
+        stdin = exit_command + "\n" + stdin
+    else:
+        script = tmp_path / "exit.sql"
+        script.write_text(exit_command + "\n" + after_exit + "\n")
+        if mode == "nested-read":
+            outer = tmp_path / "outer.sql"
+            outer.write_text(f'.read "{script.as_posix()}"\n{after_exit}\n')
+            arguments += ["-cmd", f'.read "{outer.as_posix()}"', "-cmd", after_exit]
+        elif mode == "init":
+            # Init files run before any post-init callbacks, so create the WAL there.
+            script.write_text(f".bail {bail}\n{setup}\n{exit_command}\n{after_exit}\n")
+            init_file = script
+            arguments = ["-cmd", after_exit]
+        else:
+            arguments += ["-f", str(script), "-cmd", after_exit]
+    result = run_shell(shell, database, arguments, stdin, init_file=init_file)
+    assert result.returncode == exit_code, result.stderr
+    assert "SHOULD_NOT_RUN" not in result.stdout
+    assert "Exited due to error" not in result.stderr
+    assert_checkpointed(database)
+
+    reopened = run_shell(shell, database, ["-csv", "-noheader", "-c", "SELECT * FROM saved;"])
+    assert reopened.returncode == 0, reopened.stderr
+    assert reopened.stdout.strip() == "42"
+
+
+@pytest.mark.parametrize("command", [".exit", ".exit 0", ".quit 17"])
+@pytest.mark.parametrize("mode", ["stdin", "-c", "nested-read"])
+def test_successful_exit_retains_input_scope(shell, tmp_path, command, mode):
+    database = tmp_path / "exit_scope.duckdb"
+    setup = "SET wal_autocheckpoint='1TB'; CREATE TABLE saved AS SELECT 42 AS value;"
+    arguments = ["-cmd", setup]
+    stdin = ""
+    if mode == "stdin":
+        stdin = command + "\nSELECT 'SHOULD_NOT_RUN';\n"
+    elif mode == "-c":
+        arguments += ["-c", command, "-c", "SELECT 'CONTINUED';"]
+    else:
+        script = tmp_path / "exit.sql"
+        script.write_text(command + "\nSELECT 'SHOULD_NOT_RUN';\n")
+        stdin = f'.read "{script.as_posix()}"\nSELECT \'CONTINUED\';\n'
+    result = run_shell(shell, database, arguments, stdin)
+    assert result.returncode == 0, result.stderr
+    assert "SHOULD_NOT_RUN" not in result.stdout
+    assert ("CONTINUED" in result.stdout) == (mode != "stdin")
+    assert_checkpointed(database)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX exit status normalization")
+def test_negative_exit_status_cleans_up_database(shell, tmp_path):
+    database = tmp_path / "negative_exit.duckdb"
+    setup = "SET wal_autocheckpoint='1TB'; CREATE TABLE saved AS SELECT 42 AS value;"
+    result = run_shell(shell, database, ["-c", setup, "-c", ".exit -1", "-c", "SELECT 'SHOULD_NOT_RUN';"])
+    assert result.returncode == 255, result.stderr
+    assert "SHOULD_NOT_RUN" not in result.stdout
+    assert_checkpointed(database)
 
 
 @pytest.mark.parametrize("mode", ["-c", "-cmd", "-f", "-ui", "missing-file", "meta-command", "ascii-import"])

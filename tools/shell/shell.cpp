@@ -770,19 +770,6 @@ string ShellState::EscapeCString(const string &str) {
 	return result;
 }
 
-void ShellState::Exit(int exit_code) {
-	if (exit_code == 0) {
-		// clean-up shell state if this is a successful exit
-		auto shell_state = GetReference();
-		if (shell_state) {
-			delete shell_state;
-		}
-		shell_state = nullptr;
-	}
-	// then exit
-	exit(exit_code);
-}
-
 extern "C" {
 
 /*
@@ -814,6 +801,32 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType /* One of the CTRL_*_EVEN
 	return FALSE;
 }
 #endif
+
+// Stop routing signals to ShellState before any of its owners are destroyed.
+static void IgnoreInterrupts() {
+#ifdef SIGINT
+	signal(SIGINT, SIG_IGN);
+#elif (defined(_WIN32) || defined(WIN32)) && !defined(_WIN32_WCE)
+	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
+#endif
+#if !defined(_WIN32) && !defined(WIN32)
+	signal(SIGPIPE, SIG_IGN);
+#endif
+}
+
+void ShellState::Exit(int exit_code) {
+	if (exit_code == 0) {
+		// clean-up shell state if this is a successful exit
+		IgnoreInterrupts();
+		auto &shell_state = GetReference();
+		if (shell_state) {
+			delete shell_state;
+		}
+		shell_state = nullptr;
+	}
+	// then exit
+	exit(exit_code);
+}
 
 void ShellState::ClearInterrupt() {
 	seenInterrupt = 0;
@@ -3627,11 +3640,7 @@ int RunShell(int argc, const char **argv) {
 			rc = data.ProcessInput(InputMode::STANDARD);
 		}
 	}
-#if !defined(_WIN32) && !defined(WIN32)
-	signal(SIGINT, SIG_IGN);
-#else
-	SetConsoleCtrlHandler(ConsoleCtrlHandler, FALSE);
-#endif
+	IgnoreInterrupts();
 	data.SetTableName(0);
 	data.last_result.reset();
 	data.db.reset();
@@ -3661,6 +3670,8 @@ int wmain(int argc, wchar_t **wargv) {
 	int rc = 0;
 	try {
 		rc = RunShell(argc, argv);
+	} catch (const ShellExitException &ex) {
+		rc = ex.exit_code;
 	} catch (std::exception &ex) {
 		rc = 1;
 		ErrorData error(ex);
@@ -3668,6 +3679,7 @@ int wmain(int argc, wchar_t **wargv) {
 	}
 	try {
 		// destroy shell state prior to program clean-up
+		IgnoreInterrupts();
 		if (shell_state) {
 			delete shell_state;
 		}
