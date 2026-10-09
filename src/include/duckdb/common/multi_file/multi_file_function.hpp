@@ -118,6 +118,7 @@ public:
 	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p,
 	                                                      unique_ptr<MultiFileReaderInterface> interface_p) {
+		file_options_p.ValidateBoundSchema();
 		auto &interface = *interface_p;
 
 		auto result = make_uniq<MultiFileBindData>();
@@ -1161,6 +1162,11 @@ public:
 			}
 		}
 
+		if (!bind_data.file_options.bound_schema.empty() && bind_data.file_options.filename &&
+		    bind_data.reader_bind.filename_idx == primary_index) {
+			// A physical shadow's bounds do not describe the generated path. Explicit scan statistics above still do.
+			return nullptr;
+		}
 		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		const bool multiple_files = bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES;
 		if (multiple_files && !bind_data.file_options.union_by_name) {
@@ -1168,6 +1174,11 @@ public:
 			return nullptr;
 		}
 		auto result = bind_data.initial_reader->GetStatistics(context, col_name);
+		if (result && !bind_data.file_options.bound_schema.empty() &&
+		    !result->GetType().EqualsIncludingCollation(bind_data.types[primary_index])) {
+			// Check the whole root before interpreting an extracted child's positional statistics.
+			return nullptr;
+		}
 		if (result && multiple_files) {
 			for (idx_t i = 1; i < bind_data.union_readers.size(); i++) {
 				auto &union_reader = *bind_data.union_readers[i];
