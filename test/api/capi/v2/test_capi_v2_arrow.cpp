@@ -112,21 +112,28 @@ duckdb_v2_data_chunk_handle ArrowRoundtripChunk(ArrowRoundtrip &rt, duckdb_v2_da
 }
 
 // ---------------------------------------------------------------------------
-// arrow_roundtrip(x): declared with an ANY return; the bind callback reads the
-// argument type, matches the return type to it, and builds the exporter/importer
-// pair. One function therefore covers every type, nested ones included.
+// arrow_roundtrip(x): declared with an ANY return; the resolve types callback
+// matches the return type to the argument type, and the bind callback builds the
+// exporter/importer pair. One function therefore covers every type, nested ones
+// included.
 // ---------------------------------------------------------------------------
 
-void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle result,
-                 duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+void ArrowRtResolveTypes(duckdb_v2_function_bind_info_handle info,
+                         duckdb_v2_scalar_function_resolve_types_info_handle result, duckdb_v2_context_handle,
+                         duckdb_v2_error_info_handle *err) {
 	duckdb_v2_logical_type_handle arg_type = nullptr;
 	if (duckdb_v2_function_bind_get_arg_type(info, 0, &arg_type, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	// The result type follows the argument type.
-	auto rc = duckdb_v2_scalar_function_bind_set_return_type(result, arg_type, err);
-	if (rc != DUCKDB_V2_ERROR_NONE) {
-		duckdb_v2_logical_type_destroy(&arg_type);
+	duckdb_v2_scalar_function_resolve_types_set_return_type(result, arg_type, err);
+	duckdb_v2_logical_type_destroy(&arg_type);
+}
+
+void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_bind_info_handle result,
+                 duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err) {
+	duckdb_v2_logical_type_handle arg_type = nullptr;
+	if (duckdb_v2_function_bind_get_arg_type(info, 0, &arg_type, err) != DUCKDB_V2_ERROR_NONE) {
 		return;
 	}
 	auto name = Convert("x");
@@ -136,7 +143,7 @@ void ArrowRtBind(duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_func
 		return;
 	}
 	duckdb_v2_opaque bind_data = {rt, ArrowRoundtripDestroy, nullptr};
-	duckdb_v2_function_bind_set_bind_data(info, &bind_data, err);
+	duckdb_v2_scalar_function_bind_set_bind_data(result, &bind_data, err);
 }
 
 void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_context_handle context,
@@ -201,6 +208,8 @@ void RegisterArrowRoundtrip(duckdb_v2_connection_handle conn) {
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
 
+	REQUIRE(duckdb_v2_scalar_function_set_resolve_types_callback(function, ArrowRtResolveTypes, nullptr) ==
+	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, ArrowRtBind, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, ArrowRtExec, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);

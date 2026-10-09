@@ -11,11 +11,17 @@ handles:
       signature obtained via `[[scalar_function_get_signature]]`, made available with `[[scalar_function_register]]`, and
       destroyed with `[[scalar_function_destroy]]`.
 
+  scalar_function_resolve_types_info:
+    description: |
+      A borrowed opaque handle to the result of a scalar function's "resolve types" phase. The "resolve types"
+      callback receives this handle next to a `[[function_bind_info]]`, which gives access to the arguments and the
+      user data, and can use it to set the return type of the call site being bound.
+
   scalar_function_bind_info:
     description: |
       A borrowed opaque handle to the result of a scalar function's "bind" phase. The "bind" callback receives this
-      handle next to a `[[function_bind_info]]`, which gives access to the arguments, the user data and the bind
-      data, and can use it to set the return type of the call site being bound.
+      handle next to a `[[function_bind_info]]`, which gives access to the arguments and the user data, and can use
+      it to set the bind data of the call site being bound.
 
   scalar_function_init_info:
     description: |
@@ -33,16 +39,33 @@ handles:
 # Callbacks
 #-----------------------------------------------------------------------------------------------------------------------
 callbacks:
+  scalar_function_resolve_types_callback:
+    parameters:
+      info:
+        type: function_bind_info
+        description: |
+          Borrowed opaque handle providing access to the arguments of the call site being bound and the user data.
+      result:
+        type: scalar_function_resolve_types_info
+        description: Borrowed opaque handle to set the return type of the call site being bound through.
+      context:
+        type: context
+        description: Borrowed handle to the context of the query currently executing the callback.
+      err:
+        type: error_info
+        indirection: 1
+        description: Borrowed error info handle to use to report errors that occur during the callback.
+    return_type: void
+
   scalar_function_bind_callback:
     parameters:
       info:
         type: function_bind_info
         description: |
-          Borrowed opaque handle providing access to the arguments of the call site being bound, the user data and
-          the bind data.
+          Borrowed opaque handle providing access to the arguments of the call site being bound and the user data.
       result:
         type: scalar_function_bind_info
-        description: Borrowed opaque handle to set the return type of the call site being bound through.
+        description: Borrowed opaque handle to set the bind data of the call site being bound through.
       context:
         type: context
         description: Borrowed handle to the context of the query currently executing the callback.
@@ -243,16 +266,41 @@ functions:
         description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
     return_type: ERROR
 
+  scalar_function_set_resolve_types_callback:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-05" ]
+    description: |
+      Sets the optional resolve types callback of the scalar function.
+
+      The resolve types callback is invoked during query planning for each call site of the function, before the
+      arguments are cast to the parameter types of the signature. Through its `[[function_bind_info]]` it can
+      inspect the argument types as they were passed and constant argument values. Through its
+      `[[scalar_function_resolve_types_info]]` it can set a concrete return type. It cannot set "bind data", use the
+      bind callback for that.
+    parameters:
+      function:
+        type: scalar_function
+        description: The function to set the resolve types callback of.
+      callback:
+        type: scalar_function_resolve_types_callback
+        description: The resolve types callback to set.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
   scalar_function_set_bind_callback:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
     description: |
       Sets the optional bind callback of the scalar function.
 
-      The bind callback is invoked during query planning for each call site of the function. Through its
-      `[[function_bind_info]]` it can inspect the argument types and constant argument values and set "bind data"
-      that is shared with the init and exec callbacks. Through its `[[scalar_function_bind_info]]` it can set a
-      concrete return type.
+      The bind callback is invoked during query planning for each call site of the function, after the resolve
+      types callback and after the arguments have been cast to the parameter types of the signature. Through its
+      `[[function_bind_info]]` it can inspect the argument types and constant argument values. Through its
+      `[[scalar_function_bind_info]]` it can set "bind data" that is shared with the init and exec callbacks. It
+      cannot change the types of the call site, use the resolve types callback for that.
     parameters:
       function:
         type: scalar_function
@@ -310,11 +358,11 @@ functions:
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------
-  # Bind Callback Functions
+  # Resolve Types Callback Functions
   #---------------------------------------------------------------------------------------------------------------------
-  scalar_function_bind_set_return_type:
+  scalar_function_resolve_types_set_return_type:
     lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-11" ]
+      - [ "stable", "v2.0.0", "2026-10-05" ]
     description: |
       Sets the concrete return type of the call site being bound.
 
@@ -323,11 +371,39 @@ functions:
       its input. The type is borrowed and copied.
     parameters:
       info:
-        type: scalar_function_bind_info
-        description: The bind info handle.
+        type: scalar_function_resolve_types_info
+        description: The resolve types info handle.
       return_type:
         type: logical_type
         description: The return type to set. Borrowed for the call only.
+      err:
+        type: error_info
+        indirection: 1
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+    return_type: ERROR
+
+  #---------------------------------------------------------------------------------------------------------------------
+  # Bind Callback Functions
+  #---------------------------------------------------------------------------------------------------------------------
+  scalar_function_bind_set_bind_data:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-10-07" ]
+    description: |
+      Sets the function's "bind data" from the bind callback.
+
+      The bind data is stored with the bound call site and retrievable from the init and exec callbacks. The opaque
+      handle bundles the pointer with an optional destructor, invoked when the bind data is no longer needed,
+      and an optional equality callback used when comparing two bound call sites; without one, pointer equality
+      is used. Scalar functions set their bind data through this function, `[[function_bind_set_bind_data]]` is not
+      available to them.
+    parameters:
+      info:
+        type: scalar_function_bind_info
+        description: The bind info handle.
+      data:
+        type: opaque
+        indirection: 1
+        description: Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
       err:
         type: error_info
         indirection: 1
@@ -581,8 +657,8 @@ functions:
 
       The function is registered on the target given at creation: the connection's database or the loading
       extension. Registration requires a name, an exec callback, and a signature with a complete return type;
-      an ANY return type is accepted only together with a bind callback that sets the concrete type per call
-      site. The caller still owns the handle after registration and must destroy it with
+      an ANY return type is accepted only together with a resolve types callback that sets the concrete type per
+      call site. The caller still owns the handle after registration and must destroy it with
       `[[scalar_function_destroy]]`, which does not affect the registered function.
 
       A connection-scoped registration is refused with `ERROR_RESOURCE_IN_USE` while its connection has a live result.

@@ -39,14 +39,9 @@ void ReadChangedRows(const DataChunk &chunk, idx_t &rows_changed) {
 }
 
 void ReadChangedRows(const ArrowArrayWrapper &unit, idx_t &rows_changed) {
-	auto &array = unit.arrow_array;
-	if (array.length == 0) {
-		return;
+	if (unit.arrow_array.length > 0) {
+		rows_changed = ArrowFormat::ChangedRows(unit.arrow_array);
 	}
-	D_ASSERT(array.n_children == 1);
-	auto &count = *array.children[0];
-	auto values = static_cast<const int64_t *>(count.buffers[1]);
-	rows_changed = static_cast<idx_t>(values[array.offset + count.offset]);
 }
 
 } // anonymous namespace
