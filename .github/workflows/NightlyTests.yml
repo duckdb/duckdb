@@ -465,7 +465,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: python3 scripts/ci/retry.py -- bash -lc 'CORE_EXTENSIONS="tpch" make'
+        run: python3 scripts/ci/retry.py -- bash -lc 'CORE_EXTENSIONS="tpch" LINK_CORE_EXTENSIONS=1 make'
 
       - name: Start Minio
         working-directory: ${{ github.workspace }}/duckdb-httpfs
