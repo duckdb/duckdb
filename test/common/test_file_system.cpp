@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "test_helpers.hpp"
 #if (!defined(_WIN32) && !defined(WIN32))
@@ -26,6 +27,16 @@
 using namespace duckdb;
 
 namespace {
+
+class CountingCanonicalizationFileSystem : public LocalFileSystem {
+public:
+	string CanonicalizePath(const string &path, optional_ptr<FileOpener> opener) override {
+		canonicalization_count++;
+		return LocalFileSystem::CanonicalizePath(path, opener);
+	}
+
+	idx_t canonicalization_count = 0;
+};
 
 class ExistingDirectoryFileSystem : public FileSystem {
 public:
@@ -134,6 +145,32 @@ public:
 };
 
 } // namespace
+
+TEST_CASE("Unrestricted file access skips path canonicalization", "[file_system]") {
+	DBConfig config;
+	auto counting_fs = make_uniq<CountingCanonicalizationFileSystem>();
+	auto &counter = *counting_fs;
+	config.file_system = make_uniq<VirtualFileSystem>(std::move(counting_fs));
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+	ClientContextFileOpener opener(*con.context);
+	ExistingDirectoryFileSystem inner_fs;
+	TestOpenerFileSystem fs(inner_fs, opener);
+	auto path = TestCreatePath("canonicalization_access");
+	counter.canonicalization_count = 0;
+
+	REQUIRE(fs.DirectoryExists(path));
+	REQUIRE(counter.canonicalization_count == 0);
+	auto allowed_path = TestCreatePath("canonicalization_allowed");
+	DBConfig::GetConfig(*con.context).AddAllowedPath(allowed_path);
+	REQUIRE_NO_FAIL(con.Query("SET enable_external_access = false"));
+	counter.canonicalization_count = 0;
+	REQUIRE(fs.DirectoryExists(allowed_path));
+	REQUIRE(counter.canonicalization_count > 0);
+	counter.canonicalization_count = 0;
+	REQUIRE_THROWS_AS(fs.DirectoryExists(path), PermissionException);
+	REQUIRE(counter.canonicalization_count > 0);
+}
 
 TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
