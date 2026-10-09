@@ -1325,6 +1325,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"enable_curl_server_cert_verification", "httpfs"},
     {"enable_geoparquet_conversion", "parquet"},
     {"enable_global_s3_configuration", "httpfs"},
+    {"enable_legacy_parser", "legacy_parser"},
     {"enable_server_cert_verification", "httpfs"},
     {"extra_http_headers", "httpfs"},
     {"force_download", "httpfs"},
@@ -1563,10 +1564,32 @@ static constexpr ExtensionEntry EXTENSION_LOG_TYPES[] = {
     {"Iceberg", "iceberg"},   {"PostgresQueryLog", "postgres_scanner"}, {"Quack", "quack"},
 }; // END_OF_EXTENSION_LOG_TYPES
 
-static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "autocomplete", "avro",       "aws",           "azure",   "core_functions",   "delta", "ducklake",
-    "encodings",    "excel",      "fts",           "httpfs",  "iceberg",          "icu",   "inet",
-    "json",         "motherduck", "mysql_scanner", "parquet", "postgres_scanner", "quack", "sqlite_scanner",
-    "sqlsmith",     "tpcds",      "tpch",          "ui",      "unity_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"autocomplete",
+                                                          "avro",
+                                                          "aws",
+                                                          "azure",
+                                                          "core_functions",
+                                                          "delta",
+                                                          "ducklake",
+                                                          "encodings",
+                                                          "excel",
+                                                          "fts",
+                                                          "httpfs",
+                                                          "iceberg",
+                                                          "icu",
+                                                          "inet",
+                                                          "json",
+                                                          "legacy_parser",
+                                                          "motherduck",
+                                                          "mysql_scanner",
+                                                          "parquet",
+                                                          "postgres_scanner",
+                                                          "quack",
+                                                          "sqlite_scanner",
+                                                          "sqlsmith",
+                                                          "tpcds",
+                                                          "tpch",
+                                                          "ui",
+                                                          "unity_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

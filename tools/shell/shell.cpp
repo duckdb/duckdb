@@ -3013,7 +3013,7 @@ bool ShellState::SQLIsComplete(const char *zSql) {
 			next_state = SQLParseState::WHITESPACE;
 			break;
 		}
-			//		case '`': /* Grave-accent quoted symbols used by MySQL */
+		case '`': /* backtick-quoted identifiers */
 		case '"': /* single- and double-quoted strings */
 		case '\'': {
 			int c = *zSql;
