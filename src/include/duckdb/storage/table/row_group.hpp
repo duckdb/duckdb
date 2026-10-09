@@ -51,6 +51,7 @@ class TableFilterSet;
 struct ColumnFetchState;
 struct PrefetchState;
 struct RowGroupAppendState;
+struct SuballocationBlock;
 class MetadataManager;
 class RowVersionManager;
 class CommitDropState;
@@ -216,6 +217,8 @@ public:
 	PersistentRowGroupData SerializeRowGroupInfo(idx_t row_group_start) const;
 
 	static void InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state);
+	//! Continue a finalized append in a new row group, retaining unused transient block space
+	static void InitializeNextAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
 	void FinalizeAppend(RowGroupAppendState &append_state);
 
@@ -308,6 +311,8 @@ private:
 	PerColumnMetadataBlocks per_column_metadata_blocks;
 	atomic<bool> deletes_is_loaded;
 	atomic<idx_t> allocation_size;
+	//! Append cursor, retained between appends and moved when appending to the next row group
+	unique_ptr<SuballocationBlock> transient;
 	//! The row id column data (mutable because `const` can lazy load)
 	mutable unique_ptr<ColumnData> row_id_column_data;
 	//! Whether or not `row_id_column_data` is loaded (mutable because `const` can lazy load)

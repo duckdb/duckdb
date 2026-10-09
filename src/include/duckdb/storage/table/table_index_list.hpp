@@ -69,10 +69,6 @@ public:
 	                       optional_idx active_checkpoint = optional_idx());
 	//! Removes an index entry from the list of index entries and release any storage the index owns.
 	void RemoveIndex(idx_t index_oid);
-	//! Returns true, if the index name does not exist.
-	bool NameIsUnique(const string &name) const;
-	//! Returns true if an index with the given name exists.
-	bool Contains(const Identifier &name) const;
 	//! Returns shared ownership of the stable logical index entry matching the name.
 	shared_ptr<IndexEntry> FindEntry(const Identifier &name) const;
 	//! Returns the entry matching the index OID.
