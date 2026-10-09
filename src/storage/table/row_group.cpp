@@ -1284,6 +1284,18 @@ void RowGroup::InitializeAppend(SegmentNode<RowGroup> &row_group, RowGroupAppend
 	append_state.row_group = row_group;
 	row_group.GetNode().InitializeAppendInternal(append_state);
 }
+
+void RowGroup::InitializeNextAppend(SegmentNode<RowGroup> &row_group, RowGroupAppendState &append_state) {
+	D_ASSERT(append_state.row_group);
+	auto &previous = append_state.row_group->GetNode();
+	auto &next = row_group.GetNode();
+	D_ASSERT(!RefersToSameObject(previous, next));
+	D_ASSERT(RefersToSameObject(previous.GetCollection(), next.GetCollection()));
+	D_ASSERT(!next.transient);
+	next.transient = std::move(previous.transient);
+	InitializeAppend(row_group, append_state);
+}
+
 void RowGroup::InitializeAppendInternal(RowGroupAppendState &append_state) {
 	if (!RefersToSameObject(append_state.row_group->GetNode(), *this)) {
 		throw InternalException("RowGroup::InitializeAppend mismatch - call RowGroupAppendState::InitializeAppend");
