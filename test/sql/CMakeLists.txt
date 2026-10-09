@@ -4,6 +4,7 @@ add_subdirectory(index)
 add_subdirectory(parallelism)
 add_subdirectory(pivot)
 add_subdirectory(storage)
+add_subdirectory(window)
 
 set(UNITTEST_OBJECT_FILES
     ${UNITTEST_OBJECT_FILES}
