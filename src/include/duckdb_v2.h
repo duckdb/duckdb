@@ -3764,7 +3764,10 @@ typedef enum DUCKDB_V2_TOKEN_TYPE {
 
 /* --- Types for tokenizer --- */
 
-//! An opaque, owned handle to an iterator over the tokens of a SQL string, produced by tokenize_sql.
+/*!
+ * An opaque, owned handle to an iterator over the tokens of a SQL string, produced by tokenize_sql_from_connection or
+ * tokenize_sql_from_context.
+ */
 typedef struct _duckdb_v2_token_iterator {
 	void *internal_ptr;
 } * duckdb_v2_token_iterator_handle;
@@ -3794,9 +3797,35 @@ typedef struct _duckdb_v2_token_iterator {
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
-                                                    duckdb_v2_token_iterator_handle *out_iterator,
-                                                    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_connection(duckdb_v2_connection_handle conn,
+                                                                    const duckdb_v2_str *sql,
+                                                                    duckdb_v2_token_iterator_handle *out_iterator,
+                                                                    duckdb_v2_error_info_handle *err);
+
+/*!
+ * Tokenizes a SQL string into an iterator over its tokens.
+ *
+ * Lexical tokenization, in the context of whatever grammar extensions are active in the given client context, e.g. the
+ * one passed to a function callback. The iterator may outlive the context, and changing settings afterwards does not
+ * affect the tokens. The SQL string is borrowed for the call only, the caller may free it once this call returns.
+ * Whitespace is not a token. Malformed input is not an error; `duckdb_v2_token_iterator_ends_unterminated()` reports
+ * whether the input ended inside an open token.
+ *
+ * *out_iterator is set to NULL on failure.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param context The context supplying the grammar.
+ * @param sql The SQL text. Borrowed for the call only; may contain interior null bytes. {NULL, 0} is the empty input.
+ * @param out_iterator Receives the new iterator handle. Destroy via token_iterator_destroy.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_tokenize_sql_from_context(duckdb_v2_context_handle context,
+                                                                 const duckdb_v2_str *sql,
+                                                                 duckdb_v2_token_iterator_handle *out_iterator,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Yields the next token, or END_OF_INPUT once exhausted.
@@ -9142,12 +9171,12 @@ typedef struct _duckdb_v2_statement_iterator {
  * - stable: v2.0.0
  *
  * @param conn The connection supplying the parser configuration.
- * @param sql Null-terminated SQL string; may contain any number of statements.
+ * @param sql The SQL text; may contain any number of statements. Copied by the call.
  * @param out_iterator Receives the new iterator handle.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const char *sql,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_parse_sql(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql,
                                                  duckdb_v2_statement_iterator_handle *out_iterator,
                                                  duckdb_v2_error_info_handle *err);
 

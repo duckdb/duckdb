@@ -253,7 +253,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_option_get_target_scope)
 	(duckdb_v2_option_handle option, DUCKDB_V2_OPTION_TARGET_SCOPE *out_target_scope, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_parse_sql)
-	(duckdb_v2_connection_handle conn, const char *sql, duckdb_v2_statement_iterator_handle *out_iterator,
+	(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql, duckdb_v2_statement_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_result_destroy)(duckdb_v2_result_handle *result);
 	DUCKDB_V2_ERROR(*duckdb_v2_result_drain)
@@ -1282,7 +1282,7 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_token_iterator_next)
 	(duckdb_v2_token_iterator_handle iterator, DUCKDB_V2_TOKEN_TYPE *out_type, idx_t *out_start, idx_t *out_length,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql)
+	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql_from_connection)
 	(duckdb_v2_connection_handle conn, const duckdb_v2_str *sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_attach_options_create)
@@ -1363,6 +1363,9 @@ typedef struct {
 	(duckdb_v2_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_order_preservation)
 	(duckdb_v2_table_function_bind_info_handle info, DUCKDB_V2_ORDER_PRESERVATION order,
+	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_tokenize_sql_from_context)
+	(duckdb_v2_context_handle context, const duckdb_v2_str *sql, duckdb_v2_token_iterator_handle *out_iterator,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_arrow_result_destroy)(duckdb_v2_arrow_result_handle *result);
 	DUCKDB_V2_ERROR(*duckdb_v2_arrow_result_drain)
@@ -2040,7 +2043,7 @@ typedef struct {
 #define duckdb_v2_token_iterator_destroy                 duckdb_ext_api.duckdb_v2_token_iterator_destroy
 #define duckdb_v2_token_iterator_ends_unterminated       duckdb_ext_api.duckdb_v2_token_iterator_ends_unterminated
 #define duckdb_v2_token_iterator_next                    duckdb_ext_api.duckdb_v2_token_iterator_next
-#define duckdb_v2_tokenize_sql                           duckdb_ext_api.duckdb_v2_tokenize_sql
+#define duckdb_v2_tokenize_sql_from_connection           duckdb_ext_api.duckdb_v2_tokenize_sql_from_connection
 #define duckdb_v2_attach_options_create                  duckdb_ext_api.duckdb_v2_attach_options_create
 #define duckdb_v2_attach_options_destroy                 duckdb_ext_api.duckdb_v2_attach_options_destroy
 #define duckdb_v2_attach_options_set                     duckdb_ext_api.duckdb_v2_attach_options_set
@@ -2092,6 +2095,7 @@ typedef struct {
 #define duckdb_v2_function_bind_set_bind_data duckdb_ext_api.duckdb_v2_function_bind_set_bind_data
 #define duckdb_v2_table_function_bind_set_order_preservation                                                           \
 	duckdb_ext_api.duckdb_v2_table_function_bind_set_order_preservation
+#define duckdb_v2_tokenize_sql_from_context        duckdb_ext_api.duckdb_v2_tokenize_sql_from_context
 #define duckdb_v2_arrow_result_destroy             duckdb_ext_api.duckdb_v2_arrow_result_destroy
 #define duckdb_v2_arrow_result_drain               duckdb_ext_api.duckdb_v2_arrow_result_drain
 #define duckdb_v2_arrow_result_fetch_array         duckdb_ext_api.duckdb_v2_arrow_result_fetch_array
