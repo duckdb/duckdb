@@ -1851,13 +1851,25 @@ struct LoggingMode {
 	static Value GetSetting(const ClientContext &context);
 };
 
-struct LoggingStorage {
+struct LoggingSink {
 	using RETURN_TYPE = string;
-	static constexpr const char *Name = "logging_storage";
-	static constexpr const char *Description = "Set the logging storage (memory/stdout/file/<custom>)";
+	static constexpr const char *Name = "logging_sink";
+	static constexpr const char *Description = "Set the logging sink (memory/stdout/file/<custom>)";
 	static constexpr const char *InputType = "VARCHAR";
 	static constexpr bool IsDebug = false;
 	static constexpr bool IsDeprecated = false;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct LoggingStorage {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "logging_storage";
+	static constexpr const char *Description = "Deprecated setting. Use logging_sink instead.";
+	static constexpr const char *InputType = "VARCHAR";
+	static constexpr bool IsDebug = false;
+	static constexpr bool IsDeprecated = true;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(const ClientContext &context);

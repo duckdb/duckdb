@@ -1,4 +1,5 @@
-#include "duckdb/logging/log_storage.hpp"
+#include "duckdb/logging/log_sink.hpp"
+#include "duckdb/logging/log_format_writer.hpp"
 #include "duckdb/function/table_function.hpp"
 
 #include "duckdb/common/csv_writer.hpp"
@@ -21,7 +22,7 @@
 
 namespace duckdb {
 
-vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
+vector<LogicalType> LogSink::GetSchema(LoggingTargetTable table) {
 	switch (table) {
 	case LoggingTargetTable::ALL_LOGS: {
 		auto all_logs = GetSchema(LoggingTargetTable::LOG_CONTEXTS);
@@ -51,7 +52,7 @@ vector<LogicalType> LogStorage::GetSchema(LoggingTargetTable table) {
 	}
 }
 
-vector<Identifier> LogStorage::GetColumnNames(LoggingTargetTable table) {
+vector<Identifier> LogSink::GetColumnNames(LoggingTargetTable table) {
 	switch (table) {
 	case LoggingTargetTable::ALL_LOGS: {
 		auto all_logs = GetColumnNames(LoggingTargetTable::LOG_CONTEXTS);
@@ -70,56 +71,41 @@ vector<Identifier> LogStorage::GetColumnNames(LoggingTargetTable table) {
 	}
 }
 
-unique_ptr<LogStorageScanState> LogStorage::CreateScanState(LoggingTargetTable table) const {
-	throw NotImplementedException("Not implemented for this LogStorage: CreateScanEntriesState");
+unique_ptr<LogSinkScanState> LogSink::CreateScanState(LoggingTargetTable table) const {
+	throw NotImplementedException("Not implemented for this LogSink: CreateScanEntriesState");
 }
-bool LogStorage::Scan(LogStorageScanState &state, DataChunk &result) const {
-	throw NotImplementedException("Not implemented for this LogStorage: ScanEntries");
+bool LogSink::Scan(LogSinkScanState &state, DataChunk &result) const {
+	throw NotImplementedException("Not implemented for this LogSink: ScanEntries");
 }
-void LogStorage::InitializeScan(LogStorageScanState &state) const {
-	throw NotImplementedException("Not implemented for this LogStorage: InitializeScanEntries");
+void LogSink::InitializeScan(LogSinkScanState &state) const {
+	throw NotImplementedException("Not implemented for this LogSink: InitializeScanEntries");
 }
-void LogStorage::Truncate() {
-	throw NotImplementedException("Not implemented for this LogStorage: TruncateLogStorage");
+void LogSink::Truncate() {
+	throw NotImplementedException("Not implemented for this LogSink: TruncateLogSink");
 }
 
-void LogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+void LogSink::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	if (!config.empty()) {
-		throw InvalidInputException("Log storage '%s' does not support passing configuration", GetStorageName());
+		throw InvalidInputException("Log sink '%s' does not support passing configuration", GetSinkName());
 	}
 }
 
-unique_ptr<TableRef> LogStorage::BindReplace(ClientContext &context, TableFunctionBindInput &input,
-                                             LoggingTargetTable table) {
+unique_ptr<TableRef> LogSink::BindReplace(ClientContext &context, TableFunctionBindInput &input,
+                                          LoggingTargetTable table) {
 	return nullptr;
 }
 
-CSVLogStorage::~CSVLogStorage() {
-}
-
-CSVLogStorage::CSVLogStorage(DatabaseInstance &db, bool normalize, idx_t buffer_size)
-    : BufferingLogStorage(db, buffer_size, normalize) {
-	reader_options = make_uniq<CSVReaderOptions>();
-	writer_options = make_uniq<CSVWriterOptions>(*reader_options);
-
-	reader_options->dialect_options.state_machine_options.escape = '\"';
-	reader_options->dialect_options.state_machine_options.quote = '\"';
-	reader_options->dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
-
-	ResetCastChunk();
-}
-
-void BufferingLogStorage::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+void BufferingLogSink::UpdateConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	lock_guard<mutex> lck(lock);
 	return UpdateConfigInternal(db, config);
 }
 
-bool BufferingLogStorage::IsEnabled(LoggingTargetTable table) {
+bool BufferingLogSink::IsEnabled(LoggingTargetTable table) {
 	lock_guard<mutex> lck(lock);
 	return IsEnabledInternal(table);
 }
 
-bool BufferingLogStorage::IsEnabledInternal(LoggingTargetTable table) {
+bool BufferingLogSink::IsEnabledInternal(LoggingTargetTable table) {
 	if (normalize_contexts) {
 		return table == LoggingTargetTable::LOG_CONTEXTS || table == LoggingTargetTable::LOG_ENTRIES;
 	}
@@ -127,114 +113,11 @@ bool BufferingLogStorage::IsEnabledInternal(LoggingTargetTable table) {
 	return table == LoggingTargetTable::ALL_LOGS;
 }
 
-idx_t BufferingLogStorage::GetBufferLimit() const {
+idx_t BufferingLogSink::GetBufferLimit() const {
 	return buffer_limit;
 }
 
-void CSVLogStorage::ExecuteCast(LoggingTargetTable table, DataChunk &chunk) {
-	// Reset the cast buffer before use
-	cast_buffers[table]->Reset();
-
-	auto &cast_buffer = *cast_buffers[table];
-	idx_t count = chunk.size();
-
-	// Do default casts
-	for (idx_t i = 0; i < chunk.data.size(); i++) {
-		VectorOperations::DefaultCast(chunk.data[i], cast_buffer.data[i], count, false);
-	}
-}
-
-void CSVLogStorage::ResetAllBuffers() {
-	BufferingLogStorage::ResetAllBuffers();
-	ResetCastChunk();
-}
-
-void CSVLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
-	auto config_copy = config;
-
-	bool changed_writer_settings = false;
-
-	vector<string> to_remove;
-	for (const auto &it : config_copy) {
-		auto key = StringUtil::Lower(it.first);
-		if (key == "delim") {
-			changed_writer_settings = true;
-			reader_options->dialect_options.state_machine_options.delimiter = CSVOption<string>(it.second.ToString());
-			to_remove.push_back(it.first);
-		}
-	}
-
-	if (changed_writer_settings) {
-		for (auto &writer : writers) {
-			SetWriterConfigs(*writer.second, GetColumnNames(writer.first));
-		}
-	}
-
-	for (const auto &it : to_remove) {
-		config_copy.erase(it);
-	}
-
-	return BufferingLogStorage::UpdateConfigInternal(db, config_copy);
-}
-
-void CSVLogStorage::RegisterWriter(LoggingTargetTable table, unique_ptr<CSVWriter> writer) {
-	writers[table] = std::move(writer);
-}
-
-CSVWriter &CSVLogStorage::GetWriter(LoggingTargetTable table) {
-	return *writers[table];
-}
-
-void CSVLogStorage::InitializeCastChunk(LoggingTargetTable table) {
-	cast_buffers[table] = make_uniq<DataChunk>();
-
-	vector<LogicalType> types;
-	types.resize(GetSchema(table).size(), LogicalType::VARCHAR);
-	idx_t buffer_size = MaxValue<idx_t>(GetBufferLimit(), 1);
-	cast_buffers[table]->Initialize(Allocator::DefaultAllocator(), types, buffer_size);
-}
-
-void CSVLogStorage::ResetCastChunk() {
-	InitializeCastChunk(LoggingTargetTable::LOG_ENTRIES);
-	InitializeCastChunk(LoggingTargetTable::LOG_CONTEXTS);
-	InitializeCastChunk(LoggingTargetTable::ALL_LOGS);
-}
-
-void CSVLogStorage::SetWriterConfigs(CSVWriter &writer, vector<Identifier> column_names) {
-	writer.options = *reader_options;
-	writer.writer_options = *writer_options;
-
-	// Update the config with the column names since that is different per schema
-	writer.options.name_list = std::move(column_names);
-	writer.options.force_quote = vector<bool>(writer.options.name_list.size(), false);
-}
-
-CSVReaderOptions &CSVLogStorage::GetCSVReaderOptions() {
-	return *reader_options;
-}
-
-CSVWriterOptions &CSVLogStorage::GetCSVWriterOptions() {
-	return *writer_options;
-}
-
-void CSVLogStorage::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
-	BeforeFlush(table, chunk);
-
-	// Execute the cast
-	ExecuteCast(table, chunk);
-
-	// Write the chunk to the CSVWriter
-	writers[table]->WriteChunk(*cast_buffers[table]);
-	writers[table]->Flush();
-
-	// Call child class to implement any post flushing behaviour (e.g. calling sync)
-	AfterFlush(table, chunk);
-
-	// Reset the cast buffer
-	cast_buffers[table]->Reset();
-}
-
-void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+void BufferingLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	for (const auto &it : config) {
 		if (StringUtil::Lower(it.first) == "buffer_size") {
 			buffer_limit = it.second.GetValue<uint64_t>();
@@ -245,85 +128,93 @@ void BufferingLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insens
 		} else if (StringUtil::Lower(it.first) == "normalize") {
 			throw InternalException("'normalize' setting should be handled in child class");
 		} else {
-			throw InvalidInputException("Unrecognized log storage config option for storage: '%s': '%s'",
-			                            GetStorageName(), it.first);
+			throw InvalidInputException("Unrecognized log sink config option for sink: '%s': '%s'", GetSinkName(),
+			                            it.first);
 		}
 	}
 }
 
-void StdOutLogStorage::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t write_size) {
+void StdOutLogSink::StdOutWriteStream::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 	string data(const_char_ptr_cast(buffer), NumericCast<size_t>(write_size));
 	Printer::RawPrint(OutputStream::STREAM_STDOUT, data);
 	Printer::Flush(OutputStream::STREAM_STDOUT);
 }
 
-StdOutLogStorage::StdOutLogStorage(DatabaseInstance &db) : CSVLogStorage(db, false, 1) {
-	// StdOutLogStorage is denormalized only
+StdOutLogSink::StdOutLogSink(DatabaseInstance &db) : BufferingLogSink(db, 1, /*normalize=*/false) {
 	auto target_table = LoggingTargetTable::ALL_LOGS;
-
-	// Set storage specific defaults
-	GetCSVWriterOptions().newline_writing_mode = CSVNewLineMode::WRITE_AFTER;
-	GetCSVReaderOptions().dialect_options.state_machine_options.delimiter = CSVOption<string>("\t");
-
-	// Create and configure writer
-	auto writer = make_uniq<CSVWriter>(stdout_stream, GetColumnNames(target_table), false);
-	SetWriterConfigs(*writer, GetColumnNames(target_table));
-
-	RegisterWriter(target_table, std::move(writer));
+	auto column_names = GetColumnNames(target_table);
+	writer = make_uniq<CSVFormatWriter>(stdout_stream, target_table, column_names, "\t", CSVNewLineMode::WRITE_AFTER);
 }
 
-StdOutLogStorage::~StdOutLogStorage() {
+StdOutLogSink::~StdOutLogSink() {
 }
 
-FileLogStorage::FileLogStorage(DatabaseInstance &db_p) : CSVLogStorage(db_p, true, STANDARD_VECTOR_SIZE), db(db_p) {
+void StdOutLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
+	writer->WriteChunk(chunk);
+}
+
+void StdOutLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+	auto config_copy = config;
+
+	vector<string> to_remove;
+	for (const auto &it : config_copy) {
+		auto key = StringUtil::Lower(it.first);
+		if (key == "delim") {
+			writer->UpdateConfig({it});
+			to_remove.push_back(it.first);
+		}
+	}
+
+	for (const auto &it : to_remove) {
+		config_copy.erase(it);
+	}
+
+	BufferingLogSink::UpdateConfigInternal(db, config_copy);
+}
+
+FileLogSink::FileLogSink(DatabaseInstance &db_p)
+    : BufferingLogSink(db_p, STANDARD_VECTOR_SIZE, /*normalize=*/true), db(db_p) {
 	tables[LoggingTargetTable::ALL_LOGS] = TableWriter();
 	tables[LoggingTargetTable::LOG_CONTEXTS] = TableWriter();
 	tables[LoggingTargetTable::LOG_ENTRIES] = TableWriter();
-
-	// Set storage specific defaults
-	GetCSVWriterOptions().newline_writing_mode = CSVNewLineMode::WRITE_BEFORE;
-	GetCSVReaderOptions().dialect_options.state_machine_options.delimiter = CSVOption<string>(",");
 }
 
-FileLogStorage::~FileLogStorage() {
+FileLogSink::~FileLogSink() {
 }
 
-void FileLogStorage::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
+void FileLogSink::Initialize(LoggingTargetTable table) {
 	auto &table_writer = tables[table];
+	if (!table_writer.initialized) {
+		if (table_writer.path.empty()) {
+			throw InvalidConfigurationException("Failed to initialize file log sink table, path wasn't set");
+		}
+		InitializeFile(db, table);
+	}
+}
 
-	// reset the files writer, we may be re-initializing it here and otherwise we hold 2 handles to the same file
+void FileLogSink::InitializeFile(DatabaseInstance &db, LoggingTargetTable table) {
+	auto &table_writer = tables[table];
+	// the format writer writes to the file writer, so it goes first
+	table_writer.writer.reset();
 	table_writer.file_writer.reset();
-
-	// (re)initialize the file writer
 	table_writer.file_writer = InitializeFileWriter(db, table_writer.path);
+
 	auto file_writer = table_writer.file_writer.get();
 
-	// Create CSV writer that writes to file
 	auto column_names = GetColumnNames(table);
+	auto format_writer =
+	    make_uniq<CSVFormatWriter>(*file_writer, table, column_names, ",", CSVNewLineMode::WRITE_BEFORE);
+	format_writer->UpdateConfig(format_config);
 
-	// Configure writer
-	auto csv_writer = make_uniq<CSVWriter>(*file_writer, column_names, false);
-	SetWriterConfigs(*csv_writer, column_names);
 	bool should_write_header = file_writer->handle->GetFileSize() == 0;
+	format_writer->Initialize(should_write_header);
 
-	// We write the header only if the file was empty: when appending to the file we don't
-	csv_writer->options.dialect_options.header = {should_write_header, true};
-
-	// Initialize the writer, this writes out the header if required
-	csv_writer->Initialize();
-
-	// Needed to ensure we correctly start with a newline
-	csv_writer->SetWrittenAnything(true);
-
-	RegisterWriter(table, std::move(csv_writer));
-
-	// Ensures that the file is fully initialized when this function returns
+	table_writer.writer = std::move(format_writer);
 	file_writer->Sync();
-
 	table_writer.initialized = true;
 }
 
-unique_ptr<BufferedFileWriter> FileLogStorage::InitializeFileWriter(DatabaseInstance &db, const string &path) {
+unique_ptr<BufferedFileWriter> FileLogSink::InitializeFileWriter(DatabaseInstance &db, const string &path) {
 	auto &fs = db.GetFileSystem();
 
 	// Create parent directories if non existent
@@ -343,79 +234,24 @@ unique_ptr<BufferedFileWriter> FileLogStorage::InitializeFileWriter(DatabaseInst
 	return make_uniq<BufferedFileWriter>(fs, path, flags);
 }
 
-void FileLogStorage::Truncate() {
-	lock_guard<mutex> lck(lock);
-
-	// Reset buffers
-	ResetAllBuffers();
-
-	for (const auto &it : tables) {
-		auto &file_writer = it.second.file_writer;
-		if (!file_writer) {
-			continue;
-		}
-		// Truncate the file writer
-		file_writer->Truncate(0);
-		auto &writer = GetWriter(it.first);
-		// Reset writer and header option, then re-initialize
-		writer.Reset(nullptr);
-		writer.options.dialect_options.header = CSVOption<bool>(true);
-		writer.Initialize(true);
-	}
-}
-
-void FileLogStorage::BeforeFlush(LoggingTargetTable table, DataChunk &) {
-	// Lazily initialize the files
+void FileLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 	Initialize(table);
-}
-
-void FileLogStorage::AfterFlush(LoggingTargetTable table, DataChunk &) {
+	tables[table].writer->WriteChunk(chunk);
 	tables[table].file_writer->Sync();
 }
 
-void FileLogStorage::Initialize(LoggingTargetTable table) {
-	auto &table_writer = tables[table];
-	if (!table_writer.initialized) {
-		if (table_writer.path.empty()) {
-			throw InvalidConfigurationException("Failed to initialize file log storage table, path wasn't set");
-		}
-
-		InitializeFile(db, table);
-	}
-}
-
-void FileLogStorage::SetPaths(const string &base_path) {
-	for (auto &it : tables) {
-		it.second.path.clear();
-	}
-
-	LocalFileSystem fs;
-	if (normalize_contexts) {
-		tables[LoggingTargetTable::LOG_CONTEXTS].path = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
-		tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
-	} else {
-		if (StringUtil::EndsWith(base_path, ".csv")) {
-			tables[LoggingTargetTable::ALL_LOGS].path = base_path;
-		} else {
-			tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
-		}
-	}
-}
-
-void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
+void FileLogSink::UpdateConfigInternal(DatabaseInstance &db, case_insensitive_map_t<Value> &config) {
 	auto config_copy = config;
 
 	string new_path;
 	bool normalize_contexts_new_value = normalize_contexts;
 	bool normalize_set_explicitly = false;
 	bool require_reinitializing_files = false;
-
 	vector<string> to_remove;
 	for (const auto &it : config_copy) {
 		auto key = StringUtil::Lower(it.first);
 		if (key == "path") {
 			auto path_value = it.second.ToString();
-			//! We implicitly set normalize to false when a path ending in .csv is specified
 			if (!normalize_set_explicitly && StringUtil::EndsWith(path_value, ".csv")) {
 				normalize_contexts_new_value = false;
 			}
@@ -426,22 +262,21 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 			normalize_contexts_new_value = it.second.GetValue<bool>();
 			to_remove.push_back(it.first);
 		} else if (key == "delim") {
+			// the files are reinitialized, so the new format writers pick this up
+			format_config[it.first] = it.second;
 			require_reinitializing_files = true;
+			to_remove.push_back(it.first);
 		}
 	}
 
 	if (StringUtil::EndsWith(new_path, ".csv") && normalize_contexts_new_value) {
 		throw InvalidConfigurationException(
-		    "Can not set path to '%s' while normalize is true. Normalize will make DuckDB write multiple log files to "
-		    "more efficiently store log entries. Please specify a directory path instead of a csv file path, or set "
-		    "normalize to false.",
+		    "Can not set path to '%s' while normalize is true. Normalize will make DuckDB write multiple log files "
+		    "to more efficiently store log entries. Please specify a directory path instead of a csv file path, or "
+		    "set normalize to false.",
 		    new_path);
 	}
 
-	// If any writer is initialized, we flush first:
-	// - when switching between normalized and denormalized, this is necessary since we are changing the buffer schema
-	// - when simply changing the path, it avoids writing log entries written before this change to end up in the new
-	// file
 	bool initialized = false;
 	for (auto &it : tables) {
 		initialized |= it.second.initialized;
@@ -453,17 +288,13 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 	require_reinitializing_files |= normalize_contexts != normalize_contexts_new_value;
 	normalize_contexts = normalize_contexts_new_value;
 
-	// Reset the buffers to ensure they have the correct schema
 	if (require_reinitializing_files) {
 		ResetAllBuffers();
-
-		// Mark tables as uninitialized
 		for (auto &table : tables) {
 			table.second.initialized = false;
 		}
 	}
 
-	// Apply any path change
 	if (new_path != base_path) {
 		base_path = new_path;
 		SetPaths(new_path);
@@ -473,12 +304,12 @@ void FileLogStorage::UpdateConfigInternal(DatabaseInstance &db, case_insensitive
 		config_copy.erase(it);
 	}
 
-	CSVLogStorage::UpdateConfigInternal(db, config_copy);
+	BufferingLogSink::UpdateConfigInternal(db, config_copy);
 }
 
-unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
-                                                         const string &path, const string &select_clause,
-                                                         const string &csv_columns) {
+unique_ptr<TableRef> FileLogSink::BindReplaceInternal(ClientContext &context, TableFunctionBindInput &input,
+                                                      const string &path, const string &select_clause,
+                                                      const string &csv_columns) {
 	string sub_query_string =
 	    StringUtil::Format("%s FROM read_csv_auto(%s, columns={%s})", select_clause, SQLString(path), csv_columns);
 
@@ -489,8 +320,8 @@ unique_ptr<TableRef> FileLogStorage::BindReplaceInternal(ClientContext &context,
 	return duckdb::make_uniq<SubqueryRef>(std::move(select_stmt));
 }
 
-unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFunctionBindInput &input,
-                                                 LoggingTargetTable table) {
+unique_ptr<TableRef> FileLogSink::BindReplace(ClientContext &context, TableFunctionBindInput &input,
+                                              LoggingTargetTable table) {
 	lock_guard<mutex> lck(lock);
 
 	// We only allow scanning enabled tables
@@ -533,12 +364,46 @@ unique_ptr<TableRef> FileLogStorage::BindReplace(ClientContext &context, TableFu
 	return BindReplaceInternal(context, input, path, select, columns);
 }
 
-BufferingLogStorage::BufferingLogStorage(DatabaseInstance &db_p, idx_t buffer_size, bool normalize)
+void FileLogSink::SetPaths(const string &base_path) {
+	for (auto &it : tables) {
+		it.second.path.clear();
+	}
+
+	LocalFileSystem fs;
+	if (normalize_contexts) {
+		tables[LoggingTargetTable::LOG_CONTEXTS].path = fs.JoinPath(base_path, "duckdb_log_contexts.csv");
+		tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
+	} else {
+		if (StringUtil::EndsWith(base_path, ".csv")) {
+			tables[LoggingTargetTable::ALL_LOGS].path = base_path;
+		} else {
+			tables[LoggingTargetTable::LOG_ENTRIES].path = fs.JoinPath(base_path, "duckdb_log_entries.csv");
+		}
+	}
+}
+
+void FileLogSink::Truncate() {
+	lock_guard<mutex> lck(lock);
+
+	// Reset buffers
+	ResetAllBuffers();
+
+	for (auto &it : tables) {
+		auto &file_writer = it.second.file_writer;
+		if (!file_writer) {
+			continue;
+		}
+		file_writer->Truncate(0);
+		it.second.writer->Truncate();
+	}
+}
+
+BufferingLogSink::BufferingLogSink(DatabaseInstance &db_p, idx_t buffer_size, bool normalize)
     : normalize_contexts(normalize), buffer_limit(buffer_size) {
 	ResetLogBuffers();
 }
 
-void BufferingLogStorage::ResetLogBuffers() {
+void BufferingLogSink::ResetLogBuffers() {
 	idx_t buffer_size = MaxValue<idx_t>(buffer_limit, 1);
 	// initialize the new buffers before replacing the old ones - initializing allocates, and a buffer that is
 	// replaced but not initialized has no columns, so every later write to it indexes out of bounds
@@ -558,42 +423,42 @@ void BufferingLogStorage::ResetLogBuffers() {
 	registered_contexts.clear();
 }
 
-void BufferingLogStorage::ResetAllBuffers() {
+void BufferingLogSink::ResetAllBuffers() {
 	ResetLogBuffers();
 }
 
-InMemoryLogStorageScanState::InMemoryLogStorageScanState(LoggingTargetTable table) : LogStorageScanState(table) {
+InMemoryLogSinkScanState::InMemoryLogSinkScanState(LoggingTargetTable table) : LogSinkScanState(table) {
 }
-InMemoryLogStorageScanState::~InMemoryLogStorageScanState() {
+InMemoryLogSinkScanState::~InMemoryLogSinkScanState() {
 }
 
-InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p) : BufferingLogStorage(db_p, STANDARD_VECTOR_SIZE, true) {
-	log_storage_buffers[LoggingTargetTable::LOG_ENTRIES] =
+InMemoryLogSink::InMemoryLogSink(DatabaseInstance &db_p) : BufferingLogSink(db_p, STANDARD_VECTOR_SIZE, true) {
+	log_sink_buffers[LoggingTargetTable::LOG_ENTRIES] =
 	    make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_ENTRIES));
-	log_storage_buffers[LoggingTargetTable::LOG_CONTEXTS] =
+	log_sink_buffers[LoggingTargetTable::LOG_CONTEXTS] =
 	    make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), GetSchema(LoggingTargetTable::LOG_CONTEXTS));
 }
 
-void InMemoryLogStorage::ResetAllBuffers() {
-	BufferingLogStorage::ResetAllBuffers();
+void InMemoryLogSink::ResetAllBuffers() {
+	BufferingLogSink::ResetAllBuffers();
 
-	for (const auto &buffer : log_storage_buffers) {
+	for (const auto &buffer : log_sink_buffers) {
 		buffer.second->Reset();
 	}
 }
 
-ColumnDataCollection &InMemoryLogStorage::GetBuffer(LoggingTargetTable table) const {
-	auto res = log_storage_buffers.find(table);
-	if (res == log_storage_buffers.end()) {
+ColumnDataCollection &InMemoryLogSink::GetBuffer(LoggingTargetTable table) const {
+	auto res = log_sink_buffers.find(table);
+	if (res == log_sink_buffers.end()) {
 		throw InternalException("Failed to find table");
 	}
 	return *res->second;
 }
 
-InMemoryLogStorage::~InMemoryLogStorage() {
+InMemoryLogSink::~InMemoryLogSink() {
 }
 
-BufferingLogStorage::~BufferingLogStorage() {
+BufferingLogSink::~BufferingLogSink() {
 }
 
 static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggingContext &context, idx_t &col) {
@@ -634,8 +499,8 @@ static void WriteLoggingContextsToChunk(DataChunk &chunk, const RegisteredLoggin
 	chunk.SetChildCardinality(size + 1);
 }
 
-void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
-                                        const string &log_message, const RegisteredLoggingContext &context) {
+void BufferingLogSink::WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
+                                     const string &log_message, const RegisteredLoggingContext &context) {
 	unique_lock<mutex> lck(lock);
 
 	auto &log_entries_buffer =
@@ -691,35 +556,35 @@ void BufferingLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, c
 	}
 }
 
-void BufferingLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
-	throw NotImplementedException("BufferingLogStorage::WriteLogEntries(DataChunk &chunk) not implemented");
+void BufferingLogSink::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
+	throw NotImplementedException("BufferingLogSink::WriteLogEntries(DataChunk &chunk) not implemented");
 }
 
-void BufferingLogStorage::FlushAll() {
+void BufferingLogSink::FlushAll() {
 	unique_lock<mutex> lck(lock);
 	if (!only_flush_on_full_buffer) {
 		FlushAllInternal();
 	}
 }
 
-void BufferingLogStorage::Flush(LoggingTargetTable table) {
+void BufferingLogSink::Flush(LoggingTargetTable table) {
 	unique_lock<mutex> lck(lock);
 	if (!only_flush_on_full_buffer) {
 		FlushInternal(table);
 	}
 }
 
-void BufferingLogStorage::Truncate() {
+void BufferingLogSink::Truncate() {
 	unique_lock<mutex> lck(lock);
 	ResetAllBuffers();
 }
 
-void InMemoryLogStorage::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
+void InMemoryLogSink::FlushChunk(LoggingTargetTable table, DataChunk &chunk) {
 	D_ASSERT(table == LoggingTargetTable::LOG_ENTRIES || table == LoggingTargetTable::LOG_CONTEXTS);
-	log_storage_buffers[table]->Append(chunk);
+	log_sink_buffers[table]->Append(chunk);
 }
 
-void BufferingLogStorage::FlushAllInternal() {
+void BufferingLogSink::FlushAllInternal() {
 	if (normalize_contexts) {
 		FlushInternal(LoggingTargetTable::LOG_ENTRIES);
 		FlushInternal(LoggingTargetTable::LOG_CONTEXTS);
@@ -728,7 +593,7 @@ void BufferingLogStorage::FlushAllInternal() {
 	}
 }
 
-void BufferingLogStorage::FlushInternal(LoggingTargetTable table) {
+void BufferingLogSink::FlushInternal(LoggingTargetTable table) {
 	if (!IsEnabledInternal(table)) {
 		throw InvalidConfigurationException("Cannot flush disabled logging target");
 	}
@@ -736,7 +601,7 @@ void BufferingLogStorage::FlushInternal(LoggingTargetTable table) {
 	buffers[table]->Reset();
 }
 
-void BufferingLogStorage::WriteLoggingContext(const RegisteredLoggingContext &context) {
+void BufferingLogSink::WriteLoggingContext(const RegisteredLoggingContext &context) {
 	registered_contexts.insert(context.context_id);
 
 	// If we don't normalize the contexts they are written out on every log entry
@@ -755,24 +620,24 @@ void BufferingLogStorage::WriteLoggingContext(const RegisteredLoggingContext &co
 	WriteLoggingContextsToChunk(*log_contexts_buffer, context, col);
 }
 
-bool InMemoryLogStorage::CanScan(LoggingTargetTable table) {
+bool InMemoryLogSink::CanScan(LoggingTargetTable table) {
 	unique_lock<mutex> lck(lock);
 	return IsEnabledInternal(table);
 }
 
-unique_ptr<LogStorageScanState> InMemoryLogStorage::CreateScanState(LoggingTargetTable table) const {
-	return make_uniq<InMemoryLogStorageScanState>(table);
+unique_ptr<LogSinkScanState> InMemoryLogSink::CreateScanState(LoggingTargetTable table) const {
+	return make_uniq<InMemoryLogSinkScanState>(table);
 }
 
-bool InMemoryLogStorage::Scan(LogStorageScanState &state, DataChunk &result) const {
+bool InMemoryLogSink::Scan(LogSinkScanState &state, DataChunk &result) const {
 	unique_lock<mutex> lck(lock);
-	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
+	auto &in_mem_scan_state = state.Cast<InMemoryLogSinkScanState>();
 	return GetBuffer(in_mem_scan_state.table).Scan(in_mem_scan_state.scan_state, result);
 }
 
-void InMemoryLogStorage::InitializeScan(LogStorageScanState &state) const {
+void InMemoryLogSink::InitializeScan(LogSinkScanState &state) const {
 	unique_lock<mutex> lck(lock);
-	auto &in_mem_scan_state = state.Cast<InMemoryLogStorageScanState>();
+	auto &in_mem_scan_state = state.Cast<InMemoryLogSinkScanState>();
 	GetBuffer(in_mem_scan_state.table)
 	    .InitializeScan(in_mem_scan_state.scan_state, ColumnDataScanProperties::DISALLOW_ZERO_COPY);
 }

@@ -10,7 +10,7 @@ def test_trace(shell, tmp_path):
 
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging('FileSystem', level = 'trace', storage = 'shell_log_storage');")
+        .statement("CALL enable_logging('FileSystem', level = 'trace', storage = 'shell_log_sink');")
         .statement(f"copy (select 1 as a) to 'temp_file'")
     )
     result = test.run()
@@ -21,7 +21,7 @@ def test_trace(shell, tmp_path):
 # def test_debug(shell):
 #     test = (
 #         ShellTest(shell)
-#         .statement("CALL enable_logging(level = 'debug', storage = 'shell_log_storage');")
+#         .statement("CALL enable_logging(level = 'debug', storage = 'shell_log_sink');")
 #         .statement("SELECT 42;")
 #     )
 #
@@ -36,7 +36,7 @@ def test_info(shell):
 
     test = (
         ShellTest(shell)
-        .statement("CALL enable_logging(level = 'info', storage = 'shell_log_storage');")
+        .statement("CALL enable_logging(level = 'info', storage = 'shell_log_sink');")
         .statement("LOAD HTTP;")
     )
 
@@ -86,3 +86,33 @@ def test_changing_logging_settings(shell, tmp_path):
     print(result.stderr)
     result.check_stdout("WARNING:")
     result.check_stdout("The logging settings have been changed")
+
+
+def test_deprecated_shell_log_storage(shell):
+    test = ShellTest(shell).statement("CALL enable_logging(level = 'info', storage = 'shell_log_storage');")
+
+    result = test.run()
+    result.check_stdout("WARNING:")
+    result.check_stdout("The log sink 'shell_log_storage' has been renamed to 'shell_log_sink'")
+
+
+def test_enable_shell_log_sink(shell):
+    # with logs going to memory, CLI warnings are no longer printed
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_logging(level = 'warning', storage = 'memory');")
+        .statement("SET logging_storage = 'memory';")
+    )
+    result = test.run()
+    assert "the logging_storage setting is deprecated" not in result.stdout
+
+    # enabling the shell sink prints them again, while they still go to memory
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_logging(level = 'warning', storage = 'memory');")
+        .statement("CALL enable_log_sink('shell_log_sink');")
+        .statement("SET logging_storage = 'memory';")
+        .statement("SELECT count(*) FROM duckdb_logs WHERE message LIKE 'the logging_storage setting is deprecated%';")
+    )
+    result = test.run()
+    result.check_stdout("the logging_storage setting is deprecated")
