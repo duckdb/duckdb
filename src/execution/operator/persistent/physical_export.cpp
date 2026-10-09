@@ -71,6 +71,8 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		for (auto &not_null_column : exported_table.not_null_columns) {
 			info.options["force_not_null"].push_back(not_null_column);
 		}
+		// the writer quotes empty strings and the null string so they can be told apart from NULL
+		info.options["allow_quoted_nulls"] = {Value::BOOLEAN(false)};
 	}
 	for (auto &copy_option : info.options) {
 		if (copy_option.second.empty()) {

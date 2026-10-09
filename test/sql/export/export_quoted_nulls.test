@@ -1,0 +1,66 @@
+# name: test/sql/export/export_quoted_nulls.test
+# description: Test that EXPORT/IMPORT DATABASE round-trips NULL, empty strings and the null string
+# group: [export]
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE tbl(v VARCHAR)
+
+statement ok
+INSERT INTO tbl VALUES (NULL), (''), ('NULL')
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_quoted_nulls'
+
+statement ok
+ROLLBACK
+
+# the generated load.sql must not read the quoted values back as NULL
+query I
+SELECT contains(content, 'allow_quoted_nulls false') FROM read_text('{TEST_DIR}/export_quoted_nulls/load.sql')
+----
+true
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/export_quoted_nulls'
+
+query III
+SELECT count(*) FILTER (WHERE v IS NULL), count(*) FILTER (WHERE v = ''), count(*) FILTER (WHERE v = 'NULL') FROM tbl
+----
+1	1	1
+
+# same with an explicit null string: the string 'NULL' is written quoted and must survive the round trip
+statement ok
+DROP TABLE tbl
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE tbl2(i INTEGER, v VARCHAR)
+
+statement ok
+INSERT INTO tbl2 VALUES (1, NULL), (2, ''), (3, 'NULL')
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_quoted_nulls_nullstr' (FORMAT CSV, NULLSTR 'NULL')
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/export_quoted_nulls_nullstr'
+
+query III
+SELECT i, v IS NULL, length(v) FROM tbl2 ORDER BY i
+----
+1	true	NULL
+2	false	0
+3	false	4
+
+query III
+SELECT count(*) FILTER (WHERE v IS NULL), count(*) FILTER (WHERE v = ''), count(*) FILTER (WHERE v = 'NULL') FROM tbl2
+----
+1	1	1
