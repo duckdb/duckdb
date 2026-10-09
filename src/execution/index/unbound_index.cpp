@@ -67,6 +67,9 @@ IndexStorageInfo UnboundIndex::CopyStorageInfo() const {
 }
 
 unique_ptr<BoundIndex> UnboundIndex::Bind(IndexBinder &binder, const vector<LogicalType> &physical_column_types) {
+	if (storage_reclaimed) {
+		throw FatalException("Cannot bind index %s: its storage was already reclaimed", GetIndexName());
+	}
 	auto bound_index = binder.BindIndex(*this);
 	storage_reclaimed = true;
 	if (HasBufferedReplays()) {

@@ -893,17 +893,22 @@ void SingleFileStorageManager::CreateCheckpoint(QueryContext context, Checkpoint
 		}
 	}
 
-	if (db.GetStorageExtension()) {
-		db.GetStorageExtension()->OnCheckpointStart(db, options);
-	}
-
 	auto &config = DBConfig::Get(db);
 	// We only need to checkpoint if there is anything in the WAL.
 	auto wal_size = GetWALSize();
 	auto should_checkpoint =
 	    wal_size > 0 || config.options.force_checkpoint || options.action == CheckpointAction::ALWAYS_CHECKPOINT;
 	// Binding can fail: bind before the checkpoint starts, as any failure after that invalidates the database.
-	if (should_checkpoint && BindIndexesForCheckpoint(context, options)) {
+	if (should_checkpoint && !BindIndexesForCheckpoint(context, options)) {
+		// Keep the WAL: it is the only record of buffered index replays.
+		should_checkpoint = false;
+	}
+
+	if (db.GetStorageExtension()) {
+		db.GetStorageExtension()->OnCheckpointStart(db, options);
+	}
+
+	if (should_checkpoint) {
 		try {
 			// Start timing the checkpoint.
 			auto client_context = context.GetClientContext();
