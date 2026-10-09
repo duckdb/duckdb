@@ -208,9 +208,8 @@ bool QueryResult::IsOpen() {
 
 QueryResultState QueryResult::Cancelled() {
 	if (!HasError()) {
-		SetError(ErrorData(ExceptionType::INTERRUPT,
-		                   "The execution of the query was cancelled before it could finish, likely caused by "
-		                   "executing a different query"));
+		SetError(
+		    ErrorData(ExceptionType::INTERRUPT, "The execution of the query was cancelled before it could finish"));
 	}
 	return QueryResultState::EXECUTION_ERROR;
 }

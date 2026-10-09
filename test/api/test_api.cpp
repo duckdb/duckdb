@@ -255,17 +255,24 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	const string failing_query =
 	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);";
 
-	// a second stream invalidates the first
+	// a second stream is refused while the first is open
 	auto stream = OpenStream(con, "SELECT 42;");
+	auto refused = con.Submit("SELECT 42;");
+	REQUIRE(refused->HasError());
+	REQUIRE(refused->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
+	result2 = DrainStream(*stream);
+	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 	auto stream2 = OpenStream(con, "SELECT 42;");
-	REQUIRE_THROWS(stream->Fetch());
 	result2 = DrainStream(*stream2);
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
-	// stream followed by a retained result
+	// a retained result is refused while a stream is open, and taken once the stream is closed
 	stream = OpenStream(con, "SELECT 42;");
 	result2 = con.Query("SELECT 42;");
-	REQUIRE_THROWS(stream->Fetch());
+	REQUIRE(result2->HasError());
+	REQUIRE(result2->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
+	stream->Close();
+	result2 = con.Query("SELECT 42;");
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
 	// error in binding
@@ -312,13 +319,12 @@ TEST_CASE("Test fetch API", "[api]") {
 	auto materialized_result = con.Query("select a from test");
 	REQUIRE(CHECK_COLUMN(materialized_result, 0, {42}));
 
-	// override the open stream
-	auto stream = OpenStream(con, "SELECT a from test");
-	stream = OpenStream(con, "SELECT a from test");
-	stream = OpenStream(con, "SELECT a from test");
-	stream = OpenStream(con, "SELECT a from test");
-	result = DrainStream(*stream);
-	REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	// one stream at a time: each drained stream frees the connection for the next
+	for (idx_t i = 0; i < 4; i++) {
+		auto stream = OpenStream(con, "SELECT a from test");
+		result = DrainStream(*stream);
+		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
 }
 
 TEST_CASE("Test fetch API not to completion", "[api]") {
@@ -357,21 +363,25 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 	// fetch should not fail
 	chunk = stream->Fetch();
 	REQUIRE(chunk);
-	// new queries on the connection should not fail either
+	// new queries on the connection should not fail either, once the stream has ended
+	REQUIRE(!stream->Fetch());
 	REQUIRE_NO_FAIL(conn->Query("SELECT 42"));
 
-	// override the open stream
+	// a second stream is refused while the first is open
 	db = make_uniq<DuckDB>(nullptr);
 	conn = make_uniq<Connection>(*db);
 	auto stream1 = OpenStream(*conn, "SELECT 42");
-	auto stream2 = OpenStream(*conn, "SELECT 84");
 	REQUIRE(!stream1->HasError());
-	REQUIRE(!stream2->HasError());
+	auto refused = conn->Submit("SELECT 84");
+	REQUIRE(refused->HasError());
+	REQUIRE(refused->GetErrorType() == ExceptionType::RESOURCE_IN_USE);
 
-	// stream1 should be closed now
-	REQUIRE_THROWS(stream1->Fetch());
-	// stream2 should work
+	// stream1 is untouched
+	REQUIRE(stream1->Fetch());
+	stream1->Close();
+	auto stream2 = OpenStream(*conn, "SELECT 84");
 	REQUIRE(stream2->Fetch());
+	stream2->Close();
 
 	// a retained result stays readable after another query starts
 	auto materialized = conn->Query("SELECT 42");
