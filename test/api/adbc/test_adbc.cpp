@@ -321,6 +321,10 @@ TEST_CASE("ADBC - Cancel statement while consuming stream", "[adbc]") {
 
 	REQUIRE(stream_status.load() != 0);
 	REQUIRE(last_error.find("Interrupted!") != std::string::npos);
+	AdbcStatusCode cancel_status = ADBC_STATUS_OK;
+	auto stream_error = AdbcErrorFromArrayStream(&stream, &cancel_status);
+	REQUIRE(stream_error);
+	REQUIRE(cancel_status == ADBC_STATUS_CANCELLED);
 
 	if (stream.release) {
 		stream.release(&stream);
@@ -3856,6 +3860,22 @@ TEST_CASE("Test ADBC 1.1.0 rows_affected", "[adbc]") {
 		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 	}
 
+	// A statement that changed nothing reports 0, a statement without a count reports -1
+	for (auto &entry :
+	     vector<std::pair<string, int64_t>> {{"UPDATE test_rows SET value = 0 WHERE false", 0},
+	                                         {"DELETE FROM test_rows WHERE false", 0},
+	                                         {"INSERT INTO test_rows SELECT * FROM test_rows WHERE false", 0},
+	                                         {"CREATE TABLE test_rows_ddl (value INTEGER)", -1}}) {
+		INFO(entry.first);
+		AdbcStatement adbc_statement;
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, entry.first.c_str(), &adbc_error)));
+		int64_t rows_affected = -999;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, nullptr, &rows_affected, &adbc_error)));
+		REQUIRE(rows_affected == entry.second);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	}
+
 	// Test rows_affected for SELECT (should return -1)
 	{
 		AdbcStatement adbc_statement;
@@ -5372,6 +5392,580 @@ TEST_CASE("ADBC - Rich Error Metadata API", "[adbc]") {
 			input.release(&input);
 		}
 	}
+}
+
+//! The duckdb:error_type detail of an error, empty when it has none
+static string ErrorTypeDetail(const AdbcError &error) {
+	auto count = AdbcErrorGetDetailCount(&error);
+	for (int i = 0; i < count; i++) {
+		auto detail = AdbcErrorGetDetail(&error, i);
+		if (detail.key && std::strcmp(detail.key, "duckdb:error_type") == 0) {
+			return string(reinterpret_cast<const char *>(detail.value), detail.value_length);
+		}
+	}
+	return string();
+}
+
+static void AppendBigintColumn(const ArrowArray &array, vector<int64_t> &values) {
+	auto &column = *array.children[0];
+	auto data = static_cast<const int64_t *>(column.buffers[1]) + column.offset + array.offset;
+	values.insert(values.end(), data, data + array.length);
+}
+
+//! Reads the stream to its end or its first error, returning what get_next returned last
+static int DrainBigintColumn(ArrowArrayStream &stream, vector<int64_t> &values) {
+	while (true) {
+		ArrowArray array;
+		auto rc = stream.get_next(&stream, &array);
+		if (rc != 0 || !array.release) {
+			return rc;
+		}
+		AppendBigintColumn(array, values);
+		array.release(&array);
+	}
+}
+
+static idx_t CountMisplaced(const vector<int64_t> &values, bool descending) {
+	idx_t misplaced = 0;
+	for (idx_t row = 0; row < values.size(); row++) {
+		auto expected = static_cast<int64_t>(descending ? values.size() - 1 - row : row);
+		misplaced += values[row] != expected;
+	}
+	return misplaced;
+}
+
+static string ExtensionName(const ArrowSchema &schema) {
+	duckdb_nanoarrow::ArrowStringView value;
+	if (!schema.metadata ||
+	    duckdb_nanoarrow::ArrowMetadataGetValue(schema.metadata, "ARROW:extension:name", "", &value) != NANOARROW_OK) {
+		return string();
+	}
+	return string(value.data, NumericCast<idx_t>(value.n_bytes));
+}
+
+static void RequireSameSchema(const ArrowSchema &left, const ArrowSchema &right) {
+	REQUIRE(string(left.format) == string(right.format));
+	REQUIRE(string(left.name ? left.name : "") == string(right.name ? right.name : ""));
+	REQUIRE(left.flags == right.flags);
+	REQUIRE(ExtensionName(left) == ExtensionName(right));
+	REQUIRE(left.n_children == right.n_children);
+	for (int64_t i = 0; i < left.n_children; i++) {
+		RequireSameSchema(*left.children[i], *right.children[i]);
+	}
+}
+
+TEST_CASE("ADBC - Stream keeps the result order across arrays", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(!db.Query("SET threads=4")->HasError());
+	REQUIRE(!db.Query("CREATE TABLE ordered AS SELECT i FROM range(300000) t(i)")->HasError());
+
+	for (bool descending : {false, true}) {
+		auto &stream = db.QueryArrow(descending ? "SELECT i FROM ordered ORDER BY i DESC" : "SELECT i FROM ordered");
+		vector<int64_t> values;
+		idx_t misshapen_arrays = 0;
+		while (true) {
+			ArrowArray array;
+			REQUIRE(stream.get_next(&stream, &array) == 0);
+			if (!array.release) {
+				break;
+			}
+			if (array.length == 0 || array.length > static_cast<int64_t>(STANDARD_VECTOR_SIZE)) {
+				misshapen_arrays++;
+			}
+			AppendBigintColumn(array, values);
+			array.release(&array);
+		}
+		REQUIRE(misshapen_arrays == 0);
+		REQUIRE(values.size() == 300000);
+		REQUIRE(CountMisplaced(values, descending) == 0);
+	}
+}
+
+TEST_CASE("ADBC - Execution error part-way through a stream", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	// One thread and a small buffer keep the producer from reaching the failing row before the first array is read
+	REQUIRE(!db.Query("SET threads=1")->HasError());
+	REQUIRE(!db.Query("SET max_streaming_buffer_size='64KB'")->HasError());
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(
+	    &statement,
+	    "SELECT CASE WHEN i < 100000 THEN i ELSE error('stream failed')::BIGINT END AS v FROM range(200000) t(i)",
+	    &db.adbc_error)));
+	ArrowArrayStream stream;
+	int64_t rows_affected;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+
+	vector<int64_t> values;
+	ArrowArray array;
+	REQUIRE(stream.get_next(&stream, &array) == 0);
+	REQUIRE(array.release);
+	AppendBigintColumn(array, values);
+	array.release(&array);
+
+	SECTION("read directly") {
+	}
+	SECTION("materialized by the next statement on the connection") {
+		REQUIRE(db.QueryAndCheck("SELECT 42"));
+	}
+
+	REQUIRE(DrainBigintColumn(stream, values) != 0);
+	REQUIRE(string(stream.get_last_error(&stream)).find("stream failed") != string::npos);
+	AdbcStatusCode status = ADBC_STATUS_OK;
+	auto stream_error = AdbcErrorFromArrayStream(&stream, &status);
+	REQUIRE(stream_error);
+	REQUIRE(status == ADBC_STATUS_INTERNAL);
+	REQUIRE(ErrorTypeDetail(*stream_error) == "InvalidInput");
+	REQUIRE(stream.get_next(&stream, &array) != 0);
+	REQUIRE(values.size() <= 100000);
+	REQUIRE(CountMisplaced(values, false) == 0);
+
+	stream.release(&stream);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	REQUIRE(db.QueryAndCheck("SELECT 1"));
+}
+
+TEST_CASE("ADBC - Cancelled stream reports CANCELLED", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	SECTION("plain error messages") {
+	}
+	SECTION("errors as JSON") {
+		REQUIRE(!db.Query("SET errors_as_json=true")->HasError());
+	}
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, "SELECT i FROM range(100000000) t(i)", &db.adbc_error)));
+	ArrowArrayStream stream;
+	int64_t rows_affected;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+
+	vector<int64_t> values;
+	ArrowArray array;
+	REQUIRE(stream.get_next(&stream, &array) == 0);
+	REQUIRE(array.release);
+	array.release(&array);
+	REQUIRE(AdbcConnectionCancel(&db.adbc_connection, &db.adbc_error) == ADBC_STATUS_OK);
+
+	REQUIRE(DrainBigintColumn(stream, values) != 0);
+	REQUIRE(string(stream.get_last_error(&stream)).find("Interrupted!") != string::npos);
+	AdbcStatusCode status = ADBC_STATUS_OK;
+	auto stream_error = AdbcErrorFromArrayStream(&stream, &status);
+	REQUIRE(stream_error);
+	REQUIRE(status == ADBC_STATUS_CANCELLED);
+	REQUIRE(ErrorTypeDetail(*stream_error) == "Interrupt");
+
+	stream.release(&stream);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	REQUIRE(db.QueryAndCheck("SELECT 1"));
+}
+
+TEST_CASE("ADBC - Stream of a data-modifying statement", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(!db.Query("CREATE TABLE modified (i BIGINT)")->HasError());
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	ArrowArrayStream stream;
+	int64_t rows_affected = 0;
+	vector<int64_t> values;
+	int64_t expected_rows = 0;
+
+	SECTION("INSERT hands out its changed row count") {
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetSqlQuery(&statement, "INSERT INTO modified VALUES (1), (2), (3)", &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+		REQUIRE(rows_affected == 3);
+
+		ArrowSchema schema;
+		REQUIRE(stream.get_schema(&stream, &schema) == 0);
+		REQUIRE(schema.n_children == 1);
+		REQUIRE(string(schema.children[0]->name) == "Count");
+		REQUIRE(string(schema.children[0]->format) == "l");
+		schema.release(&schema);
+
+		REQUIRE(DrainBigintColumn(stream, values) == 0);
+		REQUIRE(values == vector<int64_t> {3});
+		expected_rows = 3;
+	}
+	SECTION("INSERT RETURNING hands out the returned rows") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, "INSERT INTO modified VALUES (4), (5) RETURNING i * 10",
+		                                         &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+		REQUIRE(rows_affected == -1);
+		REQUIRE(DrainBigintColumn(stream, values) == 0);
+		REQUIRE(values == vector<int64_t> {40, 50});
+		expected_rows = 2;
+	}
+	SECTION("INSERT RETURNING rows survive the next statement on the connection") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, "INSERT INTO modified VALUES (4), (5) RETURNING i * 10",
+		                                         &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+		REQUIRE(db.QueryAndCheck("SELECT 42"));
+		REQUIRE(DrainBigintColumn(stream, values) == 0);
+		REQUIRE(values == vector<int64_t> {40, 50});
+		expected_rows = 2;
+	}
+
+	stream.release(&stream);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	auto count = db.Query("SELECT count(*) FROM modified");
+	REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == expected_rows);
+}
+
+TEST_CASE("ADBC - Stream schema declares the extension types its arrays use", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(!db.Query("SET arrow_lossless_conversion=true")->HasError());
+	const auto query = "SELECT true AS b, '7a1d4a2e-3f0b-4c1e-9d3a-0e5f6b7c8d9e'::UUID AS u, {'a': true} AS s, "
+	                   "[true] AS l";
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, query, &db.adbc_error)));
+	ArrowSchema prepared_schema;
+	REQUIRE(SUCCESS(AdbcStatementExecuteSchema(&statement, &prepared_schema, &db.adbc_error)));
+	ArrowArrayStream stream;
+	int64_t rows_affected;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+
+	ArrowSchema schema;
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(schema.n_children == 4);
+	REQUIRE(ExtensionName(*schema.children[0]) == "arrow.bool8");
+	REQUIRE(ExtensionName(*schema.children[1]) == "arrow.uuid");
+	REQUIRE(ExtensionName(*schema.children[2]->children[0]) == "arrow.bool8");
+	REQUIRE(ExtensionName(*schema.children[3]->children[0]) == "arrow.bool8");
+	RequireSameSchema(schema, prepared_schema);
+	prepared_schema.release(&prepared_schema);
+
+	ArrowArray array;
+	REQUIRE(stream.get_next(&stream, &array) == 0);
+	REQUIRE(array.release);
+	REQUIRE(array.length == 1);
+	auto bool8_value = [](const ArrowArray &column) {
+		return static_cast<const int8_t *>(column.buffers[1])[column.offset];
+	};
+	REQUIRE(bool8_value(*array.children[0]) == 1);
+	REQUIRE(static_cast<const uint8_t *>(array.children[1]->buffers[1])[0] == 0x7a);
+	REQUIRE(bool8_value(*array.children[2]->children[0]) == 1);
+	REQUIRE(bool8_value(*array.children[3]->children[0]) == 1);
+	array.release(&array);
+	REQUIRE(stream.get_next(&stream, &array) == 0);
+	REQUIRE(!array.release);
+
+	schema.release(&schema);
+	stream.release(&stream);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Stream outlives its connection with several arrays left", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	AdbcDatabase adbc_database;
+	AdbcError adbc_error;
+	std::memset(&adbc_error, 0, sizeof(adbc_error));
+	std::memset(&adbc_database, 0, sizeof(adbc_database));
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+	AdbcConnection adbc_connection;
+	std::memset(&adbc_connection, 0, sizeof(adbc_connection));
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, "SELECT i FROM range(10000) t(i)", &adbc_error)));
+	ArrowArrayStream stream;
+	int64_t rows_affected;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &adbc_error)));
+	vector<int64_t> values;
+	ArrowArray array;
+	REQUIRE(stream.get_next(&stream, &array) == 0);
+	REQUIRE(array.release);
+	AppendBigintColumn(array, values);
+	array.release(&array);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+
+	ArrowSchema schema;
+	REQUIRE(stream.get_schema(&stream, &schema) == 0);
+	REQUIRE(schema.n_children == 1);
+	REQUIRE(string(schema.children[0]->name) == "i");
+	REQUIRE(string(schema.children[0]->format) == "l");
+	schema.release(&schema);
+	REQUIRE(DrainBigintColumn(stream, values) == 0);
+	REQUIRE(values.size() == 10000);
+	REQUIRE(CountMisplaced(values, false) == 0);
+
+	stream.release(&stream);
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
+}
+
+TEST_CASE("ADBC - Bound parameter stream without rows is refused", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	auto &input = db.QueryArrowForIngest("SELECT 1::BIGINT AS p WHERE false");
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	SECTION("typed parameter") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, "SELECT ?::BIGINT + 1 AS r", &db.adbc_error)));
+	}
+	SECTION("untyped parameter") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, "SELECT ? AS r", &db.adbc_error)));
+	}
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &db.adbc_error)));
+	ArrowArrayStream stream = {};
+	int64_t rows_affected = 0;
+	REQUIRE(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error) ==
+	        ADBC_STATUS_INVALID_ARGUMENT);
+	REQUIRE(!stream.release);
+	REQUIRE(string(db.adbc_error.message).find("non-empty chunk") != string::npos);
+	InitializeADBCError(&db.adbc_error);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	REQUIRE(db.QueryAndCheck("SELECT 1"));
+}
+
+//! Hands out one array per get_next, so that each array binds one parameter row
+struct ArrayListStream {
+	ArrowSchema schema;
+	vector<ArrowArray> arrays;
+	idx_t next = 0;
+
+	static int GetSchema(ArrowArrayStream *stream, ArrowSchema *out) {
+		auto &self = *static_cast<ArrayListStream *>(stream->private_data);
+		return duckdb_nanoarrow::ArrowSchemaDeepCopy(&self.schema, out);
+	}
+	static int GetNext(ArrowArrayStream *stream, ArrowArray *out) {
+		auto &self = *static_cast<ArrayListStream *>(stream->private_data);
+		out->release = nullptr;
+		if (self.next < self.arrays.size()) {
+			*out = self.arrays[self.next++];
+		}
+		return 0;
+	}
+	static const char *GetLastError(ArrowArrayStream *stream) {
+		return nullptr;
+	}
+	static void Release(ArrowArrayStream *stream) {
+		auto self = static_cast<ArrayListStream *>(stream->private_data);
+		for (idx_t i = self->next; i < self->arrays.size(); i++) {
+			self->arrays[i].release(&self->arrays[i]);
+		}
+		self->schema.release(&self->schema);
+		delete self;
+		stream->release = nullptr;
+	}
+};
+
+static void MakeParameterRows(ADBCTestDatabase &db, const vector<int64_t> &values, ArrowArrayStream &out) {
+	auto self = make_uniq<ArrayListStream>();
+	self->schema.release = nullptr;
+	for (auto value : values) {
+		auto &input = db.QueryArrowForIngest("SELECT " + std::to_string(value) + "::BIGINT AS p");
+		if (!self->schema.release) {
+			REQUIRE(input.get_schema(&input, &self->schema) == 0);
+		}
+		ArrowArray array;
+		REQUIRE(input.get_next(&input, &array) == 0);
+		REQUIRE(array.length == 1);
+		self->arrays.push_back(array);
+	}
+	out.get_schema = ArrayListStream::GetSchema;
+	out.get_next = ArrayListStream::GetNext;
+	out.get_last_error = ArrayListStream::GetLastError;
+	out.release = ArrayListStream::Release;
+	out.private_data = self.release();
+}
+
+TEST_CASE("ADBC - Each bound parameter row runs the statement once", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(!db.Query("CREATE TABLE bound (i BIGINT)")->HasError());
+	ArrowArrayStream input;
+	MakeParameterRows(db, {1, 2, 3}, input);
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	int64_t rows_affected = 0;
+
+	SECTION("a query hands out the result of the last row") {
+		// More rows than one array, so every earlier row leaves an unfinished stream behind
+		REQUIRE(SUCCESS(
+		    AdbcStatementSetSqlQuery(&statement, "SELECT ?::BIGINT * 10 AS r FROM range(3000)", &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &db.adbc_error)));
+		ArrowArrayStream stream;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+		REQUIRE(rows_affected == -1);
+		vector<int64_t> values;
+		REQUIRE(DrainBigintColumn(stream, values) == 0);
+		REQUIRE(values.size() == 3000);
+		idx_t unexpected = 0;
+		for (auto value : values) {
+			unexpected += value != 30;
+		}
+		REQUIRE(unexpected == 0);
+		stream.release(&stream);
+	}
+	SECTION("an insert reports the rows the last row changed") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&statement, "INSERT INTO bound VALUES (?)", &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &db.adbc_error)));
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, nullptr, &rows_affected, &db.adbc_error)));
+		REQUIRE(rows_affected == 1);
+		auto inserted = db.Query("SELECT list(i ORDER BY i) FROM bound");
+		REQUIRE(inserted->Collection().GetValue(0, 0).ToString() == "[1, 2, 3]");
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	if (input.release) {
+		input.release(&input);
+	}
+}
+
+TEST_CASE("ADBC - A timeout is reported as an error, not a cancellation", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(!db.Query("SET max_execution_time=50")->HasError());
+	AdbcStatement statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &db.adbc_error)));
+	int64_t rows_affected;
+
+	SECTION("while streaming") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(
+		    &statement, "SELECT t1.i FROM range(100000000) t1(i), range(1000) t2(j)", &db.adbc_error)));
+		ArrowArrayStream stream;
+		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&statement, &stream, &rows_affected, &db.adbc_error)));
+		int rc;
+		ArrowArray array;
+		while ((rc = stream.get_next(&stream, &array)) == 0 && array.release) {
+			array.release(&array);
+		}
+		REQUIRE(rc != 0);
+		REQUIRE(string(stream.get_last_error(&stream)).find("Query exceeded maximum execution time") != string::npos);
+		AdbcStatusCode status = ADBC_STATUS_OK;
+		auto stream_error = AdbcErrorFromArrayStream(&stream, &status);
+		REQUIRE(stream_error);
+		REQUIRE(status == ADBC_STATUS_INTERNAL);
+		REQUIRE(ErrorTypeDetail(*stream_error) == "Interrupt");
+		stream.release(&stream);
+	}
+	SECTION("while a statement completes at submission") {
+		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(
+		    &statement, "CREATE TABLE counted AS SELECT count(*) AS c FROM range(100000000) t1, range(1000) t2",
+		    &db.adbc_error)));
+		AdbcError error = ADBC_ERROR_INIT;
+		REQUIRE(AdbcStatementExecuteQuery(&statement, nullptr, &rows_affected, &error) == ADBC_STATUS_INVALID_ARGUMENT);
+		REQUIRE(string(error.message).find("Query exceeded maximum execution time") != string::npos);
+		REQUIRE(ErrorTypeDetail(error) == "Interrupt");
+		error.release(&error);
+	}
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+}
+
+TEST_CASE("ADBC - Cancelled ingestion reports CANCELLED", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	SECTION("plain error messages") {
+	}
+	SECTION("errors as JSON") {
+		REQUIRE(!db.Query("SET errors_as_json=true")->HasError());
+	}
+	REQUIRE(!db.Query("CREATE TABLE cancelled_adbc_ingest_mode_append (i BIGINT)")->HasError());
+
+	// Each mode fails in its own place: the statement that creates the table, or an appender flush
+	for (auto mode : {ADBC_INGEST_OPTION_MODE_CREATE, ADBC_INGEST_OPTION_MODE_APPEND, ADBC_INGEST_OPTION_MODE_REPLACE,
+	                  ADBC_INGEST_OPTION_MODE_CREATE_APPEND}) {
+		INFO(mode);
+		auto &input = db.QueryArrowForIngest("SELECT i FROM range(20000000) t(i)");
+		AdbcStatement statement;
+		AdbcError error = ADBC_ERROR_INIT;
+		auto table_name = string("cancelled_") + StringUtil::Replace(mode, ".", "_");
+		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &error)));
+		REQUIRE(
+		    SUCCESS(AdbcStatementSetOption(&statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &error)));
+		REQUIRE(SUCCESS(AdbcStatementSetOption(&statement, ADBC_INGEST_OPTION_MODE, mode, &error)));
+		REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &error)));
+
+		// Every query the ingestion runs clears a pending interrupt when it starts, so only a cancel that lands while
+		// one runs takes effect
+		std::atomic<bool> done {false};
+		std::thread canceller([&]() {
+			while (!done.load()) {
+				AdbcError cancel_error = ADBC_ERROR_INIT;
+				AdbcConnectionCancel(&db.adbc_connection, &cancel_error);
+				if (cancel_error.release) {
+					cancel_error.release(&cancel_error);
+				}
+				std::this_thread::sleep_for(std::chrono::microseconds(100));
+			}
+		});
+		auto status = AdbcStatementExecuteQuery(&statement, nullptr, nullptr, &error);
+		done = true;
+		canceller.join();
+
+		REQUIRE(status == ADBC_STATUS_CANCELLED);
+		REQUIRE(ErrorTypeDetail(error) == "Interrupt");
+		error.release(&error);
+		REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+	}
+	REQUIRE(db.QueryAndCheck("SELECT 1"));
+}
+
+TEST_CASE("ADBC - Ingestion fails when its last appended rows fail", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(!db.Query("CREATE TABLE keyed (i BIGINT PRIMARY KEY)")->HasError());
+	// Fewer rows than one appender flush, so every row is written when the appender closes
+	auto &input = db.QueryArrowForIngest("SELECT unnest([1, 2, 2])::BIGINT AS i");
+	AdbcStatement statement;
+	AdbcError error = ADBC_ERROR_INIT;
+	REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &error)));
+	REQUIRE(SUCCESS(AdbcStatementSetOption(&statement, ADBC_INGEST_OPTION_TARGET_TABLE, "keyed", &error)));
+	REQUIRE(
+	    SUCCESS(AdbcStatementSetOption(&statement, ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &error)));
+	REQUIRE(SUCCESS(AdbcStatementBindStream(&statement, &input, &error)));
+
+	int64_t rows_affected = -999;
+	REQUIRE(AdbcStatementExecuteQuery(&statement, nullptr, &rows_affected, &error) == ADBC_STATUS_INTERNAL);
+	REQUIRE(string(error.message).find("duplicate key \"2\"") != string::npos);
+	REQUIRE(ErrorTypeDetail(error) == "Constraint");
+	REQUIRE(rows_affected != 3);
+	error.release(&error);
+	REQUIRE(SUCCESS(AdbcStatementRelease(&statement, &db.adbc_error)));
+
+	auto count = db.Query("SELECT count(*) FROM keyed");
+	REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
 }
 
 } // namespace duckdb

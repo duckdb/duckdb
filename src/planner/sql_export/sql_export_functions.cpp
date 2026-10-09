@@ -234,9 +234,9 @@ BoundExpressionSQLExportState::ExportScalarFunction(const BoundFunctionExpressio
 	// Restore result types when binding or optimization changed argument types.
 	const bool can_restore_result_type = SQLExportHelpers::IsSQLRepresentableType(expression.GetReturnType()) &&
 	                                     !expression.GetReturnType().IsAggregateState();
-	const bool has_specialized_result_type =
-	    (definition->HasBindCallback() || definition->GetReturnType().id() == LogicalTypeId::SQLNULL) &&
-	    definition->GetReturnType() != expression.GetReturnType();
+	const bool has_specialized_result_type = (definition->HasBindCallback() || definition->HasResolveTypesCallback() ||
+	                                          definition->GetReturnType().id() == LogicalTypeId::SQLNULL) &&
+	                                         definition->GetReturnType() != expression.GetReturnType();
 	if (can_restore_result_type && has_specialized_result_type) {
 		return RestoreResultType(expression.GetReturnType(), std::move(result), path);
 	}

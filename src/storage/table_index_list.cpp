@@ -327,29 +327,6 @@ bool TableIndexList::HasBufferedReplays() const {
 	return false;
 }
 
-bool TableIndexList::NameIsUnique(const string &name) const {
-	annotated_lock_guard lock(index_entries_lock);
-	// Only covers PK, FK, and UNIQUE indexes.
-	// is_unique also covers primary-key indexes.
-	for (const auto &entry : index_entries) {
-		auto index_info = entry->GetStorageInfo();
-		if ((index_info.is_unique || index_info.is_foreign) && entry->GetName() == name) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool TableIndexList::Contains(const Identifier &name) const {
-	annotated_lock_guard lock(index_entries_lock);
-	for (const auto &entry : index_entries) {
-		if (entry->GetName() == name) {
-			return true;
-		}
-	}
-	return false;
-}
-
 shared_ptr<IndexEntry> TableIndexList::FindEntry(const Identifier &name) const {
 	annotated_lock_guard lock(index_entries_lock);
 	for (const auto &entry : index_entries) {
