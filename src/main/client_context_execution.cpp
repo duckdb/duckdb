@@ -162,6 +162,14 @@ void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *re
 	D_ASSERT(!active_query);
 }
 
+void ClientContext::AbortInternal(ClientContextLock &lock) {
+	D_ASSERT(active_query);
+	auto &prepared = active_query->prepared;
+	// No savepoint isolates a single statement, so partial writes can only be dropped with the whole transaction
+	const bool may_write = !prepared || !prepared->properties.IsReadOnly();
+	CleanupInternal(lock, nullptr, may_write);
+}
+
 Executor &ClientContext::GetExecutor() {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->executor);
@@ -376,8 +384,10 @@ QueryResultState ClientContext::FailQueryInternal(ClientContextLock &lock, BaseQ
 }
 
 void ClientContext::InitialCleanup(ClientContextLock &lock) {
-	//! Cleanup any open results and reset the interrupted flag
-	CleanupInternal(lock);
+	//! Abandon the query of an open result that no call ended, as Close would, and reset the interrupted flag
+	if (active_query) {
+		AbortInternal(lock);
+	}
 	interrupt_state = ClientInterruptState::NOT_INTERRUPTED;
 }
 
