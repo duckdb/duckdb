@@ -523,7 +523,7 @@ JSONStructureNode &JSONStructureDescription::GetOrCreateChild(yyjson_val *key, y
                                                               const idx_t depth) {
 	D_ASSERT(yyjson_is_str(key));
 	auto &child = GetOrCreateChild(unsafe_yyjson_get_str(key), unsafe_yyjson_get_len(key));
-	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, depth + 1);
+	JSONStructure::ExtractStructure(val, child, ignore_errors, detect_geojson, depth);
 	return child;
 }
 
@@ -563,7 +563,7 @@ static void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &node, con
 			                                    *insert_result.first + "\" in object %s",
 			                                obj);
 		}
-		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson, depth);
+		description.GetOrCreateChild(key, val, ignore_errors, detect_geojson, depth + 1);
 	}
 }
 
@@ -579,10 +579,8 @@ static void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node, const bool ignore_errors,
                                      const bool detect_geojson, const idx_t depth) {
-	if (depth > MAX_STRUCTURE_DEPTH) {
-		throw InvalidInputException(
-		    "JSON is nested more than %llu levels deep, which is more than json_structure supports",
-		    MAX_STRUCTURE_DEPTH);
+	if (depth >= JSONCommon::MAX_RECURSION_DEPTH) {
+		throw InvalidInputException("JSON exceeds maximum recursion depth of %d", JSONCommon::MAX_RECURSION_DEPTH);
 	}
 	node.count++;
 	const auto tag = yyjson_get_tag(val);
