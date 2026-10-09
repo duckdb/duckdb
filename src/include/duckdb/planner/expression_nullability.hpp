@@ -26,6 +26,9 @@ class LogicalOperator;
 bool ExpressionBecomesNull(const Expression &expr,
                            const std::function<bool(const BoundColumnRefExpression &)> &column_becomes_null);
 
+//! Returns whether the filter cannot be TRUE when expr is NULL.
+bool FilterRejectsNull(const Expression &filter, const Expression &expr);
+
 //! Conservatively proves that an expression cannot be NULL at a logical operator's output.
 class NotNullExpressionAnalyzer {
 public:

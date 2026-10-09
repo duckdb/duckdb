@@ -4,6 +4,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb/planner/statement_preprocessor.hpp"
 
 namespace duckdb {
 
@@ -15,7 +16,8 @@ static bool StatementIteratorIsExplainAnalyze(SQLStatement *statement) {
 }
 
 StatementIterator::StatementIterator(ParseIterator &&parse_iterator)
-    : source(std::move(parse_iterator)), context(source.GetClientContext()) {
+    : source(std::move(parse_iterator)), context(source.GetClientContext()),
+      preprocessor(make_uniq<StatementPreprocessor>(context)) {
 }
 
 StatementIterator::~StatementIterator() = default;
@@ -81,7 +83,7 @@ unique_ptr<SQLStatement> StatementIterator::GetStatementInternal(optional_ptr<Cl
 	buffer.push_back(std::move(stmt));
 	// Preprocess the peel into one-or-more engine-facing statements. This runs in Get (not Peek) so it
 	// sees the transaction state left by the previously executed statement.
-	context.PreprocessStatements(buffer, lock);
+	context.PreprocessStatements(buffer, lock, preprocessor.get());
 	if (buffer.empty()) {
 		parser_timer.Reset();
 		// Preprocessing swallowed the peel — caller skips with `continue`; the next Get pulls on.
