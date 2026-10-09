@@ -815,6 +815,53 @@ require windows: 2
             self.assertEqual(call["total_tests"], 1)
             self.assertTrue(call["batches"][0][0].endswith("test/sql/b.test"))
 
+    def test_changed_tests_stabilization_rebatches_for_available_workers(self):
+        base_names = [f"test/sql/base_{idx}.test" for idx in range(120)]
+        changed_names = [f"test/sql/changed_{idx}.test" for idx in range(9)]
+        base_test_list_path = create_temp_file("\n".join(base_names) + "\n")
+        changed_test_list_path = create_temp_file("\n".join(changed_names) + "\n")
+        listed_tests_path = create_temp_file(
+            "name\tgroup\n" + "\n".join(f"{name}\t[fast]" for name in base_names + changed_names) + "\n"
+        )
+        run_calls = []
+
+        def fake_run_tests(_config, batches, total_tests):
+            run_calls.append(batches)
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=total_tests, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with (
+                mock.patch("scripts.ci.run_tests.create_temp_test_list", return_value=listed_tests_path),
+                mock.patch("scripts.ci.run_tests.run_tests", side_effect=fake_run_tests),
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "12",
+                        "--batch-size",
+                        "10",
+                        "--test-list",
+                        str(base_test_list_path),
+                        "--changed-tests",
+                        str(changed_test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            base_test_list_path.unlink(missing_ok=True)
+            changed_test_list_path.unlink(missing_ok=True)
+            listed_tests_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(len(run_calls), 10)
+        self.assertEqual(len(run_calls[0][0]), 10)
+        for batches in run_calls[1:]:
+            self.assertEqual(batches, [[name] for name in changed_names])
+
     def test_changed_tests_large_set_uses_fast_three_total_runs(self):
         base_test_list_path = create_temp_file("test/sql/base.test\n")
         changed_lines = ["test/sql/base.test"] + [f"test/sql/new_{idx}.test" for idx in range(501)]
