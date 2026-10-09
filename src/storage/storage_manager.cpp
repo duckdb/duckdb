@@ -813,19 +813,35 @@ static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) 
 	return false;
 }
 
+//! Binds the indexes with buffered WAL replays, returning the first error.
+static ErrorData BindIndexesWithBufferedReplays(ClientContext &context,
+                                                const vector<reference<DuckTableEntry>> &tables) {
+	for (auto &table : tables) {
+		auto &info = *table.get().GetStorage().GetDataTableInfo();
+		if (!info.GetIndexes().HasBufferedReplays()) {
+			continue;
+		}
+		auto error = TryBindIndexes(info, context);
+		if (error.HasError()) {
+			return error;
+		}
+	}
+	return ErrorData();
+}
+
 bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options) {
 	if (!buffered_index_replays && !options.explicit_checkpoint) {
 		return true;
 	}
 	auto tables = GetTablesWithUnboundIndexes(db);
+	if (tables.empty()) {
+		buffered_index_replays = false;
+		return true;
+	}
 	if (!context.GetClientContext()) {
 		// The database is closing (shutdown or DETACH): we do not bind, so skip if anything is still buffered.
 		buffered_index_replays = HasBufferedReplays(tables);
 		return !buffered_index_replays;
-	}
-	if (tables.empty()) {
-		buffered_index_replays = false;
-		return true;
 	}
 	auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 	if (checkpoint_sleep_ms > 0) {
@@ -836,16 +852,9 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 	auto &bind_context = *con.context;
 	bind_context.transaction.BeginTransaction();
 	bind_context.transaction.SetReadOnly();
-	// Indexes with buffered replays must be bound, otherwise the checkpoint would lose these operations.
-	for (auto &table : tables) {
-		auto &info = *table.get().GetStorage().GetDataTableInfo();
-		if (!info.GetIndexes().HasBufferedReplays()) {
-			continue;
-		}
-		auto error = TryBindIndexes(info, bind_context);
-		if (!error.HasError()) {
-			continue;
-		}
+
+	auto error = BindIndexesWithBufferedReplays(bind_context, tables);
+	if (error.HasError()) {
 		if (options.explicit_checkpoint) {
 			throw InvalidInputException(
 			    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s",
@@ -865,7 +874,6 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 			TryBindIndexes(*table.get().GetStorage().GetDataTableInfo(), bind_context);
 		}
 	}
-	bind_context.transaction.Commit();
 	return true;
 }
 
