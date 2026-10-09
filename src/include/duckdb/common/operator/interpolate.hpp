@@ -17,6 +17,12 @@ namespace duckdb {
 //	Linear interpolation between two values
 struct InterpolateOperator {
 	template <typename TARGET_TYPE>
+	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double numerator, const double denominator,
+	                                    const TARGET_TYPE &hi) {
+		return Operation<TARGET_TYPE>(lo, numerator / denominator, hi);
+	}
+
+	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
 		const auto delta = static_cast<double>(hi) - static_cast<double>(lo);
 		const auto result = static_cast<double>(lo) + delta * d;
@@ -38,6 +44,9 @@ template <>
 double InterpolateOperator::Operation(const double &lo, const double d, const double &hi);
 template <>
 int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const int64_t &hi);
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, const double numerator, const double denominator,
+                                       const int64_t &hi);
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi);
 template <>

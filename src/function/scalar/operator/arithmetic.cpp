@@ -1466,66 +1466,95 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 	return lo * (1.0 - d) + hi * d;
 }
 
-// nearest integer, exact halves round down - temporal ties go to the earlier value on either
-// side of the epoch, unlike llround which rounds them away from zero
-template <class T>
-static int64_t RoundHalfDown(const T &input) {
-	const auto floored = std::floor(input);
-	// the fraction is computed exactly, so the tie-break is platform-independent
-	return static_cast<int64_t>(input - floored > 0.5 ? floored + 1 : floored);
-}
+static int64_t InterpolateInt64(int64_t lo, double d, int64_t hi, bool round_half_down) {
+	D_ASSERT(d >= 0 && d <= 1);
+	if (d == 0 || lo == hi) {
+		return lo;
+	}
+	if (d == 1) {
+		return hi;
+	}
 
-static int64_t InterpolateInt64(int64_t lo, double d, int64_t hi) {
-	int64_t delta;
-	if (TrySubtractOperator::Operation(hi, lo, delta)) {
-		// the result stays within [lo, hi], so an exact integer computation cannot overflow and is
-		// platform-independent - unlike the floating point path below (long double is only 64 bits on MSVC)
-		const auto bound = static_cast<double>(delta);
-		const auto offset = bound * d;
-		if (delta >= 0) {
-			if (offset <= 0) {
-				return lo;
-			}
-			if (offset >= bound) {
-				return hi;
-			}
-		} else {
-			if (offset >= 0) {
-				return lo;
-			}
-			if (offset <= bound) {
-				return hi;
-			}
+	// Decompose the weight exactly; the product needs at most 117 bits.
+	int32_t exponent;
+	const auto fraction = std::frexp(d, &exponent);
+	constexpr auto digits = std::numeric_limits<double>::digits;
+	const auto significand = static_cast<int64_t>(std::ldexp(fraction, digits));
+	const auto shift = digits - exponent;
+	const auto delta = hugeint_t(hi) - hugeint_t(lo);
+	const auto descending = delta < 0;
+	const auto product = (descending ? -delta : delta) * significand;
+	if (shift >= 128) {
+		return descending && !round_half_down ? lo - 1 : lo;
+	}
+
+	auto offset = product >> shift;
+	const auto remainder = product - (offset << shift);
+	if (round_half_down) {
+		const auto half = hugeint_t(1) << (shift - 1);
+		if (descending ? remainder >= half : remainder > half) {
+			offset += 1;
 		}
-		return lo + RoundHalfDown(offset);
+	} else if (descending && remainder != 0) {
+		offset += 1;
 	}
-	// the delta overflows int64 - long double can represent all int64 values exactly on x86-64 and aarch64
-	const auto result = static_cast<long double>(lo) * (1.0L - static_cast<long double>(d)) +
-	                    static_cast<long double>(hi) * static_cast<long double>(d);
-	// casting an out-of-range floating point value to int64 is UB and platform-dependent
-	// (x86 cvttsd2si yields the integer indefinite value, ARM fcvtzs saturates) - clamp first
-	if (result >= static_cast<long double>(NumericLimits<int64_t>::Maximum())) {
-		return NumericLimits<int64_t>::Maximum();
-	}
-	if (result <= static_cast<long double>(NumericLimits<int64_t>::Minimum())) {
-		return NumericLimits<int64_t>::Minimum();
-	}
-	return RoundHalfDown(result);
+	return Hugeint::Cast<int64_t>(hugeint_t(lo) + (descending ? -offset : offset));
 }
 
 template <>
 int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const int64_t &hi) {
-	return InterpolateInt64(lo, d, hi);
+	return InterpolateInt64(lo, d, hi, false);
+}
+
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, double numerator, double denominator, const int64_t &hi) {
+	D_ASSERT(std::isfinite(numerator) && std::isfinite(denominator) && denominator != 0);
+	if (denominator < 0) {
+		numerator = -numerator;
+		denominator = -denominator;
+	}
+	if (numerator <= 0 || lo == hi) {
+		return lo;
+	}
+	if (numerator >= denominator) {
+		return hi;
+	}
+
+	// Keep the ratio exact so division cannot move an integral FILL result below its boundary.
+	constexpr auto digits = std::numeric_limits<double>::digits;
+	int32_t numerator_exponent;
+	int32_t denominator_exponent;
+	const auto numerator_fraction = std::frexp(numerator, &numerator_exponent);
+	const auto denominator_fraction = std::frexp(denominator, &denominator_exponent);
+	const auto numerator_significand = static_cast<int64_t>(std::ldexp(numerator_fraction, digits));
+	const auto denominator_significand = static_cast<int64_t>(std::ldexp(denominator_fraction, digits));
+	const auto shift = denominator_exponent - numerator_exponent;
+	D_ASSERT(shift >= 0);
+	const auto delta = hugeint_t(hi) - hugeint_t(lo);
+	const auto descending = delta < 0;
+	const auto product = (descending ? -delta : delta) * numerator_significand;
+	// Larger gaps make the denominator exceed the 117-bit product.
+	if (shift >= 65) {
+		return descending ? lo - 1 : lo;
+	}
+
+	const auto divisor = hugeint_t(denominator_significand) << shift;
+	hugeint_t remainder;
+	auto offset = Hugeint::DivMod(product, divisor, remainder);
+	if (descending && remainder != 0) {
+		offset += 1;
+	}
+	return Hugeint::Cast<int64_t>(hugeint_t(lo) + (descending ? -offset : offset));
 }
 
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(InterpolateInt64(lo.value, d, hi.value));
+	return dtime_t(InterpolateInt64(lo.value, d, hi.value, true));
 }
 
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(InterpolateInt64(lo.value, d, hi.value));
+	return timestamp_t(InterpolateInt64(lo.value, d, hi.value, true));
 }
 
 template <>
