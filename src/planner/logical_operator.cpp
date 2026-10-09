@@ -1,4 +1,5 @@
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator_copy.hpp"
 
 #include "duckdb/planner/expression_iterator.hpp"
 
@@ -299,6 +300,29 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 	bound_parameter_map_t parameters;
 	auto op_copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
 	return op_copy;
+}
+
+unique_ptr<LogicalOperator> LogicalOperator::CopyPreservingBoundState(ClientContext &context) const {
+	LogicalOperatorCopyState::Validate(*this);
+	LogicalOperatorCopyState state;
+	MemoryStream stream(Allocator::Get(context));
+	SerializationOptions options;
+	options.storage_compatibility = StorageCompatibility::Latest();
+	BinarySerializer serializer(stream, options);
+	serializer.GetSerializationData().Set<LogicalOperatorCopyState &>(state);
+	serializer.Begin();
+	Serialize(serializer);
+	serializer.End();
+	stream.Rewind();
+	bound_parameter_map_t parameters;
+	BinaryDeserializer deserializer(stream);
+	deserializer.Set<ClientContext &>(context);
+	deserializer.Set<bound_parameter_map_t &>(parameters);
+	deserializer.Set<LogicalOperatorCopyState &>(state);
+	auto result = deserializer.Deserialize<LogicalOperator>();
+	state.VerifyConsumed();
+	LogicalOperatorCopyState::CopyCardinality(*this, *result);
+	return result;
 }
 
 } // namespace duckdb
