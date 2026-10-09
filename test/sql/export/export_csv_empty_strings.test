@@ -1,0 +1,51 @@
+# name: test/sql/export/export_csv_empty_strings.test
+# description: EXPORT DATABASE as CSV keeps empty strings and NULLs apart
+# group: [export]
+
+statement ok
+CREATE TYPE m AS ENUM ('', 'a');
+
+statement ok
+CREATE TABLE t(e m, b BLOB, v VARCHAR, n VARCHAR);
+
+statement ok
+INSERT INTO t VALUES ('', '', '', NULL), (NULL, NULL, NULL, 'x'), ('a', 'b', 'c', '');
+
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_csv_empty_strings' (FORMAT csv);
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TYPE m;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/export_csv_empty_strings';
+
+query IIIIII
+SELECT e IS NULL, b IS NULL, v IS NULL, n IS NULL, v, n FROM t ORDER BY ALL
+----
+false	false	false	false	c	(empty)
+false	false	false	true	(empty)	NULL
+true	true	true	false	NULL	x
+
+# with a custom NULL string
+statement ok
+EXPORT DATABASE '{TEST_DIR}/export_csv_empty_strings_nullstr' (FORMAT csv, NULLSTR 'null');
+
+statement ok
+DROP TABLE t;
+
+statement ok
+DROP TYPE m;
+
+statement ok
+IMPORT DATABASE '{TEST_DIR}/export_csv_empty_strings_nullstr';
+
+query IIIIII
+SELECT e IS NULL, b IS NULL, v IS NULL, n IS NULL, v, n FROM t ORDER BY ALL
+----
+false	false	false	false	c	(empty)
+false	false	false	true	(empty)	NULL
+true	true	true	false	NULL	x

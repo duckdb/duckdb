@@ -46,6 +46,11 @@ bool DynamicFilterData::CompareValue(ExpressionType comparison_type, const Value
 
 FilterPropagateResult DynamicFilterData::CheckStatistics(const BaseStatistics &stats, ExpressionType comparison_type,
                                                          const Value &constant) {
+	if (!stats.CanHaveNoNull()) {
+		return comparison_type == ExpressionType::COMPARE_DISTINCT_FROM ? FilterPropagateResult::FILTER_ALWAYS_TRUE
+		                                                                : FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
+
 	switch (constant.type().InternalType()) {
 	case PhysicalType::UINT8:
 	case PhysicalType::UINT16:

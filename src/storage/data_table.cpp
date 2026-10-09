@@ -435,10 +435,6 @@ void DataTable::CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t sta
 	row_groups->CleanupAppend(lowest_visibility_bound, start, count);
 }
 
-bool DataTable::IndexNameIsUnique(const string &name) {
-	return info->indexes.NameIsUnique(name);
-}
-
 Identifier DataTableInfo::GetSchemaName() {
 	return schema_path.back();
 }

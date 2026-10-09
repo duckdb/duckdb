@@ -205,6 +205,8 @@ Actual result:
                 "name": "plain",
                 "stdout": """
 All tests passed (5 skipped tests, 123 assertions in 4 test cases)
+[TEST_EVENT] {"event":"end","name":"test/sql/a.test","status":"ok","passes":4,"fails":0,"skip-mode":2,"partial-skip-reasons":["mode skip flaky planner","mode skip unsupported"]}
+[TEST_EVENT] {"event":"end","name":"test/sql/b.test","status":"ok","passes":7,"fails":0,"skip-mode":1,"partial-skip-reasons":["mode skip flaky planner"]}
 
 Skipped tests for the following reasons:
 require longdouble: 2
@@ -216,6 +218,9 @@ mode skip unsupported: 1
                 "expected_reasons": [
                     "require longdouble: 2",
                     "require-env SOME_TOKEN: 3",
+                ],
+                "expected_partial_count": 2,
+                "expected_partial_reasons": [
                     "mode skip flaky planner: 2",
                     "mode skip unsupported: 1",
                 ],
@@ -229,14 +234,19 @@ mode skip unsupported: 1
                     "\x1b[33mrequire icu: 2\x1b[0m\n"
                     "\x1b[33mrequire-env LOCAL_EXTENSION_REPO: 5\x1b[0m\n"
                     "\x1b[33mmode skip flaky parser: 2\x1b[0m\n"
+                    '[TEST_EVENT] {"event":"end","name":"test/sql/a.test","status":"ok","passes":4,'
+                    '"fails":0,"skip-mode":1,"partial-skip-reasons":["mode skip flaky parser"]}\n'
+                    '[TEST_EVENT] {"event":"end","name":"test/sql/b.test","status":"ok","passes":7,'
+                    '"fails":0,"skip-mode":1,"partial-skip-reasons":["mode skip flaky parser"]}\n'
                 ),
                 "expected_skip_count": 14,
                 "expected_reasons": [
                     "require httpfs: 1",
                     "require icu: 2",
                     "require-env LOCAL_EXTENSION_REPO: 5",
-                    "mode skip flaky parser: 2",
                 ],
+                "expected_partial_count": 2,
+                "expected_partial_reasons": ["mode skip flaky parser: 2"],
             },
         ]
 
@@ -272,10 +282,83 @@ mode skip unsupported: 1
 
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 self.assertIn("ran tests: ", proc.stdout)
-                self.assertIn(f", {case['expected_skip_count']} skipped in ", proc.stdout)
-                self.assertIn("Skipped tests for the following reasons:", proc.stdout)
+                self.assertIn(
+                    f", {case['expected_skip_count']} skipped ({case['expected_partial_count']} partially) in ",
+                    proc.stdout,
+                )
+                self.assertIn(f"Skipped tests ({case['expected_skip_count']}):", proc.stdout)
                 for expected_reason in case["expected_reasons"]:
                     self.assertIn(expected_reason, proc.stdout)
+                self.assertIn(f"Partially skipped tests ({case['expected_partial_count']}):", proc.stdout)
+                for expected_reason in case["expected_partial_reasons"]:
+                    self.assertIn(expected_reason, proc.stdout)
+
+    def test_reports_distinct_partially_skipped_tests(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+        try:
+            with mock.patch(
+                "scripts.ci.run_tests.run_batch",
+                return_value={
+                    "failed": False,
+                    "stdout": "All tests passed (5 skipped tests, 100 assertions in 10 test cases)\n",
+                    "stderr": """
+[TEST_EVENT] {"event":"end","name":"test/sql/a.test","status":"ok","passes":4,"fails":0,"skip-mode":3,"partial-skip-reasons":["mode skip flaky planner","mode skip unsupported"]}
+[TEST_EVENT] {"event":"end","name":"test/sql/b.test","status":"ok","passes":7,"fails":0,"skip-mode":1,"partial-skip-reasons":["mode skip flaky planner"]}
+Skipped tests for the following reasons:
+require longdouble: 2
+require-env SOME_TOKEN: 3
+mode skip flaky planner: 4
+mode skip unsupported: 1
+""",
+                    "message": None,
+                    "peak_rss_bytes": 0,
+                },
+            ):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--batch-size",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-command",
+                        "echo fake-run {test_list}",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("5 skipped (2 partially)", proc.stdout)
+        self.assertIn("Partially skipped tests (2):", proc.stdout)
+        partial_summary = proc.stdout.rsplit("Partially skipped tests (2):", 1)[-1]
+        self.assertIn("mode skip flaky planner: 2", partial_summary)
+        self.assertIn("mode skip unsupported: 1", partial_summary)
+
+    def test_terminal_events_override_aggregate_skip_miscounts(self):
+        stdout = "All tests passed (1 skipped test, 100 assertions in 10 test cases)\n"
+        stderr = """
+[TEST_EVENT] {"event":"end","name":"test/sql/full_a.test","status":"skip-requirement","passes":0,"fails":0,"skip-mode":0,"data":"require windows"}
+[TEST_EVENT] {"event":"end","name":"test/sql/full_b.test","status":"skip-requirement","passes":0,"fails":0,"skip-mode":0,"data":"require-env TOKEN"}
+[TEST_EVENT] {"event":"end","name":"test/sql/conditional.test","status":"ok","passes":4,"fails":0,"skip-mode":3}
+[TEST_EVENT] {"event":"end","name":"test/sql/partial.test","status":"ok","passes":4,"fails":0,"skip-mode":2,"partial-skip-reasons":["mode skip flaky"]}
+
+Skipped tests for the following reasons:
+require windows: 2
+require-env TOKEN: 3
+mode skip flaky: 4
+"""
+
+        skipped_count, skipped_reasons, partial_names, partial_reason_names = run_tests.extract_skipped_test_output(
+            stdout, stderr
+        )
+
+        self.assertEqual(skipped_count, 2)
+        self.assertEqual(skipped_reasons, {"require windows": 1, "require-env TOKEN": 1})
+        self.assertEqual(partial_names, {"test/sql/partial.test"})
+        self.assertEqual(partial_reason_names, {"mode skip flaky": {"test/sql/partial.test"}})
 
     def test_successful_batches_print_progress_bar(self):
         test_list_path = create_temp_file("test/sql/a.test\ntest/sql/b.test\n")
@@ -317,6 +400,7 @@ mode skip unsupported: 1
                 "failed": False,
                 "stdout": """
 All tests passed (2 skipped tests, 100 assertions in 1 test cases)
+[TEST_EVENT] {"event":"end","name":"test/sql/a.test","status":"ok","passes":4,"fails":0,"skip-mode":2,"partial-skip-reasons":["mode skip flaky planner"]}
 
 Skipped tests for the following reasons:
 require windows: 1
@@ -331,6 +415,7 @@ mode skip flaky planner: 2
                 "failed": False,
                 "stdout": """
 All tests passed (3 skipped tests, 100 assertions in 1 test cases)
+[TEST_EVENT] {"event":"end","name":"test/sql/b.test","status":"ok","passes":4,"fails":0,"skip-mode":2,"partial-skip-reasons":["mode skip flaky planner","mode skip unsupported"]}
 
 Skipped tests for the following reasons:
 require-env A: 2
@@ -362,11 +447,13 @@ mode skip unsupported: 1
             test_list_path.unlink(missing_ok=True)
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertIn(", 5 skipped in ", proc.stdout)
+        self.assertIn(", 5 skipped (2 partially) in ", proc.stdout)
         self.assertIn("require windows: 1", proc.stdout)
         self.assertIn("require-env A: 3", proc.stdout)
         self.assertIn("require-env B: 1", proc.stdout)
-        self.assertIn("mode skip flaky planner: 3", proc.stdout)
+        self.assertIn("5 skipped (2 partially)", proc.stdout)
+        self.assertIn("Partially skipped tests (2):", proc.stdout)
+        self.assertIn("mode skip flaky planner: 2", proc.stdout)
         self.assertIn("mode skip unsupported: 1", proc.stdout)
 
     def test_does_not_double_count_summary_when_in_stdout_and_stderr(self):
@@ -500,7 +587,7 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn(", 2 skipped in ", proc.stdout)
-        summary_block = proc.stdout.rsplit("Skipped tests for the following reasons:", 1)[-1]
+        summary_block = proc.stdout.rsplit("Skipped tests (2):", 1)[-1]
         self.assertIn("require windows: 2", summary_block)
         self.assertNotIn("require windows: 7", summary_block)
 
@@ -541,7 +628,7 @@ require windows: 2
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         self.assertIn("require mysql_scanner: 56", proc.stdout)
-        summary_block = proc.stdout.rsplit("Skipped tests for the following reasons:", 1)[-1]
+        summary_block = proc.stdout.rsplit("Skipped tests (0):", 1)[-1]
         self.assertIn("require mysql_scanner: 56", summary_block)
         self.assertIn("require postgres_scanner: 2", summary_block)
         self.assertIn("require spatial: 124", summary_block)
@@ -1326,7 +1413,7 @@ Error: Catalog Error: a failed
                         "24 <> 20001\n"
                         "\n"
                         "Skipped tests for the following reasons:\n"
-                        "mode skip instable: 1\n"
+                        "require windows: 1\n"
                     ),
                     "message": None,
                     "peak_rss_bytes": 0,
@@ -1350,10 +1437,10 @@ Error: Catalog Error: a failed
 
         self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
         failure_block = proc.stdout.split("reproduce:", 1)[0]
-        self.assertNotIn("Skipped tests for the following reasons:", failure_block)
-        self.assertNotIn("mode skip instable: 1", failure_block)
-        summary_block = proc.stdout.rsplit("Skipped tests for the following reasons:", 1)[-1]
-        self.assertIn("mode skip instable: 1", summary_block)
+        self.assertNotIn("Skipped tests (", failure_block)
+        self.assertNotIn("require windows: 1", failure_block)
+        summary_block = proc.stdout.rsplit("Skipped tests (0):", 1)[-1]
+        self.assertIn("require windows: 1", summary_block)
 
     def test_prefers_failing_stderr_block_and_single_test_reproduce(self):
         batch = [
@@ -1791,6 +1878,7 @@ assertions: 359 | 358 passed | 1 failed
         batch = ["/tmp/a.test", "/tmp/b.test"]
         stdout = """
 [0/2] (0%): /tmp/a.test
+[TEST_EVENT] {"event":"begin","name":"/tmp/a.test"}
 [1/2] (50%): /tmp/a.test took 0.1s
 [1/2] (50%): /tmp/b.test
 ===============================================================================
@@ -1803,6 +1891,7 @@ assertions: 16 | 15 passed | 1 failed
         self.assertIn("--- raw unittest stdout ---", stripped_lines)
         self.assertIn("--- raw unittest stderr: empty ---", stripped_lines)
         self.assertIn("assertions: 16 | 15 passed | 1 failed", stripped_lines)
+        self.assertNotIn("[TEST_EVENT]", "\n".join(stripped_lines))
         self.assertEqual(reproduce_batch, ["/tmp/a.test", "/tmp/b.test"])
 
     def test_informative_failures_do_not_dump_raw_output(self):
@@ -2121,6 +2210,276 @@ For more information, see https://duckdb.org/docs/current/dev/internal_errors
         self.assertIn("running 2 configs", proc.stdout)
         self.assertEqual(proc.stdout.count("ran tests: "), 2)
         self.assertIn("all 2 config runs passed", proc.stdout)
+
+    def test_multiple_test_configs_run_concurrently(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            helper_path = create_temp_file(
+                """
+                #!/bin/sh
+                if [ "$3" = "--list-tests" ]; then
+                  printf 'name\\tgroup\\ntest/sql/a.test\\t[fast]\\n'
+                  exit 0
+                fi
+
+                case "$2" in
+                  *a.json) marker=a ;;
+                  *b.json) marker=b ;;
+                  *) exit 2 ;;
+                esac
+                touch "{state_dir}/$marker.started"
+                attempts=0
+                while [ ! -f "{state_dir}/a.started" ] || [ ! -f "{state_dir}/b.started" ]; do
+                  attempts=$((attempts + 1))
+                  if [ "$attempts" -gt 100 ]; then
+                    exit 3
+                  fi
+                  sleep 0.02
+                done
+                """,
+                state_dir=state_dir,
+            )
+            os.chmod(helper_path, 0o755)
+            try:
+                with mock.patch.dict(os.environ, {"CI": ""}, clear=False):
+                    proc = start_runner(
+                        [
+                            "--workers",
+                            "2",
+                            "--batch-size",
+                            "1",
+                            "--test-config",
+                            "test/configs/a.json",
+                            "--test-config",
+                            "test/configs/b.json",
+                            str(helper_path),
+                        ]
+                    )
+            finally:
+                helper_path.unlink(missing_ok=True)
+
+            a_started = (Path(state_dir) / "a.started").exists()
+            b_started = (Path(state_dir) / "b.started").exists()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue(a_started)
+        self.assertTrue(b_started)
+
+    def test_next_test_config_starts_only_during_previous_tail(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            helper_path = create_temp_file(
+                """
+                #!/bin/sh
+                if [ "$3" = "--list-tests" ]; then
+                  if [ "$2" = "test/configs/a.json" ]; then
+                    printf 'name\\tgroup\\ntest/sql/a1.test\\t[fast]\\ntest/sql/a2.test\\t[fast]\\n'
+                    printf 'test/sql/a3.test\\t[fast]\\ntest/sql/a4.test\\t[fast]\\n'
+                  else
+                    printf 'name\\tgroup\\ntest/sql/b.test\\t[fast]\\n'
+                  fi
+                  exit 0
+                fi
+
+                for batch_file do :; done
+                test_name=$(head -n 1 "$batch_file")
+                case "$test_name" in
+                  *a1.test) touch "{state_dir}/a1.done" ;;
+                  *a2.test) touch "{state_dir}/a2.done" ;;
+                  *a3.test)
+                    touch "{state_dir}/a3.started"
+                    sleep 0.05
+                    touch "{state_dir}/a3.done"
+                    ;;
+                  *a4.test)
+                    touch "{state_dir}/a4.started"
+                    sleep 1
+                    touch "{state_dir}/a4.done"
+                    ;;
+                  *b.test)
+                    [ -f "{state_dir}/a1.done" ] || exit 5
+                    [ -f "{state_dir}/a2.done" ] || exit 6
+                    [ -f "{state_dir}/a4.started" ] || exit 7
+                    [ ! -f "{state_dir}/a4.done" ] || exit 8
+                    touch "{state_dir}/b.started"
+                    ;;
+                  *) exit 9 ;;
+                esac
+                """,
+                state_dir=state_dir,
+            )
+            os.chmod(helper_path, 0o755)
+            try:
+                with mock.patch.dict(os.environ, {"CI": ""}, clear=False):
+                    proc = start_runner(
+                        [
+                            "--workers",
+                            "2",
+                            "--batch-size",
+                            "1",
+                            "--test-config",
+                            "test/configs/a.json",
+                            "--test-config",
+                            "test/configs/b.json",
+                            str(helper_path),
+                        ]
+                    )
+            finally:
+                helper_path.unlink(missing_ok=True)
+
+            b_started = (Path(state_dir) / "b.started").exists()
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue(b_started)
+
+    def test_multiple_test_configs_share_global_worker_limit(self):
+        with tempfile.TemporaryDirectory() as state_dir:
+            helper_path = create_temp_file(
+                """
+                #!/bin/sh
+                if [ "$3" = "--list-tests" ]; then
+                  printf 'name\\tgroup\\ntest/sql/a.test\\t[fast]\\n'
+                  exit 0
+                fi
+
+                slot=''
+                if mkdir "{state_dir}/slot-1" 2>/dev/null; then
+                  slot="{state_dir}/slot-1"
+                elif mkdir "{state_dir}/slot-2" 2>/dev/null; then
+                  slot="{state_dir}/slot-2"
+                else
+                  exit 4
+                fi
+                trap 'rmdir "$slot"' EXIT
+                sleep 0.1
+                """,
+                state_dir=state_dir,
+            )
+            os.chmod(helper_path, 0o755)
+            try:
+                with mock.patch.dict(os.environ, {"CI": ""}, clear=False):
+                    proc = start_runner(
+                        [
+                            "--workers",
+                            "2",
+                            "--batch-size",
+                            "1",
+                            "--test-config",
+                            "test/configs/a.json",
+                            "--test-config",
+                            "test/configs/b.json",
+                            "--test-config",
+                            "test/configs/c.json",
+                            str(helper_path),
+                        ]
+                    )
+            finally:
+                helper_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+
+    def test_single_test_config_uses_live_output_path(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+
+        def fake_run_single_config(*args, **kwargs):
+            self.assertEqual(kwargs, {})
+            self.assertEqual(len(args), 10)
+            print("live config output")
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "--test-config",
+                        "test/configs/a.json",
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("live config output", proc.stdout)
+        self.assertNotIn("running 1 configs", proc.stdout)
+
+    def test_default_config_uses_live_output_path(self):
+        test_list_path = create_temp_file("test/sql/a.test\n")
+
+        def fake_run_single_config(*args, **kwargs):
+            self.assertEqual(kwargs, {})
+            self.assertEqual(len(args), 10)
+            self.assertFalse(args[9])
+            print("live default output")
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        try:
+            with mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config):
+                proc = start_runner(
+                    [
+                        "--workers",
+                        "1",
+                        "--test-list",
+                        str(test_list_path),
+                        "unused-binary",
+                    ]
+                )
+        finally:
+            test_list_path.unlink(missing_ok=True)
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("live default output", proc.stdout)
+        self.assertNotIn("=== config run: default ===", proc.stdout)
+
+    def test_multiple_test_configs_buffer_output_separately(self):
+        seen_executors = []
+        seen_outputs = []
+
+        def fake_run_single_config(*args):
+            invocation = args[8]
+            executor = args[10]
+            output = args[11]
+            seen_executors.append(executor)
+            seen_outputs.append(output)
+            print(f"only in {invocation.label}", file=output)
+            return run_tests.ConfigRunResult(
+                returncode=0, passed_tests=1, failed_tests=0, skipped_tests=0, elapsed_seconds=0.0
+            )
+
+        with (
+            mock.patch.dict(os.environ, {"CI": ""}, clear=False),
+            mock.patch("scripts.ci.run_tests.run_single_config", side_effect=fake_run_single_config),
+        ):
+            proc = start_runner(
+                [
+                    "--workers",
+                    "2",
+                    "--test-config",
+                    "test/configs/a.json",
+                    "--test-config",
+                    "test/configs/b.json",
+                    "unused-binary",
+                ]
+            )
+
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(len({id(executor) for executor in seen_executors}), 1)
+        self.assertEqual(len({id(output) for output in seen_outputs}), 2)
+        for label, other_label in (("a", "b"), ("b", "a")):
+            header = f"=== config run: test/configs/{label}.json ==="
+            other_header = f"=== config run: test/configs/{other_label}.json ==="
+            section_start = proc.stdout.index(header)
+            other_start = proc.stdout.find(other_header, section_start + len(header))
+            section_end = len(proc.stdout) if other_start == -1 else other_start
+            section = proc.stdout[section_start:section_end]
+            self.assertIn(f"only in test/configs/{label}.json", section)
+            self.assertNotIn(f"only in test/configs/{other_label}.json", section)
 
     def test_multiple_test_configs_aggregate_failure(self):
         failing_helper = create_temp_file(

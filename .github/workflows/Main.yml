@@ -148,6 +148,7 @@ jobs:
               - .github/**
             osx:
               - '.github/workflows/OSX.yml'
+              - scripts/lldb/**
               - tools/swift/**
             extensions:
               - .github/config/**
@@ -930,6 +931,7 @@ jobs:
     name: Linux Release (musl, ${{ matrix.config.name }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-musl') }}
     needs: prepare
+    continue-on-error: ${{ needs.prepare.outputs.staged_version != '' }}
     strategy:
       fail-fast: false
       matrix:

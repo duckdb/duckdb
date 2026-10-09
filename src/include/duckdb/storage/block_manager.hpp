@@ -117,6 +117,11 @@ public:
 	void UnregisterPersistentBlock(BlockHandle &block);
 	//! UnregisterBlock, only accepts non-temporary block ids
 	virtual void UnregisterBlock(block_id_t id);
+	//! Unregister the block id if no live handle is registered for it. Used when destroying a
+	//! handle: a newer handle may have been registered for the same block id in the meantime
+	//! (metadata blocks are re-registered in place) and must not be unregistered by a stale handle.
+	//! Returns true if the block id is no longer registered.
+	virtual bool UnregisterExpiredBlock(block_id_t id);
 
 	//! Returns a reference to the metadata manager of this block manager.
 	MetadataManager &GetMetadataManager();
