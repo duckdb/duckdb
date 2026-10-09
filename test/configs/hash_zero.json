@@ -80,6 +80,7 @@
         "test/sql/function/generic/hash_func.test",
         "test/sql/copy/file_size_bytes.test",
         "test/sql/copy/parquet/parquet_prefetch_projection.test",
+        "test/sql/copy/parquet/parquet_prefetch_shared_column_chunks.test",
         "test/sql/copy/parquet/parquet_prefetch_row_group_outcome.test",
         "test/sql/copy/return_stats_extra_info.test",
         "test/sql/timezone/test_icu_calendar_chinese.test",
