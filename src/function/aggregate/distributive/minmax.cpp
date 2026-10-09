@@ -368,8 +368,10 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 	const auto varchar_collation =
 	    input_type.id() == LogicalTypeId::VARCHAR &&
 	    (!StringType::GetCollation(input_type).empty() || !Settings::Get<DefaultCollationSetting>(context).empty());
-	const auto collation =
-	    input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::VARIANT || varchar_collation;
+	const auto nested_collation = StructType::IsStruct(input_type) || input_type.id() == LogicalTypeId::LIST ||
+	                              input_type.id() == LogicalTypeId::ARRAY;
+	const auto collation = input_type.id() == LogicalTypeId::BIT || input_type.id() == LogicalTypeId::VARIANT ||
+	                       varchar_collation || nested_collation;
 	auto collated_arg = collation ? arguments[0]->Copy() : nullptr;
 	if (collation && ExpressionBinder::PushCollation(context, collated_arg, collated_arg->GetReturnType())) {
 		// If aggr function is min/max and uses collations, replace bound_function with arg_min/arg_max
@@ -381,6 +383,7 @@ unique_ptr<FunctionData> BindMinMax(BindAggregateFunctionInput &input) {
 		// Bind function like arg_min/arg_max.
 		arguments.push_back(std::move(collated_arg));
 		function.GetArguments()[0] = arguments[0]->GetReturnType();
+		function.GetArguments()[1] = arguments[1]->GetReturnType();
 		function.SetReturnType(arguments[0]->GetReturnType());
 		return make_uniq<ArgMinMaxFunctionData>();
 	}

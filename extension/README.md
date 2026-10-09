@@ -43,21 +43,25 @@ to build when making duckdb set the extensions variable to a `;` separated list 
 ```bash
 DUCKDB_EXTENSIONS='json;icu' make
 ```
-The `DUCKDB_EXTENSIONS` variable is simply passed to a CMake variable `BUILD_EXTENSIONS` which can also be invoked directly:
+Make builds that select extensions automatically use the synchronized extension build path. This includes
+`DUCKDB_EXTENSIONS`, `BUILD_EXTENSIONS`, `CORE_EXTENSIONS`, the `BUILD_<extension>` shorthands,
+`BUILD_ALL_*`, and `EXTENSION_CONFIGS`. Set `DUCKDB_NEW_EXTENSION_BUILD=0` to temporarily use the legacy
+build path instead.
+
+The `DUCKDB_EXTENSIONS` variable is passed to a CMake variable `BUILD_EXTENSIONS` which can also be invoked directly:
 ```bash
 cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS='parquet;icu;tpch;tpcds;fts;json'
 ```
 
 ### Project-owned extension revisions
 
-With `DUCKDB_NEW_EXTENSION_BUILD=1`, the sync script and CMake use the same configuration
+With the synchronized extension build path, the sync script and CMake use the same configuration
 precedence: explicit `EXTENSION_CONFIGS` files first, then named `BUILD_EXTENSIONS` configs.
 The first declaration of each extension wins, including `SOURCE_DIR` and `DONT_BUILD`
 declarations. An extension project can therefore supply its own repository URLs and
 `GIT_TAG` hashes without changing DuckDB's checked-in defaults:
 
 ```bash
-DUCKDB_NEW_EXTENSION_BUILD=1 \
 EXTENSION_CONFIGS=/path/to/project/extension_config.cmake \
 BUILD_EXTENSIONS='httpfs;avro;aws' make reldebug
 ```
@@ -69,7 +73,6 @@ To own the entire directory of named configs, set `EXTENSION_CONFIG_BASE_DIR`. F
 the following reads `httpfs.cmake` and `avro.cmake` from the project's directory:
 
 ```bash
-DUCKDB_NEW_EXTENSION_BUILD=1 \
 EXTENSION_CONFIG_BASE_DIR=/path/to/project/extension-configs \
 BUILD_EXTENSIONS='httpfs;avro' make reldebug
 ```
@@ -82,6 +85,9 @@ are recommended for builds driven by another repository.
 The sync script also accepts `--extension-configs` and `--extension-config-base-dir`.
 CMake accepts `-DEXTENSION_CONFIG_BASE_DIR=...` or the environment variable. Build wrappers
 must pass the same settings to both steps.
+
+Direct CMake builds do not run the synchronization step automatically. Call the sync script first and set
+`DUCKDB_NEW_EXTENSION_BUILD=1`, or use the Make wrapper for builds containing out-of-tree extensions.
 
 Sync reads literal `duckdb_extension_load` declarations and follows absolute includes and
 includes using `${CMAKE_CURRENT_LIST_DIR}` or `${EXTENSION_CONFIG_BASE_DIR}`. It does not

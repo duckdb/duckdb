@@ -1197,8 +1197,13 @@ void SingleFileBlockManager::ReadBlock(Block &block, bool skip_block_header) con
 
 void SingleFileBlockManager::Read(QueryContext context, Block &block) {
 	D_ASSERT(block.id >= 0);
-	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
+	D_ASSERT(!BlockIsFreeListed(block.id));
 	ReadAndChecksum(context, block, GetBlockLocation(block.id));
+}
+
+bool SingleFileBlockManager::BlockIsFreeListed(block_id_t block_id) {
+	lock_guard<mutex> lock(single_file_block_lock);
+	return free_list.find(block_id) != free_list.end();
 }
 
 void SingleFileBlockManager::ReadBlocks(QueryContext context, FileBuffer &buffer, block_id_t start_block,
@@ -1338,6 +1343,7 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 	header.iteration = ++iteration_count;
 
 	set<block_id_t> all_free_blocks = free_list;
+	all_free_blocks.insert(free_blocks_in_use.begin(), free_blocks_in_use.end());
 	auto checkpoint_freed_blocks = modified_blocks;
 	for (auto &block : checkpoint_freed_blocks) {
 		all_free_blocks.insert(block);
@@ -1374,12 +1380,9 @@ void SingleFileBlockManager::WriteHeader(QueryContext context, DatabaseHeader he
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
 	}
-	lock.unlock();
-	metadata_manager.Flush(context);
-
-	lock.lock();
 	header.block_count = NumericCast<idx_t>(max_block);
 	lock.unlock();
+	metadata_manager.Flush(context);
 
 	header.storage_compatibility = options.storage_version;
 
@@ -1434,17 +1437,38 @@ void SingleFileBlockManager::FileSync() {
 	handle->Sync();
 }
 
-void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
-	// perform the actual unregistration
-	BlockManager::UnregisterBlock(id);
-	// check if it is part of the newly free list
-	lock_guard<mutex> lock(single_file_block_lock);
+void SingleFileBlockManager::ReleaseFreeBlockInUse(unique_lock<mutex> &lock, block_id_t id) {
+	if (!lock.owns_lock()) {
+		throw InternalException("ReleaseFreeBlockInUse must be called while holding the lock");
+	}
+	// check if the block is part of the newly free list
 	auto entry = free_blocks_in_use.find(id);
 	if (entry != free_blocks_in_use.end()) {
 		// it is! move it to the regular free list so the block can be re-used
 		free_list.insert(id);
 		free_blocks_in_use.erase(entry);
 	}
+}
+
+void SingleFileBlockManager::UnregisterBlock(block_id_t id) {
+	unique_lock<mutex> lock(single_file_block_lock);
+	// perform the actual unregistration
+	BlockManager::UnregisterBlock(id);
+	ReleaseFreeBlockInUse(lock, id);
+}
+
+bool SingleFileBlockManager::UnregisterExpiredBlock(block_id_t id) {
+	// hold the lock across the live-handle check and the free-list transition: otherwise a
+	// re-registration and retirement of the block id can interleave between them, and the
+	// free-list transition would run although a live handle exists
+	// lock order: single_file_block_lock before blocks_lock, as in AddFreeBlock
+	unique_lock<mutex> lock(single_file_block_lock);
+	if (!BlockManager::UnregisterExpiredBlock(id)) {
+		// a newer handle is registered for this block id - the block id is still in use
+		return false;
+	}
+	ReleaseFreeBlockInUse(lock, id);
+	return true;
 }
 
 void SingleFileBlockManager::TrimFreeBlockRange(block_id_t start, block_id_t end) {

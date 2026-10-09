@@ -38,22 +38,11 @@ idx_t ChangedRows(QueryResult &result) {
 	if (types.size() != 1 || types[0].id() != duckdb::LogicalTypeId::BIGINT) {
 		return 0;
 	}
-	// A CHANGED_ROWS result is one BIGINT row, which the Arrow format wrapped in an array with a
-	// single int64 child
 	auto &arrays = result.Collection<ArrowFormat>();
 	if (arrays.empty()) {
 		return 0;
 	}
-	auto &array = arrays.front()->arrow_array;
-	if (array.length != 1 || array.n_children != 1 || !array.children || !array.children[0]) {
-		return 0;
-	}
-	auto &child = *array.children[0];
-	if (child.n_buffers < 2 || !child.buffers || !child.buffers[1]) {
-		return 0;
-	}
-	auto counts = reinterpret_cast<const int64_t *>(child.buffers[1]);
-	return duckdb::NumericCast<idx_t>(counts[array.offset + child.offset]);
+	return ArrowFormat::ChangedRows(arrays.front()->arrow_array);
 }
 
 } // namespace

@@ -25,16 +25,16 @@ SELECT struct_extract_at('{"a":1}'::JSON::VARIANT, 1);
 ----
 <REGEX>:.*(Binder|Conversion|Invalid Input) Error.*
 
-# a NULL VARIANT constant folds to NULL before the bind - must simply return NULL, not crash
-query I
+# a NULL VARIANT is rejected by its type as well
+statement error
 SELECT struct_extract(NULL::VARIANT, 'a');
 ----
-NULL
+Binder Error: struct_extract can only be used on a STRUCT, not on VARIANT
 
-query I
+statement error
 SELECT struct_extract_at(NULL::VARIANT, 1);
 ----
-NULL
+Binder Error: struct_extract can only be used on a STRUCT, not on VARIANT
 
 # the VARIANT-aware path still works
 query I
