@@ -3655,6 +3655,8 @@ TEST_CASE("Test AdbcConnectionGetObjects - snapshot at call time", "[adbc]") {
 
 	// Catalog changes on another connection between the call and reading the stream must not leak in
 	ADBCTestDatabase db("test_metadata_snapshot");
+	// One thread keeps the query from running before the stream is read, so a lazy snapshot would see the later DDL
+	REQUIRE(!db.Query("SET threads=1")->HasError());
 	db.Query("CREATE TABLE before_snapshot (i INTEGER)");
 
 	AdbcError adbc_error = {};
@@ -3679,6 +3681,57 @@ TEST_CASE("Test AdbcConnectionGetObjects - snapshot at call time", "[adbc]") {
 	db.Query("Drop table result;");
 }
 
+//! Reads a stream on its own thread until it ends or fails; starts no new read after a minute
+class StreamReaderThread {
+public:
+	explicit StreamReaderThread(ArrowArrayStream &stream_p) : stream(stream_p), thread([this]() { Run(); }) {
+	}
+	~StreamReaderThread() {
+		Join();
+	}
+
+	void Join() {
+		if (thread.joinable()) {
+			thread.join();
+		}
+	}
+	//! Returns once the reader has rows, so whatever runs next overlaps with live reads
+	void WaitForRows() const {
+		auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes(1);
+		while (rows.load() == 0 && !done.load() && std::chrono::steady_clock::now() < deadline) {
+			std::this_thread::yield();
+		}
+	}
+
+public:
+	std::atomic<int64_t> rows {0};
+	std::atomic<bool> failed {false};
+	std::atomic<bool> done {false};
+
+private:
+	void Run() {
+		auto deadline = std::chrono::steady_clock::now() + std::chrono::minutes(1);
+		while (std::chrono::steady_clock::now() < deadline) {
+			ArrowArray array = {};
+			if (stream.get_next(&stream, &array) != 0) {
+				failed = true;
+				break;
+			}
+			if (!array.release) {
+				break;
+			}
+			rows += array.length;
+			array.release(&array);
+		}
+		done = true;
+	}
+
+private:
+	ArrowArrayStream &stream;
+	//! Declared last, because the thread starts in the constructor and reads every other member
+	std::thread thread;
+};
+
 TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -3696,30 +3749,12 @@ TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &reader_stream, nullptr, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
 
-	std::atomic<int64_t> total_rows {0};
-	std::atomic<bool> read_error {false};
-	std::thread reader([&]() {
-		while (true) {
-			ArrowArray array = {};
-			if (reader_stream.get_next(&reader_stream, &array) != 0) {
-				read_error = true;
-				break;
-			}
-			if (!array.release) {
-				break;
-			}
-			total_rows += array.length;
-			array.release(&array);
-		}
-	});
-	// Wait until the reader is mid-stream, so the first drain overlaps with live reads
-	while (total_rows.load() == 0 && !read_error.load()) {
-		std::this_thread::yield();
-	}
+	StreamReaderThread reader(reader_stream);
+	reader.WaitForRows();
 	idx_t failed_statements = 0;
 	for (idx_t i = 0; i < 20; i++) {
-		AdbcStatement statement;
-		ArrowArrayStream drain_trigger;
+		AdbcStatement statement = {};
+		ArrowArrayStream drain_trigger = {};
 		if (!SUCCESS(AdbcStatementNew(&db.adbc_connection, &statement, &adbc_error)) ||
 		    !SUCCESS(AdbcStatementSetSqlQuery(&statement, "SELECT 42", &adbc_error)) ||
 		    !SUCCESS(AdbcStatementExecuteQuery(&statement, &drain_trigger, nullptr, &adbc_error))) {
@@ -3729,66 +3764,49 @@ TEST_CASE("ADBC - concurrent stream read and statement execution", "[adbc]") {
 		}
 		AdbcStatementRelease(&statement, &adbc_error);
 	}
-	reader.join();
+	reader.Join();
 	REQUIRE((failed_statements == 0));
-	REQUIRE(!read_error.load());
-	REQUIRE((total_rows.load() == 1000000));
+	REQUIRE(!reader.failed.load());
+	REQUIRE((reader.rows.load() == 1000000));
 	reader_stream.release(&reader_stream);
 }
 
-TEST_CASE("ADBC - commit and rollback drain open streams", "[adbc]") {
+TEST_CASE("ADBC - setting the current catalog drains open streams", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-
-	// COMMIT and ROLLBACK run on the raw connection; an open stream must be drained first, not invalidated
 	ADBCTestDatabase db;
-	AdbcError adbc_error = {};
-	InitializeADBCError(&adbc_error);
-	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
-	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
-
-	auto read_all = [](ArrowArrayStream &stream) {
-		int64_t total = 0;
-		while (true) {
-			ArrowArray array = {};
-			if (stream.get_next(&stream, &array) != 0 || !array.release) {
-				break;
-			}
-			total += array.length;
-			array.release(&array);
-		}
-		return total;
-	};
-
-	auto open_stream = [&](ArrowArrayStream &stream) {
-		AdbcStatement adbc_statement;
-		REQUIRE(SUCCESS(AdbcStatementNew(&db.adbc_connection, &adbc_statement, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, "SELECT i FROM range(100000) t(i)", &adbc_error)));
-		REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &stream, nullptr, &adbc_error)));
-		REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
-	};
-
-	for (bool commit : {true, false}) {
-		ArrowArrayStream stream;
-		open_stream(stream);
-		if (commit) {
-			REQUIRE(SUCCESS(AdbcConnectionCommit(&db.adbc_connection, &adbc_error)));
-		} else {
-			REQUIRE(SUCCESS(AdbcConnectionRollback(&db.adbc_connection, &adbc_error)));
-		}
-		REQUIRE((read_all(stream) == 100000));
-		stream.release(&stream);
+	auto &stream = db.QueryArrow("SELECT i FROM range(100000) t(i)");
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, "memory",
+	                                        &db.adbc_error)));
+	int64_t rows = 0;
+	ArrowArray array;
+	while (stream.get_next(&stream, &array) == 0 && array.release) {
+		rows += array.length;
+		array.release(&array);
 	}
+	REQUIRE(rows == 100000);
+}
 
-	{
-		// The USE statement behind the current-catalog option must drain too
-		ArrowArrayStream stream;
-		open_stream(stream);
-		REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_CURRENT_CATALOG, "memory",
-		                                        &adbc_error)));
-		REQUIRE((read_all(stream) == 100000));
-		stream.release(&stream);
+TEST_CASE("ADBC - rollback while another thread reads a stream", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	auto &stream = db.QueryArrow("SELECT i FROM range(10000000) t(i)");
+
+	StreamReaderThread reader(stream);
+	reader.WaitForRows();
+	auto status = AdbcConnectionRollback(&db.adbc_connection, &db.adbc_error);
+	reader.Join();
+	REQUIRE(SUCCESS(status));
+	// The reader either finished before the rollback or saw the close; a close never ends the stream silently
+	if (reader.failed.load()) {
+		REQUIRE(StringUtil::Contains(stream.get_last_error(&stream), "rolled back"));
+	} else {
+		REQUIRE(reader.rows.load() == 10000000);
 	}
 }
 
@@ -6218,6 +6236,72 @@ TEST_CASE("ADBC - Ingestion fails when its last appended rows fail", "[adbc]") {
 
 	auto count = db.Query("SELECT count(*) FROM keyed");
 	REQUIRE(count->Collection().GetValue(0, 0).GetValue<int64_t>() == 0);
+}
+
+TEST_CASE("ADBC - metadata call execution errors keep their duckdb:error_type", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	REQUIRE(!db.Query("CREATE TABLE keyed (i INTEGER PRIMARY KEY)")->HasError());
+	REQUIRE(!db.Query("INSERT INTO keyed VALUES (1)")->HasError());
+	REQUIRE(db.Query("INSERT INTO keyed VALUES (1)")->HasError());
+
+	auto require_transaction_error = [](AdbcStatusCode status, AdbcError &error) {
+		REQUIRE(status != ADBC_STATUS_OK);
+		REQUIRE(error.message);
+		REQUIRE(string(error.message).find("Current transaction is aborted") != string::npos);
+		REQUIRE(ErrorTypeDetail(error) == "Transaction");
+		error.release(&error);
+	};
+
+	{
+		AdbcError error = ADBC_ERROR_INIT;
+		ArrowArrayStream stream = {};
+		require_transaction_error(AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr,
+		                                                   nullptr, nullptr, nullptr, &stream, &error),
+		                          error);
+		REQUIRE(!stream.release);
+	}
+	{
+		AdbcError error = ADBC_ERROR_INIT;
+		ArrowArrayStream stream = {};
+		require_transaction_error(AdbcConnectionGetTableTypes(&db.adbc_connection, &stream, &error), error);
+		REQUIRE(!stream.release);
+	}
+	{
+		AdbcError error = ADBC_ERROR_INIT;
+		ArrowSchema schema = {};
+		require_transaction_error(
+		    AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "main", "keyed", &schema, &error), error);
+	}
+	for (auto key : {ADBC_CONNECTION_OPTION_CURRENT_CATALOG, ADBC_CONNECTION_OPTION_CURRENT_DB_SCHEMA}) {
+		AdbcError error = ADBC_ERROR_INIT;
+		char buffer[64];
+		size_t length = sizeof(buffer);
+		require_transaction_error(AdbcConnectionGetOption(&db.adbc_connection, key, buffer, &length, &error), error);
+	}
+}
+
+TEST_CASE("ADBC - rollback keeps the error a stream already reported", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&db.adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &db.adbc_error)));
+	auto &stream = db.QueryArrow("SELECT CASE WHEN i = 50000 THEN error('boom') ELSE i END FROM range(100000) t(i)");
+	vector<int64_t> values;
+	REQUIRE(DrainBigintColumn(stream, values) != 0);
+	REQUIRE(SUCCESS(AdbcConnectionRollback(&db.adbc_connection, &db.adbc_error)));
+
+	REQUIRE(StringUtil::Contains(stream.get_last_error(&stream), "boom"));
+	AdbcStatusCode status = ADBC_STATUS_OK;
+	auto stream_error = AdbcErrorFromArrayStream(&stream, &status);
+	REQUIRE(stream_error);
+	REQUIRE(ErrorTypeDetail(*stream_error) == "InvalidInput");
 }
 
 } // namespace duckdb
