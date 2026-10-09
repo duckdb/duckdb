@@ -2,6 +2,9 @@
 # description: Parallel aggregation remains correct when local hash tables grow or fall back to external aggregation
 # group: [external]
 
+# These memory budgets assume standard-sized vectors.
+require vector_size 2048
+
 statement ok
 CREATE TABLE growth_input AS SELECT i FROM range(2000000) t(i);
 

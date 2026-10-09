@@ -100,6 +100,8 @@ public:
 	idx_t GetThreadLimit() const {
 		return temporary_memory_state->GetReservation() / number_of_threads / 10 * 8;
 	}
+	//! Whether the aggregate arena alone approaches the thread memory limit
+	bool StatePressureExceeded(GroupedAggregateHashTable &ht) const;
 
 public:
 	ClientContext &context;
@@ -158,8 +160,6 @@ class RadixHTLocalSinkState : public LocalSinkState {
 public:
 	RadixHTLocalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht);
 	void ResetForReuse(const RadixPartitionedHashTable &radix_ht, RadixHTGlobalSinkState &gstate);
-	void ResetHLLObservation();
-	void RetireGrowth();
 	void PrepareForSpill(RadixHTGlobalSinkState &gstate);
 
 public:
@@ -168,34 +168,16 @@ public:
 	//! Chunk with group columns
 	DataChunk group_chunk;
 
-	//! After seeing this many tuples, we decide whether to adapt our strategy
-	static constexpr idx_t ADAPTIVITY_THRESHOLD = 1048576;
-	//! Bound observation even when the input never settles
-	static constexpr idx_t MAXIMUM_HLL_INPUT = 16 * ADAPTIVITY_THRESHOLD;
-	//! Whether we have decided to adapt our strategy
-	bool adapted;
 	//! Whether this local state has already registered itself as active for the current iteration
 	bool registered;
 	//! Whether this local table has entered spilling or state export
 	bool spilling = false;
 	//! Sink capacity for this thread
 	idx_t local_sink_capacity;
-	//! Input and materialized rows at the last local table growth
-	idx_t sink_count_at_growth;
-	idx_t materialized_count_at_growth;
-	bool has_grown;
-	//! Counters for consecutive windows without capacity pressure after growth
-	idx_t sink_count_at_observation = 0;
-	idx_t materialized_count_at_observation = 0;
-	idx_t hll_count_at_observation = 0;
-	idx_t stable_observation_count = 0;
-
 	//! Data that is abandoned ends up here (only if we're doing external aggregation)
 	unique_ptr<PartitionedTupleData> abandoned_data;
 	//! Exported abandoned aggregate states, aligned one-to-one with the partitions of abandoned_data
 	vector<unique_ptr<ColumnDataCollection>> abandoned_exported_data;
 };
-
-bool TryGrowSinkHashTable(RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate);
 
 } // namespace duckdb

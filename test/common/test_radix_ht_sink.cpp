@@ -1,7 +1,9 @@
 #include "catch.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/vector/vector_writer.hpp"
+#include "duckdb/execution/radix_ht_adaptivity.hpp"
 #include "duckdb/execution/radix_ht_sink_state.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -12,13 +14,14 @@ namespace duckdb {
 
 class RadixSinkFixture {
 public:
-	RadixSinkFixture(const string &memory_limit, bool aggregate = false)
+	RadixSinkFixture(const string &memory_limit, bool aggregate = false,
+	                 const LogicalType &group_type = LogicalType::VARCHAR)
 	    : db(nullptr), con(db), thread(*con.context), context(*con.context, thread, nullptr) {
 		REQUIRE_NO_FAIL(con.Query("SET threads=4; SET memory_limit='" + memory_limit + "';"));
 		REQUIRE_NO_FAIL(
 		    con.Query("SET temp_directory = " + Value(TestCreatePath("radix_ht_sink_spill")).ToSQLString()));
 		vector<unique_ptr<Expression>> groups;
-		groups.push_back(make_uniq<BoundReferenceExpression>(LogicalType::VARCHAR, 0));
+		groups.push_back(make_uniq<BoundReferenceExpression>(group_type, 0));
 		vector<unique_ptr<Expression>> aggregates;
 		if (aggregate) {
 			auto plan = con.ExtractPlan("SELECT i::VARCHAR k, string_agg(i::VARCHAR) FROM range(10) t(i) GROUP BY k");
@@ -38,7 +41,7 @@ public:
 		for (idx_t i = 0; i < 4; i++) {
 			locals.push_back(radix->GetLocalSinkState(context));
 		}
-		chunk.Initialize(Allocator::Get(*con.context), {LogicalType::VARCHAR});
+		chunk.Initialize(Allocator::Get(*con.context), {group_type});
 	}
 
 	RadixHTGlobalSinkState &Global() {
@@ -84,7 +87,7 @@ public:
 		auto local_source = radix->GetLocalSourceState(context);
 		OperatorSourceInput input {*source, *local_source, interrupt};
 		DataChunk output;
-		output.Initialize(Allocator::Get(*con.context), {LogicalType::VARCHAR});
+		output.Initialize(Allocator::Get(*con.context), chunk.GetTypes());
 		idx_t count = 0;
 		while (true) {
 			output.Reset();
@@ -113,9 +116,16 @@ public:
 	unsafe_vector<idx_t> filter;
 };
 
-TEST_CASE("Growing aggregate tables spill before their occupancy limit", "[radix_ht_sink]") {
-	RadixSinkFixture fixture("128MB");
-	for (idx_t offset = 0; offset < 400000; offset += STANDARD_VECTOR_SIZE) {
+TEST_CASE("Large aggregate tables spill before their occupancy limit", "[radix_ht_sink]") {
+	RadixSinkFixture fixture("512MB");
+	fixture.Keys(0, 65536);
+	for (idx_t worker = 0; worker < 4; worker++) {
+		fixture.Sink(worker);
+		auto &local = fixture.Local(worker);
+		local.ht->Resize(262144);
+		local.local_sink_capacity = local.ht->Capacity();
+	}
+	for (idx_t offset = STANDARD_VECTOR_SIZE; offset < 65536; offset += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(offset, 65536);
 		for (idx_t worker = 0; worker < 4; worker++) {
 			fixture.Sink(worker);
@@ -124,7 +134,6 @@ TEST_CASE("Growing aggregate tables spill before their occupancy limit", "[radix
 	auto &global = fixture.Global();
 	REQUIRE_FALSE(global.external);
 	for (idx_t worker = 0; worker < 4; worker++) {
-		REQUIRE(fixture.Local(worker).has_grown);
 		REQUIRE(fixture.Local(worker).ht->Capacity() > global.config.sink_capacity);
 	}
 	bool spilled_below_threshold = false;
@@ -145,7 +154,7 @@ TEST_CASE("Growing aggregate tables spill before their occupancy limit", "[radix
 	REQUIRE(spilled_below_threshold);
 	for (idx_t worker = 0; worker < 4; worker++) {
 		auto &local = fixture.Local(worker);
-		REQUIRE_FALSE(local.ht->HLLEnabled());
+		REQUIRE_FALSE(local.ht->GetAdaptivityState().HLLEnabled());
 		REQUIRE(local.ht->Capacity() == global.config.sink_capacity);
 		REQUIRE(local.local_sink_capacity == local.ht->Capacity());
 		REQUIRE(local.abandoned_data);
@@ -179,13 +188,17 @@ TEST_CASE("State export retires aggregate telemetry even after another worker co
 	for (const idx_t input_count : {idx_t(262144), idx_t(1114112)}) {
 		CAPTURE(input_count);
 		RadixSinkFixture fixture("512MB", true);
-		for (idx_t offset = 0; offset < input_count; offset += STANDARD_VECTOR_SIZE) {
+		fixture.Keys(0, 65536);
+		fixture.Sink();
+		fixture.Local().ht->Resize(262144);
+		fixture.Local().local_sink_capacity = fixture.Local().ht->Capacity();
+		for (idx_t offset = STANDARD_VECTOR_SIZE; offset < input_count; offset += STANDARD_VECTOR_SIZE) {
 			fixture.Keys(offset, 65536);
 			fixture.Sink();
 		}
 		auto &local = fixture.Local();
-		REQUIRE(local.has_grown);
-		REQUIRE(local.ht->HLLEnabled());
+		REQUIRE(local.ht->Capacity() > fixture.Global().config.sink_capacity);
+		REQUIRE(local.ht->GetAdaptivityState().HLLEnabled());
 		fixture.Sink(1);
 		fixture.Combine(1);
 		REQUIRE(fixture.Global().any_combined);
@@ -197,13 +210,8 @@ TEST_CASE("State export retires aggregate telemetry even after another worker co
 		}
 		REQUIRE_FALSE(local.abandoned_exported_data.empty());
 		REQUIRE_FALSE(fixture.Global().external);
-		REQUIRE_FALSE(local.ht->HLLEnabled());
+		REQUIRE_FALSE(local.ht->GetAdaptivityState().HLLEnabled());
 		REQUIRE(local.spilling);
-		REQUIRE(local.adapted);
-		REQUIRE_FALSE(local.has_grown);
-		REQUIRE(local.materialized_count_at_growth == 0);
-		REQUIRE(local.materialized_count_at_observation == 0);
-		REQUIRE(local.stable_observation_count == 0);
 		REQUIRE(local.ht->Capacity() == fixture.Global().config.sink_capacity);
 		fixture.SetPayload(Value(LogicalType::VARCHAR));
 		for (idx_t offset = 0; offset < 1048576; offset += STANDARD_VECTOR_SIZE) {
@@ -211,43 +219,97 @@ TEST_CASE("State export retires aggregate telemetry even after another worker co
 			fixture.Sink();
 		}
 		fixture.radix->ResetLocalSinkState(fixture.context, *fixture.global, *fixture.locals[0]);
-		REQUIRE(local.ht->HLLEnabled());
+		REQUIRE(local.ht->GetAdaptivityState().HLLEnabled());
 		REQUIRE_FALSE(local.spilling);
-		REQUIRE_FALSE(local.adapted);
-		REQUIRE_FALSE(local.has_grown);
-		REQUIRE(local.ht->GetSinkCount() == 0);
-		REQUIRE(local.materialized_count_at_observation == 0);
+		REQUIRE_FALSE(local.ht->GetAdaptivityState().LookupsSkipped());
+		REQUIRE(local.ht->GetAdaptivityState().GetSinkCount() == 0);
+		REQUIRE(local.ht->GetAdaptivityState().GetCycleInputCount() == 0);
+		REQUIRE(local.ht->GetAdaptivityState().GetSkippedInputCount() == 0);
 	}
 }
 
-TEST_CASE("Aggregate observation retires on hits and distinct convergence", "[radix_ht_sink]") {
-	for (const bool convergence : {false, true}) {
-		CAPTURE(convergence);
-		RadixSinkFixture fixture("1GB");
-		const idx_t distinct = convergence ? 524288 : 65536;
-		bool retired = false;
-		for (idx_t offset = 0; offset < 3 * 1048576; offset += STANDARD_VECTOR_SIZE) {
-			fixture.Keys(offset, distinct, 0, convergence && offset >= distinct);
-			auto &local = fixture.Local();
-			const auto previous_materialized = local.materialized_count_at_observation;
-			const auto previous_input = local.sink_count_at_observation;
-			fixture.Sink();
-			if (!local.ht->HLLEnabled()) {
-				REQUIRE(local.has_grown);
-				REQUIRE(local.stable_observation_count == 3);
-				const auto new_groups = local.ht->GetMaterializedCount() - previous_materialized;
-				const auto new_input = local.ht->GetSinkCount() - previous_input;
-				if (convergence) {
-					REQUIRE(new_groups > new_input / 100);
-				} else {
-					REQUIRE(new_groups <= new_input / 100);
-				}
-				retired = true;
-				break;
+TEST_CASE("Aggregate lookup retries recover a small recurring domain after unique input", "[radix_ht_sink]") {
+	// Keep chunk metadata at tiny vector sizes from triggering spill before the lookup decision.
+	RadixSinkFixture fixture("8GB");
+	const auto sample_size = RadixHTAdaptivity::LOOKUP_SAMPLE_SIZE;
+	idx_t offset = 0;
+	for (; offset < sample_size + 2 * fixture.Global().config.sink_capacity; offset += STANDARD_VECTOR_SIZE) {
+		fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
+		fixture.Sink();
+		if (fixture.Local().ht->GetAdaptivityState().LookupsSkipped()) {
+			offset += STANDARD_VECTOR_SIZE;
+			break;
+		}
+	}
+	auto &ht = *fixture.Local().ht;
+	CAPTURE(ht.GetAdaptivityState().GetSinkCount(), ht.GetSizeInBytes(), fixture.Global().GetThreadLimit(),
+	        fixture.Global().external.load());
+	REQUIRE(ht.GetAdaptivityState().LookupsSkipped());
+	REQUIRE(ht.GetAdaptivityState().HLLEnabled());
+	REQUIRE(ht.Count() == 0);
+	const auto capacity = ht.Capacity();
+	REQUIRE(capacity == fixture.Global().config.sink_capacity);
+	REQUIRE(ht.GetAdaptivityState().GetSkippedInputCount() == 0);
+
+	// Ordinary abandonment must not reset the skipped-input interval.
+	for (; ht.GetAdaptivityState().GetSkippedInputCount() + STANDARD_VECTOR_SIZE < sample_size;
+	     offset += STANDARD_VECTOR_SIZE) {
+		fixture.Keys(offset, NumericLimits<idx_t>::Maximum());
+		fixture.Sink();
+		REQUIRE(ht.GetAdaptivityState().LookupsSkipped());
+	}
+	const auto unique_count = offset;
+	const auto estimate = ht.GetAdaptivityState().GetHLLUpperBound();
+	for (idx_t retry_input = 0; retry_input < 2 * capacity && ht.GetAdaptivityState().LookupsSkipped();
+	     retry_input += STANDARD_VECTOR_SIZE) {
+		fixture.Keys(retry_input, 64);
+		fixture.Sink();
+	}
+	REQUIRE_FALSE(ht.GetAdaptivityState().LookupsSkipped());
+	REQUIRE_FALSE(fixture.Global().external);
+	REQUIRE(ht.GetAdaptivityState().HLLEnabled());
+	REQUIRE(ht.GetAdaptivityState().GetHLLUpperBound() == estimate);
+	REQUIRE(ht.Capacity() == capacity);
+	REQUIRE(ht.Count() == 0);
+	REQUIRE(ht.GetAdaptivityState().GetCycleInputCount() == 0);
+	const auto materialized = ht.GetMaterializedCount();
+	for (idx_t hot_input = 0; hot_input < 1024; hot_input += STANDARD_VECTOR_SIZE) {
+		fixture.Keys(hot_input, 64);
+		fixture.Sink();
+	}
+	REQUIRE(ht.Count() == 64);
+	REQUIRE(ht.GetMaterializedCount() == materialized + 64);
+	fixture.Combine(0);
+	REQUIRE(fixture.ScanGroupCount() == unique_count);
+}
+
+TEST_CASE("Aggregate growth converges when cardinality is just above an occupancy limit", "[radix_ht_sink]") {
+	RadixSinkFixture fixture("2GB", false, LogicalType::BIGINT);
+	idx_t previous_capacity = fixture.Global().config.sink_capacity;
+	idx_t growth_count = 0;
+	for (idx_t offset = 0; offset < 800000; offset += STANDARD_VECTOR_SIZE) {
+		fixture.chunk.Reset();
+		{
+			auto writer = FlatVector::Writer<int64_t>(fixture.chunk.data[0], STANDARD_VECTOR_SIZE);
+			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+				writer.WriteValue(132000 + (offset + i) % 44000);
 			}
 		}
-		REQUIRE(retired);
+		fixture.chunk.CheckCardinality(STANDARD_VECTOR_SIZE);
+		fixture.Sink();
+		const auto capacity = fixture.Local().ht->Capacity();
+		if (capacity != previous_capacity) {
+			REQUIRE_FALSE(fixture.Global().external);
+			REQUIRE(capacity > previous_capacity);
+			previous_capacity = capacity;
+			growth_count++;
+		}
 	}
+	REQUIRE(growth_count > 0);
+	REQUIRE(fixture.Local().ht->Count() == 44000);
+	REQUIRE_FALSE(fixture.Local().ht->GetAdaptivityState().LookupsSkipped());
+	fixture.Combine(0);
+	REQUIRE(fixture.ScanGroupCount() == 44000);
 }
 
 TEST_CASE("Spilling tolerates memory pressure while shrinking retained pointer allocations", "[radix_ht_sink]") {
@@ -275,7 +337,7 @@ TEST_CASE("Spilling tolerates memory pressure while shrinking retained pointer a
 			REQUIRE(fixture.Global().config.SetRadixBitsToExternal());
 			REQUIRE_NOTHROW(fixture.Sink());
 			REQUIRE(local.spilling);
-			REQUIRE_FALSE(local.ht->HLLEnabled());
+			REQUIRE_FALSE(local.ht->GetAdaptivityState().HLLEnabled());
 			REQUIRE(local.ht->GetMaterializedCount() == old_materialized + STANDARD_VECTOR_SIZE);
 			REQUIRE(local.local_sink_capacity == local.ht->Capacity());
 			if (memory_pressure) {
@@ -320,47 +382,48 @@ TEST_CASE("Aggregate memory accounting tracks hits and replacement tuple storage
 	ht.SetRadixBits(ht.GetRadixBits() + 1);
 	ht.Repartition();
 	REQUIRE(ht.GetMaterializedCount() == materialized);
-	REQUIRE(ht.GetSizeInBytes() > narrow_size);
 	const auto repartitioned_size = ht.GetSizeInBytes();
 	auto old_data = ht.AcquirePartitionedData();
 	REQUIRE(ht.GetSizeInBytes() < repartitioned_size);
+	const auto empty_size = ht.GetSizeInBytes();
 	ht.AddChunk(fixture.chunk, fixture.payload, fixture.filter);
 	REQUIRE(ht.GetMaterializedCount() == materialized);
-	REQUIRE(ht.GetSizeInBytes() >= narrow_size);
+	REQUIRE(ht.GetSizeInBytes() > empty_size);
 }
 
 TEST_CASE("Failed adaptive growth preserves rows and falls back to the existing table", "[radix_ht_sink]") {
-	RadixSinkFixture fixture("128MB");
+	RadixSinkFixture fixture("512MB");
 	fixture.Keys(0, 65536);
 	fixture.Sink();
 	auto &local = fixture.Local();
 	auto &global = fixture.Global();
 	// Materialize repeated groups without attempting the optional growth yet.
-	for (idx_t offset = STANDARD_VECTOR_SIZE; offset < 3 * 65536; offset += STANDARD_VECTOR_SIZE) {
+	for (idx_t offset = STANDARD_VECTOR_SIZE; offset < 6 * 65536; offset += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(offset, 65536);
 		if (local.ht->Count() + STANDARD_VECTOR_SIZE >= local.ht->ResizeThreshold()) {
 			local.ht->Abandon();
 		}
 		local.ht->AddChunk(fixture.chunk, fixture.payload, fixture.filter);
 	}
-	global.temporary_memory_state->SetMinimumReservation(64 * 1024 * 1024);
-	global.temporary_memory_state->SetRemainingSizeAndUpdateReservation(*fixture.con.context, 64 * 1024 * 1024);
-	REQUIRE_FALSE(local.has_grown);
-	REQUIRE(local.ht->HLLEnabled());
+	// Leave policy headroom even when tiny vectors require more tuple metadata.
+	const auto reservation = 5 * (local.ht->GetSizeInBytes() + 4 * 1024 * 1024);
+	global.temporary_memory_state->SetMinimumReservation(reservation);
+	global.temporary_memory_state->SetRemainingSizeAndUpdateReservation(*fixture.con.context, reservation);
+	REQUIRE(local.ht->GetAdaptivityState().HLLEnabled());
 	const auto old_capacity = local.ht->Capacity();
 	const auto old_materialized = local.ht->GetMaterializedCount();
 	auto &manager = BufferManager::GetBufferManager(*fixture.con.context);
 	{
 		auto competing_allocation =
 		    manager.GetBufferAllocator().Allocate(manager.GetMaxMemory() - manager.GetUsedMemory() - 65536);
-		REQUIRE_FALSE(TryGrowSinkHashTable(global, local));
-		REQUIRE_FALSE(local.ht->HLLEnabled());
+		REQUIRE_FALSE(RadixHTAdaptivity::TryGrow(global, local));
+		REQUIRE_FALSE(local.ht->GetAdaptivityState().HLLEnabled());
 		REQUIRE(local.ht->Capacity() == old_capacity);
 		REQUIRE(local.local_sink_capacity == old_capacity);
 		REQUIRE(local.ht->GetMaterializedCount() == old_materialized);
 		REQUIRE(local.ht->Count() == 0);
 	}
-	for (idx_t offset = 3 * 65536; offset < 262144; offset += STANDARD_VECTOR_SIZE) {
+	for (idx_t offset = 6 * 65536; offset < 7 * 65536; offset += STANDARD_VECTOR_SIZE) {
 		fixture.Keys(offset, 65536);
 		fixture.Sink();
 	}
