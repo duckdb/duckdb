@@ -283,6 +283,11 @@ BoundStatement Binder::BindNode(MergeQueryNode &node) {
 
 	merge_into->bound_constraints = BindConstraints(table);
 
+	// Set return_chunk before binding any actions
+	if (!node.returning_list.empty()) {
+		merge_into->return_chunk = true;
+	}
+
 	for (auto &entry : node.actions) {
 		if (entry.first == MergeActionCondition::WHEN_MATCHED) {
 			continue;
