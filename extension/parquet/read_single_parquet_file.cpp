@@ -476,6 +476,12 @@ bool ParquetScanFunction::ProjectionExpressionPushdown(ClientContext &context,
 	if (idx >= children.size() || idx >= bind_data.types.size() || idx >= reader.types.size()) {
 		return false;
 	}
+	if (!bind_data.file_options.bound_schema.empty() &&
+	    (idx >= reader.columns.size() || reader.columns[idx].name != bind_data.names[idx] ||
+	     !reader.types[idx].EqualsIncludingCollation(bind_data.types[idx]))) {
+		// The pushed expression addresses a physical column, before name mapping and conversion.
+		return false;
+	}
 	const idx_t column_flat_idx = children[idx].column_index;
 	for (const auto &group : metadata_reader.GetFileMetadata()->row_groups) {
 		D_ASSERT(column_flat_idx < group.columns.size());

@@ -223,7 +223,27 @@ static vector<PartitionStatistics> ParquetMultiFileGetPartitionStats(ClientConte
                                                                      GetPartitionStatsInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
-		return TableFunctionMultiFileWrapper::GetPartitionStats(context, input);
+		auto result = TableFunctionMultiFileWrapper::GetPartitionStats(context, input);
+		if (!bind_data.file_options.bound_schema.empty()) {
+			// Column accessors address physical ordinals and types, not the mapped output or generated roles.
+			bool identity = bind_data.initial_reader && !bind_data.file_options.filename &&
+			                !bind_data.file_options.file_row_number &&
+			                bind_data.reader_bind.hive_partitioning_indexes.empty();
+			if (identity) {
+				auto &columns = bind_data.initial_reader->GetColumns();
+				identity = columns.size() == bind_data.types.size();
+				for (idx_t i = 0; identity && i < columns.size(); i++) {
+					identity = columns[i].name == bind_data.names[i] &&
+					           columns[i].type.EqualsIncludingCollation(bind_data.types[i]);
+				}
+			}
+			if (!identity) {
+				for (auto &partition : result) {
+					partition.partition_row_group.reset();
+				}
+			}
+		}
+		return result;
 	}
 	// without the bind of a file we do not know the key the files are encrypted with - encrypted files are then not
 	// answered from their metadata
@@ -270,6 +290,8 @@ TableFunction ParquetScanFunction::GetMultiFileFunction(Identifier name) {
 	// the multi-file parquet reader is the single-file parquet reader wrapped into a multi-file function
 	auto result = TableFunctionMultiFileWrapper::CreateFunction(GetSingleFileFunction(), std::move(name),
 	                                                            GetMultiFileSettings(), ParquetMultiFileBind);
+	result.GetSignature().ExtendTypedKwargs(
+	    [](TypedKwargs &options) { options.Add("bound_schema", LogicalType::ANY); });
 	// the callbacks below describe the scan rather than one of its files, so they are set on the wrapper
 	result.get_row_id_columns = ParquetGetRowIdColumns;
 	result.supports_pushdown_extract = ParquetScanSupportPushdownExtract;
