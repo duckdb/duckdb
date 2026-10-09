@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
@@ -82,8 +83,10 @@ private:
 
 	//! Load a buffer from disk, if not in memory.
 	void LoadFromDisk();
-	//! Returns the first free offset in a bitmask
-	uint32_t GetOffset(const idx_t bitmask_count, const idx_t available_segments);
+	//! Reserves a free slot in the buffer and returns the corresponding offset.
+	uint32_t AllocateSegment(const idx_t bitmask_count, const idx_t available_segments);
+	//! Frees the slot at the given offset in the current buffer.
+	void FreeSegment(const idx_t offset, const idx_t available_segments);
 	//! Sets the allocation size, if dirty
 	void SetAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
 
