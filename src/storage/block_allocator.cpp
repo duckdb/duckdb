@@ -180,16 +180,6 @@ static bool OnDeallocation(const data_ptr_t pointer, const idx_t size) {
 #endif
 }
 
-static void FlushFallbackAllocator() noexcept {
-	try {
-		if (Allocator::SupportsFlush()) {
-			Allocator::FlushAll();
-		}
-	} catch (...) {
-		// Fallback reclamation is best effort.
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // BlockAllocatorThreadLocalState
 //===--------------------------------------------------------------------===//
@@ -472,8 +462,9 @@ data_ptr_t BlockAllocator::AllocateData(const idx_t size) const {
 
 idx_t BlockAllocator::GetCachedMemory() const {
 	int64_t count = 0;
-	for (auto &slot : cached_blocks) {
-		count += slot.count.load(std::memory_order_relaxed);
+	const auto slots = MinValue<idx_t>(next_cache_slot.load(std::memory_order_relaxed), cached_blocks.size());
+	for (idx_t i = 0; i < slots; i++) {
+		count += cached_blocks[i].count.load(std::memory_order_relaxed);
 	}
 	return count > 0 ? idx_t(count) * block_size : 0;
 }
@@ -483,9 +474,10 @@ void BlockAllocator::UpdateCachedBlocks(const int64_t count, const idx_t slot) c
 }
 
 void BlockAllocator::FreeData(const data_ptr_t pointer, const idx_t size) const {
-	deallocated_since_flush.fetch_add(size, std::memory_order_relaxed);
 	if (!IsActive() || !IsInPool(pointer)) {
-		return allocator.FreeData(pointer, size);
+		allocator.FreeData(pointer, size);
+		deallocated_since_flush.fetch_add(size, std::memory_order_relaxed);
+		return;
 	}
 	D_ASSERT(size == block_size);
 	GetBlockAllocatorThreadLocalState(*this).Free(pointer);
@@ -667,40 +659,45 @@ idx_t BlockAllocator::FlushPool(const optional_idx block_limit, const optional_i
 }
 
 void BlockAllocator::FlushAll() const noexcept {
-	deallocated_since_flush.store(0, std::memory_order_relaxed);
 	FlushPool();
-	FlushFallbackAllocator();
+	FlushFallbackAllocator(deallocated_since_flush.exchange(0, std::memory_order_relaxed));
 }
 
 void BlockAllocator::FlushOnShutdown() const noexcept {
-	FlushFallbackAllocator();
-}
-
-idx_t BlockAllocator::GetDeallocatedSinceFlush() const {
-	return deallocated_since_flush.load(std::memory_order_relaxed);
-}
-
-bool BlockAllocator::TryFlushDeallocated(const idx_t threshold) const {
-	if (!SupportsFlush()) {
-		return false;
-	}
-	auto deallocated = deallocated_since_flush.load(std::memory_order_relaxed);
-	if (deallocated < threshold) {
-		return false;
-	}
-	// the thread that claims the accumulated amount performs the flush
-	if (!deallocated_since_flush.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
-		return false;
-	}
-	FlushAll();
-	return true;
+	FlushFallbackAllocator(deallocated_since_flush.exchange(0, std::memory_order_relaxed));
 }
 
 void BlockAllocator::FlushForAllocation(const idx_t extra_memory, const idx_t memory_headroom) const noexcept {
 	if (GetCachedMemory() > memory_headroom) {
 		FlushPool(DivBlockSize(extra_memory), optional_idx(), ReclaimMode::FORCE, DivBlockSize(memory_headroom));
 	}
-	FlushFallbackAllocator();
+	FlushFallbackAllocator(deallocated_since_flush.exchange(0, std::memory_order_relaxed));
+}
+
+bool BlockAllocator::TryFlushDeallocated(const idx_t threshold, const idx_t memory_headroom) const noexcept {
+	auto deallocated = deallocated_since_flush.load(std::memory_order_relaxed);
+	if (deallocated == 0 || deallocated < threshold || !Allocator::SupportsFlush()) {
+		return false;
+	}
+	if (deallocated <= memory_headroom && (!IsEnabled() || GetCachedMemory() <= memory_headroom - deallocated)) {
+		return false;
+	}
+	if (!deallocated_since_flush.compare_exchange_strong(deallocated, 0, std::memory_order_relaxed)) {
+		return false;
+	}
+	FlushFallbackAllocator(deallocated);
+	return true;
+}
+
+void BlockAllocator::FlushFallbackAllocator(const idx_t deallocated) const noexcept {
+	try {
+		if (Allocator::SupportsFlush()) {
+			Allocator::FlushAll();
+		}
+	} catch (...) {
+		// Keep failed purges eligible for retry without losing concurrent frees.
+		deallocated_since_flush.fetch_add(deallocated, std::memory_order_relaxed);
+	}
 }
 
 idx_t BlockAllocator::FreeInternal(const optional_idx block_limit, const optional_idx task_limit,

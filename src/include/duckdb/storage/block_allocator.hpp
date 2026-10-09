@@ -57,10 +57,6 @@ public:
 	bool SupportsFlush() const;
 	optional_idx DecayDelay() const;
 	void ThreadFlush(bool allocator_background_threads, idx_t threshold, idx_t thread_count) const;
-	//! Memory freed since the last flush, which the allocator may still hold
-	idx_t GetDeallocatedSinceFlush() const;
-	//! Flush if at least threshold bytes were freed since the last flush, returns whether a flush happened
-	bool TryFlushDeallocated(idx_t threshold) const;
 	//! Apply idle decay through the bound scheduler; standalone allocators reclaim synchronously.
 	void ThreadIdle() const DUCKDB_EXCLUDES(flush_lock);
 	//! Return local blocks without scheduling or discarding pool backing.
@@ -71,6 +67,8 @@ public:
 	void FlushOnShutdown() const noexcept;
 	//! Retain cached backing that fits alongside the buffer manager's live reservations.
 	void FlushForAllocation(idx_t extra_memory, idx_t memory_headroom) const noexcept DUCKDB_EXCLUDES(flush_lock);
+	//! Purge accumulated fallback frees when they no longer fit alongside cached pool backing.
+	bool TryFlushDeallocated(idx_t threshold, idx_t memory_headroom) const noexcept;
 
 private:
 	enum class FlushState : uint8_t { IDLE, SCHEDULED, RESCHEDULE_REQUESTED };
@@ -94,6 +92,7 @@ private:
 	idx_t RetentionTarget(idx_t now_ms) const;
 	void UpdateCachedBlocks(int64_t count, idx_t slot) const;
 	void ReturnThreadLocalBlocks() const;
+	void FlushFallbackAllocator(idx_t deallocated) const noexcept;
 
 	void SetScheduler(TaskScheduler &scheduler);
 	void ClearScheduler();
@@ -115,8 +114,6 @@ private:
 	const hugeint_t uuid;
 	//! Fallback allocator
 	Allocator &allocator;
-	//! Memory freed since the last flush
-	mutable atomic<idx_t> deallocated_since_flush {0};
 
 	//! Block size (power of two)
 	const idx_t block_size;
@@ -160,6 +157,9 @@ private:
 	mutable FlushState flush_state DUCKDB_GUARDED_BY(flush_lock) = FlushState::IDLE;
 	//! Bound before workers start and cleared after they join; never owns the scheduler.
 	optional_ptr<TaskScheduler> scheduler;
+
+	//! Keep fallback free traffic separate from fields used by pooled allocations.
+	alignas(64) mutable atomic<idx_t> deallocated_since_flush {0};
 };
 
 } // namespace duckdb

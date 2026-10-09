@@ -379,15 +379,18 @@ BufferPool::EvictionResult BufferPool::EvictObjectCacheEntries(MemoryTag tag, id
 }
 
 void BufferPool::FlushForAllocation(const idx_t extra_memory, const idx_t memory_limit) {
+	static constexpr idx_t BULK_DEALLOCATION_FLUSH_DIVISOR = 16;
+	const auto used_memory = GetUsedMemory(false);
+	const auto memory_headroom = memory_limit - MinValue(memory_limit, used_memory);
 	if (extra_memory > allocator_bulk_deallocation_flush_threshold) {
-		const auto used_memory = GetUsedMemory(false);
-		block_allocator.FlushForAllocation(extra_memory, memory_limit - MinValue(memory_limit, used_memory));
+		block_allocator.FlushForAllocation(extra_memory, memory_headroom);
+	} else {
+		block_allocator.TryFlushDeallocated(memory_limit / BULK_DEALLOCATION_FLUSH_DIVISOR, memory_headroom);
 	}
 }
 
 BufferPool::EvictionResult BufferPool::EvictBlocks(QueryContext context, MemoryTag tag, idx_t extra_memory,
                                                    idx_t memory_limit, unique_ptr<FileBuffer> *buffer) {
-	FlushOnBulkDeallocation();
 	for (auto &queue : queues) {
 		auto block_result = EvictBlocksInternal(context, *queue, tag, extra_memory, memory_limit, buffer);
 		if (block_result.success) {
@@ -576,29 +579,6 @@ void BufferPool::SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold) {
 
 idx_t BufferPool::GetAllocatorBulkDeallocationFlushThreshold() {
 	return allocator_bulk_deallocation_flush_threshold;
-}
-
-idx_t BufferPool::GetBulkDeallocationFlushThreshold() const {
-	// freed memory that the allocator still holds must stay a small fraction of the memory limit
-	return maximum_memory.load(std::memory_order_relaxed) / BULK_DEALLOCATION_FLUSH_DIVISOR;
-}
-
-void BufferPool::FlushAllocator(const optional_idx extra_memory) {
-	block_allocator.FlushAll();
-}
-
-void BufferPool::FlushOnBulkDeallocation() {
-	const auto threshold = GetBulkDeallocationFlushThreshold();
-	const auto deallocated = block_allocator.GetDeallocatedSinceFlush();
-	if (deallocated < threshold) {
-		return;
-	}
-	// freed memory that the allocator still holds only matters once it could push us past the memory limit
-	const auto used_memory = memory_usage.GetUsedMemory(MemoryUsageCaches::NO_FLUSH);
-	if (used_memory + deallocated <= maximum_memory.load(std::memory_order_relaxed)) {
-		return;
-	}
-	block_allocator.TryFlushDeallocated(threshold);
 }
 
 vector<EvictionQueueInformation> BufferPool::GetEvictionQueueInfo() const {

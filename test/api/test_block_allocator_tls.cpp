@@ -1,6 +1,8 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/storage/block_allocator.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/config.hpp"
@@ -70,6 +72,12 @@ public:
 	static void FlushBytes(const BlockAllocator &allocator, idx_t bytes) {
 		allocator.FlushPool(allocator.DivBlockSize(bytes));
 	}
+	static idx_t Deallocated(const BlockAllocator &allocator) {
+		return allocator.deallocated_since_flush.load(std::memory_order_relaxed);
+	}
+	static bool IsInPool(const BlockAllocator &allocator, data_ptr_t pointer) {
+		return allocator.IsInPool(pointer);
+	}
 
 private:
 	static idx_t Now() {
@@ -83,6 +91,142 @@ private:
 } // namespace duckdb
 
 #if INTPTR_MAX == INT64_MAX
+TEST_CASE("BlockAllocator tracks only frees to the fallback allocator", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+	for (idx_t i = 0; i < 100; i++) {
+		auto pointer = allocator.AllocateData(BLOCK_SIZE);
+		allocator.FreeData(pointer, BLOCK_SIZE);
+	}
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+	CHECK_FALSE(allocator.TryFlushDeallocated(0, 0));
+
+	auto pooled = allocator.AllocateData(BLOCK_SIZE);
+	auto overflow = allocator.AllocateData(BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, pooled));
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, overflow));
+	allocator.FreeData(overflow, BLOCK_SIZE);
+	allocator.FreeData(pooled, BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == BLOCK_SIZE);
+
+	auto other = allocator.AllocateData(2 * BLOCK_SIZE);
+	allocator.FreeData(other, 2 * BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 3 * BLOCK_SIZE);
+}
+
+TEST_CASE("BlockAllocator fallback pressure shares headroom with cached blocks", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+	auto pooled = allocator.AllocateData(BLOCK_SIZE);
+	pooled[0] = 42;
+	allocator.FreeData(pooled, BLOCK_SIZE);
+	auto other = allocator.AllocateData(2 * BLOCK_SIZE);
+	allocator.FreeData(other, 2 * BLOCK_SIZE);
+
+	SECTION("The free threshold is independent of headroom") {
+		CHECK_FALSE(allocator.TryFlushDeallocated(2 * BLOCK_SIZE + 1, 0));
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
+	}
+	SECTION("Combined cached and fallback memory fits") {
+		CHECK_FALSE(allocator.TryFlushDeallocated(2 * BLOCK_SIZE, 3 * BLOCK_SIZE));
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
+	}
+	SECTION("Fallback purge preserves pooled backing that still fits") {
+		CHECK(allocator.TryFlushDeallocated(2 * BLOCK_SIZE, 3 * BLOCK_SIZE - 1) == Allocator::SupportsFlush());
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (Allocator::SupportsFlush() ? 0 : 2 * BLOCK_SIZE));
+		CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+		auto reused = allocator.AllocateData(BLOCK_SIZE);
+		CHECK(reused == pooled);
+		CHECK(reused[0] == 42);
+		allocator.FreeData(reused, BLOCK_SIZE);
+	}
+	SECTION("Pool-only reclamation does not reset fallback pressure") {
+		BlockAllocatorTestHelper::FlushBytes(allocator, BLOCK_SIZE);
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
+	}
+	SECTION("Full flush resets fallback pressure") {
+		allocator.FlushAll();
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+	}
+	SECTION("Bulk allocation flush resets fallback pressure") {
+		allocator.FlushForAllocation(BLOCK_SIZE, BLOCK_SIZE);
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+		CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	}
+	SECTION("Shutdown flush resets fallback pressure") {
+		allocator.FlushOnShutdown();
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 0);
+		CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+	}
+}
+
+TEST_CASE("BufferPool checks fallback pressure after small reservations", "[api][block_allocator]") {
+	class TestBufferPool : public BufferPool {
+	public:
+		using BufferPool::BufferPool;
+		using BufferPool::EvictBlocks;
+	};
+	constexpr idx_t BLOCK_SIZE = 65536;
+	constexpr idx_t MEMORY_LIMIT = 16 * 1024 * 1024;
+	constexpr idx_t FREED_SIZE = MEMORY_LIMIT / 16;
+	Allocator fallback;
+	BlockAllocator allocator(fallback, BLOCK_SIZE, BLOCK_SIZE, 0);
+	TestBufferPool pool(allocator, 2 * MEMORY_LIMIT, false, MEMORY_LIMIT);
+	auto pointer = allocator.AllocateData(FREED_SIZE);
+	allocator.FreeData(pointer, FREED_SIZE);
+	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, MEMORY_LIMIT - FREED_SIZE);
+	{
+		auto result = pool.EvictBlocks(QueryContext(), MemoryTag::ALLOCATOR, BLOCK_SIZE, MEMORY_LIMIT);
+		CHECK(result.success);
+		CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == (Allocator::SupportsFlush() ? 0 : FREED_SIZE));
+	}
+	pool.UpdateUsedMemory(MemoryTag::ALLOCATOR, -int64_t(MEMORY_LIMIT - FREED_SIZE));
+	CHECK(pool.GetUsedMemory() == 0);
+}
+
+TEST_CASE("BufferAllocator routes allocation transitions through BlockAllocator", "[api][block_allocator]") {
+	constexpr idx_t BLOCK_SIZE = 65536;
+	Allocator fallback;
+	DBConfig config;
+	config.options.maximum_threads = 1;
+	config.options.async_threads = 0;
+	config.block_allocator = make_uniq<BlockAllocator>(fallback, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+	DuckDB db(nullptr, &config);
+	auto &allocator = BlockAllocator::Get(*db.instance);
+	auto &manager = BufferManager::GetBufferManager(*db.instance);
+	auto &buffer_allocator = manager.GetBufferAllocator();
+	allocator.FlushAll();
+	const auto initial_memory = manager.GetUsedMemory();
+
+	auto pointer = buffer_allocator.AllocateData(BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, pointer));
+	CHECK(manager.GetUsedMemory() == initial_memory + BLOCK_SIZE);
+	pointer[0] = 42;
+
+	pointer = buffer_allocator.ReallocateData(pointer, BLOCK_SIZE, 2 * BLOCK_SIZE);
+	CHECK_FALSE(BlockAllocatorTestHelper::IsInPool(allocator, pointer));
+	CHECK(pointer[0] == 42);
+	CHECK(manager.GetUsedMemory() == initial_memory + 2 * BLOCK_SIZE);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+
+	pointer = buffer_allocator.ReallocateData(pointer, 2 * BLOCK_SIZE, BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::IsInPool(allocator, pointer));
+	CHECK(pointer[0] == 42);
+	CHECK(manager.GetUsedMemory() == initial_memory + BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 2 * BLOCK_SIZE);
+	buffer_allocator.FreeData(pointer, BLOCK_SIZE);
+	CHECK(manager.GetUsedMemory() == initial_memory);
+	CHECK(allocator.GetCachedMemory() == BLOCK_SIZE);
+
+	pointer = buffer_allocator.AllocateData(2 * BLOCK_SIZE);
+	buffer_allocator.FreeData(pointer, 2 * BLOCK_SIZE);
+	CHECK(BlockAllocatorTestHelper::Deallocated(allocator) == 4 * BLOCK_SIZE);
+	CHECK(manager.GetUsedMemory() == initial_memory);
+}
+
 TEST_CASE("BlockAllocator retention ages free volume", "[api][block_allocator]") {
 	constexpr idx_t BLOCK_SIZE = 4096;
 	constexpr idx_t CAPACITY = 4096;
