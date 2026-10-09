@@ -387,6 +387,82 @@ class ExtensionSyncTest(unittest.TestCase):
         )
         self.assertEqual(git(checkout, 'rev-parse', 'HEAD'), revision)
 
+    def test_sync_commits_and_exports_patches_inside_submodules(self):
+        os.environ.update(
+            PATH=os.defpath,
+            GIT_ALLOW_PROTOCOL='file',
+            GIT_CONFIG_NOSYSTEM='1',
+            GIT_CONFIG_GLOBAL=os.devnull,
+            GIT_AUTHOR_NAME='Extension Sync Test',
+            GIT_AUTHOR_EMAIL='test@example.com',
+            GIT_COMMITTER_NAME='Extension Sync Test',
+            GIT_COMMITTER_EMAIL='test@example.com',
+        )
+
+        def git(repo, *args):
+            return subprocess.check_output(['git', '-C', str(repo), *args], stderr=subprocess.PIPE, text=True).strip()
+
+        def repo(name):
+            directory = self.root / name
+            directory.mkdir()
+            git(directory, 'init')
+            git(directory, 'config', 'user.name', 'Extension Sync Test')
+            git(directory, 'config', 'user.email', 'test@example.com')
+            (directory / 'source.txt').write_text('original\n')
+            git(directory, 'add', '.')
+            git(directory, 'commit', '-m', 'Initial source')
+            return directory
+
+        library = repo('library')
+        extension = repo('extension')
+        git(extension, 'submodule', 'add', str(library), 'third_party/library')
+        git(extension, 'commit', '-am', 'Add library')
+        revision = git(extension, 'rev-parse', 'HEAD')
+
+        patch_name = '0001-update-library.patch'
+        patch_dir = self.root / '.github' / 'patches' / 'extensions' / 'example'
+        patch_dir.mkdir(parents=True)
+        patch_file = patch_dir / patch_name
+        patch_file.write_text(
+            '''diff --git a/third_party/library/source.txt b/third_party/library/source.txt
+index 4b48dee..92efc5d 100644
+--- a/third_party/library/source.txt
++++ b/third_party/library/source.txt
+@@ -1 +1 @@
+-original
++patched
+'''
+        )
+        descriptor = self.parse(
+            f'duckdb_extension_load(example GIT_URL "{extension}" GIT_TAG "{revision}" '
+            'SUBMODULES "third_party/library" APPLY_PATCHES)'
+        )[0]
+        external_dir = self.root / 'external'
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            sync.sync_extension(descriptor, external_dir, self.root)
+        checkout = external_dir / 'example'
+        self.assertEqual((checkout / 'third_party/library/source.txt').read_text(), 'patched\n')
+        self.assertEqual(git(checkout, 'status', '--porcelain'), '')
+        self.assertEqual(git(checkout, 'log', '-1', '--format=%s'), patch_name)
+        self.assertEqual(git(checkout / 'third_party/library', 'log', '-1', '--format=%s'), patch_name)
+
+        with patch.object(sync, 'run_cmd', wraps=sync.run_cmd) as commands, contextlib.redirect_stdout(io.StringIO()):
+            sync.sync_extension(descriptor, external_dir, self.root)
+        self.assertFalse(
+            any(call.args[0][1] in ('clone', 'fetch', 'checkout', 'submodule') for call in commands.call_args_list)
+        )
+
+        os.environ['EXPORT_EXTENSION_PATCHES'] = '1'
+        with contextlib.redirect_stdout(io.StringIO()):
+            sync.sync_extension(descriptor, external_dir, self.root)
+        exported = patch_file.read_text()
+        self.assertIn('diff --git a/third_party/library/source.txt b/third_party/library/source.txt', exported)
+        self.assertNotIn('Submodule third_party/library', exported)
+        git(checkout, 'reset', '--hard', revision)
+        git(checkout, 'submodule', 'update', '--force')
+        git(checkout, 'apply', '--check', str(patch_file))
+
 
 if __name__ == '__main__':
     unittest.main()
