@@ -1,0 +1,82 @@
+# name: test/parquet/parquet_bound_schema_plans.test
+# description: Bound reader metadata safeguards retain safe native optimizations
+# group: [parquet]
+
+require parquet
+
+statement ok
+SET profiling_renderer_settings = MAP {'operator_casing':'upper'}
+
+statement ok
+COPY (SELECT 'longer' b, 'x' a) TO '{TEST_DIR}/bound_plan_strings.parquet' (FORMAT parquet)
+
+# Same names and types, wrong physical ordinal: scalar projection stays outside.
+query II
+EXPLAIN SELECT strlen(a) FROM read_parquet('{TEST_DIR}/bound_plan_strings.parquet', bound_schema={'a':'VARCHAR','b':'VARCHAR'}, hive_partitioning=false)
+----
+physical_plan	<REGEX>:.*PROJECTION.*
+
+# Same physical ordinal/type: the native byte-length reader is still available.
+query II
+EXPLAIN SELECT strlen(a) FROM read_parquet('{TEST_DIR}/bound_plan_strings.parquet', bound_schema={'b':'VARCHAR','a':'VARCHAR'}, hive_partitioning=false)
+----
+physical_plan	<!REGEX>:.*PROJECTION.*
+
+query I
+SELECT strlen(a) FROM read_parquet('{TEST_DIR}/bound_plan_strings.parquet', bound_schema={'b':'VARCHAR','a':'VARCHAR'}, hive_partitioning=false)
+----
+1
+
+statement ok
+COPY (SELECT '9' v UNION ALL SELECT '10') TO '{TEST_DIR}/bound_plan_numeric.parquet' (FORMAT parquet)
+
+# Numeric ordering cannot use the physical string min/max accessor.
+query II
+EXPLAIN SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_numeric.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
+----
+physical_plan	<REGEX>:.*READ_PARQUET.*
+
+query II
+SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_numeric.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
+----
+9	10
+
+statement ok
+COPY (SELECT 9::BIGINT v UNION ALL SELECT 10::BIGINT) TO '{TEST_DIR}/bound_plan_identity.parquet' (FORMAT parquet)
+
+# Native partition min/max exactness remains usable for an identity mapping.
+query II
+EXPLAIN SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_identity.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
+----
+physical_plan	<!REGEX>:.*READ_PARQUET.*
+
+query II
+SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_identity.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
+----
+9	10
+
+# Safe physical bounds still allow impossible filters to become empty.
+query II
+EXPLAIN SELECT v FROM read_parquet('{TEST_DIR}/bound_plan_identity.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false) WHERE v > 10
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+# Explicit statistics are already in the target domain, even when physical types differ.
+query II
+EXPLAIN SELECT v FROM read_parquet('{TEST_DIR}/bound_plan_numeric.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false, column_statistics=MAP {'v':MAP {'min':'9','max':'10','count':'2','null_count':'0'}}) WHERE v > 10
+----
+physical_plan	<REGEX>:.*EMPTY_RESULT.*
+
+statement ok
+COPY (SELECT 'stored' filename) TO '{TEST_DIR}/bound_plan_filename.parquet' (FORMAT parquet)
+
+# Generated filename bounds cannot come from a same-name/type/ordinal physical shadow.
+query II
+EXPLAIN SELECT filename FROM read_parquet('{TEST_DIR}/bound_plan_filename.parquet', bound_schema={'filename':'VARCHAR'}, filename=true, hive_partitioning=false) WHERE filename <> 'stored'
+----
+physical_plan	<!REGEX>:.*EMPTY_RESULT.*
+
+query I
+SELECT filename <> 'stored' FROM read_parquet('{TEST_DIR}/bound_plan_filename.parquet', bound_schema={'filename':'VARCHAR'}, filename=true, hive_partitioning=false)
+----
+true
