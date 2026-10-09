@@ -990,12 +990,17 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     endif()
 
     if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
+        # Provide the extension name to the extension's CMakeLists. C-API extensions built from the
+        # extension-template-c template require EXTENSION_NAME to be defined; supplying it here lets
+        # such an extension be built in-tree without a wrapper CMakeLists or hardcoding its own name.
+        set(EXTENSION_NAME ${EXT_NAME})
         if(NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PREBUILT_PATH}" STREQUAL "")
             add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME} EXCLUDE_FROM_ALL)
         else()
             add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
         endif()
         duckdb_add_missing_extension_describe(${EXT_NAME})
+        unset(EXTENSION_NAME)
     else()
         message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
     endif()
