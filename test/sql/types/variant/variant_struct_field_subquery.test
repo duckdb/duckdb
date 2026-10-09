@@ -1,0 +1,64 @@
+# name: test/sql/types/variant/variant_struct_field_subquery.test
+# description: A field path into a VARIANT nested in a STRUCT, read through a subquery or view
+# group: [variant]
+
+statement ok
+CREATE TABLE t AS SELECT * FROM (VALUES
+	(9, {'x': {'a': 1}::VARIANT}),
+	(10, {'x': {'a': 2, 'b': 'two'}::VARIANT})
+) v(id, n);
+
+statement ok
+CREATE VIEW s AS SELECT * FROM t;
+
+# -----------------------------------------------------------------------------
+# Direct on the table
+#
+
+query I
+SELECT n.x.a FROM t WHERE id = 9;
+----
+1
+
+# -----------------------------------------------------------------------------
+# Through a subquery
+#
+
+query I
+SELECT n.x.a FROM (SELECT * FROM t) WHERE id = 9;
+----
+1
+
+query I
+SELECT n.x.a FROM (SELECT * FROM t WHERE id < 30) WHERE id = 9;
+----
+1
+
+query II
+SELECT n.x.a, n.x.b FROM (SELECT * FROM t WHERE id < 30) ORDER BY id;
+----
+1	NULL
+2	two
+
+# -----------------------------------------------------------------------------
+# Through a view
+#
+
+query I
+SELECT n.x.a FROM s WHERE id = 9;
+----
+1
+
+# -----------------------------------------------------------------------------
+# Variant field in the WHERE clause
+#
+
+query I
+SELECT id FROM (SELECT * FROM t WHERE id < 30) WHERE n.x.a = 1;
+----
+9
+
+query I
+SELECT id FROM s WHERE n.x.b = 'two';
+----
+10
