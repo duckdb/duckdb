@@ -228,7 +228,7 @@ private:
 	idx_t next_batch_index = 0;
 	//! Jobs scheduled ahead of decoding
 	atomic<idx_t> active_jobs {0};
-	//! Budget charge of the backlog: reserved producer slots plus scheduled jobs, released per job in WaitForJob
+	//! Budget charge of the reserved producer slots and scheduled jobs, released per job in WaitForJob
 	atomic<idx_t> pending_io_bytes {0};
 	atomic<bool> done {false};
 	//! Threads that reserved a slot but have not pushed their job yet

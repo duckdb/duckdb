@@ -252,14 +252,10 @@ void ScanReadAhead::SetDone() {
 
 bool ScanReadAhead::TryReserveSlot() {
 	// take the minimum job charge up front so concurrent producers cannot all pass the budget check together
-	const auto backlog = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE);
-	// admit while the backlog is below budget, overshooting it by at most one job charge;
-	// an empty backlog always admits one job so the scan makes progress under any budget
-	if (backlog != 0 && backlog >= backlog_budget.load()) {
-		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
-		return false;
-	}
-	if (active_jobs.fetch_add(1) >= read_ahead_depth) {
+	const bool over_budget = pending_io_bytes.fetch_add(MINIMUM_JOB_IO_CHARGE) >= backlog_budget.load();
+	// over budget one job stays queued, claimed jobs hold the budget until their task resumes
+	const idx_t depth = over_budget ? 1 : read_ahead_depth;
+	if (active_jobs.fetch_add(1) >= depth) {
 		--active_jobs;
 		pending_io_bytes -= MINIMUM_JOB_IO_CHARGE;
 		return false;
