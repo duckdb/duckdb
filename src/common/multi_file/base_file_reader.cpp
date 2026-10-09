@@ -41,6 +41,19 @@ InsertionOrderPreservingMap<Value> BaseFileReader::GetMetadata() const {
 	return {};
 }
 
+BytesScannedReporting BaseFileReader::GetBytesScannedReporting() const {
+	// a reader that does not count what it reads has the stored size of its file reported
+	return BytesScannedReporting::STORED_FILE_SIZE;
+}
+
+optional_idx BaseFileReader::GetStoredFileSize() const {
+	idx_t file_size;
+	if (file.extended_info && file.extended_info->TryGetOption("file_size", file_size)) {
+		return file_size;
+	}
+	return optional_idx();
+}
+
 unique_ptr<BaseStatistics> BaseUnionData::GetStatistics(ClientContext &context, const Identifier &name) {
 	return nullptr;
 }
