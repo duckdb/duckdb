@@ -148,11 +148,12 @@ jobs:
               - .github/**
             osx:
               - '.github/workflows/OSX.yml'
+              - scripts/lldb/**
               - tools/swift/**
             extensions:
               - .github/config/**
               - .github/patches/**
-              - extensions/**
+              - extension/**
             tests:
               - test/**/*.test
             tests_slow:
@@ -470,7 +471,11 @@ jobs:
 
  extensions-deploy:
     name: Deploy extensions
-    if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-deploy') }}
+    if: |
+      always() &&
+      needs.prepare.result == 'success' &&
+      needs.extensions-build.result == 'success' &&
+      contains(fromJson(needs.prepare.outputs.enabled_jobs), 'extensions-deploy')
     runs-on: ${{ fromJSON(needs.prepare.outputs.runners).linux_x64 || 'ubuntu-latest' }}
     container:
       image: ghcr.io/duckdb/duckdb-ci/manylinux_2_28_amd64_main:${{ needs.prepare.outputs.image_version }}
@@ -595,14 +600,14 @@ jobs:
         continue-on-error: true
         uses: actions/download-artifact@v8
         with:
-          name: linux-release-build
+          name: linux-release-build.tar.gz
           path: build
 
       - name: Extract linux release artifact
         if: ${{ steps.linux_release_artifact.outcome == 'success' }}
         run: |
           rm -rf build/release
-          tar -xzf build/release-artifact.tar.gz -C build
+          tar -xzf build/linux-release-build.tar.gz -C build
 
       - name: Install parser tools
         if: ${{ !fromJson(needs.prepare.outputs.skip_tests) }}
@@ -708,11 +713,16 @@ jobs:
       with:
         build: python3 scripts/ci/retry.py -- make release
         test: ${{ !fromJson(needs.prepare.outputs.skip_tests) && matrix.config.run_smoke && 'make smoke T="--changed-tests=$RUNNER_TEMP/changed_tests.txt"' || 'true' }}
-        bundle: make release-artifact
-        upload-name: ${{ matrix.config.build_artifact }}
+        bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/${{ matrix.config.build_artifact }}.tar.gz
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: ${{ matrix.config.vcpkg_cache_suffix }}
         save-cache: ${{ matrix.config.save_vcpkg_cache && fromJson(needs.prepare.outputs.save_cache) }}
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: build/${{ matrix.config.build_artifact }}.tar.gz
+        if-no-files-found: error
+        archive: false
 
     - name: Checks
       shell: bash
@@ -898,13 +908,13 @@ jobs:
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
       with:
-        name: linux-release-build
+        name: linux-release-build.tar.gz
         path: build
 
     - name: Extract linux release artifact
       run: |
         rm -rf build/release
-        tar -xzf build/release-artifact.tar.gz -C build
+        tar -xzf build/linux-release-build.tar.gz -C build
 
     - name: Run all release unit tests
       run: make allunit T="--test-flags='--thread-stack-size 131072'"
@@ -921,6 +931,7 @@ jobs:
     name: Linux Release (musl, ${{ matrix.config.name }})
     if: ${{ contains(fromJson(needs.prepare.outputs.enabled_jobs), 'linux-release-musl') }}
     needs: prepare
+    continue-on-error: ${{ needs.prepare.outputs.staged_version != '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -954,9 +965,16 @@ jobs:
         FORCE_WARN_UNUSED: 1
       with:
         build: make
+        bundle: make release-artifact RELEASE_ARTIFACT_TARBALL=build/${{ matrix.config.build_artifact }}.tar.gz
         vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24
         cache-suffix: linux-cli-${{ matrix.config.cache_suffix }}
         save-cache: ${{ fromJson(needs.prepare.outputs.save_cache) }}
+
+    - uses: actions/upload-artifact@v7
+      with:
+        path: build/${{ matrix.config.build_artifact }}.tar.gz
+        if-no-files-found: error
+        archive: false
 
     - name: CLI check
       shell: bash
@@ -1319,13 +1337,13 @@ jobs:
     - name: Download linux release artifact
       uses: actions/download-artifact@v8
       with:
-        name: linux-release-build
+        name: linux-release-build.tar.gz
         path: build
 
     - name: Extract linux release artifact
       run: |
         rm -rf build/release
-        tar -xzf build/release-artifact.tar.gz -C build
+        tar -xzf build/linux-release-build.tar.gz -C build
 
     - name: Test Configurations
       if: success() || failure()

@@ -527,6 +527,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
 				throw IOException("DECIMAL requires a length and scale specifier!");
 			}
+			if (s_ele.precision < 1 || s_ele.scale < 0 || s_ele.scale > s_ele.precision) {
+				throw IOException("Invalid DECIMAL precision %d and scale %d", s_ele.precision, s_ele.scale);
+			}
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
 			if (s_ele.precision > DecimalType::MaxWidth()) {
 				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
@@ -755,7 +758,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 			throw InternalException("Can't locate the child by name '%s' in the VARIANT column", field_name);
 		}
 		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
-		if (child_column.type.id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(child_column.type)) {
 			throw InternalException("Extracted field for '%s' from 'typed_value', is not a struct (received: %s)",
 			                        field_name, child_column.type.ToString());
 		}
@@ -822,7 +825,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
 			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
-		case LogicalTypeId::STRUCT: {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE: {
 			if (column_id.IsPushdownExtract()) {
 				auto &child = indexes[0];
 				auto child_index = child.GetPrimaryIndex();
@@ -856,36 +860,30 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
-		if (schema.children.size() != 3 || !column_id.IsPushdownExtract()) {
-			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] =
-				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
-			}
-			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
-		}
-		//! VARIANT is shredded -  it has a 'typed_value' column
-		//! And the extract is pushed down into the scan
-		auto &typed_value_schema = schema.children[2];
-		D_ASSERT(typed_value_schema.name == "typed_value");
-		auto variant_stats = GetVariantStats(schema);
+		if (schema.children.size() == 3 && column_id.IsPushdownExtract()) {
+			//! VARIANT is shredded - it has a 'typed_value' column
+			auto &typed_value_schema = schema.children[2];
+			D_ASSERT(typed_value_schema.name == "typed_value");
+			auto variant_stats = GetVariantStats(schema);
 
-		if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
-			//! This field is present in 'typed_value' across all rowgroups
-			//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
-			auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
-			return CreateReaderRecursive(context, typed_value_index, typed_value_schema);
+			if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
+				//! This field is present in 'typed_value' across all rowgroups
+				//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
+				auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
+				return CreateReaderRecursive(context, typed_value_index, typed_value_schema);
+			}
 		}
-		for (idx_t child_index = 0; child_index < 3; child_index++) {
+		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 			children[child_index] =
 			    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 		}
 		// Create the VariantColumnReader with the column index, so we can perform the extract at Read
 		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 
-		const auto &scan_type = column_id.GetScanType();
-		if (scan_type.id() == LogicalTypeId::VARIANT) {
+		if (!column_id.IsPushdownExtract() || column_id.GetScanType().id() == LogicalTypeId::VARIANT) {
 			return std::move(column_reader);
 		}
+		const auto &scan_type = column_id.GetScanType();
 		auto input = make_uniq<BoundReferenceExpression>(LogicalType::VARIANT(), 0ULL);
 		auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), scan_type);
 		auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
@@ -1173,7 +1171,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw IOException("Failed to read Parquet file \"%s\": root schema element has no children", file.path);
 	}
 	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx, context);
-	if (root.type.id() != LogicalTypeId::STRUCT) {
+	if (!StructType::IsStruct(root.type)) {
 		throw InvalidInputException("Failed to read Parquet file \"%s\": Root element of Parquet file must be a struct",
 		                            file.path);
 	}
@@ -1559,7 +1557,7 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 	// Handle MAP value extraction.
 	if (leaf_reader->Type().id() == LogicalTypeId::MAP && function.Function().GetName() == "map_extract_value") {
 		auto &entry_reader = leaf_reader->Cast<ListColumnReader>().GetChildReader();
-		if (entry_reader.Type().id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(entry_reader.Type())) {
 			return false;
 		}
 		auto &struct_reader = entry_reader.Cast<StructColumnReader>();
@@ -1571,7 +1569,7 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 	}
 
 	// Handle STRUCT type.
-	if (leaf_reader->Type().id() == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(leaf_reader->Type())) {
 		idx_t child_idx;
 		if (!TryGetStructExtractChildIndex(function, child_idx)) {
 			return false;

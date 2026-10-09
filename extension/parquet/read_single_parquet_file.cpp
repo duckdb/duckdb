@@ -286,7 +286,7 @@ static void ReadSingleParquetFilePrepareReadAhead(ClientContext &context, TableF
 }
 
 //! The parquet reader can always be read ahead - the row group a thread claimed is loaded before it is scanned
-static bool ReadSingleParquetFileSupportsReadAhead(const FunctionData &bind_data) {
+static bool ReadSingleParquetFileSupportsReadAhead(optional_ptr<const FunctionData> bind_data) {
 	return true;
 }
 
@@ -510,7 +510,7 @@ const ParquetOptions &ParquetScanFunction::GetFileOptions(const FunctionData &fi
 
 TableFunction ParquetScanFunction::GetSingleFileFunction() {
 	TableFunction read_parquet("read_single_parquet_file",
-	                           FunctionSignature().AddPositionalOnly("path", LogicalType::VARCHAR),
+	                           FunctionSignature().AddPositionalOnly("file", LogicalType::ANY),
 	                           ReadSingleParquetFileFunction, ReadSingleParquetFileBind,
 	                           ReadSingleParquetFileInitGlobal, ReadSingleParquetFileInitLocal);
 	read_parquet.table_scan_progress = ReadSingleParquetFileProgress;

@@ -1,0 +1,43 @@
+diff --git a/src/postgres_scanner.cpp b/src/postgres_scanner.cpp
+index 99cbef5..82cba91 100644
+--- a/src/postgres_scanner.cpp
++++ b/src/postgres_scanner.cpp
+@@ -609,15 +609,14 @@ static unique_ptr<FunctionData> PostgresScanDeserialize(Deserializer &deserializ
+ 	throw NotImplementedException("PostgresScanDeserialize");
+ }
+ 
+-static BindInfo PostgresGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
++static optional_ptr<TableCatalogEntry> PostgresGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {
+ 	auto &bdata = bind_data_p->Cast<PostgresBindData>();
+-	BindInfo info(ScanType::EXTERNAL);
+ 	shared_ptr<ClientContext> ctx = bdata.context_ptr.lock();
+-	if (ctx) { // cannot fail in known scenarios
+-		auto attached_table = PostgresTableEntry::Lookup(*ctx, bdata.qualified_table_name);
+-		info.table = attached_table.Get<PostgresTableEntry>();
++	if (!ctx) { // cannot fail in known scenarios
++		return nullptr;
+ 	}
+-	return info;
++	auto attached_table = PostgresTableEntry::Lookup(*ctx, bdata.qualified_table_name);
++	return attached_table.Get<PostgresTableEntry>();
+ }
+ 
+ PostgresScanFunction::PostgresScanFunction()
+@@ -633,7 +632,7 @@ PostgresScanFunction::PostgresScanFunction()
+ 	get_partition_data = PostgresGetPartitionData;
+ 	cardinality = PostgresScanCardinality;
+ 	table_scan_progress = PostgresScanProgress;
+-	get_bind_info = PostgresGetBindInfo;
++	get_table_entry = PostgresGetTableEntry;
+ 	projection_pushdown = true;
+ 	global_initialization = TableFunctionInitialization::INITIALIZE_ON_SCHEDULE;
+ }
+@@ -651,7 +650,7 @@ PostgresScanFunctionFilterPushdown::PostgresScanFunctionFilterPushdown()
+ 	get_partition_data = PostgresGetPartitionData;
+ 	cardinality = PostgresScanCardinality;
+ 	table_scan_progress = PostgresScanProgress;
+-	get_bind_info = PostgresGetBindInfo;
++	get_table_entry = PostgresGetTableEntry;
+ 	projection_pushdown = true;
+ 	filter_pushdown = true;
+ 	global_initialization = TableFunctionInitialization::INITIALIZE_ON_SCHEDULE;

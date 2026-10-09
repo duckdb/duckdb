@@ -101,7 +101,7 @@ public:
 	// Reserved field id used for the "_last_updated_sequence_number" field according to the iceberg spec
 	static constexpr int32_t LAST_UPDATED_SEQUENCE_NUMBER_ID = 2147483539;
 	//! The field of a file STRUCT that holds the path of the file - all other fields are open options
-	static constexpr const char *FILE_PATH_FIELD = "filename";
+	static constexpr const char *FILE_PATH_FIELD = OpenFileInfo::PATH_FIELD;
 
 public:
 	virtual ~MultiFileReader();

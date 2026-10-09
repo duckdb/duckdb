@@ -29,7 +29,7 @@ public:
 		state.token_iterator.SetPreviousTokenType(TokenType::NUMBER_LITERAL);
 		auto result = state.AllocateParseResult<NumberParseResult>(token_text, start_offset, token_length);
 		if (result.HasParseResult()) {
-			result.GetParseResult()->name = name;
+			result.GetParseResult()->SetNameFrom(*this);
 		}
 		return result;
 	}
@@ -40,6 +40,10 @@ public:
 
 	string ToString() const override {
 		return "NUMBER_LITERAL";
+	}
+
+	void InitializeFirstSet(MatcherFirstSet &first_set, const GrammarLiteralTable &table) const override {
+		first_set.class_mask = MatcherTokenClass::NUMBER;
 	}
 
 private:

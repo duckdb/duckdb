@@ -1,6 +1,13 @@
 # Adds extensions to what the DuckDB targets link by default, for extension configs; STATICALLY_LINK_EXTENSIONS
 # replaces the whole default. An extension that is only loaded with duckdb_extension_load is built, not linked, and can be
 # installed from the build's extension repository.
+set(DUCKDB_NEW_EXTENSION_BUILD_ENABLED FALSE)
+if(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    if(NOT "$ENV{DUCKDB_NEW_EXTENSION_BUILD}" STREQUAL "" AND NOT "$ENV{DUCKDB_NEW_EXTENSION_BUILD}" STREQUAL "0")
+        set(DUCKDB_NEW_EXTENSION_BUILD_ENABLED TRUE)
+    endif()
+endif()
+
 function(duckdb_extension_statically_link)
     set_property(GLOBAL APPEND PROPERTY DUCKDB_EXTENSIONS_STATICALLY_LINKED_BY_CONFIG ${ARGN})
 endfunction()
@@ -255,6 +262,9 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     set_target_properties(${TARGET_NAME} PROPERTIES DEFINE_SYMBOL "")
     set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
     set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+    if(NOT EXTENSION_STATIC_BUILD)
+        set_property(TARGET ${TARGET_NAME} PROPERTY DUCKDB_DYNAMIC_LOADABLE_EXTENSION TRUE)
+    endif()
     if(${IGNORE_WARNINGS} GREATER -1)
         disable_target_warnings(${TARGET_NAME})
     endif()
@@ -462,7 +472,8 @@ function(build_static_extension NAME PARAMETERS)
         set(PREBUILT_TARGET ${NAME}_prebuilt_extension)
         add_library(${PREBUILT_TARGET} STATIC IMPORTED GLOBAL)
         set_property(TARGET ${PREBUILT_TARGET} PROPERTY IMPORTED_LOCATION "${PREBUILT_PATH}")
-        target_link_libraries(${PREBUILT_TARGET} INTERFACE duckdb_static)
+        target_link_libraries(${PREBUILT_TARGET} INTERFACE
+            "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:DUCKDB_DYNAMIC_LOADABLE_EXTENSION>>>:duckdb_static>")
         add_library(${NAME}_extension STATIC "${DUMMY_SOURCE}")
         target_link_libraries(${NAME}_extension "$<BUILD_INTERFACE:${PREBUILT_TARGET}>")
         set_property(TARGET ${NAME}_extension PROPERTY DUCKDB_EXTENSION_KIND CPP)
@@ -470,7 +481,9 @@ function(build_static_extension NAME PARAMETERS)
         return()
     endif()
     add_library(${NAME}_extension STATIC ${FILES})
-    target_link_libraries(${NAME}_extension duckdb_static)
+    # Dynamic loadables resolve DuckDB symbols from the host, including when linked through this archive.
+    target_link_libraries(${NAME}_extension
+        "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:DUCKDB_DYNAMIC_LOADABLE_EXTENSION>>>:duckdb_static>")
     duckdb_add_extension_describe(${NAME} CPP)
     duckdb_make_native_lto_archive(${NAME}_extension)
 endfunction()
@@ -542,7 +555,8 @@ endfunction()
 
 function(build_static_extension_capi_internal NAME KIND API_VERSION FILES)
     add_library(${NAME}_extension STATIC ${FILES})
-    target_link_libraries(${NAME}_extension duckdb_static)
+    target_link_libraries(${NAME}_extension
+        "$<$<NOT:$<BOOL:$<TARGET_PROPERTY:DUCKDB_DYNAMIC_LOADABLE_EXTENSION>>>:duckdb_static>")
     target_compile_definitions(${NAME}_extension PRIVATE DUCKDB_BUILD_STATIC_EXTENSION)
     duckdb_add_extension_describe(${NAME} ${KIND} "${API_VERSION}")
     duckdb_make_native_lto_archive(${NAME}_extension)
@@ -634,7 +648,7 @@ macro(register_external_extension NAME URL COMMIT DONT_BUILD LOAD_TESTS PATH INC
     string(TOUPPER "DUCKDB_${NAME}_DIRECTORY" DIRECTORY_OVERRIDE)
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         set("${NAME}_extension_fc_SOURCE_DIR" "$ENV{${DIRECTORY_OVERRIDE}}")
-    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    elseif(DUCKDB_NEW_EXTENSION_BUILD_ENABLED)
         # Use the pre-cloned source from extension/external/<name> (populated by
         # scripts/sync_out_of_tree_extensions.py via `make sync_out_of_tree_extensions`).
         set("${NAME}_extension_fc_SOURCE_DIR" "${DUCKDB_MODULE_BASE_DIR}/extension/external/${NAME}")
@@ -671,7 +685,7 @@ macro(register_external_extension NAME URL COMMIT DONT_BUILD LOAD_TESTS PATH INC
 
     if(DEFINED ENV{${DIRECTORY_OVERRIDE}})
         message(STATUS "Load extension '${NAME}' from local path \"${${NAME}_extension_fc_SOURCE_DIR}\" @ ${EXTERNAL_EXTENSION_VERSION}")
-    elseif(DEFINED ENV{DUCKDB_NEW_EXTENSION_BUILD})
+    elseif(DUCKDB_NEW_EXTENSION_BUILD_ENABLED)
         message(STATUS "Load extension '${NAME}' from extension/external/${NAME} @ ${EXTERNAL_EXTENSION_VERSION}")
     else()
         message(STATUS "Load extension '${NAME}' from ${URL} @ ${EXTERNAL_EXTENSION_VERSION}")

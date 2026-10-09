@@ -192,10 +192,28 @@ def get_patch_files(patch_dir):
     return sorted(f for f in os.listdir(patch_dir) if f.endswith('.patch'))
 
 
-def apply_patches_as_commits(ext_dir, patch_dir, patches):
+def commit_patch(repo_dir, patch_name):
+    run_cmd(['git', 'add', '-A'], cwd=repo_dir)
+    run_cmd(
+        [
+            'git',
+            '-c',
+            'user.name=DuckDB Sync',
+            '-c',
+            'user.email=sync@duckdb.org',
+            'commit',
+            '-m',
+            patch_name,
+            '--no-verify',
+        ],
+        cwd=repo_dir,
+    )
+
+
+def apply_patches_as_commits(ext_dir, patch_dir, patches, submodules):
     """
-    Apply each patch file and create a commit whose message is the patch filename
-    (e.g. "fix.patch").
+    Apply each patch file and create commits whose message is the patch filename
+    (e.g. "fix.patch"), including commits for changes inside submodules.
     """
     for patch_name in patches:
         patch_file = patch_dir / patch_name
@@ -207,21 +225,14 @@ def apply_patches_as_commits(ext_dir, patch_dir, patches):
         # --no-backup-if-mismatch: a fuzzy apply otherwise leaves <file>.orig behind, which the
         # `git add -A` below would commit into the extension.
         run_cmd(['patch', '-p1', '--forward', '--no-backup-if-mismatch', '-i', str(patch_file)], cwd=ext_dir)
-        run_cmd(['git', 'add', '-A'], cwd=ext_dir)
-        run_cmd(
-            [
-                'git',
-                '-c',
-                'user.name=DuckDB Sync',
-                '-c',
-                'user.email=sync@duckdb.org',
-                'commit',
-                '-m',
-                patch_name,
-                '--no-verify',
-            ],
-            cwd=ext_dir,
-        )
+        # A superproject cannot stage file changes made inside a submodule. Commit those first so
+        # the parent patch commit can record the resulting gitlink and remain clean on later syncs.
+        for submodule in submodules:
+            submodule_dir = ext_dir / submodule
+            status = run_cmd(['git', 'status', '--porcelain'], cwd=submodule_dir)
+            if status.stdout.strip():
+                commit_patch(submodule_dir, patch_name)
+        commit_patch(ext_dir, patch_name)
 
 
 def _exportable_reason(commits_oldest_first):
@@ -284,10 +295,18 @@ def export_commits_as_patches(name, ext_dir, resolved_git_tag, patch_dir):
     for commit_hash, msg in commits:
         # Capture raw bytes: text-mode capture would translate CRLF line endings
         # in the diff to LF, corrupting patches that touch CRLF files.
+        # Expand gitlink changes back into ordinary file diffs so exported patches can be applied
+        # to a fresh checkout with either `patch -p1` or `git apply`.
         diff_proc = subprocess.run(
-            ['git', 'diff', f'{commit_hash}^', commit_hash], cwd=ext_dir, capture_output=True, check=True
+            ['git', 'diff', '--submodule=diff', f'{commit_hash}^', commit_hash],
+            cwd=ext_dir,
+            capture_output=True,
+            check=True,
         )
-        (patch_dir / msg).write_bytes(diff_proc.stdout)
+        diff = b''.join(
+            line for line in diff_proc.stdout.splitlines(keepends=True) if not line.startswith(b'Submodule ')
+        )
+        (patch_dir / msg).write_bytes(diff)
         print(f"    Exported: {msg}")
 
     print(f"  {name}: wrote {len(commits)} patch(es) to .github/patches/extensions/{name}/")
@@ -372,7 +391,7 @@ def sync_extension(ext, external_dir, repo_root):
             run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches and not skip_patches:
-            apply_patches_as_commits(ext_dir, patch_dir, patches)
+            apply_patches_as_commits(ext_dir, patch_dir, patches, submodules)
 
         print(f"  Cloned {name} @ {git_tag}")
     elif skip_patches:
@@ -420,7 +439,7 @@ def sync_extension(ext, external_dir, repo_root):
             run_cmd(['git', 'submodule', 'update', '--init', '--force', '--'] + submodules, cwd=ext_dir)
 
         if patches:
-            apply_patches_as_commits(ext_dir, patch_dir, patches)
+            apply_patches_as_commits(ext_dir, patch_dir, patches, submodules)
 
         print(f"  {'Force-reset' if force else 'Updated'} {name} @ {git_tag}")
 
