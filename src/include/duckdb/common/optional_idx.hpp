@@ -15,9 +15,10 @@ namespace duckdb {
 
 class optional_idx {
 public:
-	optional_idx() {
+	constexpr optional_idx() {
 	}
-	optional_idx(idx_t index) : index(index) { // NOLINT: allow implicit conversion from idx_t
+	// NOLINTNEXTLINE: allow implicit conversion from idx_t
+	constexpr optional_idx(idx_t index_p) : index(index_p) {
 	}
 
 	static optional_idx Invalid() {

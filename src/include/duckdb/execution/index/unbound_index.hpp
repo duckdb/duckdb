@@ -61,7 +61,7 @@ struct BufferedIndexReplays {
 	}
 };
 
-class UnboundIndex final : public Index {
+class UnboundIndex : public Index {
 private:
 	//! The CreateInfo of the index.
 	unique_ptr<CreateInfo> create_info;

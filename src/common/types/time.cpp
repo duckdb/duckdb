@@ -316,6 +316,12 @@ bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 	if (microseconds < 0 || microseconds > 1000000) {
 		return false;
 	}
+	// a leap second (or a full second of microseconds) is allowed, as long as the time does not exceed 24:00:00
+	const int64_t total_micros =
+	    ((int64_t(hour) * 60 + minute) * 60 + second) * Interval::MICROS_PER_SEC + microseconds;
+	if (total_micros > Interval::MICROS_PER_DAY) {
+		return false;
+	}
 	return true;
 }
 

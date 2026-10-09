@@ -969,3 +969,10 @@ TEST_CASE("Test ClientInterruptState suppresses interrupts after irreversible op
 		REQUIRE_NO_FAIL(con.Query("DROP TABLE suppress_test"));
 	}
 }
+
+TEST_CASE("Test ExtractStatements error location", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_THROWS_WITH(con.ExtractStatements("FROM (VALUES ('1', '2'), ('1'))"),
+	                    Catch::Matchers::Contains("LINE 1: FROM (VALUES ('1', '2'), ('1'))"));
+}
