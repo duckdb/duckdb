@@ -30,25 +30,39 @@ SELECT strlen(a) FROM read_parquet('{TEST_DIR}/bound_plan_strings.parquet', boun
 statement ok
 COPY (SELECT '9' v UNION ALL SELECT '10') TO '{TEST_DIR}/bound_plan_numeric.parquet' (FORMAT parquet)
 
+statement ok
+COPY (SELECT 9::BIGINT v UNION ALL SELECT 10::BIGINT) TO '{TEST_DIR}/bound_plan_identity.parquet' (FORMAT parquet)
+
+# These two plans test the ordinary min/max metadata optimization. State-export
+# verification changes the aggregate shape, so restore that mode before results.
+statement ok
+SET VARIABLE bound_schema_saved_state_export = current_setting('debug_verify_aggregate_state_export')
+
+statement ok
+SET debug_verify_aggregate_state_export = false
+
 # Numeric ordering cannot use the physical string min/max accessor.
 query II
 EXPLAIN SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_numeric.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
 ----
 physical_plan	<REGEX>:.*READ_PARQUET.*
 
-query II
-SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_numeric.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
-----
-9	10
-
-statement ok
-COPY (SELECT 9::BIGINT v UNION ALL SELECT 10::BIGINT) TO '{TEST_DIR}/bound_plan_identity.parquet' (FORMAT parquet)
-
 # Native partition min/max exactness remains usable for an identity mapping.
 query II
 EXPLAIN SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_identity.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
 ----
 physical_plan	<!REGEX>:.*READ_PARQUET.*
+
+statement ok
+SET debug_verify_aggregate_state_export = getvariable('bound_schema_saved_state_export')
+
+statement ok
+RESET VARIABLE bound_schema_saved_state_export
+
+query II
+SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_numeric.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)
+----
+9	10
 
 query II
 SELECT min(v), max(v) FROM read_parquet('{TEST_DIR}/bound_plan_identity.parquet', bound_schema={'v':'BIGINT'}, hive_partitioning=false)

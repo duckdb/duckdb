@@ -70,11 +70,34 @@ missing
 statement ok
 COPY (SELECT {'a':10,'bad':'not an integer'} s) TO '{TEST_DIR}/bound_nested.parquet' (FORMAT parquet)
 
-# Native child selection need not convert an unused invalid child.
+# Child projection is an optimizer contract. Check both modes locally, then restore
+# the caller's setting for the remaining reader and lifecycle coverage.
+statement ok
+SET VARIABLE bound_schema_saved_optimizer = current_setting('debug_disable_optimizer')
+
+statement ok
+SET debug_disable_optimizer = false
+
+# Optimized child selection need not convert an unused invalid child.
 query I
 SELECT s.a FROM read_parquet('{TEST_DIR}/bound_nested.parquet', bound_schema={'s':'STRUCT(a BIGINT, bad INTEGER, absent VARCHAR)'}, hive_partitioning=false)
 ----
 10
+
+# Without child projection, the reader converts the whole STRUCT.
+statement ok
+SET debug_disable_optimizer = true
+
+statement error
+SELECT s.a FROM read_parquet('{TEST_DIR}/bound_nested.parquet', bound_schema={'s':'STRUCT(a BIGINT, bad INTEGER, absent VARCHAR)'}, hive_partitioning=false)
+----
+Could not convert
+
+statement ok
+SET debug_disable_optimizer = getvariable('bound_schema_saved_optimizer')
+
+statement ok
+RESET VARIABLE bound_schema_saved_optimizer
 
 statement error
 SELECT s FROM read_parquet('{TEST_DIR}/bound_nested.parquet', bound_schema={'s':'STRUCT(a BIGINT, bad INTEGER, absent VARCHAR)'}, hive_partitioning=false)
