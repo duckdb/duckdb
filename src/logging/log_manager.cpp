@@ -53,6 +53,7 @@ RegisteredLoggingContext LogManager::RegisterLoggingContext(LoggingContext &cont
 }
 
 bool LogManager::RegisterLogSink(const string &name, shared_ptr<LogSink> &sink) {
+	unique_lock<mutex> lck(lock);
 	if (registered_log_sinks.find(name) != registered_log_sinks.end()) {
 		return false;
 	}
@@ -71,11 +72,25 @@ shared_ptr<Logger> LogManager::GlobalLoggerReference() {
 void LogManager::Flush() {
 	unique_lock<mutex> lck(lock);
 	log_sink->FlushAll();
+	for (auto &entry : enabled_log_sinks) {
+		if (entry.second.get() != log_sink.get()) {
+			entry.second->FlushAll();
+		}
+	}
 }
 
 shared_ptr<LogSink> LogManager::GetLogSink() {
 	unique_lock<mutex> lck(lock);
 	return log_sink;
+}
+
+shared_ptr<LogSink> LogManager::GetRegisteredLogSink(const string &name) {
+	unique_lock<mutex> lck(lock);
+	auto entry = registered_log_sinks.find(name);
+	if (entry == registered_log_sinks.end()) {
+		return nullptr;
+	}
+	return entry->second;
 }
 
 bool LogManager::CanScan(LoggingTargetTable table) {
@@ -120,6 +135,12 @@ void LogManager::WriteLogEntry(timestamp_t timestamp, const char *log_type, LogL
 	} else {
 		unique_lock<mutex> lck(lock);
 		log_sink->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
+		for (auto &entry : enabled_log_sinks) {
+			// a sink that is both the log sink and enabled gets every entry once
+			if (entry.second.get() != log_sink.get()) {
+				entry.second->WriteLogEntry(timestamp, log_level, log_type, log_message, context);
+			}
+		}
 	}
 }
 
@@ -222,6 +243,26 @@ void LogManager::SetLogSinkInternal(DatabaseInstance &db, const string &sink_nam
 		throw InvalidInputException("Log sink '%s' is not yet registered", sink_name);
 	}
 	config.storage = sink_name_to_lower;
+}
+
+void LogManager::EnableLogSink(const string &name) {
+	unique_lock<mutex> lck(lock);
+	auto entry = registered_log_sinks.find(name);
+	if (entry == registered_log_sinks.end()) {
+		throw InvalidInputException("Log sink '%s' is not registered", name);
+	}
+	enabled_log_sinks[name] = entry->second;
+}
+
+void LogManager::DisableLogSink(const string &name) {
+	unique_lock<mutex> lck(lock);
+	auto entry = enabled_log_sinks.find(name);
+	if (entry == enabled_log_sinks.end()) {
+		throw InvalidInputException("Log sink '%s' is not enabled", name);
+	}
+	// flush, so the entries it received stay readable
+	entry->second->FlushAll();
+	enabled_log_sinks.erase(entry);
 }
 
 void LogManager::UpdateLogSinkConfig(DatabaseInstance &db, case_insensitive_map_t<Value> &config_value) {

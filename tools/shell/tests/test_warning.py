@@ -94,3 +94,25 @@ def test_deprecated_shell_log_storage(shell):
     result = test.run()
     result.check_stdout("WARNING:")
     result.check_stdout("The log sink 'shell_log_storage' has been renamed to 'shell_log_sink'")
+
+
+def test_enable_shell_log_sink(shell):
+    # with logs going to memory, CLI warnings are no longer printed
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_logging(level = 'warning', storage = 'memory');")
+        .statement("SET logging_storage = 'memory';")
+    )
+    result = test.run()
+    assert "the logging_storage setting is deprecated" not in result.stdout
+
+    # enabling the shell sink prints them again, while they still go to memory
+    test = (
+        ShellTest(shell)
+        .statement("CALL enable_logging(level = 'warning', storage = 'memory');")
+        .statement("CALL enable_log_sink('shell_log_sink');")
+        .statement("SET logging_storage = 'memory';")
+        .statement("SELECT count(*) FROM duckdb_logs WHERE message LIKE 'the logging_storage setting is deprecated%';")
+    )
+    result = test.run()
+    result.check_stdout("the logging_storage setting is deprecated")

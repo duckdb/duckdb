@@ -213,6 +213,70 @@ TEST_CASE("Test pluggable log sink", "[logging][.]") {
 	REQUIRE(my_log_sink->log_store.find("HELLO, BRO") != my_log_sink->log_store.end());
 }
 
+// Counts how often each message was written
+class CountingLogSink : public MyLogSink {
+public:
+	void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type, const string &log_message,
+	                   const RegisteredLoggingContext &context) override {
+		MyLogSink::WriteLogEntry(timestamp, level, log_type, log_message, context);
+		message_counts[log_message]++;
+	}
+
+	unordered_map<string, idx_t> message_counts;
+};
+
+TEST_CASE("Test multiple log sinks", "[logging]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &log_manager = db.instance->GetLogManager();
+
+	auto sink_a = make_shared_ptr<MyLogSink>();
+	auto sink_b = make_shared_ptr<MyLogSink>();
+	duckdb::shared_ptr<LogSink> sink_a_ptr = sink_a;
+	duckdb::shared_ptr<LogSink> sink_b_ptr = sink_b;
+	REQUIRE(log_manager.RegisterLogSink("sink_a", sink_a_ptr));
+	REQUIRE(log_manager.RegisterLogSink("sink_b", sink_b_ptr));
+	REQUIRE(log_manager.GetRegisteredLogSink("sink_a").get() == sink_a.get());
+	REQUIRE(!log_manager.GetRegisteredLogSink("sink_c"));
+
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	log_manager.EnableLogSink("sink_a");
+	// enable_log_sink uses the sink that is already registered under this name
+	REQUIRE_NO_FAIL(con.Query("call enable_log_sink('sink_b');"));
+
+	REQUIRE_NO_FAIL(con.Query("select write_log('BEFORE DISABLE');"));
+	REQUIRE(sink_a->log_store.count("BEFORE DISABLE") == 1);
+	REQUIRE(sink_b->log_store.count("BEFORE DISABLE") == 1);
+
+	log_manager.DisableLogSink("sink_a");
+	REQUIRE_NO_FAIL(con.Query("select write_log('AFTER DISABLE');"));
+	REQUIRE(sink_a->log_store.count("AFTER DISABLE") == 0);
+	REQUIRE(sink_b->log_store.count("AFTER DISABLE") == 1);
+
+	REQUIRE_NO_FAIL(con.Query("call disable_log_sink('sink_b');"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('BOTH DISABLED');"));
+	REQUIRE(sink_b->log_store.count("BOTH DISABLED") == 0);
+
+	REQUIRE_THROWS_WITH(log_manager.EnableLogSink("sink_c"), Catch::Matchers::Contains("is not registered"));
+	REQUIRE_THROWS_WITH(log_manager.DisableLogSink("sink_a"), Catch::Matchers::Contains("is not enabled"));
+}
+
+TEST_CASE("Test a log sink that is also enabled gets each entry once", "[logging]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	auto &log_manager = db.instance->GetLogManager();
+
+	auto counting_sink = make_shared_ptr<CountingLogSink>();
+	duckdb::shared_ptr<LogSink> counting_ptr = counting_sink;
+	REQUIRE(log_manager.RegisterLogSink("counting_sink", counting_ptr));
+
+	REQUIRE_NO_FAIL(con.Query("set enable_logging=true;"));
+	REQUIRE_NO_FAIL(con.Query("set logging_sink='counting_sink';"));
+	REQUIRE_NO_FAIL(con.Query("call enable_log_sink('counting_sink');"));
+	REQUIRE_NO_FAIL(con.Query("select write_log('ONCE');"));
+	REQUIRE(counting_sink->message_counts["ONCE"] == 1);
+}
+
 static bool ContainsMessage(const unordered_set<string> &messages, const string &needle) {
 	for (auto &message : messages) {
 		if (StringUtil::Contains(message, needle)) {

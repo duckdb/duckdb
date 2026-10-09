@@ -1,0 +1,165 @@
+# name: test/sql/logging/logging_multiple_sinks.test
+# description: Enable additional log sinks and read them with duckdb_logs(sink=...)
+# group: [logging]
+
+statement ok
+CALL enable_logging()
+
+# a name that no sink is registered under gets a new in-memory sink
+statement ok
+CALL enable_log_sink('sink1')
+
+statement ok
+CALL enable_log_sink('sink2')
+
+statement ok
+SELECT write_log('to all sinks')
+
+# the log sink and both enabled sinks receive the entry
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'to all sinks'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs(sink='sink1') WHERE message = 'to all sinks'
+----
+1
+
+query I
+SELECT count(*) FROM duckdb_logs(sink='sink2') WHERE message = 'to all sinks'
+----
+1
+
+# a sink only receives the entries written after it was enabled
+statement ok
+CALL enable_log_sink('sink3')
+
+query I
+SELECT count(*) FROM duckdb_logs(sink='sink3') WHERE message = 'to all sinks'
+----
+0
+
+# a disabled sink stops receiving entries, but keeps the ones it has
+statement ok
+CALL disable_log_sink('sink1')
+
+# including the entries of the query that disabled it
+query I
+SELECT count(*) FROM duckdb_logs(sink='sink1') WHERE starts_with(message, 'CALL disable_log_sink')
+----
+1
+
+statement ok
+SELECT write_log('after disable')
+
+query I
+SELECT message FROM duckdb_logs(sink='sink1') WHERE message IN ('to all sinks', 'after disable')
+----
+to all sinks
+
+query I
+SELECT message FROM duckdb_logs(sink='sink2') WHERE message IN ('to all sinks', 'after disable') ORDER BY message
+----
+after disable
+to all sinks
+
+# enabling it again continues with the same sink
+statement ok
+CALL enable_log_sink('sink1')
+
+statement ok
+SELECT write_log('enabled again')
+
+query I
+SELECT message FROM duckdb_logs(sink='sink1') WHERE message IN ('to all sinks', 'after disable', 'enabled again') ORDER BY message
+----
+enabled again
+to all sinks
+
+# sink names are case insensitive, and enabling an enabled sink changes nothing
+statement ok
+CALL enable_log_sink('SINK2')
+
+statement ok
+SELECT write_log('once')
+
+query I
+SELECT count(*) FROM duckdb_logs(sink='sink2') WHERE message = 'once'
+----
+1
+
+statement ok
+CALL flush_logs()
+
+# truncating the log sink does not touch the enabled sinks
+statement ok
+CALL truncate_duckdb_logs()
+
+query I
+SELECT count(*) FROM duckdb_logs WHERE message = 'once'
+----
+0
+
+# the denormalized table of an enabled sink joins its own entries and contexts
+query II
+SELECT scope, message FROM duckdb_logs(sink='sink2', denormalized_table=true) WHERE message = 'once'
+----
+CONNECTION	once
+
+query I
+SELECT count(*) > 0 FROM duckdb_log_contexts(sink='sink2')
+----
+true
+
+# the stdout sink can be enabled, but it cannot be scanned
+statement ok
+CALL enable_log_sink('stdout')
+
+statement ok
+CALL disable_log_sink('stdout')
+
+query I
+SELECT count(*) FROM duckdb_logs(sink='stdout')
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_log_contexts(sink='stdout')
+----
+0
+
+query I
+SELECT count(*) FROM duckdb_logs(sink='stdout', denormalized_table=true)
+----
+0
+
+statement error
+CALL enable_log_sink('file')
+----
+Cannot enable the 'file' log sink with enable_log_sink because it requires a path
+
+statement error
+CALL enable_log_sink('')
+----
+The log sink name cannot be empty
+
+statement error
+CALL enable_log_sink(NULL)
+----
+The log sink name cannot be NULL
+
+statement error
+CALL disable_log_sink('not_enabled')
+----
+Log sink 'not_enabled' is not enabled
+
+statement error
+SELECT * FROM duckdb_logs(sink='unknown')
+----
+Log sink 'unknown' is not registered
+
+statement error
+SELECT * FROM duckdb_log_contexts(sink='unknown')
+----
+Log sink 'unknown' is not registered
