@@ -22,6 +22,7 @@
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
+#include "duckdb/transaction/update_rows_info.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -393,6 +394,12 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data, CommitInfo &info)
 		info->version_number = commit_id;
 		break;
 	}
+	case UndoFlags::UPDATE_ROWS: {
+		auto info = reinterpret_cast<UpdateRowsInfo *>(data);
+		info->commit_id = commit_id;
+		info->version_info->ReplaceUpdateWriter(transaction.GetTransactionId(), commit_id);
+		break;
+	}
 	case UndoFlags::ATTACHED_DATABASE:
 	case UndoFlags::SEQUENCE_VALUE: {
 		break;
@@ -439,6 +446,12 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		// update:
 		auto info = reinterpret_cast<UpdateInfo *>(data);
 		info->version_number = transaction_id;
+		break;
+	}
+	case UndoFlags::UPDATE_ROWS: {
+		auto info = reinterpret_cast<UpdateRowsInfo *>(data);
+		// revert the commit by writing the (uncommitted) transaction_id back into the version info
+		info->version_info->ReplaceUpdateWriter(info->commit_id, transaction_id);
 		break;
 	}
 	case UndoFlags::ATTACHED_DATABASE:

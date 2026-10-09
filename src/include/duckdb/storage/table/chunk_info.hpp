@@ -12,6 +12,7 @@
 #include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/transaction/transaction_data.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/bitset.hpp"
 
 namespace duckdb {
 class RowGroup;
@@ -51,6 +52,20 @@ enum class VersionCompressionResult : uint8_t {
 //! ARRAY    - per-row delete ids materialized in deleted_data
 enum class DeleteIdState : uint8_t { CONSTANT, MASKED, ARRAY };
 
+//! The rows of a vector that an update writer (an index into the update writers of the row group, see
+//! RowVersionManager) wrote
+struct WriterRows {
+	uint32_t writer;
+	bitset<STANDARD_VECTOR_SIZE> rows;
+};
+
+//! The writers of the rows of a vector: the last writer of each row, and the writer before it if a transaction might
+//! not see that one yet. A row is in the rows of at most one last and one previous writer
+struct RowUpdateWriters {
+	vector<WriterRows> last;
+	vector<WriterRows> previous;
+};
+
 class ChunkVectorInfo {
 public:
 	explicit ChunkVectorInfo(FixedSizeAllocator &allocator, idx_t start, transaction_t insert_id = 0);
@@ -69,6 +84,10 @@ public:
 	bool Fetch(TransactionData transaction, row_t row);
 	//! Whether any of the rows (ids[i] - offset) was deleted by another transaction
 	bool HasConflictingDelete(transaction_t transaction_id, const row_t ids[], idx_t count, row_t offset) const;
+	//! Whether any of the rows (ids[i] - offset) was updated by a transaction that the view does not see (writers are
+	//! the update writers of the row group)
+	bool HasConflictingUpdate(const SnapshotView &view, const vector<transaction_t> &writers, const row_t ids[],
+	                          idx_t count, row_t offset) const;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end);
 	bool Cleanup(VisibilityBound lowest_visibility_bound) const;
 	string ToString(idx_t max_count) const;
@@ -80,15 +99,18 @@ public:
 	//! In case we delete rows that were already deleted
 	//! Note that "rows" is written to to reflect the row ids that were actually deleted
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
-	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
+	//! Throws if one of the rows was deleted by another transaction or updated by one that the transaction does not see
+	idx_t Delete(TransactionData transaction, const vector<transaction_t> &writers, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, const DeleteInfo &info);
-	//! Records the updated columns, throws if another transaction deleted one of the rows (ids[i] - offset)
-	void Update(transaction_t transaction_id, const vector<PhysicalIndex> &column_ids, const row_t ids[], idx_t count,
-	            row_t offset);
-	//! The (sorted) columns that were updated in this vector
-	const vector<storage_t> &UpdatedColumns() const {
-		return updated_columns;
-	}
+	//! Makes writer (an index into the update writers of the row group) the last writer of the rows (ids[i] - offset).
+	//! Throws if one of the rows was deleted by another transaction or updated by one that the transaction does not
+	//! see. Writers that all transactions see (below lowest_visibility_bound) are forgotten
+	void Update(TransactionData transaction, const vector<transaction_t> &writers, uint32_t writer, const row_t ids[],
+	            idx_t count, row_t offset, VisibilityBound lowest_visibility_bound);
+	//! Forgets the writers of the rows
+	void ClearUpdates();
+	//! Replaces each writer of the rows by mapping[writer]
+	void RemapUpdateWriters(const vector<uint32_t> &mapping);
 
 	//! Attempts to compress the per-row insert/delete ids into constants. Ids that precede
 	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse
@@ -155,8 +177,8 @@ private:
 	//! until a further delete re-arms it). CompressVersionIds returns the cached SETTLED without
 	//! re-scanning the ids while this is false.
 	bool recheck_compression = true;
-	//! The columns that were updated in this vector, so a delete only checks those for conflicting updates
-	vector<storage_t> updated_columns;
+	//! The writers of the rows that a transaction might not see yet (if any), to detect conflicting writes
+	unique_ptr<RowUpdateWriters> row_writers;
 };
 
 } // namespace duckdb

@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/storage/checkpoint/row_group_writer.hpp"
 
@@ -38,14 +39,16 @@ public:
 	void RevertAppend(idx_t new_count);
 	void CleanupAppend(VisibilityBound lowest_visibility_bound, idx_t row_group_start, idx_t count);
 
-	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
-	//! Records an update of the columns of the rows (ids[i] - offset) of the vector, throws if another transaction
-	//! deleted one of them
-	void UpdateRows(transaction_t transaction_id, idx_t vector_idx, const vector<PhysicalIndex> &column_ids,
-	                const row_t ids[], idx_t count, row_t offset);
-	//! The columns updated in the vector
-	vector<storage_t> GetUpdatedColumns(idx_t vector_idx);
+	idx_t DeleteRows(idx_t vector_idx, TransactionData transaction, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info);
+	//! Whether the transaction marked rows of this row group as updated (and has an undo entry for them)
+	bool HasUpdatedRows(transaction_t transaction_id);
+	//! Marks the rows (ids[i] - offset) of the vector as updated by the transaction (see ChunkVectorInfo::Update)
+	void UpdateRows(idx_t vector_idx, TransactionData transaction, const row_t ids[], idx_t count, row_t offset,
+	                VisibilityBound lowest_visibility_bound);
+	//! Replaces the id old_id of an update writer by new_id: a commit (transaction id to commit id), the revert of a
+	//! commit, or a rollback (to 0, which leaves the previous writers of the rows)
+	void ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id);
 
 	//! Attempts to compress the per-row insert/delete ids of each vector into constants. Ids that precede
 	//! lowest_visibility_bound look the same to every active and future transaction, so they can collapse.
@@ -65,6 +68,13 @@ private:
 	mutex version_lock;
 	FixedSizeAllocator allocator;
 	vector<unique_ptr<ChunkVectorInfo>> vector_info;
+	//! The transactions that updated rows of this row group, indexed by the writers of the rows (see
+	//! RowUpdateWriters): a transaction id, its commit id once committed, or 0 once rolled back. Index 0 is no writer
+	vector<transaction_t> update_writers;
+	//! The writer index of each transaction that updates rows of this row group, until it commits or rolls back
+	unordered_map<transaction_t, uint32_t> transaction_writers;
+	//! The number of update writers at which a new writer first compacts them
+	idx_t compact_update_writers_at = 64;
 	//! The newest and the oldest delete commit that has not been written by a checkpoint yet
 	optional_idx newest_uncheckpointed_delete_commit;
 	optional_idx oldest_uncheckpointed_delete_commit;
@@ -80,6 +90,8 @@ private:
 	}
 	optional_ptr<ChunkVectorInfo> GetChunkInfo(idx_t vector_idx);
 	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
+	//! Forgets the update writers that all transactions see, or that rolled back
+	void CompactUpdateWriters(VisibilityBound lowest_visibility_bound);
 	void FillVectorInfo(idx_t vector_idx);
 };
 

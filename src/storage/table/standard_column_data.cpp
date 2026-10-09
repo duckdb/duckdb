@@ -332,12 +332,6 @@ bool StandardColumnData::HasAnyChanges() const {
 	return ColumnData::HasAnyChanges() || validity->HasAnyChanges();
 }
 
-bool StandardColumnData::HasConflictingUpdate(TransactionData transaction, idx_t vector_index, const row_t rows[],
-                                              idx_t count) const {
-	return ColumnData::HasConflictingUpdate(transaction, vector_index, rows, count) ||
-	       validity->HasConflictingUpdate(transaction, vector_index, rows, count);
-}
-
 PersistentColumnData StandardColumnData::Serialize() {
 	auto persistent_data = ColumnData::Serialize();
 	persistent_data.child_columns.push_back(validity->Serialize());

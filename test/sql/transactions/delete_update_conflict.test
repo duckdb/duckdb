@@ -526,7 +526,7 @@ SELECT * FROM t14 ORDER BY id
 ----
 1	new
 
-# ALTER shares the version info that recorded the updated columns with row groups of the new column layout
+# ALTER shares the version info with the row groups of the new column layout
 statement ok
 CREATE TABLE t17 (a INTEGER, b INTEGER, c INTEGER);
 
@@ -562,7 +562,7 @@ Conflict on tuple deletion
 statement ok con2
 ROLLBACK
 
-# the cleanup of an append keeps the version info that recorded an update of the appended rows
+# the cleanup of an append keeps the version info that marks an update of the appended rows
 statement ok
 CREATE TABLE t18 (id INTEGER, v INTEGER);
 

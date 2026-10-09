@@ -195,30 +195,94 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 	return *vector_info[vector_idx];
 }
 
-idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
+idx_t RowVersionManager::DeleteRows(idx_t vector_idx, TransactionData transaction, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
 	needs_compression_check = true;
-	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
+	return GetVectorInfo(vector_idx).Delete(transaction, update_writers, rows, count);
 }
 
-void RowVersionManager::UpdateRows(transaction_t transaction_id, idx_t vector_idx,
-                                   const vector<PhysicalIndex> &column_ids, const row_t ids[], idx_t count,
-                                   row_t offset) {
+bool RowVersionManager::HasUpdatedRows(transaction_t transaction_id) {
 	lock_guard<mutex> lock(version_lock);
-	if (!GetChunkInfo(vector_idx)) {
-		// the info created below starts with an armed compression check
-		needs_compression_check = true;
-	}
-	GetVectorInfo(vector_idx).Update(transaction_id, column_ids, ids, count, offset);
+	return transaction_writers.find(transaction_id) != transaction_writers.end();
 }
 
-vector<storage_t> RowVersionManager::GetUpdatedColumns(idx_t vector_idx) {
+void RowVersionManager::UpdateRows(idx_t vector_idx, TransactionData transaction, const row_t ids[], idx_t count,
+                                   row_t offset, VisibilityBound lowest_visibility_bound) {
 	lock_guard<mutex> lock(version_lock);
-	auto chunk_info = GetChunkInfo(vector_idx);
-	if (!chunk_info) {
-		return vector<storage_t>();
+	needs_compression_check = true;
+	auto transaction_id = transaction.GetTransactionId();
+	auto entry = transaction_writers.find(transaction_id);
+	uint32_t writer;
+	if (entry == transaction_writers.end()) {
+		if (update_writers.size() >= compact_update_writers_at) {
+			CompactUpdateWriters(lowest_visibility_bound);
+			compact_update_writers_at = MaxValue<idx_t>(64, 2 * update_writers.size());
+		}
+		if (update_writers.empty()) {
+			// index 0 is no writer
+			update_writers.push_back(0);
+		}
+		writer = NumericCast<uint32_t>(update_writers.size());
+		update_writers.push_back(transaction_id);
+		transaction_writers[transaction_id] = writer;
+	} else {
+		writer = entry->second;
 	}
-	return chunk_info->UpdatedColumns();
+	GetVectorInfo(vector_idx).Update(transaction, update_writers, writer, ids, count, offset, lowest_visibility_bound);
+}
+
+void RowVersionManager::ReplaceUpdateWriter(transaction_t old_id, transaction_t new_id) {
+	lock_guard<mutex> lock(version_lock);
+	needs_compression_check = true;
+	auto entry = transaction_writers.find(old_id);
+	if (entry != transaction_writers.end()) {
+		update_writers[entry->second] = new_id;
+		transaction_writers.erase(entry);
+		return;
+	}
+	// e.g. reverting a commit, whose commit id is not registered
+	for (idx_t writer = 1; writer < update_writers.size(); writer++) {
+		if (update_writers[writer] == old_id) {
+			update_writers[writer] = new_id;
+			return;
+		}
+	}
+}
+
+void RowVersionManager::CompactUpdateWriters(VisibilityBound lowest_visibility_bound) {
+	vector<uint32_t> mapping(update_writers.size(), 0);
+	vector<transaction_t> compacted_writers {0};
+	for (idx_t writer = 1; writer < update_writers.size(); writer++) {
+		auto writer_id = update_writers[writer];
+		if (writer_id != 0 && writer_id >= lowest_visibility_bound) {
+			mapping[writer] = NumericCast<uint32_t>(compacted_writers.size());
+			compacted_writers.push_back(writer_id);
+		}
+	}
+	if (compacted_writers.size() == update_writers.size()) {
+		// every writer is still needed
+		return;
+	}
+	if (compacted_writers.size() == 1) {
+		// no write of a row can conflict with the updates anymore
+		D_ASSERT(transaction_writers.empty());
+		for (auto &info : vector_info) {
+			if (info) {
+				info->ClearUpdates();
+			}
+		}
+		update_writers.clear();
+		return;
+	}
+	for (auto &info : vector_info) {
+		if (info) {
+			info->RemapUpdateWriters(mapping);
+		}
+	}
+	for (auto &entry : transaction_writers) {
+		entry.second = mapping[entry.second];
+	}
+	update_writers = std::move(compacted_writers);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, const DeleteInfo &info) {
@@ -249,6 +313,9 @@ void RowVersionManager::CompressVersionIds(VisibilityBound lowest_visibility_bou
 		}
 #endif
 		return;
+	}
+	if (!update_writers.empty()) {
+		CompactUpdateWriters(lowest_visibility_bound);
 	}
 	bool pending = false;
 	for (auto &info : vector_info) {
