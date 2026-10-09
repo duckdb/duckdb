@@ -1258,6 +1258,9 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_claim_batch_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_claim_batch_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_factory_create_common_type)
+	(duckdb_v2_factory_handle factory, const duckdb_v2_logical_type_handle *types, idx_t type_count,
+	 duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 } duckdb_ext_api_v2;
 
 //===--------------------------------------------------------------------===//
@@ -1843,6 +1846,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_claim_batch_get_user_data = duckdb_v2_table_function_claim_batch_get_user_data;
 	result.duckdb_v2_table_function_claim_batch_set_claimed = duckdb_v2_table_function_claim_batch_set_claimed;
 	result.duckdb_v2_table_function_set_claim_batch_callback = duckdb_v2_table_function_set_claim_batch_callback;
+	result.duckdb_v2_factory_create_common_type = duckdb_v2_factory_create_common_type;
 	return result;
 }
 

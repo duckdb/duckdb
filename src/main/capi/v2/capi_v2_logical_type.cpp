@@ -211,6 +211,27 @@ Value TypeParamValue(const LogicalType &type, idx_t index, duckdb_v2_identifier_
 }
 
 } // anonymous namespace
+
+auto ResolveCommonType(CV2Factory &factory, const vector<LogicalType> &types) -> LogicalType {
+	D_ASSERT(!types.empty());
+	auto context = factory.TryGetClientContext();
+	auto result = types[0];
+	for (idx_t i = 1; i < types.size(); i++) {
+		auto &type = types[i];
+		if (context) {
+			result = LogicalType::MaxLogicalType(*context, result, type);
+			continue;
+		}
+		LogicalType max_type;
+		if (!LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(result, type, max_type)) {
+			throw NotImplementedException("Cannot combine types %s and %s - an explicit cast is required",
+			                              result.ToString(), type.ToString());
+		}
+		result = std::move(max_type);
+	}
+	return result;
+}
+
 } // namespace duckdb::capiv2
 
 // ---------------------------------------------------------------------------
@@ -467,4 +488,31 @@ DUCKDB_V2_ERROR duckdb_v2_factory_create_type_with_alias(duckdb_v2_factory_handl
 	DUCKDB_CHECK_ARG(alias_name);
 	DUCKDB_CHECK_ARG(out_type);
 	return WithErrorHandler(err, [&]() { *out_type = Convert(AliasOf(base_type, alias_name, out_type)); });
+}
+
+DUCKDB_V2_ERROR duckdb_v2_factory_create_common_type(duckdb_v2_factory_handle factory,
+                                                     const duckdb_v2_logical_type_handle *types, idx_t type_count,
+                                                     duckdb_v2_logical_type_handle *out_type,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(factory);
+	DUCKDB_CHECK_ARG(out_type);
+	*out_type = nullptr;
+	return WithErrorHandler(err, [&]() {
+		if (type_count == 0 || !types) {
+			throw duckdb::InvalidInputException("cannot resolve the common type of an empty set");
+		}
+		duckdb::vector<duckdb::LogicalType> input_types;
+		input_types.reserve(type_count);
+		for (idx_t i = 0; i < type_count; i++) {
+			if (!types[i]) {
+				throw duckdb::InvalidInputException("type %llu is null", i);
+			}
+			auto type = Convert(types[i]);
+			if (type->id() == duckdb::LogicalTypeId::ANY) {
+				throw duckdb::InvalidInputException("cannot resolve the common type of ANY");
+			}
+			input_types.push_back(*type);
+		}
+		*out_type = Convert(ResolveCommonType(*Convert(factory), input_types));
+	});
 }

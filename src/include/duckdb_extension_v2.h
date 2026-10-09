@@ -1324,6 +1324,9 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_claim_batch_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_claim_batch_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_factory_create_common_type)
+	(duckdb_v2_factory_handle factory, const duckdb_v2_logical_type_handle *types, idx_t type_count,
+	 duckdb_v2_logical_type_handle *out_type, duckdb_v2_error_info_handle *err);
 #endif
 	// capigen:end appended
 } duckdb_ext_api_v2;
@@ -1998,6 +2001,9 @@ typedef struct {
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_table_function_set_claim_batch_callback                                                              \
 	duckdb_ext_api.duckdb_v2_table_function_set_claim_batch_callback
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_factory_create_common_type duckdb_ext_api.duckdb_v2_factory_create_common_type
 #endif
 // capigen:end appended
 #endif // DUCKDB_BUILD_STATIC_EXTENSION

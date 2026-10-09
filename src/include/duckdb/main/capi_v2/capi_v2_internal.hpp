@@ -291,6 +291,10 @@ private:
 	CV2Instance &instance;
 };
 
+//! The common type of a non-empty set of types, folded left to right in the factory's scope. Throws
+//! NotImplementedException when there is none. Defined in capi_v2_logical_type.cpp.
+auto ResolveCommonType(CV2Factory &factory, const vector<LogicalType> &types) -> LogicalType;
+
 //! The SQL ATTACH `(KEY value)` options of one attach, as the text values a quoted literal produces. Bound to the
 //! instance handle it was created from, which is what future per-instance resources (an allocator, say) would be
 //! taken from.

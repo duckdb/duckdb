@@ -625,3 +625,47 @@ functions:
         kind: OUT
         description: "Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy."
     return_type: ERROR
+  factory_create_common_type:
+    lifecycle:
+      - [ "unstable", "v2.0.0", "2026-10-09" ]
+    description: |
+      Creates the common type of a set of logical types.
+
+      The common type is the type every input implicitly casts to, resolved by
+      the same rule a SQL list literal and value_create_list follow:
+      INTEGER and BIGINT resolve to BIGINT, and DECIMAL(4,1) and DECIMAL(5,4)
+      to DECIMAL(7,4). The types are combined pairwise from left to right, and
+      the result is not guaranteed to be independent of their order.
+
+      A connection's or a callback's factory also applies the casts that
+      extensions registered, while an instance's factory knows only the
+      built-in ones, so the two can resolve the same set differently. A single
+      type resolves to a copy of itself.
+
+      Returns ERROR_INPUT_INVALID for an empty set, for a NULL entry and for
+      ANY, and ERROR_QUERY_NOT_IMPLEMENTED when the types have no common type.
+    role: constructor
+    belongs_to: factory
+    parameters:
+      factory:
+        type: factory
+        description: The factory to resolve the type in.
+      types:
+        type: logical_type
+        indirection: 1
+        const: true
+        description: An array of type_count logical types. Borrowed.
+      type_count:
+        type: idx
+        description: The number of types. Must be at least 1.
+      out_type:
+        type: logical_type
+        indirection: 1
+        kind: OUT
+        description: Receives the new logical type handle.
+      err:
+        type: error_info
+        indirection: 1
+        kind: OUT
+        description: Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+    return_type: ERROR

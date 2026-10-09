@@ -8183,6 +8183,39 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_with_alias(duckdb_v2_
                                                                       duckdb_v2_logical_type_handle *out_type,
                                                                       duckdb_v2_error_info_handle *err);
 
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Creates the common type of a set of logical types.
+ *
+ * The common type is the type every input implicitly casts to, resolved by the same rule a SQL list literal and
+ * value_create_list follow: INTEGER and BIGINT resolve to BIGINT, and DECIMAL(4,1) and DECIMAL(5,4) to DECIMAL(7,4).
+ * The types are combined pairwise from left to right, and the result is not guaranteed to be independent of their
+ * order.
+ *
+ * A connection's or a callback's factory also applies the casts that extensions registered, while an instance's factory
+ * knows only the built-in ones, so the two can resolve the same set differently. A single type resolves to a copy of
+ * itself.
+ *
+ * Returns ERROR_INPUT_INVALID for an empty set, for a NULL entry and for ANY, and ERROR_QUERY_NOT_IMPLEMENTED when the
+ * types have no common type.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param factory The factory to resolve the type in.
+ * @param types An array of type_count logical types. Borrowed.
+ * @param type_count The number of types. Must be at least 1.
+ * @param out_type Receives the new logical type handle.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via error_info_destroy.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_common_type(duckdb_v2_factory_handle factory,
+                                                                  const duckdb_v2_logical_type_handle *types,
+                                                                  idx_t type_count,
+                                                                  duckdb_v2_logical_type_handle *out_type,
+                                                                  duckdb_v2_error_info_handle *err);
+#endif
+
 /* --- Struct definitions for logical_type --- */
 
 /* ============================================================================

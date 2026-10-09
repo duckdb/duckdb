@@ -764,22 +764,12 @@ duckdb::LogicalType ResolveChildType(CV2Factory &factory, duckdb_v2_logical_type
 		throw duckdb::InvalidInputException(std::string("cannot resolve the ") + what +
 		                                    " of an empty set; pass it explicitly");
 	}
-	auto context = factory.TryGetClientContext();
-	auto type = children[0].type();
-	for (idx_t i = 1; i < children.size(); i++) {
-		auto &child_type = children[i].type();
-		if (context) {
-			type = duckdb::LogicalType::MaxLogicalType(*context, type, child_type);
-			continue;
-		}
-		duckdb::LogicalType max_type;
-		if (!duckdb::LogicalType::DefaultTryGetMaxLogicalTypeUnchecked(type, child_type, max_type)) {
-			throw duckdb::NotImplementedException("Cannot combine types %s and %s - an explicit cast is required",
-			                                      type.ToString(), child_type.ToString());
-		}
-		type = std::move(max_type);
+	duckdb::vector<duckdb::LogicalType> types;
+	types.reserve(children.size());
+	for (auto &child : children) {
+		types.push_back(child.type());
 	}
-	return type;
+	return ResolveCommonType(factory, types);
 }
 
 duckdb::Value BuildList(CV2Factory &factory, duckdb_v2_logical_type_handle child_type,
