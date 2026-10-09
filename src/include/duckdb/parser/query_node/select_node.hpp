@@ -57,6 +57,9 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &deserializer);
+
+private:
+	vector<unique_ptr<ParsedExpression>> GetSelectListForSerialization(Serializer &serializer) const;
 };
 
 } // namespace duckdb

@@ -358,8 +358,8 @@ protected:
 		}
 	}
 
-	BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function,
-	                              idx_t depth) override {
+	BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth,
+	                              vector<unique_ptr<Expression>> bound_children) override {
 		return BindResult(BinderException::Unsupported(expr, "lambda functions are not allowed in PARTITION_PATH"));
 	}
 
