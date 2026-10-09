@@ -1,3 +1,18 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index e49e40e..63a1145 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -11,8 +11,8 @@ if(DEFINED DUCKDB_MODULE_BASE_DIR)
+     set(${EXTENSION_NAME}_CMAKE_ONLY_BUILD TRUE)
+ 
+     set(TARGET_DUCKDB_VERSION_MAJOR 1)
+-    set(TARGET_DUCKDB_VERSION_MINOR 2)
+-    set(TARGET_DUCKDB_VERSION_PATCH 0)
++    set(TARGET_DUCKDB_VERSION_MINOR 5)
++    set(TARGET_DUCKDB_VERSION_PATCH 6)
+ 
+     find_package(Git)
+     if(Git_FOUND)
 diff --git a/src/functions/odbc_connect.cpp b/src/functions/odbc_connect.cpp
 index 85f6334..41f7eaf 100644
 --- a/src/functions/odbc_connect.cpp
