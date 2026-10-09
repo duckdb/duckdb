@@ -290,11 +290,11 @@ typedef struct _duckdb_v2_value {
  * (`duckdb_v2_result_step()`) or draining (`duckdb_v2_result_fetch_chunk()`). Single consumer: step from one thread at
  * a time.
  *
- * A result is a cursor on the connection's execution, not a box of data. While it is live — not finished, cancelled,
- * errored, or destroyed — the connection refuses new queries with ERROR_RESOURCE_IN_USE, and the query's transaction
- * stays open, deferring version cleanup and checkpointing, so drain or destroy it promptly. Side-effecting statements
- * (PRAGMA, ALTER, ...) take effect only once the result is drained. Always destroy via `duckdb_v2_result_destroy()`,
- * which is safe even on a partially consumed stream.
+ * A result is a cursor on the connection's execution, not a box of data. While its statement runs — at most until it is
+ * finished, cancelled, errored, or destroyed — the connection refuses new queries with ERROR_RESOURCE_IN_USE, and the
+ * query's transaction stays open, deferring version cleanup and checkpointing, so drain or destroy it promptly.
+ * Side-effecting statements (PRAGMA, ALTER, ...) take effect only once the result is drained. Always destroy via
+ * `duckdb_v2_result_destroy()`, which is safe even on a partially consumed stream.
  */
 typedef struct _duckdb_v2_result {
 	void *internal_ptr;
@@ -2806,7 +2806,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_function_bind_get_user_data(duckdb_v2_fun
  *
  * The bind data is stored with the bound call site and retrievable from every later callback. The opaque handle bundles
  * the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional equality
- * callback used when comparing two bound call sites; without one, pointer equality is used.
+ * callback used when comparing two bound call sites; without one, pointer equality is used. Scalar functions set their
+ * bind data through `duckdb_v2_scalar_function_bind_set_bind_data()` instead.
  *
  * history:
  * - stable: v2.0.0
@@ -8536,9 +8537,18 @@ typedef struct _duckdb_v2_scalar_function {
 } * duckdb_v2_scalar_function_handle;
 
 /*!
+ * A borrowed opaque handle to the result of a scalar function's "resolve types" phase. The "resolve types" callback
+ * receives this handle next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments and the
+ * user data, and can use it to set the return type of the call site being bound.
+ */
+typedef struct _duckdb_v2_scalar_function_resolve_types_info {
+	void *internal_ptr;
+} * duckdb_v2_scalar_function_resolve_types_info_handle;
+
+/*!
  * A borrowed opaque handle to the result of a scalar function's "bind" phase. The "bind" callback receives this handle
- * next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments, the user data and the bind
- * data, and can use it to set the return type of the call site being bound.
+ * next to a `duckdb_v2_function_bind_info_handle`, which gives access to the arguments and the user data, and can use
+ * it to set the bind data of the call site being bound.
  */
 typedef struct _duckdb_v2_scalar_function_bind_info {
 	void *internal_ptr;
@@ -8565,6 +8575,10 @@ typedef struct _duckdb_v2_scalar_function_exec_info {
 /* --- Constants for scalar --- */
 
 /* --- Function pointer typedefs for scalar --- */
+
+typedef void (*duckdb_v2_scalar_function_resolve_types_callback_fn)(
+    duckdb_v2_function_bind_info_handle info, duckdb_v2_scalar_function_resolve_types_info_handle result,
+    duckdb_v2_context_handle context, duckdb_v2_error_info_handle *err);
 
 typedef void (*duckdb_v2_scalar_function_bind_callback_fn)(duckdb_v2_function_bind_info_handle info,
                                                            duckdb_v2_scalar_function_bind_info_handle result,
@@ -8710,12 +8724,35 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_property(duckdb_v2_sc
                                                                     duckdb_v2_error_info_handle *err);
 
 /*!
+ * Sets the optional resolve types callback of the scalar function.
+ *
+ * The resolve types callback is invoked during query planning for each call site of the function, before the arguments
+ * are cast to the parameter types of the signature. Through its `duckdb_v2_function_bind_info_handle` it can inspect
+ * the argument types as they were passed and constant argument values. Through its
+ * `duckdb_v2_scalar_function_resolve_types_info_handle` it can set a concrete return type. It cannot set "bind data",
+ * use the bind callback for that.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param function The function to set the resolve types callback of.
+ * @param callback The resolve types callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_resolve_types_callback(
+    duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_resolve_types_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+
+/*!
  * Sets the optional bind callback of the scalar function.
  *
- * The bind callback is invoked during query planning for each call site of the function. Through its
- * `duckdb_v2_function_bind_info_handle` it can inspect the argument types and constant argument values and set "bind
- * data" that is shared with the init and exec callbacks. Through its `duckdb_v2_scalar_function_bind_info_handle` it
- * can set a concrete return type.
+ * The bind callback is invoked during query planning for each call site of the function, after the resolve types
+ * callback and after the arguments have been cast to the parameter types of the signature. Through its
+ * `duckdb_v2_function_bind_info_handle` it can inspect the argument types and constant argument values. Through its
+ * `duckdb_v2_scalar_function_bind_info_handle` it can set "bind data" that is shared with the init and exec callbacks.
+ * It cannot change the types of the call site, use the resolve types callback for that.
  *
  * history:
  * - stable: v2.0.0
@@ -8779,15 +8816,35 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_set_exec_callback(
  * history:
  * - stable: v2.0.0
  *
- * @param info The bind info handle.
+ * @param info The resolve types info handle.
  * @param return_type The return type to set. Borrowed for the call only.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_return_type(
-    duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_resolve_types_set_return_type(
+    duckdb_v2_scalar_function_resolve_types_info_handle info, duckdb_v2_logical_type_handle return_type,
     duckdb_v2_error_info_handle *err);
+
+/*!
+ * Sets the function's "bind data" from the bind callback.
+ *
+ * The bind data is stored with the bound call site and retrievable from the init and exec callbacks. The opaque handle
+ * bundles the pointer with an optional destructor, invoked when the bind data is no longer needed, and an optional
+ * equality callback used when comparing two bound call sites; without one, pointer equality is used. Scalar functions
+ * set their bind data through this function, `duckdb_v2_function_bind_set_bind_data()` is not available to them.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param info The bind info handle.
+ * @param data Opaque handle bundling the bind data pointer plus optional destructor and equality callbacks.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_bind_set_bind_data(
+    duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 
 /*!
  * Retrieves the user data set via `duckdb_v2_scalar_function_set_user_data()`.
@@ -8970,9 +9027,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2
  *
  * The function is registered on the target given at creation: the connection's database or the loading extension.
  * Registration requires a name, an exec callback, and a signature with a complete return type; an ANY return type is
- * accepted only together with a bind callback that sets the concrete type per call site. The caller still owns the
- * handle after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect the
- * registered function.
+ * accepted only together with a resolve types callback that sets the concrete type per call site. The caller still owns
+ * the handle after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect
+ * the registered function.
  *
  * history:
  * - stable: v2.0.0
@@ -11548,8 +11605,8 @@ typedef struct _duckdb_v2_prepared_statement {
  * `ERROR_INPUT_INVALID` when the plan would not be reused, so a caller who wants the handle only for the speedup finds
  * out here rather than after silently taking the slow path.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result. Drain, destroy, or interrupt that result
- * first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
+ * Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running. Drain, destroy, or
+ * interrupt that result first, or prepare on another connection. `*out_prepared` is set to NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11593,9 +11650,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_prepared_statement_create(duckdb_v2_conne
  * parameter type that differs from the one the cached plan assumed, triggers a re-bind that is invisible apart from its
  * cost.
  *
- * Refuses with `ERROR_RESOURCE_IN_USE` while the connection has a live result; drain, destroy, or interrupt it first,
- * or execute on another connection. A failed execution, at any stage, leaves the prepared statement usable.
- * `*out_result` is set to NULL on failure.
+ * Refuses with `ERROR_RESOURCE_IN_USE` while a statement on the connection is still running; drain, destroy, or
+ * interrupt that result first, or execute on another connection. A failed execution, at any stage, leaves the prepared
+ * statement usable. `*out_result` is set to NULL on failure.
  *
  * history:
  * - stable: v2.0.0
@@ -11739,8 +11796,8 @@ typedef enum DUCKDB_V2_RESULT_STEP_STATUS {
  * with more than one row-producing statement cannot be streamed as a single result and reports
  * ERROR_QUERY_NOT_IMPLEMENTED; no known expansion produces one.
  *
- * One live result per connection: this refuses with ERROR_RESOURCE_IN_USE while the connection already has a live
- * result. Drain, destroy, or interrupt that one first, or open another connection.
+ * One running statement per connection: this refuses with ERROR_RESOURCE_IN_USE while a statement on the connection is
+ * still running. Drain, destroy, or interrupt that result first, or open another connection.
  *
  * Schema metadata — result type, statement type, column count, names, logical types — is available on the returned
  * handle immediately, before the first step.
@@ -11775,9 +11832,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_statement_execute(duckdb_v2_connection_ha
  * Destroys a result handle.
  *
  * Null-safe: passing nullptr or a slot already set to nullptr is a no-op. Frees the memory the result owns and releases
- * the connection for its next query. Safe at any point in the stream's life, though destroying a partially consumed
- * result abandons the remaining execution, including side effects not yet applied. Chunks already fetched are
- * caller-owned and stay valid. On success the slot is set to nullptr.
+ * the connection for its next query. Safe at any point in the stream's life. Destroying a result before its statement
+ * ended (drained, or stepped to FINISHED) aborts the statement. On autocommit, its writes are rolled back. Inside a
+ * transaction, a statement that may write invalidates the transaction, and a read-only statement just stops. Chunks
+ * already fetched are caller-owned and stay valid. On success the slot is set to nullptr.
  *
  * history:
  * - stable: v2.0.0
@@ -12118,6 +12176,16 @@ typedef struct _duckdb_v2_table_function_claim_batch_info {
 } * duckdb_v2_table_function_claim_batch_info_handle;
 
 /*!
+ * A borrowed opaque handle to the arguments supplied to a table function when the engine asks it to describe a bound
+ * call. The "get bind info" callback receives this handle, and can use it to describe the call in more detail than its
+ * columns: with identifiers of its columns (e.g. field ids), and with options - key-value facts about what the call
+ * reads.
+ */
+typedef struct _duckdb_v2_table_function_get_bind_info_info {
+	void *internal_ptr;
+} * duckdb_v2_table_function_get_bind_info_info_handle;
+
+/*!
  * An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already registered
  * table function that reads a single file, and adds everything that is needed to read many files at once on top of it:
  * globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Created with
@@ -12170,6 +12238,10 @@ typedef void (*duckdb_v2_table_function_partitioning_callback_fn)(
 typedef void (*duckdb_v2_table_function_claim_batch_callback_fn)(duckdb_v2_table_function_claim_batch_info_handle info,
                                                                  duckdb_v2_context_handle context,
                                                                  duckdb_v2_error_info_handle *err);
+
+typedef void (*duckdb_v2_table_function_get_bind_info_callback_fn)(
+    duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_context_handle context,
+    duckdb_v2_error_info_handle *err);
 
 /* --- Functions for table --- */
 
@@ -13511,13 +13583,69 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Attaches an identifier to a result column, or to a field nested inside one.
+ * Sets the optional "get bind info" callback of the table function.
  *
- * Identifiers are only consulted when the function reads a file as part of a multi-file function registered with
- * `duckdb_v2_multi_file_function_register()`, and are ignored otherwise. A multi-file reader can then map the columns
- * of every file onto the columns of the scan by identifier rather than by name - e.g. by the field ids of a file format
- * that carries them, so that renamed columns and fields are still found. An identifier is an INTEGER field id or a
- * VARCHAR name.
+ * The engine invokes the callback with the bind data of a bound call when it needs to know more about the call than its
+ * columns. E.g. a multi-file function registered with `duckdb_v2_multi_file_function_register()` asks the function it
+ * wraps for every file it binds: it maps the columns of the files onto the columns of its scan by the identifiers the
+ * callback reports, and exposes the options it reports as the metadata of the reader of the file. The callback may be
+ * invoked more than once for the same bind data, so it should only report what the bind already determined.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param function The function to set the callback of.
+ * @param callback The "get bind info" callback to set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_set_get_bind_info_callback(
+    duckdb_v2_table_function_handle function, duckdb_v2_table_function_get_bind_info_callback_fn callback,
+    duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the user data set via `duckdb_v2_table_function_set_user_data()`.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The get bind info handle.
+ * @param data Receives the user data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_get_user_data(
+    duckdb_v2_table_function_get_bind_info_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Retrieves the bind data the function's bind callback set for the bound call being described.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param info The get bind info handle.
+ * @param data Receives the bind data pointer, or null if none was set.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_get_bind_data(
+    duckdb_v2_table_function_get_bind_info_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Attaches an identifier to a result column of the bound call, or to a field nested inside one.
+ *
+ * A multi-file reader can then map the columns of every file onto the columns of its scan by identifier rather than by
+ * name - e.g. by the field ids of a file format that carries them, so that renamed columns and fields are still found.
+ * An identifier is an INTEGER field id or a VARCHAR name.
  *
  * The nested field is addressed by a path of child indexes, starting at the result column at `column_index`: a STRUCT
  * field by its index, the elements of a LIST or ARRAY by `0`, the keys of a MAP by `0` and its values by `1`, and a
@@ -13528,8 +13656,8 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(
  * history:
  * - unstable: v2.0.0
  *
- * @param info The bind info handle.
- * @param column_index The index of the result column, in the order the columns were declared.
+ * @param info The get bind info handle.
+ * @param column_index The index of the result column, in the order the bind callback declared the columns.
  * @param child_path The path of child indexes addressing the nested field, or null for the column itself.
  * @param child_path_length The number of entries in the path, 0 for the column itself.
  * @param identifier The identifier, an INTEGER or VARCHAR value. Borrowed and copied.
@@ -13537,33 +13665,32 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_result_column_identifier(
-    duckdb_v2_table_function_bind_info_handle info, idx_t column_index, const idx_t *child_path,
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_column_identifier(
+    duckdb_v2_table_function_get_bind_info_info_handle info, idx_t column_index, const idx_t *child_path,
     idx_t child_path_length, duckdb_v2_value_handle identifier, duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Adds an entry to the metadata of the file the function reads.
+ * Sets an option describing the bound call: a key-value fact about what the call reads, e.g. a property of the file it
+ * reads. Setting a key again replaces its value.
  *
- * File metadata is only consulted when the function reads a file as part of a multi-file function registered with
- * `duckdb_v2_multi_file_function_register()`, and is ignored otherwise: it is the key-value metadata the reader of the
- * file exposes to the multi-file reader, e.g. to a custom multi-file reader of another extension. Entries keep the
- * order in which they were added; adding a key again replaces its value.
+ * A multi-file function registered with `duckdb_v2_multi_file_function_register()` exposes the options of the function
+ * it wraps as the metadata of the reader of each file, e.g. to a custom multi-file reader of another extension.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param info The bind info handle.
- * @param key The key of the entry. Borrowed and copied.
- * @param value The value of the entry. Borrowed and copied.
+ * @param info The get bind info handle.
+ * @param key The key of the option. Borrowed and copied.
+ * @param value The value of the option. Borrowed and copied.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR
-duckdb_v2_table_function_bind_add_file_metadata(duckdb_v2_table_function_bind_info_handle info, duckdb_v2_str *key,
-                                                duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_get_bind_info_set_option(
+    duckdb_v2_table_function_get_bind_info_info_handle info, duckdb_v2_str *key, duckdb_v2_value_handle value,
+    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -13638,12 +13765,19 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_name(duckdb_v2_mu
 /*!
  * Sets the name of the table function that reads a single file, which the multi-file function wraps.
  *
- * The single-file function must be registered before the multi-file function is, and must take the path of the file to
- * read as its only positional VARCHAR parameter. It is bound once for every file that is read, and every named
- * parameter it declares is also a named parameter of the multi-file function, forwarded to it as given. Everything that
- * involves several files - globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the
- * like - is provided by the multi-file function on top of it. The name is borrowed and copied. A single-file function
- * must be set before registration.
+ * The single-file function must be registered before the multi-file function is, and must take the file to read as its
+ * only positional parameter, of type ANY. It is bound once for every file that is read, and receives the file the way a
+ * multi-file function takes one: as the VARCHAR path of the file when there is nothing more to know about it, and
+ * otherwise as a STRUCT holding the path in its `filename` field and the options to open the file with in its other
+ * fields - e.g. the size of the file, as a file system reported it while globbing, or the options a caller passed along
+ * with the file (`read_x([{'filename': 'f.x', 'file_size': 42}])`). Opening the file with those options, set with
+ * `duckdb_v2_file_open_options_set_value()`, lets the file system skip work it would otherwise repeat, such as asking a
+ * remote store for the size of the file. A single-file function that takes a VARCHAR parameter instead is still
+ * accepted, and only receives the path. Every named parameter the single-file function declares is also a named
+ * parameter of the multi-file function, forwarded to it as given. Everything that involves several files - globbing,
+ * lists of files, hive partitioning, the `filename` column, `union_by_name` and the like - is provided by the
+ * multi-file function on top of it. The name is borrowed and copied. A single-file function must be set before
+ * registration.
  *
  * history:
  * - unstable: v2.0.0
@@ -13707,9 +13841,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_file_extension(
  * can then be called with the path of a single file, a glob pattern, or a list of either, and accepts the options every
  * multi-file function accepts (e.g. `filename`, `hive_partitioning`, `union_by_name`) next to the named parameters of
  * the single-file function. Registration requires a name and a single-file function, and fails when no table function
- * by that name is registered or it does not take the path of a file as its only positional VARCHAR parameter. The
- * caller still owns the handle after registration and must destroy it with `duckdb_v2_multi_file_function_destroy()`,
- * which does not affect the registered function.
+ * by that name is registered or it does not take the file to read as its only positional parameter (see
+ * `duckdb_v2_multi_file_function_set_single_file_function()`). The caller still owns the handle after registration and
+ * must destroy it with `duckdb_v2_multi_file_function_destroy()`, which does not affect the registered function.
  *
  * history:
  * - unstable: v2.0.0

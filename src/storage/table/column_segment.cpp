@@ -490,8 +490,8 @@ static idx_t ExecuteExpressionFilterSelection(SelectionVector &sel, Vector &vect
 		chunk.data.emplace_back(Vector::Ref(vector));
 		chunk.SetChildCardinality(scan_count);
 		SelectionVector identity_sel;
-		optional_ptr<SelectionVector> current_sel = &sel;
-		if (!sel.IsSet()) {
+		optional_ptr<SelectionVector> current_sel = sel.IsSet() ? &sel : nullptr;
+		if (!sel.IsSet() && (vector.GetType().IsNested() || approved_tuple_count != scan_count)) {
 			identity_sel = SelectionVector::Incremental(approved_tuple_count);
 			current_sel = &identity_sel;
 		}
