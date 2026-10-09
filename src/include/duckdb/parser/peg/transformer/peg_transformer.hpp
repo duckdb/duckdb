@@ -402,6 +402,8 @@ struct TransformStackFrame {
 	ParseResult &parse_result;
 	arena_ptr<TransformProcess> process;
 	arena_ptr<TransformResultValue> child_result;
+	//! How much this frame adds to the expression depth while it is on the stack
+	idx_t expression_depth_weight = 0;
 };
 
 #ifdef DEBUG
@@ -413,6 +415,7 @@ using frame_stack_t = stack<TransformStackFrame>;
 class TransformStack {
 public:
 	explicit TransformStack(PEGTransformer &transformer);
+	~TransformStack();
 	arena_ptr<TransformResultValue> Execute(TransformInput input);
 
 	template <class T>
@@ -431,6 +434,7 @@ public:
 
 private:
 	void PushFrame(TransformInput input);
+	void PopFrame();
 	void InitializeFrame(TransformStackFrame &frame);
 	arena_ptr<TransformResultValue> ExecuteFrame(TransformStackFrame &frame);
 
@@ -570,6 +574,13 @@ public:
 
 	friend class StackChecker<PEGTransformer>;
 	idx_t stack_depth = 0;
+	//! An upper bound of the depth of the expression trees currently being transformed - tracked by the transform
+	//! stacks: every nested expression, nested type and link of an operator chain counts while it is transformed
+	idx_t expression_depth = 0;
+	//! The depth a frame of this rule adds while it is on the stack (see ParsedGrammar::SetExpressionDepth)
+	static idx_t ExpressionDepthWeight(optional_ptr<const CompiledGrammarRule> rule, ParseResult &parse_result);
+	void EnterExpression(idx_t weight);
+	void ExitExpression(idx_t weight);
 
 	StackChecker<PEGTransformer> StackCheck(idx_t extra_stack = 1) {
 		if (stack_depth + extra_stack >= options.max_expression_depth) {
