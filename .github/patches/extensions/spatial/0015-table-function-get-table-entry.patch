@@ -1,0 +1,25 @@
+diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
+index 48cbb50..1357867 100644
+--- a/src/spatial/index/rtree/rtree_index_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_scan.cpp
+@@ -19,9 +19,9 @@
+ 
+ namespace duckdb {
+ 
+-BindInfo RTreeIndexScanBindInfo(const optional_ptr<FunctionData> bind_data_p) {
++optional_ptr<TableCatalogEntry> RTreeIndexScanGetTableEntry(optional_ptr<const FunctionData> bind_data_p) {
+ 	auto &bind_data = bind_data_p->Cast<RTreeIndexScanBindData>();
+-	return BindInfo(bind_data.table);
++	return &bind_data.table;
+ }
+ 
+ //-------------------------------------------------------------------------
+@@ -267,7 +267,7 @@ TableFunction RTreeIndexScanFunction::GetFunction() {
+ 	func.table_scan_progress = nullptr;
+ 	func.projection_pushdown = true;
+ 	func.filter_pushdown = false;
+-	func.get_bind_info = RTreeIndexScanBindInfo;
++	func.get_table_entry = RTreeIndexScanGetTableEntry;
+ 	func.serialize = RTreeScanSerialize;
+ 	func.deserialize = RTreeScanDeserialize;
+ 	func.parallelism = TableFunctionParallelism::SEQUENTIAL;
