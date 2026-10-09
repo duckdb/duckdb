@@ -1981,7 +1981,11 @@ bool TryCast::Operation(string_t input, dtime_ns_t &result, bool strict) {
 	if (!TryCast::Operation(micros, result)) {
 		return false;
 	}
-	return TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, nanos, result.value);
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, nanos, result.value)) {
+		return false;
+	}
+	// the nanoseconds can push e.g. 24:00:00 past the end of the day
+	return result.value <= Interval::NANOS_PER_DAY;
 }
 
 template <>
@@ -3311,7 +3315,8 @@ static void FillDecimalDigits(hugeint_t input, duckdb_fast_float::decimal &decim
 		negative = false;
 	}
 
-	char buffer[DecimalWidth<hugeint_t>::max];
+	// a hugeint can have one more digit than the maximum decimal width
+	char buffer[DecimalWidth<hugeint_t>::max + 1];
 	auto end = buffer + sizeof(buffer);
 	auto begin = NumericHelper::FormatUnsigned(input, end);
 

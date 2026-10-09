@@ -168,6 +168,13 @@ void SQLLogicTestRunner::EmitEnd(const string &test_name, const string &status, 
 	obj.Add("passes", writer.CreateUnsignedInteger(test_stat_passes.load()));
 	obj.Add("fails", writer.CreateUnsignedInteger(test_stat_fails.load()));
 	obj.Add("skip-mode", writer.CreateUnsignedInteger(test_stat_skip_mode.load()));
+	if (!partial_skip_reasons.empty()) {
+		auto reasons = writer.CreateArray();
+		for (auto &reason : partial_skip_reasons) {
+			reasons.AppendString(reason);
+		}
+		obj.Add("partial-skip-reasons", reasons);
+	}
 	if (!data.empty()) {
 		obj.AddString("data", data);
 	}
@@ -1045,7 +1052,9 @@ void SQLLogicTestRunner::ExecuteScript(SQLLogicParser &parser, const string &scr
 						reason += " " + token.parameters[i];
 					}
 				}
-				AddSkipReason("mode skip " + reason);
+				auto skip_reason = "mode skip " + reason;
+				AddSkipReason(skip_reason);
+				partial_skip_reasons.insert(std::move(skip_reason));
 				skip_level++;
 			} else if (parameter == "unskip") {
 				skip_level--;

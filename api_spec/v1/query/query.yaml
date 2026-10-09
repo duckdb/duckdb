@@ -39,6 +39,14 @@ functions:
     return_type: opaque
     description: |
       Closes the result and de-allocates all memory allocated for that result.
+
+      Destroying a streaming result whose statement has not completed aborts the statement. On autocommit, its writes
+      are rolled back. Inside a transaction, a statement that may write invalidates the transaction, and a read-only
+      statement just stops. Preparing or running another statement on the connection aborts a statement that has not
+      completed the same way, so a COMMIT issued before a statement that may write completed rolls the transaction
+      back. To make sure the statement takes effect, complete it by fetching until `duckdb_fetch_chunk` returns NULL
+      before destroying the result. A NULL chunk is also returned on an error, so check `duckdb_result_error`
+      afterwards.
   column_name:
     offset: 15
     lifecycle:

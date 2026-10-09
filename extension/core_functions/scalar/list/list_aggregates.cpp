@@ -444,31 +444,122 @@ void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	ListAggregatesFunction<UniqueFunctor>(args, state, result);
 }
 
-template <bool IS_AGGR = false>
-unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, BoundScalarFunction &bound_function,
-                                                    const LogicalType &list_child_type,
-                                                    const AggregateFunction &aggr_function,
-                                                    vector<unique_ptr<Expression>> &arguments) {
-	// create the child expression and its type - it refers to the list elements
-	vector<unique_ptr<Expression>> children;
-	auto expr = make_uniq<BoundReferenceExpression>(list_child_type, idx_t(0));
-	children.push_back(std::move(expr));
-	// push any extra arguments into the list aggregate bind
-	const idx_t extra_argument_count = arguments.size() > 2 ? arguments.size() - 2 : 0;
-	if (arguments.size() > 2) {
-		for (idx_t i = 2; i < arguments.size(); i++) {
-			children.push_back(std::move(arguments[i]));
-		}
-		arguments.resize(2);
+AggregateFunctionCatalogEntry &GetListAggregateEntry(ClientContext &context, const string &function_name) {
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
+	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(),
+	                           Identifier(function_name)));
+	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
+	return func;
+}
+
+//! Binds the aggregate that is applied to the elements of the list
+template <bool IS_AGGR>
+unique_ptr<BoundAggregateExpression> BindListAggregate(ClientContext &context, LogicalType child_type,
+                                                       const string &function_name,
+                                                       vector<unique_ptr<Expression>> extra_arguments) {
+	auto &func = GetListAggregateEntry(context, function_name);
+
+	// find a matching aggregate function
+	ErrorData error;
+	vector<LogicalType> types;
+	types.push_back(child_type);
+	// push any extra arguments into the type list
+	for (auto &argument : extra_arguments) {
+		types.push_back(argument->GetReturnType());
 	}
 
 	FunctionBinder function_binder(context);
-	auto bound_aggr_function = function_binder.BindAggregateFunction(aggr_function, std::move(children));
-	bound_function.GetArguments()[0] = LogicalType::LIST(bound_aggr_function->Function().GetArguments()[0]);
+	auto best_function_idx = function_binder.BindFunction(func.name, func.functions, types, error);
+	if (!best_function_idx.IsValid()) {
+		throw BinderException("No matching aggregate function\n%s", error.Message());
+	}
 
+	// create the child expression and its type - it refers to the list elements
+	vector<unique_ptr<Expression>> children;
+	children.push_back(make_uniq<BoundReferenceExpression>(child_type, idx_t(0)));
+	for (auto &argument : extra_arguments) {
+		children.push_back(std::move(argument));
+	}
+
+	// found a matching function, bind it as an aggregate
+	const auto &best_function = *func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
 	if (IS_AGGR) {
+		return function_binder.BindAggregateFunction(best_function, std::move(children));
+	}
+	// create the unordered map histogram function
+	D_ASSERT(best_function.GetSignature().GetParameterCount() == 1);
+	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
+	return function_binder.BindAggregateFunction(aggr_function, std::move(children));
+}
+
+template <bool IS_AGGR = false>
+void ListAggregatesResolveTypes(ResolveScalarFunctionTypesInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto list_type = input.GetArgumentType(0);
+	if (list_type.id() == LogicalTypeId::ARRAY) {
+		list_type = LogicalType::LIST(ArrayType::GetChildType(list_type));
+	}
+
+	if (list_type.id() == LogicalTypeId::SQLNULL) {
+		ListAggregatesBindFailure(bound_function);
+		return;
+	}
+	auto function_name = IS_AGGR ? input.GetConstant(1).ToString() : string("histogram");
+	if (list_type.id() == LogicalTypeId::UNKNOWN) {
+		// verify the aggregate exists, even if we cannot bind it yet
+		GetListAggregateEntry(context, function_name);
+		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
+		bound_function.SetReturnType(LogicalType::SQLNULL);
+		return;
+	}
+	if (list_type.id() != LogicalTypeId::LIST && list_type.id() != LogicalTypeId::MAP) {
+		// Unreachable
+		throw InvalidInputException("First argument of list aggregate must be a list, map or array");
+	}
+
+	vector<unique_ptr<Expression>> extra_arguments;
+	for (idx_t i = 2; i < input.GetArgumentCount(); i++) {
+		extra_arguments.push_back(input.GetArgument(i).Copy());
+	}
+	auto bound_aggr_function = BindListAggregate<IS_AGGR>(context, ListType::GetChildType(list_type), function_name,
+	                                                      std::move(extra_arguments));
+
+	bound_function.GetArguments()[0] = LogicalType::LIST(bound_aggr_function->Function().GetArguments()[0]);
+	if (IS_AGGR) {
+		if (bound_aggr_function->Function().GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+			// never clear the error mode here - executing the aggregate can throw regardless of how it is declared
+			bound_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
+		}
 		bound_function.SetReturnType(bound_aggr_function->Function().GetReturnType());
 	}
+}
+
+template <bool IS_AGGR = false>
+unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
+	auto &context = input.GetClientContext();
+	auto &bound_function = input.GetBoundFunction();
+	auto &arguments = input.GetArguments();
+	auto list_type_id = arguments[0]->GetReturnType().id();
+	if (list_type_id == LogicalTypeId::SQLNULL || list_type_id == LogicalTypeId::UNKNOWN) {
+		// no bind data, the bind data of this function is always a ListAggregatesBindData
+		return nullptr;
+	}
+
+	// the extra arguments are pushed into the list aggregate bind
+	const idx_t extra_argument_count = arguments.size() > 2 ? arguments.size() - 2 : 0;
+	vector<unique_ptr<Expression>> extra_arguments;
+	for (idx_t i = 2; i < arguments.size(); i++) {
+		extra_arguments.push_back(std::move(arguments[i]));
+	}
+	if (arguments.size() > 2) {
+		arguments.resize(2);
+	}
+	auto function_name = IS_AGGR ? input.GetConstant(1).ToString() : string("histogram");
+	auto child_type = ListType::GetChildType(arguments[0]->GetReturnType());
+	auto bound_aggr_function =
+	    BindListAggregate<IS_AGGR>(context, child_type, function_name, std::move(extra_arguments));
+
 	// the extra arguments are passed to the aggregate as constant vectors, so they have to be constant - arguments
 	// that the bind of the aggregate added after them are derived from the list elements
 	auto &aggr_children = bound_aggr_function->GetChildrenMutable();
@@ -483,84 +574,13 @@ unique_ptr<FunctionData> ListAggregatesBindFunction(ClientContext &context, Boun
 	}
 
 	// Preserve folded SQL arguments without evaluating them again.
-	if (aggr_children.size() + 1 == bound_function.GetLogicalArguments().size()) {
-		for (idx_t child_idx = 1; child_idx < aggr_children.size(); child_idx++) {
+	if (extra_argument_count + 2 == bound_function.GetLogicalArguments().size()) {
+		for (idx_t child_idx = 1; child_idx <= extra_argument_count; child_idx++) {
 			arguments.push_back(aggr_children[child_idx]->Copy());
 		}
 	}
 
 	return make_uniq<ListAggregatesBindData>(bound_function.GetReturnType(), std::move(bound_aggr_function));
-}
-
-template <bool IS_AGGR = false>
-unique_ptr<FunctionData> ListAggregatesBind(BindScalarFunctionInput &input) {
-	auto &context = input.GetClientContext();
-	auto &bound_function = input.GetBoundFunction();
-	auto &arguments = input.GetArguments();
-	arguments[0] = BoundCastExpression::AddArrayCastToList(context, std::move(arguments[0]));
-
-	if (arguments[0]->GetReturnType().id() == LogicalTypeId::SQLNULL) {
-		return ListAggregatesBindFailure(bound_function);
-	}
-
-	bool is_parameter = arguments[0]->GetReturnType().id() == LogicalTypeId::UNKNOWN;
-	LogicalType child_type;
-	if (is_parameter) {
-		child_type = LogicalType::ANY;
-	} else if (arguments[0]->GetReturnType().id() == LogicalTypeId::LIST ||
-	           arguments[0]->GetReturnType().id() == LogicalTypeId::MAP) {
-		child_type = ListType::GetChildType(arguments[0]->GetReturnType());
-	} else {
-		// Unreachable
-		throw InvalidInputException("First argument of list aggregate must be a list, map or array");
-	}
-
-	string function_name = "histogram";
-	if (IS_AGGR) { // get the name of the aggregate function
-		function_name = input.GetConstant(1).ToString();
-	}
-
-	// look up the aggregate function in the catalog
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-	    context, QualifiedName(Catalog::GetSystemCatalog(context).GetName(), Identifier::DefaultSchema(),
-	                           Identifier(function_name)));
-	D_ASSERT(func.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
-
-	if (is_parameter) {
-		bound_function.GetArguments()[0] = LogicalTypeId::UNKNOWN;
-		bound_function.SetReturnType(LogicalType::SQLNULL);
-		return nullptr;
-	}
-
-	// find a matching aggregate function
-	ErrorData error;
-	vector<LogicalType> types;
-	types.push_back(child_type);
-	// push any extra arguments into the type list
-	for (idx_t i = 2; i < arguments.size(); i++) {
-		types.push_back(arguments[i]->GetReturnType());
-	}
-
-	FunctionBinder function_binder(context);
-	auto best_function_idx = function_binder.BindFunction(func.name, func.functions, types, error);
-	if (!best_function_idx.IsValid()) {
-		throw BinderException("No matching aggregate function\n%s", error.Message());
-	}
-
-	// found a matching function, bind it as an aggregate
-	const auto &best_function = *func.functions.GetFunctionByOffset(best_function_idx.GetIndex());
-	if (IS_AGGR) {
-		if (best_function.GetErrorMode() == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
-			// never clear the error mode here - executing the aggregate can throw regardless of how it is declared
-			bound_function.SetErrorMode(FunctionErrors::CAN_THROW_RUNTIME_ERROR);
-		}
-		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
-	}
-
-	// create the unordered map histogram function
-	D_ASSERT(best_function.GetSignature().GetParameterCount() == 1);
-	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(child_type);
-	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }
 
 unique_ptr<FunctionData> ListAggregateBind(BindScalarFunctionInput &input) {
@@ -582,6 +602,7 @@ ScalarFunction ListAggregateFun::GetFunction() {
 	result.SetFallible();
 	result.SetNullHandling(FunctionNullHandling::SPECIAL_HANDLING);
 	result.GetSignature().AddArgs("args", LogicalType::ANY);
+	result.SetResolveTypesCallback(ListAggregatesResolveTypes<true>);
 	result.SetSerializeCallback(ListAggregatesBindData::SerializeFunction);
 	result.SetDeserializeCallback(ListAggregatesBindData::DeserializeFunction);
 	return result;
@@ -591,6 +612,7 @@ ScalarFunction ListDistinctFun::GetFunction() {
 	ScalarFunction fun({}, LogicalType::LIST(LogicalType::TEMPLATE("T")), ListDistinctFunction,
 	                   ListAggregatesBind<false>, nullptr, ListAggregatesInitLocalState);
 	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::TEMPLATE("T")));
+	fun.SetResolveTypesCallback(ListAggregatesResolveTypes<false>);
 	return fun;
 }
 
@@ -598,6 +620,7 @@ ScalarFunction ListUniqueFun::GetFunction() {
 	ScalarFunction fun({}, LogicalType::UBIGINT, ListUniqueFunction, ListAggregatesBind<false>, nullptr,
 	                   ListAggregatesInitLocalState);
 	fun.GetSignature().AddParameter("list", LogicalType::LIST(LogicalType::ANY));
+	fun.SetResolveTypesCallback(ListAggregatesResolveTypes<false>);
 	return fun;
 }
 
