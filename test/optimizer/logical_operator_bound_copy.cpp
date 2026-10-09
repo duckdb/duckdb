@@ -241,7 +241,7 @@ TEST_CASE("Bound plan copy bypasses table-function rebinding and rejects noncopy
 			    make_shared_ptr<DynamicFilterData>(ExpressionType::COMPARE_LESSTHAN, Value::BIGINT(7)),
 			    LogicalType::BIGINT);
 			AggregateFunction function("bound_copy_aggregate", {}, LogicalType::BIGINT, nullptr, nullptr, nullptr,
-			                           nullptr, nullptr);
+			                           nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING);
 			auto aggregate =
 			    make_uniq<BoundAggregateExpression>(BoundAggregateFunction(function), vector<unique_ptr<Expression>> {},
 			                                        nullptr, nullptr, AggregateType::NON_DISTINCT);
