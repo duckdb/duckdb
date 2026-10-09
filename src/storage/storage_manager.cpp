@@ -1,7 +1,6 @@
 #include "duckdb/storage/storage_manager.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/enums/checkpoint_abort.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -791,21 +790,42 @@ static vector<reference<DuckTableEntry>> GetTablesWithUnboundIndexes(AttachedDat
 	return result;
 }
 
+//! Binds the indexes of a table, rethrowing errors that invalidate the database.
+static ErrorData TryBindIndexes(DataTableInfo &info, ClientContext &context) {
+	try {
+		info.BindIndexes(context);
+	} catch (std::exception &ex) {
+		ErrorData error(ex);
+		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
+			throw;
+		}
+		return error;
+	}
+	return ErrorData();
+}
+
+static bool HasBufferedReplays(const vector<reference<DuckTableEntry>> &tables) {
+	for (auto &table : tables) {
+		if (table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, const CheckpointOptions &options) {
 	if (!buffered_index_replays && !options.explicit_checkpoint) {
 		return true;
 	}
 	auto tables = GetTablesWithUnboundIndexes(db);
+	if (!context.GetClientContext()) {
+		// The database is closing (shutdown or DETACH): we do not bind, so skip if anything is still buffered.
+		buffered_index_replays = HasBufferedReplays(tables);
+		return !buffered_index_replays;
+	}
 	if (tables.empty()) {
 		buffered_index_replays = false;
 		return true;
-	}
-	if (!context.GetClientContext()) {
-		// The database is closing (shutdown or DETACH): we do not bind, so skip if anything is still buffered.
-		buffered_index_replays = std::any_of(tables.begin(), tables.end(), [](const reference<DuckTableEntry> &table) {
-			return table.get().GetStorage().GetDataTableInfo()->GetIndexes().HasBufferedReplays();
-		});
-		return !buffered_index_replays;
 	}
 	auto checkpoint_sleep_ms = Settings::Get<DebugCheckpointSleepMsSetting>(db.GetDatabase());
 	if (checkpoint_sleep_ms > 0) {
@@ -822,38 +842,27 @@ bool SingleFileStorageManager::BindIndexesForCheckpoint(QueryContext context, co
 		if (!info.GetIndexes().HasBufferedReplays()) {
 			continue;
 		}
-		try {
-			info.BindIndexes(bind_context);
-		} catch (std::exception &ex) {
-			ErrorData error(ex);
-			if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-				throw;
-			}
-			if (options.explicit_checkpoint) {
-				throw InvalidInputException(
-				    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s",
-				    error.RawMessage());
-			}
-			// Keep the WAL: it is the only remaining record of the buffered operations.
-			DUCKDB_LOG_WARNING(db.GetDatabase(),
-			                   "Skipped the checkpoint of database \"%s\" and kept its write-ahead log: an index with "
-			                   "buffered write-ahead log operations cannot be bound: %s",
-			                   db.GetName(), error.RawMessage());
-			return false;
+		auto error = TryBindIndexes(info, bind_context);
+		if (!error.HasError()) {
+			continue;
 		}
+		if (options.explicit_checkpoint) {
+			throw InvalidInputException(
+			    "Cannot CHECKPOINT: an index with buffered write-ahead log operations cannot be bound: %s",
+			    error.RawMessage());
+		}
+		// Keep the WAL: it is the only remaining record of the buffered operations.
+		DUCKDB_LOG_WARNING(db.GetDatabase(),
+		                   "Skipped the checkpoint of database \"%s\" and kept its write-ahead log: an index with "
+		                   "buffered write-ahead log operations cannot be bound: %s",
+		                   db.GetName(), error.RawMessage());
+		return false;
 	}
 	buffered_index_replays = false;
-	// Explicit checkpoints also bind the remaining indexes, so that they can vacuum their tables.
 	if (options.explicit_checkpoint) {
+		// Best effort: bind the remaining indexes, so that the checkpoint can vacuum their tables.
 		for (auto &table : tables) {
-			try {
-				table.get().GetStorage().GetDataTableInfo()->BindIndexes(bind_context);
-			} catch (std::exception &ex) {
-				ErrorData error(ex);
-				if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
-					throw;
-				}
-			}
+			TryBindIndexes(*table.get().GetStorage().GetDataTableInfo(), bind_context);
 		}
 	}
 	bind_context.transaction.Commit();
