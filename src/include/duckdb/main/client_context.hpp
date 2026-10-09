@@ -14,6 +14,7 @@
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/enums/query_result_state.hpp"
+#include "duckdb/common/enums/metric_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/pair.hpp"
@@ -223,6 +224,9 @@ public:
 
 	//! Gets current percentage of the query's progress, returns 0 in case the progress bar is disabled.
 	DUCKDB_API QueryProgress GetQueryProgress();
+	//! Snapshot the query-level metrics of the running query, keyed by metric name (e.g. "io.total_bytes_read").
+	//! Safe to call from another thread while the query runs, and regardless of whether profiling is enabled.
+	DUCKDB_API profiler_metrics_t GetLiveQueryMetrics();
 
 	//! Register function in the temporary schema
 	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);

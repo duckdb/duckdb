@@ -377,6 +377,10 @@ QueryProgress ClientContext::GetQueryProgress() {
 	return query_progress;
 }
 
+profiler_metrics_t ClientContext::GetLiveQueryMetrics() {
+	return QueryProfiler::Get(*this).GetLiveMetrics();
+}
+
 void ClientContext::CheckIfPreparedStatementIsExecutable(PreparedStatementData &statement) {
 	if (ValidChecker::IsInvalidated(ActiveTransaction()) && statement.properties.requires_valid_transaction) {
 		throw ErrorManager::InvalidatedTransaction(*this);
