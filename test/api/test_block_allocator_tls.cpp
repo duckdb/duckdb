@@ -15,6 +15,8 @@
 
 #if defined(__linux__)
 #include <sys/mman.h>
+#include <sys/syscall.h>
+#include <unistd.h>
 #elif defined(__APPLE__)
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
@@ -1280,7 +1282,8 @@ TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][blo
 	auto live_second = blocks[12];
 	auto locked = blocks[8];
 	// Linux rejects MADV_DONTNEED for locked pages, leaving the mapping accessible.
-	if (mlock(locked, 1) != 0) {
+	// Sanitizers replace mlock/munlock with no-ops, so call the kernel directly.
+	if (syscall(SYS_mlock, locked, 1) != 0) {
 		WARN("Cannot lock a page to exercise discard failure");
 		for (auto block : blocks) {
 			allocator.FreeData(block, BLOCK_SIZE);
@@ -1300,7 +1303,7 @@ TEST_CASE("BlockAllocator preserves capacity after a failed discard", "[api][blo
 	CHECK_NOTHROW(allocator.FlushAll());
 	CHECK_NOTHROW(allocator.ThreadIdle());
 	CHECK(allocator.GetCachedMemory() == (BLOCK_COUNT - 6) * BLOCK_SIZE);
-	CHECK(munlock(locked, 1) == 0);
+	CHECK(syscall(SYS_munlock, locked, 1) == 0);
 	allocator.FlushAll();
 	CHECK(allocator.GetCachedMemory() == 0);
 	std::unordered_set<data_ptr_t> allocated {live_first, live_second};
@@ -1331,7 +1334,7 @@ TEST_CASE("BlockAllocator database shutdown unmaps locked pool pages", "[api][bl
 	auto &allocator = BlockAllocator::Get(*db->instance);
 	auto block = allocator.AllocateData(DEFAULT_BLOCK_ALLOC_SIZE);
 	block[0] = 42;
-	if (mlock(block, 1) != 0) {
+	if (syscall(SYS_mlock, block, 1) != 0) {
 		WARN("Cannot lock a page to exercise unmapping during shutdown");
 		allocator.FreeData(block, DEFAULT_BLOCK_ALLOC_SIZE);
 		return;
