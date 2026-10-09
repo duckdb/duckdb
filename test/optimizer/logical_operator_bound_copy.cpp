@@ -8,6 +8,7 @@
 #include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_states.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -137,7 +138,7 @@ struct JoinCopySet {
 using join_copy_sets_t = reference_map_t<DynamicTableFilterSet, JoinCopySet>;
 
 static void CheckJoinCopies(LogicalOperator &original, LogicalOperator &copy, join_copy_sets_t &sets,
-                            JoinCopyProbe &probe) {
+                            JoinCopyProbe &probe, ClientContext &context) {
 	REQUIRE(original.type == copy.type);
 	REQUIRE(original.children.size() == copy.children.size());
 	auto check_set = [&](DynamicTableFilterSet &source, DynamicTableFilterSet &target, bool scan) {
@@ -180,7 +181,18 @@ static void CheckJoinCopies(LogicalOperator &original, LogicalOperator &copy, jo
 			probe.multiple_targets += a.probe_info.size() > 1;
 			for (idx_t i = 0; i < a.min_max_aggregates.size(); i++) {
 				REQUIRE(a.min_max_aggregates[i].get() != b.min_max_aggregates[i].get());
-				REQUIRE(a.min_max_aggregates[i]->Equals(*b.min_max_aggregates[i]));
+				// Ordinary reconstruction can replace a statistics-specialized cast implementation.
+				MemoryStream stream(Allocator::Get(context));
+				SerializationOptions options;
+				options.storage_compatibility = StorageCompatibility::Latest();
+				BinarySerializer::Serialize(*a.min_max_aggregates[i], stream, options);
+				stream.Rewind();
+				bound_parameter_map_t parameters;
+				auto ordinary = BinaryDeserializer::Deserialize<Expression>(stream, context, parameters);
+				REQUIRE(ordinary->Equals(*b.min_max_aggregates[i]));
+				auto &aggregate = b.min_max_aggregates[i]->Cast<BoundAggregateExpression>();
+				REQUIRE(aggregate.GetChildren().size() == 1);
+				REQUIRE(aggregate.GetChildren()[0]->Equals(rhs.conditions[b.join_condition[i / 2]].GetRHS()));
 			}
 			for (idx_t i = 0; i < a.probe_info.size(); i++) {
 				auto &left = a.probe_info[i];
@@ -205,7 +217,7 @@ static void CheckJoinCopies(LogicalOperator &original, LogicalOperator &copy, jo
 		}
 	}
 	for (idx_t i = 0; i < original.children.size(); i++) {
-		CheckJoinCopies(*original.children[i], *copy.children[i], sets, probe);
+		CheckJoinCopies(*original.children[i], *copy.children[i], sets, probe, context);
 	}
 }
 
@@ -234,9 +246,9 @@ static void CopyJoinAfterOptimization(OptimizerExtensionInput &input, unique_ptr
 	auto sibling = plan->CopyPreservingBoundState(input.context);
 	auto repeated = copy->CopyPreservingBoundState(input.context);
 	join_copy_sets_t sets, siblings, repeats;
-	CheckJoinCopies(*plan, *copy, sets, probe);
-	CheckJoinCopies(*plan, *sibling, siblings, probe);
-	CheckJoinCopies(*copy, *repeated, repeats, probe);
+	CheckJoinCopies(*plan, *copy, sets, probe, input.context);
+	CheckJoinCopies(*plan, *sibling, siblings, probe, input.context);
+	CheckJoinCopies(*copy, *repeated, repeats, probe, input.context);
 	PhysicalPlan physical(Allocator::Get(input.context));
 	auto &identity = physical.Make<PhysicalDummyScan>(vector<LogicalType> {LogicalType::BIGINT}, 1);
 	for (auto &entry : sets) {
