@@ -33,6 +33,7 @@ struct LogicalPlanSQLExportField {
 
 struct LogicalPlanSQLExportRelation {
 	unique_ptr<QueryNode> query;
+	//! A zero-column relation has a SQL placeholder column that is absent from fields.
 	vector<LogicalPlanSQLExportField> fields;
 };
 

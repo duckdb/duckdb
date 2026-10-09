@@ -16,12 +16,11 @@ class optional_idx {
 	static constexpr const idx_t INVALID_INDEX = idx_t(-1);
 
 public:
-	optional_idx() : index(INVALID_INDEX) {
+	constexpr optional_idx() : index(INVALID_INDEX) {
 	}
-	optional_idx(idx_t index) : index(index) { // NOLINT: allow implicit conversion from idx_t
-		if (index == INVALID_INDEX) {
-			ThrowInvalidInitialization();
-		}
+	// NOLINTNEXTLINE: allow implicit conversion from idx_t
+	constexpr optional_idx(idx_t index_p)
+	    : index(index_p == INVALID_INDEX ? (ThrowInvalidInitialization(), index_p) : index_p) {
 	}
 
 	static optional_idx Invalid() {

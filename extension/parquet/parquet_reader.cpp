@@ -13,6 +13,7 @@
 #include "reader/byte_array_length_column_reader.hpp"
 #include "reader/expression_column_reader.hpp"
 #include "parquet_geometry.hpp"
+#include "parquet_int96.hpp"
 #include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -20,6 +21,7 @@
 #include "reader/row_number_column_reader.hpp"
 #include "reader/variant_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
+#include "reader/string_column_reader.hpp"
 #include "thrift_tools.hpp"
 #include "parquet_prefetch_cost_model.hpp"
 #include "duckdb/common/encryption_state.hpp"
@@ -29,8 +31,10 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
 #include "duckdb/common/multi_file/multi_file_adaptive_filter_cache.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/types/geometry_crs.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -105,6 +109,20 @@ ParquetPrefetchStrategyOption ParquetPrefetchStrategyOptionFromString(const stri
 		return ParquetPrefetchStrategyOption::WHOLE_GROUP;
 	}
 	throw BinderException("Unrecognized prefetch_strategy '%s' (supported: 'auto', 'whole_group')", value);
+}
+
+ParquetInt96AsOption ParquetInt96AsOptionFromString(const string &value) {
+	auto lower = StringUtil::Lower(value);
+	if (lower == "timestamp") {
+		return ParquetInt96AsOption::TIMESTAMP;
+	}
+	if (lower == "timestamp_ns") {
+		return ParquetInt96AsOption::TIMESTAMP_NS;
+	}
+	if (lower == "struct") {
+		return ParquetInt96AsOption::STRUCT;
+	}
+	throw BinderException("Unrecognized int96_as '%s' (supported: 'timestamp', 'timestamp_ns', 'struct')", value);
 }
 
 static idx_t ParquetColumnChunkFileOffset(const duckdb_parquet::ColumnChunk &chunk) {
@@ -527,6 +545,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
 				throw IOException("DECIMAL requires a length and scale specifier!");
 			}
+			if (s_ele.precision < 1 || s_ele.scale < 0 || s_ele.scale > s_ele.precision) {
+				throw IOException("Invalid DECIMAL precision %d and scale %d", s_ele.precision, s_ele.scale);
+			}
 			schema.type_scale = NumericCast<uint32_t>(s_ele.scale);
 			if (s_ele.precision > DecimalType::MaxWidth()) {
 				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
@@ -594,7 +615,16 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, const P
 			return LogicalType::BIGINT;
 		case Type::INT96: // always a timestamp it would seem
 			schema.type_info = ParquetExtraTypeInfo::IMPALA_TIMESTAMP;
-			return LogicalType(ParquetTimestampLogicalType(schema.type_info));
+			switch (parquet_options.int96_as) {
+			case ParquetInt96AsOption::TIMESTAMP:
+				return LogicalType::TIMESTAMP;
+			case ParquetInt96AsOption::TIMESTAMP_NS:
+				return LogicalType::TIMESTAMP_NS;
+			case ParquetInt96AsOption::STRUCT:
+				return LogicalType::STRUCT({{"date", LogicalType::DATE}, {"time", LogicalType::TIME_NS}});
+			default:
+				throw InternalException("Unrecognized int96_as option");
+			}
 		case Type::FLOAT:
 			return LogicalType::FLOAT;
 		case Type::DOUBLE:
@@ -755,7 +785,7 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 			throw InternalException("Can't locate the child by name '%s' in the VARIANT column", field_name);
 		}
 		auto &child_column = typed_value.get().GetChildByIndex(child_column_index.GetIndex());
-		if (child_column.type.id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(child_column.type)) {
 			throw InternalException("Extracted field for '%s' from 'typed_value', is not a struct (received: %s)",
 			                        field_name, child_column.type.ToString());
 		}
@@ -786,6 +816,43 @@ static ColumnIndex CreateVariantTypedValuePushdown(const ParquetColumnSchema &sc
 	return result_index;
 }
 
+static unique_ptr<ColumnReader> CreateInt96StructReader(ClientContext &context, const ParquetReader &reader,
+                                                        const ParquetColumnSchema &schema,
+                                                        optional_ptr<const ColumnIndex> pushdown_child) {
+	// Read the raw 12-byte INT96 value as a BLOB - this is lossless over the full range INT96 can express
+	// (0001-01-01 through 9999-12-31), unlike TIMESTAMP/TIMESTAMP_NS which clamp or truncate
+	// The blob schema is a copy of the leaf schema with a different type; it is kept alive on the
+	// expression reader's heap (the ColumnReader base class only holds a reference to it)
+	if (pushdown_child) {
+		// The scan only exposes a single child of the INT96-as-struct column (e.g. ts['date']).
+		// Follow the same pattern as a pushed-down extract on a regular STRUCT column: wrap the leaf in an
+		// EXPRESSION schema carrying the child's type so the reader reports the child type and produces no
+		// (struct) row group statistics, which a filter on the child would otherwise be checked against.
+		auto expr = CreateInt96AsStructChildExpression(context, pushdown_child->GetPrimaryIndex());
+		if (expr->GetReturnType() != pushdown_child->GetType()) {
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), pushdown_child->GetType());
+		}
+		auto expr_schema = make_uniq<ParquetColumnSchema>(
+		    ParquetColumnSchema::FromParentSchema(schema, expr->GetReturnType(), ParquetColumnSchemaType::EXPRESSION));
+		// FromParentSchema embeds a copy of the leaf schema as its first child - retype that copy to BLOB so the
+		// embedded child is the raw INT96 leaf and stays alive through the expression schema's ownership
+		expr_schema->children[0].type = LogicalType::BLOB;
+		vector<unique_ptr<ColumnReader>> children;
+		children.push_back(make_uniq<StringColumnReader>(reader, expr_schema->children[0]));
+		return make_uniq<ExpressionColumnReader>(context, std::move(children), std::move(expr), std::move(expr_schema));
+	}
+	auto child_schema = make_uniq<ParquetColumnSchema>(schema);
+	child_schema->type = LogicalType::BLOB;
+	auto blob_reader = make_uniq<StringColumnReader>(reader, *child_schema);
+
+	vector<unique_ptr<ColumnReader>> children;
+	children.push_back(std::move(blob_reader));
+	auto expr = CreateInt96AsStructExpression(context);
+	auto result = make_uniq<ExpressionColumnReader>(context, std::move(children), std::move(expr), schema);
+	result->owned_schema = std::move(child_schema);
+	return std::move(result);
+}
+
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context, const ColumnIndex &column_id,
                                                               const ParquetColumnSchema &schema) const {
 	auto &indexes = column_id.GetChildIndexes();
@@ -800,6 +867,11 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 	}
 	case ParquetColumnSchemaType::COLUMN: {
 		if (schema.children.empty()) {
+			if (schema.parquet_type == Type::INT96 && schema.type.id() == LogicalTypeId::STRUCT) {
+				// int96_as='struct' exposes the raw INT96 value as STRUCT(date DATE, time TIME_NS)
+				return CreateInt96StructReader(context, *this, schema,
+				                               column_id.IsPushdownExtract() ? &indexes[0] : nullptr);
+			}
 			// leaf reader
 			return ColumnReader::CreateReader(*this, schema);
 		}
@@ -822,7 +894,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		case LogicalTypeId::MAP:
 			D_ASSERT(children.size() == 1);
 			return make_uniq<ListColumnReader>(*this, schema, std::move(children[0]));
-		case LogicalTypeId::STRUCT: {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::TUPLE: {
 			if (column_id.IsPushdownExtract()) {
 				auto &child = indexes[0];
 				auto child_index = child.GetPrimaryIndex();
@@ -856,36 +929,30 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 		}
 		vector<unique_ptr<ColumnReader>> children;
 		children.resize(schema.children.size());
-		if (schema.children.size() != 3 || !column_id.IsPushdownExtract()) {
-			for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
-				children[child_index] =
-				    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
-			}
-			return make_uniq<VariantColumnReader>(context, *this, schema, std::move(children));
-		}
-		//! VARIANT is shredded -  it has a 'typed_value' column
-		//! And the extract is pushed down into the scan
-		auto &typed_value_schema = schema.children[2];
-		D_ASSERT(typed_value_schema.name == "typed_value");
-		auto variant_stats = GetVariantStats(schema);
+		if (schema.children.size() == 3 && column_id.IsPushdownExtract()) {
+			//! VARIANT is shredded - it has a 'typed_value' column
+			auto &typed_value_schema = schema.children[2];
+			D_ASSERT(typed_value_schema.name == "typed_value");
+			auto variant_stats = GetVariantStats(schema);
 
-		if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
-			//! This field is present in 'typed_value' across all rowgroups
-			//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
-			auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
-			return CreateReaderRecursive(context, typed_value_index, typed_value_schema);
+			if (variant_stats && IsFullyShredded(*variant_stats, column_id)) {
+				//! This field is present in 'typed_value' across all rowgroups
+				//! So we can directly push a struct extract into 'typed_value' and ignore 'value'+'metadata'
+				auto typed_value_index = CreateVariantTypedValuePushdown(typed_value_schema, column_id);
+				return CreateReaderRecursive(context, typed_value_index, typed_value_schema);
+			}
 		}
-		for (idx_t child_index = 0; child_index < 3; child_index++) {
+		for (idx_t child_index = 0; child_index < schema.children.size(); child_index++) {
 			children[child_index] =
 			    CreateReaderRecursive(context, ColumnIndex(child_index), schema.children[child_index]);
 		}
 		// Create the VariantColumnReader with the column index, so we can perform the extract at Read
 		auto column_reader = make_uniq<VariantColumnReader>(context, *this, schema, std::move(children), column_id);
 
-		const auto &scan_type = column_id.GetScanType();
-		if (scan_type.id() == LogicalTypeId::VARIANT) {
+		if (!column_id.IsPushdownExtract() || column_id.GetScanType().id() == LogicalTypeId::VARIANT) {
 			return std::move(column_reader);
 		}
+		const auto &scan_type = column_id.GetScanType();
 		auto input = make_uniq<BoundReferenceExpression>(LogicalType::VARIANT(), 0ULL);
 		auto cast_expression = BoundCastExpression::AddCastToType(context, std::move(input), scan_type);
 		auto expr_schema = make_uniq<ParquetColumnSchema>(ParquetColumnSchema::FromParentSchema(
@@ -1173,7 +1240,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema(ClientContext &contex
 		throw IOException("Failed to read Parquet file \"%s\": root schema element has no children", file.path);
 	}
 	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx, context);
-	if (root.type.id() != LogicalTypeId::STRUCT) {
+	if (!StructType::IsStruct(root.type)) {
 		throw InvalidInputException("Failed to read Parquet file \"%s\": Root element of Parquet file must be a struct",
 		                            file.path);
 	}
@@ -1210,6 +1277,18 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
 	if (element.schema_type != ParquetColumnSchemaType::GEOMETRY) {
 		for (auto &child : element.children) {
 			result.children.push_back(ParseColumnDefinition(file_meta_data, child));
+		}
+	}
+	// An INT96 column exposed as a STRUCT (int96_as='struct') is a logical struct over a physical leaf - synthesize
+	// the struct children here, mirroring MultiFileColumnDefinition::CreateFromNameAndType, so that the column
+	// definition matches the global one (and the multi-file mapper can map the column trivially).
+	if (element.schema_type == ParquetColumnSchemaType::COLUMN && element.parquet_type == Type::INT96 &&
+	    element.type.id() == LogicalTypeId::STRUCT && parquet_options.int96_as == ParquetInt96AsOption::STRUCT) {
+		result.children.clear();
+		result.children.reserve(StructType::GetChildTypes(element.type).size());
+		for (auto &child_entry : StructType::GetChildTypes(element.type)) {
+			result.children.push_back(
+			    MultiFileColumnDefinition::CreateFromNameAndType(child_entry.first, child_entry.second));
 		}
 	}
 	return result;
@@ -1559,7 +1638,7 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 	// Handle MAP value extraction.
 	if (leaf_reader->Type().id() == LogicalTypeId::MAP && function.Function().GetName() == "map_extract_value") {
 		auto &entry_reader = leaf_reader->Cast<ListColumnReader>().GetChildReader();
-		if (entry_reader.Type().id() != LogicalTypeId::STRUCT) {
+		if (!StructType::IsStruct(entry_reader.Type())) {
 			return false;
 		}
 		auto &struct_reader = entry_reader.Cast<StructColumnReader>();
@@ -1571,7 +1650,7 @@ static bool TryGetNestedBloomFilterLeaf(ColumnReader &column_reader, const Expre
 	}
 
 	// Handle STRUCT type.
-	if (leaf_reader->Type().id() == LogicalTypeId::STRUCT) {
+	if (StructType::IsStruct(leaf_reader->Type())) {
 		idx_t child_idx;
 		if (!TryGetStructExtractChildIndex(function, child_idx)) {
 			return false;

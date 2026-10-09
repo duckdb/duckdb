@@ -17,9 +17,10 @@ LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
-	// we match on LIKE ("~~"), NOT LIKE ("!~~"), GLOB ("~~~"), and NOT GLOB ("!~~~")
-	func->function = make_uniq<ManyFunctionMatcher>(
-	    identifier_set_t {Identifier("!~~"), Identifier("~~"), Identifier("!~~~"), Identifier("~~~")});
+	// we match on LIKE ("~~"), NOT LIKE ("!~~"), GLOB ("~~~"), NOT GLOB ("!~~~"), ILIKE ("~~*"), and NOT ILIKE ("!~~*")
+	func->function =
+	    make_uniq<ManyFunctionMatcher>(identifier_set_t {Identifier("!~~"), Identifier("~~"), Identifier("!~~~"),
+	                                                     Identifier("~~~"), Identifier("~~*"), Identifier("!~~*")});
 	root = std::move(func);
 }
 
@@ -137,6 +138,11 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<r
 
 	if (constant_expr.GetValue().IsNull()) {
 		return make_uniq<BoundConstantExpression>(Value(root.GetReturnType()));
+	}
+
+	bool is_ilike = root.Function().GetName() == "~~*" || root.Function().GetName() == "!~~*";
+	if (is_ilike) {
+		return nullptr;
 	}
 
 	// the constant_expr is a scalar expression that we have to fold
