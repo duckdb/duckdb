@@ -834,24 +834,43 @@ static bool HasUntypedNullArgument(const vector<unique_ptr<Expression>> &regular
 	return false;
 }
 
-static bool FoldsToNull(ClientContext &context, const Expression &child) {
-	if (!child.IsFoldable()) {
+//! Evaluates a constant argument and returns true if it is NULL. A non-NULL result replaces the argument with a
+//! constant: the argument has been evaluated anyway, and keeping the result means that it is not evaluated again by
+//! every enclosing function call - which made binding nested constant expressions quadratic in their depth.
+static bool FoldConstantArgument(ClientContext &context, unique_ptr<Expression> &child) {
+	if (child->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
+		return child->Cast<BoundConstantExpression>().GetValue().IsNull();
+	}
+	// a lambda has no value of its own, the function it is passed to executes its body
+	if (child->GetExpressionClass() == ExpressionClass::BOUND_LAMBDA || !child->IsFoldable()) {
 		return false;
 	}
 	Value result;
-	return ExpressionExecutor::TryEvaluateScalar(context, child, result) && result.IsNull();
+	if (!ExpressionExecutor::TryEvaluateScalar(context, *child, result)) {
+		// the argument cannot be evaluated: leave it in place so that the error surfaces at execution
+		return false;
+	}
+	if (result.IsNull()) {
+		return true;
+	}
+	auto constant = make_uniq<BoundConstantExpression>(std::move(result));
+	constant->SetAlias(child->GetAlias());
+	constant->SetQueryLocation(child->GetQueryLocation());
+	child = std::move(constant);
+	return false;
 }
 
-//! Returns true if any argument is a constant expression that evaluates to NULL
-static bool HasNullConstantArgument(ClientContext &context, const vector<unique_ptr<Expression>> &regular_args,
-                                    const vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
+//! Returns true if any argument is a constant expression that evaluates to NULL. Arguments that evaluate to a non-NULL
+//! value are folded to constants along the way.
+static bool HasNullConstantArgument(ClientContext &context, vector<unique_ptr<Expression>> &regular_args,
+                                    vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args) {
 	for (auto &child : regular_args) {
-		if (FoldsToNull(context, *child)) {
+		if (FoldConstantArgument(context, child)) {
 			return true;
 		}
 	}
 	for (auto &child : keyword_args) {
-		if (FoldsToNull(context, *child.second)) {
+		if (FoldConstantArgument(context, child.second)) {
 			return true;
 		}
 	}
