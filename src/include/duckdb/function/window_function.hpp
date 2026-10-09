@@ -193,6 +193,8 @@ public:
 	bool can_exclude = false;
 	//! Does the window function support RESPECT/IGNORE NULLS?
 	bool can_ignore_nulls = true;
+	//! Does the function rank rows within the partition?
+	bool is_ranking = false;
 };
 
 class BaseWindowFunction {
@@ -230,12 +232,14 @@ public: // Properties
 	bool CanOrderBy() const { return properties.can_order_by; }
 	bool CanExclude() const { return properties.can_exclude; }
 	bool CanIgnoreNulls() const { return properties.can_ignore_nulls; }
+	bool IsRanking() const { return properties.is_ranking; }
 
 	void SetCanDistinct(bool value) { properties.can_distinct = value; }
 	void SetCanFilter(bool value) { properties.can_filter = value; }
 	void SetCanOrderBy(bool value) { properties.can_order_by = value; }
 	void SetCanExclude(bool value) { properties.can_exclude = value; }
 	void SetCanIgnoreNulls(bool value) { properties.can_ignore_nulls = value; }
+	void SetIsRanking(bool value) { properties.is_ranking = value; }
 
 public: // Callbacks
 
