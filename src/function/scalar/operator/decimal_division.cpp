@@ -169,10 +169,17 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 	auto &arguments = input.GetArguments();
 
 	uint8_t p1, s1, p2, s2;
-	if (!arguments[0]->GetReturnType().GetDecimalProperties(p1, s1) ||
-	    !arguments[1]->GetReturnType().GetDecimalProperties(p2, s2)) {
+	auto lhs_type = arguments[0]->GetReturnType();
+	auto rhs_type = arguments[1]->GetReturnType();
+	if (!lhs_type.GetDecimalProperties(p1, s1) || !rhs_type.GetDecimalProperties(p2, s2)) {
 		throw InvalidInputException("decimal_division: both arguments must be DECIMAL");
 	}
+
+	// an argument may be a non-DECIMAL integer type (implicit DECIMAL(p, 0)); normalize it to its canonical DECIMAL
+	// representation so the physical-type logic below operates on a DECIMAL physical type and the stored argument
+	// types are always DECIMAL
+	auto lhs_decimal_type = lhs_type.id() == LogicalTypeId::DECIMAL ? lhs_type : LogicalType::DECIMAL(p1, s1);
+	auto rhs_decimal_type = rhs_type.id() == LogicalTypeId::DECIMAL ? rhs_type : LogicalType::DECIMAL(p2, s2);
 
 	uint8_t result_scale;
 	if (arguments.size() == 3) {
@@ -222,8 +229,8 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 
 	bound_function.SetReturnType(LogicalType::DECIMAL(result_width, result_scale));
 
-	auto lhs_physical = arguments[0]->GetReturnType().InternalType();
-	auto rhs_physical = arguments[1]->GetReturnType().InternalType();
+	auto lhs_physical = lhs_decimal_type.InternalType();
+	auto rhs_physical = rhs_decimal_type.InternalType();
 	auto wider = MaxValue<PhysicalType>(lhs_physical, rhs_physical);
 
 	int32_t scale_exp = s2 + result_scale - s1;
@@ -252,9 +259,9 @@ static unique_ptr<FunctionData> DecimalDivisionBind(BindScalarFunctionInput &inp
 	// changing p changes the result-width formula).
 	// For cross-tier inputs, promote the narrower argument to the wider physical tier.
 	bound_function.GetArguments()[0] =
-	    (lhs_physical != wider) ? LogicalType::DECIMAL(input_max_width, s1) : arguments[0]->GetReturnType();
+	    (lhs_physical != wider) ? LogicalType::DECIMAL(input_max_width, s1) : lhs_decimal_type;
 	bound_function.GetArguments()[1] =
-	    (rhs_physical != wider) ? LogicalType::DECIMAL(input_max_width, s2) : arguments[1]->GetReturnType();
+	    (rhs_physical != wider) ? LogicalType::DECIMAL(input_max_width, s2) : rhs_decimal_type;
 
 	switch (wider) {
 	case PhysicalType::INT16:
