@@ -2137,9 +2137,10 @@ ParquetPrefetchStrategy ParquetReader::RegisterRowGroupReads(ClientContext &cont
 		++state.row_groups_skipped;
 	} else {
 		++state.row_groups_read;
-		state.bytes_scanned += to_scan_compressed_bytes;
-		QueryProfiler::Get(context).TrackBytesScanned(to_scan_compressed_bytes);
 	}
+	// counted in Process when the scan of the row group starts: a row group that is read ahead but never scanned,
+	// or whose prefetch fails, is not counted
+	state.pending_bytes_scanned = row_group_skipped ? 0 : to_scan_compressed_bytes;
 	if (state.op) {
 		DUCKDB_LOG(context, PhysicalOperatorLogType, *state.op, "ParquetReader",
 		           row_group_skipped ? "SkipRowGroup" : "ReadRowGroup",
@@ -2363,6 +2364,11 @@ AsyncResult ParquetReader::Process(ClientContext &context, ParquetReaderScanStat
 		// the row group is fully consumed
 		FinishRowGroup(context, state, log_prefetch);
 		return SourceResultType::FINISHED;
+	}
+	if (state.pending_bytes_scanned > 0) {
+		state.bytes_scanned += state.pending_bytes_scanned;
+		QueryProfiler::Get(context).TrackBytesScanned(state.pending_bytes_scanned);
+		state.pending_bytes_scanned = 0;
 	}
 
 	auto &deletion_filter = this->deletion_filter;

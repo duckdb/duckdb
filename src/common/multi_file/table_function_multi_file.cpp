@@ -43,6 +43,8 @@ public:
 	shared_ptr<BaseFileReader> reader;
 	//! The local state of the wrapped function
 	unique_ptr<LocalTableFunctionState> local_state;
+	//! Whether what the first scan of the current batch counted has been collected
+	bool batch_metrics_collected = true;
 };
 
 //===--------------------------------------------------------------------===//
@@ -285,6 +287,7 @@ bool TableFunctionFileReader::TryInitializeScan(ClientContext &context, GlobalTa
 	SetScanState(gstate);
 	InitializeFunctionState(context);
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
+	lstate.batch_metrics_collected = false;
 	if (!function.init_local) {
 		// the wrapped function has no local state - it can only be scanned by a single thread
 		bool expected = false;
@@ -323,7 +326,7 @@ AsyncResult TableFunctionFileReader::ScheduleIO(ClientContext &context, GlobalTa
 	return result;
 }
 
-AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &,
+AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFunctionState &gstate,
                                           LocalTableFunctionState &lstate_p, DataChunk &chunk) {
 	auto &lstate = lstate_p.Cast<TableFunctionMultiFileLocalState>();
 	TableFunctionInput input(bind_data.get(), lstate.local_state.get(), global_state.get());
@@ -331,6 +334,12 @@ AsyncResult TableFunctionFileReader::Scan(ClientContext &context, GlobalTableFun
 	input.async_result = AsyncResultType::IMPLICIT;
 	input.results_execution_mode = AsyncResultsExecutionMode::SYNCHRONOUS;
 	function.function(context, input, chunk);
+	if (!lstate.batch_metrics_collected) {
+		// the first scan of a batch can count what it scans (Parquet counts a row group then), and the file may
+		// already have been finished - collect it, as ScheduleIO does
+		CollectMetrics(context, gstate);
+		lstate.batch_metrics_collected = true;
+	}
 	if (chunk.size() == 0 && !settings.claim_batch) {
 		// an empty chunk signals the end of the scan for this thread - when the function scans in batches it only
 		// signals the end of the current batch, and the next batch is claimed by TryInitializeScan

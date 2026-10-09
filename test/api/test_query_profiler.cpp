@@ -175,9 +175,9 @@ TEST_CASE("Test the running total of bytes scanned", "[api][parquet]") {
 TEST_CASE("Test the running total of bytes scanned after a failed query", "[api][parquet]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	// bytes are counted when a row group's read is scheduled: no read-ahead, so the failure stops the counting
+	// read-ahead schedules the later row groups early; only those whose scan started may count
 	REQUIRE_NO_FAIL(con.Query("SET threads = 1"));
-	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth = 0"));
+	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth = 8"));
 	auto path = TestCreatePath("bytes_scanned_failed_query.parquet");
 	REQUIRE_NO_FAIL(
 	    con.Query("COPY (SELECT range AS i FROM range(6144)) TO '" + path + "' (FORMAT parquet, ROW_GROUP_SIZE 2048)"));
@@ -220,4 +220,22 @@ TEST_CASE("Test the running total of bytes scanned for a row-oriented format", "
 	REQUIRE_FAIL(
 	    con.Query("SELECT sum(CASE WHEN i = 90000 THEN error('boom') ELSE i END) FROM read_csv('" + path + "')"));
 	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == file_size);
+}
+
+TEST_CASE("Test bytes scanned by a LIMIT with read-ahead", "[api][parquet]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("SET threads = 1"));
+	REQUIRE_NO_FAIL(con.Query("SET read_ahead_depth = 8"));
+	auto path = TestCreatePath("bytes_scanned_limit.parquet");
+	REQUIRE_NO_FAIL(con.Query("COPY (SELECT range AS i FROM range(10 * 2048)) TO '" + path +
+	                          "' (FORMAT parquet, ROW_GROUP_SIZE 2048)"));
+	auto first =
+	    con.Query("SELECT total_compressed_size::UBIGINT FROM parquet_metadata('" + path + "') WHERE row_group_id = 0");
+	REQUIRE_NO_FAIL(*first);
+	auto first_row_group = first->Collection().GetValue(0, 0).GetValue<uint64_t>();
+
+	// the row groups read ahead are never scanned, so only the first counts
+	REQUIRE_NO_FAIL(con.Query("SELECT * FROM read_parquet('" + path + "') LIMIT 10"));
+	REQUIRE(QueryProfiler::Get(*con.context).GetBytesScanned() == first_row_group);
 }
