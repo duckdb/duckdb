@@ -28,6 +28,14 @@ struct SortedAggregateStateOrder {
 	OrderByNullType null_order;
 };
 
+//! A scalar function with its argument and return types resolved, before the bind callback is invoked
+struct ResolvedScalarFunctionTypes {
+	BoundScalarFunction bound_function;
+	vector<Identifier> argument_names;
+	//! The collation pushed into the arguments, to be propagated to the return type after binding
+	string pushed_collation;
+};
+
 //! Overload selection: picks the cheapest matching overload out of a function set, given the argument types of a
 //! call. Free-standing so that callers without a ClientContext - which only limits the set of implicit casts
 //! considered, can select overloads too.
@@ -332,6 +340,11 @@ public:
 	}
 
 private:
+	//! Resolves the argument / return types of the function and casts the children to them - everything that happens
+	//! before the bind callback is invoked
+	ResolvedScalarFunctionTypes
+	ResolveScalarFunctionTypes(shared_ptr<const ScalarFunction> function, vector<unique_ptr<Expression>> &children,
+	                           vector<pair<Identifier, unique_ptr<Expression>>> &keyword_args);
 	//! Cast a set of expressions to the arguments of this function
 	void CastToFunctionArguments(BoundSimpleFunction &function, vector<unique_ptr<Expression>> &children);
 
