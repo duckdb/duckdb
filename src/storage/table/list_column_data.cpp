@@ -176,7 +176,11 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// however, let's just read all "count" entries for now
 	Vector offset_vector(LogicalType::UBIGINT, count);
 	idx_t scan_count = ScanVector(state, offset_vector, count, ScanVectorType::SCAN_FLAT_VECTOR);
-	D_ASSERT(scan_count > 0);
+	if (scan_count == 0) {
+		// no offsets were scanned - there is nothing to skip in the child, and reading offset[-1] below would be
+		// an out-of-bounds read
+		return;
+	}
 
 	UnifiedVectorFormat offsets;
 	offset_vector.ToUnifiedFormat(offsets);
