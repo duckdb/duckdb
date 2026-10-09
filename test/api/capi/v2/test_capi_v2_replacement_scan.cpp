@@ -224,9 +224,9 @@ void ReplClaimWithUserData(duckdb_v2_replacement_scan_info_handle info, duckdb_v
 // Creates a scan on the connection with the given callback, registers it, and destroys the handle.
 void ReplRegisterOnConnection(duckdb_v2_connection_handle conn, duckdb_v2_replacement_scan_callback_fn callback) {
 	duckdb_v2_replacement_scan_handle scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(FactoryOf(conn), &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, callback, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_destroy(&scan) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(scan == nullptr);
 }
@@ -372,12 +372,12 @@ void ReplClaimCollection(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_
 // Registers a collection-serving scan whose user data is the caller-owned registry.
 void ReplRegisterRegistry(duckdb_v2_connection_handle conn, ReplRegistry &registry) {
 	duckdb_v2_replacement_scan_handle scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(FactoryOf(conn), &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplClaimCollection, nullptr) == DUCKDB_V2_ERROR_NONE);
 	// The registry outlives the database, so nothing to destroy.
 	duckdb_v2_opaque user_data = {&registry, nullptr, nullptr};
 	REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_replacement_scan_destroy(&scan);
 }
 
@@ -441,10 +441,9 @@ TEST_CASE("V2 replacement scan: connection scope and precedence", "[capi_v2][rep
 
 	// An instance-scoped scan reaches every connection, including ones opened afterwards.
 	duckdb_v2_replacement_scan_handle instance_scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(fx.instance, &instance_scan, nullptr) ==
-	        DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &instance_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(instance_scan, ReplClaimRange, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_replacement_scan_register(instance_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_instance_register_replacement_scan(fx.instance, instance_scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_replacement_scan_destroy(&instance_scan);
 
 	REQUIRE(ReplQueryI64(other, "SELECT * FROM anything") == std::vector<int64_t> {0, 1});
@@ -534,11 +533,11 @@ TEST_CASE("V2 replacement scan: user data flows and is destroyed once", "[capi_v
 	{
 		EnvFixture fx;
 		duckdb_v2_replacement_scan_handle scan = nullptr;
-		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplClaimWithUserData, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_opaque user_data = {new std::string("planted"), ReplDestroyUserData, nullptr};
 		REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, &user_data, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 		// Destroying the builder does not affect the registered scan or free the user data.
 		REQUIRE(duckdb_v2_replacement_scan_destroy(&scan) == DUCKDB_V2_ERROR_NONE);
 
@@ -555,17 +554,19 @@ TEST_CASE("V2 replacement scan: registration refusals", "[capi_v2][replacement_s
 	// No callback.
 	{
 		duckdb_v2_replacement_scan_handle scan = nullptr;
-		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_replacement_scan_destroy(&scan);
 	}
 	// Registering twice from one handle.
 	{
 		duckdb_v2_replacement_scan_handle scan = nullptr;
-		REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_replacement_scan_set_callback(scan, ReplDecline, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_replacement_scan_register(scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, scan, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_replacement_scan_destroy(&scan);
 	}
 }
@@ -574,18 +575,17 @@ TEST_CASE("V2 replacement scan: null arguments and destroy null-safety", "[capi_
 	EnvFixture fx;
 
 	duckdb_v2_replacement_scan_handle scan = nullptr;
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(nullptr, &scan, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_create(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(scan == nullptr);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_instance(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_create_with_extension(nullptr, &scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(nullptr, scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_instance_register_replacement_scan(nullptr, scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_extension_register_replacement_scan(nullptr, scan, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_replacement_scan_create_with_connection(fx.conn, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_replacement_scan_create(fx.factory, &scan, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_replacement_scan_set_callback(nullptr, ReplDecline, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(duckdb_v2_replacement_scan_set_user_data(scan, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_replacement_scan_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_replacement_scan(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	// The info accessors reject a null handle and a null out-parameter alike.
 	void *data = nullptr;

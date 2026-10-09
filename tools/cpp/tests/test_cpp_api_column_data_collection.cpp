@@ -49,8 +49,7 @@ std::vector<int32_t> ScanInts(Connection &conn, const ColumnDataCollection &coll
 } // namespace
 
 TEST_CASE("Stable C++API: ColumnDataCollection round-trip", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -70,8 +69,7 @@ TEST_CASE("Stable C++API: ColumnDataCollection round-trip", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: ColumnDataCollection combine consumes the source", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -97,8 +95,7 @@ TEST_CASE("Stable C++API: ColumnDataCollection combine consumes the source", "[c
 }
 
 TEST_CASE("Stable C++API: ColumnDataCollection reset", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -117,8 +114,7 @@ TEST_CASE("Stable C++API: ColumnDataCollection reset", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: ColumnDataCollection clear", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -140,8 +136,7 @@ TEST_CASE("Stable C++API: ColumnDataCollection clear", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: ColumnDataCollection scan refuses a mismatching chunk", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -159,8 +154,7 @@ TEST_CASE("Stable C++API: ColumnDataCollection scan refuses a mismatching chunk"
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 TEST_CASE("Stable C++API: DataChunk::Copy outlives the scan", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 

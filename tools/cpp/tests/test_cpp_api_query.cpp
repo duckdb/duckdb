@@ -32,8 +32,7 @@ bool Contains(const std::string &haystack, const std::string &needle) {
 TEST_CASE("Stable C++API: step loop drains a multi-chunk result", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto result = conn.Execute("SELECT i FROM range(100000) t(i)");
@@ -68,8 +67,7 @@ TEST_CASE("Stable C++API: step loop drains a multi-chunk result", "[cpp_api]") {
 TEST_CASE("Stable C++API: Drain applies side effects and reports rows changed", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	REQUIRE(conn.Execute("CREATE TABLE t (i INTEGER)").Drain() == 0);
@@ -87,8 +85,7 @@ TEST_CASE("Stable C++API: Drain applies side effects and reports rows changed", 
 TEST_CASE("Stable C++API: a busy connection refuses new work with RESOURCE_IN_USE", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto live = conn.Execute("SELECT i FROM range(100000) t(i)");
@@ -104,8 +101,7 @@ TEST_CASE("Stable C++API: a busy connection refuses new work with RESOURCE_IN_US
 TEST_CASE("Stable C++API: Interrupt cancels a running query", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto result = conn.Execute("SELECT i FROM range(10000000) t(i)");
@@ -127,8 +123,7 @@ TEST_CASE("Stable C++API: Interrupt cancels a running query", "[cpp_api]") {
 TEST_CASE("Stable C++API: GetQueryProgress reports idle values when no query is active", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto progress = conn.GetQueryProgress();
@@ -140,8 +135,7 @@ TEST_CASE("Stable C++API: GetQueryProgress reports idle values when no query is 
 TEST_CASE("Stable C++API: GetQueryProgress reports unavailable progress", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.GetConfig().SetOption("enable_progress_bar", "true", SettingScope::SESSION);
 
@@ -157,8 +151,7 @@ TEST_CASE("Stable C++API: GetQueryProgress reports unavailable progress", "[cpp_
 TEST_CASE("Stable C++API: ParseSQL iterates statements into Execute", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto statements = conn.ParseSQL("SELECT 42; SELECT 84; SELECT 126");
@@ -181,8 +174,7 @@ TEST_CASE("Stable C++API: ParseSQL iterates statements into Execute", "[cpp_api]
 TEST_CASE("Stable C++API: SqlStatement parse-time metadata", "[cpp_api][sql_statement]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto statements = conn.ParseSQL("select $1; select 21");
@@ -207,8 +199,7 @@ TEST_CASE("Stable C++API: SqlStatement parse-time metadata", "[cpp_api][sql_stat
 TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE t(a INTEGER, b VARCHAR)").Drain();
@@ -241,8 +232,7 @@ TEST_CASE("Stable C++API: Bind", "[cpp_api][statement_bind]") {
 TEST_CASE("Stable C++API: QueryResult GetSchema", "[cpp_api][query_result]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -256,8 +246,7 @@ TEST_CASE("Stable C++API: QueryResult GetSchema", "[cpp_api][query_result]") {
 TEST_CASE("Stable C++API: QueryResult result and statement types", "[cpp_api][query_result]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.Execute("CREATE TABLE rt(i INTEGER)").Drain();
 
@@ -295,8 +284,7 @@ TEST_CASE("Stable C++API: QueryResult result and statement types", "[cpp_api][qu
 TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE scores(id INTEGER, score INTEGER)").Drain();
@@ -381,8 +369,7 @@ TEST_CASE("Stable C++API: prepared statements", "[cpp_api][prepared_statement]")
 TEST_CASE("Stable C++API: Connection Execute binds named parameters", "[cpp_api][prepared_statement]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	auto statement = conn.ParseSQL("SELECT $left::BIGINT - $right::BIGINT").Next();
@@ -396,8 +383,7 @@ TEST_CASE("Stable C++API: Connection Execute binds named parameters", "[cpp_api]
 TEST_CASE("Stable C++API: RenderBox renders glyphs, the type row, and NULL cells", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto text = conn.Execute("SELECT * FROM (VALUES (1, 'x'), (2, NULL)) t(a, b)").RenderBox();
@@ -415,8 +401,7 @@ TEST_CASE("Stable C++API: RenderBox renders glyphs, the type row, and NULL cells
 TEST_CASE("Stable C++API: RenderBox footer counts all rows even when max_rows bounds display", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	// 100 rows, display bounded to 5: max_rows bounds DISPLAY, not the read.
@@ -429,8 +414,7 @@ TEST_CASE("Stable C++API: RenderBox footer counts all rows even when max_rows bo
 TEST_CASE("Stable C++API: RenderBox max_rows changes display and 0 selects the default", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto few = conn.Execute("SELECT i AS n FROM range(100) t(i)").RenderBox(/*max_rows=*/3);
@@ -446,8 +430,7 @@ TEST_CASE("Stable C++API: RenderBox max_rows changes display and 0 selects the d
 TEST_CASE("Stable C++API: RenderBox max_width and max_col_width change the layout", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	// Five wide columns; explicit widths keep the test off the terminal probe.
@@ -475,8 +458,7 @@ TEST_CASE("Stable C++API: RenderBox max_width and max_col_width change the layou
 TEST_CASE("Stable C++API: RenderBox render_mode selects rows vs columns layout", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	const char *sql = "SELECT 1 AS a, 2 AS b, 3 AS c";
@@ -488,8 +470,7 @@ TEST_CASE("Stable C++API: RenderBox render_mode selects rows vs columns layout",
 TEST_CASE("Stable C++API: RenderBox custom null_value overrides the default NULL text", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto def = conn.Execute("SELECT CAST(NULL AS INTEGER) AS b").RenderBox();
@@ -504,8 +485,7 @@ TEST_CASE("Stable C++API: RenderBox custom null_value overrides the default NULL
 TEST_CASE("Stable C++API: RenderBox consumes the result and frees the connection", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto r = conn.Execute("SELECT i FROM range(5) t(i)");
@@ -522,8 +502,7 @@ TEST_CASE("Stable C++API: RenderBox consumes the result and frees the connection
 TEST_CASE("Stable C++API: RenderBox on a partially consumed result renders the remainder", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	// More than one chunk so a single fetch leaves a remainder.
@@ -542,8 +521,7 @@ TEST_CASE("Stable C++API: RenderBox on a partially consumed result renders the r
 TEST_CASE("Stable C++API: RenderBox handles zero-row and no-row-output results", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	// Zero-row SELECT: the schema is known and the footer reports 0 rows.
@@ -562,8 +540,7 @@ TEST_CASE("Stable C++API: RenderBox handles zero-row and no-row-output results",
 TEST_CASE("Stable C++API: RenderBox limit yields an approximate '? rows' footer", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	// The .show() idiom: wrap the query with LIMIT n and pass n as limit, so the

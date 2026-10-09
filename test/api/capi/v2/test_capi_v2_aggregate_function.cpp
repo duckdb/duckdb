@@ -24,7 +24,7 @@ duckdb_v2_identifier_t AggName(const char *s) {
 // Create an aggregate function on the connection with the given name.
 duckdb_v2_aggregate_function_handle MakeAggregate(duckdb_v2_connection_handle conn, const char *name) {
 	duckdb_v2_aggregate_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto str = Convert(name);
 	REQUIRE(duckdb_v2_aggregate_function_set_name(function, &str, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return function;
@@ -164,7 +164,7 @@ void RegisterMySum(EnvFixture &fx) {
 	REQUIRE(duckdb_v2_aggregate_function_set_combine_callback(function, SumCombine, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, SumFinalize, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_destroy(&function) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(function == nullptr);
 	duckdb_v2_logical_type_destroy(&integer);
@@ -462,7 +462,7 @@ TEST_CASE("V2 aggregate: bind callback resolves ANY return and bind data flows",
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, AggFlowFinalize, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
@@ -517,7 +517,7 @@ TEST_CASE("V2 aggregate: bind reads argument count, types and constants", "[capi
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, AggArgProbeFinalize, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
@@ -572,7 +572,7 @@ TEST_CASE("V2 aggregate: update error propagates to the result", "[capi_v2][aggr
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, AggNoopFinalize, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 
@@ -624,12 +624,12 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 	// No name.
 	{
 		duckdb_v2_aggregate_function_handle function = nullptr;
-		REQUIRE(duckdb_v2_aggregate_function_create_with_connection(fx.conn, &function, nullptr) ==
-		        DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_aggregate_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 		auto sig = AggSigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		configure(function, true, true, true, true, true);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -639,7 +639,8 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 		auto sig = AggSigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		configure(function, missing != 0, missing != 1, missing != 2, missing != 3, missing != 4);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -647,7 +648,8 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 	{
 		auto function = MakeAggregate(fx.conn, "no_return");
 		configure(function, true, true, true, true, true);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -657,7 +659,8 @@ TEST_CASE("V2 aggregate: registration refusals", "[capi_v2][aggregate_function]"
 		auto sig = AggSigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
 		configure(function, true, true, true, true, true);
-		REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_aggregate_function_destroy(&function);
 	}
 
@@ -669,17 +672,16 @@ TEST_CASE("V2 aggregate: null arguments and destroy null-safety", "[capi_v2][agg
 	EnvFixture fx;
 
 	duckdb_v2_aggregate_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(nullptr, &function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_aggregate_function_create(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(function == nullptr);
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(fx.conn, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_aggregate_function_create(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_aggregate_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_aggregate_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_name(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_aggregate_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_aggregate_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, nullptr, nullptr) ==
+	        DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_aggregate_function_destroy(&function);
 
@@ -726,7 +728,7 @@ TEST_CASE("V2 aggregate: function properties", "[capi_v2][aggregate_function]") 
 	                                                  static_cast<DUCKDB_V2_FUNCTION_PROPERTY_VALUE>(0x7F0000),
 	                                                  nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&bigint);
@@ -807,7 +809,7 @@ TEST_CASE("V2 aggregate: named-only arguments reach update", "[capi_v2][aggregat
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_combine_callback(function, SumCombine, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_aggregate_function_set_finalize_callback(function, SumFinalize, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_aggregate_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_aggregate_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_aggregate_function_destroy(&function);
 	duckdb_v2_value_destroy(&one);
 	duckdb_v2_logical_type_destroy(&bigint);

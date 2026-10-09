@@ -44,8 +44,7 @@ void AppendValues(Connection &conn, Appender &appender, const std::vector<int64_
 } // namespace
 
 TEST_CASE("Stable C++API: appender buffers and flushes into a table", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
 
@@ -73,8 +72,7 @@ TEST_CASE("Stable C++API: appender buffers and flushes into a table", "[cpp_api]
 }
 
 TEST_CASE("Stable C++API: appender buffers across several chunks before flushing", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
 
@@ -88,8 +86,7 @@ TEST_CASE("Stable C++API: appender buffers across several chunks before flushing
 }
 
 TEST_CASE("Stable C++API: appender Clear drops the buffer without writing", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
 
@@ -106,8 +103,7 @@ TEST_CASE("Stable C++API: appender Clear drops the buffer without writing", "[cp
 }
 
 TEST_CASE("Stable C++API: appender destruction drops unflushed rows", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
@@ -129,8 +125,7 @@ TEST_CASE("Stable C++API: appender destruction drops unflushed rows", "[cpp_api]
 }
 
 TEST_CASE("Stable C++API: appender with an explicit query", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE t (v BIGINT, tag VARCHAR DEFAULT 'seen')").Drain();
@@ -156,8 +151,7 @@ TEST_CASE("Stable C++API: appender with an explicit query", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: appender is scoped to its connection", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	auto other = db.Connect();
@@ -173,8 +167,7 @@ TEST_CASE("Stable C++API: appender is scoped to its connection", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: appender refuses a mismatching chunk", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE t (v BIGINT)").Drain();
@@ -194,8 +187,7 @@ TEST_CASE("Stable C++API: appender refuses a mismatching chunk", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: appender construction refusals", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 

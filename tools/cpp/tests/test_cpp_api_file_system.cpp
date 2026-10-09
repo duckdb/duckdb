@@ -28,8 +28,7 @@ std::string ReadAll(FileHandle &file, idx_t capacity) {
 } // namespace
 
 TEST_CASE("Stable C++API: file system round-trip", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_roundtrip.bin");
@@ -54,8 +53,7 @@ TEST_CASE("Stable C++API: file system round-trip", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: an instance's file system", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto fs = db.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_instance.bin");
 	{
@@ -67,8 +65,7 @@ TEST_CASE("Stable C++API: an instance's file system", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: file flags", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_flags.bin");
@@ -107,8 +104,7 @@ TEST_CASE("Stable C++API: file flags", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: file system refusals", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 
@@ -123,8 +119,7 @@ TEST_CASE("Stable C++API: file system refusals", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: file handle close then destroy", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_close.bin");
@@ -136,8 +131,7 @@ TEST_CASE("Stable C++API: file handle close then destroy", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: positional file read and write", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto fs = conn.GetFileSystem();
 	auto path = duckdb::TestCreatePath("cpp_fs_positional.bin");
@@ -163,8 +157,7 @@ TEST_CASE("Stable C++API: positional file read and write", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: file open options", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	auto fs = conn.GetFileSystem();

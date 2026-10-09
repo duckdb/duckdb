@@ -36,8 +36,7 @@ std::string SlotBytes(const duckdb_v2_bytes &s) {
 TEST_CASE("Stable C++API: Vector AssignString", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -64,8 +63,7 @@ TEST_CASE("Stable C++API: Vector AssignString", "[cpp_api]") {
 TEST_CASE("Stable C++API: Vector AssignString over a batch of slots", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -93,8 +91,7 @@ TEST_CASE("Stable C++API: Vector AssignString over a batch of slots", "[cpp_api]
 TEST_CASE("Stable C++API: StringHeap primitive (dedup + scatter)", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -131,8 +128,7 @@ TEST_CASE("Stable C++API: StringHeap primitive (dedup + scatter)", "[cpp_api]") 
 TEST_CASE("Stable C++API: StringHeap::Allocate write-in-place", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -172,8 +168,7 @@ TEST_CASE("Stable C++API: AssignString rejects misuse", "[cpp_api]") {
 
 	// A non-string vector has no heap: AssignString surfaces INVALID_INPUT.
 	{
-		Environment env;
-		auto db = env.Open(":memory:");
+		auto db = Instance(":memory:");
 		auto conn = db.Connect();
 		auto &factory = conn.GetFactory();
 		std::vector<LogicalType> types;
@@ -186,8 +181,7 @@ TEST_CASE("Stable C++API: AssignString rejects misuse", "[cpp_api]") {
 
 	// A CONSTANT vector's data array holds one slot: only index 0 is writable.
 	{
-		Environment env;
-		auto db = env.Open(":memory:");
+		auto db = Instance(":memory:");
 		auto conn = db.Connect();
 		auto &factory = conn.GetFactory();
 		std::vector<LogicalType> types;
@@ -203,8 +197,7 @@ TEST_CASE("Stable C++API: AssignString rejects misuse", "[cpp_api]") {
 TEST_CASE("Stable C++API: VectorView NULL-aware read of a queried chunk", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto result = conn.Execute("SELECT CASE WHEN i % 3 = 0 THEN NULL ELSE i END AS v FROM range(10) t(i)");
@@ -233,8 +226,7 @@ TEST_CASE("Stable C++API: VectorView NULL-aware read of a queried chunk", "[cpp_
 TEST_CASE("Stable C++API: VectorView CONSTANT without flatten", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -312,8 +304,7 @@ TEST_CASE("Stable C++API: VectorView DICTIONARY resolves validity through sel", 
 TEST_CASE("Stable C++API: MakeSequence and MakeConstant round-trip", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -350,8 +341,7 @@ TEST_CASE("Stable C++API: MakeSequence and MakeConstant round-trip", "[cpp_api]"
 TEST_CASE("Stable C++API: VectorView VARCHAR and BLOB reads via blob_t", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	const std::string long_str = "this string is comfortably longer than twelve bytes";
@@ -389,8 +379,7 @@ TEST_CASE("Stable C++API: VectorView VARCHAR and BLOB reads via blob_t", "[cpp_a
 TEST_CASE("Stable C++API: validity write round-trip", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -437,8 +426,7 @@ TEST_CASE("Stable C++API: validity write round-trip", "[cpp_api]") {
 TEST_CASE("Stable C++API: validity mask word-boundary rows", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -481,8 +469,7 @@ TEST_CASE("Stable C++API: validity mask word-boundary rows", "[cpp_api]") {
 TEST_CASE("Stable C++API: VectorView::AllValid ignores bits past the row count", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -512,8 +499,7 @@ TEST_CASE("Stable C++API: VectorView::AllValid ignores bits past the row count",
 TEST_CASE("Stable C++API: vector read surface rejects misuse", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -541,8 +527,7 @@ TEST_CASE("Stable C++API: vector read surface rejects misuse", "[cpp_api]") {
 TEST_CASE("Stable C++API: Vector SetNull recurses into nested children", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -580,8 +565,7 @@ TEST_CASE("Stable C++API: Vector SetNull recurses into nested children", "[cpp_a
 TEST_CASE("Stable C++API: ValidityMask SetAllInvalid born-invalid pattern", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -612,8 +596,7 @@ TEST_CASE("Stable C++API: ValidityMask SetAllInvalid born-invalid pattern", "[cp
 TEST_CASE("Stable C++API: ValidityMask SetAllValid born-valid and reset", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -652,8 +635,7 @@ TEST_CASE("Stable C++API: ValidityMask SetAllValid born-valid and reset", "[cpp_
 
 TEST_CASE("Stable C++API: checked and unsafe UTF-8 string construction", "[cpp_api]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	std::vector<LogicalType> types;
@@ -692,8 +674,7 @@ TEST_CASE("Stable C++API: checked and unsafe UTF-8 string construction", "[cpp_a
 
 TEST_CASE("Stable C++API: AssignString preserves binary bytes", "[cpp_api]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	const auto bignum = bignum_t::Encode({{0xFF}, false});
@@ -714,8 +695,7 @@ TEST_CASE("Stable C++API: AssignString preserves binary bytes", "[cpp_api]") {
 TEST_CASE("Stable C++API: Vector Reference aliases the source without copying", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -789,8 +769,7 @@ TEST_CASE("Stable C++API: Vector Reference aliases the source without copying", 
 TEST_CASE("Stable C++API: MAP entries are written through its entries child", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE maps (m MAP(INTEGER, VARCHAR))").Drain();
@@ -827,8 +806,7 @@ TEST_CASE("Stable C++API: MAP entries are written through its entries child", "[
 TEST_CASE("Stable C++API: DataChunk capacity", "[cpp_api]") {
 	using namespace duckdb::cxx;
 
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 

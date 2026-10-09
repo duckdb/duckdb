@@ -6,9 +6,9 @@ handles:
   scalar_function:
     description: |
       An owned opaque handle to a custom scalar function being built. Created with
-      `[[scalar_function_create_with_connection]]` or `[[scalar_function_create_with_extension]]`, configured with the
+      `[[scalar_function_create]]`, configured with the
       setter functions (e.g. `[[scalar_function_set_name]]`, `[[scalar_function_set_exec_callback]]`, etc.) and the
-      signature obtained via `[[scalar_function_get_signature]]`, made available with `[[scalar_function_register]]`, and
+      signature obtained via `[[scalar_function_get_signature]]`, made available with `[[connection_register_scalar_function]]` or `[[extension_register_scalar_function]]`, and
       destroyed with `[[scalar_function_destroy]]`.
 
   scalar_function_bind_info:
@@ -86,48 +86,25 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Constructors
   #---------------------------------------------------------------------------------------------------------------------
-  scalar_function_create_with_connection:
+  scalar_function_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
     description: |
-      Creates a new scalar function that will be registered on the connection's database.
+      Creates a new scalar function through a factory.
 
       The function starts out empty: configure it with the setter functions (e.g. `[[scalar_function_set_name]]`,
-      `[[scalar_function_set_exec_callback]]`, etc.) and the signature obtained via
-      `[[scalar_function_get_signature]]`, then make it available with `[[scalar_function_register]]`.
+      `[[scalar_function_set_exec_callback]]`, etc.) and the signature obtained via `[[scalar_function_get_signature]]`,
+      then make it available with `[[connection_register_scalar_function]]` or `[[extension_register_scalar_function]]`.
       The caller owns the returned handle and must destroy it with `[[scalar_function_destroy]]`, also after
       registration.
-    parameters:
-      connection:
-        type: connection
-        description: The connection to create the function in.
-      function:
-        type: scalar_function
-        indirection: 1
-        kind: OUT
-        description: On success, receives the newly created scalar function. Owned by the caller.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
 
-  scalar_function_create_with_extension:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-08-11" ]
-    description: |
-      Creates a new scalar function that will be registered on the loading extension's database.
-
-      Use this from an extension load callback, where an extension handle is available. The function starts out
-      empty: configure it with the setter functions (e.g. `[[scalar_function_set_name]]`,
-      `[[scalar_function_set_exec_callback]]`, etc.) and the signature obtained via
-      `[[scalar_function_get_signature]]`, then make it available with `[[scalar_function_register]]`.
-      The caller owns the returned handle and must destroy it with `[[scalar_function_destroy]]`, also after
-      registration.
+      The scalar function can only be registered on the database the factory belongs to.
+    role: constructor
+    belongs_to: scalar_function
     parameters:
-      extension:
-        type: extension
-        description: The extension to create the function in.
+      factory:
+        type: factory
+        description: The factory to create the scalar function through.
       function:
         type: scalar_function
         indirection: 1
@@ -573,25 +550,59 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Register
   #---------------------------------------------------------------------------------------------------------------------
-  scalar_function_register:
+  connection_register_scalar_function:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-08-11" ]
     description: |
       Registers the scalar function, making it available for use in SQL queries.
 
-      The function is registered on the target given at creation: the connection's database or the loading
-      extension. Registration requires a name, an exec callback, and a signature with a complete return type;
-      an ANY return type is accepted only together with a bind callback that sets the concrete type per call
-      site. The caller still owns the handle after registration and must destroy it with
-      `[[scalar_function_destroy]]`, which does not affect the registered function.
+      The function is registered on the connection's database, visible to every connection, in the connection's
+      transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits,
+      and a rollback undoes it. Registration requires a name, an exec callback, and a signature with a complete return
+      type; an ANY return type is accepted only together with a bind callback that sets the concrete type per call site.
+      The scalar function must have been created through a factory of the same database. The caller still owns the
+      handle after registration and must destroy it with `[[scalar_function_destroy]]`, which does not affect the
+      registered function.
+    role: method
+    belongs_to: connection
     parameters:
+      conn:
+        type: connection
+        description: The connection to register on.
       function:
         type: scalar_function
-        description: The function to register.
+        description: The scalar function to register.
       err:
         type: error_info
         indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  extension_register_scalar_function:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-08-11" ]
+    description: |
+      Registers the scalar function, making it available for use in SQL queries.
+
+      The function is registered on the loading extension's database and attributed to the extension. Use this from the
+      extension's load callback. Registration requires a name, an exec callback, and a signature with a complete return
+      type; an ANY return type is accepted only together with a bind callback that sets the concrete type per call site.
+      The scalar function must have been created through a factory of the same database. The caller still owns the
+      handle after registration and must destroy it with `[[scalar_function_destroy]]`, which does not affect the
+      registered function.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      function:
+        type: scalar_function
+        description: The scalar function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------

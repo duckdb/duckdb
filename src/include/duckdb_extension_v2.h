@@ -472,9 +472,13 @@ typedef struct {
 	(duckdb_v2_vector_handle vector, idx_t size, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vector_set_value)
 	(duckdb_v2_vector_handle vector, idx_t row, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_scalar_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_scalar_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_log)
 	(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level, const duckdb_v2_str *log_type,
 	 const duckdb_v2_str *message, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_scalar_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_scalar_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_function_signature_add_parameter)
 	(duckdb_v2_function_signature_handle sig, const duckdb_v2_identifier_t *name, duckdb_v2_logical_type_handle type,
 	 duckdb_v2_value_handle value, DUCKDB_V2_FUNCTION_PARAMETER_KIND kind, duckdb_v2_error_info_handle *err);
@@ -483,12 +487,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_bind_set_return_type)
 	(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_scalar_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_scalar_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_scalar_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_scalar_function_destroy)(duckdb_v2_scalar_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_exec_get_arg)
 	(duckdb_v2_scalar_function_exec_info_handle info, idx_t index, duckdb_v2_vector_handle *vector,
@@ -516,8 +516,6 @@ typedef struct {
 	(duckdb_v2_scalar_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_init_set_init_data)
 	(duckdb_v2_scalar_function_init_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_register)
-	(duckdb_v2_scalar_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_bind_callback)
 	(duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_bind_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -544,12 +542,8 @@ typedef struct {
 	(duckdb_v2_aggregate_function_combine_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_combine_get_user_data)
 	(duckdb_v2_aggregate_function_combine_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_aggregate_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_aggregate_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_aggregate_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_aggregate_function_destroy)(duckdb_v2_aggregate_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_destroy_get_bind_data)
 	(duckdb_v2_aggregate_function_destroy_info_handle info, void **data, duckdb_v2_error_info_handle *err);
@@ -583,8 +577,6 @@ typedef struct {
 	(duckdb_v2_aggregate_function_init_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_init_get_user_data)
 	(duckdb_v2_aggregate_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_register)
-	(duckdb_v2_aggregate_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_bind_callback)
 	(duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_bind_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -631,23 +623,29 @@ typedef struct {
 	(duckdb_v2_aggregate_function_update_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_update_get_user_data)
 	(duckdb_v2_aggregate_function_update_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_aggregate_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_aggregate_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_aggregate_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_aggregate_function_handle function,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_property)
 	(duckdb_v2_aggregate_function_handle function, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
 	 DUCKDB_V2_FUNCTION_PROPERTY_VALUE value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_property)
 	(duckdb_v2_scalar_function_handle function, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
 	 DUCKDB_V2_FUNCTION_PROPERTY_VALUE value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_table_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_table_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_table_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_table_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_add_result_column)
 	(duckdb_v2_table_function_bind_info_handle info, const duckdb_v2_identifier_t *name,
 	 duckdb_v2_logical_type_handle type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_cardinality)
 	(duckdb_v2_table_function_bind_info_handle info, idx_t cardinality, bool is_exact,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_table_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_table_function_handle *function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_table_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_table_function_destroy)(duckdb_v2_table_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_exec_get_bind_data)
 	(duckdb_v2_table_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
@@ -687,8 +685,6 @@ typedef struct {
 	(duckdb_v2_table_function_progress_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_progress_set_progress)
 	(duckdb_v2_table_function_progress_info_handle info, double progress, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_register)
-	(duckdb_v2_table_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_bind_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_bind_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -708,11 +704,8 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_user_data)
 	(duckdb_v2_table_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_cast_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_cast_function_handle *function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_cast_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_cast_function_destroy)(duckdb_v2_cast_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_exec_get_input)
 	(duckdb_v2_cast_function_exec_info_handle info, duckdb_v2_vector_handle *vector, duckdb_v2_error_info_handle *err);
@@ -724,8 +717,6 @@ typedef struct {
 	(duckdb_v2_cast_function_exec_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_exec_get_user_data)
 	(duckdb_v2_cast_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_register)
-	(duckdb_v2_cast_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_set_exec_callback)
 	(duckdb_v2_cast_function_handle function, duckdb_v2_cast_function_exec_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -741,19 +732,27 @@ typedef struct {
 	(duckdb_v2_cast_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_clear)
 	(duckdb_v2_column_data_collection_handle collection, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_cast_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_cast_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_custom_type)
+	(duckdb_v2_connection_handle conn, duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_replacement_scan)
+	(duckdb_v2_connection_handle conn, duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_file_system)
 	(duckdb_v2_context_handle context, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_custom_type_handle *type, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_custom_type_handle *type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_custom_type_handle *type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_custom_type_destroy)(duckdb_v2_custom_type_handle *type);
-	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_register)
-	(duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_set_base_type)
 	(duckdb_v2_custom_type_handle type, duckdb_v2_logical_type_handle base_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_set_name)
 	(duckdb_v2_custom_type_handle type, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_cast_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_cast_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_custom_type)
+	(duckdb_v2_extension_handle extension, duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_replacement_scan)
+	(duckdb_v2_extension_handle extension, duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_file_close)(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_file_destroy)(duckdb_v2_file_handle *file);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_open_options_create)
@@ -784,6 +783,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_file_write_at)
 	(duckdb_v2_file_handle file, const void *buffer, idx_t buffer_size, idx_t location,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_register_replacement_scan)
+	(duckdb_v2_instance_handle instance, duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_qname_create)
 	(const duckdb_v2_identifier_t *parts, idx_t part_count, duckdb_v2_qname_handle *name,
 	 duckdb_v2_error_info_handle *err);
@@ -806,19 +807,13 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_add_named_argument)
 	(duckdb_v2_replacement_scan_info_handle info, const duckdb_v2_identifier_t *name, duckdb_v2_value_handle value,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_instance)
-	(duckdb_v2_instance_handle instance, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_replacement_scan_destroy)(duckdb_v2_replacement_scan_handle *scan);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_name)
 	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_qname_handle *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_user_data)
 	(duckdb_v2_replacement_scan_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_register)
-	(duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_alias)
 	(duckdb_v2_replacement_scan_info_handle info, const duckdb_v2_identifier_t *alias,
 	 duckdb_v2_error_info_handle *err);
@@ -869,6 +864,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_describe_table)
 	(duckdb_v2_connection_handle conn, duckdb_v2_qname_handle name, duckdb_v2_table_description_handle *desc,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_copy_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_copy_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_bind_get_column_count)
 	(duckdb_v2_copy_from_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_bind_get_column_name)
@@ -942,14 +939,9 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_set_progress_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_from_progress_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_copy_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_copy_function_handle *function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_copy_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_copy_function_destroy)(duckdb_v2_copy_function_handle *function);
-	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_register)
-	(duckdb_v2_copy_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_name)
 	(duckdb_v2_copy_function_handle function, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_user_data)
@@ -1052,6 +1044,8 @@ typedef struct {
 	(duckdb_v2_expression_handle expression, duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_expression_get_type)
 	(duckdb_v2_expression_handle expression, DUCKDB_V2_EXPRESSION_TYPE *type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_copy_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_copy_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_identifier_render_quoted)
 	(const duckdb_v2_identifier_t *name, char *out_text, idx_t out_capacity, idx_t *out_length,
 	 duckdb_v2_error_info_handle *err);
@@ -1265,6 +1259,8 @@ typedef struct {
 	(duckdb_v2_option_handle option, DUCKDB_V2_SETTING_SCOPE scope, bool *out_supported,
 	 duckdb_v2_error_info_handle *err);
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_to_statistics_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -1280,15 +1276,13 @@ typedef struct {
 	(duckdb_v2_copy_to_statistics_info_handle info, idx_t row_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_capacity)
 	(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_multi_file_function_handle *function,
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_multi_file_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_multi_file_function_handle function,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_multi_file_function_handle *function,
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_multi_file_function_handle *function,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_multi_file_function_destroy)(duckdb_v2_multi_file_function_handle *function);
-	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_register)
-	(duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_file_extension)
 	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *extension, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_name)
@@ -1349,185 +1343,185 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_column_data_collection_worker_scan_state_create
 #define duckdb_v2_column_data_collection_worker_scan_state_destroy                                                     \
 	duckdb_ext_api.duckdb_v2_column_data_collection_worker_scan_state_destroy
-#define duckdb_v2_config_get_option_by_index             duckdb_ext_api.duckdb_v2_config_get_option_by_index
-#define duckdb_v2_config_get_option_by_name              duckdb_ext_api.duckdb_v2_config_get_option_by_name
-#define duckdb_v2_config_get_option_count                duckdb_ext_api.duckdb_v2_config_get_option_count
-#define duckdb_v2_connection_create                      duckdb_ext_api.duckdb_v2_connection_create
-#define duckdb_v2_connection_destroy                     duckdb_ext_api.duckdb_v2_connection_destroy
-#define duckdb_v2_connection_interrupt                   duckdb_ext_api.duckdb_v2_connection_interrupt
-#define duckdb_v2_connection_progress_get                duckdb_ext_api.duckdb_v2_connection_progress_get
-#define duckdb_v2_data_chunk_copy                        duckdb_ext_api.duckdb_v2_data_chunk_copy
-#define duckdb_v2_data_chunk_create                      duckdb_ext_api.duckdb_v2_data_chunk_create
-#define duckdb_v2_data_chunk_destroy                     duckdb_ext_api.duckdb_v2_data_chunk_destroy
-#define duckdb_v2_data_chunk_get_size                    duckdb_ext_api.duckdb_v2_data_chunk_get_size
-#define duckdb_v2_data_chunk_get_vector                  duckdb_ext_api.duckdb_v2_data_chunk_get_vector
-#define duckdb_v2_data_chunk_get_vector_count            duckdb_ext_api.duckdb_v2_data_chunk_get_vector_count
-#define duckdb_v2_environment_create                     duckdb_ext_api.duckdb_v2_environment_create
-#define duckdb_v2_environment_destroy                    duckdb_ext_api.duckdb_v2_environment_destroy
-#define duckdb_v2_environment_get_instance_count         duckdb_ext_api.duckdb_v2_environment_get_instance_count
-#define duckdb_v2_error_info_destroy                     duckdb_ext_api.duckdb_v2_error_info_destroy
-#define duckdb_v2_error_info_get_code                    duckdb_ext_api.duckdb_v2_error_info_get_code
-#define duckdb_v2_error_info_get_raw_text                duckdb_ext_api.duckdb_v2_error_info_get_raw_text
-#define duckdb_v2_error_info_get_text                    duckdb_ext_api.duckdb_v2_error_info_get_text
-#define duckdb_v2_error_info_set_code                    duckdb_ext_api.duckdb_v2_error_info_set_code
-#define duckdb_v2_error_info_set_text                    duckdb_ext_api.duckdb_v2_error_info_set_text
-#define duckdb_v2_factory_create_type_from_id            duckdb_ext_api.duckdb_v2_factory_create_type_from_id
-#define duckdb_v2_factory_create_type_from_name          duckdb_ext_api.duckdb_v2_factory_create_type_from_name
-#define duckdb_v2_factory_create_type_from_text          duckdb_ext_api.duckdb_v2_factory_create_type_from_text
-#define duckdb_v2_factory_create_type_with_alias         duckdb_ext_api.duckdb_v2_factory_create_type_with_alias
-#define duckdb_v2_instance_attach                        duckdb_ext_api.duckdb_v2_instance_attach
-#define duckdb_v2_instance_create                        duckdb_ext_api.duckdb_v2_instance_create
-#define duckdb_v2_instance_create_with_options           duckdb_ext_api.duckdb_v2_instance_create_with_options
-#define duckdb_v2_instance_destroy                       duckdb_ext_api.duckdb_v2_instance_destroy
-#define duckdb_v2_instance_detach                        duckdb_ext_api.duckdb_v2_instance_detach
-#define duckdb_v2_library_version                        duckdb_ext_api.duckdb_v2_library_version
-#define duckdb_v2_logical_type_copy                      duckdb_ext_api.duckdb_v2_logical_type_copy
-#define duckdb_v2_logical_type_destroy                   duckdb_ext_api.duckdb_v2_logical_type_destroy
-#define duckdb_v2_logical_type_get_id                    duckdb_ext_api.duckdb_v2_logical_type_get_id
-#define duckdb_v2_logical_type_get_name                  duckdb_ext_api.duckdb_v2_logical_type_get_name
-#define duckdb_v2_logical_type_get_param                 duckdb_ext_api.duckdb_v2_logical_type_get_param
-#define duckdb_v2_logical_type_get_param_count           duckdb_ext_api.duckdb_v2_logical_type_get_param_count
-#define duckdb_v2_logical_type_is_equal                  duckdb_ext_api.duckdb_v2_logical_type_is_equal
-#define duckdb_v2_logical_type_to_text                   duckdb_ext_api.duckdb_v2_logical_type_to_text
-#define duckdb_v2_option_destroy                         duckdb_ext_api.duckdb_v2_option_destroy
-#define duckdb_v2_option_get_alias                       duckdb_ext_api.duckdb_v2_option_get_alias
-#define duckdb_v2_option_get_alias_count                 duckdb_ext_api.duckdb_v2_option_get_alias_count
-#define duckdb_v2_option_get_default_value               duckdb_ext_api.duckdb_v2_option_get_default_value
-#define duckdb_v2_option_get_description                 duckdb_ext_api.duckdb_v2_option_get_description
-#define duckdb_v2_option_get_name                        duckdb_ext_api.duckdb_v2_option_get_name
-#define duckdb_v2_parse_sql                              duckdb_ext_api.duckdb_v2_parse_sql
-#define duckdb_v2_result_destroy                         duckdb_ext_api.duckdb_v2_result_destroy
-#define duckdb_v2_result_drain                           duckdb_ext_api.duckdb_v2_result_drain
-#define duckdb_v2_result_fetch_chunk                     duckdb_ext_api.duckdb_v2_result_fetch_chunk
-#define duckdb_v2_result_get_result_type                 duckdb_ext_api.duckdb_v2_result_get_result_type
-#define duckdb_v2_result_get_schema                      duckdb_ext_api.duckdb_v2_result_get_schema
-#define duckdb_v2_result_get_statement_type              duckdb_ext_api.duckdb_v2_result_get_statement_type
-#define duckdb_v2_result_render_box                      duckdb_ext_api.duckdb_v2_result_render_box
-#define duckdb_v2_result_step                            duckdb_ext_api.duckdb_v2_result_step
-#define duckdb_v2_result_wait                            duckdb_ext_api.duckdb_v2_result_wait
-#define duckdb_v2_schema_destroy                         duckdb_ext_api.duckdb_v2_schema_destroy
-#define duckdb_v2_schema_get_count                       duckdb_ext_api.duckdb_v2_schema_get_count
-#define duckdb_v2_schema_get_field                       duckdb_ext_api.duckdb_v2_schema_get_field
-#define duckdb_v2_sql_statement_destroy                  duckdb_ext_api.duckdb_v2_sql_statement_destroy
-#define duckdb_v2_statement_bind                         duckdb_ext_api.duckdb_v2_statement_bind
-#define duckdb_v2_statement_execute                      duckdb_ext_api.duckdb_v2_statement_execute
-#define duckdb_v2_statement_iterator_destroy             duckdb_ext_api.duckdb_v2_statement_iterator_destroy
-#define duckdb_v2_statement_iterator_next                duckdb_ext_api.duckdb_v2_statement_iterator_next
-#define duckdb_v2_value_cast                             duckdb_ext_api.duckdb_v2_value_cast
-#define duckdb_v2_value_create_array                     duckdb_ext_api.duckdb_v2_value_create_array
-#define duckdb_v2_value_create_bigint                    duckdb_ext_api.duckdb_v2_value_create_bigint
-#define duckdb_v2_value_create_bignum                    duckdb_ext_api.duckdb_v2_value_create_bignum
-#define duckdb_v2_value_create_bit                       duckdb_ext_api.duckdb_v2_value_create_bit
-#define duckdb_v2_value_create_blob                      duckdb_ext_api.duckdb_v2_value_create_blob
-#define duckdb_v2_value_create_bool                      duckdb_ext_api.duckdb_v2_value_create_bool
-#define duckdb_v2_value_create_date                      duckdb_ext_api.duckdb_v2_value_create_date
-#define duckdb_v2_value_create_decimal                   duckdb_ext_api.duckdb_v2_value_create_decimal
-#define duckdb_v2_value_create_double                    duckdb_ext_api.duckdb_v2_value_create_double
-#define duckdb_v2_value_create_float                     duckdb_ext_api.duckdb_v2_value_create_float
-#define duckdb_v2_value_create_hugeint                   duckdb_ext_api.duckdb_v2_value_create_hugeint
-#define duckdb_v2_value_create_int                       duckdb_ext_api.duckdb_v2_value_create_int
-#define duckdb_v2_value_create_interval                  duckdb_ext_api.duckdb_v2_value_create_interval
-#define duckdb_v2_value_create_list                      duckdb_ext_api.duckdb_v2_value_create_list
-#define duckdb_v2_value_create_map                       duckdb_ext_api.duckdb_v2_value_create_map
-#define duckdb_v2_value_create_null                      duckdb_ext_api.duckdb_v2_value_create_null
-#define duckdb_v2_value_create_smallint                  duckdb_ext_api.duckdb_v2_value_create_smallint
-#define duckdb_v2_value_create_struct                    duckdb_ext_api.duckdb_v2_value_create_struct
-#define duckdb_v2_value_create_time                      duckdb_ext_api.duckdb_v2_value_create_time
-#define duckdb_v2_value_create_time_ns                   duckdb_ext_api.duckdb_v2_value_create_time_ns
-#define duckdb_v2_value_create_time_tz                   duckdb_ext_api.duckdb_v2_value_create_time_tz
-#define duckdb_v2_value_create_timestamp                 duckdb_ext_api.duckdb_v2_value_create_timestamp
-#define duckdb_v2_value_create_timestamp_ms              duckdb_ext_api.duckdb_v2_value_create_timestamp_ms
-#define duckdb_v2_value_create_timestamp_ns              duckdb_ext_api.duckdb_v2_value_create_timestamp_ns
-#define duckdb_v2_value_create_timestamp_sec             duckdb_ext_api.duckdb_v2_value_create_timestamp_sec
-#define duckdb_v2_value_create_timestamp_tz              duckdb_ext_api.duckdb_v2_value_create_timestamp_tz
-#define duckdb_v2_value_create_timestamp_tz_ns           duckdb_ext_api.duckdb_v2_value_create_timestamp_tz_ns
-#define duckdb_v2_value_create_tinyint                   duckdb_ext_api.duckdb_v2_value_create_tinyint
-#define duckdb_v2_value_create_tuple                     duckdb_ext_api.duckdb_v2_value_create_tuple
-#define duckdb_v2_value_create_type                      duckdb_ext_api.duckdb_v2_value_create_type
-#define duckdb_v2_value_create_ubigint                   duckdb_ext_api.duckdb_v2_value_create_ubigint
-#define duckdb_v2_value_create_uhugeint                  duckdb_ext_api.duckdb_v2_value_create_uhugeint
-#define duckdb_v2_value_create_uint                      duckdb_ext_api.duckdb_v2_value_create_uint
-#define duckdb_v2_value_create_usmallint                 duckdb_ext_api.duckdb_v2_value_create_usmallint
-#define duckdb_v2_value_create_utinyint                  duckdb_ext_api.duckdb_v2_value_create_utinyint
-#define duckdb_v2_value_create_uuid                      duckdb_ext_api.duckdb_v2_value_create_uuid
-#define duckdb_v2_value_create_varchar                   duckdb_ext_api.duckdb_v2_value_create_varchar
-#define duckdb_v2_value_destroy                          duckdb_ext_api.duckdb_v2_value_destroy
-#define duckdb_v2_value_get_bigint                       duckdb_ext_api.duckdb_v2_value_get_bigint
-#define duckdb_v2_value_get_blob                         duckdb_ext_api.duckdb_v2_value_get_blob
-#define duckdb_v2_value_get_bool                         duckdb_ext_api.duckdb_v2_value_get_bool
-#define duckdb_v2_value_get_child                        duckdb_ext_api.duckdb_v2_value_get_child
-#define duckdb_v2_value_get_child_count                  duckdb_ext_api.duckdb_v2_value_get_child_count
-#define duckdb_v2_value_get_date                         duckdb_ext_api.duckdb_v2_value_get_date
-#define duckdb_v2_value_get_decimal                      duckdb_ext_api.duckdb_v2_value_get_decimal
-#define duckdb_v2_value_get_double                       duckdb_ext_api.duckdb_v2_value_get_double
-#define duckdb_v2_value_get_float                        duckdb_ext_api.duckdb_v2_value_get_float
-#define duckdb_v2_value_get_hugeint                      duckdb_ext_api.duckdb_v2_value_get_hugeint
-#define duckdb_v2_value_get_int                          duckdb_ext_api.duckdb_v2_value_get_int
-#define duckdb_v2_value_get_interval                     duckdb_ext_api.duckdb_v2_value_get_interval
-#define duckdb_v2_value_get_logical_type                 duckdb_ext_api.duckdb_v2_value_get_logical_type
-#define duckdb_v2_value_get_smallint                     duckdb_ext_api.duckdb_v2_value_get_smallint
-#define duckdb_v2_value_get_time                         duckdb_ext_api.duckdb_v2_value_get_time
-#define duckdb_v2_value_get_time_ns                      duckdb_ext_api.duckdb_v2_value_get_time_ns
-#define duckdb_v2_value_get_time_tz                      duckdb_ext_api.duckdb_v2_value_get_time_tz
-#define duckdb_v2_value_get_timestamp                    duckdb_ext_api.duckdb_v2_value_get_timestamp
-#define duckdb_v2_value_get_timestamp_ms                 duckdb_ext_api.duckdb_v2_value_get_timestamp_ms
-#define duckdb_v2_value_get_timestamp_ns                 duckdb_ext_api.duckdb_v2_value_get_timestamp_ns
-#define duckdb_v2_value_get_timestamp_sec                duckdb_ext_api.duckdb_v2_value_get_timestamp_sec
-#define duckdb_v2_value_get_timestamp_tz                 duckdb_ext_api.duckdb_v2_value_get_timestamp_tz
-#define duckdb_v2_value_get_timestamp_tz_ns              duckdb_ext_api.duckdb_v2_value_get_timestamp_tz_ns
-#define duckdb_v2_value_get_tinyint                      duckdb_ext_api.duckdb_v2_value_get_tinyint
-#define duckdb_v2_value_get_type                         duckdb_ext_api.duckdb_v2_value_get_type
-#define duckdb_v2_value_get_ubigint                      duckdb_ext_api.duckdb_v2_value_get_ubigint
-#define duckdb_v2_value_get_uhugeint                     duckdb_ext_api.duckdb_v2_value_get_uhugeint
-#define duckdb_v2_value_get_uint                         duckdb_ext_api.duckdb_v2_value_get_uint
-#define duckdb_v2_value_get_usmallint                    duckdb_ext_api.duckdb_v2_value_get_usmallint
-#define duckdb_v2_value_get_utinyint                     duckdb_ext_api.duckdb_v2_value_get_utinyint
-#define duckdb_v2_value_get_uuid                         duckdb_ext_api.duckdb_v2_value_get_uuid
-#define duckdb_v2_value_get_varchar                      duckdb_ext_api.duckdb_v2_value_get_varchar
-#define duckdb_v2_value_is_null                          duckdb_ext_api.duckdb_v2_value_is_null
-#define duckdb_v2_value_to_string                        duckdb_ext_api.duckdb_v2_value_to_string
-#define duckdb_v2_vector_constant_set_valid              duckdb_ext_api.duckdb_v2_vector_constant_set_valid
-#define duckdb_v2_vector_flat_get_validity_mutable       duckdb_ext_api.duckdb_v2_vector_flat_get_validity_mutable
-#define duckdb_v2_vector_flatten                         duckdb_ext_api.duckdb_v2_vector_flatten
-#define duckdb_v2_vector_get_arena                       duckdb_ext_api.duckdb_v2_vector_get_arena
-#define duckdb_v2_vector_get_child                       duckdb_ext_api.duckdb_v2_vector_get_child
-#define duckdb_v2_vector_get_child_count                 duckdb_ext_api.duckdb_v2_vector_get_child_count
-#define duckdb_v2_vector_get_data_mutable                duckdb_ext_api.duckdb_v2_vector_get_data_mutable
-#define duckdb_v2_vector_get_logical_type                duckdb_ext_api.duckdb_v2_vector_get_logical_type
-#define duckdb_v2_vector_get_size                        duckdb_ext_api.duckdb_v2_vector_get_size
-#define duckdb_v2_vector_get_value                       duckdb_ext_api.duckdb_v2_vector_get_value
-#define duckdb_v2_vector_get_vector_type                 duckdb_ext_api.duckdb_v2_vector_get_vector_type
-#define duckdb_v2_vector_get_view                        duckdb_ext_api.duckdb_v2_vector_get_view
-#define duckdb_v2_vector_make_constant                   duckdb_ext_api.duckdb_v2_vector_make_constant
-#define duckdb_v2_vector_make_sequence                   duckdb_ext_api.duckdb_v2_vector_make_sequence
-#define duckdb_v2_vector_reference                       duckdb_ext_api.duckdb_v2_vector_reference
-#define duckdb_v2_vector_set_null                        duckdb_ext_api.duckdb_v2_vector_set_null
-#define duckdb_v2_vector_set_size                        duckdb_ext_api.duckdb_v2_vector_set_size
-#define duckdb_v2_vector_set_value                       duckdb_ext_api.duckdb_v2_vector_set_value
-#define duckdb_v2_context_log                            duckdb_ext_api.duckdb_v2_context_log
-#define duckdb_v2_function_signature_add_parameter       duckdb_ext_api.duckdb_v2_function_signature_add_parameter
-#define duckdb_v2_function_signature_set_return_type     duckdb_ext_api.duckdb_v2_function_signature_set_return_type
-#define duckdb_v2_scalar_function_bind_set_return_type   duckdb_ext_api.duckdb_v2_scalar_function_bind_set_return_type
-#define duckdb_v2_scalar_function_create_with_connection duckdb_ext_api.duckdb_v2_scalar_function_create_with_connection
-#define duckdb_v2_scalar_function_create_with_extension  duckdb_ext_api.duckdb_v2_scalar_function_create_with_extension
-#define duckdb_v2_scalar_function_destroy                duckdb_ext_api.duckdb_v2_scalar_function_destroy
-#define duckdb_v2_scalar_function_exec_get_arg           duckdb_ext_api.duckdb_v2_scalar_function_exec_get_arg
-#define duckdb_v2_scalar_function_exec_get_arg_count     duckdb_ext_api.duckdb_v2_scalar_function_exec_get_arg_count
-#define duckdb_v2_scalar_function_exec_get_bind_data     duckdb_ext_api.duckdb_v2_scalar_function_exec_get_bind_data
-#define duckdb_v2_scalar_function_exec_get_init_data     duckdb_ext_api.duckdb_v2_scalar_function_exec_get_init_data
-#define duckdb_v2_scalar_function_exec_get_result        duckdb_ext_api.duckdb_v2_scalar_function_exec_get_result
-#define duckdb_v2_scalar_function_exec_get_row_count     duckdb_ext_api.duckdb_v2_scalar_function_exec_get_row_count
-#define duckdb_v2_scalar_function_exec_get_user_data     duckdb_ext_api.duckdb_v2_scalar_function_exec_get_user_data
-#define duckdb_v2_scalar_function_get_signature          duckdb_ext_api.duckdb_v2_scalar_function_get_signature
-#define duckdb_v2_scalar_function_init_get_bind_data     duckdb_ext_api.duckdb_v2_scalar_function_init_get_bind_data
-#define duckdb_v2_scalar_function_init_get_user_data     duckdb_ext_api.duckdb_v2_scalar_function_init_get_user_data
-#define duckdb_v2_scalar_function_init_set_init_data     duckdb_ext_api.duckdb_v2_scalar_function_init_set_init_data
-#define duckdb_v2_scalar_function_register               duckdb_ext_api.duckdb_v2_scalar_function_register
-#define duckdb_v2_scalar_function_set_bind_callback      duckdb_ext_api.duckdb_v2_scalar_function_set_bind_callback
-#define duckdb_v2_scalar_function_set_exec_callback      duckdb_ext_api.duckdb_v2_scalar_function_set_exec_callback
-#define duckdb_v2_scalar_function_set_init_callback      duckdb_ext_api.duckdb_v2_scalar_function_set_init_callback
-#define duckdb_v2_scalar_function_set_name               duckdb_ext_api.duckdb_v2_scalar_function_set_name
-#define duckdb_v2_scalar_function_set_user_data          duckdb_ext_api.duckdb_v2_scalar_function_set_user_data
+#define duckdb_v2_config_get_option_by_index           duckdb_ext_api.duckdb_v2_config_get_option_by_index
+#define duckdb_v2_config_get_option_by_name            duckdb_ext_api.duckdb_v2_config_get_option_by_name
+#define duckdb_v2_config_get_option_count              duckdb_ext_api.duckdb_v2_config_get_option_count
+#define duckdb_v2_connection_create                    duckdb_ext_api.duckdb_v2_connection_create
+#define duckdb_v2_connection_destroy                   duckdb_ext_api.duckdb_v2_connection_destroy
+#define duckdb_v2_connection_interrupt                 duckdb_ext_api.duckdb_v2_connection_interrupt
+#define duckdb_v2_connection_progress_get              duckdb_ext_api.duckdb_v2_connection_progress_get
+#define duckdb_v2_data_chunk_copy                      duckdb_ext_api.duckdb_v2_data_chunk_copy
+#define duckdb_v2_data_chunk_create                    duckdb_ext_api.duckdb_v2_data_chunk_create
+#define duckdb_v2_data_chunk_destroy                   duckdb_ext_api.duckdb_v2_data_chunk_destroy
+#define duckdb_v2_data_chunk_get_size                  duckdb_ext_api.duckdb_v2_data_chunk_get_size
+#define duckdb_v2_data_chunk_get_vector                duckdb_ext_api.duckdb_v2_data_chunk_get_vector
+#define duckdb_v2_data_chunk_get_vector_count          duckdb_ext_api.duckdb_v2_data_chunk_get_vector_count
+#define duckdb_v2_environment_create                   duckdb_ext_api.duckdb_v2_environment_create
+#define duckdb_v2_environment_destroy                  duckdb_ext_api.duckdb_v2_environment_destroy
+#define duckdb_v2_environment_get_instance_count       duckdb_ext_api.duckdb_v2_environment_get_instance_count
+#define duckdb_v2_error_info_destroy                   duckdb_ext_api.duckdb_v2_error_info_destroy
+#define duckdb_v2_error_info_get_code                  duckdb_ext_api.duckdb_v2_error_info_get_code
+#define duckdb_v2_error_info_get_raw_text              duckdb_ext_api.duckdb_v2_error_info_get_raw_text
+#define duckdb_v2_error_info_get_text                  duckdb_ext_api.duckdb_v2_error_info_get_text
+#define duckdb_v2_error_info_set_code                  duckdb_ext_api.duckdb_v2_error_info_set_code
+#define duckdb_v2_error_info_set_text                  duckdb_ext_api.duckdb_v2_error_info_set_text
+#define duckdb_v2_factory_create_type_from_id          duckdb_ext_api.duckdb_v2_factory_create_type_from_id
+#define duckdb_v2_factory_create_type_from_name        duckdb_ext_api.duckdb_v2_factory_create_type_from_name
+#define duckdb_v2_factory_create_type_from_text        duckdb_ext_api.duckdb_v2_factory_create_type_from_text
+#define duckdb_v2_factory_create_type_with_alias       duckdb_ext_api.duckdb_v2_factory_create_type_with_alias
+#define duckdb_v2_instance_attach                      duckdb_ext_api.duckdb_v2_instance_attach
+#define duckdb_v2_instance_create                      duckdb_ext_api.duckdb_v2_instance_create
+#define duckdb_v2_instance_create_with_options         duckdb_ext_api.duckdb_v2_instance_create_with_options
+#define duckdb_v2_instance_destroy                     duckdb_ext_api.duckdb_v2_instance_destroy
+#define duckdb_v2_instance_detach                      duckdb_ext_api.duckdb_v2_instance_detach
+#define duckdb_v2_library_version                      duckdb_ext_api.duckdb_v2_library_version
+#define duckdb_v2_logical_type_copy                    duckdb_ext_api.duckdb_v2_logical_type_copy
+#define duckdb_v2_logical_type_destroy                 duckdb_ext_api.duckdb_v2_logical_type_destroy
+#define duckdb_v2_logical_type_get_id                  duckdb_ext_api.duckdb_v2_logical_type_get_id
+#define duckdb_v2_logical_type_get_name                duckdb_ext_api.duckdb_v2_logical_type_get_name
+#define duckdb_v2_logical_type_get_param               duckdb_ext_api.duckdb_v2_logical_type_get_param
+#define duckdb_v2_logical_type_get_param_count         duckdb_ext_api.duckdb_v2_logical_type_get_param_count
+#define duckdb_v2_logical_type_is_equal                duckdb_ext_api.duckdb_v2_logical_type_is_equal
+#define duckdb_v2_logical_type_to_text                 duckdb_ext_api.duckdb_v2_logical_type_to_text
+#define duckdb_v2_option_destroy                       duckdb_ext_api.duckdb_v2_option_destroy
+#define duckdb_v2_option_get_alias                     duckdb_ext_api.duckdb_v2_option_get_alias
+#define duckdb_v2_option_get_alias_count               duckdb_ext_api.duckdb_v2_option_get_alias_count
+#define duckdb_v2_option_get_default_value             duckdb_ext_api.duckdb_v2_option_get_default_value
+#define duckdb_v2_option_get_description               duckdb_ext_api.duckdb_v2_option_get_description
+#define duckdb_v2_option_get_name                      duckdb_ext_api.duckdb_v2_option_get_name
+#define duckdb_v2_parse_sql                            duckdb_ext_api.duckdb_v2_parse_sql
+#define duckdb_v2_result_destroy                       duckdb_ext_api.duckdb_v2_result_destroy
+#define duckdb_v2_result_drain                         duckdb_ext_api.duckdb_v2_result_drain
+#define duckdb_v2_result_fetch_chunk                   duckdb_ext_api.duckdb_v2_result_fetch_chunk
+#define duckdb_v2_result_get_result_type               duckdb_ext_api.duckdb_v2_result_get_result_type
+#define duckdb_v2_result_get_schema                    duckdb_ext_api.duckdb_v2_result_get_schema
+#define duckdb_v2_result_get_statement_type            duckdb_ext_api.duckdb_v2_result_get_statement_type
+#define duckdb_v2_result_render_box                    duckdb_ext_api.duckdb_v2_result_render_box
+#define duckdb_v2_result_step                          duckdb_ext_api.duckdb_v2_result_step
+#define duckdb_v2_result_wait                          duckdb_ext_api.duckdb_v2_result_wait
+#define duckdb_v2_schema_destroy                       duckdb_ext_api.duckdb_v2_schema_destroy
+#define duckdb_v2_schema_get_count                     duckdb_ext_api.duckdb_v2_schema_get_count
+#define duckdb_v2_schema_get_field                     duckdb_ext_api.duckdb_v2_schema_get_field
+#define duckdb_v2_sql_statement_destroy                duckdb_ext_api.duckdb_v2_sql_statement_destroy
+#define duckdb_v2_statement_bind                       duckdb_ext_api.duckdb_v2_statement_bind
+#define duckdb_v2_statement_execute                    duckdb_ext_api.duckdb_v2_statement_execute
+#define duckdb_v2_statement_iterator_destroy           duckdb_ext_api.duckdb_v2_statement_iterator_destroy
+#define duckdb_v2_statement_iterator_next              duckdb_ext_api.duckdb_v2_statement_iterator_next
+#define duckdb_v2_value_cast                           duckdb_ext_api.duckdb_v2_value_cast
+#define duckdb_v2_value_create_array                   duckdb_ext_api.duckdb_v2_value_create_array
+#define duckdb_v2_value_create_bigint                  duckdb_ext_api.duckdb_v2_value_create_bigint
+#define duckdb_v2_value_create_bignum                  duckdb_ext_api.duckdb_v2_value_create_bignum
+#define duckdb_v2_value_create_bit                     duckdb_ext_api.duckdb_v2_value_create_bit
+#define duckdb_v2_value_create_blob                    duckdb_ext_api.duckdb_v2_value_create_blob
+#define duckdb_v2_value_create_bool                    duckdb_ext_api.duckdb_v2_value_create_bool
+#define duckdb_v2_value_create_date                    duckdb_ext_api.duckdb_v2_value_create_date
+#define duckdb_v2_value_create_decimal                 duckdb_ext_api.duckdb_v2_value_create_decimal
+#define duckdb_v2_value_create_double                  duckdb_ext_api.duckdb_v2_value_create_double
+#define duckdb_v2_value_create_float                   duckdb_ext_api.duckdb_v2_value_create_float
+#define duckdb_v2_value_create_hugeint                 duckdb_ext_api.duckdb_v2_value_create_hugeint
+#define duckdb_v2_value_create_int                     duckdb_ext_api.duckdb_v2_value_create_int
+#define duckdb_v2_value_create_interval                duckdb_ext_api.duckdb_v2_value_create_interval
+#define duckdb_v2_value_create_list                    duckdb_ext_api.duckdb_v2_value_create_list
+#define duckdb_v2_value_create_map                     duckdb_ext_api.duckdb_v2_value_create_map
+#define duckdb_v2_value_create_null                    duckdb_ext_api.duckdb_v2_value_create_null
+#define duckdb_v2_value_create_smallint                duckdb_ext_api.duckdb_v2_value_create_smallint
+#define duckdb_v2_value_create_struct                  duckdb_ext_api.duckdb_v2_value_create_struct
+#define duckdb_v2_value_create_time                    duckdb_ext_api.duckdb_v2_value_create_time
+#define duckdb_v2_value_create_time_ns                 duckdb_ext_api.duckdb_v2_value_create_time_ns
+#define duckdb_v2_value_create_time_tz                 duckdb_ext_api.duckdb_v2_value_create_time_tz
+#define duckdb_v2_value_create_timestamp               duckdb_ext_api.duckdb_v2_value_create_timestamp
+#define duckdb_v2_value_create_timestamp_ms            duckdb_ext_api.duckdb_v2_value_create_timestamp_ms
+#define duckdb_v2_value_create_timestamp_ns            duckdb_ext_api.duckdb_v2_value_create_timestamp_ns
+#define duckdb_v2_value_create_timestamp_sec           duckdb_ext_api.duckdb_v2_value_create_timestamp_sec
+#define duckdb_v2_value_create_timestamp_tz            duckdb_ext_api.duckdb_v2_value_create_timestamp_tz
+#define duckdb_v2_value_create_timestamp_tz_ns         duckdb_ext_api.duckdb_v2_value_create_timestamp_tz_ns
+#define duckdb_v2_value_create_tinyint                 duckdb_ext_api.duckdb_v2_value_create_tinyint
+#define duckdb_v2_value_create_tuple                   duckdb_ext_api.duckdb_v2_value_create_tuple
+#define duckdb_v2_value_create_type                    duckdb_ext_api.duckdb_v2_value_create_type
+#define duckdb_v2_value_create_ubigint                 duckdb_ext_api.duckdb_v2_value_create_ubigint
+#define duckdb_v2_value_create_uhugeint                duckdb_ext_api.duckdb_v2_value_create_uhugeint
+#define duckdb_v2_value_create_uint                    duckdb_ext_api.duckdb_v2_value_create_uint
+#define duckdb_v2_value_create_usmallint               duckdb_ext_api.duckdb_v2_value_create_usmallint
+#define duckdb_v2_value_create_utinyint                duckdb_ext_api.duckdb_v2_value_create_utinyint
+#define duckdb_v2_value_create_uuid                    duckdb_ext_api.duckdb_v2_value_create_uuid
+#define duckdb_v2_value_create_varchar                 duckdb_ext_api.duckdb_v2_value_create_varchar
+#define duckdb_v2_value_destroy                        duckdb_ext_api.duckdb_v2_value_destroy
+#define duckdb_v2_value_get_bigint                     duckdb_ext_api.duckdb_v2_value_get_bigint
+#define duckdb_v2_value_get_blob                       duckdb_ext_api.duckdb_v2_value_get_blob
+#define duckdb_v2_value_get_bool                       duckdb_ext_api.duckdb_v2_value_get_bool
+#define duckdb_v2_value_get_child                      duckdb_ext_api.duckdb_v2_value_get_child
+#define duckdb_v2_value_get_child_count                duckdb_ext_api.duckdb_v2_value_get_child_count
+#define duckdb_v2_value_get_date                       duckdb_ext_api.duckdb_v2_value_get_date
+#define duckdb_v2_value_get_decimal                    duckdb_ext_api.duckdb_v2_value_get_decimal
+#define duckdb_v2_value_get_double                     duckdb_ext_api.duckdb_v2_value_get_double
+#define duckdb_v2_value_get_float                      duckdb_ext_api.duckdb_v2_value_get_float
+#define duckdb_v2_value_get_hugeint                    duckdb_ext_api.duckdb_v2_value_get_hugeint
+#define duckdb_v2_value_get_int                        duckdb_ext_api.duckdb_v2_value_get_int
+#define duckdb_v2_value_get_interval                   duckdb_ext_api.duckdb_v2_value_get_interval
+#define duckdb_v2_value_get_logical_type               duckdb_ext_api.duckdb_v2_value_get_logical_type
+#define duckdb_v2_value_get_smallint                   duckdb_ext_api.duckdb_v2_value_get_smallint
+#define duckdb_v2_value_get_time                       duckdb_ext_api.duckdb_v2_value_get_time
+#define duckdb_v2_value_get_time_ns                    duckdb_ext_api.duckdb_v2_value_get_time_ns
+#define duckdb_v2_value_get_time_tz                    duckdb_ext_api.duckdb_v2_value_get_time_tz
+#define duckdb_v2_value_get_timestamp                  duckdb_ext_api.duckdb_v2_value_get_timestamp
+#define duckdb_v2_value_get_timestamp_ms               duckdb_ext_api.duckdb_v2_value_get_timestamp_ms
+#define duckdb_v2_value_get_timestamp_ns               duckdb_ext_api.duckdb_v2_value_get_timestamp_ns
+#define duckdb_v2_value_get_timestamp_sec              duckdb_ext_api.duckdb_v2_value_get_timestamp_sec
+#define duckdb_v2_value_get_timestamp_tz               duckdb_ext_api.duckdb_v2_value_get_timestamp_tz
+#define duckdb_v2_value_get_timestamp_tz_ns            duckdb_ext_api.duckdb_v2_value_get_timestamp_tz_ns
+#define duckdb_v2_value_get_tinyint                    duckdb_ext_api.duckdb_v2_value_get_tinyint
+#define duckdb_v2_value_get_type                       duckdb_ext_api.duckdb_v2_value_get_type
+#define duckdb_v2_value_get_ubigint                    duckdb_ext_api.duckdb_v2_value_get_ubigint
+#define duckdb_v2_value_get_uhugeint                   duckdb_ext_api.duckdb_v2_value_get_uhugeint
+#define duckdb_v2_value_get_uint                       duckdb_ext_api.duckdb_v2_value_get_uint
+#define duckdb_v2_value_get_usmallint                  duckdb_ext_api.duckdb_v2_value_get_usmallint
+#define duckdb_v2_value_get_utinyint                   duckdb_ext_api.duckdb_v2_value_get_utinyint
+#define duckdb_v2_value_get_uuid                       duckdb_ext_api.duckdb_v2_value_get_uuid
+#define duckdb_v2_value_get_varchar                    duckdb_ext_api.duckdb_v2_value_get_varchar
+#define duckdb_v2_value_is_null                        duckdb_ext_api.duckdb_v2_value_is_null
+#define duckdb_v2_value_to_string                      duckdb_ext_api.duckdb_v2_value_to_string
+#define duckdb_v2_vector_constant_set_valid            duckdb_ext_api.duckdb_v2_vector_constant_set_valid
+#define duckdb_v2_vector_flat_get_validity_mutable     duckdb_ext_api.duckdb_v2_vector_flat_get_validity_mutable
+#define duckdb_v2_vector_flatten                       duckdb_ext_api.duckdb_v2_vector_flatten
+#define duckdb_v2_vector_get_arena                     duckdb_ext_api.duckdb_v2_vector_get_arena
+#define duckdb_v2_vector_get_child                     duckdb_ext_api.duckdb_v2_vector_get_child
+#define duckdb_v2_vector_get_child_count               duckdb_ext_api.duckdb_v2_vector_get_child_count
+#define duckdb_v2_vector_get_data_mutable              duckdb_ext_api.duckdb_v2_vector_get_data_mutable
+#define duckdb_v2_vector_get_logical_type              duckdb_ext_api.duckdb_v2_vector_get_logical_type
+#define duckdb_v2_vector_get_size                      duckdb_ext_api.duckdb_v2_vector_get_size
+#define duckdb_v2_vector_get_value                     duckdb_ext_api.duckdb_v2_vector_get_value
+#define duckdb_v2_vector_get_vector_type               duckdb_ext_api.duckdb_v2_vector_get_vector_type
+#define duckdb_v2_vector_get_view                      duckdb_ext_api.duckdb_v2_vector_get_view
+#define duckdb_v2_vector_make_constant                 duckdb_ext_api.duckdb_v2_vector_make_constant
+#define duckdb_v2_vector_make_sequence                 duckdb_ext_api.duckdb_v2_vector_make_sequence
+#define duckdb_v2_vector_reference                     duckdb_ext_api.duckdb_v2_vector_reference
+#define duckdb_v2_vector_set_null                      duckdb_ext_api.duckdb_v2_vector_set_null
+#define duckdb_v2_vector_set_size                      duckdb_ext_api.duckdb_v2_vector_set_size
+#define duckdb_v2_vector_set_value                     duckdb_ext_api.duckdb_v2_vector_set_value
+#define duckdb_v2_connection_register_scalar_function  duckdb_ext_api.duckdb_v2_connection_register_scalar_function
+#define duckdb_v2_context_log                          duckdb_ext_api.duckdb_v2_context_log
+#define duckdb_v2_extension_register_scalar_function   duckdb_ext_api.duckdb_v2_extension_register_scalar_function
+#define duckdb_v2_function_signature_add_parameter     duckdb_ext_api.duckdb_v2_function_signature_add_parameter
+#define duckdb_v2_function_signature_set_return_type   duckdb_ext_api.duckdb_v2_function_signature_set_return_type
+#define duckdb_v2_scalar_function_bind_set_return_type duckdb_ext_api.duckdb_v2_scalar_function_bind_set_return_type
+#define duckdb_v2_scalar_function_create               duckdb_ext_api.duckdb_v2_scalar_function_create
+#define duckdb_v2_scalar_function_destroy              duckdb_ext_api.duckdb_v2_scalar_function_destroy
+#define duckdb_v2_scalar_function_exec_get_arg         duckdb_ext_api.duckdb_v2_scalar_function_exec_get_arg
+#define duckdb_v2_scalar_function_exec_get_arg_count   duckdb_ext_api.duckdb_v2_scalar_function_exec_get_arg_count
+#define duckdb_v2_scalar_function_exec_get_bind_data   duckdb_ext_api.duckdb_v2_scalar_function_exec_get_bind_data
+#define duckdb_v2_scalar_function_exec_get_init_data   duckdb_ext_api.duckdb_v2_scalar_function_exec_get_init_data
+#define duckdb_v2_scalar_function_exec_get_result      duckdb_ext_api.duckdb_v2_scalar_function_exec_get_result
+#define duckdb_v2_scalar_function_exec_get_row_count   duckdb_ext_api.duckdb_v2_scalar_function_exec_get_row_count
+#define duckdb_v2_scalar_function_exec_get_user_data   duckdb_ext_api.duckdb_v2_scalar_function_exec_get_user_data
+#define duckdb_v2_scalar_function_get_signature        duckdb_ext_api.duckdb_v2_scalar_function_get_signature
+#define duckdb_v2_scalar_function_init_get_bind_data   duckdb_ext_api.duckdb_v2_scalar_function_init_get_bind_data
+#define duckdb_v2_scalar_function_init_get_user_data   duckdb_ext_api.duckdb_v2_scalar_function_init_get_user_data
+#define duckdb_v2_scalar_function_init_set_init_data   duckdb_ext_api.duckdb_v2_scalar_function_init_set_init_data
+#define duckdb_v2_scalar_function_set_bind_callback    duckdb_ext_api.duckdb_v2_scalar_function_set_bind_callback
+#define duckdb_v2_scalar_function_set_exec_callback    duckdb_ext_api.duckdb_v2_scalar_function_set_exec_callback
+#define duckdb_v2_scalar_function_set_init_callback    duckdb_ext_api.duckdb_v2_scalar_function_set_init_callback
+#define duckdb_v2_scalar_function_set_name             duckdb_ext_api.duckdb_v2_scalar_function_set_name
+#define duckdb_v2_scalar_function_set_user_data        duckdb_ext_api.duckdb_v2_scalar_function_set_user_data
 #define duckdb_v2_aggregate_function_bind_set_return_type                                                              \
 	duckdb_ext_api.duckdb_v2_aggregate_function_bind_set_return_type
 #define duckdb_v2_aggregate_function_combine_get_bind_data                                                             \
@@ -1538,10 +1532,7 @@ typedef struct {
 #define duckdb_v2_aggregate_function_combine_get_targets duckdb_ext_api.duckdb_v2_aggregate_function_combine_get_targets
 #define duckdb_v2_aggregate_function_combine_get_user_data                                                             \
 	duckdb_ext_api.duckdb_v2_aggregate_function_combine_get_user_data
-#define duckdb_v2_aggregate_function_create_with_connection                                                            \
-	duckdb_ext_api.duckdb_v2_aggregate_function_create_with_connection
-#define duckdb_v2_aggregate_function_create_with_extension                                                             \
-	duckdb_ext_api.duckdb_v2_aggregate_function_create_with_extension
+#define duckdb_v2_aggregate_function_create  duckdb_ext_api.duckdb_v2_aggregate_function_create
 #define duckdb_v2_aggregate_function_destroy duckdb_ext_api.duckdb_v2_aggregate_function_destroy
 #define duckdb_v2_aggregate_function_destroy_get_bind_data                                                             \
 	duckdb_ext_api.duckdb_v2_aggregate_function_destroy_get_bind_data
@@ -1566,7 +1557,6 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_aggregate_function_init_get_state_count
 #define duckdb_v2_aggregate_function_init_get_states    duckdb_ext_api.duckdb_v2_aggregate_function_init_get_states
 #define duckdb_v2_aggregate_function_init_get_user_data duckdb_ext_api.duckdb_v2_aggregate_function_init_get_user_data
-#define duckdb_v2_aggregate_function_register           duckdb_ext_api.duckdb_v2_aggregate_function_register
 #define duckdb_v2_aggregate_function_set_bind_callback  duckdb_ext_api.duckdb_v2_aggregate_function_set_bind_callback
 #define duckdb_v2_aggregate_function_set_combine_callback                                                              \
 	duckdb_ext_api.duckdb_v2_aggregate_function_set_combine_callback
@@ -1592,19 +1582,22 @@ typedef struct {
 #define duckdb_v2_aggregate_function_update_get_states duckdb_ext_api.duckdb_v2_aggregate_function_update_get_states
 #define duckdb_v2_aggregate_function_update_get_user_data                                                              \
 	duckdb_ext_api.duckdb_v2_aggregate_function_update_get_user_data
-#define duckdb_v2_aggregate_function_set_property       duckdb_ext_api.duckdb_v2_aggregate_function_set_property
-#define duckdb_v2_scalar_function_set_property          duckdb_ext_api.duckdb_v2_scalar_function_set_property
-#define duckdb_v2_table_function_bind_add_result_column duckdb_ext_api.duckdb_v2_table_function_bind_add_result_column
-#define duckdb_v2_table_function_bind_set_cardinality   duckdb_ext_api.duckdb_v2_table_function_bind_set_cardinality
-#define duckdb_v2_table_function_create_with_connection duckdb_ext_api.duckdb_v2_table_function_create_with_connection
-#define duckdb_v2_table_function_create_with_extension  duckdb_ext_api.duckdb_v2_table_function_create_with_extension
-#define duckdb_v2_table_function_destroy                duckdb_ext_api.duckdb_v2_table_function_destroy
-#define duckdb_v2_table_function_exec_get_bind_data     duckdb_ext_api.duckdb_v2_table_function_exec_get_bind_data
-#define duckdb_v2_table_function_exec_get_global_state  duckdb_ext_api.duckdb_v2_table_function_exec_get_global_state
-#define duckdb_v2_table_function_exec_get_local_state   duckdb_ext_api.duckdb_v2_table_function_exec_get_local_state
-#define duckdb_v2_table_function_exec_get_output_chunk  duckdb_ext_api.duckdb_v2_table_function_exec_get_output_chunk
-#define duckdb_v2_table_function_exec_get_user_data     duckdb_ext_api.duckdb_v2_table_function_exec_get_user_data
-#define duckdb_v2_table_function_get_signature          duckdb_ext_api.duckdb_v2_table_function_get_signature
+#define duckdb_v2_connection_register_aggregate_function duckdb_ext_api.duckdb_v2_connection_register_aggregate_function
+#define duckdb_v2_extension_register_aggregate_function  duckdb_ext_api.duckdb_v2_extension_register_aggregate_function
+#define duckdb_v2_aggregate_function_set_property        duckdb_ext_api.duckdb_v2_aggregate_function_set_property
+#define duckdb_v2_scalar_function_set_property           duckdb_ext_api.duckdb_v2_scalar_function_set_property
+#define duckdb_v2_connection_register_table_function     duckdb_ext_api.duckdb_v2_connection_register_table_function
+#define duckdb_v2_extension_register_table_function      duckdb_ext_api.duckdb_v2_extension_register_table_function
+#define duckdb_v2_table_function_bind_add_result_column  duckdb_ext_api.duckdb_v2_table_function_bind_add_result_column
+#define duckdb_v2_table_function_bind_set_cardinality    duckdb_ext_api.duckdb_v2_table_function_bind_set_cardinality
+#define duckdb_v2_table_function_create                  duckdb_ext_api.duckdb_v2_table_function_create
+#define duckdb_v2_table_function_destroy                 duckdb_ext_api.duckdb_v2_table_function_destroy
+#define duckdb_v2_table_function_exec_get_bind_data      duckdb_ext_api.duckdb_v2_table_function_exec_get_bind_data
+#define duckdb_v2_table_function_exec_get_global_state   duckdb_ext_api.duckdb_v2_table_function_exec_get_global_state
+#define duckdb_v2_table_function_exec_get_local_state    duckdb_ext_api.duckdb_v2_table_function_exec_get_local_state
+#define duckdb_v2_table_function_exec_get_output_chunk   duckdb_ext_api.duckdb_v2_table_function_exec_get_output_chunk
+#define duckdb_v2_table_function_exec_get_user_data      duckdb_ext_api.duckdb_v2_table_function_exec_get_user_data
+#define duckdb_v2_table_function_get_signature           duckdb_ext_api.duckdb_v2_table_function_get_signature
 #define duckdb_v2_table_function_init_global_get_bind_data                                                             \
 	duckdb_ext_api.duckdb_v2_table_function_init_global_get_bind_data
 #define duckdb_v2_table_function_init_global_get_user_data                                                             \
@@ -1626,7 +1619,6 @@ typedef struct {
 	duckdb_ext_api.duckdb_v2_table_function_progress_get_global_state
 #define duckdb_v2_table_function_progress_get_user_data duckdb_ext_api.duckdb_v2_table_function_progress_get_user_data
 #define duckdb_v2_table_function_progress_set_progress  duckdb_ext_api.duckdb_v2_table_function_progress_set_progress
-#define duckdb_v2_table_function_register               duckdb_ext_api.duckdb_v2_table_function_register
 #define duckdb_v2_table_function_set_bind_callback      duckdb_ext_api.duckdb_v2_table_function_set_bind_callback
 #define duckdb_v2_table_function_set_exec_callback      duckdb_ext_api.duckdb_v2_table_function_set_exec_callback
 #define duckdb_v2_table_function_set_init_global_callback                                                              \
@@ -1635,28 +1627,30 @@ typedef struct {
 #define duckdb_v2_table_function_set_name                duckdb_ext_api.duckdb_v2_table_function_set_name
 #define duckdb_v2_table_function_set_progress_callback   duckdb_ext_api.duckdb_v2_table_function_set_progress_callback
 #define duckdb_v2_table_function_set_user_data           duckdb_ext_api.duckdb_v2_table_function_set_user_data
-#define duckdb_v2_cast_function_create_with_connection   duckdb_ext_api.duckdb_v2_cast_function_create_with_connection
-#define duckdb_v2_cast_function_create_with_extension    duckdb_ext_api.duckdb_v2_cast_function_create_with_extension
+#define duckdb_v2_cast_function_create                   duckdb_ext_api.duckdb_v2_cast_function_create
 #define duckdb_v2_cast_function_destroy                  duckdb_ext_api.duckdb_v2_cast_function_destroy
 #define duckdb_v2_cast_function_exec_get_input           duckdb_ext_api.duckdb_v2_cast_function_exec_get_input
 #define duckdb_v2_cast_function_exec_get_mode            duckdb_ext_api.duckdb_v2_cast_function_exec_get_mode
 #define duckdb_v2_cast_function_exec_get_output          duckdb_ext_api.duckdb_v2_cast_function_exec_get_output
 #define duckdb_v2_cast_function_exec_get_row_count       duckdb_ext_api.duckdb_v2_cast_function_exec_get_row_count
 #define duckdb_v2_cast_function_exec_get_user_data       duckdb_ext_api.duckdb_v2_cast_function_exec_get_user_data
-#define duckdb_v2_cast_function_register                 duckdb_ext_api.duckdb_v2_cast_function_register
 #define duckdb_v2_cast_function_set_exec_callback        duckdb_ext_api.duckdb_v2_cast_function_set_exec_callback
 #define duckdb_v2_cast_function_set_implicit_cast_cost   duckdb_ext_api.duckdb_v2_cast_function_set_implicit_cast_cost
 #define duckdb_v2_cast_function_set_source_type          duckdb_ext_api.duckdb_v2_cast_function_set_source_type
 #define duckdb_v2_cast_function_set_target_type          duckdb_ext_api.duckdb_v2_cast_function_set_target_type
 #define duckdb_v2_cast_function_set_user_data            duckdb_ext_api.duckdb_v2_cast_function_set_user_data
 #define duckdb_v2_column_data_collection_clear           duckdb_ext_api.duckdb_v2_column_data_collection_clear
+#define duckdb_v2_connection_register_cast_function      duckdb_ext_api.duckdb_v2_connection_register_cast_function
+#define duckdb_v2_connection_register_custom_type        duckdb_ext_api.duckdb_v2_connection_register_custom_type
+#define duckdb_v2_connection_register_replacement_scan   duckdb_ext_api.duckdb_v2_connection_register_replacement_scan
 #define duckdb_v2_context_get_file_system                duckdb_ext_api.duckdb_v2_context_get_file_system
-#define duckdb_v2_custom_type_create_with_connection     duckdb_ext_api.duckdb_v2_custom_type_create_with_connection
-#define duckdb_v2_custom_type_create_with_extension      duckdb_ext_api.duckdb_v2_custom_type_create_with_extension
+#define duckdb_v2_custom_type_create                     duckdb_ext_api.duckdb_v2_custom_type_create
 #define duckdb_v2_custom_type_destroy                    duckdb_ext_api.duckdb_v2_custom_type_destroy
-#define duckdb_v2_custom_type_register                   duckdb_ext_api.duckdb_v2_custom_type_register
 #define duckdb_v2_custom_type_set_base_type              duckdb_ext_api.duckdb_v2_custom_type_set_base_type
 #define duckdb_v2_custom_type_set_name                   duckdb_ext_api.duckdb_v2_custom_type_set_name
+#define duckdb_v2_extension_register_cast_function       duckdb_ext_api.duckdb_v2_extension_register_cast_function
+#define duckdb_v2_extension_register_custom_type         duckdb_ext_api.duckdb_v2_extension_register_custom_type
+#define duckdb_v2_extension_register_replacement_scan    duckdb_ext_api.duckdb_v2_extension_register_replacement_scan
 #define duckdb_v2_file_close                             duckdb_ext_api.duckdb_v2_file_close
 #define duckdb_v2_file_destroy                           duckdb_ext_api.duckdb_v2_file_destroy
 #define duckdb_v2_file_open_options_create               duckdb_ext_api.duckdb_v2_file_open_options_create
@@ -1672,6 +1666,7 @@ typedef struct {
 #define duckdb_v2_file_tell                              duckdb_ext_api.duckdb_v2_file_tell
 #define duckdb_v2_file_write                             duckdb_ext_api.duckdb_v2_file_write
 #define duckdb_v2_file_write_at                          duckdb_ext_api.duckdb_v2_file_write_at
+#define duckdb_v2_instance_register_replacement_scan     duckdb_ext_api.duckdb_v2_instance_register_replacement_scan
 #define duckdb_v2_qname_create                           duckdb_ext_api.duckdb_v2_qname_create
 #define duckdb_v2_qname_destroy                          duckdb_ext_api.duckdb_v2_qname_destroy
 #define duckdb_v2_qname_equals                           duckdb_ext_api.duckdb_v2_qname_equals
@@ -1682,14 +1677,10 @@ typedef struct {
 #define duckdb_v2_qname_render                           duckdb_ext_api.duckdb_v2_qname_render
 #define duckdb_v2_replacement_scan_add_argument          duckdb_ext_api.duckdb_v2_replacement_scan_add_argument
 #define duckdb_v2_replacement_scan_add_named_argument    duckdb_ext_api.duckdb_v2_replacement_scan_add_named_argument
-#define duckdb_v2_replacement_scan_create_with_connection                                                              \
-	duckdb_ext_api.duckdb_v2_replacement_scan_create_with_connection
-#define duckdb_v2_replacement_scan_create_with_extension duckdb_ext_api.duckdb_v2_replacement_scan_create_with_extension
-#define duckdb_v2_replacement_scan_create_with_instance  duckdb_ext_api.duckdb_v2_replacement_scan_create_with_instance
+#define duckdb_v2_replacement_scan_create                duckdb_ext_api.duckdb_v2_replacement_scan_create
 #define duckdb_v2_replacement_scan_destroy               duckdb_ext_api.duckdb_v2_replacement_scan_destroy
 #define duckdb_v2_replacement_scan_get_name              duckdb_ext_api.duckdb_v2_replacement_scan_get_name
 #define duckdb_v2_replacement_scan_get_user_data         duckdb_ext_api.duckdb_v2_replacement_scan_get_user_data
-#define duckdb_v2_replacement_scan_register              duckdb_ext_api.duckdb_v2_replacement_scan_register
 #define duckdb_v2_replacement_scan_set_alias             duckdb_ext_api.duckdb_v2_replacement_scan_set_alias
 #define duckdb_v2_replacement_scan_set_callback          duckdb_ext_api.duckdb_v2_replacement_scan_set_callback
 #define duckdb_v2_replacement_scan_set_collection        duckdb_ext_api.duckdb_v2_replacement_scan_set_collection
@@ -1712,6 +1703,7 @@ typedef struct {
 #define duckdb_v2_column_description_has_default         duckdb_ext_api.duckdb_v2_column_description_has_default
 #define duckdb_v2_column_description_has_generated       duckdb_ext_api.duckdb_v2_column_description_has_generated
 #define duckdb_v2_connection_describe_table              duckdb_ext_api.duckdb_v2_connection_describe_table
+#define duckdb_v2_connection_register_copy_function      duckdb_ext_api.duckdb_v2_connection_register_copy_function
 #define duckdb_v2_copy_from_bind_get_column_count        duckdb_ext_api.duckdb_v2_copy_from_bind_get_column_count
 #define duckdb_v2_copy_from_bind_get_column_name         duckdb_ext_api.duckdb_v2_copy_from_bind_get_column_name
 #define duckdb_v2_copy_from_bind_get_column_type         duckdb_ext_api.duckdb_v2_copy_from_bind_get_column_type
@@ -1744,10 +1736,8 @@ typedef struct {
 #define duckdb_v2_copy_from_set_init_global_callback     duckdb_ext_api.duckdb_v2_copy_from_set_init_global_callback
 #define duckdb_v2_copy_from_set_init_local_callback      duckdb_ext_api.duckdb_v2_copy_from_set_init_local_callback
 #define duckdb_v2_copy_from_set_progress_callback        duckdb_ext_api.duckdb_v2_copy_from_set_progress_callback
-#define duckdb_v2_copy_function_create_with_connection   duckdb_ext_api.duckdb_v2_copy_function_create_with_connection
-#define duckdb_v2_copy_function_create_with_extension    duckdb_ext_api.duckdb_v2_copy_function_create_with_extension
+#define duckdb_v2_copy_function_create                   duckdb_ext_api.duckdb_v2_copy_function_create
 #define duckdb_v2_copy_function_destroy                  duckdb_ext_api.duckdb_v2_copy_function_destroy
-#define duckdb_v2_copy_function_register                 duckdb_ext_api.duckdb_v2_copy_function_register
 #define duckdb_v2_copy_function_set_name                 duckdb_ext_api.duckdb_v2_copy_function_set_name
 #define duckdb_v2_copy_function_set_user_data            duckdb_ext_api.duckdb_v2_copy_function_set_user_data
 #define duckdb_v2_copy_to_batch_get_bind_data            duckdb_ext_api.duckdb_v2_copy_to_batch_get_bind_data
@@ -1793,6 +1783,7 @@ typedef struct {
 #define duckdb_v2_expression_get_child_count             duckdb_ext_api.duckdb_v2_expression_get_child_count
 #define duckdb_v2_expression_get_return_type             duckdb_ext_api.duckdb_v2_expression_get_return_type
 #define duckdb_v2_expression_get_type                    duckdb_ext_api.duckdb_v2_expression_get_type
+#define duckdb_v2_extension_register_copy_function       duckdb_ext_api.duckdb_v2_extension_register_copy_function
 #define duckdb_v2_identifier_render_quoted               duckdb_ext_api.duckdb_v2_identifier_render_quoted
 #define duckdb_v2_prepared_statement_create              duckdb_ext_api.duckdb_v2_prepared_statement_create
 #define duckdb_v2_prepared_statement_destroy             duckdb_ext_api.duckdb_v2_prepared_statement_destroy
@@ -1912,6 +1903,10 @@ typedef struct {
 #define duckdb_v2_option_get_default_scope         duckdb_ext_api.duckdb_v2_option_get_default_scope
 #define duckdb_v2_option_supports_scope            duckdb_ext_api.duckdb_v2_option_supports_scope
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
+#define duckdb_v2_connection_register_multi_file_function                                                              \
+	duckdb_ext_api.duckdb_v2_connection_register_multi_file_function
+#endif
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_copy_to_set_statistics_callback duckdb_ext_api.duckdb_v2_copy_to_set_statistics_callback
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -1933,18 +1928,13 @@ typedef struct {
 #define duckdb_v2_data_chunk_get_capacity duckdb_ext_api.duckdb_v2_data_chunk_get_capacity
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_multi_file_function_create_with_connection                                                           \
-	duckdb_ext_api.duckdb_v2_multi_file_function_create_with_connection
+#define duckdb_v2_extension_register_multi_file_function duckdb_ext_api.duckdb_v2_extension_register_multi_file_function
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_multi_file_function_create_with_extension                                                            \
-	duckdb_ext_api.duckdb_v2_multi_file_function_create_with_extension
+#define duckdb_v2_multi_file_function_create duckdb_ext_api.duckdb_v2_multi_file_function_create
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_multi_file_function_destroy duckdb_ext_api.duckdb_v2_multi_file_function_destroy
-#endif
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-#define duckdb_v2_multi_file_function_register duckdb_ext_api.duckdb_v2_multi_file_function_register
 #endif
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 #define duckdb_v2_multi_file_function_set_file_extension duckdb_ext_api.duckdb_v2_multi_file_function_set_file_extension

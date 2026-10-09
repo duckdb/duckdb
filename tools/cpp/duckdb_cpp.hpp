@@ -24,8 +24,8 @@
 /// Failures that are part of a function's contract are documented with `\@throws`; any other failure surfaces as a
 /// plain `Exception`.
 ///
-/// The usual path through the API: an `Environment` opens an `Instance`, an `Instance` hands out `Connection`s, and a
-/// `Connection` parses and executes SQL into a streaming `QueryResult` that yields `DataChunk`s of `Vector`s.
+/// The usual path through the API: open an `Instance`, which hands out `Connection`s, and a `Connection` parses and
+/// executes SQL into a streaming `QueryResult` that yields `DataChunk`s of `Vector`s.
 
 #include <utility>
 #include <string>
@@ -61,7 +61,6 @@ class Exception;
 class OptionDescription;
 struct OptionValue;
 class Config;
-class Environment;
 class Instance;
 class Connection;
 class SqlStatement;
@@ -97,6 +96,12 @@ class FileSystem;
 class FileHandle;
 class FileOpenOptions;
 class MultiFileFunction;
+class ScalarFunction;
+class AggregateFunction;
+class TableFunction;
+class CopyFunction;
+class Factory;
+class Extension;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Internal Implementation Details
@@ -319,7 +324,7 @@ public:
 // Configuration settings. Reached through the `Config` of an `Instance`, a `Connection` or a `Context`: `SetOption`
 // writes one, `GetOption` reads its current value and the scope it came from, and `DescribeOption` describes it
 // -- its default value, description, the scopes it may be written at, and aliases. Settings that can only be chosen at
-// startup are passed to `Environment::CreateInstance`.
+// startup are passed to the `Instance` constructor.
 
 /// The scope a setting is written at, or its value was read from.
 enum class SettingScope : uint8_t {
@@ -759,6 +764,48 @@ public:
 		return factory;
 	}
 
+	/// Registers on this connection's database, in the connection's transaction: inside an explicit transaction a
+	/// rollback undoes catalog entries, though casts and replacement scans take effect immediately. Replacement scans
+	/// stay local to this connection.
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, exec callback, or a usable return type is missing.
+	auto Register(ScalarFunction &scalar_function) -> void;
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, a required callback, or a usable return type is missing.
+	auto Register(AggregateFunction &aggregate_function) -> void;
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, bind callback or exec callback is missing, the signature
+	/// declares a return type, or a partitioning callback is set without a partition data callback.
+	auto Register(TableFunction &table_function) -> void;
+	/// Registers the function. The function object remains valid.
+	/// @throws InvalidInputException When the name or the single-file function is missing, or the single-file
+	/// function does not exist or does not take the path of a file as its only positional VARCHAR parameter.
+	auto Register(MultiFileFunction &multi_file_function) -> void;
+	/// Registers the type. The type object remains valid and may be adjusted
+	/// and registered again.
+	/// @throws InvalidInputException When the name or the base type is missing, or the base type is not concrete.
+	auto Register(CustomType &custom_type) -> void;
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name is missing, neither side is configured, a configured
+	/// `COPY ... TO` side lacks its batch or flush callback, or a configured `COPY ... FROM` side lacks its bind or
+	/// exec callback.
+	auto Register(CopyFunction &copy_function) -> void;
+	/// Registers the cast, replacing whatever cast was registered for the same type pair. The function object remains
+	/// valid and may be adjusted and registered again; user data set via `SetUserData` is consumed by the first
+	/// registration.
+	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
+	/// not concrete.
+	auto Register(CastFunction &cast_function) -> void;
+	/// Registers the scan. Scans are consulted in registration order within
+	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
+	/// be registered only once.
+	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
+	auto Register(ReplacementScan &replacement_scan) -> void;
+
 	/// The config of this connection: its own cascade.
 	auto GetConfig() -> Config & {
 		return config;
@@ -869,22 +916,87 @@ private:
 // Instance
 //----------------------------------------------------------------------------------------------------------------------
 // An open database: the catalog, the storage behind it, and the settings shared by every session on it. Databases are
-// opened through an `Environment` and worked with through the `Connection`s they hand out.
+// opened by constructing an `Instance` and worked with through the `Connection`s they hand out. Every instance of the
+// process shares one environment, so a file can only be open in one instance at a time.
+
+/// The options an `Instance` can only be given when it is created: once it exists they can no longer change, or only
+/// become stricter. Each setter returns the options, so they chain: `StartupOptions().EnableUnsignedExtensions(true)`.
+/// An option left unset keeps DuckDB's default.
+class StartupOptions {
+	friend class Instance;
+
+public:
+	StartupOptions() = default;
+
+	/// Whether extensions built by the community can be loaded. Defaults to true.
+	auto EnableCommunityExtensions(bool value) -> StartupOptions & {
+		allow_community_extensions = value;
+		return *this;
+	}
+
+	/// Whether extensions with an invalid or missing signature can be loaded. Defaults to false.
+	auto EnableUnsignedExtensions(bool value) -> StartupOptions & {
+		allow_unsigned_extensions = value;
+		return *this;
+	}
+
+	/// Whether a fatal error invalidates the instance, refusing every further query on it. Disabling this should be
+	/// done with great care: DuckDB cannot guarantee correct behavior after a fatal error. Defaults to true.
+	auto EnableDatabaseInvalidation(bool value) -> StartupOptions & {
+		disable_database_invalidation = !value;
+		return *this;
+	}
+
+	/// Whether secrets can be printed unredacted. Defaults to false.
+	auto EnableUnredactedSecrets(bool value) -> StartupOptions & {
+		allow_unredacted_secrets = value;
+		return *this;
+	}
+
+	/// Metadata added to the user agent of the HTTP requests DuckDB makes, so callers and wrappers can tag their own
+	/// traffic. Defaults to none.
+	auto SetCustomUserAgent(std::string_view value) -> StartupOptions & {
+		custom_user_agent = std::string(value);
+		return *this;
+	}
+
+private:
+	std::optional<bool> allow_community_extensions;
+	std::optional<bool> allow_unsigned_extensions;
+	std::optional<bool> allow_unredacted_secrets;
+	std::optional<bool> disable_database_invalidation;
+	std::optional<std::string> custom_user_agent;
+};
 
 class Instance final : public detail::Handle<Instance> {
 	friend detail::HandleFactory;
 
 public:
+	/// Creates a database instance with nothing attached. Attach a database with `Attach` and make it the default
+	/// with `SetDefault`.
+	Instance();
+
+	/// Creates a database instance with nothing attached, with the options that can only be chosen at startup.
+	explicit Instance(const StartupOptions &options);
+
+	/// Creates a database instance, attaches `path`, and makes it the default database.
+	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
+	/// @param options The options that can only be chosen at startup.
+	explicit Instance(const std::string &path, const StartupOptions &options = {});
+
 	~Instance() override;
 	Instance(Instance &&) noexcept = default;
 	Instance &operator=(Instance &&) noexcept = default;
+
+	/// How many database instances are currently alive in this process.
+	static auto GetInstanceCount() -> size_t;
 
 	/// Attaches a database to this instance, like SQL `ATTACH 'path'`, under the name derived from the path: `memory`
 	/// for an in-memory database, else the file name up to its first `.` (`/data/sales.2024.db` -> `sales`).
 	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
 	/// @param make_default Whether to make it the default database for sessions opened afterwards, as `SetDefault`
 	/// would; false leaves the default alone.
-	/// @throws Exception When the path is already attached in this environment, or a database of that name exists.
+	/// @throws Exception When the path is already attached in this process, or a database of that name exists.
 	auto Attach(const std::string &path, bool make_default = false) -> void;
 
 	/// Attaches a database under a name and with the per-database options SQL `ATTACH` takes, like
@@ -910,8 +1022,8 @@ public:
 	/// @throws InvalidInputException When no database is attached under `name`.
 	auto SetDefault(const std::string &name) -> void;
 
-	/// The config of this database: the GLOBAL scope. Settings that can only be chosen at startup are passed to
-	/// `Environment::CreateInstance` instead.
+	/// The config of this database: the GLOBAL scope. Settings that can only be chosen at startup are passed to the
+	/// constructor instead.
 	auto GetConfig() -> Config & {
 		return config;
 	}
@@ -930,6 +1042,14 @@ public:
 		return factory;
 	}
 
+	/// Registers a replacement scan on this database, visible to every connection. Not thread-safe against queries
+	/// binding on other connections: register before issuing queries.
+	/// Registers the scan. Scans are consulted in registration order within
+	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
+	/// be registered only once.
+	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
+	auto Register(ReplacementScan &replacement_scan) -> void;
+
 	/// The file system of this database, with its GLOBAL settings and secrets. Borrowed, and valid only while the
 	/// instance is.
 	auto GetFileSystem() const -> FileSystem;
@@ -944,6 +1064,8 @@ public:
 
 private:
 	explicit Instance(void *impl);
+	//! The (name, value) pairs of the options that were set, in the textual form SQL `SET` accepts.
+	static auto StartupOptionPairs(const StartupOptions &options) -> std::vector<std::pair<std::string, std::string>>;
 
 	Factory factory;
 	Config config;
@@ -964,7 +1086,45 @@ class Extension final : public detail::Handle<Extension> {
 public:
 	~Extension() override;
 
-	// TODO: (You can't do anything with this yet, but in the future will be able to register functions, types etc.)
+	/// Registers on the loading extension's database, attributed to the extension and visible to every connection.
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, exec callback, or a usable return type is missing.
+	auto Register(ScalarFunction &scalar_function) -> void;
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, a required callback, or a usable return type is missing.
+	auto Register(AggregateFunction &aggregate_function) -> void;
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name, bind callback or exec callback is missing, the signature
+	/// declares a return type, or a partitioning callback is set without a partition data callback.
+	auto Register(TableFunction &table_function) -> void;
+	/// Registers the function. The function object remains valid.
+	/// @throws InvalidInputException When the name or the single-file function is missing, or the single-file
+	/// function does not exist or does not take the path of a file as its only positional VARCHAR parameter.
+	auto Register(MultiFileFunction &multi_file_function) -> void;
+	/// Registers the type. The type object remains valid and may be adjusted
+	/// and registered again.
+	/// @throws InvalidInputException When the name or the base type is missing, or the base type is not concrete.
+	auto Register(CustomType &custom_type) -> void;
+	/// Registers the function. The function object remains valid and may be
+	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first registration.
+	/// @throws InvalidInputException When the name is missing, neither side is configured, a configured
+	/// `COPY ... TO` side lacks its batch or flush callback, or a configured `COPY ... FROM` side lacks its bind or
+	/// exec callback.
+	auto Register(CopyFunction &copy_function) -> void;
+	/// Registers the cast, replacing whatever cast was registered for the same type pair. The function object remains
+	/// valid and may be adjusted and registered again; user data set via `SetUserData` is consumed by the first
+	/// registration.
+	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
+	/// not concrete.
+	auto Register(CastFunction &cast_function) -> void;
+	/// Registers the scan. Scans are consulted in registration order within
+	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
+	/// be registered only once.
+	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
+	auto Register(ReplacementScan &replacement_scan) -> void;
 
 private:
 	explicit Extension(void *impl);
@@ -976,42 +1136,6 @@ namespace detail {
 /// passed untyped to keep the C loader types out of this header.
 auto RunExtensionEntry(void (*body)(Extension &, Context &), void *extension, void *context, void *err) -> void;
 } // namespace detail
-
-//----------------------------------------------------------------------------------------------------------------------
-// Environment
-//----------------------------------------------------------------------------------------------------------------------
-// The entry point to the API: an `Environment` creates instances and tracks the ones it has created. Create one,
-// keep it for as long as any instance is alive, and create instances through it.
-
-/// The environment instances are created in. It must outlive every `Instance` created through it; destroying it
-/// while instances are still alive leaks them.
-class Environment final : public detail::Handle<Environment> {
-	friend detail::HandleFactory;
-
-public:
-	Environment();
-	~Environment() override;
-	Environment(Environment &&) noexcept = default;
-	Environment &operator=(Environment &&) noexcept = default;
-
-	/// How many databases are currently alive in this environment.
-	auto GetInstanceCount() const -> size_t;
-
-	/// Creates a database instance with nothing attached. Attach a database with `Instance::Attach` and make it the
-	/// default with `Instance::SetDefault`.
-	auto CreateInstance() -> Instance;
-
-	/// Creates a database instance with startup options, as (name, value) pairs in the textual form SQL `SET`
-	/// accepts. Options that cannot change once the instance exists, such as access_mode, can only be set here.
-	auto CreateInstance(const std::vector<std::pair<std::string, std::string>> &options) -> Instance;
-
-	/// Creates a database instance with default settings, attaches `path`, and makes it the default database.
-	/// @param path The database file, or ":memory:" / the empty string for an in-memory database.
-	auto Open(const std::string &path) -> Instance;
-
-	/// As `Open`, with startup options as for `CreateInstance`.
-	auto Open(const std::string &path, const std::vector<std::pair<std::string, std::string>> &options) -> Instance;
-};
 
 /// The version of the DuckDB library this program is linked against, e.g. "v1.5.0", with a suffix such as
 /// "v1.5.0-dev123" on development builds.
@@ -3037,16 +3161,18 @@ enum class OrderPreservation : uint8_t {
 // Scalar Function
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A user-defined scalar function, built up with the setters and made live with `Register`.
-/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, signature,
-/// callbacks), then call `Register`. The function object may be destroyed after registration; the registered function
-/// lives on in the catalog.
+/// A user-defined scalar function, built up with the setters and made live with `Connection::Register` or
+/// `Extension::Register`. Create one through a `Factory` of the database it will be registered in, describe it (name,
+/// signature, callbacks), then register it with `Connection::Register` or `Extension::Register`. The function object
+/// may be destroyed after registration; the registered function lives on in the catalog.
 ///
 /// The callbacks receive their state through the input objects: `SetUserData` plants data readable from every
 /// callback, the bind callback may plant bind data for init and exec, and the init callback may plant init data for
 /// exec. A callback reports failure by throwing; the exception surfaces as the query's error.
 class ScalarFunction final : public detail::Handle<ScalarFunction> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
 
 public:
 	class BindInput;
@@ -3065,10 +3191,9 @@ public:
 
 	~ScalarFunction() override;
 
-	/// Creates a function that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> ScalarFunction;
-	/// Creates a function that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> ScalarFunction;
+	/// Creates an empty ScalarFunction through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> ScalarFunction;
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> ScalarFunction &;
@@ -3087,7 +3212,8 @@ public:
 	}
 
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
-	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
+	/// re-registering.
 	template <class T, class... ARGS>
 	auto SetUserData(ARGS &&... args) & -> ScalarFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
@@ -3109,13 +3235,10 @@ public:
 	/// How the function interacts with collations on its arguments. Defaults to `PROPAGATE`.
 	auto SetCollationHandling(FunctionCollationHandling value) & -> ScalarFunction &;
 
-	/// Registers the function in the catalog it was created against. The function object remains valid and may be
-	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name, exec callback, or a usable return type is missing.
-	auto Register() -> void;
-
 private:
 	explicit ScalarFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -3257,10 +3380,10 @@ public:
 // Aggregate Function
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A user-defined aggregate function, built up with the setters and made live with `Register`.
-/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, signature,
-/// callbacks), then call `Register`. The function object may be destroyed after registration; the registered function
-/// lives on in the catalog.
+/// A user-defined aggregate function, built up with the setters and made live with `Connection::Register` or
+/// `Extension::Register`. Create one through a `Factory` of the database it will be registered in, describe it (name,
+/// signature, callbacks), then register it with `Connection::Register` or `Extension::Register`. The function object
+/// may be destroyed after registration; the registered function lives on in the catalog.
 ///
 /// The aggregate keeps one state per group. The size callback reports how large a single state is; the init callback
 /// constructs a batch of freshly allocated states; the update callback folds a batch of input rows into their rows'
@@ -3273,6 +3396,8 @@ public:
 /// dropped, as it runs on a path that must not fail.
 class AggregateFunction final : public detail::Handle<AggregateFunction> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
 
 public:
 	/// Whether the aggregate's result depends on the order in which rows are aggregated.
@@ -3319,10 +3444,9 @@ public:
 
 	~AggregateFunction() override;
 
-	/// Creates a function that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> AggregateFunction;
-	/// Creates a function that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> AggregateFunction;
+	/// Creates an empty AggregateFunction through `factory`. Register it through a `Connection` or an `Extension` of
+	/// the factory's database.
+	static auto Create(Factory &factory) -> AggregateFunction;
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> AggregateFunction &;
@@ -3341,7 +3465,8 @@ public:
 	}
 
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
-	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
+	/// re-registering.
 	template <class T, class... ARGS>
 	auto SetUserData(ARGS &&... args) & -> AggregateFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
@@ -3371,13 +3496,10 @@ public:
 	/// Whether the result is affected by a DISTINCT modifier. Defaults to `DEPENDENT`.
 	auto SetDistinctDependence(DistinctDependence value) & -> AggregateFunction &;
 
-	/// Registers the function in the catalog it was created against. The function object remains valid and may be
-	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name, a required callback, or a usable return type is missing.
-	auto Register() -> void;
-
 private:
 	explicit AggregateFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -3764,10 +3886,10 @@ private:
 // Table Function
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A user-defined table function, built up with the setters and made live with `Register`.
-/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, signature,
-/// callbacks), then call `Register`. The function object may be destroyed after registration; the registered function
-/// lives on in the catalog.
+/// A user-defined table function, built up with the setters and made live with `Connection::Register` or
+/// `Extension::Register`. Create one through a `Factory` of the database it will be registered in, describe it (name,
+/// signature, callbacks), then register it with `Connection::Register` or `Extension::Register`. The function object
+/// may be destroyed after registration; the registered function lives on in the catalog.
 ///
 /// A table function produces a table rather than a value: the bind callback declares the columns it returns, and the
 /// exec callback is then invoked repeatedly to fill batches of rows until it produces an empty one. Between them, the
@@ -3779,6 +3901,8 @@ private:
 /// by throwing; the exception surfaces as the query's error.
 class TableFunction final : public detail::Handle<TableFunction> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
 
 public:
 	class BindInput;
@@ -3833,10 +3957,9 @@ public:
 
 	~TableFunction() override;
 
-	/// Creates a function that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> TableFunction;
-	/// Creates a function that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> TableFunction;
+	/// Creates an empty TableFunction through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> TableFunction;
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> TableFunction &;
@@ -3855,7 +3978,8 @@ public:
 	}
 
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
-	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
+	/// re-registering.
 	template <class T, class... ARGS>
 	auto SetUserData(ARGS &&... args) & -> TableFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
@@ -3882,14 +4006,10 @@ public:
 	/// output chunk always holds every declared column, and the engine drops the unused ones itself.
 	auto SetProjectionPushdown(bool enable) & -> TableFunction &;
 
-	/// Registers the function in the catalog it was created against. The function object remains valid and may be
-	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name, bind callback or exec callback is missing, the signature
-	/// declares a return type, or a partitioning callback is set without a partition data callback.
-	auto Register() -> void;
-
 private:
 	explicit TableFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -4452,6 +4572,8 @@ public:
 /// threads scan it.
 class MultiFileFunction final : public detail::Handle<MultiFileFunction> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
 
 public:
 	MultiFileFunction(MultiFileFunction &&) noexcept = default;
@@ -4459,10 +4581,9 @@ public:
 
 	~MultiFileFunction() override;
 
-	/// Creates a function that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> MultiFileFunction;
-	/// Creates a function that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> MultiFileFunction;
+	/// Creates an empty MultiFileFunction through `factory`. Register it through a `Connection` or an `Extension` of
+	/// the factory's database.
+	static auto Create(Factory &factory) -> MultiFileFunction;
 
 	/// Sets the function's name, as SQL will call it.
 	auto SetName(const std::string &name) & -> MultiFileFunction &;
@@ -4477,22 +4598,20 @@ public:
 	/// directory then reads the files with that extension inside it.
 	auto SetFileExtension(const std::string &extension) & -> MultiFileFunction &;
 
-	/// Registers the function in the catalog it was created against. The function object remains valid.
-	/// @throws InvalidInputException When the name or the single-file function is missing, or the single-file
-	/// function does not exist or does not take the path of a file as its only positional VARCHAR parameter.
-	auto Register() -> void;
-
 private:
 	explicit MultiFileFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
 // Custom Type
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A user-defined type, built up with the setters and made live with `Register`.
-/// Create one against the `Connection` or `Extension` it will be registered in, give it a name and a base type, then
-/// call `Register`. The type object may be destroyed after registration; the registered type lives on in the catalog.
+/// A user-defined type, built up with the setters and made live with `Connection::Register` or `Extension::Register`.
+/// Create one through a `Factory` of the database it will be registered in, give it a name and a base type, then
+/// register it with `Connection::Register` or `Extension::Register`. The type object may be destroyed after
+/// registration; the registered type lives on in the catalog.
 ///
 /// A custom type borrows its base type's internal representation, so the execution engine needs no special handling
 /// for it, while staying logically distinct from the base type so it can carry its own casts. Values of it are
@@ -4500,6 +4619,8 @@ private:
 /// base type with `LogicalType::WithAlias`.
 class CustomType final : public detail::Handle<CustomType> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
 
 public:
 	CustomType(CustomType &&) noexcept = default;
@@ -4507,10 +4628,9 @@ public:
 
 	~CustomType() override;
 
-	/// Creates a type that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> CustomType;
-	/// Creates a type that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> CustomType;
+	/// Creates an empty CustomType through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> CustomType;
 
 	/// Sets the type's name, as SQL will refer to it, and as every logical type instance of it carries as its alias.
 	auto SetName(const std::string &name) & -> CustomType &;
@@ -4518,23 +4638,21 @@ public:
 	/// Sets the type whose representation this type borrows. Must be a fully defined concrete type.
 	auto SetBaseType(const LogicalType &type) & -> CustomType &;
 
-	/// Registers the type in the catalog it was created against. The type object remains valid and may be adjusted
-	/// and registered again.
-	/// @throws InvalidInputException When the name or the base type is missing, or the base type is not concrete.
-	auto Register() -> void;
-
 private:
 	explicit CustomType(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 };
 
 //----------------------------------------------------------------------------------------------------------------------
 // Copy Function
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A user-defined file format for `COPY`, built up with the setters and made live with `Register`.
-/// Create one against the `Connection` or `Extension` it will be registered in, describe it (name, callbacks), then
-/// call `Register`. The function object may be destroyed after registration; the registered function lives on in the
-/// catalog and is reached from SQL with `COPY ... TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`.
+/// A user-defined file format for `COPY`, built up with the setters and made live with `Connection::Register` or
+/// `Extension::Register`. Create one through a `Factory` of the database it will be registered in, describe it (name,
+/// callbacks), then register it with `Connection::Register` or `Extension::Register`. The function object may be
+/// destroyed after registration; the registered function lives on in the catalog and is reached from SQL with `COPY ...
+/// TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`.
 ///
 /// The two directions are configured separately and a function may implement either or both. The `COPY ... TO` side
 /// gathers the rows being written into batches and drives its callbacks in this order: bind (once, during planning),
@@ -4549,6 +4667,8 @@ private:
 /// callbacks. A callback reports failure by throwing; the exception surfaces as the query's error.
 class CopyFunction final : public detail::Handle<CopyFunction> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
 
 public:
 	class CopyToBindInput;
@@ -4598,16 +4718,16 @@ public:
 
 	~CopyFunction() override;
 
-	/// Creates a function that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> CopyFunction;
-	/// Creates a function that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> CopyFunction;
+	/// Creates an empty CopyFunction through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> CopyFunction;
 
 	/// Sets the function's name: the format SQL selects it with, as in `COPY ... TO 'path' (FORMAT name)`.
 	auto SetName(const std::string &name) & -> CopyFunction &;
 
 	/// Constructs user data of type `T`, carried by the registered function and freed at engine teardown; read it from
-	/// any callback via the inputs' `GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	/// any callback via the inputs' `GetUserData<T>`. Consumed by registration: set it again before
+	/// re-registering.
 	template <class T, class... ARGS>
 	auto SetUserData(ARGS &&... args) & -> CopyFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
@@ -4629,15 +4749,10 @@ public:
 	auto SetCopyFromExecCallback(CopyFromExecCallback callback) & -> CopyFunction &;
 	auto SetCopyFromProgressCallback(CopyFromProgressCallback callback) & -> CopyFunction &;
 
-	/// Registers the function in the catalog it was created against. The function object remains valid and may be
-	/// adjusted and registered again; user data set via `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the name is missing, neither side is configured, a configured
-	/// `COPY ... TO` side lacks its batch or flush callback, or a configured `COPY ... FROM` side lacks its bind or
-	/// exec callback.
-	auto Register() -> void;
-
 private:
 	explicit CopyFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -5308,10 +5423,10 @@ enum class CastMode : uint8_t {
 	TRY = 1,
 };
 
-/// A user-defined cast between two types, built up with the setters and made live with `Register`.
-/// Create one against the `Connection` or `Extension` it will be registered in, describe it (source type, target
-/// type, exec callback), then call `Register`. The function object may be destroyed after registration; the
-/// registered cast lives on.
+/// A user-defined cast between two types, built up with the setters and made live with `Connection::Register` or
+/// `Extension::Register`. Create one through a `Factory` of the database it will be registered in, describe it (source
+/// type, target type, exec callback), then register it with `Connection::Register` or `Extension::Register`. The
+/// function object may be destroyed after registration; the registered cast lives on.
 ///
 /// A cast is keyed by its (source, target) type pair rather than by a name, and is reached from SQL through CAST and
 /// TRY_CAST -- and, when it declares a non-negative implicit cast cost, through the binder converting argument types
@@ -5319,6 +5434,8 @@ enum class CastMode : uint8_t {
 /// becomes a NULL follows from `ExecInput::GetMode`.
 class CastFunction final : public detail::Handle<CastFunction> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
 
 public:
 	class ExecInput;
@@ -5331,10 +5448,9 @@ public:
 
 	~CastFunction() override;
 
-	/// Creates a cast that `Register` adds to the connection's database.
-	static auto Create(const Connection &conn) -> CastFunction;
-	/// Creates a cast that `Register` adds through the loading extension.
-	static auto Create(const Extension &extension) -> CastFunction;
+	/// Creates an empty CastFunction through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> CastFunction;
 
 	/// Sets the type the cast converts from. Must be a fully defined concrete type.
 	auto SetSourceType(const LogicalType &type) & -> CastFunction &;
@@ -5350,7 +5466,8 @@ public:
 	auto SetImplicitCastCost(int64_t cost) & -> CastFunction &;
 
 	/// Constructs user data of type `T`, carried by the registered cast and freed at engine teardown; read it from the
-	/// exec callback via `ExecInput::GetUserData<T>`. Consumed by `Register`: set it again before re-registering.
+	/// exec callback via `ExecInput::GetUserData<T>`. Consumed by registration: set it again before
+	/// re-registering.
 	template <class T, class... ARGS>
 	auto SetUserData(ARGS &&... args) & -> CastFunction & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
@@ -5360,15 +5477,10 @@ public:
 
 	auto SetExecCallback(ExecCallback callback) & -> CastFunction &;
 
-	/// Registers the cast in the database it was created against, replacing whatever cast was registered for the same
-	/// type pair. The function object remains valid and may be adjusted and registered again; user data set via
-	/// `SetUserData` is consumed by the first `Register`.
-	/// @throws InvalidInputException When the source type, target type, or exec callback is missing, or either type is
-	/// not concrete.
-	auto Register() -> void;
-
 private:
 	explicit CastFunction(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 
@@ -5687,10 +5799,10 @@ private:
 // Replacement Scan
 //----------------------------------------------------------------------------------------------------------------------
 
-/// A user-defined replacement scan, built up with the setters and made live with `Register`.
-/// Create one against the `Connection`, `Instance` or `Extension` it will be registered on, set its callback and
-/// user data, then call `Register`. The scan object may be destroyed after registration; the registered scan lives
-/// on until its scope ends.
+/// A user-defined replacement scan, built up with the setters and made live with `Connection::Register` or
+/// `Extension::Register`. Create one through a `Factory` of the database it will be registered on, set its callback and
+/// user data, then register it with `Connection::Register` or `Extension::Register`. The scan object may be destroyed
+/// after registration; the registered scan lives on until its scope ends.
 ///
 /// The binder consults replacement scans when a table name cannot be resolved in the catalog; this is what makes
 /// `SELECT * FROM 'file.parquet'` work. The callback inspects the unresolved name and either claims it, by naming a
@@ -5698,13 +5810,16 @@ private:
 /// nothing, which lets the next registered scan try. When no scan claims the name, the usual "table does not exist"
 /// error is raised. A callback reports failure by throwing; the exception surfaces as the query's error.
 ///
-/// Scope follows the constructor. A scan created against a `Connection` is visible only to that connection, is
-/// released when it closes, and is consulted before every instance-wide scan, including the built-in file scans. A
-/// scan created against an `Instance` or `Extension` is visible to every connection to that instance and lives until
-/// it closes; registering one is not thread-safe against queries binding on other connections, so do it during
-/// extension load or before issuing queries. A registered scan cannot be unregistered.
+/// Scope follows the registration. A scan registered through a `Connection` is visible only to that connection,
+/// is released when it closes, and is consulted before every instance-wide scan, including the built-in file scans. A
+/// scan registered through an `Instance` or an `Extension` is visible to every connection to that instance
+/// and lives until it closes; registering one is not thread-safe against queries binding on other connections, so do it
+/// during extension load or before issuing queries. A registered scan cannot be unregistered.
 class ReplacementScan final : public detail::Handle<ReplacementScan> {
 	friend detail::HandleFactory;
+	friend class Connection;
+	friend class Extension;
+	friend class Instance;
 
 public:
 	class Input;
@@ -5717,17 +5832,14 @@ public:
 
 	~ReplacementScan() override;
 
-	/// Creates a scan that `Register` adds to the connection, visible only there.
-	static auto Create(const Connection &conn) -> ReplacementScan;
-	/// Creates a scan that `Register` adds to the database, visible to every connection.
-	static auto Create(const Instance &instance) -> ReplacementScan;
-	/// Creates a scan that `Register` adds through the loading extension, visible to every connection.
-	static auto Create(const Extension &extension) -> ReplacementScan;
+	/// Creates an empty ReplacementScan through `factory`. Register it through a `Connection` or an `Extension` of the
+	/// factory's database.
+	static auto Create(Factory &factory) -> ReplacementScan;
 
 	auto SetCallback(Callback callback) & -> ReplacementScan &;
 
 	/// Constructs user data of type `T`, carried by the registered scan and freed when its scope ends; read it from
-	/// the callback via `Input::GetUserData<T>`. Consumed by `Register`.
+	/// the callback via `Input::GetUserData<T>`. Consumed by registration.
 	template <class T, class... ARGS>
 	auto SetUserData(ARGS &&... args) & -> ReplacementScan & {
 		auto ptr = new T(std::forward<ARGS>(args)...);
@@ -5735,14 +5847,10 @@ public:
 		return *this;
 	}
 
-	/// Registers the scan on the target it was created against. Scans are consulted in registration order within
-	/// their scope, connection-scoped ones before database-wide ones, and the first to claim a name wins. A scan can
-	/// be registered only once.
-	/// @throws InvalidInputException When the callback is missing, or the scan is already registered.
-	auto Register() -> void;
-
 private:
 	explicit ReplacementScan(void *impl);
+	//! Moves what the callbacks need into the C handle, right before it is registered.
+	auto PrepareRegistration() -> void;
 
 	auto SetUserDataInternal(void *data, void (*destructor)(void *)) -> void;
 

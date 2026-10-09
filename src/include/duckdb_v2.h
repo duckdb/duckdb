@@ -847,11 +847,11 @@ typedef enum DUCKDB_V2_CAST_MODE {
 /* --- Types for cast --- */
 
 /*!
- * An owned opaque handle to a cast function being built. Created with
- * `duckdb_v2_cast_function_create_with_connection()` or `duckdb_v2_cast_function_create_with_extension()`, configured
+ * An owned opaque handle to a cast function being built. Created with `duckdb_v2_cast_function_create()`, configured
  * with the setter functions (e.g. `duckdb_v2_cast_function_set_source_type()`,
- * `duckdb_v2_cast_function_set_exec_callback()`, etc.), made available with `duckdb_v2_cast_function_register()`, and
- * destroyed with `duckdb_v2_cast_function_destroy()`.
+ * `duckdb_v2_cast_function_set_exec_callback()`, etc.), made available with
+ * `duckdb_v2_connection_register_cast_function()` or `duckdb_v2_extension_register_cast_function()`, and destroyed with
+ * `duckdb_v2_cast_function_destroy()`.
  */
 typedef struct _duckdb_v2_cast_function {
 	void *internal_ptr;
@@ -877,47 +877,28 @@ typedef void (*duckdb_v2_cast_function_exec_callback_fn)(duckdb_v2_cast_function
 /* --- Functions for cast --- */
 
 /*!
- * Creates a new cast function that will be registered on the connection's database.
+ * Creates a new cast function through a factory.
  *
  * The function starts out empty: configure it with the setter functions (e.g.
  * `duckdb_v2_cast_function_set_source_type()`, `duckdb_v2_cast_function_set_exec_callback()`, etc.), then make it
- * available with `duckdb_v2_cast_function_register()`. The caller owns the returned handle and must destroy it with
- * `duckdb_v2_cast_function_destroy()`, also after registration.
+ * available with `duckdb_v2_connection_register_cast_function()` or `duckdb_v2_extension_register_cast_function()`. The
+ * caller owns the returned handle and must destroy it with `duckdb_v2_cast_function_destroy()`, also after
+ * registration.
+ *
+ * The cast function can only be registered on the database the factory belongs to.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param connection The connection to create the function in.
+ * @param factory The factory to create the cast function through.
  * @param function On success, receives the newly created cast function. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                            duckdb_v2_cast_function_handle *function,
-                                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new cast function that will be registered on the loading extension's database.
- *
- * Use this from an extension load callback, where an extension handle is available. The function starts out empty:
- * configure it with the setter functions (e.g. `duckdb_v2_cast_function_set_source_type()`,
- * `duckdb_v2_cast_function_set_exec_callback()`, etc.), then make it available with
- * `duckdb_v2_cast_function_register()`. The caller owns the returned handle and must destroy it with
- * `duckdb_v2_cast_function_destroy()`, also after registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param extension The extension to create the function in.
- * @param function On success, receives the newly created cast function. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                           duckdb_v2_cast_function_handle *function,
-                                                                           duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_create(duckdb_v2_factory_handle factory,
+                                                            duckdb_v2_cast_function_handle *function,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the type the cast converts from.
@@ -1112,22 +1093,47 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_exec_get_mode(duckdb_v2_cas
 /*!
  * Registers the cast function, making it available to CAST and TRY_CAST.
  *
- * The function is registered on the target given at creation: the connection's database or the loading extension.
- * Registration requires a source type, a target type and an exec callback; both types must be fully defined concrete
- * types. Registering a cast for a pair that already has one replaces it. The caller still owns the handle after
- * registration and must destroy it with `duckdb_v2_cast_function_destroy()`, which does not affect the registered
- * function.
+ * The cast is registered on the connection's database and takes effect immediately for every connection; it is not part
+ * of the connection's transaction, so a rollback does not undo it. Registration requires a source type, a target type
+ * and an exec callback; both types must be fully defined concrete types. Registering a cast for a pair that already has
+ * one replaces it. The cast function must have been created through a factory of the same database. The caller still
+ * owns the handle after registration and must destroy it with `duckdb_v2_cast_function_destroy()`, which does not
+ * affect the registered function.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param function The function to register.
+ * @param conn The connection to register on.
+ * @param function The cast function to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_cast_function_register(duckdb_v2_cast_function_handle function,
-                                                              duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_cast_function(duckdb_v2_connection_handle conn,
+                                                                         duckdb_v2_cast_function_handle function,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the cast function, making it available to CAST and TRY_CAST.
+ *
+ * The cast is registered on the loading extension's database. Use this from the extension's load callback. Registration
+ * requires a source type, a target type and an exec callback; both types must be fully defined concrete types.
+ * Registering a cast for a pair that already has one replaces it. The cast function must have been created through a
+ * factory of the same database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_cast_function_destroy()`, which does not affect the registered function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param function The cast function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_cast_function(duckdb_v2_extension_handle extension,
+                                                                        duckdb_v2_cast_function_handle function,
+                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys the cast function, releasing its resources.
@@ -1948,9 +1954,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_progress_get(duckdb_v2_connect
 /* --- Types for custom type --- */
 
 /*!
- * An owned opaque handle to a custom type being built. Created with `duckdb_v2_custom_type_create_with_connection()` or
- * `duckdb_v2_custom_type_create_with_extension()`, configured with `duckdb_v2_custom_type_set_name()` and
- * `duckdb_v2_custom_type_set_base_type()`, made available with `duckdb_v2_custom_type_register()`, and destroyed with
+ * An owned opaque handle to a custom type being built. Created with `duckdb_v2_custom_type_create()`, configured with
+ * `duckdb_v2_custom_type_set_name()` and `duckdb_v2_custom_type_set_base_type()`, made available with
+ * `duckdb_v2_connection_register_custom_type()` or `duckdb_v2_extension_register_custom_type()`, and destroyed with
  * `duckdb_v2_custom_type_destroy()`.
  */
 typedef struct _duckdb_v2_custom_type {
@@ -1964,45 +1970,27 @@ typedef struct _duckdb_v2_custom_type {
 /* --- Functions for custom type --- */
 
 /*!
- * Creates a new custom type that will be registered on the connection's database.
+ * Creates a new custom type through a factory.
  *
  * The type starts out empty: configure it with `duckdb_v2_custom_type_set_name()` and
- * `duckdb_v2_custom_type_set_base_type()`, then make it available with `duckdb_v2_custom_type_register()`. The caller
- * owns the returned handle and must destroy it with `duckdb_v2_custom_type_destroy()`, also after registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param connection The connection to create the type in.
- * @param type On success, receives the newly created custom type. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                          duckdb_v2_custom_type_handle *type,
-                                                                          duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new custom type that will be registered on the loading extension's database.
- *
- * Use this from an extension load callback, where an extension handle is available. The type starts out empty:
- * configure it with `duckdb_v2_custom_type_set_name()` and `duckdb_v2_custom_type_set_base_type()`, then make it
- * available with `duckdb_v2_custom_type_register()`. The caller owns the returned handle and must destroy it with
+ * `duckdb_v2_custom_type_set_base_type()`, then make it available with `duckdb_v2_connection_register_custom_type()` or
+ * `duckdb_v2_extension_register_custom_type()`. The caller owns the returned handle and must destroy it with
  * `duckdb_v2_custom_type_destroy()`, also after registration.
  *
+ * The custom type can only be registered on the database the factory belongs to.
+ *
  * history:
  * - stable: v2.0.0
  *
- * @param extension The extension to create the type in.
+ * @param factory The factory to create the custom type through.
  * @param type On success, receives the newly created custom type. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                         duckdb_v2_custom_type_handle *type,
-                                                                         duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_create(duckdb_v2_factory_handle factory,
+                                                          duckdb_v2_custom_type_handle *type,
+                                                          duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the name of the custom type.
@@ -2047,20 +2035,45 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_set_base_type(duckdb_v2_custo
 /*!
  * Registers the custom type, making it available for use in SQL queries.
  *
- * The type is registered on the target given at creation: the connection's database or the loading extension.
- * Registration requires a name and a complete base type. The caller still owns the handle after registration and must
- * destroy it with `duckdb_v2_custom_type_destroy()`, which does not affect the registered type.
+ * The type is registered on the connection's database, visible to every connection, in the connection's transaction:
+ * inside an explicit transaction, it is invisible to other connections until the transaction commits, and a rollback
+ * undoes it. Registration requires a name and a complete base type. The custom type must have been created through a
+ * factory of the same database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_custom_type_destroy()`, which does not affect the registered type.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param type The type to register.
+ * @param conn The connection to register on.
+ * @param type The custom type to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_custom_type_register(duckdb_v2_custom_type_handle type,
-                                                            duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_custom_type(duckdb_v2_connection_handle conn,
+                                                                       duckdb_v2_custom_type_handle type,
+                                                                       duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the custom type, making it available for use in SQL queries.
+ *
+ * The type is registered on the loading extension's database and attributed to the extension. Use this from the
+ * extension's load callback. Registration requires a name and a complete base type. The custom type must have been
+ * created through a factory of the same database. The caller still owns the handle after registration and must destroy
+ * it with `duckdb_v2_custom_type_destroy()`, which does not affect the registered type.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param type The custom type to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_custom_type(duckdb_v2_extension_handle extension,
+                                                                      duckdb_v2_custom_type_handle type,
+                                                                      duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys the custom type, releasing its resources.
@@ -4639,10 +4652,10 @@ struct duckdb_v2_interval_t {
 
 /*!
  * An owned opaque handle to a custom aggregate function being built. Created with
- * `duckdb_v2_aggregate_function_create_with_connection()` or `duckdb_v2_aggregate_function_create_with_extension()`,
- * configured with the setter functions (e.g. `duckdb_v2_aggregate_function_set_name()`,
- * `duckdb_v2_aggregate_function_set_update_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_aggregate_function_get_signature()`, made available with `duckdb_v2_aggregate_function_register()`, and
+ * `duckdb_v2_aggregate_function_create()`, configured with the setter functions (e.g.
+ * `duckdb_v2_aggregate_function_set_name()`, `duckdb_v2_aggregate_function_set_update_callback()`, etc.) and the
+ * signature obtained via `duckdb_v2_aggregate_function_get_signature()`, made available with
+ * `duckdb_v2_connection_register_aggregate_function()` or `duckdb_v2_extension_register_aggregate_function()`, and
  * destroyed with `duckdb_v2_aggregate_function_destroy()`.
  */
 typedef struct _duckdb_v2_aggregate_function {
@@ -4740,49 +4753,29 @@ typedef void (*duckdb_v2_aggregate_function_destroy_callback_fn)(duckdb_v2_aggre
 /* --- Functions for aggregate --- */
 
 /*!
- * Creates a new aggregate function that will be registered on the connection's database.
+ * Creates a new aggregate function through a factory.
  *
  * The function starts out empty: configure it with the setter functions (e.g.
  * `duckdb_v2_aggregate_function_set_name()`, `duckdb_v2_aggregate_function_set_update_callback()`, etc.) and the
  * signature obtained via `duckdb_v2_aggregate_function_get_signature()`, then make it available with
- * `duckdb_v2_aggregate_function_register()`. The caller owns the returned handle and must destroy it with
- * `duckdb_v2_aggregate_function_destroy()`, also after registration.
+ * `duckdb_v2_connection_register_aggregate_function()` or `duckdb_v2_extension_register_aggregate_function()`. The
+ * caller owns the returned handle and must destroy it with `duckdb_v2_aggregate_function_destroy()`, also after
+ * registration.
+ *
+ * The aggregate function can only be registered on the database the factory belongs to.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param connection The connection to create the function in.
+ * @param factory The factory to create the aggregate function through.
  * @param function On success, receives the newly created aggregate function. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_connection(
-    duckdb_v2_connection_handle connection, duckdb_v2_aggregate_function_handle *function,
-    duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new aggregate function that will be registered on the loading extension's database.
- *
- * Use this from an extension load callback, where an extension handle is available. The function starts out empty:
- * configure it with the setter functions (e.g. `duckdb_v2_aggregate_function_set_name()`,
- * `duckdb_v2_aggregate_function_set_update_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_aggregate_function_get_signature()`, then make it available with
- * `duckdb_v2_aggregate_function_register()`. The caller owns the returned handle and must destroy it with
- * `duckdb_v2_aggregate_function_destroy()`, also after registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param extension The extension to create the function in.
- * @param function On success, receives the newly created aggregate function. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create_with_extension(
-    duckdb_v2_extension_handle extension, duckdb_v2_aggregate_function_handle *function,
-    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_create(duckdb_v2_factory_handle factory,
+                                                                 duckdb_v2_aggregate_function_handle *function,
+                                                                 duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the name of the aggregate function.
@@ -5477,22 +5470,48 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_destroy_get_states(
 /*!
  * Registers the aggregate function, making it available for use in SQL queries.
  *
- * The function is registered on the target given at creation: the connection's database or the loading extension.
- * Registration requires a name, the size, init, update, combine and finalize callbacks, and a signature with a complete
- * return type; an ANY return type is accepted only together with a bind callback that sets the concrete type per call
- * site. The caller still owns the handle after registration and must destroy it with
+ * The function is registered on the connection's database, visible to every connection, in the connection's
+ * transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits, and
+ * a rollback undoes it. Registration requires a name, the size, init, update, combine and finalize callbacks, and a
+ * signature with a complete return type; an ANY return type is accepted only together with a bind callback that sets
+ * the concrete type per call site. The aggregate function must have been created through a factory of the same
+ * database. The caller still owns the handle after registration and must destroy it with
  * `duckdb_v2_aggregate_function_destroy()`, which does not affect the registered function.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param function The function to register.
+ * @param conn The connection to register on.
+ * @param function The aggregate function to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_aggregate_function_register(duckdb_v2_aggregate_function_handle function,
-                                                                   duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_aggregate_function(
+    duckdb_v2_connection_handle conn, duckdb_v2_aggregate_function_handle function, duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the aggregate function, making it available for use in SQL queries.
+ *
+ * The function is registered on the loading extension's database and attributed to the extension. Use this from the
+ * extension's load callback. Registration requires a name, the size, init, update, combine and finalize callbacks, and
+ * a signature with a complete return type; an ANY return type is accepted only together with a bind callback that sets
+ * the concrete type per call site. The aggregate function must have been created through a factory of the same
+ * database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_aggregate_function_destroy()`, which does not affect the registered function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param function The aggregate function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_aggregate_function(
+    duckdb_v2_extension_handle extension, duckdb_v2_aggregate_function_handle function,
+    duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys the aggregate function, releasing its resources.
@@ -5763,11 +5782,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_column_description_destroy(duckdb_v2_colu
 
 /*!
  * An owned opaque handle to a custom copy function being built: an output format for `COPY ... TO`, an input format for
- * `COPY ... FROM`, or both. Created with `duckdb_v2_copy_function_create_with_connection()` or
- * `duckdb_v2_copy_function_create_with_extension()`, configured with the setter functions (e.g.
+ * `COPY ... FROM`, or both. Created with `duckdb_v2_copy_function_create()`, configured with the setter functions (e.g.
  * `duckdb_v2_copy_function_set_name()`, `duckdb_v2_copy_to_set_batch_callback()`,
- * `duckdb_v2_copy_from_set_exec_callback()`, etc.), made available with `duckdb_v2_copy_function_register()`, and
- * destroyed with `duckdb_v2_copy_function_destroy()`.
+ * `duckdb_v2_copy_from_set_exec_callback()`, etc.), made available with `duckdb_v2_connection_register_copy_function()`
+ * or `duckdb_v2_extension_register_copy_function()`, and destroyed with `duckdb_v2_copy_function_destroy()`.
  */
 typedef struct _duckdb_v2_copy_function {
 	void *internal_ptr;
@@ -5932,50 +5950,29 @@ typedef void (*duckdb_v2_copy_from_progress_callback_fn)(duckdb_v2_copy_from_pro
 /* --- Functions for copy --- */
 
 /*!
- * Creates a new copy function that will be registered on the connection's database.
+ * Creates a new copy function through a factory.
  *
  * A copy function implements a file format for `COPY`: once registered, SQL reaches it with `COPY ... TO 'path' (FORMAT
  * name)` and `COPY table FROM 'path' (FORMAT name)`. The function starts out empty: configure it with the setter
  * functions (e.g. `duckdb_v2_copy_function_set_name()`, the `copy_to_set_*` callbacks for writing, the
- * `copy_from_set_*` callbacks for reading, or both), then make it available with `duckdb_v2_copy_function_register()`.
- * The caller owns the returned handle and must destroy it with `duckdb_v2_copy_function_destroy()`, also after
- * registration.
+ * `copy_from_set_*` callbacks for reading, or both), then make it available with
+ * `duckdb_v2_connection_register_copy_function()` or `duckdb_v2_extension_register_copy_function()`. The caller owns
+ * the returned handle and must destroy it with `duckdb_v2_copy_function_destroy()`, also after registration.
+ *
+ * The copy function can only be registered on the database the factory belongs to.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param connection The connection to create the function in.
+ * @param factory The factory to create the copy function through.
  * @param function On success, receives the newly created copy function. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                            duckdb_v2_copy_function_handle *function,
-                                                                            duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new copy function that will be registered on the loading extension's database.
- *
- * A copy function implements a file format for `COPY`: once registered, SQL reaches it with `COPY ... TO 'path' (FORMAT
- * name)` and `COPY table FROM 'path' (FORMAT name)`. Use this from an extension load callback, where an extension
- * handle is available. The function starts out empty: configure it with the setter functions (e.g.
- * `duckdb_v2_copy_function_set_name()`, the `copy_to_set_*` callbacks for writing, the `copy_from_set_*` callbacks for
- * reading, or both), then make it available with `duckdb_v2_copy_function_register()`. The caller owns the returned
- * handle and must destroy it with `duckdb_v2_copy_function_destroy()`, also after registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param extension The extension to create the function in.
- * @param function On success, receives the newly created copy function. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                           duckdb_v2_copy_function_handle *function,
-                                                                           duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_create(duckdb_v2_factory_handle factory,
+                                                            duckdb_v2_copy_function_handle *function,
+                                                            duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the name of the copy function.
@@ -7207,22 +7204,49 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_from_progress_set_progress(duckdb_v2
 /*!
  * Registers the copy function, making it available as a `COPY` format.
  *
- * The function is registered on the target given at creation: the connection's database or the loading extension.
- * Registration requires a name and at least one configured side: a `COPY ... TO` side needs its batch and flush
- * callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction the function does not
- * implement fails with an error. The caller still owns the handle after registration and must destroy it with
+ * The function is registered on the connection's database, visible to every connection, in the connection's
+ * transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits, and
+ * a rollback undoes it. Registration requires a name and at least one configured side: a `COPY ... TO` side needs its
+ * batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction the
+ * function does not implement fails with an error. The copy function must have been created through a factory of the
+ * same database. The caller still owns the handle after registration and must destroy it with
  * `duckdb_v2_copy_function_destroy()`, which does not affect the registered function.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param function The function to register.
+ * @param conn The connection to register on.
+ * @param function The copy function to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_copy_function_register(duckdb_v2_copy_function_handle function,
-                                                              duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_copy_function(duckdb_v2_connection_handle conn,
+                                                                         duckdb_v2_copy_function_handle function,
+                                                                         duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the copy function, making it available as a `COPY` format.
+ *
+ * The function is registered on the loading extension's database and attributed to the extension. Use this from the
+ * extension's load callback. Registration requires a name and at least one configured side: a `COPY ... TO` side needs
+ * its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction
+ * the function does not implement fails with an error. The copy function must have been created through a factory of
+ * the same database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_copy_function_destroy()`, which does not affect the registered function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param function The copy function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_copy_function(duckdb_v2_extension_handle extension,
+                                                                        duckdb_v2_copy_function_handle function,
+                                                                        duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys the copy function, releasing its resources.
@@ -8068,11 +8092,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_factory_create_type_with_alias(duckdb_v2_
 /* --- Types for replacement scan --- */
 
 /*!
- * An owned opaque handle to a replacement scan being built. Created with
- * `duckdb_v2_replacement_scan_create_with_connection()`, `duckdb_v2_replacement_scan_create_with_instance()` or
- * `duckdb_v2_replacement_scan_create_with_extension()`, configured with `duckdb_v2_replacement_scan_set_callback()` and
- * `duckdb_v2_replacement_scan_set_user_data()`, made available with `duckdb_v2_replacement_scan_register()`, and
- * destroyed with `duckdb_v2_replacement_scan_destroy()`.
+ * An owned opaque handle to a replacement scan being built. Created with `duckdb_v2_replacement_scan_create()`,
+ * configured with `duckdb_v2_replacement_scan_set_callback()` and `duckdb_v2_replacement_scan_set_user_data()`, made
+ * available with `duckdb_v2_connection_register_replacement_scan()`, `duckdb_v2_instance_register_replacement_scan()`
+ * or `duckdb_v2_extension_register_replacement_scan()`, and destroyed with `duckdb_v2_replacement_scan_destroy()`.
  */
 typedef struct _duckdb_v2_replacement_scan {
 	void *internal_ptr;
@@ -8098,71 +8121,28 @@ typedef void (*duckdb_v2_replacement_scan_callback_fn)(duckdb_v2_replacement_sca
 /* --- Functions for replacement scan --- */
 
 /*!
- * Creates a new replacement scan that will be registered on the connection.
+ * Creates a new replacement scan through a factory.
  *
- * The scan is visible only to queries on this connection and is released when the connection is destroyed. It is
- * consulted before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take. The scan
- * starts out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
- * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
- * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
- * registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param connection The connection to create the scan on.
- * @param scan On success, receives the newly created replacement scan. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                               duckdb_v2_replacement_scan_handle *scan,
-                                                                               duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new replacement scan that will be registered on the instance.
- *
- * The scan is visible to every connection to the instance and lives until the instance is destroyed. The scan starts
- * out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
- * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with `duckdb_v2_replacement_scan_register()`.
- * The caller owns the returned handle and must destroy it with `duckdb_v2_replacement_scan_destroy()`, also after
- * registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param instance The instance to create the scan on.
- * @param scan On success, receives the newly created replacement scan. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_instance(duckdb_v2_instance_handle instance,
-                                                                             duckdb_v2_replacement_scan_handle *scan,
-                                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new replacement scan that will be registered on the loading extension's instance.
- *
- * Use this from an extension load callback, where an extension handle is available. The scan is visible to every
- * connection to that instance and lives until the instance is destroyed. The scan starts out empty: configure it with
- * `duckdb_v2_replacement_scan_set_callback()` and optionally `duckdb_v2_replacement_scan_set_user_data()`, then make it
- * available with `duckdb_v2_replacement_scan_register()`. The caller owns the returned handle and must destroy it with
+ * The scan starts out empty: configure it with `duckdb_v2_replacement_scan_set_callback()` and optionally
+ * `duckdb_v2_replacement_scan_set_user_data()`, then make it available with
+ * `duckdb_v2_connection_register_replacement_scan()`, `duckdb_v2_instance_register_replacement_scan()` or
+ * `duckdb_v2_extension_register_replacement_scan()`. The caller owns the returned handle and must destroy it with
  * `duckdb_v2_replacement_scan_destroy()`, also after registration.
  *
+ * The scan can only be registered on the database the factory belongs to.
+ *
  * history:
  * - stable: v2.0.0
  *
- * @param extension The extension to create the scan on.
+ * @param factory The factory to create the scan through.
  * @param scan On success, receives the newly created replacement scan. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                              duckdb_v2_replacement_scan_handle *scan,
-                                                                              duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_create(duckdb_v2_factory_handle factory,
+                                                               duckdb_v2_replacement_scan_handle *scan,
+                                                               duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the callback of the replacement scan.
@@ -8398,24 +8378,74 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_set_alias(duckdb_v2_repl
 /*!
  * Registers the replacement scan, making it consulted for names the catalog cannot resolve.
  *
- * The scan is registered on the target given at creation: the connection, the instance or the loading extension's
- * instance. Registration requires a callback. Scans are consulted in registration order within their scope,
- * connection-scoped ones before instance-wide ones, and the first to claim a name wins. A scan cannot be registered
- * twice, and a registered scan cannot be unregistered: it lives until its scope ends. Registering an instance-wide scan
- * while queries are binding on other connections is not thread-safe; register from an extension load callback or before
- * issuing queries. The caller still owns the handle after registration and must destroy it with
+ * The scan is visible only to queries on this connection and is released when the connection is destroyed. It is
+ * consulted before every instance-wide scan, so it can claim a name that a built-in scan would otherwise take.
+ * Registration requires a callback. Scans are consulted in registration order within their scope, connection-scoped
+ * ones before instance-wide ones, and the first to claim a name wins. A scan cannot be registered twice, and a
+ * registered scan cannot be unregistered: it lives until its scope ends. The scan must have been created through a
+ * factory of the same database. The caller still owns the handle after registration and must destroy it with
  * `duckdb_v2_replacement_scan_destroy()`, which does not affect the registered scan.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param scan The scan to register.
+ * @param conn The connection to register on.
+ * @param scan The replacement scan to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_register(duckdb_v2_replacement_scan_handle scan,
-                                                                 duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_replacement_scan(duckdb_v2_connection_handle conn,
+                                                                            duckdb_v2_replacement_scan_handle scan,
+                                                                            duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the replacement scan, making it consulted for names the catalog cannot resolve.
+ *
+ * The scan is visible to every connection to the instance and lives until the instance is destroyed. Registering it
+ * while queries are binding on other connections is not thread-safe: register before issuing queries. Registration
+ * requires a callback. Scans are consulted in registration order within their scope, connection-scoped ones before
+ * instance-wide ones, and the first to claim a name wins. A scan cannot be registered twice, and a registered scan
+ * cannot be unregistered: it lives until its scope ends. The scan must have been created through a factory of the same
+ * database. The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_replacement_scan_destroy()`, which does not affect the registered scan.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param instance The instance to register on.
+ * @param scan The replacement scan to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_instance_register_replacement_scan(duckdb_v2_instance_handle instance,
+                                                                          duckdb_v2_replacement_scan_handle scan,
+                                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the replacement scan, making it consulted for names the catalog cannot resolve.
+ *
+ * The scan is visible to every connection to the loading extension's instance and lives until the instance is
+ * destroyed. Use this from the extension's load callback. Registration requires a callback. Scans are consulted in
+ * registration order within their scope, connection-scoped ones before instance-wide ones, and the first to claim a
+ * name wins. A scan cannot be registered twice, and a registered scan cannot be unregistered: it lives until its scope
+ * ends. The scan must have been created through a factory of the same database. The caller still owns the handle after
+ * registration and must destroy it with `duckdb_v2_replacement_scan_destroy()`, which does not affect the registered
+ * scan.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param scan The replacement scan to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_replacement_scan(duckdb_v2_extension_handle extension,
+                                                                           duckdb_v2_replacement_scan_handle scan,
+                                                                           duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys the replacement scan, releasing its resources.
@@ -8444,12 +8474,11 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_replacement_scan_destroy(duckdb_v2_replac
 /* --- Types for scalar --- */
 
 /*!
- * An owned opaque handle to a custom scalar function being built. Created with
- * `duckdb_v2_scalar_function_create_with_connection()` or `duckdb_v2_scalar_function_create_with_extension()`,
+ * An owned opaque handle to a custom scalar function being built. Created with `duckdb_v2_scalar_function_create()`,
  * configured with the setter functions (e.g. `duckdb_v2_scalar_function_set_name()`,
  * `duckdb_v2_scalar_function_set_exec_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_scalar_function_get_signature()`, made available with `duckdb_v2_scalar_function_register()`, and
- * destroyed with `duckdb_v2_scalar_function_destroy()`.
+ * `duckdb_v2_scalar_function_get_signature()`, made available with `duckdb_v2_connection_register_scalar_function()` or
+ * `duckdb_v2_extension_register_scalar_function()`, and destroyed with `duckdb_v2_scalar_function_destroy()`.
  */
 typedef struct _duckdb_v2_scalar_function {
 	void *internal_ptr;
@@ -8502,49 +8531,28 @@ typedef void (*duckdb_v2_scalar_function_exec_callback_fn)(duckdb_v2_scalar_func
 /* --- Functions for scalar --- */
 
 /*!
- * Creates a new scalar function that will be registered on the connection's database.
+ * Creates a new scalar function through a factory.
  *
  * The function starts out empty: configure it with the setter functions (e.g. `duckdb_v2_scalar_function_set_name()`,
  * `duckdb_v2_scalar_function_set_exec_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_scalar_function_get_signature()`, then make it available with `duckdb_v2_scalar_function_register()`. The
- * caller owns the returned handle and must destroy it with `duckdb_v2_scalar_function_destroy()`, also after
- * registration.
+ * `duckdb_v2_scalar_function_get_signature()`, then make it available with
+ * `duckdb_v2_connection_register_scalar_function()` or `duckdb_v2_extension_register_scalar_function()`. The caller
+ * owns the returned handle and must destroy it with `duckdb_v2_scalar_function_destroy()`, also after registration.
+ *
+ * The scalar function can only be registered on the database the factory belongs to.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param connection The connection to create the function in.
+ * @param factory The factory to create the scalar function through.
  * @param function On success, receives the newly created scalar function. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_connection(
-    duckdb_v2_connection_handle connection, duckdb_v2_scalar_function_handle *function,
-    duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new scalar function that will be registered on the loading extension's database.
- *
- * Use this from an extension load callback, where an extension handle is available. The function starts out empty:
- * configure it with the setter functions (e.g. `duckdb_v2_scalar_function_set_name()`,
- * `duckdb_v2_scalar_function_set_exec_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_scalar_function_get_signature()`, then make it available with `duckdb_v2_scalar_function_register()`. The
- * caller owns the returned handle and must destroy it with `duckdb_v2_scalar_function_destroy()`, also after
- * registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param extension The extension to create the function in.
- * @param function On success, receives the newly created scalar function. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                             duckdb_v2_scalar_function_handle *function,
-                                                                             duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_create(duckdb_v2_factory_handle factory,
+                                                              duckdb_v2_scalar_function_handle *function,
+                                                              duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the name of the scalar function.
@@ -8888,22 +8896,49 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2
 /*!
  * Registers the scalar function, making it available for use in SQL queries.
  *
- * The function is registered on the target given at creation: the connection's database or the loading extension.
- * Registration requires a name, an exec callback, and a signature with a complete return type; an ANY return type is
- * accepted only together with a bind callback that sets the concrete type per call site. The caller still owns the
- * handle after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect the
+ * The function is registered on the connection's database, visible to every connection, in the connection's
+ * transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits, and
+ * a rollback undoes it. Registration requires a name, an exec callback, and a signature with a complete return type; an
+ * ANY return type is accepted only together with a bind callback that sets the concrete type per call site. The scalar
+ * function must have been created through a factory of the same database. The caller still owns the handle after
+ * registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect the registered
+ * function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to register on.
+ * @param function The scalar function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_scalar_function(duckdb_v2_connection_handle conn,
+                                                                           duckdb_v2_scalar_function_handle function,
+                                                                           duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the scalar function, making it available for use in SQL queries.
+ *
+ * The function is registered on the loading extension's database and attributed to the extension. Use this from the
+ * extension's load callback. Registration requires a name, an exec callback, and a signature with a complete return
+ * type; an ANY return type is accepted only together with a bind callback that sets the concrete type per call site.
+ * The scalar function must have been created through a factory of the same database. The caller still owns the handle
+ * after registration and must destroy it with `duckdb_v2_scalar_function_destroy()`, which does not affect the
  * registered function.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param function The function to register.
+ * @param extension The loading extension.
+ * @param function The scalar function to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_scalar_function_register(duckdb_v2_scalar_function_handle function,
-                                                                duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_scalar_function(duckdb_v2_extension_handle extension,
+                                                                          duckdb_v2_scalar_function_handle function,
+                                                                          duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys the scalar function, releasing its resources.
@@ -11126,12 +11161,11 @@ typedef enum DUCKDB_V2_TABLE_PARTITION_INFO {
 /* --- Types for table --- */
 
 /*!
- * An owned opaque handle to a custom table function being built. Created with
- * `duckdb_v2_table_function_create_with_connection()` or `duckdb_v2_table_function_create_with_extension()`, configured
- * with the setter functions (e.g. `duckdb_v2_table_function_set_name()`,
+ * An owned opaque handle to a custom table function being built. Created with `duckdb_v2_table_function_create()`,
+ * configured with the setter functions (e.g. `duckdb_v2_table_function_set_name()`,
  * `duckdb_v2_table_function_set_exec_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_table_function_get_signature()`, made available with `duckdb_v2_table_function_register()`, and destroyed
- * with `duckdb_v2_table_function_destroy()`.
+ * `duckdb_v2_table_function_get_signature()`, made available with `duckdb_v2_connection_register_table_function()` or
+ * `duckdb_v2_extension_register_table_function()`, and destroyed with `duckdb_v2_table_function_destroy()`.
  */
 typedef struct _duckdb_v2_table_function {
 	void *internal_ptr;
@@ -11223,10 +11257,10 @@ typedef struct _duckdb_v2_table_function_claim_batch_info {
  * An owned opaque handle to a multi-file table function being built. A multi-file function wraps an already registered
  * table function that reads a single file, and adds everything that is needed to read many files at once on top of it:
  * globbing, lists of files, hive partitioning, the `filename` column, `union_by_name` and the like. Created with
- * `duckdb_v2_multi_file_function_create_with_connection()` or `duckdb_v2_multi_file_function_create_with_extension()`,
- * configured with the setter functions (e.g. `duckdb_v2_multi_file_function_set_name()`,
- * `duckdb_v2_multi_file_function_set_single_file_function()`), made available with
- * `duckdb_v2_multi_file_function_register()`, and destroyed with `duckdb_v2_multi_file_function_destroy()`.
+ * `duckdb_v2_multi_file_function_create()`, configured with the setter functions (e.g.
+ * `duckdb_v2_multi_file_function_set_name()`, `duckdb_v2_multi_file_function_set_single_file_function()`), made
+ * available with `duckdb_v2_connection_register_multi_file_function()` or
+ * `duckdb_v2_extension_register_multi_file_function()`, and destroyed with `duckdb_v2_multi_file_function_destroy()`.
  */
 typedef struct _duckdb_v2_multi_file_function {
 	void *internal_ptr;
@@ -11276,49 +11310,28 @@ typedef void (*duckdb_v2_table_function_claim_batch_callback_fn)(duckdb_v2_table
 /* --- Functions for table --- */
 
 /*!
- * Creates a new table function that will be registered on the connection's database.
+ * Creates a new table function through a factory.
  *
  * The function starts out empty: configure it with the setter functions (e.g. `duckdb_v2_table_function_set_name()`,
  * `duckdb_v2_table_function_set_exec_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_table_function_get_signature()`, then make it available with `duckdb_v2_table_function_register()`. The
- * caller owns the returned handle and must destroy it with `duckdb_v2_table_function_destroy()`, also after
- * registration.
+ * `duckdb_v2_table_function_get_signature()`, then make it available with
+ * `duckdb_v2_connection_register_table_function()` or `duckdb_v2_extension_register_table_function()`. The caller owns
+ * the returned handle and must destroy it with `duckdb_v2_table_function_destroy()`, also after registration.
+ *
+ * The table function can only be registered on the database the factory belongs to.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param connection The connection to create the function in.
+ * @param factory The factory to create the table function through.
  * @param function On success, receives the newly created table function. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                             duckdb_v2_table_function_handle *function,
-                                                                             duckdb_v2_error_info_handle *err);
-
-/*!
- * Creates a new table function that will be registered on the loading extension's database.
- *
- * Use this from an extension load callback, where an extension handle is available. The function starts out empty:
- * configure it with the setter functions (e.g. `duckdb_v2_table_function_set_name()`,
- * `duckdb_v2_table_function_set_exec_callback()`, etc.) and the signature obtained via
- * `duckdb_v2_table_function_get_signature()`, then make it available with `duckdb_v2_table_function_register()`. The
- * caller owns the returned handle and must destroy it with `duckdb_v2_table_function_destroy()`, also after
- * registration.
- *
- * history:
- * - stable: v2.0.0
- *
- * @param extension The extension to create the function in.
- * @param function On success, receives the newly created table function. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                            duckdb_v2_table_function_handle *function,
-                                                                            duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_create(duckdb_v2_factory_handle factory,
+                                                             duckdb_v2_table_function_handle *function,
+                                                             duckdb_v2_error_info_handle *err);
 
 /*!
  * Sets the name of the table function.
@@ -12458,22 +12471,49 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_partitioning_set_partition
 /*!
  * Registers the table function, making it available for use in SQL queries.
  *
- * The function is registered on the target given at creation: the connection's database or the loading extension.
- * Registration requires a name, a bind callback and an exec callback, and rejects a signature that declares a return
- * type, since a table function declares the columns it returns from its bind callback. The caller still owns the handle
+ * The function is registered on the connection's database, visible to every connection, in the connection's
+ * transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits, and
+ * a rollback undoes it. Registration requires a name, a bind callback and an exec callback, and rejects a signature
+ * that declares a return type, since a table function declares the columns it returns from its bind callback. The table
+ * function must have been created through a factory of the same database. The caller still owns the handle after
+ * registration and must destroy it with `duckdb_v2_table_function_destroy()`, which does not affect the registered
+ * function.
+ *
+ * history:
+ * - stable: v2.0.0
+ *
+ * @param conn The connection to register on.
+ * @param function The table function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_table_function(duckdb_v2_connection_handle conn,
+                                                                          duckdb_v2_table_function_handle function,
+                                                                          duckdb_v2_error_info_handle *err);
+
+/*!
+ * Registers the table function, making it available for use in SQL queries.
+ *
+ * The function is registered on the loading extension's database and attributed to the extension. Use this from the
+ * extension's load callback. Registration requires a name, a bind callback and an exec callback, and rejects a
+ * signature that declares a return type, since a table function declares the columns it returns from its bind callback.
+ * The table function must have been created through a factory of the same database. The caller still owns the handle
  * after registration and must destroy it with `duckdb_v2_table_function_destroy()`, which does not affect the
  * registered function.
  *
  * history:
  * - stable: v2.0.0
  *
- * @param function The function to register.
+ * @param extension The loading extension.
+ * @param function The table function to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_register(duckdb_v2_table_function_handle function,
-                                                               duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_table_function(duckdb_v2_extension_handle extension,
+                                                                         duckdb_v2_table_function_handle function,
+                                                                         duckdb_v2_error_info_handle *err);
 
 /*!
  * Destroys the table function, releasing its resources.
@@ -12501,8 +12541,9 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_destroy(duckdb_v2_table_fu
  * batch.
  *
  * Telling the batches apart lets a caller that scans several batches in parallel put their rows back in the order of
- * the batches, e.g. a multi-file function registered with `duckdb_v2_multi_file_function_register()` claims the batches
- * of the function itself, so that the rows of a file keep their order also when several threads scan it.
+ * the batches, e.g. a multi-file function registered with `duckdb_v2_connection_register_multi_file_function()` or
+ * `duckdb_v2_extension_register_multi_file_function()` claims the batches of the function itself, so that the rows of a
+ * file keep their order also when several threads scan it.
  *
  * The callback runs while the work of the scan is handed out to the threads, possibly while every other scanning thread
  * waits for it. It should therefore only claim the work - e.g. reserve the number of the next block - and leave reading
@@ -12616,10 +12657,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_claim_batch_set_claimed(
  * Attaches an identifier to a result column, or to a field nested inside one.
  *
  * Identifiers are only consulted when the function reads a file as part of a multi-file function registered with
- * `duckdb_v2_multi_file_function_register()`, and are ignored otherwise. A multi-file reader can then map the columns
- * of every file onto the columns of the scan by identifier rather than by name - e.g. by the field ids of a file format
- * that carries them, so that renamed columns and fields are still found. An identifier is an INTEGER field id or a
- * VARCHAR name.
+ * `duckdb_v2_connection_register_multi_file_function()` or `duckdb_v2_extension_register_multi_file_function()`, and
+ * are ignored otherwise. A multi-file reader can then map the columns of every file onto the columns of the scan by
+ * identifier rather than by name - e.g. by the field ids of a file format that carries them, so that renamed columns
+ * and fields are still found. An identifier is an INTEGER field id or a VARCHAR name.
  *
  * The nested field is addressed by a path of child indexes, starting at the result column at `column_index`: a STRUCT
  * field by its index, the elements of a LIST or ARRAY by `0`, the keys of a MAP by `0` and its values by `1`, and a
@@ -12649,9 +12690,10 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_table_function_bind_set_result_column_ide
  * Adds an entry to the metadata of the file the function reads.
  *
  * File metadata is only consulted when the function reads a file as part of a multi-file function registered with
- * `duckdb_v2_multi_file_function_register()`, and is ignored otherwise: it is the key-value metadata the reader of the
- * file exposes to the multi-file reader, e.g. to a custom multi-file reader of another extension. Entries keep the
- * order in which they were added; adding a key again replaces its value.
+ * `duckdb_v2_connection_register_multi_file_function()` or `duckdb_v2_extension_register_multi_file_function()`, and is
+ * ignored otherwise: it is the key-value metadata the reader of the file exposes to the multi-file reader, e.g. to a
+ * custom multi-file reader of another extension. Entries keep the order in which they were added; adding a key again
+ * replaces its value.
  *
  * history:
  * - unstable: v2.0.0
@@ -12670,49 +12712,28 @@ duckdb_v2_table_function_bind_add_file_metadata(duckdb_v2_table_function_bind_in
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
 /*!
- * Creates a new multi-file function that will be registered on the connection's database.
+ * Creates a new multi-file function through a factory.
  *
  * The function starts out empty: give it a name with `duckdb_v2_multi_file_function_set_name()` and the single-file
  * function it wraps with `duckdb_v2_multi_file_function_set_single_file_function()`, then make it available with
- * `duckdb_v2_multi_file_function_register()`. The caller owns the returned handle and must destroy it with
- * `duckdb_v2_multi_file_function_destroy()`, also after registration.
+ * `duckdb_v2_connection_register_multi_file_function()` or `duckdb_v2_extension_register_multi_file_function()`. The
+ * caller owns the returned handle and must destroy it with `duckdb_v2_multi_file_function_destroy()`, also after
+ * registration.
+ *
+ * The multi-file function can only be registered on the database the factory belongs to.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param connection The connection to create the function in.
+ * @param factory The factory to create the multi-file function through.
  * @param function On success, receives the newly created multi-file function. Owned by the caller.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create_with_connection(
-    duckdb_v2_connection_handle connection, duckdb_v2_multi_file_function_handle *function,
-    duckdb_v2_error_info_handle *err);
-#endif
-
-#if DUCKDB_V2_API_ALLOW_UNSTABLE
-/*!
- * Creates a new multi-file function that will be registered on the loading extension's database.
- *
- * Use this from an extension load callback, where an extension handle is available. The function starts out empty: give
- * it a name with `duckdb_v2_multi_file_function_set_name()` and the single-file function it wraps with
- * `duckdb_v2_multi_file_function_set_single_file_function()`, then make it available with
- * `duckdb_v2_multi_file_function_register()`. The caller owns the returned handle and must destroy it with
- * `duckdb_v2_multi_file_function_destroy()`, also after registration.
- *
- * history:
- * - unstable: v2.0.0
- *
- * @param extension The extension to create the function in.
- * @param function On success, receives the newly created multi-file function. Owned by the caller.
- * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
- * `duckdb_v2_error_info_destroy()`.
- * @return DUCKDB_V2_ERROR
- */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create_with_extension(
-    duckdb_v2_extension_handle extension, duckdb_v2_multi_file_function_handle *function,
-    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create(duckdb_v2_factory_handle factory,
+                                                                  duckdb_v2_multi_file_function_handle *function,
+                                                                  duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE
@@ -12805,24 +12826,54 @@ DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_file_extension(
 /*!
  * Registers the multi-file function, making it available for use in SQL queries.
  *
- * The function is registered on the target given at creation: the connection's database or the loading extension. It
- * can then be called with the path of a single file, a glob pattern, or a list of either, and accepts the options every
- * multi-file function accepts (e.g. `filename`, `hive_partitioning`, `union_by_name`) next to the named parameters of
- * the single-file function. Registration requires a name and a single-file function, and fails when no table function
- * by that name is registered or it does not take the path of a file as its only positional VARCHAR parameter. The
- * caller still owns the handle after registration and must destroy it with `duckdb_v2_multi_file_function_destroy()`,
- * which does not affect the registered function.
+ * The function is registered on the connection's database, visible to every connection, in the connection's
+ * transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits, and
+ * a rollback undoes it. It can then be called with the path of a single file, a glob pattern, or a list of either, and
+ * accepts the options every multi-file function accepts (e.g. `filename`, `hive_partitioning`, `union_by_name`) next to
+ * the named parameters of the single-file function. Registration requires a name and a single-file function, and fails
+ * when no table function by that name is registered or it does not take the path of a file as its only positional
+ * VARCHAR parameter. The multi-file function must have been created through a factory of the same database. The caller
+ * still owns the handle after registration and must destroy it with `duckdb_v2_multi_file_function_destroy()`, which
+ * does not affect the registered function.
  *
  * history:
  * - unstable: v2.0.0
  *
- * @param function The function to register.
+ * @param conn The connection to register on.
+ * @param function The multi-file function to register.
  * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
  * `duckdb_v2_error_info_destroy()`.
  * @return DUCKDB_V2_ERROR
  */
-DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_multi_file_function_register(duckdb_v2_multi_file_function_handle function,
-                                                                    duckdb_v2_error_info_handle *err);
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_connection_register_multi_file_function(
+    duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
+#endif
+
+#if DUCKDB_V2_API_ALLOW_UNSTABLE
+/*!
+ * Registers the multi-file function, making it available for use in SQL queries.
+ *
+ * The function is registered on the loading extension's database and attributed to the extension. Use this from the
+ * extension's load callback. It can then be called with the path of a single file, a glob pattern, or a list of either,
+ * and accepts the options every multi-file function accepts (e.g. `filename`, `hive_partitioning`, `union_by_name`)
+ * next to the named parameters of the single-file function. Registration requires a name and a single-file function,
+ * and fails when no table function by that name is registered or it does not take the path of a file as its only
+ * positional VARCHAR parameter. The multi-file function must have been created through a factory of the same database.
+ * The caller still owns the handle after registration and must destroy it with
+ * `duckdb_v2_multi_file_function_destroy()`, which does not affect the registered function.
+ *
+ * history:
+ * - unstable: v2.0.0
+ *
+ * @param extension The loading extension.
+ * @param function The multi-file function to register.
+ * @param err Optional. On failure, receives an opaque info handle the caller must destroy via
+ * `duckdb_v2_error_info_destroy()`.
+ * @return DUCKDB_V2_ERROR
+ */
+DUCKDB_C_API DUCKDB_V2_ERROR duckdb_v2_extension_register_multi_file_function(
+    duckdb_v2_extension_handle extension, duckdb_v2_multi_file_function_handle function,
+    duckdb_v2_error_info_handle *err);
 #endif
 
 #if DUCKDB_V2_API_ALLOW_UNSTABLE

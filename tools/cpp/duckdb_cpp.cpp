@@ -84,10 +84,6 @@ struct HandleTraits<Instance> {
 	using handle = duckdb_v2_instance_handle;
 };
 template <>
-struct HandleTraits<Environment> {
-	using handle = duckdb_v2_environment_handle;
-};
-template <>
 struct HandleTraits<LogicalType> {
 	using handle = duckdb_v2_logical_type_handle;
 };
@@ -393,30 +389,20 @@ auto RenderQuotedIdentifier(std::string_view name) -> std::string {
 // Environment
 //---------------------------------------------------------------------------
 
-Environment::Environment() {
-	duckdb_v2_environment_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_environment_create, &_h);
-	impl = _h;
+namespace {
+
+//! The process-wide environment every instance is created in. Created on first use and deliberately never destroyed,
+//! so it outlives every instance, including ones destroyed during static destruction.
+auto GetEnvironment() -> duckdb_v2_environment_handle {
+	static const auto env = []() {
+		duckdb_v2_environment_handle result = nullptr;
+		CheckedAPICall(duckdb_v2_environment_create, &result);
+		return result;
+	}();
+	return env;
 }
 
-Environment::~Environment() {
-	auto _h = handle();
-	duckdb_v2_environment_destroy(&_h);
-}
-
-auto Environment::GetInstanceCount() const -> size_t {
-	idx_t count = 0;
-	CheckedAPICall(duckdb_v2_environment_get_instance_count, handle(), &count);
-	return static_cast<size_t>(count);
-}
-
-auto Environment::CreateInstance() -> Instance {
-	duckdb_v2_instance_handle instance = nullptr;
-	CheckedAPICall(duckdb_v2_instance_create, handle(), &instance);
-	return detail::HandleFactory::Make<Instance>(instance);
-}
-
-auto Environment::CreateInstance(const std::vector<std::pair<std::string, std::string>> &options) -> Instance {
+auto CreateInstanceHandle(const std::vector<std::pair<std::string, std::string>> &options) -> void * {
 	std::vector<duckdb_v2_str> names;
 	std::vector<duckdb_v2_str> values;
 	names.reserve(options.size());
@@ -426,22 +412,52 @@ auto Environment::CreateInstance(const std::vector<std::pair<std::string, std::s
 		values.push_back(ToStr(value));
 	}
 	duckdb_v2_instance_handle instance = nullptr;
-	CheckedAPICall(duckdb_v2_instance_create_with_options, handle(), names.data(), values.data(),
+	CheckedAPICall(duckdb_v2_instance_create_with_options, GetEnvironment(), names.data(), values.data(),
 	               static_cast<idx_t>(options.size()), &instance);
-	return detail::HandleFactory::Make<Instance>(instance);
-}
-
-auto Environment::Open(const std::string &path) -> Instance {
-	auto instance = CreateInstance();
-	instance.Attach(path, true);
 	return instance;
 }
 
-auto Environment::Open(const std::string &path, const std::vector<std::pair<std::string, std::string>> &options)
-    -> Instance {
-	auto instance = CreateInstance(options);
-	instance.Attach(path, true);
-	return instance;
+auto BoolText(bool value) -> std::string {
+	return value ? "true" : "false";
+}
+
+} // namespace
+
+auto Instance::GetInstanceCount() -> size_t {
+	idx_t count = 0;
+	CheckedAPICall(duckdb_v2_environment_get_instance_count, GetEnvironment(), &count);
+	return static_cast<size_t>(count);
+}
+
+Instance::Instance() : Instance(CreateInstanceHandle({})) {
+}
+
+auto Instance::StartupOptionPairs(const StartupOptions &options) -> std::vector<std::pair<std::string, std::string>> {
+	std::vector<std::pair<std::string, std::string>> result;
+	if (options.allow_community_extensions) {
+		result.emplace_back("allow_community_extensions", BoolText(*options.allow_community_extensions));
+	}
+	if (options.allow_unsigned_extensions) {
+		result.emplace_back("allow_unsigned_extensions", BoolText(*options.allow_unsigned_extensions));
+	}
+	if (options.allow_unredacted_secrets) {
+		result.emplace_back("allow_unredacted_secrets", BoolText(*options.allow_unredacted_secrets));
+	}
+	if (options.disable_database_invalidation) {
+		result.emplace_back("disable_database_invalidation", BoolText(*options.disable_database_invalidation));
+	}
+	if (options.custom_user_agent) {
+		result.emplace_back("custom_user_agent", *options.custom_user_agent);
+	}
+	return result;
+}
+
+Instance::Instance(const StartupOptions &options) : Instance(CreateInstanceHandle(StartupOptionPairs(options))) {
+}
+
+Instance::Instance(const std::string &path, const StartupOptions &options)
+    : Instance(CreateInstanceHandle(StartupOptionPairs(options))) {
+	Attach(path, true);
 }
 
 //---------------------------------------------------------------------------
@@ -897,6 +913,91 @@ Context::~Context() {
 //----------------------------------------------------------------------------------------------------------------------
 
 Extension::Extension(void *impl) : detail::Handle<Extension>(impl) {
+}
+
+auto Connection::Register(ScalarFunction &scalar_function) -> void {
+	scalar_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_scalar_function, handle(), scalar_function.handle());
+}
+
+auto Extension::Register(ScalarFunction &scalar_function) -> void {
+	scalar_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_scalar_function, handle(), scalar_function.handle());
+}
+
+auto Connection::Register(AggregateFunction &aggregate_function) -> void {
+	aggregate_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_aggregate_function, handle(), aggregate_function.handle());
+}
+
+auto Extension::Register(AggregateFunction &aggregate_function) -> void {
+	aggregate_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_aggregate_function, handle(), aggregate_function.handle());
+}
+
+auto Connection::Register(TableFunction &table_function) -> void {
+	table_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_table_function, handle(), table_function.handle());
+}
+
+auto Extension::Register(TableFunction &table_function) -> void {
+	table_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_table_function, handle(), table_function.handle());
+}
+
+auto Connection::Register(MultiFileFunction &multi_file_function) -> void {
+	multi_file_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_multi_file_function, handle(), multi_file_function.handle());
+}
+
+auto Extension::Register(MultiFileFunction &multi_file_function) -> void {
+	multi_file_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_multi_file_function, handle(), multi_file_function.handle());
+}
+
+auto Connection::Register(CustomType &custom_type) -> void {
+	custom_type.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_custom_type, handle(), custom_type.handle());
+}
+
+auto Extension::Register(CustomType &custom_type) -> void {
+	custom_type.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_custom_type, handle(), custom_type.handle());
+}
+
+auto Connection::Register(CopyFunction &copy_function) -> void {
+	copy_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_copy_function, handle(), copy_function.handle());
+}
+
+auto Extension::Register(CopyFunction &copy_function) -> void {
+	copy_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_copy_function, handle(), copy_function.handle());
+}
+
+auto Connection::Register(CastFunction &cast_function) -> void {
+	cast_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_cast_function, handle(), cast_function.handle());
+}
+
+auto Extension::Register(CastFunction &cast_function) -> void {
+	cast_function.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_cast_function, handle(), cast_function.handle());
+}
+
+auto Connection::Register(ReplacementScan &replacement_scan) -> void {
+	replacement_scan.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_connection_register_replacement_scan, handle(), replacement_scan.handle());
+}
+
+auto Extension::Register(ReplacementScan &replacement_scan) -> void {
+	replacement_scan.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_extension_register_replacement_scan, handle(), replacement_scan.handle());
+}
+
+auto Instance::Register(ReplacementScan &replacement_scan) -> void {
+	replacement_scan.PrepareRegistration();
+	CheckedAPICall(duckdb_v2_instance_register_replacement_scan, handle(), replacement_scan.handle());
 }
 
 Extension::~Extension() {
@@ -2671,15 +2772,9 @@ ScalarFunction::~ScalarFunction() {
 	duckdb_v2_scalar_function_destroy(&_h);
 }
 
-auto ScalarFunction::Create(const Connection &conn) -> ScalarFunction {
+auto ScalarFunction::Create(Factory &factory) -> ScalarFunction {
 	duckdb_v2_scalar_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_scalar_function_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<ScalarFunction>(_h);
-}
-
-auto ScalarFunction::Create(const Extension &extension) -> ScalarFunction {
-	duckdb_v2_scalar_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_scalar_function_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_scalar_function_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<ScalarFunction>(_h);
 }
 
@@ -2801,7 +2896,7 @@ auto ScalarFunction::SetCollationHandling(FunctionCollationHandling value) & -> 
 	return *this;
 }
 
-auto ScalarFunction::Register() -> void {
+auto ScalarFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<ScalarFunctionInfo>(
@@ -2811,8 +2906,6 @@ auto ScalarFunction::Register() -> void {
 	CheckedAPICall(duckdb_v2_scalar_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
-
-	CheckedAPICall(duckdb_v2_scalar_function_register, handle());
 }
 
 void *ScalarFunction::BindInput::GetUserDataInternal() const {
@@ -2975,15 +3068,9 @@ AggregateFunction::~AggregateFunction() {
 	duckdb_v2_aggregate_function_destroy(&_h);
 }
 
-auto AggregateFunction::Create(const Connection &conn) -> AggregateFunction {
+auto AggregateFunction::Create(Factory &factory) -> AggregateFunction {
 	duckdb_v2_aggregate_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_aggregate_function_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<AggregateFunction>(_h);
-}
-
-auto AggregateFunction::Create(const Extension &extension) -> AggregateFunction {
-	duckdb_v2_aggregate_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_aggregate_function_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_aggregate_function_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<AggregateFunction>(_h);
 }
 
@@ -3209,7 +3296,7 @@ auto AggregateFunction::SetDistinctDependence(DistinctDependence value) & -> Agg
 	return *this;
 }
 
-auto AggregateFunction::Register() -> void {
+auto AggregateFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<AggregateFunctionInfo>(
@@ -3220,8 +3307,6 @@ auto AggregateFunction::Register() -> void {
 	CheckedAPICall(duckdb_v2_aggregate_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
-
-	CheckedAPICall(duckdb_v2_aggregate_function_register, handle());
 }
 
 void *AggregateFunction::BindInput::GetUserDataInternal() const {
@@ -3530,15 +3615,9 @@ TableFunction::~TableFunction() {
 	duckdb_v2_table_function_destroy(&_h);
 }
 
-auto TableFunction::Create(const Connection &conn) -> TableFunction {
+auto TableFunction::Create(Factory &factory) -> TableFunction {
 	duckdb_v2_table_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<TableFunction>(_h);
-}
-
-auto TableFunction::Create(const Extension &extension) -> TableFunction {
-	duckdb_v2_table_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_table_function_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_table_function_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<TableFunction>(_h);
 }
 
@@ -3791,7 +3870,7 @@ auto TableFunction::SetProjectionPushdown(bool enable) & -> TableFunction & {
 	return *this;
 }
 
-auto TableFunction::Register() -> void {
+auto TableFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<TableFunctionInfo>(
@@ -3803,8 +3882,6 @@ auto TableFunction::Register() -> void {
 	CheckedAPICall(duckdb_v2_table_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
-
-	CheckedAPICall(duckdb_v2_table_function_register, handle());
 }
 
 auto TableFunction::BindInput::AddResultColumn(const std::string &name, const LogicalType &type) -> void {
@@ -4256,15 +4333,9 @@ MultiFileFunction::~MultiFileFunction() {
 	duckdb_v2_multi_file_function_destroy(&_h);
 }
 
-auto MultiFileFunction::Create(const Connection &conn) -> MultiFileFunction {
+auto MultiFileFunction::Create(Factory &factory) -> MultiFileFunction {
 	duckdb_v2_multi_file_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_multi_file_function_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<MultiFileFunction>(_h);
-}
-
-auto MultiFileFunction::Create(const Extension &extension) -> MultiFileFunction {
-	duckdb_v2_multi_file_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_multi_file_function_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_multi_file_function_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<MultiFileFunction>(_h);
 }
 
@@ -4292,8 +4363,7 @@ auto MultiFileFunction::SetFileExtension(const std::string &extension) & -> Mult
 	return *this;
 }
 
-auto MultiFileFunction::Register() -> void {
-	CheckedAPICall(duckdb_v2_multi_file_function_register, handle());
+auto MultiFileFunction::PrepareRegistration() -> void {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4369,15 +4439,9 @@ CustomType::~CustomType() {
 	duckdb_v2_custom_type_destroy(&_h);
 }
 
-auto CustomType::Create(const Connection &conn) -> CustomType {
+auto CustomType::Create(Factory &factory) -> CustomType {
 	duckdb_v2_custom_type_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_custom_type_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<CustomType>(_h);
-}
-
-auto CustomType::Create(const Extension &extension) -> CustomType {
-	duckdb_v2_custom_type_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_custom_type_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_custom_type_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<CustomType>(_h);
 }
 
@@ -4392,8 +4456,7 @@ auto CustomType::SetBaseType(const LogicalType &type) & -> CustomType & {
 	return *this;
 }
 
-auto CustomType::Register() -> void {
-	CheckedAPICall(duckdb_v2_custom_type_register, handle());
+auto CustomType::PrepareRegistration() -> void {
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -4520,15 +4583,9 @@ CopyFunction::~CopyFunction() {
 	duckdb_v2_copy_function_destroy(&_h);
 }
 
-auto CopyFunction::Create(const Connection &conn) -> CopyFunction {
+auto CopyFunction::Create(Factory &factory) -> CopyFunction {
 	duckdb_v2_copy_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_copy_function_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<CopyFunction>(_h);
-}
-
-auto CopyFunction::Create(const Extension &extension) -> CopyFunction {
-	duckdb_v2_copy_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_copy_function_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_copy_function_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<CopyFunction>(_h);
 }
 
@@ -4844,7 +4901,7 @@ auto CopyFunction::SetCopyFromProgressCallback(CopyFromProgressCallback callback
 	return *this;
 }
 
-auto CopyFunction::Register() -> void {
+auto CopyFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampolines can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<CopyFunctionInfo>(new CopyFunctionInfo(
@@ -4856,8 +4913,6 @@ auto CopyFunction::Register() -> void {
 	CheckedAPICall(duckdb_v2_copy_function_set_user_data, handle(), &opaque);
 	// The function owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
-
-	CheckedAPICall(duckdb_v2_copy_function_register, handle());
 }
 
 void *CopyFunction::CopyToBindInput::GetUserDataInternal() const {
@@ -5363,15 +5418,9 @@ CastFunction::~CastFunction() {
 	duckdb_v2_cast_function_destroy(&_h);
 }
 
-auto CastFunction::Create(const Connection &conn) -> CastFunction {
+auto CastFunction::Create(Factory &factory) -> CastFunction {
 	duckdb_v2_cast_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_cast_function_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<CastFunction>(_h);
-}
-
-auto CastFunction::Create(const Extension &extension) -> CastFunction {
-	duckdb_v2_cast_function_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_cast_function_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_cast_function_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<CastFunction>(_h);
 }
 
@@ -5421,7 +5470,7 @@ auto CastFunction::SetExecCallback(ExecCallback callback) & -> CastFunction & {
 	return *this;
 }
 
-auto CastFunction::Register() -> void {
+auto CastFunction::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampoline can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<CastFunctionInfo>(new CastFunctionInfo(exec_callback, std::move(user_data)));
@@ -5429,8 +5478,6 @@ auto CastFunction::Register() -> void {
 	CheckedAPICall(duckdb_v2_cast_function_set_user_data, handle(), &opaque);
 	// The cast owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
-
-	CheckedAPICall(duckdb_v2_cast_function_register, handle());
 }
 
 void *CastFunction::ExecInput::GetUserDataInternal() const {
@@ -5723,21 +5770,9 @@ ReplacementScan::~ReplacementScan() {
 	duckdb_v2_replacement_scan_destroy(&_h);
 }
 
-auto ReplacementScan::Create(const Connection &conn) -> ReplacementScan {
+auto ReplacementScan::Create(Factory &factory) -> ReplacementScan {
 	duckdb_v2_replacement_scan_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_replacement_scan_create_with_connection, conn.handle(), &_h);
-	return detail::HandleFactory::Make<ReplacementScan>(_h);
-}
-
-auto ReplacementScan::Create(const Instance &instance) -> ReplacementScan {
-	duckdb_v2_replacement_scan_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_replacement_scan_create_with_instance, instance.handle(), &_h);
-	return detail::HandleFactory::Make<ReplacementScan>(_h);
-}
-
-auto ReplacementScan::Create(const Extension &extension) -> ReplacementScan {
-	duckdb_v2_replacement_scan_handle _h = nullptr;
-	CheckedAPICall(duckdb_v2_replacement_scan_create_with_extension, extension.handle(), &_h);
+	CheckedAPICall(duckdb_v2_replacement_scan_create, factory.handle(), &_h);
 	return detail::HandleFactory::Make<ReplacementScan>(_h);
 }
 
@@ -5771,7 +5806,7 @@ auto ReplacementScan::SetCallback(Callback callback_p) & -> ReplacementScan & {
 	return *this;
 }
 
-auto ReplacementScan::Register() -> void {
+auto ReplacementScan::PrepareRegistration() -> void {
 	// The callback table rides the C user_data slot so the trampoline can find
 	// it; the user's own data (SetUserData, moved out here) rides inside it.
 	auto info = std::unique_ptr<ReplacementScanInfo>(new ReplacementScanInfo(callback, std::move(user_data)));
@@ -5780,8 +5815,6 @@ auto ReplacementScan::Register() -> void {
 	CheckedAPICall(duckdb_v2_replacement_scan_set_user_data, handle(), &opaque);
 	// The scan owns the table now.
 	info.release(); // NOLINT(bugprone-unused-return-value)
-
-	CheckedAPICall(duckdb_v2_replacement_scan_register, handle());
 }
 
 void *ReplacementScan::Input::GetUserDataInternal() const {
@@ -5904,7 +5937,7 @@ void Appender::Initialize(Connection &conn, const std::string &query, std::vecto
 
 	// The scan makes the buffer visible to the statement under its name. It is connection-scoped, so it is invisible
 	// to every other connection, and it holds the buffer by shared_ptr because it outlives this object.
-	auto scan = ReplacementScan::Create(conn);
+	auto scan = ReplacementScan::Create(conn.GetFactory());
 	scan.SetCallback([](ReplacementScan::Input &input) {
 		auto &shared = input.GetUserData<std::shared_ptr<Buffer>>();
 		if (!shared->collection) {
@@ -5918,7 +5951,7 @@ void Appender::Initialize(Connection &conn, const std::string &query, std::vecto
 		input.SetCollection(*shared->collection, shared->column_names);
 	});
 	scan.SetUserData<std::shared_ptr<Buffer>>(buffer);
-	scan.Register();
+	conn.Register(scan);
 
 	// Parsed once and re-executed per flush.
 	statement = std::make_unique<SqlStatement>(ParseSingleStatement(conn, query));

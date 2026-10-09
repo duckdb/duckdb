@@ -269,14 +269,13 @@ void ArgProbeFinalize(AggregateFunction::FinalizeInput &input) {
 } // namespace
 
 TEST_CASE("Stable C++API: aggregate function registers and executes", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
 	destroy_runs = 0;
 
-	auto function = AggregateFunction::Create(conn);
+	auto function = AggregateFunction::Create(conn.GetFactory());
 	function.SetName("cpp_sum")
 	    .WithSignature([&](FunctionSignature &sig) {
 		    sig.AddParameter("a", factory.ParseType("INTEGER")).SetReturnType(factory.ParseType("BIGINT"));
@@ -287,7 +286,7 @@ TEST_CASE("Stable C++API: aggregate function registers and executes", "[cpp_api]
 	    .SetCombineCallback(SumCombine)
 	    .SetFinalizeCallback(SumFinalize)
 	    .SetDestroyCallback(SumDestroy);
-	function.Register();
+	conn.Register(function);
 
 	// Ungrouped, more rows than one chunk, so the callbacks see full vectors.
 	REQUIRE(CollectBigInts(conn.Execute("SELECT cpp_sum(r::INTEGER) FROM range(5000) t(r)")) ==
@@ -304,8 +303,7 @@ TEST_CASE("Stable C++API: aggregate function registers and executes", "[cpp_api]
 }
 
 TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -316,7 +314,7 @@ TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", 
 	combine_runs = 0;
 	finalize_runs = 0;
 
-	auto function = AggregateFunction::Create(conn);
+	auto function = AggregateFunction::Create(conn.GetFactory());
 	function.SetName("cpp_flow_sum").SetUserData<Factor>(Factor {3});
 	function.GetSignature().AddParameter("a", factory.ParseType("INTEGER")).SetReturnType(factory.ParseType("BIGINT"));
 	function.SetBindCallback(FlowBind)
@@ -325,7 +323,7 @@ TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", 
 	    .SetUpdateCallback(FlowUpdate)
 	    .SetCombineCallback(FlowCombine)
 	    .SetFinalizeCallback(FlowFinalize);
-	function.Register();
+	conn.Register(function);
 
 	// 5 * 3 + (3 + 7) = 25
 	REQUIRE(CollectBigInts(conn.Execute("SELECT cpp_flow_sum(5)")) == std::vector<int64_t> {25});
@@ -345,12 +343,11 @@ TEST_CASE("Stable C++API: aggregate function data flows user->bind->callbacks", 
 }
 
 TEST_CASE("Stable C++API: aggregate function bind resolves an ANY return type", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
-	auto function = AggregateFunction::Create(conn);
+	auto function = AggregateFunction::Create(conn.GetFactory());
 	function.SetName("cpp_double_last")
 	    .SetBindCallback(AnyReturnBind)
 	    .SetSizeCallback(LastSize)
@@ -361,7 +358,7 @@ TEST_CASE("Stable C++API: aggregate function bind resolves an ANY return type", 
 	function.GetSignature()
 	    .AddParameter("a", factory.ParseType("INTEGER"))
 	    .SetReturnType(factory.CreateType(LogicalTypeId::ANY));
-	function.Register();
+	conn.Register(function);
 
 	auto result = conn.Execute("SELECT cpp_double_last(21)");
 	REQUIRE(result.GetSchema().GetFieldType(0).ToText() == "INTEGER");
@@ -369,12 +366,11 @@ TEST_CASE("Stable C++API: aggregate function bind resolves an ANY return type", 
 }
 
 TEST_CASE("Stable C++API: aggregate function bind reads argument types and constants", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
-	auto function = AggregateFunction::Create(conn);
+	auto function = AggregateFunction::Create(conn.GetFactory());
 	function.SetName("cpp_agg_arg_probe")
 	    .SetBindCallback(ArgProbeBind)
 	    .SetSizeCallback(LastSize)
@@ -386,7 +382,7 @@ TEST_CASE("Stable C++API: aggregate function bind reads argument types and const
 	    .AddParameter("a", factory.CreateType(LogicalTypeId::ANY))
 	    .AddParameter("b", factory.ParseType("INTEGER"))
 	    .SetReturnType(factory.CreateType(LogicalTypeId::ANY));
-	function.Register();
+	conn.Register(function);
 
 	agg_arg_probe = {};
 	REQUIRE(CollectInts(conn.Execute("SELECT cpp_agg_arg_probe('hello', 21)")) == std::vector<int32_t> {21});
@@ -410,13 +406,12 @@ TEST_CASE("Stable C++API: aggregate function bind reads argument types and const
 }
 
 TEST_CASE("Stable C++API: aggregate function callback errors fail the query", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	const auto integer = factory.ParseType("INTEGER");
 
-	auto failing = AggregateFunction::Create(conn);
+	auto failing = AggregateFunction::Create(conn.GetFactory());
 	failing.SetName("cpp_agg_fail")
 	    .SetSizeCallback(LastSize)
 	    .SetInitCallback(LastInit)
@@ -424,13 +419,13 @@ TEST_CASE("Stable C++API: aggregate function callback errors fail the query", "[
 	    .SetCombineCallback(LastCombine)
 	    .SetFinalizeCallback(DoubleLastFinalize);
 	failing.GetSignature().AddParameter("a", integer).SetReturnType(integer);
-	failing.Register();
+	conn.Register(failing);
 
 	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_fail(1)").Drain(), InvalidInputException,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	// GetUserData when nothing was planted reports the misuse rather than derefing null.
-	auto no_data = AggregateFunction::Create(conn);
+	auto no_data = AggregateFunction::Create(conn.GetFactory());
 	no_data.SetName("cpp_agg_no_user_data")
 	    .SetSizeCallback(LastSize)
 	    .SetInitCallback(LastInit)
@@ -438,46 +433,47 @@ TEST_CASE("Stable C++API: aggregate function callback errors fail the query", "[
 	    .SetCombineCallback(LastCombine)
 	    .SetFinalizeCallback(DoubleLastFinalize);
 	no_data.GetSignature().AddParameter("a", integer).SetReturnType(integer);
-	no_data.Register();
+	conn.Register(no_data);
 
 	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT cpp_agg_no_user_data(1)").Drain(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 }
 
 TEST_CASE("Stable C++API: aggregate function registration validation", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	const auto integer = factory.ParseType("INTEGER");
 
 	// No name.
 	{
-		auto function = AggregateFunction::Create(conn);
+		auto function = AggregateFunction::Create(conn.GetFactory());
 		function.SetSizeCallback(SumSize)
 		    .SetInitCallback(SumInit)
 		    .SetUpdateCallback(SumUpdate)
 		    .SetCombineCallback(SumCombine)
 		    .SetFinalizeCallback(SumFinalize);
 		function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
-		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(function), InvalidInputException,
+		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 
 	// A required callback missing.
 	{
-		auto function = AggregateFunction::Create(conn);
+		auto function = AggregateFunction::Create(conn.GetFactory());
 		function.SetName("cpp_no_update")
 		    .SetSizeCallback(SumSize)
 		    .SetInitCallback(SumInit)
 		    .SetCombineCallback(SumCombine)
 		    .SetFinalizeCallback(SumFinalize);
 		function.GetSignature().AddParameter("a", integer).SetReturnType(integer);
-		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(function), InvalidInputException,
+		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 
 	// An ANY return type without a bind callback to resolve it.
 	{
-		auto function = AggregateFunction::Create(conn);
+		auto function = AggregateFunction::Create(conn.GetFactory());
 		function.SetName("cpp_agg_unresolved_any")
 		    .SetSizeCallback(SumSize)
 		    .SetInitCallback(SumInit)
@@ -485,7 +481,8 @@ TEST_CASE("Stable C++API: aggregate function registration validation", "[cpp_api
 		    .SetCombineCallback(SumCombine)
 		    .SetFinalizeCallback(SumFinalize);
 		function.GetSignature().AddParameter("a", integer).SetReturnType(factory.CreateType(LogicalTypeId::ANY));
-		REQUIRE_THROWS_MATCHES(function.Register(), InvalidInputException, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(function), InvalidInputException,
+		                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 }
 
@@ -494,14 +491,13 @@ TEST_CASE("Stable C++API: aggregate function registration validation", "[cpp_api
 // ---------------------------------------------------------------------------
 
 TEST_CASE("Stable C++API: aggregate function properties", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
 	// Setting common and aggregate-specific properties leaves the function
 	// registrable and correct.
-	auto function = AggregateFunction::Create(conn);
+	auto function = AggregateFunction::Create(conn.GetFactory());
 	function.SetName("prop_sum")
 	    .WithSignature([&](FunctionSignature &sig) {
 		    sig.AddParameter("a", factory.ParseType("INTEGER")).SetReturnType(factory.ParseType("BIGINT"));
@@ -515,7 +511,7 @@ TEST_CASE("Stable C++API: aggregate function properties", "[cpp_api]") {
 	    .SetCollationHandling(FunctionCollationHandling::IGNORE)
 	    .SetOrderDependence(AggregateFunction::OrderDependence::INDEPENDENT)
 	    .SetDistinctDependence(AggregateFunction::DistinctDependence::INDEPENDENT);
-	function.Register();
+	conn.Register(function);
 
 	REQUIRE(CollectBigInts(conn.Execute("SELECT prop_sum(r::INTEGER) FROM range(1000) t(r)")) ==
 	        std::vector<int64_t> {1000LL * 999 / 2});

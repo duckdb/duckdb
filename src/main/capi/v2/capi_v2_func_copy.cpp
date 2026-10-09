@@ -748,7 +748,12 @@ static auto CV2CopyFromProgress(ClientContext &context, const FunctionData *bind
 
 class CV2CopyFunction {
 public:
-	void Register() {
+	explicit CV2CopyFunction(DatabaseInstance &db) : db(db) {
+	}
+
+	//! Validates the configuration and builds the copy function to register on `target`.
+	CopyFunction Build(DatabaseInstance &target) {
+		CheckRegistrationTarget(db, target, "copy function");
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -808,49 +813,14 @@ public:
 		}
 		function.function_info = std::move(function_info);
 
-		// Call the implementation to register
-		RegisterToCatalog(std::move(function));
+		return function;
 	}
 
-	virtual ~CV2CopyFunction() = default;
-	virtual void RegisterToCatalog(CopyFunction function) = 0;
-
 public:
+	//! The database it was created for: the only one it can be registered on.
+	DatabaseInstance &db;
 	CV2CopyFunctionInfo info;
 	Identifier name;
-};
-
-class CV2ConnectionCopyFunction : public CV2CopyFunction {
-public:
-	explicit CV2ConnectionCopyFunction(Connection &connection) : connection(connection) {
-	}
-
-	void RegisterToCatalog(CopyFunction function) override {
-		auto &context = *connection.context;
-
-		context.RunFunctionInTransaction([&]() {
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			CreateCopyFunctionInfo cf_info(std::move(function));
-			cf_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-			catalog.CreateCopyFunction(context, cf_info);
-		});
-	}
-
-private:
-	Connection &connection;
-};
-
-class CV2ExtensionCopyFunction : public CV2CopyFunction {
-public:
-	explicit CV2ExtensionCopyFunction(ExtensionLoader &loader) : loader(loader) {
-	}
-
-	void RegisterToCatalog(CopyFunction function) override {
-		loader.RegisterFunction(std::move(function));
-	}
-
-private:
-	ExtensionLoader &loader;
 };
 
 static auto Convert(duckdb_v2_copy_function_handle func) -> CV2CopyFunction * {
@@ -913,28 +883,14 @@ static auto GetOptionValue(INFO &args, idx_t index, const char *function) -> duc
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                               duckdb_v2_copy_function_handle *function,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(connection);
+DUCKDB_V2_ERROR duckdb_v2_copy_function_create(duckdb_v2_factory_handle factory,
+                                               duckdb_v2_copy_function_handle *function,
+                                               duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(factory);
 	DUCKDB_CHECK_ARG(function);
 	*function = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &conn = *Convert(connection);
-		auto result = duckdb::make_uniq<CV2ConnectionCopyFunction>(conn);
-		*function = Convert(result.release());
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_copy_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                              duckdb_v2_copy_function_handle *function,
-                                                              duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(extension);
-	DUCKDB_CHECK_ARG(function);
-	*function = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &loader = GetExtensionLoader(extension);
-		auto result = duckdb::make_uniq<CV2ExtensionCopyFunction>(loader);
+		auto result = duckdb::make_uniq<CV2CopyFunction>(Convert(factory)->GetDatabase());
 		*function = Convert(result.release());
 	});
 }
@@ -1517,10 +1473,31 @@ DUCKDB_V2_ERROR duckdb_v2_copy_from_progress_set_progress(duckdb_v2_copy_from_pr
 // Register / destroy
 //----------------------------------------------------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_copy_function_register(duckdb_v2_copy_function_handle function,
-                                                 duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_connection_register_copy_function(duckdb_v2_connection_handle conn,
+                                                            duckdb_v2_copy_function_handle function,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->Register(); });
+	return WithErrorHandler(err, [&]() {
+		auto &context = *Convert(conn)->context;
+		context.RunFunctionInTransaction([&]() {
+			auto info = duckdb::CreateCopyFunctionInfo(Convert(function)->Build(*context.db));
+			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+			catalog.CreateCopyFunction(context, info);
+		});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_extension_register_copy_function(duckdb_v2_extension_handle extension,
+                                                           duckdb_v2_copy_function_handle function,
+                                                           duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() {
+		auto &loader = GetExtensionLoader(extension);
+		loader.RegisterFunction(Convert(function)->Build(loader.GetDatabaseInstance()));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_copy_function_destroy(duckdb_v2_copy_function_handle *function) {

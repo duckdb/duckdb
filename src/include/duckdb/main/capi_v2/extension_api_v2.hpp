@@ -407,9 +407,13 @@ typedef struct {
 	(duckdb_v2_vector_handle vector, idx_t size, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_vector_set_value)
 	(duckdb_v2_vector_handle vector, idx_t row, duckdb_v2_value_handle value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_scalar_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_scalar_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_log)
 	(duckdb_v2_context_handle ctx, DUCKDB_V2_LOG_LEVEL level, const duckdb_v2_str *log_type,
 	 const duckdb_v2_str *message, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_scalar_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_scalar_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_function_signature_add_parameter)
 	(duckdb_v2_function_signature_handle sig, const duckdb_v2_identifier_t *name, duckdb_v2_logical_type_handle type,
 	 duckdb_v2_value_handle value, DUCKDB_V2_FUNCTION_PARAMETER_KIND kind, duckdb_v2_error_info_handle *err);
@@ -418,12 +422,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_bind_set_return_type)
 	(duckdb_v2_scalar_function_bind_info_handle info, duckdb_v2_logical_type_handle return_type,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_scalar_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_scalar_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_scalar_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_scalar_function_destroy)(duckdb_v2_scalar_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_exec_get_arg)
 	(duckdb_v2_scalar_function_exec_info_handle info, idx_t index, duckdb_v2_vector_handle *vector,
@@ -451,8 +451,6 @@ typedef struct {
 	(duckdb_v2_scalar_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_init_set_init_data)
 	(duckdb_v2_scalar_function_init_info_handle info, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_register)
-	(duckdb_v2_scalar_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_bind_callback)
 	(duckdb_v2_scalar_function_handle function, duckdb_v2_scalar_function_bind_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -479,12 +477,8 @@ typedef struct {
 	(duckdb_v2_aggregate_function_combine_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_combine_get_user_data)
 	(duckdb_v2_aggregate_function_combine_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_aggregate_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_aggregate_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_aggregate_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_aggregate_function_destroy)(duckdb_v2_aggregate_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_destroy_get_bind_data)
 	(duckdb_v2_aggregate_function_destroy_info_handle info, void **data, duckdb_v2_error_info_handle *err);
@@ -518,8 +512,6 @@ typedef struct {
 	(duckdb_v2_aggregate_function_init_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_init_get_user_data)
 	(duckdb_v2_aggregate_function_init_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_register)
-	(duckdb_v2_aggregate_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_bind_callback)
 	(duckdb_v2_aggregate_function_handle function, duckdb_v2_aggregate_function_bind_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -566,23 +558,29 @@ typedef struct {
 	(duckdb_v2_aggregate_function_update_info_handle info, void ***states, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_update_get_user_data)
 	(duckdb_v2_aggregate_function_update_info_handle info, void **data, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_aggregate_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_aggregate_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_aggregate_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_aggregate_function_handle function,
+	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_aggregate_function_set_property)
 	(duckdb_v2_aggregate_function_handle function, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
 	 DUCKDB_V2_FUNCTION_PROPERTY_VALUE value, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_scalar_function_set_property)
 	(duckdb_v2_scalar_function_handle function, DUCKDB_V2_FUNCTION_PROPERTY_KEY key,
 	 DUCKDB_V2_FUNCTION_PROPERTY_VALUE value, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_table_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_table_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_table_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_table_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_add_result_column)
 	(duckdb_v2_table_function_bind_info_handle info, const duckdb_v2_identifier_t *name,
 	 duckdb_v2_logical_type_handle type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_bind_set_cardinality)
 	(duckdb_v2_table_function_bind_info_handle info, idx_t cardinality, bool is_exact,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_table_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_table_function_handle *function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_table_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_table_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_table_function_destroy)(duckdb_v2_table_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_exec_get_bind_data)
 	(duckdb_v2_table_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
@@ -622,8 +620,6 @@ typedef struct {
 	(duckdb_v2_table_function_progress_info_handle info, void **data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_progress_set_progress)
 	(duckdb_v2_table_function_progress_info_handle info, double progress, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_table_function_register)
-	(duckdb_v2_table_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_bind_callback)
 	(duckdb_v2_table_function_handle function, duckdb_v2_table_function_bind_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -643,11 +639,8 @@ typedef struct {
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_table_function_set_user_data)
 	(duckdb_v2_table_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_cast_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_cast_function_handle *function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_cast_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_cast_function_destroy)(duckdb_v2_cast_function_handle *function);
 	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_exec_get_input)
 	(duckdb_v2_cast_function_exec_info_handle info, duckdb_v2_vector_handle *vector, duckdb_v2_error_info_handle *err);
@@ -659,8 +652,6 @@ typedef struct {
 	(duckdb_v2_cast_function_exec_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_exec_get_user_data)
 	(duckdb_v2_cast_function_exec_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_register)
-	(duckdb_v2_cast_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_cast_function_set_exec_callback)
 	(duckdb_v2_cast_function_handle function, duckdb_v2_cast_function_exec_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -676,19 +667,27 @@ typedef struct {
 	(duckdb_v2_cast_function_handle function, duckdb_v2_opaque *data, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_column_data_collection_clear)
 	(duckdb_v2_column_data_collection_handle collection, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_cast_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_cast_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_custom_type)
+	(duckdb_v2_connection_handle conn, duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_replacement_scan)
+	(duckdb_v2_connection_handle conn, duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_context_get_file_system)
 	(duckdb_v2_context_handle context, duckdb_v2_file_system_handle *file_system, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_custom_type_handle *type, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_custom_type_handle *type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_custom_type_handle *type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_custom_type_destroy)(duckdb_v2_custom_type_handle *type);
-	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_register)
-	(duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_set_base_type)
 	(duckdb_v2_custom_type_handle type, duckdb_v2_logical_type_handle base_type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_custom_type_set_name)
 	(duckdb_v2_custom_type_handle type, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_cast_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_cast_function_handle function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_custom_type)
+	(duckdb_v2_extension_handle extension, duckdb_v2_custom_type_handle type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_replacement_scan)
+	(duckdb_v2_extension_handle extension, duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_file_close)(duckdb_v2_file_handle file, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_file_destroy)(duckdb_v2_file_handle *file);
 	DUCKDB_V2_ERROR(*duckdb_v2_file_open_options_create)
@@ -719,6 +718,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_file_write_at)
 	(duckdb_v2_file_handle file, const void *buffer, idx_t buffer_size, idx_t location,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_instance_register_replacement_scan)
+	(duckdb_v2_instance_handle instance, duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_qname_create)
 	(const duckdb_v2_identifier_t *parts, idx_t part_count, duckdb_v2_qname_handle *name,
 	 duckdb_v2_error_info_handle *err);
@@ -741,19 +742,13 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_add_named_argument)
 	(duckdb_v2_replacement_scan_info_handle info, const duckdb_v2_identifier_t *name, duckdb_v2_value_handle value,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create_with_instance)
-	(duckdb_v2_instance_handle instance, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_replacement_scan_handle *scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_replacement_scan_destroy)(duckdb_v2_replacement_scan_handle *scan);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_name)
 	(duckdb_v2_replacement_scan_info_handle info, duckdb_v2_qname_handle *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_get_user_data)
 	(duckdb_v2_replacement_scan_info_handle info, void **data, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_register)
-	(duckdb_v2_replacement_scan_handle scan, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_replacement_scan_set_alias)
 	(duckdb_v2_replacement_scan_info_handle info, const duckdb_v2_identifier_t *alias,
 	 duckdb_v2_error_info_handle *err);
@@ -804,6 +799,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_connection_describe_table)
 	(duckdb_v2_connection_handle conn, duckdb_v2_qname_handle name, duckdb_v2_table_description_handle *desc,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_copy_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_copy_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_bind_get_column_count)
 	(duckdb_v2_copy_from_bind_info_handle info, idx_t *count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_bind_get_column_name)
@@ -877,14 +874,9 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_from_set_progress_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_from_progress_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_copy_function_handle *function,
-	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_copy_function_handle *function, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_copy_function_handle *function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_copy_function_destroy)(duckdb_v2_copy_function_handle *function);
-	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_register)
-	(duckdb_v2_copy_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_name)
 	(duckdb_v2_copy_function_handle function, const duckdb_v2_identifier_t *name, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_function_set_user_data)
@@ -987,6 +979,8 @@ typedef struct {
 	(duckdb_v2_expression_handle expression, duckdb_v2_logical_type_handle *type, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_expression_get_type)
 	(duckdb_v2_expression_handle expression, DUCKDB_V2_EXPRESSION_TYPE *type, duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_copy_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_copy_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_identifier_render_quoted)
 	(const duckdb_v2_identifier_t *name, char *out_text, idx_t out_capacity, idx_t *out_length,
 	 duckdb_v2_error_info_handle *err);
@@ -1199,6 +1193,8 @@ typedef struct {
 	DUCKDB_V2_ERROR(*duckdb_v2_option_supports_scope)
 	(duckdb_v2_option_handle option, DUCKDB_V2_SETTING_SCOPE scope, bool *out_supported,
 	 duckdb_v2_error_info_handle *err);
+	DUCKDB_V2_ERROR(*duckdb_v2_connection_register_multi_file_function)
+	(duckdb_v2_connection_handle conn, duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_copy_to_set_statistics_callback)
 	(duckdb_v2_copy_function_handle function, duckdb_v2_copy_to_statistics_callback_fn callback,
 	 duckdb_v2_error_info_handle *err);
@@ -1214,15 +1210,13 @@ typedef struct {
 	(duckdb_v2_copy_to_statistics_info_handle info, idx_t row_count, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_data_chunk_get_capacity)
 	(duckdb_v2_data_chunk_handle chunk, idx_t *out_capacity, duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_connection)
-	(duckdb_v2_connection_handle connection, duckdb_v2_multi_file_function_handle *function,
+	DUCKDB_V2_ERROR(*duckdb_v2_extension_register_multi_file_function)
+	(duckdb_v2_extension_handle extension, duckdb_v2_multi_file_function_handle function,
 	 duckdb_v2_error_info_handle *err);
-	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create_with_extension)
-	(duckdb_v2_extension_handle extension, duckdb_v2_multi_file_function_handle *function,
+	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_create)
+	(duckdb_v2_factory_handle factory, duckdb_v2_multi_file_function_handle *function,
 	 duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR (*duckdb_v2_multi_file_function_destroy)(duckdb_v2_multi_file_function_handle *function);
-	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_register)
-	(duckdb_v2_multi_file_function_handle function, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_file_extension)
 	(duckdb_v2_multi_file_function_handle function, duckdb_v2_str *extension, duckdb_v2_error_info_handle *err);
 	DUCKDB_V2_ERROR(*duckdb_v2_multi_file_function_set_name)
@@ -1433,12 +1427,13 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_vector_set_null = duckdb_v2_vector_set_null;
 	result.duckdb_v2_vector_set_size = duckdb_v2_vector_set_size;
 	result.duckdb_v2_vector_set_value = duckdb_v2_vector_set_value;
+	result.duckdb_v2_connection_register_scalar_function = duckdb_v2_connection_register_scalar_function;
 	result.duckdb_v2_context_log = duckdb_v2_context_log;
+	result.duckdb_v2_extension_register_scalar_function = duckdb_v2_extension_register_scalar_function;
 	result.duckdb_v2_function_signature_add_parameter = duckdb_v2_function_signature_add_parameter;
 	result.duckdb_v2_function_signature_set_return_type = duckdb_v2_function_signature_set_return_type;
 	result.duckdb_v2_scalar_function_bind_set_return_type = duckdb_v2_scalar_function_bind_set_return_type;
-	result.duckdb_v2_scalar_function_create_with_connection = duckdb_v2_scalar_function_create_with_connection;
-	result.duckdb_v2_scalar_function_create_with_extension = duckdb_v2_scalar_function_create_with_extension;
+	result.duckdb_v2_scalar_function_create = duckdb_v2_scalar_function_create;
 	result.duckdb_v2_scalar_function_destroy = duckdb_v2_scalar_function_destroy;
 	result.duckdb_v2_scalar_function_exec_get_arg = duckdb_v2_scalar_function_exec_get_arg;
 	result.duckdb_v2_scalar_function_exec_get_arg_count = duckdb_v2_scalar_function_exec_get_arg_count;
@@ -1451,7 +1446,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_scalar_function_init_get_bind_data = duckdb_v2_scalar_function_init_get_bind_data;
 	result.duckdb_v2_scalar_function_init_get_user_data = duckdb_v2_scalar_function_init_get_user_data;
 	result.duckdb_v2_scalar_function_init_set_init_data = duckdb_v2_scalar_function_init_set_init_data;
-	result.duckdb_v2_scalar_function_register = duckdb_v2_scalar_function_register;
 	result.duckdb_v2_scalar_function_set_bind_callback = duckdb_v2_scalar_function_set_bind_callback;
 	result.duckdb_v2_scalar_function_set_exec_callback = duckdb_v2_scalar_function_set_exec_callback;
 	result.duckdb_v2_scalar_function_set_init_callback = duckdb_v2_scalar_function_set_init_callback;
@@ -1463,8 +1457,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_aggregate_function_combine_get_state_count = duckdb_v2_aggregate_function_combine_get_state_count;
 	result.duckdb_v2_aggregate_function_combine_get_targets = duckdb_v2_aggregate_function_combine_get_targets;
 	result.duckdb_v2_aggregate_function_combine_get_user_data = duckdb_v2_aggregate_function_combine_get_user_data;
-	result.duckdb_v2_aggregate_function_create_with_connection = duckdb_v2_aggregate_function_create_with_connection;
-	result.duckdb_v2_aggregate_function_create_with_extension = duckdb_v2_aggregate_function_create_with_extension;
+	result.duckdb_v2_aggregate_function_create = duckdb_v2_aggregate_function_create;
 	result.duckdb_v2_aggregate_function_destroy = duckdb_v2_aggregate_function_destroy;
 	result.duckdb_v2_aggregate_function_destroy_get_bind_data = duckdb_v2_aggregate_function_destroy_get_bind_data;
 	result.duckdb_v2_aggregate_function_destroy_get_state_count = duckdb_v2_aggregate_function_destroy_get_state_count;
@@ -1483,7 +1476,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_aggregate_function_init_get_state_count = duckdb_v2_aggregate_function_init_get_state_count;
 	result.duckdb_v2_aggregate_function_init_get_states = duckdb_v2_aggregate_function_init_get_states;
 	result.duckdb_v2_aggregate_function_init_get_user_data = duckdb_v2_aggregate_function_init_get_user_data;
-	result.duckdb_v2_aggregate_function_register = duckdb_v2_aggregate_function_register;
 	result.duckdb_v2_aggregate_function_set_bind_callback = duckdb_v2_aggregate_function_set_bind_callback;
 	result.duckdb_v2_aggregate_function_set_combine_callback = duckdb_v2_aggregate_function_set_combine_callback;
 	result.duckdb_v2_aggregate_function_set_destroy_callback = duckdb_v2_aggregate_function_set_destroy_callback;
@@ -1502,12 +1494,15 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_aggregate_function_update_get_row_count = duckdb_v2_aggregate_function_update_get_row_count;
 	result.duckdb_v2_aggregate_function_update_get_states = duckdb_v2_aggregate_function_update_get_states;
 	result.duckdb_v2_aggregate_function_update_get_user_data = duckdb_v2_aggregate_function_update_get_user_data;
+	result.duckdb_v2_connection_register_aggregate_function = duckdb_v2_connection_register_aggregate_function;
+	result.duckdb_v2_extension_register_aggregate_function = duckdb_v2_extension_register_aggregate_function;
 	result.duckdb_v2_aggregate_function_set_property = duckdb_v2_aggregate_function_set_property;
 	result.duckdb_v2_scalar_function_set_property = duckdb_v2_scalar_function_set_property;
+	result.duckdb_v2_connection_register_table_function = duckdb_v2_connection_register_table_function;
+	result.duckdb_v2_extension_register_table_function = duckdb_v2_extension_register_table_function;
 	result.duckdb_v2_table_function_bind_add_result_column = duckdb_v2_table_function_bind_add_result_column;
 	result.duckdb_v2_table_function_bind_set_cardinality = duckdb_v2_table_function_bind_set_cardinality;
-	result.duckdb_v2_table_function_create_with_connection = duckdb_v2_table_function_create_with_connection;
-	result.duckdb_v2_table_function_create_with_extension = duckdb_v2_table_function_create_with_extension;
+	result.duckdb_v2_table_function_create = duckdb_v2_table_function_create;
 	result.duckdb_v2_table_function_destroy = duckdb_v2_table_function_destroy;
 	result.duckdb_v2_table_function_exec_get_bind_data = duckdb_v2_table_function_exec_get_bind_data;
 	result.duckdb_v2_table_function_exec_get_global_state = duckdb_v2_table_function_exec_get_global_state;
@@ -1528,7 +1523,6 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_progress_get_global_state = duckdb_v2_table_function_progress_get_global_state;
 	result.duckdb_v2_table_function_progress_get_user_data = duckdb_v2_table_function_progress_get_user_data;
 	result.duckdb_v2_table_function_progress_set_progress = duckdb_v2_table_function_progress_set_progress;
-	result.duckdb_v2_table_function_register = duckdb_v2_table_function_register;
 	result.duckdb_v2_table_function_set_bind_callback = duckdb_v2_table_function_set_bind_callback;
 	result.duckdb_v2_table_function_set_exec_callback = duckdb_v2_table_function_set_exec_callback;
 	result.duckdb_v2_table_function_set_init_global_callback = duckdb_v2_table_function_set_init_global_callback;
@@ -1536,28 +1530,30 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_table_function_set_name = duckdb_v2_table_function_set_name;
 	result.duckdb_v2_table_function_set_progress_callback = duckdb_v2_table_function_set_progress_callback;
 	result.duckdb_v2_table_function_set_user_data = duckdb_v2_table_function_set_user_data;
-	result.duckdb_v2_cast_function_create_with_connection = duckdb_v2_cast_function_create_with_connection;
-	result.duckdb_v2_cast_function_create_with_extension = duckdb_v2_cast_function_create_with_extension;
+	result.duckdb_v2_cast_function_create = duckdb_v2_cast_function_create;
 	result.duckdb_v2_cast_function_destroy = duckdb_v2_cast_function_destroy;
 	result.duckdb_v2_cast_function_exec_get_input = duckdb_v2_cast_function_exec_get_input;
 	result.duckdb_v2_cast_function_exec_get_mode = duckdb_v2_cast_function_exec_get_mode;
 	result.duckdb_v2_cast_function_exec_get_output = duckdb_v2_cast_function_exec_get_output;
 	result.duckdb_v2_cast_function_exec_get_row_count = duckdb_v2_cast_function_exec_get_row_count;
 	result.duckdb_v2_cast_function_exec_get_user_data = duckdb_v2_cast_function_exec_get_user_data;
-	result.duckdb_v2_cast_function_register = duckdb_v2_cast_function_register;
 	result.duckdb_v2_cast_function_set_exec_callback = duckdb_v2_cast_function_set_exec_callback;
 	result.duckdb_v2_cast_function_set_implicit_cast_cost = duckdb_v2_cast_function_set_implicit_cast_cost;
 	result.duckdb_v2_cast_function_set_source_type = duckdb_v2_cast_function_set_source_type;
 	result.duckdb_v2_cast_function_set_target_type = duckdb_v2_cast_function_set_target_type;
 	result.duckdb_v2_cast_function_set_user_data = duckdb_v2_cast_function_set_user_data;
 	result.duckdb_v2_column_data_collection_clear = duckdb_v2_column_data_collection_clear;
+	result.duckdb_v2_connection_register_cast_function = duckdb_v2_connection_register_cast_function;
+	result.duckdb_v2_connection_register_custom_type = duckdb_v2_connection_register_custom_type;
+	result.duckdb_v2_connection_register_replacement_scan = duckdb_v2_connection_register_replacement_scan;
 	result.duckdb_v2_context_get_file_system = duckdb_v2_context_get_file_system;
-	result.duckdb_v2_custom_type_create_with_connection = duckdb_v2_custom_type_create_with_connection;
-	result.duckdb_v2_custom_type_create_with_extension = duckdb_v2_custom_type_create_with_extension;
+	result.duckdb_v2_custom_type_create = duckdb_v2_custom_type_create;
 	result.duckdb_v2_custom_type_destroy = duckdb_v2_custom_type_destroy;
-	result.duckdb_v2_custom_type_register = duckdb_v2_custom_type_register;
 	result.duckdb_v2_custom_type_set_base_type = duckdb_v2_custom_type_set_base_type;
 	result.duckdb_v2_custom_type_set_name = duckdb_v2_custom_type_set_name;
+	result.duckdb_v2_extension_register_cast_function = duckdb_v2_extension_register_cast_function;
+	result.duckdb_v2_extension_register_custom_type = duckdb_v2_extension_register_custom_type;
+	result.duckdb_v2_extension_register_replacement_scan = duckdb_v2_extension_register_replacement_scan;
 	result.duckdb_v2_file_close = duckdb_v2_file_close;
 	result.duckdb_v2_file_destroy = duckdb_v2_file_destroy;
 	result.duckdb_v2_file_open_options_create = duckdb_v2_file_open_options_create;
@@ -1573,6 +1569,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_file_tell = duckdb_v2_file_tell;
 	result.duckdb_v2_file_write = duckdb_v2_file_write;
 	result.duckdb_v2_file_write_at = duckdb_v2_file_write_at;
+	result.duckdb_v2_instance_register_replacement_scan = duckdb_v2_instance_register_replacement_scan;
 	result.duckdb_v2_qname_create = duckdb_v2_qname_create;
 	result.duckdb_v2_qname_destroy = duckdb_v2_qname_destroy;
 	result.duckdb_v2_qname_equals = duckdb_v2_qname_equals;
@@ -1583,13 +1580,10 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_qname_render = duckdb_v2_qname_render;
 	result.duckdb_v2_replacement_scan_add_argument = duckdb_v2_replacement_scan_add_argument;
 	result.duckdb_v2_replacement_scan_add_named_argument = duckdb_v2_replacement_scan_add_named_argument;
-	result.duckdb_v2_replacement_scan_create_with_connection = duckdb_v2_replacement_scan_create_with_connection;
-	result.duckdb_v2_replacement_scan_create_with_extension = duckdb_v2_replacement_scan_create_with_extension;
-	result.duckdb_v2_replacement_scan_create_with_instance = duckdb_v2_replacement_scan_create_with_instance;
+	result.duckdb_v2_replacement_scan_create = duckdb_v2_replacement_scan_create;
 	result.duckdb_v2_replacement_scan_destroy = duckdb_v2_replacement_scan_destroy;
 	result.duckdb_v2_replacement_scan_get_name = duckdb_v2_replacement_scan_get_name;
 	result.duckdb_v2_replacement_scan_get_user_data = duckdb_v2_replacement_scan_get_user_data;
-	result.duckdb_v2_replacement_scan_register = duckdb_v2_replacement_scan_register;
 	result.duckdb_v2_replacement_scan_set_alias = duckdb_v2_replacement_scan_set_alias;
 	result.duckdb_v2_replacement_scan_set_callback = duckdb_v2_replacement_scan_set_callback;
 	result.duckdb_v2_replacement_scan_set_collection = duckdb_v2_replacement_scan_set_collection;
@@ -1612,6 +1606,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_column_description_has_default = duckdb_v2_column_description_has_default;
 	result.duckdb_v2_column_description_has_generated = duckdb_v2_column_description_has_generated;
 	result.duckdb_v2_connection_describe_table = duckdb_v2_connection_describe_table;
+	result.duckdb_v2_connection_register_copy_function = duckdb_v2_connection_register_copy_function;
 	result.duckdb_v2_copy_from_bind_get_column_count = duckdb_v2_copy_from_bind_get_column_count;
 	result.duckdb_v2_copy_from_bind_get_column_name = duckdb_v2_copy_from_bind_get_column_name;
 	result.duckdb_v2_copy_from_bind_get_column_type = duckdb_v2_copy_from_bind_get_column_type;
@@ -1644,10 +1639,8 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_copy_from_set_init_global_callback = duckdb_v2_copy_from_set_init_global_callback;
 	result.duckdb_v2_copy_from_set_init_local_callback = duckdb_v2_copy_from_set_init_local_callback;
 	result.duckdb_v2_copy_from_set_progress_callback = duckdb_v2_copy_from_set_progress_callback;
-	result.duckdb_v2_copy_function_create_with_connection = duckdb_v2_copy_function_create_with_connection;
-	result.duckdb_v2_copy_function_create_with_extension = duckdb_v2_copy_function_create_with_extension;
+	result.duckdb_v2_copy_function_create = duckdb_v2_copy_function_create;
 	result.duckdb_v2_copy_function_destroy = duckdb_v2_copy_function_destroy;
-	result.duckdb_v2_copy_function_register = duckdb_v2_copy_function_register;
 	result.duckdb_v2_copy_function_set_name = duckdb_v2_copy_function_set_name;
 	result.duckdb_v2_copy_function_set_user_data = duckdb_v2_copy_function_set_user_data;
 	result.duckdb_v2_copy_to_batch_get_bind_data = duckdb_v2_copy_to_batch_get_bind_data;
@@ -1693,6 +1686,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_expression_get_child_count = duckdb_v2_expression_get_child_count;
 	result.duckdb_v2_expression_get_return_type = duckdb_v2_expression_get_return_type;
 	result.duckdb_v2_expression_get_type = duckdb_v2_expression_get_type;
+	result.duckdb_v2_extension_register_copy_function = duckdb_v2_extension_register_copy_function;
 	result.duckdb_v2_identifier_render_quoted = duckdb_v2_identifier_render_quoted;
 	result.duckdb_v2_prepared_statement_create = duckdb_v2_prepared_statement_create;
 	result.duckdb_v2_prepared_statement_destroy = duckdb_v2_prepared_statement_destroy;
@@ -1803,6 +1797,7 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_instance_log = duckdb_v2_instance_log;
 	result.duckdb_v2_option_get_default_scope = duckdb_v2_option_get_default_scope;
 	result.duckdb_v2_option_supports_scope = duckdb_v2_option_supports_scope;
+	result.duckdb_v2_connection_register_multi_file_function = duckdb_v2_connection_register_multi_file_function;
 	result.duckdb_v2_copy_to_set_statistics_callback = duckdb_v2_copy_to_set_statistics_callback;
 	result.duckdb_v2_copy_to_statistics_get_bind_data = duckdb_v2_copy_to_statistics_get_bind_data;
 	result.duckdb_v2_copy_to_statistics_get_init_data = duckdb_v2_copy_to_statistics_get_init_data;
@@ -1810,10 +1805,9 @@ inline duckdb_ext_api_v2 CreateAPIv2(void) {
 	result.duckdb_v2_copy_to_statistics_set_file_size = duckdb_v2_copy_to_statistics_set_file_size;
 	result.duckdb_v2_copy_to_statistics_set_row_count = duckdb_v2_copy_to_statistics_set_row_count;
 	result.duckdb_v2_data_chunk_get_capacity = duckdb_v2_data_chunk_get_capacity;
-	result.duckdb_v2_multi_file_function_create_with_connection = duckdb_v2_multi_file_function_create_with_connection;
-	result.duckdb_v2_multi_file_function_create_with_extension = duckdb_v2_multi_file_function_create_with_extension;
+	result.duckdb_v2_extension_register_multi_file_function = duckdb_v2_extension_register_multi_file_function;
+	result.duckdb_v2_multi_file_function_create = duckdb_v2_multi_file_function_create;
 	result.duckdb_v2_multi_file_function_destroy = duckdb_v2_multi_file_function_destroy;
-	result.duckdb_v2_multi_file_function_register = duckdb_v2_multi_file_function_register;
 	result.duckdb_v2_multi_file_function_set_file_extension = duckdb_v2_multi_file_function_set_file_extension;
 	result.duckdb_v2_multi_file_function_set_name = duckdb_v2_multi_file_function_set_name;
 	result.duckdb_v2_multi_file_function_set_reader_type = duckdb_v2_multi_file_function_set_reader_type;

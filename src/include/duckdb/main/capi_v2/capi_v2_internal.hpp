@@ -311,6 +311,14 @@ inline auto Convert(CV2AttachOptions *options) -> duckdb_v2_attach_options_handl
 	return reinterpret_cast<duckdb_v2_attach_options_handle>(options);
 }
 
+//! Throws unless `target` is the database `what` was created for, through its factory.
+inline void CheckRegistrationTarget(const DatabaseInstance &created_for, const DatabaseInstance &target,
+                                    const char *what) {
+	if (&created_for != &target) {
+		throw InvalidInputException("the %s was created through a factory of a different database", what);
+	}
+}
+
 //! A file system handle: the file system plus the query its reads and writes are attributed to, if any.
 class CV2FileSystem {
 public:

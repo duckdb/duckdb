@@ -26,7 +26,7 @@ duckdb_v2_identifier_t Ident(const char *s) {
 // Create a scalar function on the connection with the given name.
 duckdb_v2_scalar_function_handle MakeScalar(duckdb_v2_connection_handle conn, const char *name) {
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create(FactoryOf(conn), &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto str = Convert(name);
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &str, nullptr) == DUCKDB_V2_ERROR_NONE);
 	return function;
@@ -342,7 +342,7 @@ TEST_CASE("V2 scalar: register on connection and execute", "[capi_v2][scalar_fun
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, AddExec, nullptr) == DUCKDB_V2_ERROR_NONE);
 
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_destroy(&function) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(function == nullptr);
 	duckdb_v2_logical_type_destroy(&integer);
@@ -366,7 +366,7 @@ TEST_CASE("V2 scalar: parameter defaults and named-argument calls", "[capi_v2][s
 	duckdb_v2_value_destroy(&five);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, AddExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 
@@ -391,7 +391,7 @@ TEST_CASE("V2 scalar: variadic tail", "[capi_v2][scalar_function]") {
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, VarargSumExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 
@@ -421,7 +421,7 @@ TEST_CASE("V2 scalar: invalid parameter name preserves variadic tail", "[capi_v2
 	SigParam(sig, "first", integer);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, VarargSumExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 
@@ -444,7 +444,7 @@ TEST_CASE("V2 scalar: bind callback resolves ANY return and data flows", "[capi_
 	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, FlowBind, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_init_callback(function, FlowInit, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, FlowExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
@@ -491,7 +491,7 @@ TEST_CASE("V2 scalar: bind reads argument count, types and constants", "[capi_v2
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, ArgProbeBind, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, ArgProbeExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 	duckdb_v2_logical_type_destroy(&any);
@@ -536,7 +536,7 @@ TEST_CASE("V2 scalar: exec error propagates to the result", "[capi_v2][scalar_fu
 	SigParam(sig, "x", integer);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, FailingExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 
@@ -568,11 +568,12 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 	// No name.
 	{
 		duckdb_v2_scalar_function_handle function = nullptr;
-		REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_scalar_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 		auto sig = SigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -581,7 +582,8 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		auto function = MakeScalar(fx.conn, "no_exec");
 		auto sig = SigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -589,7 +591,8 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 	{
 		auto function = MakeScalar(fx.conn, "no_return");
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -599,7 +602,8 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		auto sig = SigOf(function);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, any, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -611,7 +615,8 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		SigParam(sig, "x", integer);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -625,7 +630,8 @@ TEST_CASE("V2 scalar: registration refusals", "[capi_v2][scalar_function]") {
 		duckdb_v2_value_destroy(&five);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_set_exec_callback(function, NoopExec, nullptr);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) ==
+		        DUCKDB_V2_ERROR_INPUT_INVALID);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 
@@ -637,19 +643,17 @@ TEST_CASE("V2 scalar: null arguments and destroy null-safety", "[capi_v2][scalar
 	EnvFixture fx;
 
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(nullptr, &function, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_create(nullptr, &function, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	REQUIRE(function == nullptr);
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, nullptr, nullptr) ==
-	        DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	auto invalid_name = Convert("\x80");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &invalid_name, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 	duckdb_v2_function_signature_handle sig = nullptr;
 	REQUIRE(duckdb_v2_scalar_function_get_signature(nullptr, &sig, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
-	REQUIRE(duckdb_v2_scalar_function_register(nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, nullptr, nullptr) == DUCKDB_V2_ERROR_INPUT_INVALID);
 
 	duckdb_v2_scalar_function_destroy(&function);
 
@@ -701,7 +705,7 @@ TEST_CASE("V2 scalar: function properties", "[capi_v2][scalar_function]") {
 	REQUIRE(duckdb_v2_scalar_function_set_property(function, DUCKDB_V2_FUNCTION_PROPERTY_STABILITY,
 	                                               DUCKDB_V2_FUNCTION_PROPERTY_STABILITY_VOLATILE,
 	                                               nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 
 	// With default null handling this would be NULL without invoking the callback.
@@ -938,7 +942,7 @@ TEST_CASE("V2 scalar: parameter kinds lay out the argument list", "[capi_v2][sca
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, KindBindCb, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, KindExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_value_destroy(&one);
 	duckdb_v2_logical_type_destroy(&integer);
@@ -1015,7 +1019,7 @@ TEST_CASE("V2 scalar: parameter kind refusals", "[capi_v2][scalar_function]") {
 		AddKindParam(sig, "args", integer, DUCKDB_V2_FUNCTION_PARAMETER_KIND_POSITIONAL_VARIADIC, one);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, VarargSumExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) != DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) != DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 	SECTION("two **kwargs parameters") {
@@ -1025,7 +1029,7 @@ TEST_CASE("V2 scalar: parameter kind refusals", "[capi_v2][scalar_function]") {
 		AddKindParam(sig, "b", integer, DUCKDB_V2_FUNCTION_PARAMETER_KIND_NAMED_VARIADIC);
 		REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 		REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, VarargSumExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-		REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) != DUCKDB_V2_ERROR_NONE);
+		REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) != DUCKDB_V2_ERROR_NONE);
 		duckdb_v2_scalar_function_destroy(&function);
 	}
 	duckdb_v2_value_destroy(&one);

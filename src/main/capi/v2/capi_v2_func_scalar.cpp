@@ -175,13 +175,15 @@ static auto CV2ScalarExec(DataChunk &input, ExpressionState &state, Vector &resu
 
 class CV2ScalarFunction {
 public:
-	CV2ScalarFunction() {
+	explicit CV2ScalarFunction(DatabaseInstance &db) : db(db) {
 		// The exec callback's error slot makes failure part of the API contract, so the function defaults to fallible:
 		// a non-fallible function turns any execution error reported through the slot into an internal error.
 		properties.SetFallible();
 	}
 
-	void Register() {
+	//! Validates the configuration and builds the scalar function to register on `target`.
+	ScalarFunction Build(DatabaseInstance &target) {
+		CheckRegistrationTarget(db, target, "scalar function");
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -220,51 +222,16 @@ public:
 		}
 		function.SetExtraFunctionInfo<CV2ScalarFunctionInfo>(std::move(info));
 
-		// Call the implementation to register
-		RegisterToCatalog(std::move(function));
+		return function;
 	}
 
-	virtual ~CV2ScalarFunction() = default;
-	virtual void RegisterToCatalog(ScalarFunction function) = 0;
-
 public:
+	//! The database it was created for: the only one it can be registered on.
+	DatabaseInstance &db;
 	FunctionSignature signature;
 	CV2ScalarFunctionInfo info;
 	Identifier name;
 	FunctionProperties properties;
-};
-
-class CV2ConnectionScalarFunction : public CV2ScalarFunction {
-public:
-	explicit CV2ConnectionScalarFunction(Connection &connection) : connection(connection) {
-	}
-
-	void RegisterToCatalog(ScalarFunction function) override {
-		auto &context = *connection.context;
-
-		context.RunFunctionInTransaction([&]() {
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			CreateScalarFunctionInfo sf_info(std::move(function));
-			sf_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-			catalog.CreateFunction(context, sf_info);
-		});
-	}
-
-private:
-	Connection &connection;
-};
-
-class CV2ExtensionScalarFunction : public CV2ScalarFunction {
-public:
-	explicit CV2ExtensionScalarFunction(ExtensionLoader &loader) : loader(loader) {
-	}
-
-	void RegisterToCatalog(ScalarFunction function) override {
-		loader.RegisterFunction(std::move(function));
-	}
-
-private:
-	ExtensionLoader &loader;
 };
 
 static auto Convert(duckdb_v2_scalar_function_handle func) -> CV2ScalarFunction * {
@@ -282,29 +249,15 @@ static auto Convert(CV2ScalarFunction *func) -> duckdb_v2_scalar_function_handle
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                 duckdb_v2_scalar_function_handle *out_function,
-                                                                 duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(connection);
-	DUCKDB_CHECK_ARG(out_function);
-	*out_function = nullptr;
+DUCKDB_V2_ERROR duckdb_v2_scalar_function_create(duckdb_v2_factory_handle factory,
+                                                 duckdb_v2_scalar_function_handle *function,
+                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(factory);
+	DUCKDB_CHECK_ARG(function);
+	*function = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &conn = *Convert(connection);
-		auto function = duckdb::make_uniq<CV2ConnectionScalarFunction>(conn);
-		*out_function = Convert(function.release());
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_scalar_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                duckdb_v2_scalar_function_handle *out_function,
-                                                                duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(extension);
-	DUCKDB_CHECK_ARG(out_function);
-	*out_function = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &loader = GetExtensionLoader(extension);
-		auto function = duckdb::make_uniq<CV2ExtensionScalarFunction>(loader);
-		*out_function = Convert(function.release());
+		auto result = duckdb::make_uniq<CV2ScalarFunction>(Convert(factory)->GetDatabase());
+		*function = Convert(result.release());
 	});
 }
 
@@ -474,10 +427,31 @@ DUCKDB_V2_ERROR duckdb_v2_scalar_function_exec_get_result(duckdb_v2_scalar_funct
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_scalar_function_register(duckdb_v2_scalar_function_handle function,
-                                                   duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_connection_register_scalar_function(duckdb_v2_connection_handle conn,
+                                                              duckdb_v2_scalar_function_handle function,
+                                                              duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->Register(); });
+	return WithErrorHandler(err, [&]() {
+		auto &context = *Convert(conn)->context;
+		context.RunFunctionInTransaction([&]() {
+			auto info = duckdb::CreateScalarFunctionInfo(Convert(function)->Build(*context.db));
+			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+			catalog.CreateFunction(context, info);
+		});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_extension_register_scalar_function(duckdb_v2_extension_handle extension,
+                                                             duckdb_v2_scalar_function_handle function,
+                                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() {
+		auto &loader = GetExtensionLoader(extension);
+		loader.RegisterFunction(Convert(function)->Build(loader.GetDatabaseInstance()));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_scalar_function_destroy(duckdb_v2_scalar_function_handle *function) {

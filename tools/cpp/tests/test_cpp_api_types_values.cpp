@@ -17,8 +17,7 @@
 
 TEST_CASE("Stable C++API: Value Null and the BIGNUM codec", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -51,8 +50,7 @@ TEST_CASE("Stable C++API: Value Null and the BIGNUM codec", "[cpp_api][types_val
 }
 TEST_CASE("Stable C++API: ToText and ParseType round trip", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -78,8 +76,7 @@ TEST_CASE("Stable C++API: ToText and ParseType round trip", "[cpp_api][types_val
 }
 TEST_CASE("Stable C++API: GetTypeId reports the kind, parameters and alias aside", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -95,8 +92,7 @@ TEST_CASE("Stable C++API: GetTypeId reports the kind, parameters and alias aside
 }
 TEST_CASE("Stable C++API: CreateType named + positional params and the GetParam dual", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -132,8 +128,7 @@ TEST_CASE("Stable C++API: CreateType named + positional params and the GetParam 
 }
 TEST_CASE("Stable C++API: per-kind type getters are sugar over GetParam", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -176,8 +171,7 @@ TEST_CASE("Stable C++API: per-kind type getters are sugar over GetParam", "[cpp_
 }
 TEST_CASE("Stable C++API: TYPE values and composite Value::Create", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -207,8 +201,7 @@ TEST_CASE("Stable C++API: TYPE values and composite Value::Create", "[cpp_api][t
 }
 TEST_CASE("Stable C++API: Value::Cast through Context and Connection", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -241,8 +234,7 @@ TEST_CASE("Stable C++API: Value::Cast through Context and Connection", "[cpp_api
 }
 TEST_CASE("Stable C++API: storage-tier conveniences follow the committed tables", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -290,8 +282,7 @@ TEST_CASE("Stable C++API: writing a VARIANT vector through the boxed value path"
 	// totality path (VARIANT has no committed view layout, so the single-cell
 	// bridge is the only access), and core VARIANT work is in flux. Do not
 	// optimize this and do not grow surface for it.
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -354,8 +345,7 @@ TEST_CASE("Stable C++API: writing a VARIANT vector through the boxed value path"
 }
 TEST_CASE("Stable C++API: typed Value leaf ctors/getters round trip", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -433,8 +423,7 @@ TEST_CASE("Stable C++API: typed Value leaf ctors/getters round trip", "[cpp_api]
 }
 TEST_CASE("Stable C++API: typed Value numeric widths round trip", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -449,8 +438,7 @@ TEST_CASE("Stable C++API: typed Value numeric widths round trip", "[cpp_api][typ
 
 TEST_CASE("Stable C++API: precise temporal and decimal Values round trip", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -479,8 +467,7 @@ TEST_CASE("Stable C++API: precise temporal and decimal Values round trip", "[cpp
 
 TEST_CASE("Stable C++API: composite and encoded Values cover empty and non-empty forms", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -524,8 +511,7 @@ TEST_CASE("Stable C++API: composite and encoded Values cover empty and non-empty
 }
 TEST_CASE("Stable C++API: typed Value 128-bit getters round trip", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -571,8 +557,7 @@ TEST_CASE("Stable C++API: typed Value 128-bit getters round trip", "[cpp_api][ty
 }
 TEST_CASE("Stable C++API: TIME_TZ decodes to micros + offset", "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -598,8 +583,7 @@ TEST_CASE("Stable C++API: TIME_TZ decodes to micros + offset", "[cpp_api][types_
 TEST_CASE("Stable C++API: Factory creates chunks and collections, and an instance's factory only built-ins",
           "[cpp_api][types_values]") {
 	using namespace duckdb::cxx;
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 

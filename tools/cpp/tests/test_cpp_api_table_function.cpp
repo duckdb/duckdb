@@ -101,11 +101,11 @@ void RangeExec(TableFunction::ExecInput &input) {
 // Registers cpp_range on the connection.
 void RegisterRange(Connection &conn, const std::string &name) {
 	auto &factory = conn.GetFactory();
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName(name);
 	function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
 	function.SetBindCallback(RangeBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(RangeExec);
-	function.Register();
+	conn.Register(function);
 }
 
 // ---------------------------------------------------------------------------
@@ -433,30 +433,29 @@ void ThrowingPushdown(TableFunction::FilterPushdownInput &) {
 
 void RegisterClaim(Connection &conn, const std::string &name, TableFunction::FilterPushdownCallback pushdown) {
 	auto &factory = conn.GetFactory();
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName(name);
 	function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
 	function.SetBindCallback(ClaimBind_)
 	    .SetInitGlobalCallback(RangeInitGlobal)
 	    .SetExecCallback(ClaimExec)
 	    .SetFilterPushdownCallback(pushdown);
-	function.Register();
+	conn.Register(function);
 }
 
 } // namespace
 
 TEST_CASE("Stable C++API: table function projection pushdown", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName("cpp_proj")
 	    .SetBindCallback(ProjBind)
 	    .SetInitGlobalCallback(ProjInitGlobal)
 	    .SetExecCallback(ProjExec)
 	    .SetProjectionPushdown(true);
-	function.Register();
+	conn.Register(function);
 
 	REQUIRE(CollectBigints(conn.Execute("SELECT z FROM cpp_proj()")) == std::vector<int64_t> {200, 201, 202});
 	REQUIRE(proj_columns == std::vector<idx_t> {2});
@@ -465,8 +464,7 @@ TEST_CASE("Stable C++API: table function projection pushdown", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: table function filter pushdown", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	RegisterClaim(conn, "cpp_claim", ClaimPushdown);
 
@@ -492,8 +490,7 @@ TEST_CASE("Stable C++API: table function filter pushdown", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: expression accessors refuse other node types and errors propagate", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	RegisterClaim(conn, "cpp_misuse", MisusePushdown);
 	RegisterClaim(conn, "cpp_throwing", ThrowingPushdown);
@@ -505,8 +502,7 @@ TEST_CASE("Stable C++API: expression accessors refuse other node types and error
 }
 
 TEST_CASE("Stable C++API: table function registers and scans", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	RegisterRange(conn, "cpp_range");
@@ -519,16 +515,15 @@ TEST_CASE("Stable C++API: table function registers and scans", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: table function with several result columns", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName("cpp_pairs");
 	function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
 	function.SetBindCallback(PairsBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(PairsExec);
-	function.Register();
+	conn.Register(function);
 
 	// Both columns carry all rows: the count set on "a" reached "b".
 	REQUIRE(CollectBigints(conn.Execute("SELECT count(b) FROM cpp_pairs(5)")) == std::vector<int64_t> {5});
@@ -538,13 +533,12 @@ TEST_CASE("Stable C++API: table function with several result columns", "[cpp_api
 }
 
 TEST_CASE("Stable C++API: table function parameter defaults, named arguments and varargs", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	const auto bigint = factory.ParseType("BIGINT");
 
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName("cpp_args");
 	function.WithSignature([&](FunctionSignature &sig) {
 		sig.AddParameter("a", bigint);
@@ -552,7 +546,7 @@ TEST_CASE("Stable C++API: table function parameter defaults, named arguments and
 		sig.AddArgs("rest", bigint);
 	});
 	function.SetBindCallback(ArgsBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(ArgsExec);
-	function.Register();
+	conn.Register(function);
 
 	// Only the required parameter: the defaulted one is still present, carrying its default.
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_args(1)")) == std::vector<int64_t> {1, 7});
@@ -563,13 +557,12 @@ TEST_CASE("Stable C++API: table function parameter defaults, named arguments and
 }
 
 TEST_CASE("Stable C++API: table function named-only parameters and kwargs", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	const auto bigint = factory.ParseType("BIGINT");
 
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName("cpp_kwargs");
 	function.WithSignature([&](FunctionSignature &sig) {
 		sig.AddParameter("n", bigint);
@@ -577,7 +570,7 @@ TEST_CASE("Stable C++API: table function named-only parameters and kwargs", "[cp
 		sig.AddKwargs("opts", bigint);
 	});
 	function.SetBindCallback(KwargsBind_).SetInitGlobalCallback(RangeInitGlobal).SetExecCallback(ArgsExec);
-	function.Register();
+	conn.Register(function);
 
 	// The omitted named-only parameter carries its default.
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_kwargs(5)")) == std::vector<int64_t> {5, 1});
@@ -593,20 +586,19 @@ TEST_CASE("Stable C++API: table function named-only parameters and kwargs", "[cp
 }
 
 TEST_CASE("Stable C++API: table function user data, global and local state", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	init_global_runs = 0;
 	init_local_runs = 0;
 
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName("cpp_state").SetUserData<Seed>(Seed {42});
 	function.SetBindCallback(StateBind)
 	    .SetInitGlobalCallback(StateInitGlobal)
 	    .SetInitLocalCallback(StateInitLocal)
 	    .SetExecCallback(StateExec);
-	function.Register();
+	conn.Register(function);
 
 	// The bind data seeded three rows, each carrying the local state's tag, which came from the user data.
 	REQUIRE(CollectBigints(conn.Execute("SELECT * FROM cpp_state()")) == std::vector<int64_t> {42, 42, 42});
@@ -615,21 +607,20 @@ TEST_CASE("Stable C++API: table function user data, global and local state", "[c
 }
 
 TEST_CASE("Stable C++API: table function callbacks report failure by throwing", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
-	auto bad_bind = TableFunction::Create(conn);
+	auto bad_bind = TableFunction::Create(conn.GetFactory());
 	bad_bind.SetName("cpp_bad_bind").SetBindCallback(ThrowingBind).SetExecCallback(StateExec);
-	bad_bind.Register();
+	conn.Register(bad_bind);
 
-	auto bad_exec = TableFunction::Create(conn);
+	auto bad_exec = TableFunction::Create(conn.GetFactory());
 	bad_exec.SetName("cpp_bad_exec")
 	    .SetBindCallback(StateBind)
 	    .SetInitGlobalCallback(StateInitGlobal)
 	    .SetInitLocalCallback(StateInitLocal)
 	    .SetExecCallback(ThrowingExec);
-	bad_exec.Register();
+	conn.Register(bad_exec);
 
 	REQUIRE_THROWS_MATCHES(conn.Execute("SELECT * FROM cpp_bad_bind()").Drain(), Exception,
 	                       HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
@@ -638,36 +629,35 @@ TEST_CASE("Stable C++API: table function callbacks report failure by throwing", 
 }
 
 TEST_CASE("Stable C++API: table function registration refusals", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	const auto bigint = factory.ParseType("BIGINT");
 
 	// No name.
 	{
-		auto function = TableFunction::Create(conn);
+		auto function = TableFunction::Create(conn.GetFactory());
 		function.SetBindCallback(StateBind).SetExecCallback(StateExec);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// No bind callback: a table function has no other way to declare its columns.
 	{
-		auto function = TableFunction::Create(conn);
+		auto function = TableFunction::Create(conn.GetFactory());
 		function.SetName("cpp_no_bind").SetExecCallback(StateExec);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// No exec callback.
 	{
-		auto function = TableFunction::Create(conn);
+		auto function = TableFunction::Create(conn.GetFactory());
 		function.SetName("cpp_no_exec").SetBindCallback(StateBind);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// A return type on the signature: the columns come from bind instead.
 	{
-		auto function = TableFunction::Create(conn);
+		auto function = TableFunction::Create(conn.GetFactory());
 		function.SetName("cpp_return_type").SetBindCallback(StateBind).SetExecCallback(StateExec);
 		function.GetSignature().SetReturnType(bigint);
-		REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 }
 
@@ -845,7 +835,7 @@ void ThrowingPartitioning(TableFunction::PartitioningInput &) {
 void RegisterPart(Connection &conn, const std::string &name, TableFunction::PartitioningCallback partitioning,
                   TableFunction::PartitionDataCallback partition_data) {
 	auto &factory = conn.GetFactory();
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName(name);
 	function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
 	function.SetBindCallback(PartBind_)
@@ -853,7 +843,7 @@ void RegisterPart(Connection &conn, const std::string &name, TableFunction::Part
 	    .SetExecCallback(PartExec)
 	    .SetPartitioningCallback(partitioning)
 	    .SetPartitionDataCallback(partition_data);
-	function.Register();
+	conn.Register(function);
 }
 
 // ---------------------------------------------------------------------------
@@ -984,7 +974,7 @@ void BatchOrderData(TableFunction::PartitionDataInput &input) {
 }
 
 void RegisterBatchOrder(Connection &conn, const std::string &name, bool with_partition_data) {
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName(name)
 	    .SetBindCallback(BatchOrderBind)
 	    .SetInitGlobalCallback(BatchOrderInitGlobal)
@@ -993,14 +983,13 @@ void RegisterBatchOrder(Connection &conn, const std::string &name, bool with_par
 	if (with_partition_data) {
 		function.SetPartitionDataCallback(BatchOrderData);
 	}
-	function.Register();
+	conn.Register(function);
 }
 
 } // namespace
 
 TEST_CASE("Stable C++API: table function partition callbacks feed a partitioned aggregate", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	RegisterPart(conn, "cpp_part", PartInfo, PartData);
 
@@ -1023,12 +1012,11 @@ TEST_CASE("Stable C++API: table function partition callbacks feed a partitioned 
 
 TEST_CASE("Stable C++API: table function partition data reports declared columns under projection pushdown",
           "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName("cpp_proj_part");
 	function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
 	function.SetBindCallback(ProjPartBind)
@@ -1037,7 +1025,7 @@ TEST_CASE("Stable C++API: table function partition data reports declared columns
 	    .SetPartitioningCallback(ProjPartInfo)
 	    .SetPartitionDataCallback(ProjPartData)
 	    .SetProjectionPushdown(true);
-	function.Register();
+	conn.Register(function);
 
 	// Only part_col is scanned, so declared index 1 sits at scan position 0; the callback must still see 1.
 	REQUIRE(ExplainContains(conn, "SELECT part_col, count(*) FROM cpp_proj_part(3) GROUP BY part_col",
@@ -1050,8 +1038,7 @@ TEST_CASE("Stable C++API: table function partition data reports declared columns
 }
 
 TEST_CASE("Stable C++API: table function partition data restores batch order", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.Execute("SET threads=2").Drain();
 	RegisterBatchOrder(conn, "cpp_batch_order", true);
@@ -1067,8 +1054,7 @@ TEST_CASE("Stable C++API: table function partition data restores batch order", "
 }
 
 TEST_CASE("Stable C++API: table function partition data contract violations fail the query", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	RegisterPart(conn, "cpp_decreasing_batch", AlwaysPartitioned, DecreasingBatchData);
 	RegisterPart(conn, "cpp_constant_batch", AlwaysPartitioned, ConstantBatchData);
@@ -1096,8 +1082,7 @@ TEST_CASE("Stable C++API: table function partition data contract violations fail
 }
 
 TEST_CASE("Stable C++API: table function partitioning failures only surface for a partitioned aggregate", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	RegisterPart(conn, "cpp_throwing_partitioning", ThrowingPartitioning, NoBatchIndexData);
 
@@ -1109,27 +1094,26 @@ TEST_CASE("Stable C++API: table function partitioning failures only surface for 
 }
 
 TEST_CASE("Stable C++API: table function partitioning requires partition data", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
-	auto function = TableFunction::Create(conn);
+	auto function = TableFunction::Create(conn.GetFactory());
 	function.SetName("cpp_info_only");
 	function.GetSignature().AddParameter("n", factory.ParseType("BIGINT"));
 	function.SetBindCallback(PartBind_)
 	    .SetInitGlobalCallback(PartInitGlobal)
 	    .SetExecCallback(PartExec)
 	    .SetPartitioningCallback(AlwaysPartitioned);
-	REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 
 	function.SetPartitionDataCallback(NoBatchIndexData);
-	function.Register();
+	conn.Register(function);
 	REQUIRE(CollectBigints(conn.Execute("SELECT count(*) FROM cpp_info_only(2)")) == std::vector<int64_t> {6});
 
 	// Clearing the callbacks again is accepted and registers a plain function.
 	function.SetName("cpp_info_cleared").SetPartitioningCallback(nullptr).SetPartitionDataCallback(nullptr);
-	function.Register();
+	conn.Register(function);
 	REQUIRE_FALSE(ExplainContains(conn, "SELECT part_col, count(*) FROM cpp_info_cleared(2) GROUP BY part_col",
 	                              "Partitioned Aggregate"));
 }

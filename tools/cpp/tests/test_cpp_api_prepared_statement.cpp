@@ -32,8 +32,7 @@ std::vector<int64_t> CollectPreparedBigints(QueryResult result) {
 } // namespace
 
 TEST_CASE("Stable C++API: PreparedStatement executes repeatedly", "[cpp_api][prepared_statement]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	conn.Execute("CREATE TABLE t(x BIGINT)").Drain();
@@ -61,8 +60,7 @@ TEST_CASE("Stable C++API: PreparedStatement executes repeatedly", "[cpp_api][pre
 }
 
 TEST_CASE("Stable C++API: PreparedStatement binds named parameters", "[cpp_api][prepared_statement]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -83,8 +81,7 @@ TEST_CASE("Stable C++API: PreparedStatement binds named parameters", "[cpp_api][
 }
 
 TEST_CASE("Stable C++API: PreparedStatement reports plan reuse", "[cpp_api][prepared_statement]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	conn.Execute("CREATE TABLE t(x BIGINT)").Drain();
 
@@ -107,8 +104,7 @@ TEST_CASE("Stable C++API: PreparedStatement reports plan reuse", "[cpp_api][prep
 }
 
 TEST_CASE("Stable C++API: PreparedStatement lifetimes", "[cpp_api][prepared_statement]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 
 	SECTION("a result outlives the statement that made it") {
 		auto conn = db.Connect();
@@ -141,8 +137,7 @@ TEST_CASE("Stable C++API: PreparedStatement lifetimes", "[cpp_api][prepared_stat
 }
 
 TEST_CASE("Stable C++API: PreparedStatement error paths", "[cpp_api][prepared_statement]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	SECTION("a prepare-time catalog error throws") {

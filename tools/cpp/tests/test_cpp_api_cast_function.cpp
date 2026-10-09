@@ -118,9 +118,9 @@ void NoopCast(CastFunction::ExecInput &) {
 // Registers the TEMPERATURE type and hands back a logical type handle for it.
 auto RegisterTemperature(Connection &conn) -> LogicalType {
 	auto &factory = conn.GetFactory();
-	auto type = CustomType::Create(conn);
+	auto type = CustomType::Create(conn.GetFactory());
 	type.SetName("TEMPERATURE_CELSIUS").SetBaseType(factory.ParseType("INTEGER"));
-	type.Register();
+	conn.Register(type);
 	return factory.ParseType("INTEGER").WithAlias(factory, "TEMPERATURE_CELSIUS");
 }
 
@@ -129,14 +129,14 @@ void RegisterTemperatureCasts(Connection &conn, const LogicalType &temperature, 
 	auto &factory = conn.GetFactory();
 	const auto varchar = factory.ParseType("VARCHAR");
 
-	auto to_text = CastFunction::Create(conn);
+	auto to_text = CastFunction::Create(conn.GetFactory());
 	to_text.SetSourceType(temperature).SetTargetType(varchar).SetExecCallback(TempToText);
-	to_text.Register();
+	conn.Register(to_text);
 
-	auto from_text = CastFunction::Create(conn);
+	auto from_text = CastFunction::Create(conn.GetFactory());
 	from_text.SetSourceType(varchar).SetTargetType(temperature).SetImplicitCastCost(cost).SetExecCallback(TextToTemp);
 	from_text.SetUserData<CastTag>(CastTag {"secret"});
-	from_text.Register();
+	conn.Register(from_text);
 }
 
 // reading(t TEMPERATURE_CELSIUS) -> INTEGER: an identity scalar function, to observe implicit argument conversion.
@@ -150,27 +150,26 @@ void ReadingExec(ScalarFunction::ExecInput &input) {
 
 void RegisterReading(Connection &conn, const LogicalType &temperature) {
 	auto &factory = conn.GetFactory();
-	auto function = ScalarFunction::Create(conn);
+	auto function = ScalarFunction::Create(conn.GetFactory());
 	function.SetName("reading");
 	function.WithSignature([&](FunctionSignature &sig) {
 		sig.AddParameter("t", temperature);
 		sig.SetReturnType(factory.ParseType("INTEGER"));
 	});
 	function.SetExecCallback(ReadingExec);
-	function.Register();
+	conn.Register(function);
 }
 
 } // namespace
 
 TEST_CASE("Stable C++API: custom type registers and resolves in SQL", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
-	auto type = CustomType::Create(conn);
+	auto type = CustomType::Create(conn.GetFactory());
 	type.SetName("TEMPERATURE_CELSIUS").SetBaseType(factory.ParseType("INTEGER"));
-	type.Register();
+	conn.Register(type);
 
 	// The name resolves case-insensitively, and a value of it reports the custom name rather than the base type's.
 	REQUIRE(CollectCastStrings(conn.Execute("SELECT typeof(CAST(42 AS temperature_celsius))")) ==
@@ -181,28 +180,26 @@ TEST_CASE("Stable C++API: custom type registers and resolves in SQL", "[cpp_api]
 }
 
 TEST_CASE("Stable C++API: custom type registration errors", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
 	// No name.
 	{
-		auto type = CustomType::Create(conn);
+		auto type = CustomType::Create(conn.GetFactory());
 		type.SetBaseType(factory.ParseType("INTEGER"));
-		REQUIRE_THROWS_MATCHES(type.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(type), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 	// No base type.
 	{
-		auto type = CustomType::Create(conn);
+		auto type = CustomType::Create(conn.GetFactory());
 		type.SetName("no_base");
-		REQUIRE_THROWS_MATCHES(type.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+		REQUIRE_THROWS_MATCHES(conn.Register(type), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	}
 }
 
 TEST_CASE("Stable C++API: cast function round-trips a custom type", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto temperature = RegisterTemperature(conn);
@@ -230,8 +227,7 @@ TEST_CASE("Stable C++API: cast function round-trips a custom type", "[cpp_api]")
 }
 
 TEST_CASE("Stable C++API: cast function normal and try modes", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 
 	auto temperature = RegisterTemperature(conn);
@@ -261,8 +257,7 @@ TEST_CASE("Stable C++API: cast function implicit cast cost", "[cpp_api]") {
 
 	// A negative cost -- the default -- keeps the cast out of implicit conversion.
 	{
-		Environment env;
-		auto db = env.Open(":memory:");
+		auto db = Instance(":memory:");
 		auto conn = db.Connect();
 		auto temperature = RegisterTemperature(conn);
 		RegisterTemperatureCasts(conn, temperature, -1);
@@ -275,8 +270,7 @@ TEST_CASE("Stable C++API: cast function implicit cast cost", "[cpp_api]") {
 
 	// A non-negative cost makes the same cast available to the binder.
 	{
-		Environment env;
-		auto db = env.Open(":memory:");
+		auto db = Instance(":memory:");
 		auto conn = db.Connect();
 		auto temperature = RegisterTemperature(conn);
 		RegisterTemperatureCasts(conn, temperature, 0);
@@ -287,25 +281,24 @@ TEST_CASE("Stable C++API: cast function implicit cast cost", "[cpp_api]") {
 }
 
 TEST_CASE("Stable C++API: cast function registration errors", "[cpp_api]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 	const auto integer = factory.ParseType("INTEGER");
 	const auto varchar = factory.ParseType("VARCHAR");
 
 	// Nothing configured, then each missing piece in turn.
-	auto function = CastFunction::Create(conn);
-	REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	auto function = CastFunction::Create(conn.GetFactory());
+	REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	function.SetSourceType(integer);
-	REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	function.SetTargetType(varchar);
-	REQUIRE_THROWS_MATCHES(function.Register(), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
+	REQUIRE_THROWS_MATCHES(conn.Register(function), Exception, HasErrorCode(DUCKDB_V2_ERROR_INPUT_INVALID));
 	function.SetExecCallback(NoopCast);
-	function.Register();
+	conn.Register(function);
 
 	// A cast whose exec callback never asks for user data still needs none.
-	auto other = CastFunction::Create(conn);
+	auto other = CastFunction::Create(conn.GetFactory());
 	other.SetSourceType(varchar).SetTargetType(integer).SetExecCallback(NoopCast);
-	other.Register();
+	conn.Register(other);
 }

@@ -6,10 +6,9 @@ handles:
   copy_function:
     description: |
       An owned opaque handle to a custom copy function being built: an output format for `COPY ... TO`, an input
-      format for `COPY ... FROM`, or both. Created with `[[copy_function_create_with_connection]]` or
-      `[[copy_function_create_with_extension]]`, configured with the setter functions (e.g.
+      format for `COPY ... FROM`, or both. Created with `[[copy_function_create]]`, configured with the setter functions (e.g.
       `[[copy_function_set_name]]`, `[[copy_to_set_batch_callback]]`, `[[copy_from_set_exec_callback]]`, etc.), made
-      available with `[[copy_function_register]]`, and destroyed with `[[copy_function_destroy]]`.
+      available with `[[connection_register_copy_function]]` or `[[extension_register_copy_function]]`, and destroyed with `[[copy_function_destroy]]`.
 
   copy_to_bind_info:
     description: |
@@ -264,49 +263,26 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Constructors
   #---------------------------------------------------------------------------------------------------------------------
-  copy_function_create_with_connection:
+  copy_function_create:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-03" ]
     description: |
-      Creates a new copy function that will be registered on the connection's database.
+      Creates a new copy function through a factory.
 
-      A copy function implements a file format for `COPY`: once registered, SQL reaches it with
-      `COPY ... TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. The function starts out
-      empty: configure it with the setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks
-      for writing, the `copy_from_set_*` callbacks for reading, or both), then make it available with
-      `[[copy_function_register]]`. The caller owns the returned handle and must destroy it with
-      `[[copy_function_destroy]]`, also after registration.
+      A copy function implements a file format for `COPY`: once registered, SQL reaches it with `COPY ... TO 'path'
+      (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. The function starts out empty: configure it with the
+      setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks for writing, the
+      `copy_from_set_*` callbacks for reading, or both), then make it available with
+      `[[connection_register_copy_function]]` or `[[extension_register_copy_function]]`. The caller owns the returned
+      handle and must destroy it with `[[copy_function_destroy]]`, also after registration.
+
+      The copy function can only be registered on the database the factory belongs to.
+    role: constructor
+    belongs_to: copy_function
     parameters:
-      connection:
-        type: connection
-        description: The connection to create the function in.
-      function:
-        type: copy_function
-        indirection: 1
-        kind: OUT
-        description: On success, receives the newly created copy function. Owned by the caller.
-      err:
-        type: error_info
-        indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
-    return_type: ERROR
-
-  copy_function_create_with_extension:
-    lifecycle:
-      - [ "stable", "v2.0.0", "2026-09-03" ]
-    description: |
-      Creates a new copy function that will be registered on the loading extension's database.
-
-      A copy function implements a file format for `COPY`: once registered, SQL reaches it with
-      `COPY ... TO 'path' (FORMAT name)` and `COPY table FROM 'path' (FORMAT name)`. Use this from an extension load callback, where an extension handle is available. The function starts out
-      empty: configure it with the setter functions (e.g. `[[copy_function_set_name]]`, the `copy_to_set_*` callbacks
-      for writing, the `copy_from_set_*` callbacks for reading, or both), then make it available with
-      `[[copy_function_register]]`. The caller owns the returned handle and must destroy it with
-      `[[copy_function_destroy]]`, also after registration.
-    parameters:
-      extension:
-        type: extension
-        description: The extension to create the function in.
+      factory:
+        type: factory
+        description: The factory to create the copy function through.
       function:
         type: copy_function
         indirection: 1
@@ -1855,25 +1831,59 @@ functions:
   #---------------------------------------------------------------------------------------------------------------------
   # Register
   #---------------------------------------------------------------------------------------------------------------------
-  copy_function_register:
+  connection_register_copy_function:
     lifecycle:
       - [ "stable", "v2.0.0", "2026-09-03" ]
     description: |
       Registers the copy function, making it available as a `COPY` format.
 
-      The function is registered on the target given at creation: the connection's database or the loading
-      extension. Registration requires a name and at least one configured side: a `COPY ... TO` side needs its batch
-      and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a direction the
-      function does not implement fails with an error. The caller still owns the handle after registration and must
-      destroy it with `[[copy_function_destroy]]`, which does not affect the registered function.
+      The function is registered on the connection's database, visible to every connection, in the connection's
+      transaction: inside an explicit transaction, it is invisible to other connections until the transaction commits,
+      and a rollback undoes it. Registration requires a name and at least one configured side: a `COPY ... TO` side
+      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a
+      direction the function does not implement fails with an error. The copy function must have been created through a
+      factory of the same database. The caller still owns the handle after registration and must destroy it with
+      `[[copy_function_destroy]]`, which does not affect the registered function.
+    role: method
+    belongs_to: connection
     parameters:
+      conn:
+        type: connection
+        description: The connection to register on.
       function:
         type: copy_function
-        description: The function to register.
+        description: The copy function to register.
       err:
         type: error_info
         indirection: 1
-        description: Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`.
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
+    return_type: ERROR
+
+  extension_register_copy_function:
+    lifecycle:
+      - [ "stable", "v2.0.0", "2026-09-03" ]
+    description: |
+      Registers the copy function, making it available as a `COPY` format.
+
+      The function is registered on the loading extension's database and attributed to the extension. Use this from the
+      extension's load callback. Registration requires a name and at least one configured side: a `COPY ... TO` side
+      needs its batch and flush callbacks, a `COPY ... FROM` side needs its bind and exec callbacks. A statement in a
+      direction the function does not implement fails with an error. The copy function must have been created through a
+      factory of the same database. The caller still owns the handle after registration and must destroy it with
+      `[[copy_function_destroy]]`, which does not affect the registered function.
+    role: method
+    belongs_to: extension
+    parameters:
+      extension:
+        type: extension
+        description: The loading extension.
+      function:
+        type: copy_function
+        description: The copy function to register.
+      err:
+        type: error_info
+        indirection: 1
+        description: "Optional. On failure, receives an opaque info handle the caller must destroy via `[[error_info_destroy]]`."
     return_type: ERROR
 
   #---------------------------------------------------------------------------------------------------------------------

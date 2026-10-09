@@ -53,12 +53,12 @@ DUCKDB_CPP_EXTENSION_ENTRYPOINT(duckdb::cxx::Extension &extension, duckdb::cxx::
 
 	// Register a scalar function through the C++ wrapper, exercising every data slot.
 	const auto integer = context.GetFactory().ParseType("INTEGER");
-	auto function = duckdb::cxx::ScalarFunction::Create(extension);
+	auto function = duckdb::cxx::ScalarFunction::Create(context.GetFactory());
 	function.SetName("cpp_demo_madd");
 	function.GetSignature().AddParameter("a", integer).AddParameter("b", integer).SetReturnType(integer);
 	function.SetUserData<Factor>(Factor {3});
 	function.SetBindCallback(MaddBind);
 	function.SetInitCallback(MaddInit);
 	function.SetExecCallback(MaddExec);
-	function.Register();
+	extension.Register(function);
 }

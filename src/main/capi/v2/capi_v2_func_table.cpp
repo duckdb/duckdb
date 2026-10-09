@@ -818,7 +818,12 @@ static auto CV2TableGetPartitionInfo(ClientContext &context, TableFunctionPartit
 
 class CV2TableFunction {
 public:
-	void Register() {
+	explicit CV2TableFunction(DatabaseInstance &db) : db(db) {
+	}
+
+	//! Validates the configuration and builds the table function to register on `target`.
+	TableFunction Build(DatabaseInstance &target) {
+		CheckRegistrationTarget(db, target, "table function");
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -863,50 +868,15 @@ public:
 		info.name = name;
 		function.function_info = make_shared_ptr<CV2TableFunctionInfo>(std::move(info));
 
-		// Call the implementation to register
-		RegisterToCatalog(std::move(function));
+		return function;
 	}
 
-	virtual ~CV2TableFunction() = default;
-	virtual void RegisterToCatalog(TableFunction function) = 0;
-
 public:
+	//! The database it was created for: the only one it can be registered on.
+	DatabaseInstance &db;
 	FunctionSignature signature;
 	CV2TableFunctionInfo info;
 	Identifier name;
-};
-
-class CV2ConnectionTableFunction : public CV2TableFunction {
-public:
-	explicit CV2ConnectionTableFunction(Connection &connection) : connection(connection) {
-	}
-
-	void RegisterToCatalog(TableFunction function) override {
-		auto &context = *connection.context;
-
-		context.RunFunctionInTransaction([&]() {
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			CreateTableFunctionInfo tf_info(std::move(function));
-			tf_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-			catalog.CreateTableFunction(context, tf_info);
-		});
-	}
-
-private:
-	Connection &connection;
-};
-
-class CV2ExtensionTableFunction : public CV2TableFunction {
-public:
-	explicit CV2ExtensionTableFunction(ExtensionLoader &loader) : loader(loader) {
-	}
-
-	void RegisterToCatalog(TableFunction function) override {
-		loader.RegisterFunction(std::move(function));
-	}
-
-private:
-	ExtensionLoader &loader;
 };
 
 static auto Convert(duckdb_v2_table_function_handle func) -> CV2TableFunction * {
@@ -919,9 +889,23 @@ static auto Convert(CV2TableFunction *func) -> duckdb_v2_table_function_handle {
 //----------------------------------------------------------------------------------------------------------------------
 // Multi-file functions
 //----------------------------------------------------------------------------------------------------------------------
+//! The overloads of a table function catalog entry, copied so they outlive the transaction that read them.
+static auto CopyTableFunctions(optional_ptr<CatalogEntry> entry) -> unique_ptr<TableFunctionSet> {
+	if (!entry) {
+		return nullptr;
+	}
+	return make_uniq<TableFunctionSet>(entry->Cast<TableFunctionCatalogEntry>().functions);
+}
+
 class CV2MultiFileFunction {
 public:
-	void Register() {
+	explicit CV2MultiFileFunction(DatabaseInstance &db) : db(db) {
+	}
+
+	//! Validates the configuration and builds the function set to register on `target`, wrapping the overloads of
+	//! the single-file function registered there.
+	TableFunctionSet Build(DatabaseInstance &target, unique_ptr<TableFunctionSet> single_file_overloads) {
+		CheckRegistrationTarget(db, target, "multi-file function");
 		if (name.empty()) {
 			throw InvalidInputException("Function name cannot be empty.");
 		}
@@ -933,7 +917,7 @@ public:
 		if (!file_extension.empty()) {
 			settings.glob_input = FileGlobInput(FileGlobOptions::FALLBACK_GLOB, file_extension);
 		}
-		auto single_file = GetSingleFileFunction();
+		auto single_file = SelectSingleFileFunction(std::move(single_file_overloads));
 		if (single_file.function == CV2TableExec && single_file.function_info) {
 			// the multi-file scan claims the batches of a C API function that scans one batch at a time
 			if (single_file.function_info->Cast<CV2TableFunctionInfo>().claim_batch_cb) {
@@ -941,23 +925,17 @@ public:
 			}
 		}
 		auto function = TableFunctionMultiFileWrapper::CreateFunctionSet(std::move(single_file), name, settings);
-		RegisterToCatalog(std::move(function));
+		return function;
 	}
 
-	virtual ~CV2MultiFileFunction() = default;
-
-protected:
-	//! Looks up the single-file function in the catalog, and selects the overload to wrap from it
-	virtual TableFunction GetSingleFileFunction() = 0;
-	virtual void RegisterToCatalog(TableFunctionSet function) = 0;
-
+private:
 	//! The overload of the single-file function that takes the path of the file to read
-	TableFunction SelectSingleFileFunction(optional_ptr<CatalogEntry> entry) const {
-		if (!entry) {
+	TableFunction SelectSingleFileFunction(unique_ptr<TableFunctionSet> overloads) const {
+		if (!overloads) {
 			throw InvalidInputException("Table function \"%s\" to read single files with does not exist.",
 			                            single_file_function);
 		}
-		for (auto &function : entry->Cast<TableFunctionCatalogEntry>().functions.functions) {
+		for (auto &function : overloads->functions) {
 			auto &signature = function->GetSignature();
 			if (signature.GetRequiredParameterCount() == 1 && signature.GetParameter(0).AcceptsPosition() &&
 			    signature.GetParameter(0).GetType() == LogicalType::VARCHAR) {
@@ -971,60 +949,12 @@ protected:
 	}
 
 public:
+	//! The database it was created for: the only one it can be registered on.
+	DatabaseInstance &db;
 	Identifier name;
 	Identifier single_file_function;
 	string reader_type;
 	string file_extension;
-};
-
-class CV2ConnectionMultiFileFunction : public CV2MultiFileFunction {
-public:
-	explicit CV2ConnectionMultiFileFunction(Connection &connection) : connection(connection) {
-	}
-
-protected:
-	TableFunction GetSingleFileFunction() override {
-		auto &context = *connection.context;
-		TableFunction result;
-		context.RunFunctionInTransaction([&]() {
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			auto entry = catalog.GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, Identifier::DefaultSchema(),
-			                              single_file_function, OnEntryNotFound::RETURN_NULL);
-			result = SelectSingleFileFunction(entry);
-		});
-		return result;
-	}
-
-	void RegisterToCatalog(TableFunctionSet function) override {
-		auto &context = *connection.context;
-		context.RunFunctionInTransaction([&]() {
-			auto &catalog = Catalog::GetSystemCatalog(context);
-			CreateTableFunctionInfo tf_info(std::move(function));
-			tf_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-			catalog.CreateTableFunction(context, tf_info);
-		});
-	}
-
-private:
-	Connection &connection;
-};
-
-class CV2ExtensionMultiFileFunction : public CV2MultiFileFunction {
-public:
-	explicit CV2ExtensionMultiFileFunction(ExtensionLoader &loader) : loader(loader) {
-	}
-
-protected:
-	TableFunction GetSingleFileFunction() override {
-		return SelectSingleFileFunction(loader.TryGetTableFunction(single_file_function));
-	}
-
-	void RegisterToCatalog(TableFunctionSet function) override {
-		loader.RegisterFunction(std::move(function));
-	}
-
-private:
-	ExtensionLoader &loader;
 };
 
 static auto Convert(duckdb_v2_multi_file_function_handle func) -> CV2MultiFileFunction * {
@@ -1042,28 +972,14 @@ static auto Convert(CV2MultiFileFunction *func) -> duckdb_v2_multi_file_function
 
 using namespace duckdb::capiv2;
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                duckdb_v2_table_function_handle *function,
-                                                                duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(connection);
+DUCKDB_V2_ERROR duckdb_v2_table_function_create(duckdb_v2_factory_handle factory,
+                                                duckdb_v2_table_function_handle *function,
+                                                duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(factory);
 	DUCKDB_CHECK_ARG(function);
 	*function = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &conn = *Convert(connection);
-		auto result = duckdb::make_uniq<CV2ConnectionTableFunction>(conn);
-		*function = Convert(result.release());
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_table_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                               duckdb_v2_table_function_handle *function,
-                                                               duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(extension);
-	DUCKDB_CHECK_ARG(function);
-	*function = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &loader = GetExtensionLoader(extension);
-		auto result = duckdb::make_uniq<CV2ExtensionTableFunction>(loader);
+		auto result = duckdb::make_uniq<CV2TableFunction>(Convert(factory)->GetDatabase());
 		*function = Convert(result.release());
 	});
 }
@@ -1636,10 +1552,31 @@ duckdb_v2_table_function_partitioning_set_partition_info(duckdb_v2_table_functio
 	                        [&]() { Convert(info)->out_partition_info = CV2ConvertPartitionInfo(partition_info); });
 }
 
-DUCKDB_V2_ERROR duckdb_v2_table_function_register(duckdb_v2_table_function_handle function,
-                                                  duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_connection_register_table_function(duckdb_v2_connection_handle conn,
+                                                             duckdb_v2_table_function_handle function,
+                                                             duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->Register(); });
+	return WithErrorHandler(err, [&]() {
+		auto &context = *Convert(conn)->context;
+		context.RunFunctionInTransaction([&]() {
+			auto info = duckdb::CreateTableFunctionInfo(Convert(function)->Build(*context.db));
+			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+			catalog.CreateTableFunction(context, info);
+		});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_extension_register_table_function(duckdb_v2_extension_handle extension,
+                                                            duckdb_v2_table_function_handle function,
+                                                            duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() {
+		auto &loader = GetExtensionLoader(extension);
+		loader.RegisterFunction(Convert(function)->Build(loader.GetDatabaseInstance()));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_table_function_destroy(duckdb_v2_table_function_handle *function) {
@@ -1769,28 +1706,14 @@ DUCKDB_V2_ERROR duckdb_v2_table_function_bind_add_file_metadata(duckdb_v2_table_
 // Multi-file functions
 //----------------------------------------------------------------------------------------------------------------------
 
-DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create_with_connection(duckdb_v2_connection_handle connection,
-                                                                     duckdb_v2_multi_file_function_handle *function,
-                                                                     duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(connection);
+DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create(duckdb_v2_factory_handle factory,
+                                                     duckdb_v2_multi_file_function_handle *function,
+                                                     duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(factory);
 	DUCKDB_CHECK_ARG(function);
 	*function = nullptr;
 	return WithErrorHandler(err, [&]() {
-		auto &conn = *Convert(connection);
-		auto result = duckdb::make_uniq<CV2ConnectionMultiFileFunction>(conn);
-		*function = Convert(result.release());
-	});
-}
-
-DUCKDB_V2_ERROR duckdb_v2_multi_file_function_create_with_extension(duckdb_v2_extension_handle extension,
-                                                                    duckdb_v2_multi_file_function_handle *function,
-                                                                    duckdb_v2_error_info_handle *err) {
-	DUCKDB_CHECK_ARG(extension);
-	DUCKDB_CHECK_ARG(function);
-	*function = nullptr;
-	return WithErrorHandler(err, [&]() {
-		auto &loader = GetExtensionLoader(extension);
-		auto result = duckdb::make_uniq<CV2ExtensionMultiFileFunction>(loader);
+		auto result = duckdb::make_uniq<CV2MultiFileFunction>(Convert(factory)->GetDatabase());
 		*function = Convert(result.release());
 	});
 }
@@ -1834,10 +1757,37 @@ DUCKDB_V2_ERROR duckdb_v2_multi_file_function_set_file_extension(duckdb_v2_multi
 	});
 }
 
-DUCKDB_V2_ERROR duckdb_v2_multi_file_function_register(duckdb_v2_multi_file_function_handle function,
-                                                       duckdb_v2_error_info_handle *err) {
+DUCKDB_V2_ERROR duckdb_v2_connection_register_multi_file_function(duckdb_v2_connection_handle conn,
+                                                                  duckdb_v2_multi_file_function_handle function,
+                                                                  duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(conn);
 	DUCKDB_CHECK_ARG(function);
-	return WithErrorHandler(err, [&]() { Convert(function)->Register(); });
+	return WithErrorHandler(err, [&]() {
+		auto &self = *Convert(function);
+		auto &context = *Convert(conn)->context;
+		context.RunFunctionInTransaction([&]() {
+			auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+			auto single_file = catalog.GetEntry(context, duckdb::CatalogType::TABLE_FUNCTION_ENTRY,
+			                                    duckdb::Identifier::DefaultSchema(), self.single_file_function,
+			                                    duckdb::OnEntryNotFound::RETURN_NULL);
+			duckdb::CreateTableFunctionInfo info(self.Build(*context.db, CopyTableFunctions(single_file)));
+			info.on_conflict = duckdb::OnCreateConflict::ALTER_ON_CONFLICT;
+			catalog.CreateTableFunction(context, info);
+		});
+	});
+}
+
+DUCKDB_V2_ERROR duckdb_v2_extension_register_multi_file_function(duckdb_v2_extension_handle extension,
+                                                                 duckdb_v2_multi_file_function_handle function,
+                                                                 duckdb_v2_error_info_handle *err) {
+	DUCKDB_CHECK_ARG(extension);
+	DUCKDB_CHECK_ARG(function);
+	return WithErrorHandler(err, [&]() {
+		auto &self = *Convert(function);
+		auto &loader = GetExtensionLoader(extension);
+		auto single_file = CopyTableFunctions(loader.TryGetTableFunction(self.single_file_function));
+		loader.RegisterFunction(self.Build(loader.GetDatabaseInstance(), std::move(single_file)));
+	});
 }
 
 DUCKDB_V2_ERROR duckdb_v2_multi_file_function_destroy(duckdb_v2_multi_file_function_handle *function) {

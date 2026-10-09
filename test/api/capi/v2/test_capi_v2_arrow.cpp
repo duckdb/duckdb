@@ -192,7 +192,7 @@ void ArrowRtExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_cont
 
 void RegisterArrowRoundtrip(EnvFixture &fx) {
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name = Convert("arrow_roundtrip");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 
@@ -207,7 +207,7 @@ void RegisterArrowRoundtrip(EnvFixture &fx) {
 
 	REQUIRE(duckdb_v2_scalar_function_set_bind_callback(function, ArrowRtBind, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, ArrowRtExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&any);
 }
@@ -363,7 +363,7 @@ void ArrowRangeExecCb(duckdb_v2_table_function_exec_info_handle info, duckdb_v2_
 
 void RegisterArrowRoundtripRange(EnvFixture &fx) {
 	duckdb_v2_table_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_table_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_table_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto name = Convert("arrow_roundtrip_range");
 	REQUIRE(duckdb_v2_table_function_set_name(function, &name, nullptr) == DUCKDB_V2_ERROR_NONE);
 
@@ -379,7 +379,7 @@ void RegisterArrowRoundtripRange(EnvFixture &fx) {
 	REQUIRE(duckdb_v2_table_function_set_init_global_callback(function, ArrowRangeInitCb, nullptr) ==
 	        DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_table_function_set_exec_callback(function, ArrowRangeExecCb, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_table_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_table_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_table_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&bigint);
 }
@@ -565,7 +565,7 @@ void ArrowSplitExec(duckdb_v2_scalar_function_exec_info_handle info, duckdb_v2_c
 // Registers a no-argument-meaning probe that runs `exec` once.
 void RegisterArrowProbe(EnvFixture &fx, const char *name, duckdb_v2_scalar_function_exec_callback_fn exec) {
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto fname = Convert(name);
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &fname, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
@@ -577,7 +577,7 @@ void RegisterArrowProbe(EnvFixture &fx, const char *name, duckdb_v2_scalar_funct
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, exec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 }
@@ -854,7 +854,7 @@ TEST_CASE("V2 arrow: a dictionary column resolves to VARCHAR by default", "[capi
 	ExecSQL(fx.conn, "CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy')");
 	enum_probe_type.clear();
 	duckdb_v2_scalar_function_handle function = nullptr;
-	REQUIRE(duckdb_v2_scalar_function_create_with_connection(fx.conn, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_scalar_function_create(fx.factory, &function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto fname = Convert("enum_probe");
 	REQUIRE(duckdb_v2_scalar_function_set_name(function, &fname, nullptr) == DUCKDB_V2_ERROR_NONE);
 	auto integer = MakeType(fx.factory, DUCKDB_V2_LOGICAL_TYPE_ID_INTEGER);
@@ -866,7 +866,7 @@ TEST_CASE("V2 arrow: a dictionary column resolves to VARCHAR by default", "[capi
 	                                                   nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_function_signature_set_return_type(sig, integer, nullptr) == DUCKDB_V2_ERROR_NONE);
 	REQUIRE(duckdb_v2_scalar_function_set_exec_callback(function, EnumProbeExec, nullptr) == DUCKDB_V2_ERROR_NONE);
-	REQUIRE(duckdb_v2_scalar_function_register(function, nullptr) == DUCKDB_V2_ERROR_NONE);
+	REQUIRE(duckdb_v2_connection_register_scalar_function(fx.conn, function, nullptr) == DUCKDB_V2_ERROR_NONE);
 	duckdb_v2_scalar_function_destroy(&function);
 	duckdb_v2_logical_type_destroy(&integer);
 

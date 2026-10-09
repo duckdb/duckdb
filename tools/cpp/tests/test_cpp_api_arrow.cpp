@@ -19,8 +19,7 @@ using namespace duckdb::cxx;
 } // namespace
 
 TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api][arrow]") {
-	Environment env;
-	auto db = env.Open(":memory:");
+	auto db = Instance(":memory:");
 	auto conn = db.Connect();
 	auto &factory = conn.GetFactory();
 
@@ -37,7 +36,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 	observed_value = 0;
 	observed_arrays = 0;
 
-	auto function = ScalarFunction::Create(conn);
+	auto function = ScalarFunction::Create(conn.GetFactory());
 	function.SetName("cpp_arrow_probe");
 	function.SetExecCallback([](ScalarFunction::ExecInput &input) {
 		auto &context = input.GetContext();
@@ -86,7 +85,7 @@ TEST_CASE("Stable C++API: ArrowExporter and ArrowImporter round-trip", "[cpp_api
 	});
 	const auto integer = factory.ParseType("INTEGER");
 	function.GetSignature().AddParameter("x", integer).SetReturnType(integer);
-	function.Register();
+	conn.Register(function);
 
 	conn.Execute("SELECT cpp_arrow_probe(1)").Drain();
 	REQUIRE(observed_count == 1);

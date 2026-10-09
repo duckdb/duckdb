@@ -61,6 +61,13 @@ inline DUCKDB_V2_ERROR OpenInstance(duckdb_v2_environment_handle env, duckdb_v2_
 	return rc;
 }
 
+//! The factory of `conn`, borrowed.
+inline duckdb_v2_factory_handle FactoryOf(duckdb_v2_connection_handle conn) {
+	duckdb_v2_factory_handle factory = nullptr;
+	REQUIRE(duckdb_v2_connection_get_factory(conn, &factory, nullptr) == DUCKDB_V2_ERROR_NONE);
+	return factory;
+}
+
 struct EnvFixture {
 	duckdb_v2_environment_handle env = nullptr;
 	duckdb_v2_instance_handle instance = nullptr;
