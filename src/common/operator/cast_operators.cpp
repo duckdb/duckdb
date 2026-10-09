@@ -3319,7 +3319,8 @@ bool TryCastDecimalToFloatingPoint(SRC input, DST &result, uint8_t width, uint8_
 	}
 
 	duckdb_fast_float::decimal decimal;
-	bool negative;
+	// a zero input returns early from FillDecimalDigits (hugeint overload) without assigning negative
+	bool negative = false;
 	FillDecimalDigits(input, decimal, negative);
 	decimal.decimal_point = UnsafeNumericCast<int32_t>(decimal.num_digits) - UnsafeNumericCast<int32_t>(scale);
 	while (decimal.num_digits > 0 && decimal.digits[decimal.num_digits - 1] == 0) {
