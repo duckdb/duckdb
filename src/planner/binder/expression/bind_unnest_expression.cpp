@@ -154,6 +154,9 @@ BindResult UnnestBinder::Bind(FunctionExpression &function, idx_t depth, bool ro
 				return BindResult(std::move(error));
 			}
 			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
+			if (!alias.empty() && value.IsNull()) {
+				throw BinderException(function, "UNNEST parameter %s cannot be NULL", alias);
+			}
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
 				if (recursive) {
