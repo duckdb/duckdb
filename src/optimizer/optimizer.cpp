@@ -167,6 +167,17 @@ static void ClearProjectionMaps(LogicalOperator &op) {
 	}
 }
 
+static void PushFiltersInUnnestChildren(unique_ptr<LogicalOperator> &op, Optimizer &optimizer) {
+	if (op->type == LogicalOperatorType::LOGICAL_UNNEST) {
+		FilterPushdown pushdown(optimizer);
+		op->children[0] = pushdown.Rewrite(std::move(op->children[0]));
+		return;
+	}
+	for (auto &child : op->children) {
+		PushFiltersInUnnestChildren(child, optimizer);
+	}
+}
+
 static bool ContainsDML(const LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_INSERT:
@@ -395,6 +406,9 @@ void Optimizer::RunBuiltInOptimizers() {
 		RemoveUnusedColumns unused(*this);
 		unused.VisitOperator(plan);
 	});
+
+	// Removing unused windows can expose filters in UNNEST inputs.
+	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() { PushFiltersInUnnestChildren(plan, *this); });
 
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
