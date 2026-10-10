@@ -24,9 +24,16 @@ int64_t BaseSecret::MatchScore(const string &path) const {
 			longest_match = 0;
 			continue;
 		}
-		if (StringUtil::StartsWith(path, prefix)) {
-			longest_match = MaxValue<int64_t>(NumericCast<int64_t>(prefix.length()), longest_match);
+		if (!StringUtil::StartsWith(path, prefix)) {
+			continue;
 		}
+		// Only match on a path separator boundary - a scope of "s3://bucket" must not match "s3://bucket_evil".
+		// A scope that ends in a separator (e.g. "s3://bucket/" or "quack:") already ends on a boundary.
+		if (path.size() != prefix.size() && StringUtil::CharacterIsAlphaNumeric(prefix.back()) &&
+		    path[prefix.size()] != '/') {
+			continue;
+		}
+		longest_match = MaxValue<int64_t>(NumericCast<int64_t>(prefix.length()), longest_match);
 	}
 	return longest_match;
 }
