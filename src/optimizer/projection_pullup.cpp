@@ -62,7 +62,7 @@ void ProjectionPullup::InsertProjectionBelowOp(unique_ptr<LogicalOperator> &op, 
 		} else {
 			replacer.stop_operator = child.get();
 		}
-		replacer.VisitOperator(*root);
+		replacer.VisitOperatorWithoutProjectionMapRemapping(*root);
 	}
 	ProjectionPullup next(optimizer, root);
 	next.Optimize(child->children[0]);
@@ -86,7 +86,7 @@ void ProjectionPullup::PullUpColrefProjection(unique_ptr<LogicalOperator> &op, L
 	}
 
 	replacer.stop_operator = proj.children[0];
-	replacer.VisitOperator(*root);
+	replacer.VisitOperatorWithoutProjectionMapRemapping(*root);
 
 	// Re-run optimization after removing this projection.
 	// Binding rewrites can make parent projections redundant, and without
@@ -159,7 +159,7 @@ void ProjectionPullup::PullUpNonColrefProjection(unique_ptr<LogicalOperator> &op
 		}
 	}
 	replacer.stop_operator = &insert_at_node;
-	replacer.VisitOperator(*root);
+	replacer.VisitOperatorWithoutProjectionMapRemapping(*root);
 
 	// Find where to rewire the plan
 	if (!parent_of_insert) {

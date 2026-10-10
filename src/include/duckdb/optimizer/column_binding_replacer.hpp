@@ -65,6 +65,8 @@ public:
 public:
 	//! Update each operator of the plan
 	void VisitOperator(LogicalOperator &op) override;
+	//! Update bindings without resolving temporarily stale projection maps
+	void VisitOperatorWithoutProjectionMapRemapping(LogicalOperator &op);
 	//! Update bindings owned by this operator without visiting its children
 	virtual void VisitOperatorBindings(LogicalOperator &op);
 	//! Add binding replacements by position

@@ -142,6 +142,16 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 	VisitOperatorBindings(op);
 }
 
+void ColumnBindingReplacer::VisitOperatorWithoutProjectionMapRemapping(LogicalOperator &op) {
+	if (stop_operator && stop_operator.get() == &op) {
+		return;
+	}
+	for (auto &child : op.children) {
+		VisitOperatorWithoutProjectionMapRemapping(*child);
+	}
+	VisitOperatorBindings(op);
+}
+
 void ColumnBindingReplacer::VisitOperatorBindings(LogicalOperator &op) {
 	if (op.type == LogicalOperatorType::LOGICAL_SECURE_VIEW) {
 		auto &view = op.Cast<LogicalSecureView>();
