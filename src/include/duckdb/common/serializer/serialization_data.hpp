@@ -18,6 +18,7 @@
 
 namespace duckdb {
 class ClientContext;
+class LogicalOperatorCopyState;
 class Catalog;
 class DatabaseInstance;
 class CompressionInfo;
@@ -41,6 +42,7 @@ struct SerializationData {
 	~SerializationData();
 
 	stack<reference<ClientContext>> contexts;
+	stack<reference<LogicalOperatorCopyState>> logical_plan_copies;
 	stack<reference<DatabaseInstance>> databases;
 	stack<reference<Catalog>> catalogs;
 	stack<idx_t> enums;
@@ -95,6 +97,22 @@ struct SerializationData {
 		stack.push(data);
 	}
 };
+
+template <>
+inline void SerializationData::Set(LogicalOperatorCopyState &state) {
+	logical_plan_copies.emplace(state);
+}
+
+template <>
+inline optional_ptr<LogicalOperatorCopyState> SerializationData::TryGet() {
+	return logical_plan_copies.empty() ? nullptr : &logical_plan_copies.top().get();
+}
+
+template <>
+inline void SerializationData::Unset<LogicalOperatorCopyState>() {
+	AssertNotEmpty(logical_plan_copies);
+	logical_plan_copies.pop();
+}
 
 template <>
 inline void SerializationData::Set(ExpressionType type) {

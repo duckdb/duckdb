@@ -1,4 +1,5 @@
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/logical_operator_copy.hpp"
 
 #include "duckdb/planner/expression_iterator.hpp"
 
@@ -280,25 +281,58 @@ vector<TableIndex> LogicalOperator::GetTableIndex() const {
 	return vector<TableIndex> {};
 }
 
-unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
+// Both modes copy the same logical structure. Only the explicit in-process mode supplies
+// bound scan slots; the default continues to use the persistent function reconstruction path.
+static unique_ptr<LogicalOperator> CopyLogicalOperator(const LogicalOperator &op, ClientContext &context,
+                                                       optional_ptr<LogicalOperatorCopyState> copy_state) {
 	MemoryStream stream(Allocator::Get(context));
 	SerializationOptions options;
 	options.storage_compatibility = StorageCompatibility::Latest();
 	BinarySerializer serializer(stream, options);
+	if (copy_state) {
+		serializer.GetSerializationData().Set<LogicalOperatorCopyState &>(*copy_state);
+	}
 	try {
 		serializer.Begin();
-		this->Serialize(serializer);
+		op.Serialize(serializer);
 		serializer.End();
+		if (copy_state) {
+			copy_state->SerializeJoinExpressions(serializer);
+		}
 	} catch (NotImplementedException &ex) {
 		ErrorData error(ex);
+		if (copy_state) {
+			throw NotImplementedException("Bound plan copy requires supported copyable state: " + error.RawMessage());
+		}
 		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "
 		                              "be serializable: " +
 		                              error.RawMessage());
 	}
 	stream.Rewind();
 	bound_parameter_map_t parameters;
-	auto op_copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
-	return op_copy;
+	BinaryDeserializer deserializer(stream);
+	deserializer.Set<ClientContext &>(context);
+	deserializer.Set<bound_parameter_map_t &>(parameters);
+	if (copy_state) {
+		deserializer.Set<LogicalOperatorCopyState &>(*copy_state);
+	}
+	auto result = deserializer.Deserialize<LogicalOperator>();
+	if (copy_state) {
+		copy_state->DeserializeJoinExpressions(deserializer);
+		copy_state->CopyAnnotations(op, *result);
+		copy_state->VerifyConsumed();
+	}
+	return result;
+}
+
+unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
+	return CopyLogicalOperator(*this, context, nullptr);
+}
+
+unique_ptr<LogicalOperator> LogicalOperator::CopyPreservingBoundState(ClientContext &context) const {
+	LogicalOperatorCopyState state;
+	state.Validate(*this);
+	return CopyLogicalOperator(*this, context, state);
 }
 
 } // namespace duckdb

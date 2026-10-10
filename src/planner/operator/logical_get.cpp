@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/logical_operator_copy.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
@@ -12,6 +13,9 @@
 #include "duckdb/planner/filter/expression_filter.hpp"
 
 namespace duckdb {
+
+// Field 220 is reserved for the in-process bound-copy scan slot. It is never persisted.
+static constexpr field_id_t BOUND_COPY_SCAN_FIELD_ID = 220;
 
 static void ConvertLegacyTableFilters(LogicalGet &get) {
 	vector<pair<ProjectionIndex, unique_ptr<TableFilter>>> converted_filters;
@@ -341,6 +345,7 @@ void LogicalGet::SetPartitionsToScan(vector<idx_t> partition_indices) {
 }
 
 void LogicalGet::Serialize(Serializer &serializer) const {
+	auto copy_state = serializer.GetSerializationData().TryGet<LogicalOperatorCopyState>();
 	if (bind_info) {
 		throw NotImplementedException("Cannot serialize a table function with process-local bind input");
 	}
@@ -351,8 +356,12 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	/* [Deleted] (vector<column_t>) "column_ids" */
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
-	FunctionSerializer::Serialize(serializer, function, bind_data.get());
-	if (!function.HasSerializationCallbacks() || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
+	if (copy_state) {
+		serializer.WriteProperty(BOUND_COPY_SCAN_FIELD_ID, "bound_copy_scan", copy_state->CopyScan(*this));
+	} else {
+		FunctionSerializer::Serialize(serializer, function, bind_data.get());
+	}
+	if (copy_state || !function.HasSerializationCallbacks() || serializer.ShouldSerialize(StorageVersion::V2_0_0)) {
 		serializer.WriteProperty(206, "parameters", parameters);
 		serializer.WriteProperty(207, "named_parameters", named_parameters);
 		serializer.WriteProperty(208, "input_table_types", input_table_types);
@@ -382,18 +391,30 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	deserializer.ReadPropertyWithDefault(203, "column_ids", legacy_column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
-	auto entry = FunctionSerializer::DeserializeTableFunction(deserializer);
-	result->function = entry.first;
-	auto &function = result->function;
-	auto has_serialize = entry.second;
+	auto copy_state = deserializer.TryGet<LogicalOperatorCopyState>();
+	unique_ptr<LogicalOperatorCopyState::Scan> copied_scan;
+	bool has_serialize = false;
 	unique_ptr<FunctionData> bind_data;
-	if (has_serialize) {
-		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
+	if (copy_state) {
+		copied_scan =
+		    copy_state->TakeScan(deserializer.ReadProperty<idx_t>(BOUND_COPY_SCAN_FIELD_ID, "bound_copy_scan"));
+		result->function = copied_scan->function;
+		bind_data = std::move(copied_scan->bind_data);
+	} else {
+		auto entry = FunctionSerializer::DeserializeTableFunction(deserializer);
+		result->function = entry.first;
+		has_serialize = entry.second;
+		if (has_serialize) {
+			bind_data = FunctionSerializer::FunctionDeserialize(deserializer, result->function);
+		}
 	}
+	auto &function = result->function;
 	deserializer.ReadPropertyWithDefault(206, "parameters", result->parameters);
 	deserializer.ReadPropertyWithDefault(207, "named_parameters", result->named_parameters);
 	// a plan written by an older version holds only the arguments the call passed
-	function.GetSignature().FillNamedDefaults(deserializer.Get<ClientContext &>(), result->named_parameters);
+	if (!copy_state) {
+		function.GetSignature().FillNamedDefaults(deserializer.Get<ClientContext &>(), result->named_parameters);
+	}
 	deserializer.ReadPropertyWithDefault(208, "input_table_types", result->input_table_types);
 	deserializer.ReadPropertyWithDefault(209, "input_table_names", result->input_table_names);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
@@ -425,7 +446,9 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	auto &context = deserializer.Get<ClientContext &>();
 	virtual_column_map_t virtual_columns;
-	if (!has_serialize) {
+	if (copy_state) {
+		virtual_columns = std::move(copied_scan->virtual_columns);
+	} else if (!has_serialize) {
 		TableFunctionRef empty_ref;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
@@ -470,11 +493,17 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	result->virtual_columns = std::move(virtual_columns);
 	result->bind_data = std::move(bind_data);
 	ConvertLegacyTableFilters(*result);
-	if (row_group_order_options) {
-		result->SetScanOrder(std::move(row_group_order_options));
-	}
-	if (!scan_partition_indices.empty()) {
-		result->SetPartitionsToScan(std::move(scan_partition_indices));
+	if (copy_state) {
+		// FunctionData::Copy already preserved pushed scan state; do not apply the callbacks twice.
+		result->row_group_order_options = std::move(row_group_order_options);
+		result->scan_partition_indices = std::move(scan_partition_indices);
+	} else {
+		if (row_group_order_options) {
+			result->SetScanOrder(std::move(row_group_order_options));
+		}
+		if (!scan_partition_indices.empty()) {
+			result->SetPartitionsToScan(std::move(scan_partition_indices));
+		}
 	}
 	return std::move(result);
 }
