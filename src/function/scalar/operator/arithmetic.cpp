@@ -1466,9 +1466,90 @@ double InterpolateOperator::Operation(const double &lo, const double d, const do
 	return lo * (1.0 - d) + hi * d;
 }
 
+static int64_t InterpolateInt64(int64_t lo, double d, int64_t hi, bool round_half_down) {
+	D_ASSERT(d >= 0 && d <= 1);
+	if (d == 0 || lo == hi) {
+		return lo;
+	}
+	if (d == 1) {
+		return hi;
+	}
+
+	// Decompose the weight exactly; the product needs at most 117 bits.
+	int32_t exponent;
+	const auto fraction = std::frexp(d, &exponent);
+	constexpr auto digits = std::numeric_limits<double>::digits;
+	const auto significand = static_cast<int64_t>(std::ldexp(fraction, digits));
+	const auto shift = digits - exponent;
+	const auto delta = hugeint_t(hi) - hugeint_t(lo);
+	const auto descending = delta < 0;
+	const auto product = (descending ? -delta : delta) * significand;
+	if (shift >= 128) {
+		return descending && !round_half_down ? lo - 1 : lo;
+	}
+
+	auto offset = product >> shift;
+	const auto remainder = product - (offset << shift);
+	if (round_half_down) {
+		const auto half = hugeint_t(1) << (shift - 1);
+		if (descending ? remainder >= half : remainder > half) {
+			offset += 1;
+		}
+	} else if (descending && remainder != 0) {
+		offset += 1;
+	}
+	return Hugeint::Cast<int64_t>(hugeint_t(lo) + (descending ? -offset : offset));
+}
+
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const int64_t &hi) {
+	return InterpolateInt64(lo, d, hi, false);
+}
+
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, double numerator, double denominator, const int64_t &hi) {
+	D_ASSERT(std::isfinite(numerator) && std::isfinite(denominator) && denominator != 0);
+	if (denominator < 0) {
+		numerator = -numerator;
+		denominator = -denominator;
+	}
+	if (numerator <= 0 || lo == hi) {
+		return lo;
+	}
+	if (numerator >= denominator) {
+		return hi;
+	}
+
+	// Keep the ratio exact so division cannot move an integral FILL result below its boundary.
+	constexpr auto digits = std::numeric_limits<double>::digits;
+	int32_t numerator_exponent;
+	int32_t denominator_exponent;
+	const auto numerator_fraction = std::frexp(numerator, &numerator_exponent);
+	const auto denominator_fraction = std::frexp(denominator, &denominator_exponent);
+	const auto numerator_significand = static_cast<int64_t>(std::ldexp(numerator_fraction, digits));
+	const auto denominator_significand = static_cast<int64_t>(std::ldexp(denominator_fraction, digits));
+	const auto shift = denominator_exponent - numerator_exponent;
+	D_ASSERT(shift >= 0);
+	const auto delta = hugeint_t(hi) - hugeint_t(lo);
+	const auto descending = delta < 0;
+	const auto product = (descending ? -delta : delta) * numerator_significand;
+	// Larger gaps make the denominator exceed the 117-bit product.
+	if (shift >= 65) {
+		return descending ? lo - 1 : lo;
+	}
+
+	const auto divisor = hugeint_t(denominator_significand) << shift;
+	hugeint_t remainder;
+	auto offset = Hugeint::DivMod(product, divisor, remainder);
+	if (descending && remainder != 0) {
+		offset += 1;
+	}
+	return Hugeint::Cast<int64_t>(hugeint_t(lo) + (descending ? -offset : offset));
+}
+
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi) {
-	return dtime_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return dtime_t(InterpolateInt64(lo.value, d, hi.value, true));
 }
 
 //! TIMETZ values are interpolated by their time normalized to UTC - the result is the normalized time at offset +00
@@ -1491,7 +1572,7 @@ dtime_tz_t InterpolateOperator::Operation(const dtime_tz_t &lo, const double d, 
 
 template <>
 timestamp_t InterpolateOperator::Operation(const timestamp_t &lo, const double d, const timestamp_t &hi) {
-	return timestamp_t(std::llround(static_cast<double>(lo.value) * (1.0 - d) + static_cast<double>(hi.value) * d));
+	return timestamp_t(InterpolateInt64(lo.value, d, hi.value, true));
 }
 
 template <>

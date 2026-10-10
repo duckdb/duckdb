@@ -17,14 +17,36 @@ namespace duckdb {
 //	Linear interpolation between two values
 struct InterpolateOperator {
 	template <typename TARGET_TYPE>
+	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double numerator, const double denominator,
+	                                    const TARGET_TYPE &hi) {
+		return Operation<TARGET_TYPE>(lo, numerator / denominator, hi);
+	}
+
+	template <typename TARGET_TYPE>
 	static inline TARGET_TYPE Operation(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
 		const auto delta = static_cast<double>(hi) - static_cast<double>(lo);
-		return LossyNumericCast<TARGET_TYPE>(static_cast<double>(lo) + delta * d);
+		const auto result = static_cast<double>(lo) + delta * d;
+		// casting an out-of-range double to an integer is UB and platform-dependent
+		// (x86 cvttsd2si yields the integer indefinite value, ARM fcvtzs saturates) - clamp first.
+		// for uint64 the bound rounds up to exactly 2^64 in double, so every
+		// representable-in-double in-range value still passes through unchanged.
+		if (result >= static_cast<double>(NumericLimits<TARGET_TYPE>::Maximum())) {
+			return NumericLimits<TARGET_TYPE>::Maximum();
+		}
+		if (result <= static_cast<double>(NumericLimits<TARGET_TYPE>::Minimum())) {
+			return NumericLimits<TARGET_TYPE>::Minimum();
+		}
+		return LossyNumericCast<TARGET_TYPE>(result);
 	}
 };
 
 template <>
 double InterpolateOperator::Operation(const double &lo, const double d, const double &hi);
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, const double d, const int64_t &hi);
+template <>
+int64_t InterpolateOperator::Operation(const int64_t &lo, const double numerator, const double denominator,
+                                       const int64_t &hi);
 template <>
 dtime_t InterpolateOperator::Operation(const dtime_t &lo, const double d, const dtime_t &hi);
 template <>

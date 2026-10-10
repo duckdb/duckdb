@@ -1,0 +1,109 @@
+# name: test/sql/aggregate/aggregates/test_quantile_cont_bounds.test
+# description: Test exact temporal QUANTILE_CONT interpolation at integer bounds and half ties
+# group: [aggregates]
+
+require 64bit
+
+# Median of two identical near-max timestamps is the timestamp itself, not +/-infinity.
+# The pre-fix float path rounded the interpolated total up to 2^63, and casting that
+# back to int64 overflowed.
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775806::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775806
+
+# Interpolation between two distinct near-max timestamps stays finite
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(9223372036854775800::BIGINT)), (make_timestamp(9223372036854775806::BIGINT))) t(y);
+----
+294247-01-10 04:00:54.775803
+
+# The endpoint difference exceeds int64, but the midpoint is exactly the epoch.
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (make_timestamp(-9223372022400000000::BIGINT)), (make_timestamp(9223372022400000000::BIGINT))) t(y);
+----
+1970-01-01 00:00:00
+
+# Asymmetric endpoints retain half-microsecond ties even when the difference exceeds int64.
+query IIIIII
+SELECT epoch_us(quantile_cont(y, 0.25)), epoch_us(quantile_cont(y, 0.5)), epoch_us(quantile_cont(y, 0.75)),
+	epoch_us(quantile_cont(y, -0.25)), epoch_us(quantile_cont(y, -0.5)), epoch_us(quantile_cont(y, -0.75))
+FROM (VALUES (make_timestamp(-9223372022399999999::BIGINT)), (make_timestamp(9223372036854775803::BIGINT))) t(y);
+----
+-4611686007586306049	7227387902	4611686022041081852	4611686022041081852	7227387902	-4611686007586306049
+
+# Differences that fit in int64 can still lose precision when converted to double.
+query IIIIII
+SELECT epoch_us(quantile_cont(y, 0.25)), epoch_us(quantile_cont(y, 0.5)), epoch_us(quantile_cont(y, 0.75)),
+	epoch_us(quantile_cont(y, -0.25)), epoch_us(quantile_cont(y, -0.5)), epoch_us(quantile_cont(y, -0.75))
+FROM (VALUES (make_timestamp(1::BIGINT)), (make_timestamp(9223372036854775802::BIGINT))) t(y);
+----
+2305843009213693951	4611686018427387901	6917529027641081852	6917529027641081852	4611686018427387901	2305843009213693951
+
+# Endpoint weights and tiny positive weights preserve both bounds.
+query IIIIII
+SELECT epoch_us(quantile_cont(y, 0)), epoch_us(quantile_cont(y, 1)),
+	epoch_us(quantile_cont(y, 1e-40)), epoch_us(quantile_cont(y, -1e-40)),
+	epoch_us(quantile_cont(y, 5e-324)), epoch_us(quantile_cont(y, -5e-324))
+FROM (VALUES (make_timestamp(-9223372022399999999::BIGINT)), (make_timestamp(9223372036854775803::BIGINT))) t(y);
+----
+-9223372022399999999	9223372036854775803	-9223372022399999999	9223372036854775803	-9223372022399999999	9223372036854775803
+
+# Ordinary timestamp quantiles are unaffected
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '2020-01-01 00:00:00'), (TIMESTAMP '2020-01-03 00:00:00')) t(y);
+----
+2020-01-02 00:00:00
+
+# .5 ties round to the earlier of the two adjacent microseconds on either side of the epoch.
+# midpoint -0.5us across the epoch: rounds down to -1us (the old llround of the total agreed)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999998'), (TIMESTAMP '1970-01-01 00:00:00.000001')) t(y);
+----
+1969-12-31 23:59:59.999999
+
+# midpoint -2.5us with both endpoints negative: rounds down to -3us (the old rule agreed)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999996'), (TIMESTAMP '1969-12-31 23:59:59.999999')) t(y);
+----
+1969-12-31 23:59:59.999997
+
+# median() uses the same interpolation
+query T
+SELECT median(y) FROM
+	(VALUES (TIMESTAMP '1969-12-31 23:59:59.999998'), (TIMESTAMP '1970-01-01 00:00:00.000001')) t(y);
+----
+1969-12-31 23:59:59.999999
+
+# midpoint +2.5us: rounds down to +2us (the old llround of the total gave +3us)
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIMESTAMP '1970-01-01 00:00:00.000001'), (TIMESTAMP '1970-01-01 00:00:00.000004')) t(y);
+----
+1970-01-01 00:00:00.000002
+
+# TIME ties follow the same rule
+query T
+SELECT quantile_cont(y, 0.5) FROM
+	(VALUES (TIME '00:00:00.000001'), (TIME '00:00:00.000004')) t(y);
+----
+00:00:00.000002
+
+# Fractions on either side of a half use nearest rounding for both temporal types.
+query II
+SELECT epoch_us(quantile_cont(y, 0.25)), epoch_us(quantile_cont(y, 0.75))
+FROM (VALUES (make_timestamp(0::BIGINT)), (make_timestamp(3::BIGINT))) t(y);
+----
+1	2
+
+query TT
+SELECT quantile_cont(y, 0.25), quantile_cont(y, 0.75)
+FROM (VALUES (TIME '00:00:00'), (TIME '00:00:00.000003')) t(y);
+----
+00:00:00.000001	00:00:00.000002
