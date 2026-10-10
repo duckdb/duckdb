@@ -15,6 +15,7 @@ from grammar_types import (
     load_collapsible_rules,
     load_expression_depth_rules,
     load_packrat_memoized_rules,
+    load_second_token_lookahead_rules,
 )
 from transformer_trampoline_config import (
     TrampolineRuleMode,
@@ -96,6 +97,8 @@ MATCHER_START_BLOCK = SEPARATOR + "\t// START GENERATED RULE OVERRIDES\n" + SEPA
 MATCHER_END_BLOCK = SEPARATOR + "\t// END GENERATED RULE OVERRIDES\n" + SEPARATOR
 PACKRAT_START_BLOCK = SEPARATOR + "\t// START GENERATED PACKRAT MEMOIZED RULES\n" + SEPARATOR
 PACKRAT_END_BLOCK = SEPARATOR + "\t// END GENERATED PACKRAT MEMOIZED RULES\n" + SEPARATOR
+LOOKAHEAD_START_BLOCK = SEPARATOR + "\t// START GENERATED SECOND TOKEN LOOKAHEAD RULES\n" + SEPARATOR
+LOOKAHEAD_END_BLOCK = SEPARATOR + "\t// END GENERATED SECOND TOKEN LOOKAHEAD RULES\n" + SEPARATOR
 COLLAPSIBLE_START_BLOCK = SEPARATOR + "\t// START GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
 COLLAPSIBLE_END_BLOCK = SEPARATOR + "\t// END GENERATED COLLAPSIBLE RULES\n" + SEPARATOR
 DEPTH_START_BLOCK = SEPARATOR + "\t// START GENERATED EXPRESSION DEPTH RULES\n" + SEPARATOR
@@ -285,6 +288,7 @@ class UseGramPreviewEmitter:
         self.excluded_rules = excluded_rules
         self.matcher_overrides = matcher_overrides
         self.rule_config = rule_config
+        self.trampoline_rules = set()
         self.syntax_only_rules = self.collect_syntax_only_rules()
         self.rule_capabilities = self.collect_rule_capabilities()
 
@@ -518,7 +522,33 @@ class UseGramPreviewEmitter:
         )
         sys.exit(1)
 
+    def trampoline_rule(self, rule_name):
+        """Index of a rule pushed by generated code; resolved once per grammar by CompiledGrammar."""
+        self.trampoline_rules.add(rule_name)
+        return f"TrampolineRule::{rule_name}"
+
+    def emit_trampoline_rule_table(self):
+        names = sorted(self.trampoline_rules)
+        lines = []
+        lines.append("//! Rules pushed by the generated code, indexes into CompiledGrammar's resolved rules")
+        lines.append("struct TrampolineRule {")
+        lines.append("\tenum : idx_t {")
+        for name in names:
+            lines.append(f"\t\t{name},")
+        lines.append("\t};")
+        lines.append("};")
+        lines.append("")
+        lines.append("vector<string> PEGTransformerFactory::TrampolineRuleNames() {")
+        lines.append("\treturn {")
+        for name in names:
+            lines.append(f'\t    "{name}",')
+        lines.append("\t};")
+        lines.append("}")
+        lines.append("")
+        return lines
+
     def emit_source(self):
+        self.trampoline_rules = set()
         lines = []
         lines.append(GENERATED_HEADER)
         lines.append(
@@ -528,6 +558,7 @@ class UseGramPreviewEmitter:
         )
         lines.append("namespace duckdb {\n\n")
         lines.append("")
+        rule_table_index = len(lines)
         for rule_name in self.emitted_ops_rules():
             lines.append(
                 f"static const TransformFrameOps {ops_name(rule_name)} = "
@@ -553,6 +584,7 @@ class UseGramPreviewEmitter:
             lines.extend(self.emit_rule(rule_name, tokens_to_ast(rule.tokens)))
             lines.append("")
         lines.append("} // namespace duckdb")
+        lines[rule_table_index:rule_table_index] = self.emit_trampoline_rule_table()
         return "\n".join(lines)
 
     def emit(self):
@@ -778,13 +810,13 @@ class UseGramPreviewEmitter:
             lines.append(f"{indent}if ({stack_child.var_name}_opt.HasResult()) {{")
             child_expr = stack_child.result_expr_template.format(opt=f"{stack_child.var_name}_opt")
             lines.append(
-                f'{indent}\tprocess.PushChild({{transformer.GetRule("{stack_child.rule_name}"), {child_expr}}}, {slot_expr});'
+                f'{indent}\tprocess.PushChild({{transformer.GetRule({self.trampoline_rule(stack_child.rule_name)}), {child_expr}}}, {slot_expr});'
             )
             lines.append(f"{indent}}}")
         else:
             slot_expr = self.adjusted_slot_expr(plan, stack_child.slot_idx)
             lines.append(
-                f'{indent}process.PushChild({{transformer.GetRule("{stack_child.rule_name}"), {stack_child.parse_expr}}}, '
+                f'{indent}process.PushChild({{transformer.GetRule({self.trampoline_rule(stack_child.rule_name)}), {stack_child.parse_expr}}}, '
                 f"{slot_expr});"
             )
 
@@ -1369,7 +1401,7 @@ class UseGramPreviewEmitter:
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
                     child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
-                        f'\t\tprocess.PushChild({{transformer.GetRule("{trailing_optional.rule_name}"), {child_expr}}}, '
+                        f'\t\tprocess.PushChild({{transformer.GetRule({self.trampoline_rule(trailing_optional.rule_name)}), {child_expr}}}, '
                         f"{logical_child_slots} + dynamic_child_count - 1);"
                     )
                     lines.append("\t}")
@@ -1380,7 +1412,7 @@ class UseGramPreviewEmitter:
                 lines.append("\tfor (idx_t i = list_items.size(); i > 0; i--) {")
                 lines.append("\t\tauto child_idx = i - 1;")
                 lines.append(
-                    f'\t\tprocess.PushChild({{transformer.GetRule("{list_child.rule_name}"), list_items[child_idx].get()}}, '
+                    f'\t\tprocess.PushChild({{transformer.GetRule({self.trampoline_rule(list_child.rule_name)}), list_items[child_idx].get()}}, '
                     f"{list_child.slot_start} + child_idx);"
                 )
                 lines.append("\t}")
@@ -1398,7 +1430,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t\tfor (idx_t i = list_items.size(); i > 0; i--) {")
                 lines.append("\t\t\tauto child_idx = i - 1;")
                 lines.append(
-                    f'\t\t\tprocess.PushChild({{transformer.GetRule("{list_child.rule_name}"), list_items[child_idx].get()}}, '
+                    f'\t\t\tprocess.PushChild({{transformer.GetRule({self.trampoline_rule(list_child.rule_name)}), list_items[child_idx].get()}}, '
                     f"{list_child.slot_start} + child_idx);"
                 )
                 lines.append("\t\t}")
@@ -1424,7 +1456,7 @@ class UseGramPreviewEmitter:
                     lines.append(f"\tif ({trailing_optional.var_name}_opt.HasResult()) {{")
                     child_expr = trailing_optional.result_expr_template.format(opt=f"{trailing_optional.var_name}_opt")
                     lines.append(
-                        f'\t\tprocess.PushChild({{transformer.GetRule("{trailing_optional.rule_name}"), {child_expr}}}, '
+                        f'\t\tprocess.PushChild({{transformer.GetRule({self.trampoline_rule(trailing_optional.rule_name)}), {child_expr}}}, '
                         f"{logical_child_slots} + dynamic_child_count - 1);"
                     )
                     lines.append("\t}")
@@ -1435,7 +1467,7 @@ class UseGramPreviewEmitter:
                 lines.append("\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
                 lines.append("\t\tauto child_idx = i - 1;")
                 lines.append(
-                    f'\t\tprocess.PushChild({{transformer.GetRule("{repeat_child.rule_name}"), repeat_children[child_idx].get()}}, '
+                    f'\t\tprocess.PushChild({{transformer.GetRule({self.trampoline_rule(repeat_child.rule_name)}), repeat_children[child_idx].get()}}, '
                     f"{repeat_child.slot_start} + child_idx);"
                 )
                 lines.append("\t}")
@@ -1453,7 +1485,7 @@ class UseGramPreviewEmitter:
                 lines.append("\t\tfor (idx_t i = repeat_children.size(); i > 0; i--) {")
                 lines.append("\t\t\tauto child_idx = i - 1;")
                 lines.append(
-                    f'\t\t\tprocess.PushChild({{transformer.GetRule("{repeat_child.rule_name}"), repeat_children[child_idx].get()}}, '
+                    f'\t\t\tprocess.PushChild({{transformer.GetRule({self.trampoline_rule(repeat_child.rule_name)}), repeat_children[child_idx].get()}}, '
                     f"{repeat_child.slot_start} + child_idx);"
                 )
                 lines.append("\t\t}")
@@ -1551,6 +1583,20 @@ def write_packrat_memoized_rules(packrat_memoized_rules):
     print(f"Updated {matcher_cpp_path}")
 
 
+def write_second_token_lookahead_rules(lookahead_rules):
+    content = matcher_cpp_path.read_text()
+    lines = [f'\tAddSecondTokenLookaheadRule("{rule_name}");\n' for rule_name in lookahead_rules]
+    content = replace_generated_block(
+        content,
+        LOOKAHEAD_START_BLOCK,
+        LOOKAHEAD_END_BLOCK,
+        "".join(lines),
+        matcher_cpp_path,
+    )
+    matcher_cpp_path.write_text(content)
+    print(f"Updated {matcher_cpp_path}")
+
+
 def write_collapsible_rules(collapsible_rules):
     content = transformer_factory_cpp_path.read_text()
     lines = [f'\tcollapsible_rules.insert("{rule_name}");\n' for rule_name in collapsible_rules]
@@ -1629,6 +1675,7 @@ def main():
         packrat_rules = load_packrat_memoized_rules(grammar_types_file, all_rules.keys())
         collapsible_rules = load_collapsible_rules(grammar_types_file, emitter.emitted_ops_rules())
         write_packrat_memoized_rules(packrat_rules)
+        write_second_token_lookahead_rules(load_second_token_lookahead_rules(grammar_types_file, all_rules.keys()))
         write_collapsible_rules(collapsible_rules)
         write_expression_depth_rules(*load_expression_depth_rules(grammar_types_file, all_rules.keys()))
     elif args.report:

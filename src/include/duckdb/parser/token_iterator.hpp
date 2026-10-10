@@ -40,6 +40,16 @@ public:
 		}
 		return tokens[position].GetLiteralInfo(table);
 	}
+	//! The token after the current one, if any, and its literal info
+	optional_ptr<const MatcherToken> Next() const {
+		return position + 1 < tokens.size() ? &tokens[position + 1] : nullptr;
+	}
+	LiteralInfo NextLiteralInfo(const GrammarLiteralTable &table) {
+		if (position + 1 >= tokens.size()) {
+			return LiteralInfo();
+		}
+		return tokens[position + 1].GetLiteralInfo(table);
+	}
 	DUCKDB_API const MatcherToken &Previous() const;
 	DUCKDB_API const MatcherToken &GetToken(idx_t index) const;
 

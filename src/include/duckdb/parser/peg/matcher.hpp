@@ -275,6 +275,8 @@ struct MatcherFirstSet {
 	bool any = false;
 	//! MatcherTokenClass bits
 	uint8_t class_mask = 0;
+	//! classes whose every token is consumed by a matcher this one can start with
+	uint8_t exact_class_mask = 0;
 	//! bitset over grammar literal ids (keywords and symbols)
 	vector<uint64_t> literals;
 	optional_ptr<const GrammarLiteralTable> table;
@@ -288,6 +290,32 @@ struct MatcherFirstSet {
 	DUCKDB_API bool Merge(const MatcherFirstSet &other);
 	//! False only if the matcher certainly cannot match at the current token
 	DUCKDB_API bool MightMatch(MatchState &state) const;
+
+	//! Two-token lookahead, checked only for matchers with Matcher::HasSecondTokenLookahead
+	//! a successful match can consume exactly one token / two or more tokens
+	bool can_one = false;
+	bool can_multi = false;
+	//! no information about the second token
+	bool second_any = false;
+	//! MatcherTokenClass bits and grammar literal ids that can be the second token consumed
+	uint8_t second_class_mask = 0;
+	vector<uint64_t> second_literals;
+	//! the matcher always consumes at least two tokens and its second-token set is informative
+	bool use_second = false;
+	//! the same, restricted to matches whose first token is consumed by an identifier matcher
+	bool ident_can_one = false;
+	bool ident_can_multi = false;
+	bool ident_second_any = false;
+	uint8_t ident_second_class_mask = 0;
+	vector<uint64_t> ident_second_literals;
+	bool use_ident_second = false;
+
+	bool HasSecondLiteral(idx_t literal_id) const {
+		auto word = literal_id / 64;
+		return word < second_literals.size() && (second_literals[word] >> (literal_id % 64)) & 1;
+	}
+	//! False only if a match certainly fails at the next token; the skipped attempt's furthest position is kept
+	DUCKDB_API bool MightMatchSecond(MatchState &state) const;
 };
 
 class Matcher {
@@ -339,6 +367,13 @@ public:
 	bool IsPackratMemoized() const {
 		return packrat_memoized;
 	}
+	//! Skip attempts whose next token cannot be the second token of a match (see MatcherFirstSet::MightMatchSecond)
+	void SetSecondTokenLookahead() {
+		second_token_lookahead = true;
+	}
+	bool HasSecondTokenLookahead() const {
+		return second_token_lookahead;
+	}
 	//! See ParsedGrammar::SetTransformProcess
 	void SetCollapsible() {
 		collapsible = true;
@@ -380,6 +415,7 @@ protected:
 	string name;
 	optional_idx packrat_id;
 	bool packrat_memoized = false;
+	bool second_token_lookahead = false;
 	bool collapsible = false;
 	bool structural = false;
 	optional_ptr<const CompiledGrammarRule> rule;
@@ -440,6 +476,13 @@ public:
 			pending_destructors.push_back(std::move(owned));
 		}
 		return optional_ptr<ParseResult>(result);
+	}
+
+	//! Uninitialized room for up to capacity children in the arena, where it lives as long as the results it
+	//! belongs to; an empty set still takes an address, which costs nothing and keeps the span non-null
+	reference<ParseResult> *AllocateChildren(idx_t capacity) {
+		arena.AlignNext();
+		return reinterpret_cast<reference<ParseResult> *>(arena.Allocate(capacity * sizeof(reference<ParseResult>)));
 	}
 
 	//! Copy a collected set of children into the arena, where it lives as long as the results it belongs to

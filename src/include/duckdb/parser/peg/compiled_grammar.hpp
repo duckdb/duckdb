@@ -34,6 +34,9 @@ public:
 		return *tokenizer;
 	}
 	optional_ptr<const CompiledGrammarRule> GetRule(const string &rule_name) const;
+	optional_ptr<const CompiledGrammarRule> GetTrampolineRule(idx_t trampoline_rule) const {
+		return trampoline_rules[trampoline_rule];
+	}
 
 public:
 	static shared_ptr<CompiledGrammar> Get(ClientContext &context);
@@ -51,6 +54,8 @@ private:
 	case_insensitive_map_t<unique_ptr<CompiledGrammarRule>> rules;
 	const Matcher &program_matcher;
 	const Matcher &top_level_statement_matcher;
+	//! Rules pushed by generated code, resolved once (see PEGTransformerFactory::TrampolineRuleNames)
+	vector<optional_ptr<const CompiledGrammarRule>> trampoline_rules;
 };
 
 //! Per-database holder for the compiled base grammar.
