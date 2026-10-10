@@ -21,7 +21,7 @@ static bool KeepInExpression(const BoundOperatorExpression &expr) {
 	return true;
 }
 
-bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
+bool InClauseRewriter::ContainsLargeConstantInClause(const Expression &expr) {
 	if (expr.GetExpressionClass() == ExpressionClass::BOUND_OPERATOR &&
 	    (expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
 	     expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) &&
@@ -30,7 +30,7 @@ bool InClauseRewriter::HasRewritableInClause(const Expression &expr) {
 	}
 	bool result = false;
 	ExpressionIterator::EnumerateChildren(expr, [&](const Expression &child) {
-		if (!result && HasRewritableInClause(child)) {
+		if (!result && ContainsLargeConstantInClause(child)) {
 			result = true;
 		}
 	});

@@ -314,10 +314,12 @@ bool SupportsType(const LogicalType &type) {
 bool SupportsSortKeyLookup(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
 		return SupportsSortKeyLookup(ListType::GetChildType(type));
 	case LogicalTypeId::ARRAY:
 		return SupportsSortKeyLookup(ArrayType::GetChildType(type));
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 		for (auto &child : StructType::GetChildTypes(type)) {
 			if (!SupportsSortKeyLookup(child.second)) {
 				return false;
@@ -337,7 +339,8 @@ bool SupportsSortKeyLookup(const LogicalType &type) {
 
 bool IsNestedType(const LogicalType &type) {
 	auto id = type.id();
-	return id == LogicalTypeId::LIST || id == LogicalTypeId::ARRAY || id == LogicalTypeId::STRUCT;
+	return id == LogicalTypeId::LIST || id == LogicalTypeId::MAP || id == LogicalTypeId::ARRAY ||
+	       id == LogicalTypeId::STRUCT || id == LogicalTypeId::UNION;
 }
 
 } // namespace
@@ -378,6 +381,12 @@ unique_ptr<InValueSet> InValueSet::Create(const BoundOperatorExpression &expr) {
 }
 
 void InValueSet::Probe(const Vector &input, idx_t count, bool negate, Vector &result) const {
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		Vector constant_result(LogicalType::BOOLEAN, 1);
+		ProbeValues(input, 1, negate, constant_result);
+		result.Reference(constant_result.GetValue(0), count_t(count));
+		return;
+	}
 	if (input.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		// probe each dictionary entry only once
 		auto dictionary_size = DictionaryVector::DictionarySize(input);

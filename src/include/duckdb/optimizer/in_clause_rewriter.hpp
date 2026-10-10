@@ -15,8 +15,8 @@ namespace duckdb {
 
 class InClauseRewriter : public LogicalOperatorVisitor {
 public:
-	//! Whether the expression contains a large constant IN that is kept as an IN
-	static bool HasRewritableInClause(const Expression &expr);
+	//! Whether the expression contains an IN with a large constant list, which is kept as an IN
+	static bool ContainsLargeConstantInClause(const Expression &expr);
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 	unique_ptr<Expression> VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) override;
 };

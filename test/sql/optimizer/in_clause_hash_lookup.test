@@ -162,6 +162,43 @@ SELECT bool_and((ll IN ([[0], [0]], [[1], [2]], [[0], [1]], [[5], [5]], [[6], [6
 ----
 true
 
+statement ok
+CREATE TABLE maps_unions AS SELECT
+	CASE WHEN i % 13 = 0 THEN NULL WHEN i % 2 = 0 THEN MAP {i % 3: i % 4, 9: 1} ELSE MAP {9: 1, i % 3: i % 4} END AS m,
+	CASE WHEN i % 11 = 0 THEN NULL WHEN i % 2 = 0 THEN (i % 4)::INT::UNION(a INT, b VARCHAR)
+		ELSE ((i % 4)::VARCHAR)::UNION(a INT, b VARCHAR) END AS u,
+	MAP {'k' || (i % 3): CASE WHEN i % 5 = 0 THEN NULL ELSE [i % 2] END} AS mn
+FROM range(3000) t(i);
+
+# map equality depends on the entry order
+query I
+SELECT bool_and((m IN (MAP {0: 0, 9: 1}, MAP {9: 1, 1: 1}, MAP {2: 2, 9: 1}, MAP {9: 1, 0: 3}, MAP {5: 5}, MAP {9: 1})) IS NOT DISTINCT FROM (m = MAP {0: 0, 9: 1} OR m = MAP {9: 1, 1: 1} OR m = MAP {2: 2, 9: 1} OR m = MAP {9: 1, 0: 3} OR m = MAP {5: 5} OR m = MAP {9: 1})) FROM maps_unions;
+----
+true
+
+query I
+SELECT bool_and((m NOT IN (MAP {0: 0, 9: 1}, MAP {9: 1, 1: 1}, MAP {2: 2, 9: 1}, MAP {5: 5}, MAP {9: 1}, NULL)) IS NOT DISTINCT FROM (m <> MAP {0: 0, 9: 1} AND m <> MAP {9: 1, 1: 1} AND m <> MAP {2: 2, 9: 1} AND m <> MAP {5: 5} AND m <> MAP {9: 1} AND m <> NULL)) FROM maps_unions;
+----
+true
+
+query I
+SELECT bool_and((mn IN (MAP {'k0': [0]}, MAP {'k1': NULL}, MAP {'k2': [1]}, MAP {'k0': NULL}, MAP {'x': [5]}, MAP {'k1': [7]})) IS NOT DISTINCT FROM (mn = MAP {'k0': [0]} OR mn = MAP {'k1': NULL} OR mn = MAP {'k2': [1]} OR mn = MAP {'k0': NULL} OR mn = MAP {'x': [5]} OR mn = MAP {'k1': [7]})) FROM maps_unions;
+----
+true
+
+# union values with a different tag are not equal
+query I
+SELECT bool_and((u IN (0::UNION(a INT, b VARCHAR), 2::UNION(a INT, b VARCHAR), '1'::UNION(a INT, b VARCHAR), '3'::UNION(a INT, b VARCHAR), 7::UNION(a INT, b VARCHAR), 'x'::UNION(a INT, b VARCHAR))) IS NOT DISTINCT FROM (u = 0::UNION(a INT, b VARCHAR) OR u = 2::UNION(a INT, b VARCHAR) OR u = '1'::UNION(a INT, b VARCHAR) OR u = '3'::UNION(a INT, b VARCHAR) OR u = 7::UNION(a INT, b VARCHAR) OR u = 'x'::UNION(a INT, b VARCHAR))) FROM maps_unions;
+----
+true
+
+query II
+SELECT count(*) FILTER (WHERE u IN (1::UNION(a INT, b VARCHAR), 3::UNION(a INT, b VARCHAR), '0'::UNION(a INT, b VARCHAR), '2'::UNION(a INT, b VARCHAR), 5::UNION(a INT, b VARCHAR), 'y'::UNION(a INT, b VARCHAR))),
+	count(*) FILTER (WHERE u IN (0::UNION(a INT, b VARCHAR), 2::UNION(a INT, b VARCHAR), '1'::UNION(a INT, b VARCHAR), '3'::UNION(a INT, b VARCHAR), 5::UNION(a INT, b VARCHAR), 'y'::UNION(a INT, b VARCHAR)))
+FROM maps_unions;
+----
+0	2727
+
 # sort keys do not normalize intervals or apply collations, these fall back to pairwise comparison
 query III
 SELECT [INTERVAL 30 DAY] IN ([INTERVAL 1 MONTH], [INTERVAL 1 DAY], [INTERVAL 2 DAY], [INTERVAL 3 DAY], [INTERVAL 4 DAY]),
@@ -190,6 +227,35 @@ query I
 SELECT 'HELLO' COLLATE NOCASE IN ('hello', 'a', 'b', 'c', 'd', 'e');
 ----
 true
+
+# constant probe values over many rows
+statement ok
+PRAGMA disable_optimizer;
+
+query IIIIII
+SELECT count(*) FILTER (WHERE 3 IN (1, 2, 3, 4, 5, 6)),
+	count(*) FILTER (WHERE 7 IN (1, 2, 3, 4, 5, 6)),
+	count(*) FILTER (WHERE 7 NOT IN (1, 2, 3, 4, 5, 6)),
+	count(*) FILTER (WHERE (7 IN (1, 2, 3, 4, 5, NULL)) IS NULL),
+	count(*) FILTER (WHERE (NULL::INT IN (1, 2, 3, 4, 5, 6)) IS NULL),
+	count(*) FILTER (WHERE [2] IN ([1], [2], [3], [4], [5], [6]))
+FROM range(5000);
+----
+5000	0	5000	5000	5000	5000
+
+statement ok
+PRAGMA enable_optimizer;
+
+# a constant IN is folded
+query II
+EXPLAIN SELECT i FROM range(10) t(i) WHERE 3 IN (1, 2, 3, 4, 5, 6) AND i NOT IN (7, 8, 9, 10, 11, 12) AND 7 NOT IN (1, 2, 3, 4, 5, 6);
+----
+physical_plan	<!REGEX>:.*IN \(1, 2.*
+
+query I
+SELECT count(*) FROM range(10) t(i) WHERE 3 IN (1, 2, 3, 4, 5, 6) AND 7 NOT IN (1, 2, 3, 4, 5, 6);
+----
+10
 
 # empty input does not evaluate the constants
 query I
@@ -244,3 +310,52 @@ query I
 SELECT count(*) FROM range(100) a(x), range(100) b(y) WHERE x = y AND (x IN (1, 2, 3, 4, 5, 6) OR y > 90);
 ----
 15
+
+# hash joins push the build keys into the probe scan as an IN filter
+statement ok
+CREATE TABLE probe AS SELECT i AS id, i::INT AS id32, 'k' || (i % 5000) AS s FROM range(2000000) t(i);
+
+statement ok
+CREATE TABLE build AS SELECT * FROM (VALUES (3), (1001), (250007), (700001), (1200003), (1999999), (42)) t(k);
+
+statement ok
+CREATE TABLE build_s AS SELECT * FROM (VALUES ('k3'), ('k17'), ('k250'), ('k4999'), ('k1000'), ('k77'), ('missing')) t(k);
+
+statement ok
+CHECKPOINT;
+
+query II
+EXPLAIN ANALYZE SELECT count(*), sum(id) FROM probe JOIN build ON id = k;
+----
+analyzed_plan	<REGEX>:.*id IN \(3, 42, 1001, 250007, 700001, 1200003, 1999999\).*
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build ON id = k;
+----
+7	4151056
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build ON id32 = k;
+----
+7	4151056
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build_s ON s = k;
+----
+2400	2396538400
+
+statement ok
+SET dynamic_or_filter_threshold = 0;
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build ON id = k;
+----
+7	4151056
+
+query II
+SELECT count(*), sum(id) FROM probe JOIN build_s ON s = k;
+----
+2400	2396538400
+
+statement ok
+RESET dynamic_or_filter_threshold;

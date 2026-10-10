@@ -37,7 +37,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 				right_pushdown.filters.push_back(std::move(f));
 			} else {
 				D_ASSERT(side == JoinSide::BOTH || side == JoinSide::NONE);
-				if (InClauseRewriter::HasRewritableInClause(*f->filter)) {
+				// a filter above the join can still be made local after statistics propagation
+				if (InClauseRewriter::ContainsLargeConstantInClause(*f->filter)) {
 					deferred_filters.push_back(std::move(f->filter));
 				} else {
 					// bindings match both: turn into join condition

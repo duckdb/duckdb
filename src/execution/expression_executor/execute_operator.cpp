@@ -15,6 +15,8 @@ struct InExpressionState : public ExpressionState {
 	}
 
 	//! Set when the IN is evaluated with a lookup set, then only the probe expression has a child state
+	bool use_value_set = false;
+	//! Built on first execution
 	unique_ptr<InValueSet> value_set;
 };
 
@@ -32,8 +34,8 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundOpera
 		return result;
 	}
 	auto result = make_uniq<InExpressionState>(expr, root);
-	if (InValueSet::IsSupported(expr)) {
-		result->value_set = InValueSet::Create(expr);
+	result->use_value_set = InValueSet::IsSupported(expr);
+	if (result->use_value_set) {
 		result->AddChild(*expr.GetChildren()[0]);
 	} else {
 		for (auto &child : expr.GetChildren()) {
@@ -59,44 +61,44 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		Execute(*expr.GetChildren()[0], state->child_states[0].get(), sel, count, left);
 
 		auto &in_state = state->Cast<InExpressionState>();
-		if (in_state.value_set) {
-			in_state.value_set->Probe(left, count, expression_type == ExpressionType::COMPARE_NOT_IN, result);
-		} else {
-			// init result to false
-			Vector intermediate(LogicalType::BOOLEAN);
-			intermediate.Reference(Value::BOOLEAN(false), count_t(count));
-
-			// in rhs is a list of constants
-			// for every child, OR the result of the comparison with the left
-			// to get the overall result.
-			for (idx_t child = 1; child < expr.GetChildren().size(); child++) {
-				Vector vector_to_check(expr.GetChildren()[child]->GetReturnType());
-				Vector comp_res(LogicalType::BOOLEAN);
-
-				Execute(*expr.GetChildren()[child], state->child_states[child].get(), sel, count, vector_to_check);
-				VectorOperations::Equals(left, vector_to_check, comp_res);
-
-				if (child == 1) {
-					// first child: move to result
-					intermediate.Reference(comp_res);
-				} else {
-					// otherwise OR together
-					Vector new_result(LogicalType::BOOLEAN);
-					VectorOperations::Or(intermediate, comp_res, new_result);
-					intermediate.Reference(new_result);
-				}
+		if (in_state.use_value_set) {
+			if (!in_state.value_set) {
+				in_state.value_set = InValueSet::Create(expr);
 			}
-			if (expression_type == ExpressionType::COMPARE_NOT_IN) {
-				// NOT IN: invert result
-				VectorOperations::Not(intermediate, result);
+			in_state.value_set->Probe(left, count, expression_type == ExpressionType::COMPARE_NOT_IN, result);
+			return;
+		}
+
+		// init result to false
+		Vector intermediate(LogicalType::BOOLEAN);
+		intermediate.Reference(Value::BOOLEAN(false), count_t(count));
+
+		// in rhs is a list of constants
+		// for every child, OR the result of the comparison with the left
+		// to get the overall result.
+		for (idx_t child = 1; child < expr.GetChildren().size(); child++) {
+			Vector vector_to_check(expr.GetChildren()[child]->GetReturnType());
+			Vector comp_res(LogicalType::BOOLEAN);
+
+			Execute(*expr.GetChildren()[child], state->child_states[child].get(), sel, count, vector_to_check);
+			VectorOperations::Equals(left, vector_to_check, comp_res);
+
+			if (child == 1) {
+				// first child: move to result
+				intermediate.Reference(comp_res);
 			} else {
-				// directly use the result
-				result.Reference(intermediate);
+				// otherwise OR together
+				Vector new_result(LogicalType::BOOLEAN);
+				VectorOperations::Or(intermediate, comp_res, new_result);
+				intermediate.Reference(new_result);
 			}
 		}
-		// A single flat row is the constant result of scalar evaluation
-		if (!sel && count == 1 && result.GetVectorType() == VectorType::FLAT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		if (expression_type == ExpressionType::COMPARE_NOT_IN) {
+			// NOT IN: invert result
+			VectorOperations::Not(intermediate, result);
+		} else {
+			// directly use the result
+			result.Reference(intermediate);
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_COALESCE) {
 		SelectionVector sel_a(count);

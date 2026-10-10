@@ -1,5 +1,4 @@
 #include "duckdb/optimizer/filter_pushdown.hpp"
-#include "duckdb/optimizer/in_clause_rewriter.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
@@ -183,10 +182,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		if (expr.IsVolatile()) {
 			continue;
 		}
-		// Keep large constant IN clauses in the logical plan, where they are evaluated with a hash lookup.
-		// Also skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
-		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN &&
-		    (expr.CanThrow() || InClauseRewriter::HasRewritableInClause(expr))) {
+		// Skip throwing IN expressions: scan pushdown loses short-circuit evaluation semantics.
+		if (expr.GetExpressionType() == ExpressionType::COMPARE_IN && expr.CanThrow()) {
 			continue;
 		}
 		// Allow pushing down filters that can throw only if there is a single expression
