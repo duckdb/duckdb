@@ -212,9 +212,8 @@ static const DefaultView internal_views[] = {
      "WHERE constraint_type NOT IN ('NOT NULL');"},
     {"information_schema", "check_constraints",
      "SELECT database_name AS constraint_catalog, schema_name AS constraint_schema, constraint_name, CASE "
-     "constraint_type WHEN 'NOT NULL' THEN column_name || ' IS NOT NULL' ELSE constraint_text END AS check_clause FROM "
-     "(SELECT dc.*, UNNEST(dc.constraint_column_names) AS column_name FROM duckdb_constraints() AS dc WHERE "
-     "constraint_type IN ('CHECK', 'NOT NULL'));"},
+     "constraint_type WHEN 'NOT NULL' THEN constraint_column_names[1] || ' IS NOT NULL' ELSE constraint_text END AS "
+     "check_clause FROM duckdb_constraints() WHERE constraint_type IN ('CHECK', 'NOT NULL');"},
     {"information_schema", "views",
      "SELECT database_name AS table_catalog, schema_name AS table_schema, view_name AS table_name, sql AS "
      "view_definition, 'NONE' AS check_option, 'NO' AS is_updatable, 'NO' AS is_insertable_into, 'NO' AS "
