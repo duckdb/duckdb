@@ -1,3 +1,4 @@
+#include "duckdb/planner/logical_plan_verifier.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -571,6 +572,112 @@ TEST_CASE("Logical plan SQL export rejects incomplete secure view metadata",
 		                        {{LogicalPlanVerificationPathComponentType::OPERATOR_CHILD, 0}}});
 		connection.Rollback();
 	}
+}
+
+// SQL cannot supply a typed replacement for an existing operator, forge an invalid
+// boundary, or observe whether verification repaired the caller's type vector.
+TEST_CASE("Resolved subtree export preserves its original plan", "[sql_export][logical_plan_sql_export][plan_views]") {
+	DuckDB db(nullptr);
+	Connection connection(db);
+	connection.BeginTransaction();
+	auto plan = OptimizeLogicalPlanExportQuery(
+	    connection, "WITH q AS MATERIALIZED (SELECT i FROM range(3) t(i)) SELECT i+1 FROM q");
+	REQUIRE(LogicalPlanVerifier::VerifyAlways(*plan).IsSuccess());
+	auto source = FindLogicalPlanExportOperator(*plan, LogicalOperatorType::LOGICAL_GET);
+	REQUIRE(source);
+	auto &get = source->Cast<LogicalGet>();
+	auto original_owner = plan.get();
+	auto original_bind_data = get.bind_data.get();
+	auto original_types = plan->types;
+	auto original_bindings = plan->GetColumnBindings();
+	auto source_bindings = get.GetColumnBindings();
+	get.function.to_sql = [](ClientContext &, const LogicalGet &) -> TableFunctionToSQLResult {
+		return {nullptr, "opaque_original_source"};
+	};
+	auto relation = [&]() {
+		Parser parser(*connection.context);
+		parser.ParseQuery("SELECT 42::BIGINT AS i");
+		vector<LogicalPlanSQLExportField> fields;
+		for (idx_t i = 0; i < get.types.size(); i++) {
+			fields.push_back({source_bindings[i], get.types[i]});
+		}
+		return LogicalPlanSQLExportRelation {std::move(parser.statements[0]->Cast<SelectStatement>().node),
+		                                     std::move(fields)};
+	};
+
+	SECTION("sources precede materialized CTE consumers") {
+		for (idx_t repeat = 0; repeat < 2; repeat++) {
+			vector<LogicalPlanSQLExportReplacement> replacements;
+			replacements.push_back({get, relation()});
+			auto exported = LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements);
+			REQUIRE(exported.IsSuccess());
+			auto result = connection.Query(exported.GetValue().query->ToString());
+			REQUIRE_NO_FAIL(*result);
+			REQUIRE(result->RowCount() == 1);
+			REQUIRE(result->Collection().GetValue(0, 0) == Value::BIGINT(43));
+		}
+	}
+	SECTION("unreplaced sources remain opaque") {
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, get, {}),
+		                       LogicalPlanVerificationIssueCode::UNSUPPORTED_SOURCE);
+	}
+	SECTION("incomplete fields") {
+		auto replacement = relation();
+		replacement.fields.clear();
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({get, std::move(replacement)});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("wrong type") {
+		auto replacement = relation();
+		replacement.fields[0].type = LogicalType::INTEGER;
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({get, std::move(replacement)});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("duplicate boundary") {
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({get, relation()});
+		replacements.push_back({get, relation()});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("overlapping boundaries") {
+		auto root_relation = relation();
+		root_relation.fields[0].source_binding = original_bindings[0];
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({*plan, std::move(root_relation)});
+		replacements.push_back({get, relation()});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("foreign boundary") {
+		auto other = OptimizeLogicalPlanExportQuery(connection, "SELECT i FROM range(4) t(i)");
+		REQUIRE(LogicalPlanVerifier::VerifyAlways(*other).IsSuccess());
+		auto other_get = FindLogicalPlanExportOperator(*other, LogicalOperatorType::LOGICAL_GET);
+		REQUIRE(other_get);
+		auto replacement = relation();
+		replacement.fields[0].source_binding = other_get->GetColumnBindings()[0];
+		vector<LogicalPlanSQLExportReplacement> replacements;
+		replacements.push_back({*other_get, std::move(replacement)});
+		RequirePlanExportIssue(LogicalPlanSQLExporter::ExportWithSources(*connection.context, *plan, replacements),
+		                       LogicalPlanVerificationIssueCode::INTERNAL_INVARIANT);
+	}
+	SECTION("read-only verification never repairs unresolved types") {
+		plan->types.clear();
+		REQUIRE(LogicalPlanVerifier::VerifyResolvedBindings(*plan).HasError());
+		REQUIRE(plan->types.empty());
+		plan->types = original_types;
+		REQUIRE(LogicalPlanVerifier::VerifyResolvedBindings(*plan).IsSuccess());
+	}
+	REQUIRE(plan.get() == original_owner);
+	REQUIRE(get.bind_data.get() == original_bind_data);
+	REQUIRE(plan->types == original_types);
+	REQUIRE(plan->GetColumnBindings() == original_bindings);
+	REQUIRE(get.GetColumnBindings() == source_bindings);
+	connection.Rollback();
 }
 
 } // namespace logical_plan_sql_export_test
