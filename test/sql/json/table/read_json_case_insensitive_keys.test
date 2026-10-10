@@ -1,0 +1,93 @@
+# name: test/sql/json/table/read_json_case_insensitive_keys.test
+# description: read_json case_insensitive_keys matches object keys to the columns ignoring case
+# group: [table]
+
+require json
+
+statement ok
+COPY (SELECT * FROM (VALUES
+	('{"userid":1,"Url":"a"}'),
+	('{"userId":2,"URL":"b","user":{"userId":20}}'),
+	('{"USERID":3,"user":{"USERID":30}}')
+) t(line)) TO '{TEST_DIR}/case_keys.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+# by default keys are matched exactly
+query III
+SELECT * FROM read_json('{TEST_DIR}/case_keys.json', columns := {userid: 'INTEGER', url: 'VARCHAR', "user": 'STRUCT(userid INTEGER)'}, format := 'newline_delimited');
+----
+1	NULL	NULL
+NULL	NULL	{'userid': NULL}
+NULL	NULL	{'userid': NULL}
+
+query III
+SELECT * FROM read_json('{TEST_DIR}/case_keys.json', columns := {userid: 'INTEGER', url: 'VARCHAR', "user": 'STRUCT(userid INTEGER)'}, format := 'newline_delimited', case_insensitive_keys := true);
+----
+1	a	NULL
+2	b	{'userid': 20}
+3	NULL	{'userid': 30}
+
+# the column names may be in any case too
+query II
+SELECT * FROM read_json('{TEST_DIR}/case_keys.json', columns := {UserId: 'INTEGER', URL: 'VARCHAR'}, format := 'newline_delimited', case_insensitive_keys := true);
+----
+1	a
+2	b
+3	NULL
+
+# projection pushdown
+query I
+SELECT "user".userid FROM read_json('{TEST_DIR}/case_keys.json', columns := {userid: 'INTEGER', url: 'VARCHAR', "user": 'STRUCT(userid INTEGER)'}, format := 'newline_delimited', case_insensitive_keys := true);
+----
+NULL
+20
+30
+
+query I
+SELECT userid FROM read_ndjson('{TEST_DIR}/case_keys.json', columns := {userid: 'INTEGER'}, case_insensitive_keys := true);
+----
+1
+2
+3
+
+# keys that differ only in case are duplicate keys
+statement ok
+COPY (SELECT * FROM (VALUES
+	('{"URL":1}'),
+	('{"URL":2,"Url":3}')
+) t(line)) TO '{TEST_DIR}/case_keys_duplicate.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+statement error
+SELECT * FROM read_json('{TEST_DIR}/case_keys_duplicate.json', columns := {url: 'INTEGER'}, format := 'newline_delimited', case_insensitive_keys := true);
+----
+has duplicate key "Url"
+
+query I
+SELECT * FROM read_json('{TEST_DIR}/case_keys_duplicate.json', columns := {url: 'INTEGER'}, format := 'newline_delimited', case_insensitive_keys := true, ignore_errors := true);
+----
+1
+2
+
+# without case_insensitive_keys they are different keys
+query I
+SELECT * FROM read_json('{TEST_DIR}/case_keys_duplicate.json', columns := {URL: 'INTEGER'}, format := 'newline_delimited');
+----
+1
+2
+
+# the columns must be given: a detected schema has a column for each spelling of a key
+statement error
+SELECT * FROM read_json('{TEST_DIR}/case_keys.json', case_insensitive_keys := true);
+----
+Binder Error: read_json "case_insensitive_keys" requires the columns to be specified
+
+# multiple files are read with the same setting
+statement ok
+COPY (SELECT * FROM (VALUES ('{"USERID":4,"url":"d"}')) t(line)) TO '{TEST_DIR}/case_keys_2.json' (FORMAT csv, HEADER false, QUOTE '', ESCAPE '', DELIMITER '\t');
+
+query II
+SELECT userid, url FROM read_json(['{TEST_DIR}/case_keys.json', '{TEST_DIR}/case_keys_2.json'], columns := {userid: 'INTEGER', url: 'VARCHAR'}, format := 'newline_delimited', case_insensitive_keys := true) ORDER BY userid;
+----
+1	a
+2	b
+3	NULL
+4	d
